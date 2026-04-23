@@ -1,32 +1,56 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { describe, expect, it } from "vitest";
 
-import { ProposalBriefCard } from "../ProposalBriefCard";
+import {
+  ProposalBriefCard,
+  resolveProposalBriefCardTitle,
+} from "../ProposalBriefCard";
 
-describe("ProposalBriefCard", () => {
-  it("renders linked documents before raw source and saves summary edits", async () => {
-    const onSaveField = vi.fn().mockResolvedValue(undefined);
-    const onSaveReviewItem = vi.fn().mockResolvedValue(undefined);
+describe("resolveProposalBriefCardTitle", () => {
+  it("prefers the output document title over the source job title", () => {
+    expect(
+      resolveProposalBriefCardTitle({
+        sourceJobTitle: "Operations Associate",
+        outputDocumentTitle: "Operations Associate cover letter",
+      }),
+    ).toBe("Operations Associate cover letter");
+  });
 
+  it("falls back to the source job title when no output document title exists", () => {
+    expect(
+      resolveProposalBriefCardTitle({
+        sourceJobTitle: "Operations Associate",
+        outputDocumentTitle: null,
+      }),
+    ).toBe("Operations Associate");
+  });
+
+  it("falls back to Untitled Proposal when neither title is present", () => {
+    expect(
+      resolveProposalBriefCardTitle({
+        sourceJobTitle: null,
+        outputDocumentTitle: null,
+      }),
+    ).toBe("Untitled Proposal");
+  });
+
+  it("keeps the richer brief content in default mode", () => {
     render(
       <MemoryRouter>
         <ProposalBriefCard
-          documentTitle="Operations Associate"
-          jobDescription="Coordinate internal workflows and keep teams aligned."
-          sourceUrl="https://www.linkedin.com/jobs/view/alpha"
-          sourcePlatform="linkedin"
-          summaryText="Support recurring operations and unblock coordination work."
-          parseStatus="parsed"
+          sourceJobTitle="Operations Associate"
+          jobDescription="Coordinate recurring launches and maintain documentation."
+          summaryText="Operations Associate role focused on recurring launches."
           trustState="needs_review"
           linkedDocumentCount={1}
           linkedProposals={[
             {
-              id: "proposal_1",
+              id: "proposal_alpha",
               title: "Operations Associate cover letter",
               status: "saved",
-              updatedAt: 1711003000000,
+              updatedAt: 1710000000000,
             },
           ]}
           reviewItems={[
@@ -35,32 +59,18 @@ describe("ProposalBriefCard", () => {
               fieldKey: "responsibilities",
               label: "Responsibilities",
               reviewStatus: "pending",
-              suggestedValue: ["Run recurring workflows"],
-              sourceText: "Coordinate internal workflows and keep teams aligned.",
+              suggestedValue: ["Coordinate recurring launches"],
+              sourceText:
+                "Coordinate recurring launches and maintain documentation.",
             },
           ]}
-          onSaveField={onSaveField}
-          onSaveReviewItem={onSaveReviewItem}
         />
       </MemoryRouter>,
     );
 
-    const linkedDocuments = screen.getByText("Linked documents");
-    const rawSource = screen.getByText("Raw source");
-    expect(
-      linkedDocuments.compareDocumentPosition(rawSource) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Edit summary" }));
-    fireEvent.change(screen.getByRole("textbox"), {
-      target: { value: "Updated summary copy." },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save summary" }));
-
-    await waitFor(() => {
-      expect(onSaveField).toHaveBeenCalledWith("summary", "Updated summary copy.");
-    });
-    expect(onSaveReviewItem).not.toHaveBeenCalled();
+    expect(screen.getByText("Review state")).toBeInTheDocument();
+    expect(screen.getByText("Extracted summary")).toBeInTheDocument();
+    expect(screen.getByText("Linked documents")).toBeInTheDocument();
+    expect(screen.getByText("Raw source")).toBeInTheDocument();
   });
 });

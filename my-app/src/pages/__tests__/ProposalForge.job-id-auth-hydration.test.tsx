@@ -139,6 +139,10 @@ vi.mock("../../lib/proposal-personalization", () => ({
     title: null,
     personalizationContext: null,
   }),
+  getLocalPersonalizationSourceByCvId: () => ({
+    title: null,
+    personalizationContext: null,
+  }),
   getLocalActiveCvSnapshotById: () => null,
   getLocalCvDocumentById: () => null,
   getProposalApplicantHeaderData: () => ({

@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { ProposalForge } from "../ProposalForge";
 
@@ -88,6 +88,13 @@ vi.mock("../../components/ProposalsList", () => ({
   default: () => <div>Saved proposals</div>,
 }));
 
+function LocationProbe(): JSX.Element {
+  const location = useLocation();
+  return (
+    <div data-testid="proposal-location">{`${location.pathname}${location.search}`}</div>
+  );
+}
+
 describe("ProposalForge canonical job brief", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -147,32 +154,57 @@ describe("ProposalForge canonical job brief", () => {
     });
   });
 
-  it("loads the canonical job from jobId routes and surfaces reviewable source context", async () => {
-    render(
+  it("renders a minimal collapsed focus strip with Open job and the source link", async () => {
+    const { container } = render(
       <MemoryRouter initialEntries={["/proposal?jobId=job_123"]}>
-        <ProposalForge />
+        <Routes>
+          <Route
+            path="/proposal"
+            element={
+              <>
+                <ProposalForge />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route path="/jobs/:jobId" element={<LocationProbe />} />
+        </Routes>
       </MemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
 
     expect(
-      await screen.findByRole("link", {
+      await screen.findByTestId("proposal-brief-focus-strip"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open job" }),
+    ).toHaveAttribute("href", "/jobs/job_123");
+    expect(
+      screen.getByRole("link", {
         name: /Open original job offer on Example\.com/i,
       }),
     ).toHaveAttribute("href", "https://example.com/jobs/123");
-    expect(screen.getByText("Responsibilities")).toBeInTheDocument();
-    expect(screen.getByText("Linked documents")).toBeInTheDocument();
-    expect(screen.getByText("Review state")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", {
-        name: "Open linked proposal Operations Associate cover letter",
-      }),
-    ).toHaveAttribute("href", "/proposal?view=saved&id=proposal_alpha");
+      screen.getByRole("button", { name: "Expand" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Review state")).not.toBeInTheDocument();
+    expect(screen.queryByText("Extracted summary")).not.toBeInTheDocument();
+    expect(screen.queryByText("Linked documents")).not.toBeInTheDocument();
+    expect(screen.queryByText("Raw source")).not.toBeInTheDocument();
+    expect(screen.queryByText("Responsibilities")).not.toBeInTheDocument();
+    expect(screen.queryByText("operations")).not.toBeInTheDocument();
     expect(
-      screen.getAllByText(
-        "Coordinate recurring launches, keep handoffs clear, and maintain documentation.",
-      ).length,
-    ).toBeGreaterThan(0);
+      container.querySelector(".dasti-brief-card"),
+    ).not.toBeInTheDocument();
+    expect(
+      container.querySelector(".dasti-brief-card__summary"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("link", { name: "Open job" }));
+    expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+      "/jobs/job_123",
+    );
   });
 });

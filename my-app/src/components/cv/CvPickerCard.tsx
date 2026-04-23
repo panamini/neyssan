@@ -22,6 +22,7 @@ export type CvPickerCardOption = {
 
 type CvPickerCardProps = {
   actionLabel?: string;
+  compact?: boolean;
   onAction?: (id: string) => void;
   onSelect?: (id: string) => void;
   option: CvPickerCardOption;
@@ -30,6 +31,7 @@ type CvPickerCardProps = {
 
 export function CvPickerCard({
   actionLabel,
+  compact = false,
   onAction,
   onSelect,
   option,
@@ -39,6 +41,7 @@ export function CvPickerCard({
   const chooserDate = formatUiDate(chooserDateSource);
   const cardClassName = clsx(
     "dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser dasti-doc-card--cv-library",
+    compact && "dasti-doc-card--compact",
     selected && "dasti-doc-card--selected",
   );
   const footerClassName = clsx(
@@ -72,7 +75,10 @@ export function CvPickerCard({
             type="button"
             className="dasti-icon-button dasti-doc-card__action-arrow"
             aria-label={actionLabel}
-            onClick={() => onAction(option.id)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onAction(option.id);
+            }}
           >
             <ArrowRight size={16} strokeWidth={1.9} aria-hidden="true" />
           </button>

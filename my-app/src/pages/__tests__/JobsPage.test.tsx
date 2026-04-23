@@ -10,6 +10,7 @@ const duplicateJobMock = vi.fn().mockResolvedValue({ jobId: "job_duplicate" });
 const markOpenedMock = vi.fn().mockResolvedValue(null);
 const recordFirstRunPathMock = vi.fn().mockResolvedValue(null);
 const seedSampleJobMock = vi.fn().mockResolvedValue({ jobId: "job_sample" });
+const setJobResumeMock = vi.fn().mockResolvedValue(null);
 const trackEventMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
 const windowOpenMock = vi.fn();
@@ -81,6 +82,9 @@ const selectedJob = {
   toneCues: ["clear", "dependable"],
   contacts: ["Hiring Manager"],
   status: "active",
+  resumeId: undefined,
+  resumeName: undefined,
+  resumeSource: undefined,
   matchRead: {
     tier: "partial",
     score: 50,
@@ -129,7 +133,6 @@ const selectedJob = {
 let listResult: typeof jobsList | undefined = jobsList;
 let selectedJobResult: typeof selectedJob | null | undefined = selectedJob;
 let listError: Error | null = null;
-
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
     isLoading: false,
@@ -172,6 +175,9 @@ vi.mock("convex/react", () => ({
     if (reference === "jobsPublic.markOpened") {
       return markOpenedMock;
     }
+    if (reference === "jobsPublic.setResumeForJob") {
+      return setJobResumeMock;
+    }
     if (reference === "jobsPublic.updateField") {
       return updateFieldMock;
     }
@@ -198,9 +204,16 @@ vi.mock("../../../convex/_generated/api", () => ({
       seedSampleJob: "jobsPublic.seedSampleJob",
       trackEvent: "jobsPublic.trackEvent",
       markOpened: "jobsPublic.markOpened",
+      setResumeForJob: "jobsPublic.setResumeForJob",
       updateField: "jobsPublic.updateField",
     },
   },
+}));
+
+vi.mock("../../components/ui/toast", () => ({
+  useToast: () => ({
+    showToast: vi.fn(),
+  }),
 }));
 
 vi.mock("../../contexts/CvLibraryContext", () => ({
@@ -225,12 +238,18 @@ describe("JobsPage", () => {
     recordFirstRunPathMock.mockClear();
     seedSampleJobMock.mockReset();
     seedSampleJobMock.mockResolvedValue({ jobId: "job_sample" });
+    setJobResumeMock.mockClear();
     trackEventMock.mockClear();
     updateFieldMock.mockClear();
     windowOpenMock.mockReset();
     vi.stubGlobal("open", windowOpenMock);
     listResult = jobsList;
-    selectedJobResult = selectedJob;
+    selectedJobResult = {
+      ...selectedJob,
+      resumeId: undefined,
+      resumeName: undefined,
+      resumeSource: undefined,
+    };
     listError = null;
   });
 
@@ -287,6 +306,9 @@ describe("JobsPage", () => {
       screen.getByRole("button", { name: "Open resume with this job" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Common next steps")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Attach a resume" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save for later" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open" }),
@@ -340,6 +362,131 @@ describe("JobsPage", () => {
       timeToDecisionMs: expect.any(Number),
       tier: "partial",
     });
+  });
+
+  it("opens the paperclip picker from the job detail header", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route
+            path="/jobs/:jobId"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Attach a resume" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "Attach a resume" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Attach Primary resume" }),
+    ).toBeInTheDocument();
+  });
+
+  it("navigates to the canonical Proposal Forge job route from the job page", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      resumeId: "cv_alpha",
+      resumeName: "Operations Associate — Alex Martin",
+      resumeSource: "job",
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route
+            path="/jobs/:jobId"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route path="/proposal" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Generate cover letter" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/proposal?jobId=job_alpha",
+      );
+    });
+    expect(trackEventMock).toHaveBeenCalledWith({
+      event: "job_decision_made",
+      jobId: "job_alpha",
+      outcome: "cover_letter",
+      timeToDecisionMs: expect.any(Number),
+      tier: "partial",
+    });
+  });
+
+  it("attaches a resume only to the selected job from the paperclip picker", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Attach a resume" }));
+    fireEvent.click(screen.getByRole("button", { name: "Attach Primary resume" }));
+
+    await waitFor(() => {
+      expect(setJobResumeMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        resumeId: "cv_alpha",
+        resumeName: "Primary resume",
+      });
+    });
+    expect(
+      screen.getByRole("button", { name: "Attached resume: Primary resume" }),
+    ).toBeInTheDocument();
+  });
+
+  it("detaches the selected job resume from the paperclip picker", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      resumeId: "cv_alpha",
+      resumeName: "Primary resume",
+      resumeSource: "job",
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Attached resume: Primary resume" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove attached resume" }));
+
+    await waitFor(() => {
+      expect(setJobResumeMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        resumeId: null,
+        resumeName: null,
+      });
+    });
+    expect(screen.getByRole("button", { name: "Attach a resume" })).toBeInTheDocument();
   });
 
   it("closes to list view when save for later is selected", async () => {
@@ -416,6 +563,50 @@ describe("JobsPage", () => {
       fieldKey: "summary",
       beforeConfidence: 0.82,
     });
+  });
+
+  it("shows the attached resume in the paperclip header affordance", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      resumeId: "cv_alpha",
+      resumeName: "Primary resume",
+      resumeSource: "job",
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Attached resume: Primary resume" }),
+    ).toBeInTheDocument();
+  });
+
+  it("reflects the same job-scoped resume after Proposal Forge has already attached it", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      resumeId: "cv_alpha",
+      resumeName: "Operations Associate — Alex Martin",
+      resumeSource: "job",
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Attached resume: Operations Associate — Alex Martin",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("composes the library chips for match tier, docs, and needs review", async () => {
