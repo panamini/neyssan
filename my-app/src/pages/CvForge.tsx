@@ -1,11 +1,10 @@
 import React from "react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { isQuickStartCompleted } from "../lib/onboarding-state";
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
-import { Check, Eye, Palette, PenLine } from "@/lib/icons";
+import { Check, Eye, Palette, PenLine, X } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
-import { ProposalBriefCard } from "../components/ProposalBriefCard";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
 import ResumeExportControl from "../components/ResumeExportControl";
 import type { ResumeExportRequest } from "../components/ResumeExportControl";
@@ -69,45 +68,10 @@ type SavedStylePresetSlot = {
   name?: string;
 };
 
-type CvForgeJobReviewItem = {
-  id: string;
-  fieldKey: string;
-  label: string;
-  reviewStatus: string;
-  suggestedValue: unknown;
-  approvedValue?: unknown;
-  sourceText: string;
-};
-
-type CvForgeLinkedProposal = {
-  id: string;
-  title: string;
-  status: string;
-  updatedAt: number;
-};
-
 type CvForgeCanonicalJob = {
   id: string;
   title: string;
   company: string;
-  location: string;
-  sourceUrl: string;
-  sourceDomain: string;
-  sourceType: string;
-  applicationUrl: string;
-  parseStatus: string;
-  reviewState: string;
-  summary: string;
-  rawDescription: string;
-  responsibilities: string[];
-  keywords: string[];
-  mustHaves: string[];
-  toneCues: string[];
-  contacts: string[];
-  status: string;
-  linkedProposalCount: number;
-  linkedProposals: CvForgeLinkedProposal[];
-  reviewItems: CvForgeJobReviewItem[];
 } | null;
 
 const CV_FORGE_WORKSPACE_MODE_STORAGE_KEY = "dasti:cv-forge-workspace-mode:v1";
@@ -348,22 +312,7 @@ export function CvForge(): JSX.Element {
     ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
     requestedJobId && isConvexAuthenticated ? { jobId: requestedJobId } : "skip",
   ) as CvForgeCanonicalJob | undefined;
-  const approveJobReviewItem = useMutation(
-    ((api as any).jobsPublic?.approveReviewItem ?? "jobsPublic.approveReviewItem") as any,
-  );
-  const updateJobField = useMutation(
-    ((api as any).jobsPublic?.updateField ?? "jobsPublic.updateField") as any,
-  );
-  const [optimisticJobRecord, setOptimisticJobRecord] =
-    React.useState<CvForgeCanonicalJob>(null);
-
-  React.useEffect(() => {
-    if (requestedJobRecord !== undefined) {
-      setOptimisticJobRecord(requestedJobRecord);
-    }
-  }, [requestedJobRecord]);
-
-  const selectedJobRecord = optimisticJobRecord ?? requestedJobRecord ?? null;
+  const selectedJobRecord = requestedJobRecord ?? null;
   const isSplitCanvas = viewportWidth >= 1240;
   const editorGridMaxWidth =
     workspaceMode === "edit"
@@ -772,117 +721,22 @@ export function CvForge(): JSX.Element {
   } as React.CSSProperties;
   const showJobBriefContext = Boolean(requestedJobId);
 
-  const handleApproveJobReviewItem = React.useCallback(
-    async (item: CvForgeJobReviewItem) => {
-      if (!requestedJobId) {
-        return;
-      }
+  const handleReturnToJob = React.useCallback(() => {
+    if (!requestedJobId) {
+      return;
+    }
+    void navigate(`/jobs/${encodeURIComponent(requestedJobId)}`);
+  }, [navigate, requestedJobId]);
 
-      setOptimisticJobRecord((current) => {
-        if (!current) {
-          return current;
-        }
-
-        const nextReviewItems = current.reviewItems.map((reviewItem) =>
-          reviewItem.id === item.id
-            ? {
-                ...reviewItem,
-                reviewStatus: "approved",
-                approvedValue:
-                  reviewItem.approvedValue ?? reviewItem.suggestedValue,
-              }
-            : reviewItem,
-        );
-        const nextReviewState = nextReviewItems.every(
-          (reviewItem) => reviewItem.reviewStatus === "approved",
-        )
-          ? "ready"
-          : "needs_review";
-
-        return {
-          ...current,
-          [item.fieldKey]: item.approvedValue ?? item.suggestedValue,
-          reviewItems: nextReviewItems,
-          reviewState: nextReviewState,
-        } as CvForgeCanonicalJob;
-      });
-
-      await approveJobReviewItem({
-        jobId: requestedJobId,
-        reviewItemId: item.id,
-      });
-    },
-    [approveJobReviewItem, requestedJobId],
-  );
-
-  const handleSaveJobReviewItem = React.useCallback(
-    async (item: CvForgeJobReviewItem, nextValue: string | string[]) => {
-      if (!requestedJobId) {
-        return;
-      }
-
-      setOptimisticJobRecord((current) => {
-        if (!current) {
-          return current;
-        }
-
-        const nextReviewItems = current.reviewItems.map((reviewItem) =>
-          reviewItem.id === item.id
-            ? {
-                ...reviewItem,
-                reviewStatus: "approved",
-                approvedValue: nextValue,
-              }
-            : reviewItem,
-        );
-        const nextReviewState = nextReviewItems.every(
-          (reviewItem) => reviewItem.reviewStatus === "approved",
-        )
-          ? "ready"
-          : "needs_review";
-
-        return {
-          ...current,
-          [item.fieldKey]: nextValue,
-          reviewItems: nextReviewItems,
-          reviewState: nextReviewState,
-        } as CvForgeCanonicalJob;
-      });
-
-      await updateJobField({
-        jobId: requestedJobId,
-        fieldKey: item.fieldKey,
-        value: nextValue,
-      });
-    },
-    [requestedJobId, updateJobField],
-  );
-
-  const handleSaveJobField = React.useCallback(
-    async (fieldKey: string, nextValue: string | string[]) => {
-      if (!requestedJobId) {
-        return;
-      }
-
-      setOptimisticJobRecord((current) => {
-        if (!current) {
-          return current;
-        }
-
-        return {
-          ...current,
-          [fieldKey]: nextValue,
-        } as CvForgeCanonicalJob;
-      });
-
-      await updateJobField({
-        jobId: requestedJobId,
-        fieldKey,
-        value: nextValue,
-      });
-    },
-    [requestedJobId, updateJobField],
-  );
+  const handleClearJobContext = React.useCallback(() => {
+    const nextParams = new URLSearchParams(search);
+    nextParams.delete("jobId");
+    const nextSearch = nextParams.toString();
+    void navigate({
+      pathname: location.pathname,
+      search: nextSearch ? `?${nextSearch}` : "",
+    });
+  }, [location.pathname, navigate, search]);
 
   return (
     <div
@@ -915,24 +769,27 @@ export function CvForge(): JSX.Element {
         {showJobBriefContext ? (
           <div className="dasti-cv-job-context">
             {requestedJobRecord === undefined ? (
-              <p className="dasti-hint">Loading saved job brief…</p>
+              <p className="dasti-hint">Loading job context…</p>
             ) : selectedJobRecord ? (
-              <ProposalBriefCard
-                documentTitle={selectedJobRecord.title}
-                jobDescription={selectedJobRecord.rawDescription}
-                variant="compact"
-                sourceUrl={selectedJobRecord.sourceUrl}
-                sourcePlatform={selectedJobRecord.sourceType}
-                summaryText={selectedJobRecord.summary}
-                parseStatus={selectedJobRecord.parseStatus}
-                trustState={selectedJobRecord.reviewState}
-                linkedDocumentCount={selectedJobRecord.linkedProposalCount}
-                linkedProposals={selectedJobRecord.linkedProposals}
-                reviewItems={selectedJobRecord.reviewItems}
-                onSaveField={handleSaveJobField}
-                onApproveReviewItem={handleApproveJobReviewItem}
-                onSaveReviewItem={handleSaveJobReviewItem}
-              />
+              <div className="dasti-proposal-context-row dasti-proposal-context-row--below">
+                <button
+                  type="button"
+                  className="dasti-proposal-context-chip"
+                  onClick={handleReturnToJob}
+                >
+                  <span className="dasti-proposal-context-row__text">
+                    {`For: ${selectedJobRecord.title} @ ${selectedJobRecord.company || "Unknown company"}`}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="dasti-icon-button dasti-icon-button--compact"
+                  aria-label="Clear job context"
+                  onClick={handleClearJobContext}
+                >
+                  <X size={14} strokeWidth={1.9} aria-hidden="true" />
+                </button>
+              </div>
             ) : (
               <p className="dasti-hint">
                 Saved job context is unavailable for this resume session.
