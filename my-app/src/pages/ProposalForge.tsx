@@ -63,6 +63,7 @@ import {
 } from "../lib/proposal-output-draft";
 import {
   readProposalEntryIntent,
+  readProposalJobImportFocus,
   readProposalWorkspaceResetToken,
   readStoredProposalComposeDraft,
   writeStoredProposalComposeDraft,
@@ -894,6 +895,10 @@ export function ProposalForge(): JSX.Element {
     () => readProposalEntryIntent(location.state as unknown),
     [location.state],
   );
+  const proposalJobImportFocus = React.useMemo(
+    () => readProposalJobImportFocus(location.state as unknown),
+    [location.state],
+  );
   const shouldInitializeCoverLetterStartSession =
     requestedView === "compose" &&
     proposalEntryIntent === "cover-letter-start" &&
@@ -907,12 +912,19 @@ export function ProposalForge(): JSX.Element {
       !canonicalJobId
     ) {
       setIsCoverLetterStartSessionActive(true);
-      setShowExtensionHelper(false);
+      setShowExtensionHelper(proposalJobImportFocus === "supported-sites");
       return;
     }
 
     setShowExtensionHelper(false);
-  }, [canonicalJobId, handoffId, proposalEntryIntent, proposalWorkspaceResetToken, requestedView]);
+  }, [
+    canonicalJobId,
+    handoffId,
+    proposalEntryIntent,
+    proposalJobImportFocus,
+    proposalWorkspaceResetToken,
+    requestedView,
+  ]);
   const {
     isLoading: isConvexAuthLoading,
     isAuthenticated: isConvexAuthenticated,
@@ -1159,7 +1171,11 @@ export function ProposalForge(): JSX.Element {
   const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
   const [isCoverLetterStartSessionActive, setIsCoverLetterStartSessionActive] =
     React.useState(() => shouldInitializeCoverLetterStartSession);
-  const [showExtensionHelper, setShowExtensionHelper] = React.useState(false);
+  const [showExtensionHelper, setShowExtensionHelper] = React.useState(
+    () =>
+      shouldInitializeCoverLetterStartSession &&
+      proposalJobImportFocus === "supported-sites",
+  );
   const [coverLetterInlineImportPhase, setCoverLetterInlineImportPhase] =
     React.useState<ProposalInlineImportPhase>("idle");
   const [coverLetterInlineImportFileName, setCoverLetterInlineImportFileName] =
@@ -3781,7 +3797,12 @@ export function ProposalForge(): JSX.Element {
         replace: true,
         state:
           proposalEntryIntent === "cover-letter-start"
-            ? { proposalEntryIntent }
+            ? {
+                proposalEntryIntent,
+                ...(proposalJobImportFocus === "supported-sites"
+                  ? { jobImportFocus: proposalJobImportFocus }
+                  : {}),
+              }
             : null,
       },
     );
@@ -3790,6 +3811,7 @@ export function ProposalForge(): JSX.Element {
     location.search,
     navigate,
     proposalEntryIntent,
+    proposalJobImportFocus,
     proposalWorkspaceResetToken,
     resetProposalWorkspace,
   ]);
@@ -6485,6 +6507,11 @@ export function ProposalForge(): JSX.Element {
                   <CoverLetterStartSurface
                     hasResumes={hasLocalResumes}
                     showExtensionHelper={showExtensionHelper}
+                    initialRoute={
+                      proposalJobImportFocus === "supported-sites"
+                        ? "job"
+                        : "root"
+                    }
                     importResumeState={coverLetterInlineImportState}
                     onBackToQuickStart={
                       proposalEntryIntent === "cover-letter-start"

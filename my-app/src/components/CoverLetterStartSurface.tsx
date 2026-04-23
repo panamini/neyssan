@@ -19,6 +19,7 @@ type CoverLetterStartRoute = "root" | "job" | "resume";
 type Props = {
   hasResumes: boolean;
   showExtensionHelper: boolean;
+  initialRoute?: CoverLetterStartRoute;
   importResumeState: CoverLetterStartSurfaceImportState;
   onBackToQuickStart?: (() => void) | null;
   onClose: () => void;
@@ -31,6 +32,7 @@ type Props = {
 export function CoverLetterStartSurface({
   hasResumes,
   showExtensionHelper,
+  initialRoute = "root",
   importResumeState,
   onBackToQuickStart = null,
   onClose,
@@ -39,7 +41,10 @@ export function CoverLetterStartSurface({
   onPasteJobOffer,
   onUseChromeExtension,
 }: Props): JSX.Element {
-  const [route, setRoute] = React.useState<CoverLetterStartRoute>("root");
+  const [route, setRoute] = React.useState<CoverLetterStartRoute>(initialRoute);
+  React.useEffect(() => {
+    setRoute(initialRoute);
+  }, [initialRoute]);
   const extensionSourceLinks = React.useMemo(
     () => getProposalExtensionSourceLinks(),
     [],

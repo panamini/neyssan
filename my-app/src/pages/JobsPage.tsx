@@ -779,6 +779,7 @@ function JobsPageContent(): JSX.Element {
     void navigate("/proposal", {
       state: createProposalWorkspaceResetState({
         entryIntent: "cover-letter-start",
+        jobImportFocus: "supported-sites",
       }),
     });
   }, [navigate]);
