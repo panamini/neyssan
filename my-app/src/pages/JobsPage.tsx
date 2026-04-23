@@ -338,9 +338,6 @@ function JobsPageContent(): JSX.Element {
   const approveReviewItem = useMutation(
     ((api as any).jobsPublic?.approveReviewItem ?? "jobsPublic.approveReviewItem") as any,
   );
-  const loadJobsForUser = useMutation(
-    ((api as any).jobsPublic?.loadForUser ?? "jobsPublic.loadForUser") as any,
-  );
   const seedSampleJob = useMutation(
     ((api as any).jobsPublic?.seedSampleJob ?? "jobsPublic.seedSampleJob") as any,
   );
@@ -363,29 +360,12 @@ function JobsPageContent(): JSX.Element {
     jobsListReference,
     isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
   ) as JobsPageListItem[] | undefined;
-  const [fallbackJobs, setFallbackJobs] = React.useState<JobsPageListItem[] | null>(
-    null,
-  );
   const selectedJobRecord = useQuery(
     jobByIdReference,
     selectedJobId && isLoaded && isSignedIn && isConvexAuthenticated
       ? { jobId: selectedJobId }
       : "skip",
   ) as JobsPageDetail | undefined;
-  const effectiveJobs = fallbackJobs ?? jobs;
-
-  const refreshJobsList = React.useCallback(async () => {
-    if (!isLoaded || !isSignedIn || !isConvexAuthenticated) {
-      return;
-    }
-
-    try {
-      const nextJobs = (await loadJobsForUser({})) as JobsPageListItem[];
-      setFallbackJobs(nextJobs);
-    } catch {
-      // Keep the live query as the source of truth when the fallback refresh fails.
-    }
-  }, [isConvexAuthenticated, isLoaded, isSignedIn, loadJobsForUser]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") {
@@ -442,52 +422,9 @@ function JobsPageContent(): JSX.Element {
     }
   }, [selectedJobRecord]);
 
-  React.useEffect(() => {
-    if (!fallbackJobs || !jobs) {
-      return;
-    }
-
-    const liveJobsCoverFallback =
-      fallbackJobs.length === jobs.length &&
-      fallbackJobs.every((fallbackJob) =>
-        jobs.some(
-          (liveJob) =>
-            liveJob.id === fallbackJob.id &&
-            liveJob.updatedAt === fallbackJob.updatedAt &&
-            liveJob.lastActivityAt === fallbackJob.lastActivityAt &&
-            liveJob.reviewState === fallbackJob.reviewState &&
-            liveJob.parseStatus === fallbackJob.parseStatus,
-        ),
-      );
-
-    if (liveJobsCoverFallback) {
-      setFallbackJobs(null);
-    }
-  }, [fallbackJobs, jobs]);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void refreshJobsList();
-      }
-    };
-
-    window.addEventListener("focus", refreshJobsList);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener("focus", refreshJobsList);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [refreshJobsList]);
-
   const filteredJobs = React.useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    const baseList = [...(effectiveJobs ?? [])]
+    const baseList = [...(jobs ?? [])]
       .filter((job) =>
         matchesListFilters(
           job,
@@ -536,7 +473,7 @@ function JobsPageContent(): JSX.Element {
 
     return baseList;
   }, [
-    effectiveJobs,
+    jobs,
     optimisticActivityById,
     optimisticReviewStateById,
     hasDocsOnly,
@@ -586,9 +523,9 @@ function JobsPageContent(): JSX.Element {
   const selectedJobSummary = React.useMemo(
     () =>
       selectedJobId
-        ? (effectiveJobs ?? []).find((job) => job.id === selectedJobId) ?? null
+        ? (jobs ?? []).find((job) => job.id === selectedJobId) ?? null
         : null,
-    [effectiveJobs, selectedJobId],
+    [jobs, selectedJobId],
   );
   const selectedJob = optimisticSelectedJob ?? selectedJobRecord ?? null;
   const selectedJobIsLoading =
@@ -906,7 +843,7 @@ function JobsPageContent(): JSX.Element {
       ? "Sign in to view saved jobs."
       : null;
 
-  const hasJobs = (effectiveJobs?.length ?? 0) > 0;
+  const hasJobs = (jobs?.length ?? 0) > 0;
   const selectedSourceLabel = getProposalSourceLabel(
     selectedJob?.sourceType ?? selectedJobSummary?.sourceType,
     selectedJob?.sourceUrl ?? selectedJobSummary?.sourceUrl,
