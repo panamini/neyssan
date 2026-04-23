@@ -30,6 +30,7 @@ export type MatchReadSynthesisRequest = {
 const MATCH_READ_SYNTHESIS_MAX_ITEMS = 6;
 const MATCH_READ_SYNTHESIS_MAX_ITEM_LENGTH = 96;
 const MATCH_READ_SYNTHESIS_MAX_OUTPUT_TOKENS = 220;
+const DEFAULT_MATCH_READ_SYNTHESIS_MODEL = "ministral-3-3b-instruct-2512";
 
 function compactWhitespace(value: string): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -124,10 +125,11 @@ function parseSynthesisJson(
 
 export function resolveMatchReadSynthesisModel(): string {
   return (
+    process.env.MISTRAL_MATCH_READ_MODEL ??
     llmConfig.mistralModel ??
     llmConfig.model ??
     process.env.MISTRAL_MODEL ??
-    "mistral-small-latest"
+    DEFAULT_MATCH_READ_SYNTHESIS_MODEL
   );
 }
 
