@@ -2,7 +2,7 @@ import React from "react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
-import { Check, Eye, Palette, PenLine, X } from "@/lib/icons";
+import { Check, Eye, Palette, PenLine } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
 import ResumeExportControl from "../components/ResumeExportControl";
@@ -319,6 +319,10 @@ export function CvForge(): JSX.Element {
   const cvPickerOptions = React.useMemo(
     () => cvs.map((cv) => buildCvForgePickerOption(cv)),
     [cvs],
+  );
+  const activeCvContext = React.useMemo(
+    () => (currentCv ? buildCvForgePickerOption(currentCv) : null),
+    [currentCv],
   );
   const shouldShowEntryPicker =
     isLibraryHydrated && !lastLibraryFetchFailed && !requestedCvId;
@@ -981,10 +985,21 @@ export function CvForge(): JSX.Element {
           } as React.CSSProperties
         }
       >
-        {showJobBriefContext ? (
+        {showJobBriefContext || (!shouldShowEntryPicker && activeCvContext) ? (
           <div className="dasti-cv-job-context">
-            {requestedJobRecord === undefined ? (
-              <p className="dasti-hint">Loading job context…</p>
+            {!showJobBriefContext ? null : requestedJobRecord === undefined ? (
+              <div className="dasti-proposal-context-row dasti-proposal-context-row--below">
+                <p className="dasti-hint">Loading job context…</p>
+                {shouldShowEntryPicker ? (
+                  <button
+                    type="button"
+                    className="dasti-button dasti-button--secondary dasti-button--sm"
+                    onClick={handleReturnToJob}
+                  >
+                    <span>Back to job</span>
+                  </button>
+                ) : null}
+              </div>
             ) : selectedJobRecord ? (
               <div className="dasti-proposal-context-row dasti-proposal-context-row--below">
                 <button
@@ -993,23 +1008,56 @@ export function CvForge(): JSX.Element {
                   onClick={handleReturnToJob}
                 >
                   <span className="dasti-proposal-context-row__text">
-                    {`For: ${selectedJobRecord.title} @ ${selectedJobRecord.company || "Unknown company"}`}
+                    {`Job: ${selectedJobRecord.title} @ ${selectedJobRecord.company || "Unknown company"}`}
                   </span>
                 </button>
-                <button
-                  type="button"
-                  className="dasti-icon-button dasti-icon-button--compact"
-                  aria-label="Clear job context"
-                  onClick={handleClearJobContext}
-                >
-                  <X size={14} strokeWidth={1.9} aria-hidden="true" />
-                </button>
+                {shouldShowEntryPicker ? (
+                  <button
+                    type="button"
+                    className="dasti-button dasti-button--secondary dasti-button--sm"
+                    onClick={handleReturnToJob}
+                  >
+                    <span>Back to job</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="dasti-button dasti-button--secondary dasti-button--sm"
+                    onClick={handleClearJobContext}
+                  >
+                    <span>Clear job context</span>
+                  </button>
+                )}
               </div>
             ) : (
-              <p className="dasti-hint">
-                Saved job context is unavailable for this resume session.
-              </p>
+              <div className="dasti-proposal-context-row dasti-proposal-context-row--below">
+                <p className="dasti-hint">
+                  Saved job context is unavailable for this resume session.
+                </p>
+                {shouldShowEntryPicker ? (
+                  <button
+                    type="button"
+                    className="dasti-button dasti-button--secondary dasti-button--sm"
+                    onClick={handleReturnToJob}
+                  >
+                    <span>Back to job</span>
+                  </button>
+                ) : null}
+              </div>
             )}
+            {!shouldShowEntryPicker && activeCvContext ? (
+              <div
+                className="dasti-proposal-context-row dasti-proposal-context-row--below"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="dasti-proposal-context-chip">
+                  <span className="dasti-proposal-context-row__text">
+                    {`CV: ${activeCvContext.title}`}
+                  </span>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
         {shouldShowEntryPicker ? (
