@@ -586,19 +586,93 @@ async function requireCanonicalUserProfile(ctx: any) {
   };
 }
 
-async function listProjectedJobsForProfile(ctx: any, profile: {
+type JobsProjectionProfile = {
   _id?: string | CanonicalUserProfile["id"];
   id?: string | CanonicalUserProfile["id"];
+  version?: number;
   skills?: string[];
   keywords?: string[];
-}, options?: { trackMatchRead?: boolean }) {
-  const profileId = String(profile._id ?? profile.id ?? "");
-  const jobs = await listJobsForProfileId(ctx, profileId);
+};
 
-  const proposals = await ctx.db
-    .query("proposals")
-    .withIndex("by_user", (q: any) => q.eq("userId", profileId))
-    .collect();
+function normalizeProjectionProfiles(
+  profiles: JobsProjectionProfile[],
+): JobsProjectionProfile[] {
+  const seenProfileIds = new Set<string>();
+  const normalizedProfiles: JobsProjectionProfile[] = [];
+
+  for (const profile of profiles) {
+    const profileId = String(profile._id ?? profile.id ?? "");
+    if (!profileId || seenProfileIds.has(profileId)) {
+      continue;
+    }
+
+    seenProfileIds.add(profileId);
+    normalizedProfiles.push(profile);
+  }
+
+  return normalizedProfiles;
+}
+
+function buildMatchReadProfile(
+  profile: JobsProjectionProfile | null,
+): {
+  id: string;
+  version?: number;
+  skills: string[];
+  keywords: string[];
+} | null {
+  if (!profile) {
+    return null;
+  }
+
+  const profileId = String(profile._id ?? profile.id ?? "");
+  if (!profileId) {
+    return null;
+  }
+
+  return {
+    id: profileId,
+    ...(profile.version !== undefined ? { version: profile.version } : {}),
+    skills: profile.skills ?? [],
+    keywords: profile.keywords ?? [],
+  };
+}
+
+async function listProjectedJobsForProfiles(
+  ctx: any,
+  profiles: JobsProjectionProfile[],
+  options?: { trackMatchRead?: boolean },
+) {
+  const normalizedProfiles = normalizeProjectionProfiles(profiles);
+  if (normalizedProfiles.length === 0) {
+    return [];
+  }
+
+  const profileById = new Map(
+    normalizedProfiles.map((profile) => [
+      String(profile._id ?? profile.id ?? ""),
+      profile,
+    ]),
+  );
+
+  const jobGroups = await Promise.all(
+    normalizedProfiles.map((profile) =>
+      listJobsForProfileId(ctx, String(profile._id ?? profile.id ?? "")),
+    ),
+  );
+  const jobs = jobGroups.flat();
+
+  const proposalGroups = await Promise.all(
+    normalizedProfiles.map((profile) =>
+      ctx.db
+        .query("proposals")
+        .withIndex("by_user", (q: any) =>
+          q.eq("userId", String(profile._id ?? profile.id ?? "")),
+        )
+        .collect(),
+    ),
+  );
+  const proposals = proposalGroups.flat();
 
   const linkedProposalStats = new Map<
     string,
@@ -630,6 +704,8 @@ async function listProjectedJobsForProfile(ctx: any, profile: {
   );
 
   const projections = visibleJobs.map((job: any) => {
+      const ownerProfile =
+        profileById.get(String(job.userId)) ?? normalizedProfiles[0] ?? null;
       const stats = linkedProposalStats.get(String(job._id));
       const lastActivityAt = Math.max(
         job.updatedAt ?? 0,
@@ -645,11 +721,7 @@ async function listProjectedJobsForProfile(ctx: any, profile: {
           mustHavesExtraction: job.mustHavesExtraction ?? [],
           keywordsExtraction: job.keywordsExtraction ?? [],
         },
-        profile: {
-          id: profileId,
-          skills: profile.skills ?? [],
-          keywords: profile.keywords ?? [],
-        },
+        profile: buildMatchReadProfile(ownerProfile),
       });
 
       return {
@@ -676,6 +748,8 @@ async function listProjectedJobsForProfile(ctx: any, profile: {
   if (options?.trackMatchRead) {
     await Promise.all(
       visibleJobs.map((job: any) => {
+        const ownerProfile =
+          profileById.get(String(job.userId)) ?? normalizedProfiles[0] ?? null;
         const matchRead = computeMatchRead({
           job: {
             id: String(job._id),
@@ -685,11 +759,7 @@ async function listProjectedJobsForProfile(ctx: any, profile: {
             mustHavesExtraction: job.mustHavesExtraction ?? [],
             keywordsExtraction: job.keywordsExtraction ?? [],
           },
-          profile: {
-            id: profileId,
-            skills: profile.skills ?? [],
-            keywords: profile.keywords ?? [],
-          },
+          profile: buildMatchReadProfile(ownerProfile),
         });
         return scheduleMatchReadComputedMetric(ctx, matchRead);
       }),
@@ -697,6 +767,14 @@ async function listProjectedJobsForProfile(ctx: any, profile: {
   }
 
   return projections;
+}
+
+async function listProjectedJobsForProfile(
+  ctx: any,
+  profile: JobsProjectionProfile,
+  options?: { trackMatchRead?: boolean },
+) {
+  return listProjectedJobsForProfiles(ctx, [profile], options);
 }
 
 export const createOrReuseFromSource = mutation({
@@ -1039,12 +1117,12 @@ export const listForUser = query({
       throw new Error("Not authenticated");
     }
 
-    const profile = await getPrimaryProfileForClerk(ctx, identity.subject);
-    if (!profile) {
+    const profiles = await listProfilesForClerk(ctx, identity.subject);
+    if (profiles.length === 0) {
       return [];
     }
 
-    return listProjectedJobsForProfile(ctx, profile);
+    return listProjectedJobsForProfiles(ctx, profiles);
   },
 });
 
