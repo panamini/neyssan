@@ -5,6 +5,8 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { JobsPage } from "../JobsPage";
 
 const approveReviewItemMock = vi.fn().mockResolvedValue(null);
+const archiveJobMock = vi.fn().mockResolvedValue(null);
+const duplicateJobMock = vi.fn().mockResolvedValue({ jobId: "job_duplicate" });
 const markOpenedMock = vi.fn().mockResolvedValue(null);
 const recordFirstRunPathMock = vi.fn().mockResolvedValue(null);
 const seedSampleJobMock = vi.fn().mockResolvedValue({ jobId: "job_sample" });
@@ -152,6 +154,12 @@ vi.mock("convex/react", () => ({
     if (reference === "jobsPublic.approveReviewItem") {
       return approveReviewItemMock;
     }
+    if (reference === "jobsPublic.archiveJob") {
+      return archiveJobMock;
+    }
+    if (reference === "jobsPublic.duplicateJob") {
+      return duplicateJobMock;
+    }
     if (reference === "jobsPublic.recordFirstRunPath") {
       return recordFirstRunPathMock;
     }
@@ -184,6 +192,8 @@ vi.mock("../../../convex/_generated/api", () => ({
       listForUser: "jobsPublic.listForUser",
       getById: "jobsPublic.getById",
       approveReviewItem: "jobsPublic.approveReviewItem",
+      archiveJob: "jobsPublic.archiveJob",
+      duplicateJob: "jobsPublic.duplicateJob",
       recordFirstRunPath: "jobsPublic.recordFirstRunPath",
       seedSampleJob: "jobsPublic.seedSampleJob",
       trackEvent: "jobsPublic.trackEvent",
@@ -209,6 +219,8 @@ describe("JobsPage", () => {
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     approveReviewItemMock.mockClear();
+    archiveJobMock.mockClear();
+    duplicateJobMock.mockClear();
     markOpenedMock.mockClear();
     recordFirstRunPathMock.mockClear();
     seedSampleJobMock.mockReset();
@@ -230,7 +242,15 @@ describe("JobsPage", () => {
     render(
       <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
         <Routes>
-          <Route path="/jobs/:jobId" element={<JobsPage />} />
+          <Route
+            path="/jobs/:jobId"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
           <Route
             path="/jobs"
             element={
@@ -326,7 +346,15 @@ describe("JobsPage", () => {
     render(
       <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
         <Routes>
-          <Route path="/jobs/:jobId" element={<JobsPage />} />
+          <Route
+            path="/jobs/:jobId"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
           <Route
             path="/jobs"
             element={
@@ -451,6 +479,118 @@ describe("JobsPage", () => {
       "_blank",
       "noopener",
     );
+  });
+
+  it("archives a job from the row overflow menu and closes the selected detail view", async () => {
+    archiveJobMock.mockImplementation(async ({ jobId }: { jobId: string }) => {
+      listResult = jobsList.filter((job) => job.id !== jobId);
+      if (selectedJobResult?.id === jobId) {
+        selectedJobResult = null;
+      }
+      return null;
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route
+            path="/jobs/:jobId"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route
+            path="/jobs"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    fireEvent.click(
+      within(jobsListElement).getByRole("button", {
+        name: "More actions for Operations Associate",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
+
+    await waitFor(() => {
+      expect(archiveJobMock).toHaveBeenCalledWith({ jobId: "job_alpha" });
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent("/jobs?view=list");
+    });
+  });
+
+  it("duplicates a job from the row overflow menu and navigates to the duplicate", async () => {
+    duplicateJobMock.mockImplementation(async ({ jobId }: { jobId: string }) => {
+      const sourceJob = jobsList.find((job) => job.id === jobId)!;
+      listResult = [
+        {
+          ...sourceJob,
+          id: "job_duplicate",
+          title: `${sourceJob.title} Copy`,
+          importedAt: sourceJob.importedAt + 1,
+          updatedAt: sourceJob.updatedAt + 1,
+          lastOpenedAt: sourceJob.lastOpenedAt + 1,
+          lastActivityAt: sourceJob.lastActivityAt + 1,
+        },
+        ...jobsList,
+      ];
+      selectedJobResult = {
+        ...selectedJob,
+        id: "job_duplicate",
+        title: "Operations Associate Copy",
+      };
+      return { jobId: "job_duplicate" };
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route
+            path="/jobs/:jobId"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route
+            path="/jobs"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    fireEvent.click(
+      within(jobsListElement).getByRole("button", {
+        name: "More actions for Operations Associate",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate" }));
+
+    await waitFor(() => {
+      expect(duplicateJobMock).toHaveBeenCalledWith({ jobId: "job_alpha" });
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent("/jobs/job_duplicate");
+    });
   });
 
   it("shows the first-run panel and routes import clicks into the existing parse flow", async () => {
