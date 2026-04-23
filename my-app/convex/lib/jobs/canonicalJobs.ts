@@ -335,8 +335,46 @@ function extractToneCues(rawDescription: string): CanonicalJobExtraction[] {
 }
 
 function extractLocation(rawDescription: string): string {
-  const match = rawDescription.match(/\b(?:in|based in)\s+([A-Z][A-Za-z -]{1,40})/);
-  return compactWhitespace(match?.[1] ?? "");
+  const locationToken =
+    String.raw`(?:[A-ZÀ-Ý][A-Za-zÀ-ÿ'’-]*|de|del|della|des|du|da|di|do|dos|das|am|an|der|den|la|le|los|las|el|y)`;
+  const locationValuePattern = new RegExp(
+    `^(${locationToken}(?:\\s+${locationToken}){0,4})`,
+    "u",
+  );
+  const locationPatterns = [
+    /\b(?:based in|located in|office in)\s+([^.,;:!?]+)/iu,
+    /\bin\s+([^.,;:!?]+)/u,
+    /\b(?:oficina en|ubicad[oa] en|basad[oa] en)\s+([^.,;:!?]+)/iu,
+    /\b(?:basé(?:e|es)? à|situé(?:e|es)? à|bureau à)\s+([^.,;:!?]+)/iu,
+    /\b(?:standort(?: in)?|büro(?: in)?|sitz(?: in)?|arbeitsort(?: in)?)\s+([^.,;:!?]+)/iu,
+    /\b(?:con sede a|sede a|ufficio a|situat[oa] a|localizzato a|localizzata a)\s+([^.,;:!?]+)/iu,
+    /\b(?:escritório em|sede em|localizado em|localizada em|baseado em|baseada em)\s+([^.,;:!?]+)/iu,
+  ] as const;
+
+  for (const pattern of locationPatterns) {
+    const match = rawDescription.match(pattern);
+    const location = compactWhitespace(match?.[1] ?? "");
+    if (location) {
+      const locationValue = location.match(locationValuePattern)?.[1] ?? "";
+      if (locationValue) {
+        return compactWhitespace(locationValue);
+      }
+    }
+  }
+
+  return "";
+}
+
+export function resolveReparsedLocation(args: {
+  existingLocation?: string | null;
+  parsedLocation?: string | null;
+}): string {
+  const parsedLocation = compactWhitespace(args.parsedLocation ?? "");
+  if (parsedLocation) {
+    return parsedLocation;
+  }
+
+  return compactWhitespace(args.existingLocation ?? "");
 }
 
 function extractCompany(rawDescription: string): string {

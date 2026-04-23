@@ -34,7 +34,7 @@ const jobsList = [
     id: "job_beta",
     title: "Support Specialist",
     company: "Northwind",
-    location: "Remote",
+    location: "",
     sourceUrl: "https://www.indeed.com/viewjob?jk=beta",
     sourceDomain: "indeed.com",
     sourceType: "indeed",
@@ -217,7 +217,7 @@ describe("JobsPage", () => {
     expect((await screen.findAllByText("Operations Associate")).length).toBeGreaterThan(0);
     expect(await screen.findByText("Support Specialist")).toBeInTheDocument();
     expect(await screen.findByText("Acme · Paris")).toBeInTheDocument();
-    expect(await screen.findByText("Northwind · Remote")).toBeInTheDocument();
+    expect(await screen.findByText("Northwind · Location unavailable")).toBeInTheDocument();
     expect(await screen.findByText("Match")).toBeInTheDocument();
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
     expect(await screen.findByText("Weak")).toBeInTheDocument();
