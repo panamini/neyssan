@@ -270,6 +270,7 @@ export default defineSchema({
     toneCues: v.array(v.string()),
     toneCuesExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
     contacts: v.array(v.string()),
+    isSample: v.optional(v.boolean()),
     status: v.string(),
     archivedAt: v.optional(v.union(v.number(), v.null())),
     reviewItems: v.array(
