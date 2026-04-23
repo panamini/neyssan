@@ -233,6 +233,11 @@ function resolveMatchTierLabel(
   return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
+function resolveLocationModeLabel(value: string): string {
+  const normalizedValue = String(value ?? "").trim();
+  return normalizedValue || "Location unavailable";
+}
+
 function resolveOptimisticReviewState(
   currentReviewState: string,
   reviewItems: JobsPageReviewItem[],
@@ -931,7 +936,7 @@ function JobsPageContent(): JSX.Element {
                     const isActive = job.id === selectedJobId;
                     const title = job.title.trim() || "Untitled job";
                     const company = job.company.trim() || "Unknown company";
-                    const location = job.location.trim();
+                    const locationLabel = resolveLocationModeLabel(job.location);
                     const lastActivityLabel =
                       formatUiDate(
                         optimisticActivityById[job.id] ?? job.lastActivityAt,
@@ -957,7 +962,7 @@ function JobsPageContent(): JSX.Element {
                           <div className="dasti-jobs-row__title">{title}</div>
                           <div className="dasti-jobs-row__company">
                             {company}
-                            {location ? ` · ${location}` : ""}
+                            {` · ${locationLabel}`}
                           </div>
                           <div className="dasti-jobs-row__meta">
                             <span className="dasti-jobs-match-chip">
@@ -1096,12 +1101,10 @@ function JobsPageContent(): JSX.Element {
                       </div>
                       <div className="dasti-jobs-detail__meta">
                         <span>{selectedJob.company || "Unknown company"}</span>
-                        {selectedJob.location ? (
-                          <>
-                            <span>·</span>
-                            <span>{selectedJob.location}</span>
-                          </>
-                        ) : null}
+                        <>
+                          <span>·</span>
+                          <span>{resolveLocationModeLabel(selectedJob.location)}</span>
+                        </>
                         {selectedSourceLabel ? (
                           <>
                             <span>·</span>

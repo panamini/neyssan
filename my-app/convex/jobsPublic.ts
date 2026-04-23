@@ -12,6 +12,7 @@ import {
   buildCanonicalJobDraftFromSource,
   flattenExtractionValues,
   type CanonicalJobExtraction,
+  resolveReparsedLocation,
   resolveCanonicalJobReviewState,
   resolveReviewItemsAfterApprove,
   resolveReviewItemsAfterFieldUpdate,
@@ -770,7 +771,10 @@ export const parseCreatedJob = internalMutation({
 
       await ctx.db.patch(normalizedJobId, {
         company: draft.company,
-        location: draft.location,
+        location: resolveReparsedLocation({
+          existingLocation: job.location,
+          parsedLocation: draft.location,
+        }),
         rawLanguageDetected: draft.rawLanguageDetected,
         summary: draft.summary,
         summaryExtraction: draft.summaryExtraction,
