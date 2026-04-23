@@ -1,5 +1,6 @@
 import React from "react";
 import clsx from "clsx";
+import { ArrowRight } from "@/lib/icons";
 
 import {
   formatCvDisplaySubtitle,
@@ -20,52 +21,78 @@ export type CvPickerCardOption = {
 };
 
 type CvPickerCardProps = {
-  onSelect: (id: string) => void;
+  actionLabel?: string;
+  onAction?: (id: string) => void;
+  onSelect?: (id: string) => void;
   option: CvPickerCardOption;
-  selected: boolean;
+  selected?: boolean;
 };
 
 export function CvPickerCard({
+  actionLabel,
+  onAction,
   onSelect,
   option,
   selected,
 }: CvPickerCardProps): JSX.Element {
   const chooserDateSource = option.updatedAt ?? option.createdAt ?? null;
   const chooserDate = formatUiDate(chooserDateSource);
-
-  return (
-    <button
-      type="button"
-      className={clsx(
-        "dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser dasti-doc-card--cv-library",
-        selected && "dasti-doc-card--selected",
-      )}
-      aria-pressed={selected}
-      onClick={() => onSelect(option.id)}
-    >
-      <div className="dasti-doc-card__stack">
-        <div className="dasti-doc-card__header">
-          <div className="dasti-doc-card__title-frame">
-            <h3 className="dasti-doc-card__title">{option.title}</h3>
-          </div>
-        </div>
-
-        <div className="dasti-doc-card__meta">
-          {formatCvDisplaySubtitle({
-            title: option.title,
-            profileName: option.profileName,
-            desiredPosition: option.desiredPosition,
-            email: option.email,
-            linkedin: option.linkedin,
-            website: option.website,
-            phone: option.phone,
-          }) || "Draft resume"}
-        </div>
-
-        <div className="dasti-doc-card__footer dasti-doc-card__footer--chooser dasti-doc-card__footer--stamp-only">
-          <div className="dasti-doc-card__stamp">{chooserDate ?? ""}</div>
+  const cardClassName = clsx(
+    "dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser dasti-doc-card--cv-library",
+    selected && "dasti-doc-card--selected",
+  );
+  const footerClassName = clsx(
+    "dasti-doc-card__footer dasti-doc-card__footer--chooser dasti-doc-card__footer--stamp-only",
+    onAction && "dasti-doc-card__footer--chooser-action",
+  );
+  const cardBody = (
+    <div className="dasti-doc-card__stack">
+      <div className="dasti-doc-card__header">
+        <div className="dasti-doc-card__title-frame">
+          <h3 className="dasti-doc-card__title">{option.title}</h3>
         </div>
       </div>
-    </button>
+
+      <div className="dasti-doc-card__meta">
+        {formatCvDisplaySubtitle({
+          title: option.title,
+          profileName: option.profileName,
+          desiredPosition: option.desiredPosition,
+          email: option.email,
+          linkedin: option.linkedin,
+          website: option.website,
+          phone: option.phone,
+        }) || "Draft resume"}
+      </div>
+
+      <div className={footerClassName}>
+        <div className="dasti-doc-card__stamp">{chooserDate ?? ""}</div>
+        {actionLabel && onAction ? (
+          <button
+            type="button"
+            className="dasti-icon-button dasti-doc-card__action-arrow"
+            aria-label={actionLabel}
+            onClick={() => onAction(option.id)}
+          >
+            <ArrowRight size={16} strokeWidth={1.9} aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  return (
+    onSelect ? (
+      <button
+        type="button"
+        className={cardClassName}
+        aria-pressed={selected}
+        onClick={() => onSelect(option.id)}
+      >
+        {cardBody}
+      </button>
+    ) : (
+      <div className={cardClassName}>{cardBody}</div>
+    )
   );
 }
