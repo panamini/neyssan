@@ -174,7 +174,7 @@ function useBrowserTitle(topbarDocumentTitle: string | null): void {
   }, [location.pathname, topbarDocumentTitle]);
 }
 
-const SHOW_TOPBAR = false;
+const SHOW_TOPBAR = true;
 
 function TopbarTitleSync(): null {
   const topbarDocumentTitle = useTopbarDocumentTitle();
@@ -186,6 +186,8 @@ function TopbarTitleSync(): null {
  * Topbar — h:54px (--hdr), wordmark only.
  */
 function Topbar() {
+  const topbarDocumentTitle = useTopbarDocumentTitle();
+
   return (
     <header
       style={{
