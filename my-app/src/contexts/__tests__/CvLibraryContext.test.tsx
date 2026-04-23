@@ -600,6 +600,82 @@ describe('CvLibraryContext', () => {
     expect(ctx.currentCv.id).toBe(firstId);
   });
 
+  it('does not reshuffle visible CV recency when loading a summary-only entry from fallback cache', async () => {
+    const olderUpdatedAt = '2024-04-08T09:00:00.000Z';
+    const newerUpdatedAt = '2024-05-09T10:00:00.000Z';
+    const compactOlder = {
+      id: 'cv_older',
+      title: 'Older Resume',
+      metadata: {
+        createdAt: olderUpdatedAt,
+        updatedAt: olderUpdatedAt,
+        version: 1,
+        librarySummaryOnly: true,
+      },
+      profilePreview: {
+        name: 'Older Candidate',
+      },
+    };
+    const compactNewer = {
+      id: 'cv_newer',
+      title: 'Newer Resume',
+      metadata: {
+        createdAt: newerUpdatedAt,
+        updatedAt: newerUpdatedAt,
+        version: 1,
+        librarySummaryOnly: true,
+      },
+      profilePreview: {
+        name: 'Newer Candidate',
+      },
+    };
+
+    mockLocalStorage.setItem(
+      LOCAL_STORAGE_KEY,
+      JSON.stringify([compactOlder, compactNewer]),
+    );
+    mockLocalStorage.setItem(
+      'cv:cv_older',
+      JSON.stringify({
+        id: 'cv_older',
+        title: 'Older Resume',
+        sections: 'invalid-sections-shape',
+      }),
+    );
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.cvs).toHaveLength(2));
+
+    const sortVisibleIds = (docs: any[]) =>
+      [...docs]
+        .sort((left, right) => {
+          const rightTime = new Date(
+            right.metadata?.updatedAt ?? right.metadata?.createdAt ?? 0,
+          ).getTime();
+          const leftTime = new Date(
+            left.metadata?.updatedAt ?? left.metadata?.createdAt ?? 0,
+          ).getTime();
+          return rightTime - leftTime;
+        })
+        .map((doc) => String(doc.id));
+
+    expect(sortVisibleIds(ctx.cvs)).toEqual(['cv_newer', 'cv_older']);
+
+    act(() => {
+      ctx.loadCv('cv_older');
+    });
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_older'));
+    expect(sortVisibleIds(ctx.cvs)).toEqual(['cv_newer', 'cv_older']);
+  });
+
   it('prefers the requested /cv route id over stale active storage during hydration', async () => {
     const now = new Date().toISOString();
     const alpha = {
