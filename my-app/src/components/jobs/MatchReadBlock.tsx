@@ -1,4 +1,6 @@
 import React from "react";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 
 type MatchRead = {
   tier: "strong" | "partial" | "weak" | "unknown";
@@ -39,6 +41,36 @@ export function MatchReadBlock({
 }: {
   matchRead: MatchRead;
 }): JSX.Element {
+  const trackEvent = useMutation(
+    ((api as any).jobsPublic?.trackEvent ?? "jobsPublic.trackEvent") as any,
+  );
+  const emittedTelemetryKeyRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    const telemetryKey = `${matchRead.basedOn.jobId}:${matchRead.computedAt}`;
+    if (emittedTelemetryKeyRef.current === telemetryKey) {
+      return;
+    }
+
+    emittedTelemetryKeyRef.current = telemetryKey;
+    void trackEvent({
+      event: "match_read_computed",
+      jobId: matchRead.basedOn.jobId,
+      tier: matchRead.tier,
+      confidence: matchRead.confidence,
+      method: matchRead.method,
+      fallback: matchRead.fallback,
+    }).catch(() => {});
+  }, [
+    matchRead.basedOn.jobId,
+    matchRead.computedAt,
+    matchRead.confidence,
+    matchRead.fallback,
+    matchRead.method,
+    matchRead.tier,
+    trackEvent,
+  ]);
+
   if (matchRead.fallback === "parse_failed") {
     return (
       <section className="dasti-proposal-sheet" aria-label="Match read">

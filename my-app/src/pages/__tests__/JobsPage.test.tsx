@@ -9,6 +9,7 @@ const loadForUserMock = vi.fn();
 const markOpenedMock = vi.fn().mockResolvedValue(null);
 const recordFirstRunPathMock = vi.fn().mockResolvedValue(null);
 const seedSampleJobMock = vi.fn().mockResolvedValue({ jobId: "job_sample" });
+const trackEventMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
 const windowOpenMock = vi.fn();
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -67,6 +68,11 @@ const selectedJob = {
   parseStatus: "parsed",
   reviewState: "needs_review",
   summary: "Support recurring operations and unblock coordination work.",
+  summaryExtraction: {
+    value: "Support recurring operations and unblock coordination work.",
+    confidence: 0.82,
+    sourceSpan: null,
+  },
   rawDescription: "Coordinate internal workflows and keep teams aligned.",
   responsibilities: ["Run recurring workflows", "Coordinate team updates"],
   keywords: ["operations", "coordination"],
@@ -148,6 +154,9 @@ vi.mock("convex/react", () => ({
     if (reference === "jobsPublic.seedSampleJob") {
       return seedSampleJobMock;
     }
+    if (reference === "jobsPublic.trackEvent") {
+      return trackEventMock;
+    }
     if (reference === "jobsPublic.markOpened") {
       return markOpenedMock;
     }
@@ -173,6 +182,7 @@ vi.mock("../../../convex/_generated/api", () => ({
       approveReviewItem: "jobsPublic.approveReviewItem",
       recordFirstRunPath: "jobsPublic.recordFirstRunPath",
       seedSampleJob: "jobsPublic.seedSampleJob",
+      trackEvent: "jobsPublic.trackEvent",
       markOpened: "jobsPublic.markOpened",
       updateField: "jobsPublic.updateField",
     },
@@ -206,6 +216,7 @@ describe("JobsPage", () => {
     recordFirstRunPathMock.mockClear();
     seedSampleJobMock.mockReset();
     seedSampleJobMock.mockResolvedValue({ jobId: "job_sample" });
+    trackEventMock.mockClear();
     updateFieldMock.mockClear();
     windowOpenMock.mockReset();
     vi.stubGlobal("open", windowOpenMock);
@@ -256,6 +267,23 @@ describe("JobsPage", () => {
       screen.queryByRole("button", { name: "Do both" }),
     ).not.toBeInTheDocument();
 
+    await waitFor(() => {
+      expect(trackEventMock).toHaveBeenCalledWith({
+        event: "job_opened",
+        jobId: "job_alpha",
+        hasMatchRead: true,
+        reviewState: "needs_review",
+      });
+    });
+    expect(trackEventMock).toHaveBeenCalledWith({
+      event: "match_read_computed",
+      jobId: "job_alpha",
+      tier: "partial",
+      confidence: "medium",
+      method: "keyword-overlap",
+      fallback: "none",
+    });
+
     const linkedDocuments = screen.getByText("Linked documents");
     const rawSource = screen.getByText("Raw source");
     expect(
@@ -272,6 +300,11 @@ describe("JobsPage", () => {
       jobId: "job_alpha",
       reviewItemId: "review_1",
     });
+    expect(trackEventMock).toHaveBeenCalledWith({
+      event: "import_accepted",
+      jobId: "job_alpha",
+      fieldKey: "responsibilities",
+    });
     expect(markOpenedMock).toHaveBeenCalledWith({ jobId: "job_alpha" });
 
     fireEvent.click(screen.getByRole("button", { name: "Open resume with this job" }));
@@ -280,6 +313,12 @@ describe("JobsPage", () => {
       expect(screen.getByTestId("jobs-location")).toHaveTextContent(
         "/cv?jobId=job_alpha",
       );
+    });
+    expect(trackEventMock).toHaveBeenCalledWith({
+      event: "job_decision_made",
+      jobId: "job_alpha",
+      outcome: "resume",
+      timeToDecisionMs: expect.any(Number),
     });
   });
 
@@ -308,6 +347,12 @@ describe("JobsPage", () => {
         fieldKey: "summary",
         value: "Updated summary for the saved job brief.",
       });
+    });
+    expect(trackEventMock).toHaveBeenCalledWith({
+      event: "field_corrected",
+      jobId: "job_alpha",
+      fieldKey: "summary",
+      beforeConfidence: 0.82,
     });
   });
 
