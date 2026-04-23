@@ -95,6 +95,26 @@ const canonicalJobExtractionChoice = v.object({
   sourceSpan: v.union(canonicalJobSourceSpanChoice, v.null()),
 });
 
+const matchReadSynthesisStatusChoice = v.union(
+  v.literal("pending"),
+  v.literal("ready"),
+  v.literal("error"),
+);
+
+const matchReadSynthesisChoice = v.object({
+  cacheKey: v.string(),
+  status: matchReadSynthesisStatusChoice,
+  provider: v.string(),
+  model: v.string(),
+  computedAt: v.optional(v.number()),
+  matched: v.optional(v.array(v.string())),
+  missing: v.optional(v.array(v.string())),
+  promptTokens: v.optional(v.number()),
+  completionTokens: v.optional(v.number()),
+  estimatedCostUsd: v.optional(v.number()),
+  error: v.optional(v.string()),
+});
+
 const proposalVerbatiStyleChoice = v.object({
   layout: v.string(),
   typography: v.string(),
@@ -270,6 +290,7 @@ export default defineSchema({
     toneCues: v.array(v.string()),
     toneCuesExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
     contacts: v.array(v.string()),
+    matchReadSynthesis: v.optional(matchReadSynthesisChoice),
     isSample: v.optional(v.boolean()),
     status: v.string(),
     archivedAt: v.optional(v.union(v.number(), v.null())),

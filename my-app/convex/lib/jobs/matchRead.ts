@@ -1,4 +1,5 @@
 import type { CanonicalJobExtraction } from "./canonicalJobs";
+import type { MatchReadSynthesisCache } from "./matchReadSynthesis";
 
 export type MatchReadTier = "strong" | "partial" | "weak" | "unknown";
 export type MatchReadConfidence = "high" | "medium" | "low";
@@ -7,6 +8,7 @@ export type MatchReadFallback =
   | "profile_missing"
   | "parse_failed"
   | "requirements_missing";
+export type MatchReadMethod = "keyword-overlap" | "llm";
 
 export type MatchRead = {
   tier: MatchReadTier;
@@ -21,7 +23,7 @@ export type MatchRead = {
     jobId: string;
   };
   computedAt: number;
-  method: "keyword-overlap";
+  method: MatchReadMethod;
   fallback: MatchReadFallback;
 };
 
@@ -51,12 +53,15 @@ export function buildMatchReadTelemetryArgs(matchRead: MatchRead) {
 
 type MatchReadProfile = {
   id?: string;
+  version?: number;
   skills?: string[];
   keywords?: string[];
 };
 
 type MatchReadJob = {
   id: string;
+  updatedAt?: number;
+  parseVersion?: string | null;
   parseStatus?: string | null;
   mustHaves?: string[];
   keywords?: string[];
@@ -259,10 +264,57 @@ function resolveConfidence(args: {
   return "low";
 }
 
+export function buildMatchReadSynthesisCacheKey(args: {
+  job: MatchReadJob;
+  profile: MatchReadProfile | null;
+  matchRead: MatchRead;
+}): string {
+  return [
+    String(args.job.id ?? ""),
+    String(args.job.parseVersion ?? ""),
+    String(args.profile?.id ?? ""),
+    String(args.profile?.version ?? ""),
+    args.matchRead.tier,
+    args.matchRead.confidence,
+    args.matchRead.matched.join("|"),
+    args.matchRead.missing.join("|"),
+  ].join("::");
+}
+
+function applyMatchReadSynthesis(args: {
+  baseMatchRead: MatchRead;
+  synthesis: MatchReadSynthesisCache | null | undefined;
+  cacheKey: string;
+}): MatchRead {
+  if (
+    args.baseMatchRead.fallback !== "none" ||
+    args.synthesis?.status !== "ready" ||
+    args.synthesis.cacheKey !== args.cacheKey
+  ) {
+    return args.baseMatchRead;
+  }
+
+  return {
+    ...args.baseMatchRead,
+    matched: Array.isArray(args.synthesis.matched)
+      ? dedupeStrings(args.synthesis.matched)
+      : args.baseMatchRead.matched,
+    missing: Array.isArray(args.synthesis.missing)
+      ? dedupeStrings(args.synthesis.missing)
+      : args.baseMatchRead.missing,
+    computedAt:
+      typeof args.synthesis.computedAt === "number"
+        ? args.synthesis.computedAt
+        : args.baseMatchRead.computedAt,
+    method: "llm",
+  };
+}
+
 export function computeMatchRead(args: {
   job: MatchReadJob;
   profile: MatchReadProfile | null;
   now?: number;
+  synthesis?: MatchReadSynthesisCache | null;
 }): MatchRead {
   const computedAt = args.now ?? Date.now();
   const basedOn = {
@@ -336,7 +388,7 @@ export function computeMatchRead(args: {
     ),
   });
 
-  return {
+  const baseMatchRead: MatchRead = {
     tier: resolveTier(score),
     score,
     scoreVisible: confidence !== "low",
@@ -348,4 +400,14 @@ export function computeMatchRead(args: {
     method: "keyword-overlap",
     fallback: "none",
   };
+
+  return applyMatchReadSynthesis({
+    baseMatchRead,
+    synthesis: args.synthesis,
+    cacheKey: buildMatchReadSynthesisCacheKey({
+      job: args.job,
+      profile: args.profile,
+      matchRead: baseMatchRead,
+    }),
+  });
 }
