@@ -100,6 +100,37 @@ describe("canonicalJobs", () => {
     expect(Array.isArray(draft.reviewItems)).toBe(true);
   });
 
+  it("excludes title fragments and stopwords from extracted keywords", () => {
+    const draft = buildCanonicalJobDraftFromSource({
+      title: "Team Member - Charlotte | The Job Family Farm and Home",
+      rawDescription:
+        "Team member-charlotte and the job family farm and home listing. Required experience with customer service, inventory accuracy, point-of-sale systems, and weekend availability.",
+    });
+
+    expect(draft.keywords).toEqual(
+      expect.arrayContaining([
+        "customer",
+        "service",
+        "inventory",
+        "accuracy",
+      ]),
+    );
+    expect(draft.keywords).not.toEqual(
+      expect.arrayContaining([
+        "team",
+        "member",
+        "charlotte",
+        "member-charlotte",
+        "and",
+        "the",
+        "job",
+        "family",
+        "farm",
+        "home",
+      ]),
+    );
+  });
+
   it("extracts office-based locations across supported languages", () => {
     const examples = [
       {
