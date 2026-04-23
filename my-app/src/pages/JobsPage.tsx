@@ -1,5 +1,5 @@
 import React from "react";
-import { useConvex, useConvexAuth, useMutation } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
@@ -292,7 +292,6 @@ function JobsPageContent(): JSX.Element {
   const location = useLocation();
   const { jobId: selectedJobId } = useParams<JobsPageRouteParams>();
   const { cvs, currentCv } = useCvLibrary();
-  const convex = useConvex();
   const { isLoaded, isSignedIn } = useAuth();
   const {
     isAuthenticated: isConvexAuthenticated,
@@ -317,14 +316,9 @@ function JobsPageContent(): JSX.Element {
     React.useState<Record<string, string>>({});
   const [optimisticSelectedJob, setOptimisticSelectedJob] =
     React.useState<JobsPageDetail>(null);
-  const [jobs, setJobs] = React.useState<JobsPageListItem[] | undefined>(undefined);
-  const [jobsRuntimeUnavailable, setJobsRuntimeUnavailable] = React.useState(false);
-  const [selectedJobRecord, setSelectedJobRecord] =
-    React.useState<JobsPageDetail | undefined>(undefined);
   const [isSeedingSample, setIsSeedingSample] = React.useState(false);
   const [firstRunError, setFirstRunError] = React.useState<string | null>(null);
   const lastMarkedJobIdRef = React.useRef<string | null>(null);
-  const llmRefreshAttemptedByJobIdRef = React.useRef<Record<string, boolean>>({});
   const jobDecisionSessionRef = React.useRef<{
     jobId: string;
     openedAt: number;
@@ -333,15 +327,14 @@ function JobsPageContent(): JSX.Element {
   const rowMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [openRowMenuJobId, setOpenRowMenuJobId] = React.useState<string | null>(null);
 
-  const jobsLoadReference = React.useMemo(
-    () => ((api as any).jobsPublic?.loadForUser ?? "jobsPublic.loadForUser") as any,
+  const jobsListReference = React.useMemo(
+    () => ((api as any).jobsPublic?.listForUser ?? "jobsPublic.listForUser") as any,
     [],
   );
   const jobByIdReference = React.useMemo(
     () => ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
     [],
   );
-  const loadJobsForUser = useMutation(jobsLoadReference);
   const approveReviewItem = useMutation(
     ((api as any).jobsPublic?.approveReviewItem ?? "jobsPublic.approveReviewItem") as any,
   );
@@ -357,6 +350,16 @@ function JobsPageContent(): JSX.Element {
   const updateJobField = useMutation(
     ((api as any).jobsPublic?.updateField ?? "jobsPublic.updateField") as any,
   );
+  const jobs = useQuery(
+    jobsListReference,
+    isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
+  ) as JobsPageListItem[] | undefined;
+  const selectedJobRecord = useQuery(
+    jobByIdReference,
+    selectedJobId && isLoaded && isSignedIn && isConvexAuthenticated
+      ? { jobId: selectedJobId }
+      : "skip",
+  ) as JobsPageDetail | undefined;
 
   React.useEffect(() => {
     if (typeof window === "undefined") {
@@ -401,93 +404,6 @@ function JobsPageContent(): JSX.Element {
   }, [openRowMenuJobId]);
 
   React.useEffect(() => {
-    if (!isLoaded || !isSignedIn || !isConvexAuthenticated) {
-      setJobs(undefined);
-      setJobsRuntimeUnavailable(false);
-      return;
-    }
-
-    let cancelled = false;
-    setJobs(undefined);
-    setJobsRuntimeUnavailable(false);
-
-    void Promise.resolve(loadJobsForUser({}))
-      .then((result) => {
-        if (cancelled) {
-          return;
-        }
-        setJobs((result ?? []) as JobsPageListItem[]);
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-        if (isMissingJobsFunctionError(error)) {
-          setJobsRuntimeUnavailable(true);
-          setJobs([]);
-          return;
-        }
-        throw error;
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    isConvexAuthenticated,
-    isLoaded,
-    isSignedIn,
-    loadJobsForUser,
-  ]);
-
-  React.useEffect(() => {
-    if (!selectedJobId || !isLoaded || !isSignedIn || !isConvexAuthenticated) {
-      setSelectedJobRecord(undefined);
-      return;
-    }
-
-    if (jobsRuntimeUnavailable) {
-      setSelectedJobRecord(null);
-      return;
-    }
-
-    let cancelled = false;
-    setSelectedJobRecord(undefined);
-
-    void convex
-      .query(jobByIdReference, { jobId: selectedJobId })
-      .then((result) => {
-        if (cancelled) {
-          return;
-        }
-        setSelectedJobRecord((result ?? null) as JobsPageDetail);
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-        if (isMissingJobsFunctionError(error)) {
-          setJobsRuntimeUnavailable(true);
-          setSelectedJobRecord(null);
-          return;
-        }
-        throw error;
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    convex,
-    isConvexAuthenticated,
-    isLoaded,
-    isSignedIn,
-    jobByIdReference,
-    jobsRuntimeUnavailable,
-    selectedJobId,
-  ]);
-
-  React.useEffect(() => {
     if (selectedJobRecord === undefined) {
       return;
     }
@@ -499,31 +415,6 @@ function JobsPageContent(): JSX.Element {
       }));
     }
   }, [selectedJobRecord]);
-
-  React.useEffect(() => {
-    if (
-      !selectedJobRecord?.id ||
-      selectedJobRecord.matchRead?.method !== "keyword-overlap" ||
-      selectedJobRecord.matchRead?.fallback !== "none" ||
-      llmRefreshAttemptedByJobIdRef.current[selectedJobRecord.id]
-    ) {
-      return undefined;
-    }
-
-    llmRefreshAttemptedByJobIdRef.current[selectedJobRecord.id] = true;
-    const timeoutId = window.setTimeout(() => {
-      void convex
-        .query(jobByIdReference, { jobId: selectedJobRecord.id })
-        .then((result) => {
-          setSelectedJobRecord((result ?? null) as JobsPageDetail);
-        })
-        .catch(() => {});
-    }, 900);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [convex, jobByIdReference, selectedJobRecord]);
 
   const filteredJobs = React.useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -724,8 +615,6 @@ function JobsPageContent(): JSX.Element {
 
     try {
       const result = await seedSampleJob({});
-      const refreshedJobs = await loadJobsForUser({});
-      setJobs((refreshedJobs ?? []) as JobsPageListItem[]);
       await navigate(buildJobsRoute(result.jobId));
     } catch (error) {
       setFirstRunError(
@@ -734,7 +623,7 @@ function JobsPageContent(): JSX.Element {
     } finally {
       setIsSeedingSample(false);
     }
-  }, [loadJobsForUser, navigate, seedSampleJob]);
+  }, [navigate, seedSampleJob]);
 
   const handleOpenResumeWithJob = React.useCallback(
     (jobId: string) => {
@@ -929,10 +818,6 @@ function JobsPageContent(): JSX.Element {
     : !isSignedIn || !isConvexAuthenticated
       ? "Sign in to view saved jobs."
       : null;
-
-  if (jobsRuntimeUnavailable) {
-    return <JobsBackendUnavailable />;
-  }
 
   const hasJobs = (jobs?.length ?? 0) > 0;
   const selectedSourceLabel = getProposalSourceLabel(
