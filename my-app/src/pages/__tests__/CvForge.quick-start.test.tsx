@@ -7,10 +7,29 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { CvForge } from "../CvForge";
 import { DEFAULT_VERBATI_STYLE } from "../../features/verbati/style";
 
-const { importFileMock, mutationMock, useCvLibraryMock } = vi.hoisted(() => ({
+const {
+  importFileMock,
+  setDefaultResumeMock,
+  setJobResumeMock,
+  useCvLibraryMock,
+} = vi.hoisted(() => ({
   importFileMock: vi.fn(),
-  mutationMock: vi.fn(async () => undefined),
+  setDefaultResumeMock: vi.fn(async () => undefined),
+  setJobResumeMock: vi.fn(async () => undefined),
   useCvLibraryMock: vi.fn(),
+}));
+
+vi.mock("../../../convex/_generated/api", () => ({
+  api: {
+    jobsPublic: {
+      getById: "jobsPublic.getById",
+      setResumeForJob: "jobsPublic.setResumeForJob",
+      setDefaultResume: "jobsPublic.setDefaultResume",
+    },
+    proposalSettings: {
+      getPresets: "proposalSettings.getPresets",
+    },
+  },
 }));
 
 vi.mock("convex/react", () => ({
@@ -18,7 +37,15 @@ vi.mock("convex/react", () => ({
     isAuthenticated: true,
     isLoading: false,
   })),
-  useMutation: vi.fn(() => mutationMock),
+  useMutation: vi.fn((reference: string) => {
+    if (reference === "jobsPublic.setResumeForJob") {
+      return setJobResumeMock;
+    }
+    if (reference === "jobsPublic.setDefaultResume") {
+      return setDefaultResumeMock;
+    }
+    return vi.fn(async () => undefined);
+  }),
   useQuery: vi.fn((reference: string, args?: unknown) => {
     if (args === "skip") {
       return undefined;
@@ -148,6 +175,8 @@ describe("CvForge entry picker", () => {
   beforeEach(() => {
     window.localStorage.clear();
     importFileMock.mockReset();
+    setDefaultResumeMock.mockReset();
+    setJobResumeMock.mockReset();
     useCvLibraryMock.mockReset();
   });
 
@@ -294,7 +323,7 @@ describe("CvForge entry picker", () => {
     expect(screen.queryByRole("button", { name: "Use selected CV" })).not.toBeInTheDocument();
   });
 
-  it("keeps only the compact job chip above the picker and opens the chosen CV by id", async () => {
+  it("keeps only the compact job chip above the picker and returns to the job after choosing a CV", async () => {
     const user = userEvent.setup();
     const loadCv = vi.fn(() => true);
     const primaryCv = buildProfileCv("cv_primary", "Ada Lovelace", "Product Designer");
@@ -327,8 +356,16 @@ describe("CvForge entry picker", () => {
       screen.getAllByRole("button", { name: "Use this CV" })[1],
     );
 
+    await waitFor(() => {
+      expect(setJobResumeMock).toHaveBeenCalledWith({
+        jobId: "job_123",
+        resumeId: "cv_secondary",
+        resumeName: "Engineering Manager — Grace Hopper",
+      });
+    });
+    expect(setDefaultResumeMock).not.toHaveBeenCalled();
     expect(loadCv).toHaveBeenCalledWith("cv_secondary");
-    expect(screen.getByTestId("location")).toHaveTextContent("/cv?jobId=job_123&id=cv_secondary");
+    expect(screen.getByTestId("location")).toHaveTextContent("/jobs/job_123");
   });
 
   it("opens the selected cv directly from the card action button", async () => {
@@ -357,6 +394,8 @@ describe("CvForge entry picker", () => {
       screen.getAllByRole("button", { name: "Use this CV" })[1],
     );
 
+    expect(setDefaultResumeMock).not.toHaveBeenCalled();
+    expect(setJobResumeMock).not.toHaveBeenCalled();
     expect(loadCv).toHaveBeenCalledWith("cv_secondary");
     expect(screen.getByTestId("location")).toHaveTextContent("/cv?id=cv_secondary");
     expect(screen.queryByText("Choose your CV")).not.toBeInTheDocument();

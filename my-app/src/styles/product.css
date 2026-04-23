@@ -10363,6 +10363,17 @@ html:not(.dark) .dasti-proposal-submit {
   justify-self: end;
 }
 
+.dasti-jobs-row__controls {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.dasti-jobs-row__cv-control {
+  max-width: 228px;
+}
+
 .dasti-jobs-row__menu {
   position: relative;
   justify-self: end;
@@ -10427,6 +10438,131 @@ html:not(.dark) .dasti-proposal-submit {
   flex-wrap: wrap;
   gap: var(--space-2);
   justify-content: flex-end;
+}
+
+.dasti-jobs-detail__resume-picker {
+  position: relative;
+  --radius-toolbar-shell: var(--card-radius);
+  --proposal-chrome-shell-padding: var(--space-2);
+  --proposal-chrome-tight-gap: var(--space-1);
+  --dasti-jobs-resume-drawer-inline-size: min(
+    max(100%, var(--card-rail-xs)),
+    calc(100vw - (var(--space-4) * 2))
+  );
+  --dasti-jobs-resume-drawer-max-block-size: min(
+    var(--card-rail-sm),
+    calc(100dvh - (var(--space-8) * 2))
+  );
+  --dasti-toolbar-shell-edge-padding: var(--proposal-chrome-shell-padding);
+  --toolbar-attached-surface-gap: var(--anchored-surface-gap);
+  --dasti-toolbar-surface-border-width: 1px;
+  --dasti-toolbar-surface-visual-compensation: 0px;
+  --dasti-toolbar-attached-surface-offset: calc(
+    var(--toolbar-attached-surface-gap) +
+      var(--dasti-toolbar-shell-edge-padding, 0px) +
+      var(--dasti-toolbar-surface-border-width, 0px) +
+      var(--dasti-toolbar-surface-visual-compensation, 0px)
+  );
+}
+
+.dasti-jobs-detail__resume-popover {
+  position: absolute;
+  top: calc(
+    100% +
+      max(
+        var(--space-2),
+        var(
+          --dasti-toolbar-attached-surface-offset,
+          var(--toolbar-attached-surface-gap, var(--anchored-surface-gap))
+        )
+      )
+  );
+  right: 0;
+  z-index: var(--z-popover);
+  display: grid;
+  gap: var(--proposal-chrome-tight-gap);
+  inline-size: var(--dasti-jobs-resume-drawer-inline-size);
+  padding: var(--proposal-chrome-shell-padding);
+  border-radius: var(--radius-toolbar-shell, var(--card-radius));
+}
+
+.dasti-jobs-detail__resume-popover-list {
+  display: grid;
+  gap: var(--space-1);
+  max-block-size: var(--dasti-jobs-resume-drawer-max-block-size);
+  overflow-y: auto;
+}
+
+.dasti-jobs-detail__resume-empty {
+  padding: var(--card-padding);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
+}
+
+.dasti-jobs-detail__resume-option {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.dasti-jobs-detail__resume-option:hover,
+.dasti-jobs-detail__resume-option:focus-visible,
+.dasti-jobs-detail__resume-option--active {
+  background: color-mix(
+    in srgb,
+    var(--color-surface-muted) 86%,
+    transparent
+  );
+}
+
+.dasti-jobs-detail__resume-option-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
+  font-weight: var(--font-label-weight);
+}
+
+.dasti-jobs-detail__resume-option-meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+}
+
+.dasti-doc-card--compact {
+  min-height: 0;
+}
+
+.dasti-doc-card--compact .dasti-doc-card__stack {
+  gap: 10px;
+  padding: 12px;
+}
+
+.dasti-doc-card--compact .dasti-doc-card__title {
+  font-size: var(--ts);
+}
+
+.dasti-doc-card--compact .dasti-doc-card__meta {
+  font-size: 11px;
+}
+
+.dasti-doc-card--compact .dasti-doc-card__footer {
+  padding-top: 0;
 }
 
 .dasti-jobs-next-step__actions {
@@ -10639,6 +10775,77 @@ html:not(.dark) .dasti-proposal-submit {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s1);
+}
+
+.dasti-brief-focus-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: calc(var(--radius-card) - 6px);
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--sfr) 6%);
+}
+
+.dasti-brief-focus-strip__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  min-width: 0;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-border-selected) 42%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface-muted) 92%);
+  color: var(--color-accent);
+  font-size: var(--tx);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.dasti-brief-focus-strip__action:hover,
+.dasti-brief-focus-strip__action:focus-visible {
+  color: color-mix(in srgb, var(--color-accent) 78%, var(--ti) 22%);
+  border-color: color-mix(in srgb, var(--color-border-selected) 58%, transparent);
+  outline: none;
+}
+
+.dasti-brief-focus-strip__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dasti-brief-focus-strip__expand {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: var(--radius-toolbar-control, var(--radius-control));
+  background: transparent;
+  color: var(--tm2);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-brief-focus-strip__expand:hover,
+.dasti-brief-focus-strip__expand:focus-visible {
+  background: color-mix(in srgb, var(--sfr) 90%, transparent);
+  border-color: color-mix(in srgb, var(--color-border-contrast) 74%, transparent);
+  color: var(--ti);
+  outline: none;
 }
 
 .dasti-brief-card__meta-pill {
