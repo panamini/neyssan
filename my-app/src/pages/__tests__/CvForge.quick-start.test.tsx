@@ -7,17 +7,29 @@ import { CvForge } from "../CvForge";
 import { DEFAULT_VERBATI_STYLE } from "../../features/verbati/style";
 import { createQuickStartLocationState } from "../../lib/quick-start-routing";
 
-const { useCvLibraryMock } = vi.hoisted(() => ({
+const { mutationMock, useCvLibraryMock } = vi.hoisted(() => ({
+  mutationMock: vi.fn(async () => undefined),
   useCvLibraryMock: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
-  useQuery: vi.fn(() => ({
-    preset1: null,
-    preset2: null,
-    preset3: null,
-    activeSlot: null,
+  useConvexAuth: vi.fn(() => ({
+    isAuthenticated: true,
+    isLoading: false,
   })),
+  useMutation: vi.fn(() => mutationMock),
+  useQuery: vi.fn((reference: string, args?: unknown) => {
+    if (args === "skip") {
+      return undefined;
+    }
+
+    return {
+      preset1: null,
+      preset2: null,
+      preset3: null,
+      activeSlot: null,
+    };
+  }),
 }));
 
 vi.mock("../../components/ProfileReviewCard", () => ({
