@@ -1,7 +1,6 @@
 import { internalAction, internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { llmConfig } from "../config/llmConfig";
 
 import {
   type CanonicalUserProfile,
@@ -31,6 +30,7 @@ import {
   buildMatchReadSynthesisMetricMetadata,
   createPendingMatchReadSynthesisCache,
   isMatchReadSynthesisEnabled,
+  resolveMatchReadSynthesisModel,
   synthesizeMatchReadWithMistral,
   type MatchReadSynthesisCache,
 } from "./lib/jobs/matchReadSynthesis";
@@ -1200,11 +1200,7 @@ export const runMatchReadSynthesis = internalAction({
         }),
       );
     } catch (error) {
-      const model =
-        llmConfig.mistralModel ??
-        llmConfig.model ??
-        process.env.MISTRAL_MODEL ??
-        "mistral-small-latest";
+      const model = resolveMatchReadSynthesisModel();
 
       await ctx.runMutation((internal as any).jobsPublic.storeMatchReadSynthesis, {
         jobId: args.jobId,
