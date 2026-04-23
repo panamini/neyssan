@@ -35,6 +35,9 @@ import {
 } from "./lib/jobs/matchReadSynthesis";
 
 const COHORT_MIN_TOTAL_DECISIONS = 500;
+const FEATURE_COHORT_NEXT_STEPS = false;
+// PRD gate: switch cohort language only after >=500 job_decision_made events.
+// Local safety rail: also require >=10 decisions inside the current match tier.
 const COHORT_MIN_TIER_DECISIONS = 10;
 const NEXT_STEP_FALLBACK_ACTION_ORDER = [
   "cover_letter",
@@ -343,6 +346,14 @@ function buildNextStepHeadline(
 }
 
 async function resolveNextStepBlock(ctx: any, tier: MatchReadTier) {
+  if (!FEATURE_COHORT_NEXT_STEPS) {
+    return {
+      headline: "Common next steps",
+      usesCohortData: false,
+      actions: [...NEXT_STEP_FALLBACK_ACTION_ORDER],
+    };
+  }
+
   const metrics = await ctx.db
     .query("metrics")
     .withIndex("by_name_time", (q: any) => q.eq("name", "jobs-v2:job_decision_made"))
