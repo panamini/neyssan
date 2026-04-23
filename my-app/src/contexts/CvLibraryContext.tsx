@@ -1744,7 +1744,13 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     return true;
   }
 
-  async function performSave(documentToSave: CvDocument): Promise<void> {
+  async function performSave(
+    documentToSave: CvDocument,
+    options?: {
+      preserveVisibleUpdatedAt?: boolean;
+      preserveVisibleUpdatedAtValue?: string;
+    },
+  ): Promise<void> {
     try {
       // Ensure metadata exists and bump updatedAt/version conservatively
       // Strip legacy cvState before persisting to satisfy schema validation.
@@ -1772,7 +1778,13 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             updatedAt: new Date().toISOString(),
             version: 1,
           }),
-          updatedAt: new Date().toISOString(),
+          updatedAt:
+            options?.preserveVisibleUpdatedAt
+              ? options.preserveVisibleUpdatedAtValue ??
+                (typeof normalizedCore.metadata?.updatedAt === "string"
+                  ? normalizedCore.metadata.updatedAt
+                  : new Date().toISOString())
+              : new Date().toISOString(),
           version: (normalizedCore.metadata?.version ?? 0) + 1,
         },
       };
@@ -1881,7 +1893,13 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     }
   }
 
-  async function saveImmediately(documentToSave: CvDocument): Promise<void> {
+  async function saveImmediately(
+    documentToSave: CvDocument,
+    options?: {
+      preserveVisibleUpdatedAt?: boolean;
+      preserveVisibleUpdatedAtValue?: string;
+    },
+  ): Promise<void> {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
@@ -1896,7 +1914,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       }
     }
 
-    const p = performSave(documentToSave);
+    const p = performSave(documentToSave, options);
     pendingSavePromiseRef.current = p;
     try {
       await p;
@@ -1959,7 +1977,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         Boolean(isSavingRef.current);
 
       if (shouldPersist) {
-        await saveImmediately(latestOutgoing);
+        await saveImmediately(latestOutgoing, {
+          preserveVisibleUpdatedAt: true,
+        });
       }
     }, [flushPendingEdits]);
 
@@ -2042,6 +2062,17 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   const loadCv = useCallback(
     (id: string): boolean => {
       const targetId = String(id);
+      const visibleTargetDoc = cvsRef.current.find(
+        (candidate) => String(candidate.id) === targetId,
+      );
+      const visibleTargetCreatedAt =
+        typeof visibleTargetDoc?.metadata?.createdAt === "string"
+          ? visibleTargetDoc.metadata.createdAt
+          : undefined;
+      const visibleTargetUpdatedAt =
+        typeof visibleTargetDoc?.metadata?.updatedAt === "string"
+          ? visibleTargetDoc.metadata.updatedAt
+          : undefined;
 
       const persistOutgoingCvBeforeSwitch = async (): Promise<void> => {
         const outgoingBeforeFlush = currentCvRef.current;
@@ -2068,6 +2099,14 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
           return;
         }
 
+        const visibleLibraryDoc = cvsRef.current.find(
+          (candidate) => String(candidate.id) === String(latestOutgoing.id),
+        );
+        const visibleLibraryUpdatedAt =
+          typeof visibleLibraryDoc?.metadata?.updatedAt === "string"
+            ? visibleLibraryDoc.metadata.updatedAt
+            : undefined;
+
         syncEditedDocumentLocally(latestOutgoing);
 
         const shouldPersist =
@@ -2080,7 +2119,10 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
           return;
         }
 
-        await saveImmediately(latestOutgoing);
+        await saveImmediately(latestOutgoing, {
+          preserveVisibleUpdatedAt: true,
+          preserveVisibleUpdatedAtValue: visibleLibraryUpdatedAt,
+        });
       };
 
       const performLoad = (): boolean => {
@@ -2153,8 +2195,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                     id: String(parsed.id),
                     title: String(parsed.title ?? "Untitled CV"),
                     metadata: (parsed as any).metadata ?? {
-                      createdAt: new Date().toISOString(),
-                      updatedAt: new Date().toISOString(),
+                      createdAt:
+                        visibleTargetCreatedAt ?? new Date().toISOString(),
+                      updatedAt:
+                        visibleTargetUpdatedAt ??
+                        visibleTargetCreatedAt ??
+                        new Date().toISOString(),
                       version: 1,
                     },
                     sections: Array.isArray(parsed.sections)
@@ -2232,6 +2278,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                     ),
                   }),
                 );
+                if (deepEqual(stripMetadata(docNorm), stripMetadata(remoteNorm))) {
+                  return;
+                }
                 if (
                   !shouldApplyBackgroundRefresh(targetId, docNorm, remoteNorm)
                 ) {
@@ -2303,8 +2352,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                           id: String(parsed.id),
                           title: String(parsed.title ?? "Untitled CV"),
                           metadata: (parsed as any).metadata ?? {
-                            createdAt: new Date().toISOString(),
-                            updatedAt: new Date().toISOString(),
+                            createdAt:
+                              visibleTargetCreatedAt ?? new Date().toISOString(),
+                            updatedAt:
+                              visibleTargetUpdatedAt ??
+                              visibleTargetCreatedAt ??
+                              new Date().toISOString(),
                             version: 1,
                           },
                           sections: Array.isArray(parsed.sections)
