@@ -8,7 +8,6 @@ const approveReviewItemMock = vi.fn().mockResolvedValue(null);
 const loadForUserMock = vi.fn();
 const markOpenedMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
-const windowOpenMock = vi.fn();
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 const jobsList = [
@@ -190,8 +189,6 @@ describe("JobsPage", () => {
     listResult = jobsList;
     selectedJobResult = selectedJob;
     listError = null;
-    windowOpenMock.mockReset();
-    vi.stubGlobal("open", windowOpenMock);
   });
 
   afterEach(() => {
@@ -204,6 +201,7 @@ describe("JobsPage", () => {
         <Routes>
           <Route path="/jobs/:jobId" element={<JobsPage />} />
           <Route path="/proposal" element={<LocationProbe />} />
+          <Route path="/cv" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -217,12 +215,24 @@ describe("JobsPage", () => {
       (await screen.findAllByText("Cross-functional communication")).length,
     ).toBeGreaterThan(0);
     expect((await screen.findAllByText("Responsibilities")).length).toBeGreaterThan(0);
-    expect(await screen.findByText("Run recurring workflows")).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: /Open linked proposal Operations Associate cover letter/i })).toHaveAttribute(
       "href",
       "/proposal?view=saved&id=proposal_1",
     );
     expect(await screen.findByText("Review state")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open resume with this job" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Do both" }),
+    ).not.toBeInTheDocument();
+
+    const linkedDocuments = screen.getByText("Linked documents");
+    const rawSource = screen.getByText("Raw source");
+    expect(
+      linkedDocuments.compareDocumentPosition(rawSource) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
 
@@ -234,6 +244,42 @@ describe("JobsPage", () => {
       reviewItemId: "review_1",
     });
     expect(markOpenedMock).toHaveBeenCalledWith({ jobId: "job_alpha" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Open resume with this job" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/cv?jobId=job_alpha",
+      );
+    });
+  });
+
+  it("saves summary edits inline from the brief card", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Extracted summary")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit summary" }));
+
+    const summaryEditor = screen.getByRole("textbox");
+    fireEvent.change(summaryEditor, {
+      target: { value: "Updated summary for the saved job brief." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save summary" }));
+
+    await waitFor(() => {
+      expect(updateFieldMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        fieldKey: "summary",
+        value: "Updated summary for the saved job brief.",
+      });
+    });
   });
 
   it("shows the guided empty state when no jobs are saved", async () => {

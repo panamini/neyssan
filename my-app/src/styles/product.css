@@ -10140,6 +10140,10 @@ html:not(.dark) .dasti-proposal-submit {
   align-items: start;
 }
 
+.dasti-brief-card--card .dasti-brief-card__workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .dasti-brief-card__review-column {
   display: grid;
   gap: var(--space-2);
@@ -10162,6 +10166,11 @@ html:not(.dark) .dasti-proposal-submit {
       color-mix(in srgb, var(--color-surface-muted) 95%, var(--color-accent) 5%)
     );
   box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+}
+
+.dasti-brief-card--card .dasti-brief-card__source-dock {
+  position: static;
+  top: auto;
 }
 
 .dasti-brief-card__source-dock .dasti-brief-card__description {

@@ -8,6 +8,7 @@ import { CvForge } from "../CvForge";
 import type { ResumeExportRequest } from "../../components/ResumeExportControl";
 
 const {
+  mutationMock,
   showToastMock,
   downloadAuthoritativeResumeExportMock,
   downloadStandardResumeExportMock,
@@ -16,6 +17,7 @@ const {
   useBoundVerbatiCvStyleMock,
   useCvLibraryMock,
 } = vi.hoisted(() => ({
+  mutationMock: vi.fn(async () => undefined),
   showToastMock: vi.fn(),
   downloadAuthoritativeResumeExportMock: vi.fn(),
   downloadStandardResumeExportMock: vi.fn(),
@@ -26,12 +28,23 @@ const {
 }));
 
 vi.mock("convex/react", () => ({
-  useQuery: vi.fn(() => ({
-    preset1: null,
-    preset2: null,
-    preset3: null,
-    activeSlot: null,
+  useConvexAuth: vi.fn(() => ({
+    isAuthenticated: true,
+    isLoading: false,
   })),
+  useMutation: vi.fn(() => mutationMock),
+  useQuery: vi.fn((reference: string, args?: unknown) => {
+    if (args === "skip") {
+      return undefined;
+    }
+
+    return {
+      preset1: null,
+      preset2: null,
+      preset3: null,
+      activeSlot: null,
+    };
+  }),
   useAction: vi.fn(() => undefined),
 }));
 
