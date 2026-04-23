@@ -1,8 +1,7 @@
 import React from "react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { isQuickStartCompleted } from "../lib/onboarding-state";
-import { createQuickStartLocationState } from "../lib/quick-start-routing";
+import { v4 as uuidv4 } from "uuid";
 import { Check, Eye, Palette, PenLine, X } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProfileReviewCard } from "../components/ProfileReviewCard";
@@ -34,6 +33,10 @@ import {
   readAuthoritativeResumeFromCv,
 } from "../lib/authoritative-resume";
 import {
+  TRUSTED_MISTRAL_FILE_INPUT_ACCEPT,
+  useStructuredMistralImport,
+} from "../components/useStructuredMistralImport";
+import {
   downloadAuthoritativeResumeExport,
   downloadStandardResumeExport,
 } from "../lib/cv-export";
@@ -55,6 +58,15 @@ import {
   setStyledResumeExportContext,
 } from "../lib/document-export-debug";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
+import type { CvDocument } from "../types/cvDocument";
+import {
+  formatCvDisplayTitle,
+} from "../lib/proposal-personalization";
+import { deriveCvTitleFromSections } from "../lib/normalize-cv";
+import {
+  CvPickerCard,
+  type CvPickerCardOption,
+} from "../components/cv/CvPickerCard";
 
 type CvForgeWorkspaceMode = "edit" | "preview";
 type PresetSlotIndex = 1 | 2 | 3;
@@ -150,6 +162,61 @@ function buildStylePresetFromSettingsSlot(
   });
 }
 
+function readCvPickerProfilePreview(
+  cv: CvDocument,
+): Record<string, unknown> | null {
+  const profileSection = Array.isArray(cv.sections)
+    ? cv.sections.find((section) => String(section.type) === "profile")
+    : null;
+  const profileEntry = Array.isArray(profileSection?.structuredContent)
+    ? profileSection.structuredContent[0]
+    : null;
+
+  return profileEntry && typeof profileEntry === "object"
+    ? (profileEntry as Record<string, unknown>)
+    : null;
+}
+
+function readCvPickerString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+function buildCvForgePickerOption(
+  cv: CvDocument,
+): CvPickerCardOption {
+  const profilePreview = readCvPickerProfilePreview(cv);
+  const profileName = readCvPickerString(profilePreview?.name);
+  const desiredPosition =
+    readCvPickerString(profilePreview?.desiredPosition) ??
+    readCvPickerString(profilePreview?.title);
+
+  return {
+    id: String(cv.id),
+    title: formatCvDisplayTitle({
+      title: String(cv.title ?? "Untitled CV"),
+      profileName,
+      desiredPosition,
+      email: readCvPickerString(profilePreview?.email),
+      phone: readCvPickerString(profilePreview?.phone),
+      linkedin: readCvPickerString(profilePreview?.linkedin),
+      website: readCvPickerString(profilePreview?.website),
+      location: readCvPickerString(profilePreview?.location),
+    }),
+    updatedAt:
+      typeof cv.metadata?.updatedAt === "string" ? cv.metadata.updatedAt : undefined,
+    createdAt:
+      typeof cv.metadata?.createdAt === "string" ? cv.metadata.createdAt : undefined,
+    profileName,
+    desiredPosition,
+    email: readCvPickerString(profilePreview?.email),
+    phone: readCvPickerString(profilePreview?.phone),
+    linkedin: readCvPickerString(profilePreview?.linkedin),
+    website: readCvPickerString(profilePreview?.website),
+  };
+}
+
 /**
  * CvForge — page Resume
  *
@@ -164,26 +231,20 @@ export function CvForge(): JSX.Element {
   const {
     isAuthenticated: isConvexAuthenticated,
   } = useConvexAuth();
-  const { currentCv, importCv, cvs, isLibraryHydrated, lastLibraryFetchFailed } =
-    useCvLibrary();
-  const [quickStartCompleted] = React.useState(() =>
-    isQuickStartCompleted(),
-  );
-  const [hasHandledQuickStartSession, setHasHandledQuickStartSession] =
-    React.useState(false);
-  // Auto-launch gate:
-  // - authoritative source must be settled (isLibraryHydrated)
-  // - the authoritative fetch must NOT have failed (transient error must not be
-  //   treated as "new user empty library")
-  // - user must genuinely have no CVs and no active CV
-  // - user must not have explicitly skipped before
-  // The completed flag is an input alongside data/hydration, not the authority.
-  const shouldAutoLaunchQuickStart =
-    isLibraryHydrated &&
-    !lastLibraryFetchFailed &&
-    cvs.length === 0 &&
-    !currentCv &&
-    !quickStartCompleted;
+  const {
+    currentCv,
+    currentCvId,
+    createNewCv,
+    importCv,
+    cvs,
+    isLibraryHydrated,
+    lastLibraryFetchFailed,
+    loadCv,
+  } = useCvLibrary();
+  const { importFile: importStructuredCvFile } = useStructuredMistralImport({
+    probeOnMount: false,
+  });
+  const cvImportInputRef = React.useRef<HTMLInputElement | null>(null);
   const presetMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
@@ -192,30 +253,6 @@ export function CvForge(): JSX.Element {
     React.useState<CvForgeWorkspaceMode>(() =>
       readStoredCvForgeWorkspaceMode(),
     );
-  React.useEffect(() => {
-    if (!shouldAutoLaunchQuickStart || hasHandledQuickStartSession) {
-      return;
-    }
-
-    setHasHandledQuickStartSession(true);
-    void navigate(
-      {
-        pathname: location.pathname,
-        search: location.search,
-      },
-      {
-        replace: true,
-        state: createQuickStartLocationState(location.state),
-      },
-    );
-  }, [
-    hasHandledQuickStartSession,
-    location.pathname,
-    location.search,
-    location.state,
-    navigate,
-    shouldAutoLaunchQuickStart,
-  ]);
   const [resumeLinkIntent, setResumeLinkIntent] =
     React.useState<ResumeLinkIntent | null>(null);
   const [resumeActiveTarget, setResumeActiveTarget] =
@@ -268,10 +305,81 @@ export function CvForge(): JSX.Element {
     null,
   );
   const { showToast } = useToast();
+  const [isCreatingEntryCv, setIsCreatingEntryCv] = React.useState(false);
+  const [isImportingEntryCv, setIsImportingEntryCv] = React.useState(false);
+  const [pendingEntryCvId, setPendingEntryCvId] = React.useState<string | null>(
+    null,
+  );
+  const [pendingFreshEntryBaseCvId, setPendingFreshEntryBaseCvId] =
+    React.useState<string | null>(null);
   const requestedCvId = React.useMemo(
     () => new URLSearchParams(search).get("id") || undefined,
     [search],
   );
+  const cvPickerOptions = React.useMemo(
+    () => cvs.map((cv) => buildCvForgePickerOption(cv)),
+    [cvs],
+  );
+  const shouldShowEntryPicker =
+    isLibraryHydrated && !lastLibraryFetchFailed && !requestedCvId;
+  const entryPickerDefaultCvId = React.useMemo(() => {
+    if (cvPickerOptions.length === 1) {
+      return cvPickerOptions[0].id;
+    }
+    if (
+      currentCvId &&
+      cvPickerOptions.some((option) => option.id === currentCvId)
+    ) {
+      return currentCvId;
+    }
+    return cvPickerOptions[0]?.id ?? null;
+  }, [currentCvId, cvPickerOptions]);
+
+  React.useEffect(() => {
+    if (!shouldShowEntryPicker) {
+      setPendingEntryCvId(null);
+      return;
+    }
+
+    setPendingEntryCvId((current) => {
+      if (current && cvPickerOptions.some((option) => option.id === current)) {
+        return current;
+      }
+
+      return entryPickerDefaultCvId;
+    });
+  }, [cvPickerOptions, entryPickerDefaultCvId, shouldShowEntryPicker]);
+
+  const navigateToSelectedCv = React.useCallback(
+    (cvId: string) => {
+      const nextParams = new URLSearchParams(search);
+      nextParams.set("id", cvId);
+      const nextSearch = nextParams.toString();
+      void navigate(
+        {
+          pathname: location.pathname,
+          search: nextSearch ? `?${nextSearch}` : "",
+        },
+        {
+          replace: true,
+          state: location.state,
+        },
+      );
+    },
+    [location.pathname, location.state, navigate, search],
+  );
+
+  React.useEffect(() => {
+    if (!pendingFreshEntryBaseCvId || !currentCvId) {
+      return;
+    }
+    if (currentCvId === pendingFreshEntryBaseCvId) {
+      return;
+    }
+
+    setPendingFreshEntryBaseCvId(null);
+    navigateToSelectedCv(currentCvId);
+  }, [currentCvId, navigateToSelectedCv, pendingFreshEntryBaseCvId]);
 
   React.useEffect(() => {
     const nextCvId = currentCv?.id ? String(currentCv.id) : null;
@@ -720,6 +828,7 @@ export function CvForge(): JSX.Element {
     "--document-viewer-shell-inline-size": "100%",
   } as React.CSSProperties;
   const showJobBriefContext = Boolean(requestedJobId);
+  const isEntryPickerBusy = isCreatingEntryCv || isImportingEntryCv;
 
   const handleReturnToJob = React.useCallback(() => {
     if (!requestedJobId) {
@@ -737,6 +846,112 @@ export function CvForge(): JSX.Element {
       search: nextSearch ? `?${nextSearch}` : "",
     });
   }, [location.pathname, navigate, search]);
+
+  const handleOpenSelectedCv = React.useCallback(() => {
+    if (!pendingEntryCvId) {
+      return;
+    }
+
+    loadCv(pendingEntryCvId);
+    navigateToSelectedCv(pendingEntryCvId);
+  }, [loadCv, navigateToSelectedCv, pendingEntryCvId]);
+
+  const handleImportEntryCv = React.useCallback(() => {
+    if (isEntryPickerBusy) {
+      return;
+    }
+
+    cvImportInputRef.current?.click();
+  }, [isEntryPickerBusy]);
+
+  const handleEntryImportFileChange = React.useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file || isEntryPickerBusy) {
+        return;
+      }
+
+      setIsImportingEntryCv(true);
+
+      try {
+        const outcome = await importStructuredCvFile(file);
+
+        if (outcome.status === "rejected") {
+          showToast(outcome.message, { variant: "error" });
+          return;
+        }
+
+        if (!Array.isArray(outcome.sections) || outcome.sections.length === 0) {
+          showToast(
+            outcome.emptyReason
+              ? `Import failed: ${outcome.emptyReason}`
+              : "No importable sections were found.",
+            { variant: "error" },
+          );
+          return;
+        }
+
+        const nextCvId = uuidv4();
+        const now = new Date().toISOString();
+        await importCv({
+          id: nextCvId,
+          title: deriveCvTitleFromSections(
+            outcome.sections as any,
+            "Imported CV",
+          ),
+          metadata: {
+            createdAt: now,
+            updatedAt: now,
+            version: 1,
+            ...(outcome.authoritativeResume
+              ? { authoritativeResume: outcome.authoritativeResume }
+              : {}),
+          },
+          sections: outcome.sections as any,
+        });
+        loadCv(nextCvId);
+        navigateToSelectedCv(nextCvId);
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : "Resume import failed.",
+          { variant: "error" },
+        );
+      } finally {
+        if (cvImportInputRef.current) {
+          cvImportInputRef.current.value = "";
+        }
+        setIsImportingEntryCv(false);
+      }
+    },
+    [
+      importCv,
+      importStructuredCvFile,
+      isEntryPickerBusy,
+      loadCv,
+      navigateToSelectedCv,
+      showToast,
+    ],
+  );
+
+  const handleStartFreshEntryCv = React.useCallback(async () => {
+    if (isEntryPickerBusy) {
+      return;
+    }
+
+    setIsCreatingEntryCv(true);
+    setPendingFreshEntryBaseCvId(currentCvId ?? "__none__");
+    try {
+      await createNewCv(undefined, { forceV1: true });
+    } catch (error) {
+      setPendingFreshEntryBaseCvId(null);
+      showToast(
+        error instanceof Error ? error.message : "Could not create a new CV.",
+        { variant: "error" },
+      );
+    } finally {
+      setIsCreatingEntryCv(false);
+    }
+  }, [createNewCv, currentCvId, isEntryPickerBusy, showToast]);
 
   return (
     <div
@@ -797,7 +1012,105 @@ export function CvForge(): JSX.Element {
             )}
           </div>
         ) : null}
-        {workspaceMode === "preview" ? (
+        {shouldShowEntryPicker ? (
+          <div
+            className="dasti-proposal-sheet dasti-proposal-sheet--composer"
+            style={{
+              width: "100%",
+              maxWidth: "960px",
+              marginInline: "auto",
+            }}
+          >
+            <div className="dasti-proposal-sheet__header dasti-proposal-sheet__header--composer">
+              <div className="dasti-proposal-sheet__heading dasti-proposal-sheet__heading--full">
+                <p className="dasti-proposal-compose-shell__status-heading">
+                  Choose your CV
+                </p>
+                <h1 className="dasti-proposal-title-input">
+                  Open a saved CV, import a new one, or start from scratch.
+                </h1>
+              </div>
+            </div>
+            <div className="dasti-proposal-sheet__body dasti-proposal-sheet__body--composer">
+              {cvPickerOptions.length === 0 ? (
+                <div className="dasti-empty-state dasti-jobs-empty-state">
+                  <div className="dasti-empty-state__title">
+                    No saved CVs yet
+                  </div>
+                  <p className="dasti-empty-state__subtitle">
+                    Import an existing CV or create a fresh one to open CvForge.
+                  </p>
+                </div>
+              ) : (
+                <div
+                  className="dasti-grid-auto"
+                  style={
+                    {
+                      "--grid-min-col": "280px",
+                      "--grid-gap": "var(--layout-card-grid)",
+                    } as React.CSSProperties
+                  }
+                >
+                  {cvPickerOptions.map((option) => (
+                    <CvPickerCard
+                      key={option.id}
+                      option={option}
+                      selected={pendingEntryCvId === option.id}
+                      onSelect={setPendingEntryCvId}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            <div
+              className="dasti-cluster"
+              style={
+                {
+                  "--cluster-gap": "var(--space-2)",
+                  justifyContent: "flex-end",
+                  padding: "0 var(--space-4) var(--space-4)",
+                } as React.CSSProperties
+              }
+            >
+              <button
+                type="button"
+                className="dasti-button dasti-button--secondary dasti-button--sm"
+                onClick={handleImportEntryCv}
+                disabled={isEntryPickerBusy}
+              >
+                <span>{isImportingEntryCv ? "Importing..." : "Import new"}</span>
+              </button>
+              <button
+                type="button"
+                className="dasti-button dasti-button--secondary dasti-button--sm"
+                onClick={() => {
+                  void handleStartFreshEntryCv();
+                }}
+                disabled={isEntryPickerBusy}
+              >
+                <span>
+                  {isCreatingEntryCv ? "Creating..." : "Start from scratch"}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="dasti-button dasti-button--accent dasti-button--sm"
+                onClick={handleOpenSelectedCv}
+                disabled={!pendingEntryCvId || isEntryPickerBusy}
+              >
+                <Check size={16} strokeWidth={1.9} aria-hidden="true" />
+                <span>Open selected CV</span>
+              </button>
+            </div>
+            <input
+              ref={cvImportInputRef}
+              type="file"
+              accept={TRUSTED_MISTRAL_FILE_INPUT_ACCEPT}
+              style={{ display: "none" }}
+              onChange={handleEntryImportFileChange}
+            />
+          </div>
+        ) : workspaceMode === "preview" ? (
           <>
             {currentCv ? (
               <div style={{ display: "none" }} aria-hidden="true">

@@ -1,13 +1,14 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
 import { CvForge } from "../CvForge";
 import { DEFAULT_VERBATI_STYLE } from "../../features/verbati/style";
-import { createQuickStartLocationState } from "../../lib/quick-start-routing";
 
-const { mutationMock, useCvLibraryMock } = vi.hoisted(() => ({
+const { importFileMock, mutationMock, useCvLibraryMock } = vi.hoisted(() => ({
+  importFileMock: vi.fn(),
   mutationMock: vi.fn(async () => undefined),
   useCvLibraryMock: vi.fn(),
 }));
@@ -21,6 +22,14 @@ vi.mock("convex/react", () => ({
   useQuery: vi.fn((reference: string, args?: unknown) => {
     if (args === "skip") {
       return undefined;
+    }
+
+    if (args && typeof args === "object" && "jobId" in (args as Record<string, unknown>)) {
+      return {
+        id: "job_123",
+        title: "Senior Product Designer",
+        company: "Acme",
+      };
     }
 
     return {
@@ -55,6 +64,13 @@ vi.mock("../../components/ui/toast", () => ({
   }),
 }));
 
+vi.mock("../../components/useStructuredMistralImport", () => ({
+  TRUSTED_MISTRAL_FILE_INPUT_ACCEPT: ".pdf",
+  useStructuredMistralImport: () => ({
+    importFile: importFileMock,
+  }),
+}));
+
 vi.mock("../../contexts/CvLibraryContext", () => ({
   useCvLibrary: () => useCvLibraryMock(),
 }));
@@ -62,10 +78,13 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
 function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
   return {
     currentCv: null,
+    currentCvId: null,
+    createNewCv: vi.fn(async () => undefined),
     importCv: vi.fn(),
     cvs: [],
     isLibraryHydrated: true,
     lastLibraryFetchFailed: false,
+    loadCv: vi.fn(() => true),
     ...overrides,
   };
 }
@@ -84,6 +103,38 @@ function buildBlankCv(id = "cv_blank") {
   };
 }
 
+function buildProfileCv(
+  id: string,
+  profileName: string,
+  desiredPosition: string,
+) {
+  const now = "2026-04-17T12:00:00.000Z";
+  return {
+    id,
+    title: "Untitled CV",
+    metadata: {
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+    },
+    sections: [
+      {
+        id: `profile-${id}`,
+        type: "profile",
+        title: "Profile",
+        blocks: [],
+        structuredContent: [
+          {
+            id: `profile-item-${id}`,
+            name: profileName,
+            desiredPosition,
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function LocationProbe(): JSX.Element {
   const location = useLocation();
   return (
@@ -93,13 +144,14 @@ function LocationProbe(): JSX.Element {
   );
 }
 
-describe("CvForge Quick Start gating", () => {
+describe("CvForge entry picker", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    importFileMock.mockReset();
     useCvLibraryMock.mockReset();
   });
 
-  it("pushes empty first-session users into the shell-level quick-start state", async () => {
+  it("shows the picker for first-entry users with no saved CVs", () => {
     useCvLibraryMock.mockReturnValue(buildCvLibraryState());
 
     render(
@@ -109,12 +161,15 @@ describe("CvForge Quick Start gating", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("/cv::");
-      expect(screen.getByTestId("location")).toHaveTextContent(
-        JSON.stringify(createQuickStartLocationState(null)),
-      );
-    });
+    expect(screen.getByText("Choose your CV")).toBeInTheDocument();
+    expect(screen.getByText("No saved CVs yet")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Import new" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Start from scratch" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/cv::null");
   });
 
   it("does not auto-launch before library hydration completes", () => {
@@ -163,7 +218,8 @@ describe("CvForge Quick Start gating", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Mock profile editor none")).toBeInTheDocument();
+    expect(screen.getByText("Choose your CV")).toBeInTheDocument();
+    expect(screen.queryByText("Mock profile editor none")).not.toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
   });
 
@@ -183,19 +239,15 @@ describe("CvForge Quick Start gating", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Mock profile editor none")).toBeInTheDocument();
+    expect(screen.getByText("Choose your CV")).toBeInTheDocument();
+    expect(screen.queryByText("Mock profile editor none")).not.toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
   });
 
-  it("does not auto-launch again when quick start state is already present", () => {
-    const blankCv = buildBlankCv();
-    window.localStorage.setItem("twoweeks:quick-start-completed", "1");
+  it("does not mutate existing location state when showing the picker", () => {
     useCvLibraryMock.mockReturnValue(
       buildCvLibraryState({
-        currentCv: blankCv,
-        cvs: [blankCv],
-        isLibraryHydrated: false,
-        lastLibraryFetchFailed: true,
+        cvs: [buildBlankCv("cv_existing")],
       }),
     );
 
@@ -204,7 +256,7 @@ describe("CvForge Quick Start gating", () => {
         initialEntries={[
           {
             pathname: "/cv",
-            state: createQuickStartLocationState(null),
+            state: { source: "test" },
           },
         ]}
       >
@@ -213,9 +265,67 @@ describe("CvForge Quick Start gating", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Mock profile editor none")).toBeInTheDocument();
+    expect(screen.getByText("Choose your CV")).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent(
-      JSON.stringify(createQuickStartLocationState(null)),
+      JSON.stringify({ source: "test" }),
     );
+  });
+
+  it("pre-highlights the only saved CV without auto-loading it", () => {
+    const soloCv = buildProfileCv("cv_only", "Ada Lovelace", "Product Designer");
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv: soloCv,
+        currentCvId: "cv_only",
+        cvs: [soloCv],
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Choose your CV")).toBeInTheDocument();
+    expect(screen.queryByText("Mock profile editor none")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Product Designer/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("keeps the job chip above the picker and opens the selected CV by id", async () => {
+    const user = userEvent.setup();
+    const loadCv = vi.fn(() => true);
+    const primaryCv = buildProfileCv("cv_primary", "Ada Lovelace", "Product Designer");
+    const secondaryCv = buildProfileCv("cv_secondary", "Grace Hopper", "Engineering Manager");
+
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv: primaryCv,
+        currentCvId: "cv_primary",
+        loadCv,
+        cvs: [primaryCv, secondaryCv],
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?jobId=job_123"]}>
+        <CvForge />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: /For: Senior Product Designer @ Acme/i }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /Engineering Manager/i }),
+    );
+    await user.click(screen.getByRole("button", { name: "Open selected CV" }));
+
+    expect(loadCv).toHaveBeenCalledWith("cv_secondary");
+    expect(screen.getByTestId("location")).toHaveTextContent("/cv?jobId=job_123&id=cv_secondary");
   });
 });
