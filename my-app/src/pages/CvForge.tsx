@@ -1,5 +1,5 @@
 import React from "react";
-import { useConvexAuth, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import { Check, Eye, Palette, PenLine, X } from "@/lib/icons";
@@ -232,6 +232,10 @@ export function CvForge(): JSX.Element {
   const {
     isAuthenticated: isConvexAuthenticated,
   } = useConvexAuth();
+  const setJobResume = useMutation(
+    ((api as any).jobsPublic?.setResumeForJob ??
+      "jobsPublic.setResumeForJob") as any,
+  );
   const {
     currentCv,
     currentCvId,
@@ -316,6 +320,13 @@ export function CvForge(): JSX.Element {
     () => new URLSearchParams(search).get("id") || undefined,
     [search],
   );
+  const requestedJobId = React.useMemo(
+    () => new URLSearchParams(search).get("jobId") || undefined,
+    [search],
+  );
+  const jobDetailRoute = requestedJobId
+    ? `/jobs/${encodeURIComponent(requestedJobId)}`
+    : null;
   const cvPickerOptions = React.useMemo(
     () => cvs.map((cv) => buildCvForgePickerOption(cv)),
     [cvs],
@@ -373,10 +384,53 @@ export function CvForge(): JSX.Element {
       return;
     }
 
+    const nextResumeName =
+      typeof currentCv?.title === "string" && currentCv.title.trim().length > 0
+        ? currentCv.title.trim()
+        : "Untitled CV";
+
     setPendingFreshEntryBaseCvId(null);
-    setEntryPickerTransitionCvId(currentCvId);
-    navigateToSelectedCv(currentCvId);
-  }, [currentCvId, navigateToSelectedCv, pendingFreshEntryBaseCvId]);
+
+    void (async () => {
+      try {
+        if (requestedJobId) {
+          await setJobResume({
+            jobId: requestedJobId,
+            resumeId: currentCvId,
+            resumeName: nextResumeName,
+          });
+          loadCv(currentCvId);
+          if (jobDetailRoute) {
+            void navigate(jobDetailRoute);
+          }
+          return;
+        }
+
+        setEntryPickerTransitionCvId(currentCvId);
+        loadCv(currentCvId);
+        navigateToSelectedCv(currentCvId);
+      } catch (error) {
+        setEntryPickerTransitionCvId(null);
+        showToast(
+          error instanceof Error
+            ? error.message
+            : "Could not attach the selected CV.",
+          { variant: "error" },
+        );
+      }
+    })();
+  }, [
+    currentCv?.title,
+    currentCvId,
+    jobDetailRoute,
+    loadCv,
+    navigate,
+    navigateToSelectedCv,
+    pendingFreshEntryBaseCvId,
+    requestedJobId,
+    setJobResume,
+    showToast,
+  ]);
 
   React.useEffect(() => {
     const nextCvId = currentCv?.id ? String(currentCv.id) : null;
@@ -409,10 +463,6 @@ export function CvForge(): JSX.Element {
       hiddenSectionIds,
     );
   }, [currentCv?.id, hiddenSectionIds]);
-  const requestedJobId = React.useMemo(
-    () => new URLSearchParams(search).get("jobId") || undefined,
-    [search],
-  );
   const requestedJobRecord = useQuery(
     ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
     requestedJobId && isConvexAuthenticated ? { jobId: requestedJobId } : "skip",
@@ -838,12 +888,47 @@ export function CvForge(): JSX.Element {
   }, [location.pathname, navigate, search]);
 
   const handleOpenCvById = React.useCallback(
-    (cvId: string) => {
-      setEntryPickerTransitionCvId(cvId);
-      loadCv(cvId);
-      navigateToSelectedCv(cvId);
+    async (cvId: string) => {
+      const selectedOption =
+        cvPickerOptions.find((option) => option.id === cvId) ?? null;
+      const resumeName = selectedOption?.title ?? null;
+
+      try {
+        if (requestedJobId) {
+          await setJobResume({
+            jobId: requestedJobId,
+            resumeId: cvId,
+            resumeName,
+          });
+          loadCv(cvId);
+          if (jobDetailRoute) {
+            void navigate(jobDetailRoute);
+          }
+          return;
+        }
+
+        setEntryPickerTransitionCvId(cvId);
+        loadCv(cvId);
+        navigateToSelectedCv(cvId);
+      } catch (error) {
+        showToast(
+          error instanceof Error
+            ? error.message
+            : "Could not attach the selected CV.",
+          { variant: "error" },
+        );
+      }
     },
-    [loadCv, navigateToSelectedCv],
+    [
+      cvPickerOptions,
+      jobDetailRoute,
+      loadCv,
+      navigate,
+      navigateToSelectedCv,
+      requestedJobId,
+      setJobResume,
+      showToast,
+    ],
   );
 
   const handleImportEntryCv = React.useCallback(() => {
@@ -883,12 +968,13 @@ export function CvForge(): JSX.Element {
 
         const nextCvId = uuidv4();
         const now = new Date().toISOString();
+        const nextCvTitle = deriveCvTitleFromSections(
+          outcome.sections as any,
+          "Imported CV",
+        );
         await importCv({
           id: nextCvId,
-          title: deriveCvTitleFromSections(
-            outcome.sections as any,
-            "Imported CV",
-          ),
+          title: nextCvTitle,
           metadata: {
             createdAt: now,
             updatedAt: now,
@@ -899,6 +985,17 @@ export function CvForge(): JSX.Element {
           },
           sections: outcome.sections as any,
         });
+        if (jobDetailRoute) {
+          await setJobResume({
+            jobId: requestedJobId ?? "",
+            resumeId: nextCvId,
+            resumeName: nextCvTitle,
+          });
+          loadCv(nextCvId);
+          void navigate(jobDetailRoute);
+          return;
+        }
+
         setEntryPickerTransitionCvId(nextCvId);
         loadCv(nextCvId);
         navigateToSelectedCv(nextCvId);
@@ -919,8 +1016,12 @@ export function CvForge(): JSX.Element {
       importCv,
       importStructuredCvFile,
       isEntryPickerBusy,
+      jobDetailRoute,
       loadCv,
+      navigate,
       navigateToSelectedCv,
+      requestedJobId,
+      setJobResume,
       showToast,
     ],
   );

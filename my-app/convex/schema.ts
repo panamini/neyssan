@@ -290,6 +290,8 @@ export default defineSchema({
     toneCues: v.array(v.string()),
     toneCuesExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
     contacts: v.array(v.string()),
+    lastResumeId: v.optional(v.union(v.string(), v.null())),
+    lastResumeName: v.optional(v.union(v.string(), v.null())),
     matchReadSynthesis: v.optional(matchReadSynthesisChoice),
     isSample: v.optional(v.boolean()),
     status: v.string(),
@@ -373,6 +375,8 @@ export default defineSchema({
       name: v.optional(v.string()),
     }), v.null())),
     proposalActivePresetSlot: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
+    defaultResumeId: v.optional(v.union(v.string(), v.null())),
+    defaultResumeName: v.optional(v.union(v.string(), v.null())),
     // New optional profile fields for ingestion
     summary: v.optional(v.string()),
     skills: v.optional(v.array(v.string())),

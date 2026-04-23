@@ -46,17 +46,12 @@ import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { api } from "../../convex/_generated/api";
 import {
   buildAppProposalPersonalizationPayload,
-  clearActiveLocalCvId,
   getProposalApplicantHeaderData,
   getProposalApplicantIdentity,
-  getActiveLocalPersonalizationSource,
+  getLocalPersonalizationSourceByCvId,
   getLocalActiveCvSnapshotById,
   getLocalCvDocumentById,
-  getProposalAttachedCvId,
-  getProposalAttachedCvLocalDocument,
   listLocalCvPickerOptions,
-  PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
-  setProposalAttachedCvId,
   type ProposalApplicantHeaderData,
 } from "../lib/proposal-personalization";
 import { type ProposalGenerationFallbackInfo } from "../lib/proposal-generation-ui";
@@ -218,6 +213,9 @@ type ProposalForgeCanonicalJob = {
   toneCues: string[];
   contacts: string[];
   status: string;
+  resumeId?: string;
+  resumeName?: string;
+  resumeSource?: "job" | "default";
   linkedProposalCount: number;
   linkedProposals: ProposalForgeLinkedProposal[];
   reviewItems: ProposalForgeReviewItem[];
@@ -437,20 +435,24 @@ function buildProfessionalApplicationSubject(args: {
   return `Application for the position of ${jobTitle}`;
 }
 
-function readAttachedCvSelection(): {
+function resolveAttachedCvSelectionById(
+  cvId: string | null | undefined,
+  fallbackTitle?: string | null,
+): {
   id: string | null;
   title: string | null;
 } {
-  const attachedCvId = getProposalAttachedCvId();
-  if (!attachedCvId) {
+  const normalizedCvId = normalizeSourceCvId(cvId);
+  if (!normalizedCvId) {
     return { id: null, title: null };
   }
 
-  const attachedSnapshot = getLocalActiveCvSnapshotById(attachedCvId);
-
   return {
-    id: attachedCvId,
-    title: attachedSnapshot?.title ?? null,
+    id: normalizedCvId,
+    title:
+      getLocalActiveCvSnapshotById(normalizedCvId)?.title ??
+      fallbackTitle?.trim() ??
+      null,
   };
 }
 
@@ -765,17 +767,23 @@ export function ProposalForge(): JSX.Element {
     [traceProposalStyle],
   );
   const [attachedCvId, setAttachedCvId] = React.useState<string | null>(
-    () => readAttachedCvSelection().id,
+    null,
   );
   const [attachedCvTitle, setAttachedCvTitle] = React.useState<string | null>(
-    () => readAttachedCvSelection().title,
+    null,
   );
+  const [pendingScopedCvSelection, setPendingScopedCvSelection] = React.useState<{
+    id: string | null;
+    title: string | null;
+  } | null>(null);
+  const lastRequestedScopedCvSyncKeyRef = React.useRef<string | null>(null);
+  const lastScopedJobIdRef = React.useRef<string | null>(null);
   const activeCvProposalStylePreset = React.useMemo(() => {
     if (!attachedCvId) {
       return null;
     }
 
-    const attachedCvDocument = getProposalAttachedCvLocalDocument();
+    const attachedCvDocument = getLocalCvDocumentById(attachedCvId);
     if (!attachedCvDocument) {
       return null;
     }
@@ -829,8 +837,8 @@ export function ProposalForge(): JSX.Element {
     [activeCvProposalStylePreset, storedOutputStylePreset],
   );
   const activePersonalizationSource = React.useMemo(
-    () => getActiveLocalPersonalizationSource(),
-    [attachedCvId, attachedCvTitle],
+    () => getLocalPersonalizationSourceByCvId(attachedCvId),
+    [attachedCvId],
   );
   const initialApplicantIdentity = React.useMemo(
     () => getProposalApplicantIdentity(activePersonalizationSource),
@@ -853,54 +861,6 @@ export function ProposalForge(): JSX.Element {
   );
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
-  );
-  const refreshAttachedCvSelection = React.useCallback(() => {
-    const nextAttachedSelection = readAttachedCvSelection();
-    setAttachedCvId(nextAttachedSelection.id);
-    setAttachedCvTitle(nextAttachedSelection.title);
-  }, []);
-
-  React.useEffect(() => {
-    refreshAttachedCvSelection();
-  }, [refreshAttachedCvSelection]);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const handleAttachedCvRefresh = () => {
-      refreshAttachedCvSelection();
-    };
-
-    window.addEventListener(
-      PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
-      handleAttachedCvRefresh,
-    );
-    window.addEventListener("storage", handleAttachedCvRefresh);
-    window.addEventListener("focus", handleAttachedCvRefresh);
-
-    return () => {
-      window.removeEventListener(
-        PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
-        handleAttachedCvRefresh,
-      );
-      window.removeEventListener("storage", handleAttachedCvRefresh);
-      window.removeEventListener("focus", handleAttachedCvRefresh);
-    };
-  }, [refreshAttachedCvSelection]);
-
-  const handleAttachedCvChange = React.useCallback(
-    (nextId: string | null) => {
-      if (nextId === null) {
-        clearActiveLocalCvId();
-      } else {
-        setIsCoverLetterStartSessionActive(false);
-        setShowExtensionHelper(false);
-      }
-      refreshAttachedCvSelection();
-    },
-    [refreshAttachedCvSelection],
   );
 
   const handoffId = React.useMemo(
@@ -965,8 +925,36 @@ export function ProposalForge(): JSX.Element {
   const updateJobField = useMutation(
     (api as any).jobsPublic?.updateField ?? "jobsPublic.updateField",
   );
+  const setJobResume = useMutation(
+    ((api as any).jobsPublic?.setResumeForJob ??
+      "jobsPublic.setResumeForJob") as any,
+  );
   const createProposal = useMutation(
     (api as any).createProposalPublic?.default ?? "createProposalPublic.default",
+  );
+  const handleAttachedCvChange = React.useCallback(
+    (nextId: string | null) => {
+      if (nextId !== null) {
+        setIsCoverLetterStartSessionActive(false);
+        setShowExtensionHelper(false);
+      }
+
+      if (!canonicalJobId) {
+        const nextSelection = resolveAttachedCvSelectionById(nextId);
+        setAttachedCvId(nextSelection.id);
+        setAttachedCvTitle(nextSelection.title);
+        setPendingScopedCvSelection(null);
+        lastRequestedScopedCvSyncKeyRef.current = null;
+        return;
+      }
+
+      const nextSelection = resolveAttachedCvSelectionById(nextId);
+      setAttachedCvId(nextSelection.id);
+      setAttachedCvTitle(nextSelection.title);
+      setPendingScopedCvSelection(nextSelection);
+      lastRequestedScopedCvSyncKeyRef.current = null;
+    },
+    [canonicalJobId],
   );
   const currentProposalSettings = useQuery(
     api.proposalSettings.getCurrent,
@@ -1411,6 +1399,100 @@ export function ProposalForge(): JSX.Element {
     ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
     canonicalJobId && isConvexAuthenticated ? { jobId: canonicalJobId } : "skip",
   ) as ProposalForgeCanonicalJob | undefined;
+  const canonicalRecordCvSelection = React.useMemo(
+    () =>
+      resolveAttachedCvSelectionById(
+        canonicalJobRecord?.resumeId,
+        canonicalJobRecord?.resumeName,
+      ),
+    [canonicalJobRecord?.resumeId, canonicalJobRecord?.resumeName],
+  );
+
+  React.useEffect(() => {
+    if (lastScopedJobIdRef.current === canonicalJobId) {
+      return;
+    }
+
+    lastScopedJobIdRef.current = canonicalJobId;
+    lastRequestedScopedCvSyncKeyRef.current = null;
+    setPendingScopedCvSelection(null);
+
+    if (!canonicalJobId) {
+      setAttachedCvId(null);
+      setAttachedCvTitle(null);
+    }
+  }, [canonicalJobId]);
+
+  React.useEffect(() => {
+    if (!canonicalJobId) {
+      return;
+    }
+
+    if (
+      pendingScopedCvSelection &&
+      pendingScopedCvSelection.id === canonicalRecordCvSelection.id
+    ) {
+      setPendingScopedCvSelection(null);
+      lastRequestedScopedCvSyncKeyRef.current = null;
+    }
+
+    if (pendingScopedCvSelection) {
+      return;
+    }
+
+    setAttachedCvId(canonicalRecordCvSelection.id);
+    setAttachedCvTitle(canonicalRecordCvSelection.title);
+  }, [
+    canonicalJobId,
+    canonicalRecordCvSelection.id,
+    canonicalRecordCvSelection.title,
+    pendingScopedCvSelection,
+  ]);
+
+  React.useEffect(() => {
+    if (
+      !canonicalJobId ||
+      !pendingScopedCvSelection ||
+      !isConvexAuthenticated ||
+      isConvexAuthLoading
+    ) {
+      return;
+    }
+
+    const syncKey = `${canonicalJobId}:${pendingScopedCvSelection.id ?? ""}`;
+    if (lastRequestedScopedCvSyncKeyRef.current === syncKey) {
+      return;
+    }
+
+    lastRequestedScopedCvSyncKeyRef.current = syncKey;
+    const requestedSelection = pendingScopedCvSelection;
+
+    void setJobResume({
+      jobId: canonicalJobId,
+      resumeId: requestedSelection.id,
+      resumeName: requestedSelection.title,
+    }).catch((error: unknown) => {
+      lastRequestedScopedCvSyncKeyRef.current = null;
+      setPendingScopedCvSelection(null);
+      setAttachedCvId(canonicalRecordCvSelection.id);
+      setAttachedCvTitle(canonicalRecordCvSelection.title);
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "Could not attach the selected resume to this job.",
+        { variant: "error" },
+      );
+    });
+  }, [
+    canonicalJobId,
+    canonicalRecordCvSelection.id,
+    canonicalRecordCvSelection.title,
+    isConvexAuthLoading,
+    isConvexAuthenticated,
+    pendingScopedCvSelection,
+    setJobResume,
+    showToast,
+  ]);
 
   const canonicalPrefill = React.useMemo<ProposalForgePrefill>(() => {
     if (!canonicalJobRecord) {
@@ -3690,14 +3772,22 @@ export function ProposalForge(): JSX.Element {
 
     setComposeFormInstanceKey((currentKey) => currentKey + 1);
     resetProposalWorkspace();
-    void navigate("/proposal", {
-      replace: true,
-      state:
-        proposalEntryIntent === "cover-letter-start"
-          ? { proposalEntryIntent }
-          : null,
-    });
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: location.search,
+      },
+      {
+        replace: true,
+        state:
+          proposalEntryIntent === "cover-letter-start"
+            ? { proposalEntryIntent }
+            : null,
+      },
+    );
   }, [
+    location.pathname,
+    location.search,
     navigate,
     proposalEntryIntent,
     proposalWorkspaceResetToken,
@@ -3743,17 +3833,15 @@ export function ProposalForge(): JSX.Element {
       return values.voicePreset;
     }
 
-    const activeLocalPersonalization = getActiveLocalPersonalizationSource();
     return (
       selectAutoTone({
         jobTitle: values.jobTitle,
         jobDescription: values.jobDescription,
-        personalizationContext:
-          activeLocalPersonalization.personalizationContext,
-        personalizationRichness: activeLocalPersonalization.richness,
+        personalizationContext: activePersonalizationSource.personalizationContext,
+        personalizationRichness: activePersonalizationSource.richness,
       }).preset ?? DEFAULT_PROPOSAL_VOICE_PRESET
     );
-  }, []);
+  }, [activePersonalizationSource]);
 
   const buildStoredProposalComposeDraftSnapshot = React.useCallback(
     (values: FormValues): StoredProposalComposeDraft => {
@@ -4090,11 +4178,10 @@ export function ProposalForge(): JSX.Element {
       logStructuredImportTiming(trace, "proposal_inline.finalize.start", {
         cvId: nextCvId,
       });
-      setProposalAttachedCvId(nextCvId);
+      handleAttachedCvChange(nextCvId);
       setShowExtensionHelper(false);
       setIsCoverLetterStartSessionActive(false);
       setIsComposePanelVisible(true);
-      refreshAttachedCvSelection();
       resetCoverLetterInlineImportUi();
       setCoverLetterInlineImportError(null);
       scheduleJobDescriptionFocus();
@@ -4103,7 +4190,7 @@ export function ProposalForge(): JSX.Element {
       });
     },
     [
-      refreshAttachedCvSelection,
+      handleAttachedCvChange,
       resetCoverLetterInlineImportUi,
       scheduleJobDescriptionFocus,
     ],
@@ -4314,7 +4401,7 @@ export function ProposalForge(): JSX.Element {
     (values: FormValues) => {
       cancelPendingComposeDraftSync();
       setComposePreviewValues(buildStoredProposalComposeDraftSnapshot(values));
-      const personalizationSource = getActiveLocalPersonalizationSource();
+      const personalizationSource = activePersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
         personalizationSource,
       );
@@ -4358,6 +4445,7 @@ export function ProposalForge(): JSX.Element {
       setFallbackInfo(null);
     },
     [
+      activePersonalizationSource,
       buildStoredProposalComposeDraftSnapshot,
       cancelPendingComposeDraftSync,
       formatProposalTypeLabel,
@@ -4373,7 +4461,7 @@ export function ProposalForge(): JSX.Element {
       nextProposalId?: Id<"proposals">,
     ) => {
       cancelPendingComposeDraftSync();
-      const personalizationSource = getActiveLocalPersonalizationSource();
+      const personalizationSource = activePersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
         personalizationSource,
       );
@@ -4477,6 +4565,7 @@ export function ProposalForge(): JSX.Element {
       setLoading(false);
     },
     [
+      activePersonalizationSource,
       cancelPendingComposeDraftSync,
       effectiveProposalStylePresetWithPalette,
       effectiveProposalTemplateId,
@@ -4500,7 +4589,7 @@ export function ProposalForge(): JSX.Element {
     (message: string, values: FormValues, rawReason?: string | null) => {
       cancelPendingComposeDraftSync();
       setComposePreviewValues(buildStoredProposalComposeDraftSnapshot(values));
-      const personalizationSource = getActiveLocalPersonalizationSource();
+      const personalizationSource = activePersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
         personalizationSource,
       );
@@ -4539,6 +4628,7 @@ export function ProposalForge(): JSX.Element {
       setFallbackInfo(null);
     },
     [
+      activePersonalizationSource,
       buildStoredProposalComposeDraftSnapshot,
       cancelPendingComposeDraftSync,
       formatProposalTypeLabel,
@@ -5017,7 +5107,7 @@ export function ProposalForge(): JSX.Element {
         setOutputSourceComposeDraft(composeDraft);
         setComposeDraftInitialSeed(composeDraft);
         if (openedSavedProposalSourceCvId) {
-          setProposalAttachedCvId(openedSavedProposalSourceCvId);
+          handleAttachedCvChange(openedSavedProposalSourceCvId);
         }
       } catch {
         // Ignore storage failures and continue with the in-memory draft.
@@ -5313,8 +5403,8 @@ export function ProposalForge(): JSX.Element {
 
   const isSavedView = requestedView === "saved";
   const hasLocalResumes = React.useMemo(
-    () => listLocalCvPickerOptions().length > 0,
-    [attachedCvId, attachedCvTitle],
+    () => listLocalCvPickerOptions(attachedCvId).length > 0,
+    [attachedCvId],
   );
   const proposalTwoPaneMinViewportWidth = 1440;
   const proposalWorkspaceOutputShellInlineSize =
@@ -6459,11 +6549,11 @@ export function ProposalForge(): JSX.Element {
                             .join(" ")}
                         >
                           <ProposalBriefCard
-                            documentTitle={
-                              proposalDocumentTitle ||
-                              briefJobTitle ||
-                              "Generated proposal"
+                            sourceJobTitle={briefJobTitle}
+                            outputDocumentTitle={
+                              proposalDocumentTitle || "Generated proposal"
                             }
+                            jobId={canonicalJobId}
                             jobDescription={briefJobDescription}
                             summaryText={briefSummaryText}
                             parseStatus={canonicalJobRecord?.parseStatus ?? null}
@@ -6492,8 +6582,10 @@ export function ProposalForge(): JSX.Element {
                                   }
                                 : undefined
                             }
+                            focusMode={showBriefCard}
                             onToggleBrief={handleOpenComposeBrief}
                             variant={shouldShowDesktopBriefCapsule ? "compact" : "card"}
+                            hideRawSource={showBriefCard}
                             sourceUrl={briefSourceUrl}
                             sourcePlatform={briefSourcePlatform}
                           />
@@ -6521,6 +6613,7 @@ export function ProposalForge(): JSX.Element {
                             onError={handleProposalError}
                             onValuesChange={handleProposalFormValuesChange}
                             onActiveCvChange={handleAttachedCvChange}
+                            activeCvId={attachedCvId}
                             prefill={prefill}
                             cvPickerOpen={isCvPickerOpen}
                             onCvPickerOpenChange={setIsCvPickerOpen}
@@ -6532,7 +6625,7 @@ export function ProposalForge(): JSX.Element {
                             initialComposeDraft={composeDraftInitialSeed}
                             sourceUrl={briefSourceUrl}
                             sourcePlatform={briefSourcePlatform}
-                            canonicalJobId={canonicalJobRecord?.id ?? null}
+                            canonicalJobId={canonicalJobId}
                             onGenerateControlChange={handleComposeGenerateControlChange}
                             headerAction={
                               hasBriefContent ? (

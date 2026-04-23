@@ -1871,9 +1871,10 @@ export function ProposalForgeNext(): JSX.Element {
               <div style={stackedCardWidthStyle}>
                 {showBriefCard ? (
                   <ProposalBriefCard
-                    documentTitle={proposalDocumentTitle}
-                    jobTitle={briefJobTitle}
+                    sourceJobTitle={briefJobTitle}
+                    outputDocumentTitle={proposalDocumentTitle}
                     jobDescription={briefJobDescription}
+                    hideRawSource={showBriefCard}
                     onToggleBrief={() => setBriefExpanded(true)}
                   />
                 ) : null}

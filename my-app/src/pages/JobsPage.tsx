@@ -7,22 +7,25 @@ import {
   ClipboardText,
   DotsThree,
   FileText,
+  Paperclip,
+  X,
 } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import { ProposalBriefCard } from "../components/ProposalBriefCard";
 import { FirstRunPanel } from "../components/jobs/FirstRunPanel";
 import { MatchReadBlock } from "../components/jobs/MatchReadBlock";
 import { NextStepBlock } from "../components/jobs/NextStepBlock";
+import { useToast } from "../components/ui/toast";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
-import {
-  getProposalSourceLabel,
-} from "../lib/proposal-source-platforms";
+import { getProposalSourceLabel } from "../lib/proposal-source-platforms";
 import { clearActiveLocalCvId } from "../lib/proposal-personalization";
+import { formatCvDisplayTitle } from "../lib/proposal-personalization";
 import {
   createProposalWorkspaceResetState,
   startFreshProposalWorkspace,
 } from "../lib/proposal-workspace-state";
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
+import type { CvDocument } from "../types/cvDocument";
 import { formatUiDate } from "../lib/ui-date";
 
 type JobsPageRouteParams = {
@@ -68,6 +71,13 @@ type JobsPageLinkedProposal = {
   updatedAt: number;
 };
 
+type JobResumePickerOption = {
+  id: string;
+  title: string;
+  dateLabel: string | null;
+  dateSortValue: number;
+};
+
 type JobsPageDetail = {
   id: string;
   title: string;
@@ -96,6 +106,9 @@ type JobsPageDetail = {
   toneCues: string[];
   contacts: string[];
   status: string;
+  resumeId?: string;
+  resumeName?: string;
+  resumeSource?: "job" | "default";
   matchRead: {
     tier: "strong" | "partial" | "weak" | "unknown";
     score: number | null;
@@ -287,11 +300,104 @@ function buildJobsRoute(jobId: string): string {
   return `/jobs/${encodeURIComponent(jobId)}`;
 }
 
+function readCvPickerProfilePreview(
+  cv: CvDocument,
+): Record<string, unknown> | null {
+  const profileSection = Array.isArray(cv.sections)
+    ? cv.sections.find((section) => String(section.type) === "profile")
+    : null;
+  const profileEntry = Array.isArray(profileSection?.structuredContent)
+    ? profileSection.structuredContent[0]
+    : null;
+
+  return profileEntry && typeof profileEntry === "object"
+    ? (profileEntry as Record<string, unknown>)
+    : null;
+}
+
+function readCvPickerString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+function toResumePickerTimestamp(value: string | undefined): number {
+  if (!value) {
+    return 0;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatShortRelativeAge(value: string | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  const diffMs = Date.now() - timestamp;
+  if (diffMs < 0) {
+    return "now";
+  }
+
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < hour) {
+    return `${Math.max(1, Math.floor(diffMs / minute))}m`;
+  }
+  if (diffMs < day) {
+    return `${Math.max(1, Math.floor(diffMs / hour))}h`;
+  }
+
+  return `${Math.max(1, Math.floor(diffMs / day))}d`;
+}
+
+function buildJobResumePickerOption(cv: CvDocument): JobResumePickerOption {
+  const profilePreview = readCvPickerProfilePreview(cv);
+  const profileName = readCvPickerString(profilePreview?.name);
+  const desiredPosition =
+    readCvPickerString(profilePreview?.desiredPosition) ??
+    readCvPickerString(profilePreview?.title);
+  const dateSource =
+    typeof cv.metadata?.updatedAt === "string"
+      ? cv.metadata.updatedAt
+      : typeof cv.metadata?.createdAt === "string"
+        ? cv.metadata.createdAt
+        : undefined;
+  const relativeAge = formatShortRelativeAge(dateSource);
+  const exactDate = formatUiDate(dateSource);
+
+  return {
+    id: String(cv.id),
+    title: formatCvDisplayTitle({
+      title: String(cv.title ?? "Untitled CV"),
+      profileName,
+      desiredPosition,
+      email: readCvPickerString(profilePreview?.email),
+      phone: readCvPickerString(profilePreview?.phone),
+      linkedin: readCvPickerString(profilePreview?.linkedin),
+      website: readCvPickerString(profilePreview?.website),
+      location: readCvPickerString(profilePreview?.location),
+    }),
+    dateLabel:
+      relativeAge && exactDate ? `${relativeAge} · ${exactDate}` : relativeAge ?? exactDate ?? null,
+    dateSortValue: toResumePickerTimestamp(dateSource),
+  };
+}
+
 function JobsPageContent(): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
   const { jobId: selectedJobId } = useParams<JobsPageRouteParams>();
   const { cvs, currentCv } = useCvLibrary();
+  const { showToast } = useToast();
   const { isLoaded, isSignedIn } = useAuth();
   const {
     isAuthenticated: isConvexAuthenticated,
@@ -325,7 +431,9 @@ function JobsPageContent(): JSX.Element {
     decisionRecorded: boolean;
   } | null>(null);
   const rowMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const resumePickerRef = React.useRef<HTMLDivElement | null>(null);
   const [openRowMenuJobId, setOpenRowMenuJobId] = React.useState<string | null>(null);
+  const [isResumePickerOpen, setIsResumePickerOpen] = React.useState(false);
 
   const jobsListReference = React.useMemo(
     () => ((api as any).jobsPublic?.listForUser ?? "jobsPublic.listForUser") as any,
@@ -355,6 +463,9 @@ function JobsPageContent(): JSX.Element {
   );
   const updateJobField = useMutation(
     ((api as any).jobsPublic?.updateField ?? "jobsPublic.updateField") as any,
+  );
+  const setJobResume = useMutation(
+    ((api as any).jobsPublic?.setResumeForJob ?? "jobsPublic.setResumeForJob") as any,
   );
   const jobs = useQuery(
     jobsListReference,
@@ -408,6 +519,37 @@ function JobsPageContent(): JSX.Element {
       window.removeEventListener("keydown", handleEscape);
     };
   }, [openRowMenuJobId]);
+
+  React.useEffect(() => {
+    if (!isResumePickerOpen) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (target && !resumePickerRef.current?.contains(target)) {
+        setIsResumePickerOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsResumePickerOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isResumePickerOpen]);
+
+  React.useEffect(() => {
+    setIsResumePickerOpen(false);
+  }, [selectedJobId]);
 
   React.useEffect(() => {
     if (selectedJobRecord === undefined) {
@@ -533,6 +675,13 @@ function JobsPageContent(): JSX.Element {
     selectedJobRecord === undefined &&
     optimisticSelectedJob === null;
   const hasResumeWorkspace = cvs.length > 0 || Boolean(currentCv);
+  const resumePickerOptions = React.useMemo(
+    () =>
+      cvs
+        .map((cv) => buildJobResumePickerOption(cv))
+        .sort((left, right) => right.dateSortValue - left.dateSortValue),
+    [cvs],
+  );
 
   const recordJobDecision = React.useCallback(
     (
@@ -649,6 +798,75 @@ function JobsPageContent(): JSX.Element {
     },
     [hasResumeWorkspace, location.state, navigate, recordJobDecision],
   );
+
+  const handleAttachResumeToJob = React.useCallback(
+    async (resumeId: string) => {
+      if (!selectedJob?.id) {
+        return;
+      }
+
+      const selectedOption =
+        resumePickerOptions.find((option) => option.id === resumeId) ?? null;
+      const resumeName = selectedOption?.title ?? null;
+
+      try {
+        await setJobResume({
+          jobId: selectedJob.id,
+          resumeId,
+          resumeName,
+        });
+        setOptimisticSelectedJob((current) =>
+          current && current.id === selectedJob.id
+            ? {
+                ...current,
+                resumeId,
+                resumeName: resumeName ?? undefined,
+                resumeSource: "job",
+              }
+            : current,
+        );
+        setIsResumePickerOpen(false);
+      } catch (error) {
+        showToast(
+          error instanceof Error
+            ? error.message
+            : "Could not attach the selected resume.",
+          { variant: "error" },
+        );
+      }
+    },
+    [resumePickerOptions, selectedJob?.id, setJobResume, showToast],
+  );
+
+  const handleDetachResumeFromJob = React.useCallback(async () => {
+    if (!selectedJob?.id) {
+      return;
+    }
+
+    try {
+      await setJobResume({
+        jobId: selectedJob.id,
+        resumeId: null,
+        resumeName: null,
+      });
+      setOptimisticSelectedJob((current) =>
+        current && current.id === selectedJob.id
+          ? {
+              ...current,
+              resumeId: undefined,
+              resumeName: undefined,
+              resumeSource: undefined,
+            }
+          : current,
+      );
+      setIsResumePickerOpen(false);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Could not detach the resume.",
+        { variant: "error" },
+      );
+    }
+  }, [selectedJob?.id, setJobResume, showToast]);
 
   const handleSaveForLater = React.useCallback(
     (jobId: string) => {
@@ -1060,11 +1278,127 @@ function JobsPageContent(): JSX.Element {
                             ) : null}
                           </div>
                         </div>
-                        <div
-                          ref={isRowMenuOpen ? rowMenuRef : null}
-                          className="dasti-import-dropdown dasti-jobs-row__menu"
-                          data-open={isRowMenuOpen ? "true" : "false"}
-                        >
+                        <div className="dasti-jobs-row__controls">
+                          {isActive ? (
+                            <div
+                              ref={resumePickerRef}
+                              className="dasti-jobs-detail__resume-picker dasti-jobs-row__resume-picker"
+                            >
+                              <div
+                                className={
+                                  selectedJob?.resumeName
+                                    ? "styleforge-active-cv-control styleforge-active-cv-control--loaded dasti-jobs-row__cv-control"
+                                    : "styleforge-active-cv-control styleforge-active-cv-control--ghost dasti-jobs-row__cv-control"
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  className="styleforge-active-cv-control__icon-button"
+                                  aria-label={
+                                    selectedJob?.resumeName
+                                      ? "Remove attached resume"
+                                      : "Open resume picker"
+                                  }
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    if (selectedJob?.resumeName) {
+                                      void handleDetachResumeFromJob();
+                                      return;
+                                    }
+                                    setIsResumePickerOpen((current) => !current);
+                                  }}
+                                >
+                                  <span
+                                    className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--base"
+                                    aria-hidden
+                                  >
+                                    <Paperclip size={15} strokeWidth={1.8} />
+                                  </span>
+                                  {selectedJob?.resumeName ? (
+                                    <span
+                                      className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--hover"
+                                      aria-hidden
+                                    >
+                                      <X size={15} strokeWidth={1.8} />
+                                    </span>
+                                  ) : null}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="styleforge-active-cv-control__body"
+                                  aria-controls={`job-resume-picker-${job.id}`}
+                                  aria-expanded={isResumePickerOpen}
+                                  aria-haspopup="dialog"
+                                  aria-label={
+                                    selectedJob?.resumeName
+                                      ? `Attached resume: ${selectedJob.resumeName}`
+                                      : "Attach a resume"
+                                  }
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setIsResumePickerOpen((current) => !current);
+                                  }}
+                                >
+                                  <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
+                                    {selectedJob?.resumeName ?? "Attach CV"}
+                                  </span>
+                                </button>
+                              </div>
+                              {isResumePickerOpen ? (
+                                <div
+                                  id={`job-resume-picker-${job.id}`}
+                                  role="dialog"
+                                  aria-label="Attach a resume"
+                                  className="dasti-jobs-detail__resume-popover dasti-toolbar-drawer-surface"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                  }}
+                                >
+                                  {resumePickerOptions.length === 0 ? (
+                                    <div className="dasti-jobs-detail__resume-empty">
+                                      No local resumes found yet. Create or import one in
+                                      CvForge.
+                                    </div>
+                                  ) : (
+                                    <div className="dasti-jobs-detail__resume-popover-list">
+                                      {resumePickerOptions.map((option) => (
+                                        <button
+                                          key={option.id}
+                                          type="button"
+                                          className={[
+                                            "dasti-jobs-detail__resume-option",
+                                            option.id === selectedJob?.resumeId
+                                              ? "dasti-jobs-detail__resume-option--active"
+                                              : "",
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" ")}
+                                          aria-label={`Attach ${option.title}`}
+                                          onClick={() => {
+                                            void handleAttachResumeToJob(option.id);
+                                          }}
+                                        >
+                                          <span className="dasti-jobs-detail__resume-option-title">
+                                            {option.title}
+                                          </span>
+                                          {option.dateLabel ? (
+                                            <span className="dasti-jobs-detail__resume-option-meta">
+                                              {option.dateLabel}
+                                            </span>
+                                          ) : null}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          <div
+                            ref={isRowMenuOpen ? rowMenuRef : null}
+                            className="dasti-import-dropdown dasti-jobs-row__menu"
+                            data-open={isRowMenuOpen ? "true" : "false"}
+                          >
                           <button
                             type="button"
                             className="dasti-icon-button dasti-jobs-row__menu-trigger"
@@ -1137,6 +1471,7 @@ function JobsPageContent(): JSX.Element {
                               </button>
                             </div>
                           ) : null}
+                        </div>
                         </div>
                       </article>
                     );
@@ -1230,7 +1565,8 @@ function JobsPageContent(): JSX.Element {
                   ) : null}
 
                   <ProposalBriefCard
-                    documentTitle={selectedJob.title}
+                    sourceJobTitle={selectedJob.title}
+                    outputDocumentTitle={null}
                     jobDescription={selectedJob.rawDescription}
                     sourceUrl={selectedJob.sourceUrl}
                     sourcePlatform={selectedJob.sourceType}
