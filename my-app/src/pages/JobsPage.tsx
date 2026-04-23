@@ -8,6 +8,7 @@ import {
   DotsThree,
   FileText,
   Paperclip,
+  Star,
   X,
 } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
@@ -38,6 +39,7 @@ type JobsPageListItem = {
   company: string;
   location: string;
   isSample: boolean;
+  isFavorite: boolean;
   sourceUrl: string;
   sourceDomain: string;
   sourceType: string;
@@ -84,6 +86,7 @@ type JobsPageDetail = {
   company: string;
   location: string;
   isSample: boolean;
+  isFavorite: boolean;
   sourceUrl: string;
   sourceDomain: string;
   sourceType: string;
@@ -235,9 +238,12 @@ function matchesListFilters(
   matchFilter: JobsMatchFilter,
   hasDocsOnly: boolean,
   needsReviewOnly: boolean,
+  favoritesOnly: boolean,
   optimisticReviewState?: string,
+  optimisticFavorite?: boolean,
 ): boolean {
   const reviewState = optimisticReviewState ?? job.reviewState;
+  const isFavorite = optimisticFavorite ?? job.isFavorite;
   if (matchFilter !== "all" && job.matchTier !== matchFilter) {
     return false;
   }
@@ -245,6 +251,9 @@ function matchesListFilters(
     return false;
   }
   if (needsReviewOnly && reviewState !== "needs_review") {
+    return false;
+  }
+  if (favoritesOnly && !isFavorite) {
     return false;
   }
   return true;
@@ -415,11 +424,14 @@ function JobsPageContent(): JSX.Element {
     React.useState<JobsMatchFilter>("all");
   const [hasDocsOnly, setHasDocsOnly] = React.useState(false);
   const [needsReviewOnly, setNeedsReviewOnly] = React.useState(false);
+  const [favoritesOnly, setFavoritesOnly] = React.useState(false);
   const [sortOrder, setSortOrder] = React.useState<JobsSortOrder>("recent");
   const [optimisticActivityById, setOptimisticActivityById] =
     React.useState<Record<string, number>>({});
   const [optimisticReviewStateById, setOptimisticReviewStateById] =
     React.useState<Record<string, string>>({});
+  const [optimisticFavoriteById, setOptimisticFavoriteById] =
+    React.useState<Record<string, boolean>>({});
   const [optimisticSelectedJob, setOptimisticSelectedJob] =
     React.useState<JobsPageDetail>(null);
   const [isSeedingSample, setIsSeedingSample] = React.useState(false);
@@ -466,6 +478,9 @@ function JobsPageContent(): JSX.Element {
   );
   const setJobResume = useMutation(
     ((api as any).jobsPublic?.setResumeForJob ?? "jobsPublic.setResumeForJob") as any,
+  );
+  const setJobFavorite = useMutation(
+    ((api as any).jobsPublic?.setJobFavorite ?? "jobsPublic.setJobFavorite") as any,
   );
   const jobs = useQuery(
     jobsListReference,
@@ -573,7 +588,9 @@ function JobsPageContent(): JSX.Element {
           matchFilter,
           hasDocsOnly,
           needsReviewOnly,
+          favoritesOnly,
           optimisticReviewStateById[job.id],
+          optimisticFavoriteById[job.id],
         ),
       )
       .filter((job) => {
@@ -617,7 +634,9 @@ function JobsPageContent(): JSX.Element {
   }, [
     jobs,
     optimisticActivityById,
+    optimisticFavoriteById,
     optimisticReviewStateById,
+    favoritesOnly,
     hasDocsOnly,
     matchFilter,
     needsReviewOnly,
@@ -868,12 +887,56 @@ function JobsPageContent(): JSX.Element {
     }
   }, [selectedJob?.id, setJobResume, showToast]);
 
-  const handleSaveForLater = React.useCallback(
-    (jobId: string) => {
-      recordJobDecision("save_for_later", jobId);
-      void navigate("/jobs?view=list");
+  const handleSetJobFavorite = React.useCallback(
+    async (jobId: string, nextFavorite: boolean) => {
+      const previousFavorite =
+        optimisticFavoriteById[jobId] ??
+        (selectedJob?.id === jobId ? selectedJob.isFavorite : undefined) ??
+        (jobs ?? []).find((job) => job.id === jobId)?.isFavorite ??
+        false;
+
+      setOptimisticFavoriteById((current) => ({
+        ...current,
+        [jobId]: nextFavorite,
+      }));
+      setOptimisticSelectedJob((current) =>
+        current && current.id === jobId
+          ? {
+              ...current,
+              isFavorite: nextFavorite,
+            }
+          : current,
+      );
+
+      try {
+        await setJobFavorite({ jobId, isFavorite: nextFavorite });
+      } catch (error) {
+        setOptimisticFavoriteById((current) => ({
+          ...current,
+          [jobId]: previousFavorite,
+        }));
+        setOptimisticSelectedJob((current) =>
+          current && current.id === jobId
+            ? {
+                ...current,
+                isFavorite: previousFavorite,
+              }
+            : current,
+        );
+        showToast(
+          error instanceof Error ? error.message : "Could not update favorite.",
+          { variant: "error" },
+        );
+      }
     },
-    [navigate, recordJobDecision],
+    [
+      jobs,
+      optimisticFavoriteById,
+      selectedJob?.id,
+      selectedJob?.isFavorite,
+      setJobFavorite,
+      showToast,
+    ],
   );
 
   const handleApproveReviewItem = React.useCallback(
@@ -1058,7 +1121,7 @@ function JobsPageContent(): JSX.Element {
   const authStatusMessage = !isLoaded || isConvexAuthLoading
     ? "Loading…"
     : !isSignedIn || !isConvexAuthenticated
-      ? "Sign in to view saved jobs."
+      ? "Sign in to view jobs."
       : null;
   const isJobsListLoading =
     !authStatusMessage &&
@@ -1081,7 +1144,7 @@ function JobsPageContent(): JSX.Element {
           <div className="dasti-stack">
             <h1 className="dasti-stack__title">Jobs</h1>
             <p className="dasti-stack__subtitle dasti-jobs-page__subtitle">
-              Reopen saved opportunities, review trust, and launch document work
+              Reopen opportunities, review trust, and launch document work
               without turning the workspace into a CRM.
             </p>
           </div>
@@ -1151,7 +1214,7 @@ function JobsPageContent(): JSX.Element {
                 </label>
                 <span className="dasti-jobs-toolbar__count">
                   {filteredJobs.length === (jobs?.length ?? 0)
-                    ? `${jobs?.length ?? 0} saved`
+                    ? `${jobs?.length ?? 0} jobs`
                     : `${filteredJobs.length} of ${jobs?.length ?? 0}`}
                 </span>
               </div>
@@ -1209,6 +1272,18 @@ function JobsPageContent(): JSX.Element {
                 >
                   Needs review
                 </button>
+                <button
+                  type="button"
+                  className={[
+                    "dasti-jobs-filter-chip",
+                    favoritesOnly ? "dasti-jobs-filter-chip--active" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={() => setFavoritesOnly((current) => !current)}
+                >
+                  Favorites
+                </button>
               </div>
 
               {filteredJobs.length === 0 ? (
@@ -1234,6 +1309,8 @@ function JobsPageContent(): JSX.Element {
                       ) ?? "Recent";
                     const reviewState =
                       optimisticReviewStateById[job.id] ?? job.reviewState;
+                    const isFavorite =
+                      optimisticFavoriteById[job.id] ?? job.isFavorite;
                     const matchLabel = resolveMatchTierLabel(job.matchTier);
                     const isRowMenuOpen = openRowMenuJobId === job.id;
 
@@ -1254,6 +1331,9 @@ function JobsPageContent(): JSX.Element {
                             <span>{title}</span>
                             {job.isSample ? (
                               <span className="dasti-jobs-sample-badge">Sample</span>
+                            ) : null}
+                            {isFavorite ? (
+                              <span className="dasti-jobs-sample-badge">Favorite</span>
                             ) : null}
                           </div>
                           <div className="dasti-jobs-row__company">
@@ -1279,6 +1359,28 @@ function JobsPageContent(): JSX.Element {
                           </div>
                         </div>
                         <div className="dasti-jobs-row__controls">
+                          <button
+                            type="button"
+                            className="dasti-icon-button dasti-jobs-row__favorite"
+                            aria-pressed={isFavorite}
+                            aria-label={
+                              isFavorite
+                                ? `Remove ${title} from favorites`
+                                : `Mark ${title} as favorite`
+                            }
+                            title={isFavorite ? "Remove from favorites" : "Mark favorite"}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleSetJobFavorite(job.id, !isFavorite);
+                            }}
+                          >
+                            <Star
+                              size={16}
+                              strokeWidth={1.8}
+                              weight={isFavorite ? "fill" : "regular"}
+                              aria-hidden="true"
+                            />
+                          </button>
                           {isActive ? (
                             <div
                               ref={resumePickerRef}
@@ -1491,7 +1593,7 @@ function JobsPageContent(): JSX.Element {
                 <div className="dasti-empty-state dasti-empty-state--panel">
                   <div className="dasti-empty-state__title">Job unavailable</div>
                   <p className="dasti-empty-state__subtitle">
-                    This saved job could not be loaded. Open another job from the
+                    This job could not be loaded. Open another job from the
                     list to continue.
                   </p>
                 </div>
@@ -1516,6 +1618,9 @@ function JobsPageContent(): JSX.Element {
                         {selectedJob.isSample ? (
                           <span className="dasti-jobs-sample-badge">Sample</span>
                         ) : null}
+                        {selectedJob.isFavorite ? (
+                          <span className="dasti-jobs-sample-badge">Favorite</span>
+                        ) : null}
                       </div>
                       <div className="dasti-jobs-detail__meta">
                         <span>{selectedJob.company || "Unknown company"}</span>
@@ -1531,6 +1636,34 @@ function JobsPageContent(): JSX.Element {
                         ) : null}
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      className="dasti-icon-button"
+                      aria-pressed={selectedJob.isFavorite}
+                      aria-label={
+                        selectedJob.isFavorite
+                          ? "Remove job from favorites"
+                          : "Mark job as favorite"
+                      }
+                      title={
+                        selectedJob.isFavorite
+                          ? "Remove from favorites"
+                          : "Mark favorite"
+                      }
+                      onClick={() => {
+                        void handleSetJobFavorite(
+                          selectedJob.id,
+                          !selectedJob.isFavorite,
+                        );
+                      }}
+                    >
+                      <Star
+                        size={17}
+                        strokeWidth={1.8}
+                        weight={selectedJob.isFavorite ? "fill" : "regular"}
+                        aria-hidden="true"
+                      />
+                    </button>
                   </div>
 
                   {selectedJob.matchRead ? (
@@ -1548,7 +1681,7 @@ function JobsPageContent(): JSX.Element {
                             ? "Generate cover letter"
                             : action === "resume"
                               ? "Open resume with this job"
-                              : "Save for later",
+                              : "Add to favorites",
                       }))}
                       onSelectAction={(actionId) => {
                         if (actionId === "cover_letter") {
@@ -1559,7 +1692,7 @@ function JobsPageContent(): JSX.Element {
                           handleOpenResumeWithJob(selectedJob.id);
                           return;
                         }
-                        handleSaveForLater(selectedJob.id);
+                        void handleSetJobFavorite(selectedJob.id, true);
                       }}
                     />
                   ) : null}

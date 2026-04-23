@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { listForUser } from "../jobsPublic";
+import { listForUser, setJobFavorite } from "../jobsPublic";
 
 describe("jobsPublic.listForUser", () => {
   it("returns jobs across linked profiles without reading active CV state", async () => {
@@ -140,6 +140,7 @@ describe("jobsPublic.listForUser", () => {
         id: "job_old",
         title: "Legacy job",
         company: "Acme",
+        isFavorite: false,
         matchTier: "weak",
       }),
     ]);
@@ -328,5 +329,80 @@ describe("jobsPublic.listForUser", () => {
         }),
       ]),
     );
+  });
+});
+
+describe("jobsPublic.setJobFavorite", () => {
+  it("persists favorite state on the job record", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        email: "primary@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_alpha",
+      userId: "profile_primary",
+      isFavorite: false,
+      updatedAt: 100,
+    };
+    const patchCalls: Array<{ id: string; patch: Record<string, unknown> }> = [];
+
+    const result = await setJobFavorite._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          patch: async (id: string, patch: Record<string, unknown>) => {
+            patchCalls.push({ id, patch });
+            Object.assign(job, patch);
+          },
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter((profile) => profile.clerkId === clerkId),
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: "job_alpha", isFavorite: true },
+    );
+
+    expect(result).toBeNull();
+    expect(patchCalls).toEqual([
+      {
+        id: "job_alpha",
+        patch: {
+          isFavorite: true,
+          updatedAt: expect.any(Number),
+        },
+      },
+    ]);
+    expect(job.isFavorite).toBe(true);
   });
 });
