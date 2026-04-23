@@ -66,12 +66,12 @@ export function Home() {
     };
 
     void loadStoredAuthState()
-      .then((snapshot) => {
+      .then(() => {
         if (!isActive) {
           return;
         }
 
-        if (!hasAttemptedInitialSyncRef.current && !hasUsableExtensionAuth(snapshot.authToken)) {
+        if (!hasAttemptedInitialSyncRef.current) {
           hasAttemptedInitialSyncRef.current = true;
           return requestSessionCheck(true);
         }
@@ -83,9 +83,16 @@ export function Home() {
       });
 
     chrome.storage.onChanged.addListener(updateStoredAuth);
+
+    const handleWindowFocus = () => {
+      void requestSessionCheck(true);
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
     return () => {
       isActive = false;
       chrome.storage.onChanged.removeListener(updateStoredAuth);
+      window.removeEventListener("focus", handleWindowFocus);
     };
   }, [loadStoredAuthState, requestSessionCheck]);
 

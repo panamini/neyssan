@@ -47,6 +47,15 @@ const APP_BASE_URL = resolveAppBaseUrl(
   process.env.PLASMO_PUBLIC_APP_BASE_URL ?? process.env.PLASMO_PUBLIC_CLERK_SYNC_HOST ?? ""
 );
 const AUTH_DEBUG_PREFIX = "[clerk-sync][background]";
+const SUPPORTED_EXTENSION_TAB_PATTERNS = [
+  "https://*.upwork.com/*",
+  "https://*.indeed.com/*",
+  "https://*.linkedin.com/*",
+  "https://*.ziprecruiter.com/*",
+  "https://*.ziprecruiter.fr/*",
+  "https://www.hellowork.com/fr-fr/emplois/*",
+  "https://*.hellowork.com/fr-fr/emplois/*",
+];
 
 type SessionSyncResult = {
   signedIn: boolean;
@@ -194,6 +203,36 @@ async function performBackgroundSessionSync(trigger: string) {
   return result;
 }
 
+async function refreshSupportedTabsAfterExtensionUpdate() {
+  if (!chrome.tabs?.query) {
+    return;
+  }
+
+  try {
+    const tabs = await chrome.tabs.query({ url: SUPPORTED_EXTENSION_TAB_PATTERNS });
+    for (const tab of tabs) {
+      if (typeof tab.id !== "number") {
+        continue;
+      }
+
+      chrome.tabs.reload(tab.id, {}, () => {
+        if (chrome.runtime.lastError) {
+          logAuthDebug("tab-reload-skipped", {
+            tabId: tab.id,
+            error: chrome.runtime.lastError.message,
+          });
+        }
+      });
+    }
+
+    logAuthDebug("supported-tabs-refreshed", { count: tabs.length });
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown supported-tab refresh error";
+    logAuthDebug("supported-tabs-refresh-error", { error: errorMessage });
+  }
+}
+
 (async () => {
   logAuthDebug("background-init", {
     syncHost: SYNC_HOST || null,
@@ -204,6 +243,10 @@ async function performBackgroundSessionSync(trigger: string) {
   const result = await performBackgroundSessionSync("initial-load");
   logAuthDebug("initial-convex-token-state", { hasConvexToken: Boolean(result.token) });
 })();
+
+chrome.runtime.onInstalled.addListener(() => {
+  void refreshSupportedTabsAfterExtensionUpdate();
+});
 
 setInterval(async () => {
   const result = await performBackgroundSessionSync("periodic-interval");
