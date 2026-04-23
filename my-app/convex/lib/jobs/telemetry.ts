@@ -23,6 +23,11 @@ type JobsTelemetryMetricArgs = {
   confidence?: string | null;
   method?: string | null;
   fallback?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  promptTokens?: number | null;
+  completionTokens?: number | null;
+  estimatedCostUsd?: number | null;
 };
 
 function setString(
@@ -59,6 +64,11 @@ export function buildJobsMetricArgs(args: JobsTelemetryMetricArgs) {
   setString(metadata, "confidence", args.confidence);
   setString(metadata, "method", args.method);
   setString(metadata, "fallback", args.fallback);
+  setString(metadata, "provider", args.provider);
+  setString(metadata, "model", args.model);
+  setString(metadata, "promptTokens", args.promptTokens);
+  setString(metadata, "completionTokens", args.completionTokens);
+  setString(metadata, "estimatedCostUsd", args.estimatedCostUsd);
 
   setString(labels, "path", args.path);
   setString(labels, "outcome", args.outcome);
@@ -68,6 +78,8 @@ export function buildJobsMetricArgs(args: JobsTelemetryMetricArgs) {
   setString(labels, "confidence", args.confidence);
   setString(labels, "method", args.method);
   setString(labels, "fallback", args.fallback);
+  setString(labels, "provider", args.provider);
+  setString(labels, "model", args.model);
 
   return {
     name: `jobs-v2:${args.event}`,

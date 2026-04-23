@@ -13,7 +13,7 @@ type MatchRead = {
     jobId: string;
   };
   computedAt: number;
-  method: "keyword-overlap";
+  method: "keyword-overlap" | "llm";
   fallback:
     | "none"
     | "profile_missing"

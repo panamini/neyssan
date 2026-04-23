@@ -1,6 +1,7 @@
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalAction, internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import { llmConfig } from "../config/llmConfig";
 
 import {
   type CanonicalUserProfile,
@@ -19,11 +20,19 @@ import {
 } from "./lib/jobs/canonicalJobs";
 import {
   buildMatchReadTelemetryArgs,
+  buildMatchReadSynthesisCacheKey,
   computeMatchRead,
   type MatchRead,
   type MatchReadTier,
 } from "./lib/jobs/matchRead";
 import { buildJobsMetricArgs } from "./lib/jobs/telemetry";
+import {
+  buildMatchReadSynthesisMetricMetadata,
+  createPendingMatchReadSynthesisCache,
+  isMatchReadSynthesisEnabled,
+  synthesizeMatchReadWithMistral,
+  type MatchReadSynthesisCache,
+} from "./lib/jobs/matchReadSynthesis";
 
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const COHORT_MIN_TIER_DECISIONS = 10;
@@ -226,6 +235,83 @@ async function scheduleMatchReadComputedMetric(ctx: any, matchRead: MatchRead) {
     0,
     internal.metrics.recordMetric,
     buildMatchReadTelemetryArgs(matchRead),
+  );
+}
+
+async function scheduleMatchReadSynthesisWarm(args: {
+  ctx: any;
+  job: any;
+  profile: any;
+}) {
+  if (!isMatchReadSynthesisEnabled()) {
+    return;
+  }
+
+  const keywordMatchRead = computeMatchRead({
+    job: {
+      id: String(args.job._id),
+      updatedAt: args.job.updatedAt,
+      parseVersion: args.job.parseVersion,
+      parseStatus: args.job.parseStatus,
+      mustHaves: args.job.mustHaves ?? [],
+      keywords: args.job.keywords ?? [],
+      mustHavesExtraction: args.job.mustHavesExtraction ?? [],
+      keywordsExtraction: args.job.keywordsExtraction ?? [],
+    },
+    profile: args.profile
+      ? {
+          id: String(args.profile._id ?? args.profile.id ?? ""),
+          version: args.profile.version,
+          skills: args.profile.skills ?? [],
+          keywords: args.profile.keywords ?? [],
+        }
+      : null,
+  });
+
+  if (keywordMatchRead.fallback !== "none") {
+    return;
+  }
+
+  const cacheKey = buildMatchReadSynthesisCacheKey({
+    job: {
+      id: String(args.job._id),
+      updatedAt: args.job.updatedAt,
+      parseVersion: args.job.parseVersion,
+    },
+    profile: args.profile
+      ? {
+          id: String(args.profile._id ?? args.profile.id ?? ""),
+          version: args.profile.version,
+        }
+      : null,
+    matchRead: keywordMatchRead,
+  });
+
+  const currentCache = args.job.matchReadSynthesis as MatchReadSynthesisCache | undefined;
+  if (
+    currentCache?.cacheKey === cacheKey &&
+    (currentCache.status === "pending" || currentCache.status === "ready")
+  ) {
+    return;
+  }
+
+  await args.ctx.db.patch(args.job._id, {
+    matchReadSynthesis: createPendingMatchReadSynthesisCache(cacheKey),
+  });
+
+  await args.ctx.scheduler.runAfter(
+    0,
+    (internal as any).jobsPublic.runMatchReadSynthesis,
+    {
+      jobId: args.job._id,
+      cacheKey,
+      title: args.job.title,
+      company: args.job.company,
+      tier: keywordMatchRead.tier,
+      confidence: keywordMatchRead.confidence,
+      matched: keywordMatchRead.matched,
+      missing: keywordMatchRead.missing,
+    },
   );
 }
 
@@ -482,6 +568,7 @@ async function requireCanonicalUserProfile(ctx: any) {
     clerkId: profile.clerkId,
     email: profile.email,
     name: profile.name,
+    version: profile.version,
     skills: profile.skills,
     keywords: profile.keywords,
   };
@@ -874,6 +961,8 @@ export const getById = query({
     const matchRead = computeMatchRead({
       job: {
         id: String(job._id),
+        updatedAt: job.updatedAt,
+        parseVersion: job.parseVersion,
         parseStatus: job.parseStatus,
         mustHaves: job.mustHaves ?? [],
         keywords: job.keywords ?? [],
@@ -883,10 +972,12 @@ export const getById = query({
       profile: profile
         ? {
             id: String(profile._id),
+            version: profile.version,
             skills: profile.skills ?? [],
             keywords: profile.keywords ?? [],
           }
         : null,
+      synthesis: job.matchReadSynthesis ?? null,
     });
     const nextStepBlock = await resolveNextStepBlock(ctx, matchRead.tier);
 
@@ -974,6 +1065,144 @@ export const loadForUser = mutation({
   handler: async (ctx) => {
     const profile = await requireCanonicalUserProfile(ctx);
     return listProjectedJobsForProfile(ctx, profile, { trackMatchRead: true });
+  },
+});
+
+export const storeMatchReadSynthesis = internalMutation({
+  args: {
+    jobId: v.id("jobs"),
+    cacheKey: v.string(),
+    status: v.union(v.literal("ready"), v.literal("error")),
+    provider: v.string(),
+    model: v.string(),
+    matched: v.optional(v.array(v.string())),
+    missing: v.optional(v.array(v.string())),
+    computedAt: v.optional(v.number()),
+    promptTokens: v.optional(v.number()),
+    completionTokens: v.optional(v.number()),
+    estimatedCostUsd: v.optional(v.number()),
+    error: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job || job.matchReadSynthesis?.cacheKey !== args.cacheKey) {
+      return null;
+    }
+
+    await ctx.db.patch(args.jobId, {
+      matchReadSynthesis: {
+        cacheKey: args.cacheKey,
+        status: args.status,
+        provider: args.provider,
+        model: args.model,
+        ...(args.matched ? { matched: args.matched } : {}),
+        ...(args.missing ? { missing: args.missing } : {}),
+        ...(args.computedAt ? { computedAt: args.computedAt } : {}),
+        ...(args.promptTokens !== undefined ? { promptTokens: args.promptTokens } : {}),
+        ...(args.completionTokens !== undefined
+          ? { completionTokens: args.completionTokens }
+          : {}),
+        ...(args.estimatedCostUsd !== undefined
+          ? { estimatedCostUsd: args.estimatedCostUsd }
+          : {}),
+        ...(args.error ? { error: args.error } : {}),
+      },
+    });
+
+    return null;
+  },
+});
+
+export const runMatchReadSynthesis = internalAction({
+  args: {
+    jobId: v.id("jobs"),
+    cacheKey: v.string(),
+    title: v.string(),
+    company: v.string(),
+    tier: v.union(
+      v.literal("strong"),
+      v.literal("partial"),
+      v.literal("weak"),
+      v.literal("unknown"),
+    ),
+    confidence: v.union(
+      v.literal("high"),
+      v.literal("medium"),
+      v.literal("low"),
+    ),
+    matched: v.array(v.string()),
+    missing: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    try {
+      const synthesis = await synthesizeMatchReadWithMistral({
+        jobId: String(args.jobId),
+        title: args.title,
+        company: args.company,
+        tier: args.tier,
+        confidence: args.confidence,
+        matched: args.matched,
+        missing: args.missing,
+      });
+
+      if (synthesis.status === "error") {
+        await ctx.runMutation((internal as any).jobsPublic.storeMatchReadSynthesis, {
+          jobId: args.jobId,
+          cacheKey: args.cacheKey,
+          status: "error",
+          provider: synthesis.provider,
+          model: synthesis.model,
+          error: synthesis.error,
+        });
+        return null;
+      }
+
+      await ctx.runMutation((internal as any).jobsPublic.storeMatchReadSynthesis, {
+        jobId: args.jobId,
+        cacheKey: args.cacheKey,
+        status: "ready",
+        provider: synthesis.provider,
+        model: synthesis.model,
+        matched: synthesis.matched,
+        missing: synthesis.missing,
+        computedAt: synthesis.computedAt,
+        promptTokens: synthesis.promptTokens,
+        completionTokens: synthesis.completionTokens,
+        estimatedCostUsd: synthesis.estimatedCostUsd,
+      });
+
+      await ctx.runMutation(
+        internal.metrics.recordMetric,
+        buildJobsMetricArgs({
+          event: "match_read_computed",
+          jobId: String(args.jobId),
+          tier: args.tier,
+          confidence: args.confidence,
+          method: "llm",
+          fallback: "none",
+          ...buildMatchReadSynthesisMetricMetadata(synthesis),
+        }),
+      );
+    } catch (error) {
+      const model =
+        llmConfig.mistralModel ??
+        llmConfig.model ??
+        process.env.MISTRAL_MODEL ??
+        "mistral-small-latest";
+
+      await ctx.runMutation((internal as any).jobsPublic.storeMatchReadSynthesis, {
+        jobId: args.jobId,
+        cacheKey: args.cacheKey,
+        status: "error",
+        provider: "mistral",
+        model,
+        error: error instanceof Error ? error.message : String(error ?? "unknown_error"),
+      });
+    }
+
+    return null;
   },
 });
 
@@ -1111,6 +1340,16 @@ export const markOpened = mutation({
     await ctx.db.patch(normalizedJobId, {
       lastOpenedAt: now,
       updatedAt: now,
+    });
+
+    await scheduleMatchReadSynthesisWarm({
+      ctx,
+      job: {
+        ...job,
+        lastOpenedAt: now,
+        updatedAt: now,
+      },
+      profile,
     });
 
     return null;

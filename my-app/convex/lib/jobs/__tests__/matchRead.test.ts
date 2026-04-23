@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildMatchReadTelemetryArgs, computeMatchRead } from "../matchRead";
+import {
+  buildMatchReadTelemetryArgs,
+  buildMatchReadSynthesisCacheKey,
+  computeMatchRead,
+} from "../matchRead";
 
 describe("matchRead", () => {
   it("returns a strong match for high-overlap profile signals", () => {
@@ -166,5 +170,150 @@ describe("matchRead", () => {
         fallback: "none",
       },
     });
+  });
+
+  it("switches the method to llm when a matching synthesis cache is ready", () => {
+    const baseResult = computeMatchRead({
+      now: 1234,
+      profile: {
+        id: "profile_1",
+        version: 3,
+        skills: ["Airtable", "Vendor Operations"],
+        keywords: ["launch planning", "cross-functional communication"],
+      },
+      job: {
+        id: "job_1",
+        parseVersion: "v1",
+        mustHavesExtraction: [
+          { value: "Airtable", confidence: 0.9, sourceSpan: null },
+          {
+            value: "Vendor operations",
+            confidence: 0.9,
+            sourceSpan: null,
+          },
+        ],
+        keywordsExtraction: [
+          {
+            value: "Cross-functional communication",
+            confidence: 0.82,
+            sourceSpan: null,
+          },
+          { value: "Program management", confidence: 0.8, sourceSpan: null },
+        ],
+      },
+    });
+
+    const cacheKey = buildMatchReadSynthesisCacheKey({
+      job: {
+        id: "job_1",
+        parseVersion: "v1",
+      },
+      profile: {
+        id: "profile_1",
+        version: 3,
+      },
+      matchRead: baseResult,
+    });
+
+    const result = computeMatchRead({
+      now: 1234,
+      profile: {
+        id: "profile_1",
+        version: 3,
+        skills: ["Airtable", "Vendor Operations"],
+        keywords: ["launch planning", "cross-functional communication"],
+      },
+      job: {
+        id: "job_1",
+        parseVersion: "v1",
+        mustHavesExtraction: [
+          { value: "Airtable", confidence: 0.9, sourceSpan: null },
+          {
+            value: "Vendor operations",
+            confidence: 0.9,
+            sourceSpan: null,
+          },
+        ],
+        keywordsExtraction: [
+          {
+            value: "Cross-functional communication",
+            confidence: 0.82,
+            sourceSpan: null,
+          },
+          { value: "Program management", confidence: 0.8, sourceSpan: null },
+        ],
+      },
+      synthesis: {
+        cacheKey,
+        status: "ready",
+        provider: "mistral",
+        model: "mistral-small-latest",
+        computedAt: 2222,
+        matched: [
+          "Hands-on Airtable workflow ownership",
+          "Vendor operations experience",
+          "Cross-functional communication in delivery work",
+        ],
+        missing: ["Program management depth"],
+      },
+    });
+
+    expect(result.method).toBe("llm");
+    expect(result.computedAt).toBe(2222);
+    expect(result.matched).toEqual([
+      "Hands-on Airtable workflow ownership",
+      "Vendor operations experience",
+      "Cross-functional communication in delivery work",
+    ]);
+    expect(result.missing).toEqual(["Program management depth"]);
+  });
+
+  it("ignores a stale synthesis cache key and keeps keyword-overlap phrasing", () => {
+    const result = computeMatchRead({
+      now: 1234,
+      profile: {
+        id: "profile_1",
+        version: 3,
+        skills: ["Airtable", "Vendor Operations"],
+        keywords: ["launch planning", "cross-functional communication"],
+      },
+      job: {
+        id: "job_1",
+        parseVersion: "v1",
+        mustHavesExtraction: [
+          { value: "Airtable", confidence: 0.9, sourceSpan: null },
+          {
+            value: "Vendor operations",
+            confidence: 0.9,
+            sourceSpan: null,
+          },
+        ],
+        keywordsExtraction: [
+          {
+            value: "Cross-functional communication",
+            confidence: 0.82,
+            sourceSpan: null,
+          },
+          { value: "Program management", confidence: 0.8, sourceSpan: null },
+        ],
+      },
+      synthesis: {
+        cacheKey: "stale",
+        status: "ready",
+        provider: "mistral",
+        model: "mistral-small-latest",
+        computedAt: 2222,
+        matched: ["Rewritten phrase"],
+        missing: ["Missing phrase"],
+      },
+    });
+
+    expect(result.method).toBe("keyword-overlap");
+    expect(result.matched).toEqual([
+      "Airtable",
+      "Vendor operations",
+      "Cross-functional communication",
+    ]);
+    expect(result.missing).toEqual(["Program management"]);
   });
 });
