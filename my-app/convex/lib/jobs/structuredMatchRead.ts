@@ -156,7 +156,7 @@ const METADATA_VALUES = new Set([
 ]);
 
 const METADATA_TEXT_RE =
-  /\b(equal opportunity|eeo|privacy|cookie|cookies|terms of use|all rights reserved|apply now|share this job|save job|posted \d+|people clicked apply|kith treats|who we are|about the job|about the role|compensation|status:|location:)\b/i;
+  /\b(equal opportunity|eeo|privacy|cookie|cookies|terms of use|all rights reserved|apply now|share this job|save job|posted \d+|people clicked apply|source platform|kith treats|kith brand|brand story|company culture|our culture|company mission|mission statement|join our team|great place to work|why join|who we are|about the job|about the role|compensation|benefits package|employee discount|perks?|status:|location:)\b/i;
 const LOCATION_OR_COMP_RE =
   /\b(location|compensation|salary|\$|remote|onsite|on-site|hybrid|miami|new york|paris|district)\b/i;
 const SCHEDULE_RE = /\b(weekend|holiday|shift|schedule|availability|overnight|evening)\b/i;
