@@ -43,7 +43,7 @@ const validKithShadowRow: StructuredMatchReadShadowRow = {
   validation_status: "valid",
   fallback_used: false,
   model: "mistral-small-latest",
-  prompt_version: "p9_v1",
+  prompt_version: "p9_v2",
   created_at: 100,
 };
 
@@ -176,7 +176,7 @@ describe("structured match-read shadow scorer", () => {
     expect(
       selectEligibleStructuredJobExtraction({
         model: "mistral-small-latest",
-        promptVersion: "p9_v1",
+        promptVersion: "p9_v2",
         shadowRows: [
           { ...validKithShadowRow, validation_status: "schema_invalid" },
           { ...validKithShadowRow, fallback_used: true },
@@ -185,6 +185,26 @@ describe("structured match-read shadow scorer", () => {
         ],
       })?.normalizedOutput.role_title_normalized,
     ).toBe("Security Guard");
+  });
+
+  it("ignores mistral-small-latest rows when current policy is Ministral 3 3B", () => {
+    expect(
+      selectEligibleStructuredJobExtraction({
+        model: "ministral-3b-2512",
+        promptVersion: "p9_v2",
+        shadowRows: [validKithShadowRow],
+      }),
+    ).toBeNull();
+  });
+
+  it("ignores old p9_v1 rows under the current prompt version", () => {
+    expect(
+      selectEligibleStructuredJobExtraction({
+        model: "mistral-small-latest",
+        promptVersion: "p9_v2",
+        shadowRows: [{ ...validKithShadowRow, prompt_version: "p9_v1" }],
+      }),
+    ).toBeNull();
   });
 
   it("excludes metadata from job requirement entities and keeps constraints separate", () => {
@@ -197,7 +217,7 @@ describe("structured match-read shadow scorer", () => {
       profile: robertProfile,
       shadowRows: [validKithShadowRow],
       model: "mistral-small-latest",
-      promptVersion: "p9_v1",
+      promptVersion: "p9_v2",
     });
 
     expect(debug.structured.status).toBe("available");
@@ -279,7 +299,7 @@ describe("structured match-read shadow scorer", () => {
       profile: robertProfile,
       shadowRows: [validKithShadowRow],
       model: "mistral-small-latest",
-      promptVersion: "p9_v1",
+      promptVersion: "p9_v2",
     });
 
     expect(debug.structured.status).toBe("available");
@@ -318,7 +338,7 @@ describe("structured match-read shadow scorer", () => {
         },
       ],
       model: "mistral-small-latest",
-      promptVersion: "p9_v1",
+      promptVersion: "p9_v2",
     });
 
     expect(debug.structured.status).toBe("available");
@@ -340,7 +360,7 @@ describe("structured match-read shadow scorer", () => {
       profile: robertProfile,
       shadowRows: [validKithShadowRow],
       model: "mistral-small-latest",
-      promptVersion: "p9_v1",
+      promptVersion: "p9_v2",
     });
 
     expect(debug.old).toEqual({
@@ -366,7 +386,7 @@ describe("structured match-read shadow scorer", () => {
       profile: robertProfile,
       shadowRows: [validKithShadowRow],
       model: "mistral-small-latest",
-      promptVersion: "p9_v1",
+      promptVersion: "p9_v2",
     });
 
     expect(old).toMatchObject({
