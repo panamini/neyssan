@@ -905,6 +905,290 @@ describe("jobsPublic.debugInspectMatchInputByJobId", () => {
     expect(result?.derivedKeywords).toEqual(
       expect.arrayContaining(["airtable", "program", "management"]),
     );
+    expect(result?.structuredShadowSummary).toMatchObject({
+      flagEnabled: false,
+      internalViewer: false,
+      status: "unavailable",
+      reason: "shadow_disabled",
+      structuredScore: null,
+      metadataLeakCount: 0,
+      provenanceComplete: false,
+    });
+  });
+
+  it("does not compute structured shadow output when the internal viewer gate fails", async () => {
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        profileId: "cv_primary",
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        skills: ["Airtable"],
+        keywords: ["Airtable", "Program management"],
+        email: "primary@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_debug_gate",
+      _creationTime: 100,
+      userId: "profile_primary",
+      title: "Operations role",
+      company: "Acme",
+      location: "Remote",
+      isSample: false,
+      isFavorite: false,
+      sourceUrl: "https://example.com/job",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      applicationUrl: "",
+      parseStatus: "parsed",
+      parseVersion: "v1b",
+      reviewState: "ready",
+      status: "active",
+      importedAt: 100,
+      updatedAt: 100,
+      lastOpenedAt: 100,
+      archivedAt: null,
+      lastResumeId: null,
+      lastResumeName: null,
+      rawDescription: "Requires Airtable.",
+      rawLanguageDetected: "en",
+      summary: "Operations role",
+      responsibilities: [],
+      keywords: [],
+      mustHaves: ["Airtable"],
+      toneCues: [],
+      contacts: [],
+      mustHavesExtraction: [],
+      keywordsExtraction: [],
+      reviewItems: [],
+    };
+
+    const result = await debugInspectMatchInputByJobId._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: job._id },
+    );
+
+    expect(result?.structuredShadow).toMatchObject({
+      structured: {
+        status: "unavailable",
+        reason: "internal_viewer_required",
+      },
+    });
+    expect(result?.structuredShadowSummary).toMatchObject({
+      flagEnabled: true,
+      internalViewer: false,
+      status: "unavailable",
+      reason: "internal_viewer_required",
+      structuredScore: null,
+    });
+  });
+
+  it("exposes structured shadow comparison only when flag and internal viewer gates pass", async () => {
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "clerk_123,admin@example.com");
+
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        profileId: "cv_primary",
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        skills: ["Airtable"],
+        keywords: ["Airtable", "Program management"],
+        summary: "Operations lead with Airtable and program management experience.",
+        experience: [
+          {
+            company: "Acme",
+            title: "Program Manager",
+            description: "Program management and Airtable workflow automation",
+          },
+        ],
+        email: "primary@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_debug_structured",
+      _creationTime: 100,
+      userId: "profile_primary",
+      title: "Operations role",
+      company: "Acme",
+      location: "Remote",
+      isSample: false,
+      isFavorite: false,
+      sourceUrl: "https://example.com/job",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      applicationUrl: "",
+      parseStatus: "parsed",
+      parseVersion: "v1b",
+      reviewState: "ready",
+      status: "active",
+      importedAt: 100,
+      updatedAt: 100,
+      lastOpenedAt: 100,
+      archivedAt: null,
+      lastResumeId: null,
+      lastResumeName: null,
+      rawDescription: "Requires Airtable and program management.",
+      rawLanguageDetected: "en",
+      summary: "Operations role",
+      responsibilities: [],
+      keywords: [],
+      mustHaves: ["Airtable", "Program management"],
+      toneCues: [],
+      contacts: [],
+      mustHavesExtraction: [],
+      keywordsExtraction: [],
+      reviewItems: [],
+    };
+    const shadowRows = [
+      {
+        llm_normalized_output: {
+          summary_short: "Operations role requiring Airtable and program management.",
+          role_title_normalized: "Operations Manager",
+          requirements: [
+            { value: "Airtable", type: "skill", required: true },
+            { value: "Program management", type: "skill", required: true },
+          ],
+          keywords_canonical: ["Airtable", "Program management"],
+          licenses_or_certifications: [],
+          schedule_constraints: [],
+          environment: {
+            customer_facing: null,
+            retail: null,
+            physical_standing: null,
+            onsite: null,
+          },
+          confidence: "high",
+        },
+        validation_status: "valid",
+        fallback_used: false,
+        model: "mistral-small-latest",
+        prompt_version: "p9_v1",
+        created_at: 100,
+      },
+    ];
+
+    const result = await debugInspectMatchInputByJobId._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({
+            subject: "clerk_123",
+            email: "admin@example.com",
+          }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      expect(value).toBe(job._id);
+                      return value;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => shadowRows,
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: job._id },
+    );
+
+    expect(result?.structuredShadow.structured.status).toBe("available");
+    expect(result?.structuredShadowSummary).toMatchObject({
+      flagEnabled: true,
+      internalViewer: true,
+      status: "available",
+      reason: null,
+      oldScore: 100,
+      oldTier: "strong",
+      structuredScore: expect.any(Number),
+      structuredTier: expect.any(String),
+      matchedCount: expect.any(Number),
+      partialCount: expect.any(Number),
+      missingCount: 0,
+      unknownCount: expect.any(Number),
+      metadataLeakCount: 0,
+      provenanceComplete: true,
+      jobRequirementCount: expect.any(Number),
+      jobConstraintCount: 0,
+      profileEvidenceCount: expect.any(Number),
+      profileConstraintCount: 0,
+    });
   });
 });
 
