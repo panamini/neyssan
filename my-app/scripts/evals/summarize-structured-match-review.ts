@@ -23,7 +23,7 @@ function parseReviewCases(path: string): StructuredMatchReviewCase[] {
     return [];
   }
 
-  if (raw.startsWith("[") || raw.startsWith("{")) {
+  try {
     const parsed = JSON.parse(raw) as unknown;
     if (Array.isArray(parsed)) {
       return parsed as StructuredMatchReviewCase[];
@@ -36,13 +36,16 @@ function parseReviewCases(path: string): StructuredMatchReviewCase[] {
       return (parsed as { cases: StructuredMatchReviewCase[] }).cases;
     }
     throw new Error("JSON input must be an array or an object with a cases array.");
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return raw
+        .split(/\r?\n/g)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as StructuredMatchReviewCase);
+    }
+    throw error;
   }
-
-  return raw
-    .split(/\r?\n/g)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as StructuredMatchReviewCase);
 }
 
 function formatCountMap<T extends string>(entries: Record<T, number>): string[] {
