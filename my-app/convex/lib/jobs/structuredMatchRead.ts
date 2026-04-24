@@ -164,6 +164,9 @@ const PHYSICAL_RE = /\b(stand|standing|lift|lifting|walk|bending|twisting|climbi
 const WORK_AUTH_RE = /\b(work authorization|visa|authorized to work|sponsorship)\b/i;
 const ENGLISH_TRANSLATION_RE =
   /\b(the role|this role|you will|you'll|will be responsible|requirements include|we are looking for|candidate will|must have|nice to have)\b/i;
+const PARTIAL_SCORE_THRESHOLD = 35;
+const HIGH_UNKNOWN_COVERAGE_THRESHOLD = 0.4;
+const MIN_MATCHED_SCORABLE_FOR_CONFIDENT_TIER = 2;
 const TOKEN_STOP_WORDS = new Set([
   "and",
   "are",
@@ -847,19 +850,104 @@ function resolveStructuredTier(score: number, outcomes: StructuredOutcome[]): Ma
   return "weak";
 }
 
-function hasCertificationBridge(requirement: JobRequirementEntity, evidence: ProfileEvidenceEntity): boolean {
-  if (
-    !["license", "certification"].includes(requirement.category) ||
-    !["license", "certification", "education"].includes(evidence.category)
-  ) {
+function isCredentialRequirement(requirement: JobRequirementEntity): boolean {
+  return ["license", "certification"].includes(requirement.category);
+}
+
+function hasCredentialSignal(value: string): boolean {
+  return /\b(certif(?:ied|icate|ication)?|licen[cs](?:e|ed)?|permit|guard card|program|training|course|credential|qualification|cpo|cpop|socp)\b/i.test(
+    value,
+  );
+}
+
+function isStructuredCredentialEvidence(evidence: ProfileEvidenceEntity): boolean {
+  if (evidence.sourceSection === "raw_text") {
     return false;
   }
-  const requirementTokens = new Set(tokenize(requirement.value));
-  const evidenceTokens = new Set(tokenize(evidence.value));
+
+  const text = `${evidence.value} ${evidence.evidenceText}`;
   return (
-    (requirementTokens.has("security") && evidenceTokens.has("security")) ||
-    (requirementTokens.has("guard") && evidenceTokens.has("guard"))
+    ["license", "certification"].includes(evidence.category) ||
+    evidence.sourceSection === "certifications" ||
+    (evidence.category === "education" && hasCredentialSignal(text))
   );
+}
+
+function credentialRoleTokens(requirement: JobRequirementEntity): string[] {
+  const credentialWords = new Set([
+    "certificate",
+    "certification",
+    "certified",
+    "credential",
+    "license",
+    "licensed",
+    "licence",
+    "licenced",
+    "permit",
+    "program",
+    "training",
+  ]);
+  return tokenize(requirement.value).filter((token) => !credentialWords.has(token));
+}
+
+function credentialEvidenceScore(args: {
+  requirement: JobRequirementEntity;
+  evidence: ProfileEvidenceEntity;
+  hasStructuredCredentialEvidence: boolean;
+}): number | null {
+  const { requirement, evidence, hasStructuredCredentialEvidence } = args;
+  if (!isCredentialRequirement(requirement)) {
+    return null;
+  }
+
+  const evidenceText = lowerCompact(`${evidence.value} ${evidence.evidenceText}`);
+  const isRawText = evidence.sourceSection === "raw_text";
+  const isStructuredCredential = isStructuredCredentialEvidence(evidence);
+
+  if (isRawText && hasStructuredCredentialEvidence) {
+    return 0;
+  }
+  if (!isRawText && !isStructuredCredential) {
+    return 0;
+  }
+  if (!hasCredentialSignal(evidenceText)) {
+    return 0;
+  }
+
+  const requirementText = lowerCompact(requirement.value);
+  const requirementRoleTokens = credentialRoleTokens(requirement);
+  const evidenceTokens = new Set(tokenize(evidenceText));
+  const roleCoverage =
+    requirementRoleTokens.length > 0
+      ? requirementRoleTokens.filter((token) => evidenceTokens.has(token)).length /
+        requirementRoleTokens.length
+      : 0;
+  const hasNearExactCredential = evidenceText.includes(requirementText);
+
+  if (hasNearExactCredential) {
+    return isStructuredCredential ? 0.95 : 0.7;
+  }
+
+  if (isStructuredCredential && roleCoverage >= 1) {
+    return 0.9;
+  }
+
+  const isRelatedSecurityCredential =
+    (requirementRoleTokens.includes("security") || requirementRoleTokens.includes("guard")) &&
+    /\b(guard|protection|law enforcement|criminal justice|cpop|socp)\b/i.test(evidenceText);
+  if (isStructuredCredential && roleCoverage >= 0.5 && isRelatedSecurityCredential) {
+    return 0.65;
+  }
+
+  if (
+    isRawText &&
+    !hasStructuredCredentialEvidence &&
+    roleCoverage >= 1
+  ) {
+    return 0.65;
+  }
+
+  return 0;
 }
 
 function synonymScore(requirement: JobRequirementEntity, evidence: ProfileEvidenceEntity): number {
@@ -890,13 +978,22 @@ function categoryCompatible(requirement: JobRequirementEntity, evidence: Profile
   return false;
 }
 
-function evidenceScore(requirement: JobRequirementEntity, evidence: ProfileEvidenceEntity): number {
-  if (!categoryCompatible(requirement, evidence) && !hasCertificationBridge(requirement, evidence)) {
-    return 0;
+function evidenceScore(
+  requirement: JobRequirementEntity,
+  evidence: ProfileEvidenceEntity,
+  args: { hasStructuredCredentialEvidence: boolean },
+): number {
+  const credentialScore = credentialEvidenceScore({
+    requirement,
+    evidence,
+    hasStructuredCredentialEvidence: args.hasStructuredCredentialEvidence,
+  });
+  if (credentialScore !== null) {
+    return credentialScore;
   }
 
-  if (hasCertificationBridge(requirement, evidence)) {
-    return 0.9;
+  if (!categoryCompatible(requirement, evidence)) {
+    return 0;
   }
 
   const requirementTokens = tokenize(requirement.value);
@@ -910,8 +1007,12 @@ function classifyOutcome(
   requirement: JobRequirementEntity,
   evidence: ProfileEvidenceEntity[],
 ): StructuredOutcome {
+  const hasStructuredCredentialEvidence = evidence.some(isStructuredCredentialEvidence);
   const best = evidence
-    .map((candidate) => ({ candidate, score: evidenceScore(requirement, candidate) }))
+    .map((candidate) => ({
+      candidate,
+      score: evidenceScore(requirement, candidate, { hasStructuredCredentialEvidence }),
+    }))
     .sort((left, right) => right.score - left.score)[0];
 
   if (best && best.score >= 0.75) {
@@ -965,13 +1066,29 @@ function scoreOutcomes(outcomes: StructuredOutcome[]): number {
   const unknownScorableCount = scored.filter(
     (outcome) => outcome.outcome === "unknown",
   ).length;
+  const hasMatchedCredentialEvidence = scored.some(
+    (outcome) =>
+      outcome.outcome === "matched" &&
+      ["license", "certification"].includes(outcome.requirement.category),
+  );
   const unknownCoverage = unknownScorableCount / scored.length;
   let cappedScore = rawScore;
 
-  if (scored.length < 2 || matchedScorableCount < 2) {
+  if (
+    unknownCoverage >= HIGH_UNKNOWN_COVERAGE_THRESHOLD &&
+    matchedScorableCount < MIN_MATCHED_SCORABLE_FOR_CONFIDENT_TIER &&
+    !hasMatchedCredentialEvidence
+  ) {
+    cappedScore = Math.min(cappedScore, PARTIAL_SCORE_THRESHOLD - 1);
+  }
+
+  if (
+    scored.length < MIN_MATCHED_SCORABLE_FOR_CONFIDENT_TIER ||
+    matchedScorableCount < MIN_MATCHED_SCORABLE_FOR_CONFIDENT_TIER
+  ) {
     cappedScore = Math.min(cappedScore, 70);
   }
-  if (unknownCoverage >= 0.4) {
+  if (unknownCoverage >= HIGH_UNKNOWN_COVERAGE_THRESHOLD) {
     cappedScore = Math.min(cappedScore, 70);
   }
 
