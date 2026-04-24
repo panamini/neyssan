@@ -37,7 +37,7 @@ const LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.7;
 const RESPONSIBILITY_CUE_RE =
   /\b(lead|manage|coordinate|support|build|develop|maintain|execute|own|deliver|drive|run|monitor|analy[sz]e|partner|collaborate|improve|create|oversee|organize|plan)\b/i;
 const REQUIREMENT_CUE_RE =
-  /\b(must|required|requirements?|qualifications?|experience with|need to|should have|proficient in|familiar with|expertise in)\b/i;
+  /\b(must|required|requirements?|qualifications?|experience with|need to|should have|able to|ability to|proficient in|familiar with|expertise in|license[ds]?|certifi(?:ed|cation))\b/i;
 const STRONG_REQUIREMENT_CUE_RE =
   /\b(must|required|requirements?|qualifications?)\b/i;
 const BOILERPLATE_SENTENCE_RE =
@@ -83,6 +83,7 @@ const KEYWORD_STOP_WORDS = new Set([
   "it",
   "job",
   "jobs",
+  "location",
   "la",
   "las",
   "le",
@@ -99,6 +100,9 @@ const KEYWORD_STOP_WORDS = new Set([
   "para",
   "por",
   "role",
+  "status",
+  "required",
+  "responsibilities",
   "the",
   "to",
   "that",
@@ -117,6 +121,9 @@ const KEYWORD_STOP_WORDS = new Set([
   "your",
   "zu",
   "zur",
+  "compensation",
+  "experience",
+  "preferred",
   // French function words
   "au",
   "aux",
@@ -349,6 +356,36 @@ function extractMustHaves(rawDescription: string): CanonicalJobExtraction[] {
   return dedupeExtractions(matches, MAX_MUST_HAVES);
 }
 
+function extractRoleRequirementFromTitle(title: string): CanonicalJobExtraction | null {
+  const titleLead = compactWhitespace(title.split("|")[0]?.split(" - ")[0] ?? "");
+  if (!titleLead) {
+    return null;
+  }
+
+  const tokens = titleLead.match(/[A-Za-z0-9+#./-]+/g) ?? [];
+  const meaningfulTokens = tokens
+    .map(normalizeKeywordToken)
+    .filter((token) => token.length >= 3 && !KEYWORD_STOP_WORDS.has(token));
+
+  if (meaningfulTokens.length === 0 || meaningfulTokens.length > 5) {
+    return null;
+  }
+
+  return toExtraction(titleLead, 0.86, null);
+}
+
+function buildMustHavesWithTitleRole(args: {
+  title: string;
+  rawDescription: string;
+}): CanonicalJobExtraction[] {
+  const mustHaves = extractMustHaves(args.rawDescription);
+  const titleRole = extractRoleRequirementFromTitle(args.title);
+  return dedupeExtractions(
+    titleRole ? [...mustHaves, titleRole] : mustHaves,
+    MAX_MUST_HAVES,
+  );
+}
+
 function normalizeKeywordToken(value: string): string {
   return compactWhitespace(value)
     .toLowerCase()
@@ -398,7 +435,7 @@ function collectKeywordCandidates(args: {
 }): CanonicalJobExtraction[] {
   const orderedCandidates = new Map<
     string,
-    { value: string; confidence: number; sourceSpan: CanonicalJobSourceSpan | null }
+    { value: string; confidence: number; sourceSpan: CanonicalJobSourceSpan | null; order: number }
   >();
   const requirementSpans = args.mustHaves.map((item) => item.sourceSpan).filter(Boolean);
   const responsibilitySpans = args.responsibilities
@@ -427,6 +464,7 @@ function collectKeywordCandidates(args: {
         value: normalizedValue,
         confidence,
         sourceSpan,
+        order: orderedCandidates.size,
       });
       return;
     }
@@ -457,11 +495,13 @@ function collectKeywordCandidates(args: {
     );
   }
 
-  return Array.from(orderedCandidates.values()).map((item) => ({
-    value: item.value,
-    confidence: clampConfidence(item.confidence),
-    sourceSpan: item.sourceSpan,
-  }));
+  return Array.from(orderedCandidates.values())
+    .sort((left, right) => right.confidence - left.confidence || left.order - right.order)
+    .map((item) => ({
+      value: item.value,
+      confidence: clampConfidence(item.confidence),
+      sourceSpan: item.sourceSpan,
+    }));
 }
 
 function extractKeywords(args: {
@@ -681,7 +721,10 @@ export function buildCanonicalJobDraftFromSource(args: {
   const structuredCompany = compactWhitespace(args.company ?? "");
   const structuredLocation = compactWhitespace(args.location ?? "");
   const responsibilitiesExtraction = extractResponsibilities(rawDescription);
-  const mustHavesExtraction = extractMustHaves(rawDescription);
+  const mustHavesExtraction = buildMustHavesWithTitleRole({
+    title,
+    rawDescription,
+  });
   const keywordsExtraction = extractKeywords({
     title,
     rawDescription,
