@@ -2578,7 +2578,7 @@ export default function SectionEditor({
             className="cv-section-heading cursor-pointer"
             onClick={() => openHobbiesModal()}
           >
-            {section.title}
+            {formatSectionDisplayTitle(section, { fallback: "Hobbies" })}
           </h3>
           <div className="flex items-center gap-1">
             {renderAiMenuTrigger({
