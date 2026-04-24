@@ -84,6 +84,7 @@ export type StructuredOutcomeStatus =
   | "matched"
   | "partial"
   | "missing"
+  | "hard_gate_missing"
   | "unknown";
 
 export type StructuredOutcome = {
@@ -103,6 +104,7 @@ export type StructuredMatchReadDebug = {
         matched: StructuredOutcome[];
         partial: StructuredOutcome[];
         missing: StructuredOutcome[];
+        hardGateMissing: StructuredOutcome[];
         unknown: StructuredOutcome[];
         jobRequirements: JobRequirementEntity[];
         jobConstraints: JobConstraintEntity[];
@@ -865,6 +867,21 @@ function isCredentialRequirement(requirement: JobRequirementEntity): boolean {
   return ["license", "certification"].includes(requirement.category);
 }
 
+function isRegulatedCredentialRequirement(requirement: JobRequirementEntity): boolean {
+  if (requirement.importance !== "required") {
+    return false;
+  }
+  if (requirement.category === "license") {
+    return true;
+  }
+  if (requirement.category !== "certification") {
+    return false;
+  }
+  return /\b(medical assistant|nurs(?:e|ing)|rn|lpn|cna|emt|paramedic|phlebotom|pharmacy technician|radiolog|clinical|hipaa)\b/i.test(
+    requirement.value,
+  );
+}
+
 function hasCredentialSignal(value: string): boolean {
   return /\b(certif(?:ied|icate|ication)?|licen[cs](?:e|ed)?|permit|guard card|program|training|course|credential|qualification|cpo|cpop|socp)\b/i.test(
     value,
@@ -1044,6 +1061,16 @@ function classifyOutcome(
     };
   }
 
+  if (isRegulatedCredentialRequirement(requirement)) {
+    return {
+      requirement,
+      evidence: undefined,
+      outcome: "hard_gate_missing",
+      reason:
+        "Required regulated credential has no matching license, certification, or equivalent credential evidence.",
+    };
+  }
+
   return {
     requirement,
     evidence: undefined,
@@ -1071,6 +1098,9 @@ function scoreOutcomes(outcomes: StructuredOutcome[]): number {
   }
 
   const rawScore = possible > 0 ? Math.round((earned / possible) * 100) : 0;
+  const hasHardGateMissing = scored.some(
+    (outcome) => outcome.outcome === "hard_gate_missing",
+  );
   const matchedScorableCount = scored.filter(
     (outcome) => outcome.outcome === "matched",
   ).length;
@@ -1084,6 +1114,10 @@ function scoreOutcomes(outcomes: StructuredOutcome[]): number {
   );
   const unknownCoverage = unknownScorableCount / scored.length;
   let cappedScore = rawScore;
+
+  if (hasHardGateMissing) {
+    cappedScore = Math.min(cappedScore, PARTIAL_SCORE_THRESHOLD - 1);
+  }
 
   if (
     unknownCoverage >= HIGH_UNKNOWN_COVERAGE_THRESHOLD &&
@@ -1175,6 +1209,9 @@ export function buildStructuredMatchReadDebug(args: {
       matched: outcomes.filter((outcome) => outcome.outcome === "matched"),
       partial: outcomes.filter((outcome) => outcome.outcome === "partial"),
       missing: outcomes.filter((outcome) => outcome.outcome === "missing"),
+      hardGateMissing: outcomes.filter(
+        (outcome) => outcome.outcome === "hard_gate_missing",
+      ),
       unknown: outcomes.filter((outcome) => outcome.outcome === "unknown"),
       jobRequirements: jobEntities.requirements,
       jobConstraints: jobEntities.constraints,
