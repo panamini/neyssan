@@ -2473,6 +2473,9 @@ function JobsPageContent(): JSX.Element {
                       visibleRequirements={selectedJob.visibleRequirements}
                       keywords={selectedJob.keywords}
                       visibleKeywords={selectedJob.visibleKeywords}
+                      extractionUnavailable={
+                        selectedJob.visibleExtractionSource !== "llm"
+                      }
                       parseStatus={selectedJob.parseStatus}
                       trustState={selectedJob.reviewState}
                       linkedDocumentCount={selectedJob.linkedProposalCount}
