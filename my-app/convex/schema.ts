@@ -109,6 +109,19 @@ const jobExtractionShadowValidationStatusChoice = v.union(
   v.literal("low_confidence"),
 );
 
+const structuredMatchReviewLabelChoice = v.union(
+  v.literal("good"),
+  v.literal("acceptable but conservative"),
+  v.literal("false weak"),
+  v.literal("false strong"),
+  v.literal("overmatched"),
+  v.literal("undermatched"),
+  v.literal("evidence missing"),
+  v.literal("language issue"),
+  v.literal("metadata leak"),
+  v.literal("hard-gate issue"),
+);
+
 const matchReadSynthesisChoice = v.object({
   cacheKey: v.string(),
   status: matchReadSynthesisStatusChoice,
@@ -341,6 +354,47 @@ export default defineSchema({
     .index("by_job_text_hash", ["job_text_hash"])
     .index("by_cache_identity", ["job_text_hash", "model", "prompt_version", "validation_status"])
     .index("by_hash_status", ["job_text_hash", "validation_status"]),
+
+  structured_match_reviews: defineTable({
+    reviewerId: v.string(),
+    reviewerEmail: v.union(v.string(), v.null()),
+    jobId: v.string(),
+    profileId: v.string(),
+    resumeId: v.union(v.string(), v.null()),
+    productionScore: v.union(v.number(), v.null()),
+    productionTier: v.union(
+      v.literal("strong"),
+      v.literal("partial"),
+      v.literal("weak"),
+      v.literal("unknown"),
+    ),
+    structuredScore: v.union(v.number(), v.null()),
+    structuredTier: v.union(
+      v.literal("strong"),
+      v.literal("partial"),
+      v.literal("weak"),
+      v.literal("unknown"),
+      v.null(),
+    ),
+    matchedCount: v.number(),
+    partialCount: v.number(),
+    missingCount: v.number(),
+    unknownCount: v.number(),
+    hardGateMissingCount: v.number(),
+    metadataLeakCount: v.number(),
+    languagePreserved: v.boolean(),
+    provenanceComplete: v.boolean(),
+    reviewerLabel: structuredMatchReviewLabelChoice,
+    notes: v.optional(v.string()),
+    scorerVersion: v.object({
+      model: v.string(),
+      promptVersion: v.string(),
+    }),
+    createdAt: v.number(),
+  })
+    .index("by_job_profile", ["jobId", "profileId"])
+    .index("by_reviewer", ["reviewerId"])
+    .index("by_created", ["createdAt"]),
 
   userProfiles: defineTable({
     // External canonical profile id (used by upsertProfile)

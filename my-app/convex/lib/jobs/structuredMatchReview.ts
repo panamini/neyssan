@@ -18,6 +18,8 @@ export type StructuredMatchReviewCategory =
 export const STRUCTURED_MATCH_REVIEW_LABELS = [
   "good",
   "acceptable but conservative",
+  "false weak",
+  "false strong",
   "overmatched",
   "undermatched",
   "metadata leak",

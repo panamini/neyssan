@@ -11,11 +11,13 @@ import {
   listArchivedForUser,
   listForUser,
   parseCreatedJob,
+  recordStructuredMatchReview,
   restoreArchivedJob,
   runShadowJobExtraction,
   setJobFavorite,
   setResumeForJob,
   storeJobExtractionShadow,
+  updateField,
 } from "../jobsPublic";
 
 afterEach(() => {
@@ -362,9 +364,11 @@ describe("jobsPublic.getById", () => {
   function buildGetByIdProjectionCtx({
     job,
     shadowRows = [],
+    identity = { subject: "clerk_123" },
   }: {
     job: any;
     shadowRows?: any[];
+    identity?: { subject: string; email?: string };
   }) {
     const linkedProfiles = [
       {
@@ -383,7 +387,7 @@ describe("jobsPublic.getById", () => {
 
     return {
       auth: {
-        getUserIdentity: async () => ({ subject: "clerk_123" }),
+        getUserIdentity: async () => identity,
       },
       db: {
         normalizeId(table: string, id: string) {
@@ -707,6 +711,75 @@ describe("jobsPublic.getById", () => {
         tier: "strong",
       });
     }
+  });
+
+  it("projects structured shadow summary only for allowlisted internal UI without changing production match read", async () => {
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_UI", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+    const job = buildProjectionJob();
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        shadowRows: [buildVisibleShadowRow()],
+        identity: {
+          subject: "clerk_123",
+          email: "internal@example.com",
+        },
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result?.matchRead).toMatchObject({
+      score: 100,
+      tier: "strong",
+      matched: ["Legacy React", "legacy ops"],
+      missing: [],
+    });
+    expect(result?.structuredShadowSummary).toMatchObject({
+      flagEnabled: true,
+      internalViewer: true,
+      uiEnabled: true,
+      status: "available",
+      oldScore: 100,
+      oldTier: "strong",
+      structuredScore: expect.any(Number),
+      structuredTier: expect.any(String),
+      matchedCount: expect.any(Number),
+      partialCount: expect.any(Number),
+      missingCount: expect.any(Number),
+      unknownCount: expect.any(Number),
+      hardGateMissingCount: expect.any(Number),
+      metadataLeakCount: expect.any(Number),
+      languagePreserved: true,
+      provenanceComplete: expect.any(Boolean),
+    });
+  });
+
+  it("does not project structured shadow summary when rollback UI flag is off", async () => {
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_UI", "false");
+    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+    const job = buildProjectionJob();
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        shadowRows: [buildVisibleShadowRow()],
+        identity: {
+          subject: "clerk_123",
+          email: "internal@example.com",
+        },
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result?.structuredShadowSummary).toBeNull();
+    expect(result?.matchRead).toMatchObject({
+      score: 100,
+      tier: "strong",
+    });
   });
 
   it("does not fall back to owner profile scoring when the attached resume cannot be resolved", async () => {
@@ -1299,6 +1372,194 @@ describe("jobsPublic.debugInspectMatchInputByJobId", () => {
       jobConstraintCount: 0,
       profileEvidenceCount: expect.any(Number),
       profileConstraintCount: 0,
+    });
+  });
+});
+
+describe("jobsPublic.recordStructuredMatchReview", () => {
+  it("logs reviewer label with current production and structured values without mutating production match", async () => {
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        profileId: "cv_primary",
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        skills: ["Airtable"],
+        keywords: ["Airtable", "Program management"],
+        summary: "Operations lead with Airtable and program management experience.",
+        experience: [
+          {
+            company: "Acme",
+            title: "Program Manager",
+            description: "Program management and Airtable workflow automation",
+          },
+        ],
+        email: "primary@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_review_structured",
+      _creationTime: 100,
+      userId: "profile_primary",
+      title: "Operations role",
+      company: "Acme",
+      location: "Remote",
+      isSample: false,
+      isFavorite: false,
+      sourceUrl: "https://example.com/job",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      applicationUrl: "",
+      parseStatus: "parsed",
+      parseVersion: "v1b",
+      reviewState: "ready",
+      status: "active",
+      importedAt: 100,
+      updatedAt: 100,
+      lastOpenedAt: 100,
+      archivedAt: null,
+      lastResumeId: "cv_primary",
+      lastResumeName: "Primary CV",
+      rawDescription: "Requires Airtable and program management.",
+      rawLanguageDetected: "en",
+      summary: "Operations role",
+      responsibilities: [],
+      keywords: [],
+      mustHaves: ["Airtable", "Program management"],
+      toneCues: [],
+      contacts: [],
+      mustHavesExtraction: [],
+      keywordsExtraction: [],
+      reviewItems: [],
+    };
+    const shadowRows = [
+      {
+        llm_normalized_output: {
+          summary_short: "Operations role requiring Airtable and program management.",
+          role_title_normalized: "Operations Manager",
+          requirements: [
+            { value: "Airtable", type: "skill", required: true },
+            { value: "Program management", type: "skill", required: true },
+          ],
+          keywords_canonical: ["Airtable", "Program management"],
+          licenses_or_certifications: [],
+          schedule_constraints: [],
+          environment: {
+            customer_facing: null,
+            retail: null,
+            physical_standing: null,
+            onsite: null,
+          },
+          confidence: "high",
+        },
+        validation_status: "valid",
+        fallback_used: false,
+        model: "ministral-3b-2512",
+        prompt_version: "p9_v2",
+        created_at: 100,
+      },
+    ];
+    const inserts: Array<{ table: string; value: Record<string, unknown> }> = [];
+
+    const result = await recordStructuredMatchReview._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({
+            subject: "clerk_123",
+            email: "internal@example.com",
+          }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          insert: async (table: string, value: Record<string, unknown>) => {
+            inserts.push({ table, value });
+            return "structured_review_1";
+          },
+          patch: async () => {
+            throw new Error("review logging must not mutate production records");
+          },
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      expect(value).toBe(job._id);
+                      return value;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => shadowRows,
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      {
+        jobId: job._id,
+        label: "false weak",
+        notes: "Structured scorer underweighted the role evidence.",
+      },
+    );
+
+    expect(result).toEqual({ reviewId: "structured_review_1" });
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0]).toMatchObject({
+      table: "structured_match_reviews",
+      value: {
+        reviewerId: "clerk_123",
+        reviewerEmail: "internal@example.com",
+        jobId: "job_review_structured",
+        profileId: "cv_primary",
+        resumeId: "cv_primary",
+        productionScore: 100,
+        productionTier: "strong",
+        structuredScore: expect.any(Number),
+        structuredTier: expect.any(String),
+        matchedCount: expect.any(Number),
+        partialCount: expect.any(Number),
+        missingCount: expect.any(Number),
+        unknownCount: expect.any(Number),
+        hardGateMissingCount: expect.any(Number),
+        metadataLeakCount: 0,
+        languagePreserved: true,
+        provenanceComplete: true,
+        reviewerLabel: "false weak",
+        notes: "Structured scorer underweighted the role evidence.",
+      },
     });
   });
 });
@@ -2035,7 +2296,250 @@ describe("jobsPublic.setJobFavorite", () => {
   });
 });
 
+describe("jobsPublic.updateField", () => {
+  it("updates a visible job owned by a linked profile", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 200,
+        clerkId: "clerk_123",
+        updatedAt: 200,
+        createdAt: 200,
+        version: 2,
+        email: "primary@example.com",
+      },
+      {
+        _id: "profile_legacy",
+        _creationTime: 100,
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        email: "legacy@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_legacy",
+      userId: "profile_legacy",
+      summary: "Original summary",
+      reviewState: "needs_review",
+      reviewItems: [
+        {
+          id: "summary",
+          fieldKey: "summary",
+          label: "Summary",
+          reviewStatus: "pending",
+          suggestedValue: "Original summary",
+          sourceText: "Original summary",
+          confidence: 0.4,
+          updatedAt: 100,
+        },
+      ],
+    };
+    const patchCalls: Array<{ id: string; patch: Record<string, unknown> }> =
+      [];
+
+    const result = await updateField._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          patch: async (id: string, patch: Record<string, unknown>) => {
+            patchCalls.push({ id, patch });
+            Object.assign(job, patch);
+          },
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      {
+        jobId: "job_legacy",
+        fieldKey: "summary",
+        value: "Updated linked-profile summary",
+      },
+    );
+
+    expect(result).toBeNull();
+    expect(patchCalls).toEqual([
+      {
+        id: "job_legacy",
+        patch: expect.objectContaining({
+          summary: "Updated linked-profile summary",
+          reviewState: "ready",
+          updatedAt: expect.any(Number),
+        }),
+      },
+    ]);
+    expect(patchCalls[0]?.patch.reviewItems).toEqual([
+      expect.objectContaining({
+        fieldKey: "summary",
+        reviewStatus: "approved",
+        approvedValue: "Updated linked-profile summary",
+      }),
+    ]);
+  });
+});
+
 describe("jobsPublic.approveReviewItem", () => {
+  it("approves review items on visible jobs owned by linked profiles", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 200,
+        clerkId: "clerk_123",
+        updatedAt: 200,
+        createdAt: 200,
+        version: 2,
+        email: "primary@example.com",
+      },
+      {
+        _id: "profile_legacy",
+        _creationTime: 100,
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        email: "legacy@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_legacy",
+      userId: "profile_legacy",
+      title: "Legacy job",
+      summary: "Original summary",
+      summaryExtraction: {
+        value: "Original summary",
+        confidence: 0.6,
+        sourceSpan: null,
+      },
+      rawLanguageDetected: "en",
+      mustHaves: [],
+      mustHavesExtraction: [],
+      keywords: [],
+      keywordsExtraction: [],
+      reviewItems: [
+        {
+          id: "summary",
+          fieldKey: "summary",
+          label: "Summary",
+          reviewStatus: "pending",
+          suggestedValue: "Approved linked-profile summary",
+          sourceText: "Approved linked-profile summary",
+          confidence: 0.4,
+          updatedAt: 100,
+        },
+      ],
+    };
+    const patchCalls: Array<{ id: string; patch: Record<string, unknown> }> =
+      [];
+
+    const result = await approveReviewItem._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          patch: async (id: string, patch: Record<string, unknown>) => {
+            patchCalls.push({ id, patch });
+            Object.assign(job, patch);
+          },
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(indexName: string, buildIndex: any) {
+                  expect(indexName).toBe("by_job_id");
+                  const scope = {
+                    eq(field: string, value: string) {
+                      expect(field).toBe("job_id");
+                      expect(value).toBe(job._id);
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: "job_legacy", reviewItemId: "summary" },
+    );
+
+    expect(result).toBeNull();
+    expect(patchCalls).toEqual([
+      {
+        id: "job_legacy",
+        patch: expect.objectContaining({
+          summary: "Approved linked-profile summary",
+          reviewState: "ready",
+          updatedAt: expect.any(Number),
+        }),
+      },
+    ]);
+    expect(patchCalls[0]?.patch.reviewItems).toEqual([
+      expect.objectContaining({
+        fieldKey: "summary",
+        reviewStatus: "approved",
+        approvedValue: "Approved linked-profile summary",
+      }),
+    ]);
+  });
+
   it("persists projected Mistral review-card values when visible extraction is active", async () => {
     vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
     const linkedProfiles = [
