@@ -1717,6 +1717,7 @@ describe("jobsPublic.parseCreatedJob shadow extraction", () => {
 
 describe("jobsPublic job extraction shadow cache", () => {
   const validRow = {
+    _creationTime: 100,
     llm_raw_output: "{\"summary_short\":\"ok\"}",
     llm_normalized_output: { summary_short: "ok" },
     validation_status: "valid",
@@ -1725,6 +1726,7 @@ describe("jobsPublic job extraction shadow cache", () => {
     prompt_version: "p9_v1",
     model_confidence: "high",
     final_confidence: "high",
+    created_at: 100,
   };
 
   function buildCacheCtx(rows: Array<typeof validRow>) {
@@ -1744,14 +1746,14 @@ describe("jobsPublic job extraction shadow cache", () => {
               };
               buildIndex(scope);
               return {
-                first: async () =>
-                  rows.find(
+                collect: async () =>
+                  rows.filter(
                     (row) =>
                       criteria.job_text_hash === "hash_1" &&
                       row.model === criteria.model &&
                       row.prompt_version === criteria.prompt_version &&
                       row.validation_status === criteria.validation_status,
-                  ) ?? null,
+                  ),
               };
             },
           };
@@ -1797,6 +1799,64 @@ describe("jobsPublic job extraction shadow cache", () => {
     );
 
     expect(result).toBeNull();
+  });
+
+  it("does not reuse valid fallback rows as cache hits", async () => {
+    const result = await getValidJobExtractionShadowByHash._handler(
+      buildCacheCtx([{ ...validRow, fallback_used: true }]) as any,
+      {
+        jobTextHash: "hash_1",
+        model: "mistral-small-latest",
+        promptVersion: "p9_v1",
+      },
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("chooses the newest non-fallback cache row deterministically", async () => {
+    const result = await getValidJobExtractionShadowByHash._handler(
+      buildCacheCtx([
+        {
+          ...validRow,
+          _creationTime: 300,
+          llm_raw_output: "{\"summary_short\":\"same-created-at-newer-creation\"}",
+          llm_normalized_output: { summary_short: "same-created-at-newer-creation" },
+          created_at: 300,
+        },
+        {
+          ...validRow,
+          _creationTime: 500,
+          llm_raw_output: "{\"summary_short\":\"newest-tie-break\"}",
+          llm_normalized_output: { summary_short: "newest-tie-break" },
+          created_at: 300,
+        },
+        {
+          ...validRow,
+          _creationTime: 900,
+          llm_raw_output: "{\"summary_short\":\"fallback-newer\"}",
+          llm_normalized_output: { summary_short: "fallback-newer" },
+          fallback_used: true,
+          created_at: 400,
+        },
+        {
+          ...validRow,
+          _creationTime: 1000,
+          llm_raw_output: "{\"summary_short\":\"old\"}",
+          llm_normalized_output: { summary_short: "old" },
+          created_at: 100,
+        },
+      ]) as any,
+      {
+        jobTextHash: "hash_1",
+        model: "mistral-small-latest",
+        promptVersion: "p9_v1",
+      },
+    );
+
+    expect(result?.llm_normalized_output).toEqual({
+      summary_short: "newest-tie-break",
+    });
   });
 
   it("stores fallback output separately by leaving llm_normalized_output null", async () => {
