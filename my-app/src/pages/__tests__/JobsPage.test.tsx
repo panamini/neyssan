@@ -478,6 +478,35 @@ describe("JobsPage", () => {
     });
   });
 
+  it("renders visible extraction fields on the selected detail without changing score UI", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      visibleSummary: "LLM visible summary for the selected job.",
+      visibleRequirements: ["LLM visible requirement"],
+      visibleKeywords: ["llm keyword"],
+      visibleExtractionSource: "llm",
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByText("LLM visible summary for the selected job."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("LLM visible requirement")).toBeInTheDocument();
+    expect(screen.getByText("llm keyword")).toBeInTheDocument();
+    expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.getByText("Match")).toBeInTheDocument();
+    expect(screen.queryByText("AI extracted")).not.toBeInTheDocument();
+    expect(screen.queryByText("visibleExtractionSource")).not.toBeInTheDocument();
+    expect(screen.queryByText("Extraction dashboard")).not.toBeInTheDocument();
+  });
+
   it("opens the paperclip picker from the job detail header", async () => {
     render(
       <MemoryRouter initialEntries={["/jobs/job_alpha"]}>

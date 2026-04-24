@@ -32,6 +32,11 @@ type ProposalBriefCardProps = {
   sourceUrl?: string | null;
   sourcePlatform?: string | null;
   summaryText?: string | null;
+  visibleSummaryText?: string | null;
+  requirements?: string[];
+  visibleRequirements?: string[];
+  keywords?: string[];
+  visibleKeywords?: string[];
   parseStatus?: string | null;
   trustState?: string | null;
   linkedDocumentCount?: number;
@@ -104,6 +109,25 @@ export function resolveProposalBriefCardTitle(args: {
   );
 }
 
+export function resolveProposalBriefCardDisplayContent(args: {
+  summaryText?: string | null;
+  visibleSummaryText?: string | null;
+  requirements?: string[];
+  visibleRequirements?: string[];
+  keywords?: string[];
+  visibleKeywords?: string[];
+}): {
+  summaryText: string | null | undefined;
+  requirements: string[];
+  keywords: string[];
+} {
+  return {
+    summaryText: args.visibleSummaryText ?? args.summaryText,
+    requirements: args.visibleRequirements ?? args.requirements ?? [],
+    keywords: args.visibleKeywords ?? args.keywords ?? [],
+  };
+}
+
 export function ProposalBriefCard({
   sourceJobTitle = null,
   outputDocumentTitle = null,
@@ -116,6 +140,11 @@ export function ProposalBriefCard({
   sourceUrl = null,
   sourcePlatform = null,
   summaryText = null,
+  visibleSummaryText = null,
+  requirements = [],
+  visibleRequirements,
+  keywords = [],
+  visibleKeywords,
   parseStatus = null,
   trustState = null,
   linkedDocumentCount = 0,
@@ -141,7 +170,7 @@ export function ProposalBriefCard({
     setEditingItemId(null);
     setDraftValues({});
     setResolvedItems({});
-  }, [reviewItems, summaryText]);
+  }, [reviewItems, summaryText, visibleSummaryText]);
 
   const visibleReviewItems = reviewItems.map((item) => ({
     ...item,
@@ -154,7 +183,19 @@ export function ProposalBriefCard({
     sourceJobTitle,
     outputDocumentTitle,
   });
-  const summaryValue = String(summaryText ?? "").trim();
+  const {
+    summaryText: resolvedSummaryText,
+    requirements: resolvedRequirements,
+    keywords: resolvedKeywords,
+  } = resolveProposalBriefCardDisplayContent({
+    summaryText,
+    visibleSummaryText,
+    requirements,
+    visibleRequirements,
+    keywords,
+    visibleKeywords,
+  });
+  const summaryValue = String(resolvedSummaryText ?? "").trim();
   const isSummaryEditing = editingItemId === SUMMARY_EDITOR_ID;
   const summaryDraft = draftValues[SUMMARY_EDITOR_ID] ?? summaryValue;
 
@@ -286,7 +327,7 @@ export function ProposalBriefCard({
                   <p className="dasti-brief-card__summary-copy">{trustLabel}</p>
                 </div>
               ) : null}
-              {summaryText ? (
+              {resolvedSummaryText ? (
                 <div className="dasti-brief-card__review-item">
                   <div className="dasti-brief-card__review-head">
                     <div>
@@ -342,8 +383,30 @@ export function ProposalBriefCard({
                       </button>
                     </div>
                   ) : (
-                    <p className="dasti-brief-card__summary-copy">{summaryText}</p>
+                    <p className="dasti-brief-card__summary-copy">
+                      {resolvedSummaryText}
+                    </p>
                   )}
+                </div>
+              ) : null}
+              {resolvedRequirements.length > 0 ? (
+                <div className="dasti-brief-card__summary-block">
+                  <div className="dasti-brief-card__summary-label">
+                    Requirements
+                  </div>
+                  <div className="dasti-brief-card__summary-list">
+                    {resolvedRequirements.map((requirement) => (
+                      <div key={requirement}>{requirement}</div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {resolvedKeywords.length > 0 ? (
+                <div className="dasti-brief-card__summary-block">
+                  <div className="dasti-brief-card__summary-label">Keywords</div>
+                  <p className="dasti-brief-card__summary-copy">
+                    {resolvedKeywords.join(", ")}
+                  </p>
                 </div>
               ) : null}
               {visibleReviewItems.length > 0 ? (

@@ -56,6 +56,11 @@ import {
   PROMPT_VERSION,
   resolveJobExtractionModel,
 } from "./lib/jobs/llmExtractJob";
+import {
+  isJobLlmVisibleExtractionEnabled,
+  selectVisibleJobExtraction,
+  type VisibleJobExtractionSelection,
+} from "./lib/jobs/visibleJobExtraction";
 
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
@@ -761,6 +766,7 @@ function buildJobProjection(
     status: string;
     updatedAt: number;
   }> = [],
+  visibleExtraction?: VisibleJobExtractionSelection,
 ) {
   const responsibilitiesExtraction = buildExtractionProjection({
     job,
@@ -809,7 +815,18 @@ function buildJobProjection(
           value: String(job.summary ?? ""),
           confidence: 0.35,
           sourceSpan: null,
-        };
+      };
+  const visibleSelection =
+    visibleExtraction ??
+    selectVisibleJobExtraction({
+      flagEnabled: false,
+      heuristic: {
+        summary: summaryExtraction.value,
+        requirements: flattenExtractionValues(mustHavesExtraction),
+        keywords: flattenExtractionValues(keywordsExtraction),
+      },
+      rawLanguageDetected: job.rawLanguageDetected,
+    });
 
   return {
     id: String(job._id),
@@ -826,6 +843,10 @@ function buildJobProjection(
     reviewState: job.reviewState,
     summary: summaryExtraction.value,
     summaryExtraction,
+    visibleSummary: visibleSelection.summary,
+    visibleRequirements: visibleSelection.requirements,
+    visibleKeywords: visibleSelection.keywords,
+    visibleExtractionSource: visibleSelection.source,
     rawDescription: job.rawDescription,
     responsibilities: flattenExtractionValues(responsibilitiesExtraction),
     responsibilitiesExtraction,
@@ -1204,6 +1225,12 @@ export const getById = query({
       parseStatus: v.string(),
       reviewState: v.string(),
       summary: v.string(),
+      visibleSummary: v.union(v.string(), v.null()),
+      visibleRequirements: v.array(v.string()),
+      visibleKeywords: v.array(v.string()),
+      visibleExtractionSource: v.optional(
+        v.union(v.literal("llm"), v.literal("heuristic"), v.literal("empty")),
+      ),
       summaryExtraction: v.object({
         value: v.string(),
         confidence: v.number(),
@@ -1396,6 +1423,31 @@ export const getById = query({
       synthesis: job.matchReadSynthesis ?? null,
     });
     const nextStepBlock = await resolveNextStepBlock(ctx, matchRead.tier);
+    const shadowRows = await ctx.db
+      .query("job_extraction_shadow")
+      .withIndex("by_job_id", (q) => q.eq("job_id", job._id))
+      .collect();
+    const visibleFallbackMustHaves =
+      Array.isArray(job.mustHavesExtraction) && job.mustHavesExtraction.length > 0
+        ? flattenExtractionValues(job.mustHavesExtraction)
+        : (job.mustHaves ?? []);
+    const visibleFallbackKeywords =
+      Array.isArray(job.keywordsExtraction) && job.keywordsExtraction.length > 0
+        ? flattenExtractionValues(job.keywordsExtraction)
+        : (job.keywords ?? []);
+    const visibleExtraction = selectVisibleJobExtraction({
+      flagEnabled: isJobLlmVisibleExtractionEnabled(),
+      shadowRows,
+      heuristic: {
+        summary:
+          typeof job.summaryExtraction?.value === "string"
+            ? job.summaryExtraction.value
+            : job.summary,
+        requirements: visibleFallbackMustHaves,
+        keywords: visibleFallbackKeywords,
+      },
+      rawLanguageDetected: job.rawLanguageDetected,
+    });
 
     return buildJobProjection(
       job,
@@ -1404,6 +1456,7 @@ export const getById = query({
       nextStepBlock,
       linkedProposals.length,
       projectedLinkedProposals,
+      visibleExtraction,
     );
   },
 });

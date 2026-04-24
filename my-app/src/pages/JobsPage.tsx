@@ -112,6 +112,10 @@ type JobsPageDetail = {
   parseStatus: string;
   reviewState: string;
   summary: string;
+  visibleSummary?: string | null;
+  visibleRequirements?: string[];
+  visibleKeywords?: string[];
+  visibleExtractionSource?: "llm" | "heuristic" | "empty";
   summaryExtraction?: {
     value: string;
     confidence: number;
@@ -2264,6 +2268,11 @@ function JobsPageContent(): JSX.Element {
                       sourceUrl={selectedJob.sourceUrl}
                       sourcePlatform={selectedJob.sourceType}
                       summaryText={selectedJob.summary}
+                      visibleSummaryText={selectedJob.visibleSummary}
+                      requirements={selectedJob.mustHaves}
+                      visibleRequirements={selectedJob.visibleRequirements}
+                      keywords={selectedJob.keywords}
+                      visibleKeywords={selectedJob.visibleKeywords}
                       parseStatus={selectedJob.parseStatus}
                       trustState={selectedJob.reviewState}
                       linkedDocumentCount={selectedJob.linkedProposalCount}
