@@ -1,10 +1,7 @@
-import React from "react";
-import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import {
-  ProposalBriefCard,
+  resolveProposalBriefCardDisplayContent,
   resolveProposalBriefCardTitle,
 } from "../ProposalBriefCard";
 
@@ -36,41 +33,34 @@ describe("resolveProposalBriefCardTitle", () => {
     ).toBe("Untitled Proposal");
   });
 
-  it("keeps the richer brief content in default mode", () => {
-    render(
-      <MemoryRouter>
-        <ProposalBriefCard
-          sourceJobTitle="Operations Associate"
-          jobDescription="Coordinate recurring launches and maintain documentation."
-          summaryText="Operations Associate role focused on recurring launches."
-          trustState="needs_review"
-          linkedDocumentCount={1}
-          linkedProposals={[
-            {
-              id: "proposal_alpha",
-              title: "Operations Associate cover letter",
-              status: "saved",
-              updatedAt: 1710000000000,
-            },
-          ]}
-          reviewItems={[
-            {
-              id: "review_1",
-              fieldKey: "responsibilities",
-              label: "Responsibilities",
-              reviewStatus: "pending",
-              suggestedValue: ["Coordinate recurring launches"],
-              sourceText:
-                "Coordinate recurring launches and maintain documentation.",
-            },
-          ]}
-        />
-      </MemoryRouter>,
-    );
+  it("resolves visible display props when provided", () => {
+    expect(
+      resolveProposalBriefCardDisplayContent({
+        summaryText: "Heuristic summary",
+        visibleSummaryText: "LLM visible summary",
+        requirements: ["Heuristic requirement"],
+        visibleRequirements: ["LLM visible requirement"],
+        keywords: ["heuristic"],
+        visibleKeywords: ["llm keyword"],
+      }),
+    ).toEqual({
+      summaryText: "LLM visible summary",
+      requirements: ["LLM visible requirement"],
+      keywords: ["llm keyword"],
+    });
+  });
 
-    expect(screen.getByText("Review state")).toBeInTheDocument();
-    expect(screen.getByText("Extracted summary")).toBeInTheDocument();
-    expect(screen.getByText("Linked documents")).toBeInTheDocument();
-    expect(screen.getByText("Raw source")).toBeInTheDocument();
+  it("falls back to current props when visible display props are omitted", () => {
+    expect(
+      resolveProposalBriefCardDisplayContent({
+        summaryText: "Heuristic summary",
+        requirements: ["Heuristic requirement"],
+        keywords: ["heuristic"],
+      }),
+    ).toEqual({
+      summaryText: "Heuristic summary",
+      requirements: ["Heuristic requirement"],
+      keywords: ["heuristic"],
+    });
   });
 });
