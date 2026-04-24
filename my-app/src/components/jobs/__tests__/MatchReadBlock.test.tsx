@@ -113,4 +113,36 @@ describe("MatchReadBlock", () => {
     expect(screen.getByText("Weak · 0%")).toBeInTheDocument();
     expect(screen.getByText("Program management")).toBeInTheDocument();
   });
+
+  it("cleans visible missing requirements and hides junk tokens", () => {
+    render(
+      <MatchReadBlock
+        visibleRequirements={["Customer-facing experience"]}
+        jobCompany="Acme"
+        jobLocation="Miami"
+        matchRead={buildMatchRead({
+          tier: "partial",
+          score: 50,
+          matched: ["Airtable"],
+          missing: [
+            "Miami",
+            "Compensation",
+            "Acme",
+            "Equal opportunity employer",
+            "Customer-facing experience",
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Missing")).toBeInTheDocument();
+    expect(
+      screen.getByText("Customer-facing experience"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Miami")).toBeNull();
+    expect(screen.queryByText("Compensation")).toBeNull();
+    expect(screen.queryByText("Acme")).toBeNull();
+    expect(screen.queryByText("Equal opportunity employer")).toBeNull();
+    expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
+  });
 });
