@@ -871,10 +871,7 @@ function isRegulatedCredentialRequirement(requirement: JobRequirementEntity): bo
   if (requirement.importance !== "required") {
     return false;
   }
-  if (requirement.category === "license") {
-    return true;
-  }
-  if (requirement.category !== "certification") {
+  if (!["license", "certification"].includes(requirement.category)) {
     return false;
   }
   return /\b(medical assistant|nurs(?:e|ing)|rn|lpn|cna|emt|paramedic|phlebotom|pharmacy technician|radiolog|clinical|hipaa)\b/i.test(
