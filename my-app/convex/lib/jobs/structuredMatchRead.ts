@@ -164,6 +164,10 @@ const PHYSICAL_RE = /\b(stand|standing|lift|lifting|walk|bending|twisting|climbi
 const WORK_AUTH_RE = /\b(work authorization|visa|authorized to work|sponsorship)\b/i;
 const ENGLISH_TRANSLATION_RE =
   /\b(the role|this role|you will|you'll|will be responsible|requirements include|we are looking for|candidate will|must have|nice to have)\b/i;
+const FRENCH_SOURCE_SIGNAL_RE =
+  /\b(poste|charge|support client|gestion|demandes|demande|suivi|candidat|candidature|francais|courant|avec|entrant|entrantes|traitement)\b/i;
+const FRENCH_TO_ENGLISH_TRANSLATION_RE =
+  /\b(customer support|support specialist|ticket management|incoming requests|fluent french|french fluency|customer-facing|tracking requests)\b/i;
 const PARTIAL_SCORE_THRESHOLD = 35;
 const HIGH_UNKNOWN_COVERAGE_THRESHOLD = 0.4;
 const MIN_MATCHED_SCORABLE_FOR_CONFIDENT_TIER = 2;
@@ -228,7 +232,14 @@ function violatesKnownLanguageSignal(args: {
   if (!language.startsWith("fr")) {
     return false;
   }
-  return ENGLISH_TRANSLATION_RE.test(args.values.join(" "));
+  const combined = args.values.join(" ");
+  if (ENGLISH_TRANSLATION_RE.test(combined)) {
+    return true;
+  }
+  return (
+    FRENCH_TO_ENGLISH_TRANSLATION_RE.test(combined) &&
+    !FRENCH_SOURCE_SIGNAL_RE.test(combined)
+  );
 }
 
 function confidenceForExtraction(output: NormalizedJobExtraction): number {
