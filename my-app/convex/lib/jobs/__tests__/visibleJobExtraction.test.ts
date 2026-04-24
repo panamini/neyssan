@@ -139,7 +139,7 @@ function row(
     validation_status: "valid",
     fallback_used: false,
     model: "mistral-small-latest",
-    prompt_version: "p9_v1",
+    prompt_version: "p9_v2",
     created_at: 100,
     ...overrides,
   };
@@ -158,7 +158,7 @@ function select(
     },
     rawLanguageDetected: "fr",
     model: "mistral-small-latest",
-    promptVersion: "p9_v1",
+    promptVersion: "p9_v2",
     ...overrides,
   });
 }
@@ -196,9 +196,21 @@ describe("selectVisibleJobExtraction", () => {
     });
   });
 
-  it("falls back for old prompt-version rows", () => {
+  it("ignores mistral-small-latest rows when current policy is Ministral 3 3B", () => {
     expect(
-      select({ shadowRows: [row({ prompt_version: "old_prompt" })] }),
+      select({
+        shadowRows: [row({ model: "mistral-small-latest" })],
+        model: "ministral-3b-2512",
+      }),
+    ).toMatchObject({
+      source: "heuristic",
+      summary: "Heuristic summary",
+    });
+  });
+
+  it("ignores old p9_v1 rows under the current prompt version", () => {
+    expect(
+      select({ shadowRows: [row({ prompt_version: "p9_v1" })] }),
     ).toMatchObject({
       source: "heuristic",
       summary: "Heuristic summary",
