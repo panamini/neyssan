@@ -17,7 +17,8 @@ type EvaluationFamily =
   | "healthcare_regulated"
   | "short_noisy"
   | "long_duplicated_scrape"
-  | "multilingual";
+  | "multilingual"
+  | "negative_control";
 
 type ManualExpectedLabel =
   | "good_fit"
@@ -429,7 +430,54 @@ const fixtures: EvaluationFixture[] = [
     },
     oldSignals: ["support client", "gestion demandes"],
   },
+  {
+    fixtureId: "negative_control_frontend_vs_food_service",
+    family: "negative_control",
+    manualExpectedLabel: "weak_fit",
+    rawLanguageDetected: "en",
+    extraction: extraction({
+      summary_short: "Frontend Engineer role building React and TypeScript interfaces.",
+      role_title_normalized: "Frontend Engineer",
+      requirements: [
+        { value: "React", type: "skill", required: true },
+        { value: "TypeScript", type: "skill", required: true },
+        { value: "API integration", type: "skill", required: true },
+      ],
+      keywords_canonical: ["React", "TypeScript", "API integration"],
+      environment: { onsite: false },
+    }),
+    profile: {
+      _id: "profile_food_service",
+      summary: "Food service worker with cashier, prep, and customer counter experience.",
+      skills: ["cash handling", "food prep", "customer service"],
+      keywords: ["cashier", "food prep"],
+      experience: [
+        {
+          company: "Quick Lunch",
+          title: "Food Service Worker",
+          description:
+            "Prepared orders, handled cash drawer, and cleaned the customer counter.",
+        },
+      ],
+    },
+    oldSignals: ["react", "typescript", "api integration"],
+  },
 ];
+
+const expectedOldScorerByFixture: Record<
+  string,
+  { oldScore: number | null; oldTier: MatchReadTier }
+> = {
+  security_kith_robert: { oldScore: 0, oldTier: "weak" },
+  retail_service_associate: { oldScore: 0, oldTier: "weak" },
+  technical_frontend_engineer: { oldScore: 100, oldTier: "strong" },
+  admin_office_coordinator: { oldScore: 67, oldTier: "partial" },
+  healthcare_medical_assistant: { oldScore: 100, oldTier: "strong" },
+  short_noisy_cashier: { oldScore: 0, oldTier: "weak" },
+  long_duplicated_scrape_inventory: { oldScore: 0, oldTier: "weak" },
+  multilingual_fr_support: { oldScore: 100, oldTier: "strong" },
+  negative_control_frontend_vs_food_service: { oldScore: 0, oldTier: "weak" },
+};
 
 function oldMatchForFixture(fixture: EvaluationFixture) {
   const profileSkills = Array.isArray(fixture.profile.skills)
@@ -571,6 +619,11 @@ describe("structured match-read evaluation matrix", () => {
   it("records a comparison row for each critical fixture family", () => {
     const rows = fixtures.map((fixture) => evaluateFixture(fixture).row);
 
+    console.info(
+      "structured match-read comparison summary",
+      JSON.stringify(rows, null, 2),
+    );
+
     expect(rows).toHaveLength(fixtures.length);
     expect(new Set(rows.map((row) => row.family))).toEqual(
       new Set<EvaluationFamily>([
@@ -582,6 +635,7 @@ describe("structured match-read evaluation matrix", () => {
         "short_noisy",
         "long_duplicated_scrape",
         "multilingual",
+        "negative_control",
       ]),
     );
 
@@ -601,6 +655,21 @@ describe("structured match-read evaluation matrix", () => {
         provenanceComplete: true,
         manualExpectedLabel: expect.any(String),
       });
+    }
+  });
+
+  it("keeps the production scorer comparison baseline unchanged", () => {
+    const rows = fixtures.map((fixture) => evaluateFixture(fixture).row);
+
+    expect(Object.keys(expectedOldScorerByFixture).sort()).toEqual(
+      fixtures.map((fixture) => fixture.fixtureId).sort(),
+    );
+
+    for (const row of rows) {
+      expect({
+        oldScore: row.oldScore,
+        oldTier: row.oldTier,
+      }).toEqual(expectedOldScorerByFixture[row.fixtureId]);
     }
   });
 
@@ -652,12 +721,31 @@ describe("structured match-read evaluation matrix", () => {
   });
 
   it("records unknown outcomes instead of confident matches when fixture evidence is absent", () => {
-    const adminEvaluation = evaluateFixture(
-      fixtures.find((fixture) => fixture.fixtureId === "admin_office_coordinator")!,
+    const evaluations = fixtures.map(evaluateFixture);
+
+    for (const evaluation of evaluations) {
+      expect(evaluation.debug.structured.status).toBe("available");
+      if (evaluation.debug.structured.status !== "available") continue;
+
+      const allOutcomes = [
+        ...evaluation.debug.structured.matched,
+        ...evaluation.debug.structured.partial,
+        ...evaluation.debug.structured.missing,
+        ...evaluation.debug.structured.unknown,
+      ];
+      expect(
+        allOutcomes
+          .filter((outcome) => !outcome.evidence)
+          .every((outcome) => outcome.outcome === "unknown"),
+      ).toBe(true);
+    }
+
+    const adminEvaluation = evaluations.find(
+      (evaluation) => evaluation.row.fixtureId === "admin_office_coordinator",
     );
 
-    expect(adminEvaluation.debug.structured.status).toBe("available");
-    if (adminEvaluation.debug.structured.status !== "available") return;
+    expect(adminEvaluation?.debug.structured.status).toBe("available");
+    if (adminEvaluation?.debug.structured.status !== "available") return;
 
     expect(
       adminEvaluation.debug.structured.unknown.some(
