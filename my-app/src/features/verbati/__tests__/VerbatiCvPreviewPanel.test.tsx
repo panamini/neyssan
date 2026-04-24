@@ -230,7 +230,7 @@ describe("VerbatiCvPreviewPanel", () => {
       screen.getByRole("button", { name: "Open palette controls" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Switch to sample preview" }),
+      screen.getByRole("button", { name: "Show sample resume" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Preview title: Protection Guard")).toBeInTheDocument();
     expect(
@@ -313,11 +313,11 @@ describe("VerbatiCvPreviewPanel", () => {
     expect(screen.getByText("Preview title: Protection Guard")).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Switch to sample preview" }),
+      screen.getByRole("button", { name: "Show sample resume" }),
     );
 
     expect(
-      screen.getByRole("button", { name: "Switch to active CV preview" }),
+      screen.getByRole("button", { name: "Show your resume" }),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Preview title: Senior Product Designer"),
@@ -333,7 +333,7 @@ describe("VerbatiCvPreviewPanel", () => {
     render(<VerbatiCvPreviewPanel hostMode="workspace" />);
 
     expect(
-      screen.queryByText(/too sparse for a faithful render/i),
+      screen.queryByText(/Resume too sparse/i),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText("Preview title: Senior Product Designer"),
@@ -349,7 +349,7 @@ describe("VerbatiCvPreviewPanel", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Switch to sample preview" }),
+      screen.getByRole("button", { name: "Show sample resume" }),
     );
 
     const lastCall =

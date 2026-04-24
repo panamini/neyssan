@@ -53,10 +53,10 @@ describe("VerbatiCvPreviewPanel workspace style cycle", () => {
       screen.getByRole("group", { name: "Switch resume styles" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Show previous resume style: Editorial" }),
+      screen.getByRole("button", { name: "Previous style: Editorial" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Show next resume style: Clean" }),
+      screen.getByRole("button", { name: "Next style: Clean" }),
     ).toBeInTheDocument();
   });
 
@@ -67,15 +67,15 @@ describe("VerbatiCvPreviewPanel workspace style cycle", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Show next resume style: Clean",
+        name: "Next style: Clean",
       }),
     );
 
-    expect(screen.getByText("Preview layout: two-column")).toBeInTheDocument();
+    expect(screen.getByText("Preview layout: modernist")).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Show previous resume style: Bold",
+        name: "Previous style: Bold",
       }),
     );
 
@@ -86,12 +86,12 @@ describe("VerbatiCvPreviewPanel workspace style cycle", () => {
     render(<VerbatiCvPreviewPanel hostMode="workspace" />);
 
     const nextStyleButton = screen.getByRole("button", {
-      name: "Show next resume style: Clean",
+      name: "Next style: Clean",
     });
 
     nextStyleButton.focus();
     fireEvent.keyDown(nextStyleButton, { key: "ArrowRight" });
-    expect(screen.getByText("Preview layout: two-column")).toBeInTheDocument();
+    expect(screen.getByText("Preview layout: modernist")).toBeInTheDocument();
 
     fireEvent.keyDown(nextStyleButton, { key: "ArrowLeft" });
     expect(screen.getByText("Preview layout: swiss")).toBeInTheDocument();
