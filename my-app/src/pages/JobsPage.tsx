@@ -50,6 +50,8 @@ type JobsStructuredShadowSummary = {
   flagEnabled: boolean;
   internalViewer: boolean;
   uiEnabled: boolean;
+  advisoryBetaEnabled: boolean;
+  advisoryBetaViewer: boolean;
   status: "available" | "unavailable";
   reason: string | null;
   oldScore: number | null;
@@ -217,6 +219,16 @@ const STRUCTURED_MATCH_REVIEW_LABELS = [
   "language issue",
   "metadata leak",
   "hard-gate issue",
+] as const;
+
+const STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS = [
+  "good",
+  "too_vague",
+  "wrong_focus",
+  "noisy",
+  "incomplete",
+  "metadata_leak",
+  "wrong_language",
 ] as const;
 
 function isMissingJobsFunctionError(error: unknown): boolean {
@@ -402,6 +414,18 @@ function JobsStructuredShadowInternalPanel({
   );
   const [reviewLabel, setReviewLabel] =
     React.useState<(typeof STRUCTURED_MATCH_REVIEW_LABELS)[number]>("good");
+  const [summaryVerdict, setSummaryVerdict] =
+    React.useState<(typeof STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS)[number]>(
+      "good",
+    );
+  const [requirementsVerdict, setRequirementsVerdict] =
+    React.useState<(typeof STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS)[number]>(
+      "good",
+    );
+  const [keywordsVerdict, setKeywordsVerdict] =
+    React.useState<(typeof STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS)[number]>(
+      "good",
+    );
   const [notes, setNotes] = React.useState("");
   const [submitState, setSubmitState] = React.useState<
     "idle" | "saving" | "saved" | "failed"
@@ -409,6 +433,9 @@ function JobsStructuredShadowInternalPanel({
 
   React.useEffect(() => {
     setReviewLabel("good");
+    setSummaryVerdict("good");
+    setRequirementsVerdict("good");
+    setKeywordsVerdict("good");
     setNotes("");
     setSubmitState("idle");
   }, [jobId]);
@@ -429,6 +456,9 @@ function JobsStructuredShadowInternalPanel({
     void recordStructuredMatchReview({
       jobId,
       label: reviewLabel,
+      extractionSummaryVerdict: summaryVerdict,
+      extractionRequirementsVerdict: requirementsVerdict,
+      extractionKeywordsVerdict: keywordsVerdict,
       notes,
     })
       .then(() => {
@@ -528,6 +558,77 @@ function JobsStructuredShadowInternalPanel({
             ))}
           </select>
         </label>
+        <div
+          className="dasti-brief-card__summary"
+          aria-label="Extraction verdicts"
+        >
+          <label className="dasti-jobs-toolbar__select">
+            <span className="dasti-brief-card__summary-label">
+              Summary verdict
+            </span>
+            <select
+              className="dasti-select dasti-select--sm"
+              aria-label="Summary verdict"
+              value={summaryVerdict}
+              onChange={(event) =>
+                setSummaryVerdict(
+                  event.target
+                    .value as (typeof STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS)[number],
+                )
+              }
+            >
+              {STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS.map((verdict) => (
+                <option key={verdict} value={verdict}>
+                  {verdict}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="dasti-jobs-toolbar__select">
+            <span className="dasti-brief-card__summary-label">
+              Requirements verdict
+            </span>
+            <select
+              className="dasti-select dasti-select--sm"
+              aria-label="Requirements verdict"
+              value={requirementsVerdict}
+              onChange={(event) =>
+                setRequirementsVerdict(
+                  event.target
+                    .value as (typeof STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS)[number],
+                )
+              }
+            >
+              {STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS.map((verdict) => (
+                <option key={verdict} value={verdict}>
+                  {verdict}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="dasti-jobs-toolbar__select">
+            <span className="dasti-brief-card__summary-label">
+              Keywords verdict
+            </span>
+            <select
+              className="dasti-select dasti-select--sm"
+              aria-label="Keywords verdict"
+              value={keywordsVerdict}
+              onChange={(event) =>
+                setKeywordsVerdict(
+                  event.target
+                    .value as (typeof STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS)[number],
+                )
+              }
+            >
+              {STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS.map((verdict) => (
+                <option key={verdict} value={verdict}>
+                  {verdict}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <label className="dasti-jobs-toolbar__search">
           <span className="dasti-brief-card__summary-label">Review notes</span>
           <textarea
@@ -551,6 +652,67 @@ function JobsStructuredShadowInternalPanel({
           <div className="dasti-empty-state__subtitle">Review logging failed.</div>
         ) : null}
       </form>
+    </section>
+  );
+}
+
+function JobsStructuredPreviewAdvisoryPanel({
+  summary,
+}: {
+  summary?: JobsStructuredShadowSummary | null;
+}): JSX.Element | null {
+  if (
+    !summary ||
+    !summary.flagEnabled ||
+    !summary.advisoryBetaEnabled ||
+    !summary.advisoryBetaViewer ||
+    summary.status !== "available"
+  ) {
+    return null;
+  }
+
+  return (
+    <section
+      aria-label="Structured preview"
+      data-testid="jobs-structured-preview-advisory-panel"
+      className="dasti-proposal-sheet"
+    >
+      <div className="dasti-proposal-sheet__header">
+        <div className="dasti-stack">
+          <div className="dasti-brief-card__summary-label">Advisory beta</div>
+          <div className="dasti-empty-state__title">Structured preview</div>
+          <p className="dasti-empty-state__subtitle">
+            Experimental match read. Production score remains authoritative.
+          </p>
+        </div>
+      </div>
+
+      <div className="dasti-brief-card__summary">
+        <div className="dasti-brief-card__summary-block">
+          <div className="dasti-brief-card__summary-label">Current match</div>
+          <div>score {formatDebugScore(summary.oldScore)}</div>
+          <div>tier {summary.oldTier}</div>
+        </div>
+
+        <div className="dasti-brief-card__summary-block">
+          <div className="dasti-brief-card__summary-label">
+            Structured preview
+          </div>
+          <div>score {formatDebugScore(summary.structuredScore)}</div>
+          <div>tier {summary.structuredTier ?? "null"}</div>
+          <div className="dasti-jobs-filter-chips" style={{ marginTop: 8 }}>
+            <span className="dasti-jobs-filter-chip">
+              matched {summary.matchedCount}
+            </span>
+            <span className="dasti-jobs-filter-chip">
+              partial {summary.partialCount}
+            </span>
+            <span className="dasti-jobs-filter-chip">
+              unknown {summary.unknownCount}
+            </span>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
@@ -2576,6 +2738,10 @@ function JobsPageContent(): JSX.Element {
 
                     <JobsStructuredShadowInternalPanel
                       jobId={selectedJob.id}
+                      summary={selectedJob.structuredShadowSummary}
+                    />
+
+                    <JobsStructuredPreviewAdvisoryPanel
                       summary={selectedJob.structuredShadowSummary}
                     />
 
