@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   archiveJob,
+  debugInspectMatchInputByJobId,
   deleteArchivedJob,
   duplicateJob,
   getById,
@@ -9,6 +10,7 @@ import {
   listForUser,
   restoreArchivedJob,
   setJobFavorite,
+  setResumeForJob,
 } from "../jobsPublic";
 
 describe("jobsPublic.listForUser", () => {
@@ -481,6 +483,271 @@ describe("jobsPublic.getById", () => {
       matched: [],
       missing: ["Airtable", "Program management"],
     });
+  });
+});
+
+describe("jobsPublic.debugInspectMatchInputByJobId", () => {
+  it("returns the full match-input chain for the attached resume source", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        profileId: "cv_primary",
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        skills: ["legacy"],
+        keywords: ["legacy"],
+        email: "primary@example.com",
+      },
+      {
+        _id: "profile_attached",
+        _creationTime: 120,
+        profileId: "cv_attached",
+        clerkId: "clerk_123",
+        updatedAt: 120,
+        createdAt: 120,
+        version: 2,
+        skills: [],
+        keywords: [],
+        summary:
+          "Operations lead with Airtable workflow automation experience.",
+        experience: [
+          {
+            company: "Acme",
+            title: "Program Manager",
+            description: "Program management and stakeholder reporting",
+          },
+        ],
+        raw_text: "airtable automation program management",
+        email: "attached@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_debug_case",
+      _creationTime: 100,
+      userId: "profile_primary",
+      title: "Operations role",
+      company: "Acme",
+      location: "Remote",
+      isSample: false,
+      isFavorite: false,
+      sourceUrl: "https://example.com/job",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      applicationUrl: "",
+      parseStatus: "parsed",
+      parseVersion: "v1b",
+      reviewState: "ready",
+      status: "active",
+      importedAt: 100,
+      updatedAt: 100,
+      lastOpenedAt: 100,
+      archivedAt: null,
+      lastResumeId: "cv_attached",
+      lastResumeName: "Attached CV",
+      rawDescription: "Requires Airtable and program management.",
+      rawLanguageDetected: "en",
+      summary: "Operations role",
+      responsibilities: [],
+      keywords: [],
+      mustHaves: [],
+      toneCues: [],
+      contacts: [],
+      mustHavesExtraction: [
+        { value: "Airtable", confidence: 0.9, sourceSpan: null },
+      ],
+      keywordsExtraction: [
+        { value: "Program management", confidence: 0.8, sourceSpan: null },
+      ],
+      reviewItems: [],
+    };
+
+    const result = await debugInspectMatchInputByJobId._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: job._id },
+    );
+
+    expect(result).toMatchObject({
+      jobId: "job_debug_case",
+      lastResumeId: "cv_attached",
+      resolvedProfileId: "cv_attached",
+      profileSkills: [],
+      profileKeywords: [],
+      summary: "Operations lead with Airtable workflow automation experience.",
+      raw_text: "airtable automation program management",
+      matchReadFallback: "none",
+      score: 100,
+      matchedSignals: ["Airtable", "Program management"],
+      missingSignals: [],
+    });
+    expect(result?.experience).toEqual([
+      {
+        company: "Acme",
+        title: "Program Manager",
+        description: "Program management and stakeholder reporting",
+      },
+    ]);
+    expect(result?.derivedKeywords).toEqual(
+      expect.arrayContaining(["airtable", "program", "management"]),
+    );
+  });
+});
+
+describe("jobsPublic.setResumeForJob", () => {
+  it("backfills empty attached resume scoring fields from the saved cvDocument snapshot", async () => {
+    const primaryProfile = {
+      _id: "profile_primary",
+      _creationTime: 100,
+      profileId: "cv_primary",
+      clerkId: "clerk_123",
+      updatedAt: 100,
+      createdAt: 100,
+      version: 1,
+      skills: ["legacy"],
+      keywords: ["legacy"],
+      email: "primary@example.com",
+    };
+    const attachedProfile = {
+      _id: "profile_attached",
+      _creationTime: 110,
+      profileId: "cv_attached",
+      clerkId: "clerk_123",
+      updatedAt: 110,
+      createdAt: 110,
+      version: 1,
+      skills: [],
+      keywords: [],
+      experience: [],
+      summary: null,
+      raw_text: null,
+      email: "attached@example.com",
+      cvDocument: {
+        id: "cv_attached",
+        title: "Retail Resume",
+        sections: [
+          {
+            type: "summary",
+            blocks: [],
+            structuredContent: [
+              {
+                summary:
+                  "Retail design specialist for Miami Design District stores.",
+              },
+            ],
+          },
+          {
+            type: "skills",
+            blocks: [],
+            structuredContent: [{ name: "Retail design" }],
+          },
+        ],
+      },
+    };
+    const job = {
+      _id: "job_attach",
+      userId: "profile_primary",
+    };
+    const patchCalls: Array<[string, Record<string, unknown>]> = [];
+
+    await setResumeForJob._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          patch: async (id: string, patch: Record<string, unknown>) => {
+            patchCalls.push([id, patch]);
+          },
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      [primaryProfile, attachedProfile].filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      {
+        jobId: "job_attach",
+        resumeId: "cv_attached",
+        resumeName: "Retail Resume",
+      },
+    );
+
+    const profilePatch = patchCalls.find(
+      ([id]) => id === "profile_attached",
+    )?.[1];
+    const jobPatch = patchCalls.find(([id]) => id === "job_attach")?.[1];
+
+    expect(profilePatch).toEqual(
+      expect.objectContaining({
+        summary: "Retail design specialist for Miami Design District stores.",
+        skills: ["Retail design"],
+        raw_text: expect.stringContaining("Miami Design District"),
+        keywords: expect.arrayContaining(["retail", "design", "miami"]),
+      }),
+    );
+    expect(jobPatch).toEqual(
+      expect.objectContaining({
+        lastResumeId: "cv_attached",
+        lastResumeName: "Retail Resume",
+      }),
+    );
   });
 });
 

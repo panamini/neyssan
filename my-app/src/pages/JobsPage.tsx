@@ -1,5 +1,5 @@
 import React from "react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
@@ -31,6 +31,24 @@ import { formatUiDate } from "../lib/ui-date";
 
 type JobsPageRouteParams = {
   jobId?: string;
+};
+
+const isJobsMatchInputDebugEnabled = import.meta.env.DEV;
+
+type JobsMatchInputDebugPayload = {
+  jobId: string;
+  lastResumeId: string | null;
+  resolvedProfileId: string | null;
+  profileSkills: string[];
+  profileKeywords: string[];
+  summary: string | null;
+  experience: unknown[];
+  raw_text: string | null;
+  derivedKeywords: string[];
+  matchReadFallback: string;
+  score: number | null;
+  matchedSignals: string[];
+  missingSignals: string[];
 };
 
 type JobsPageListItem = {
@@ -129,6 +147,7 @@ type JobsPageDetail = {
     fallback:
       | "none"
       | "profile_missing"
+      | "profile_insufficient"
       | "parse_failed"
       | "requirements_missing";
   } | null;
@@ -154,6 +173,183 @@ function isMissingJobsFunctionError(error: unknown): boolean {
       message.includes("jobsPublic:listForUser") ||
       message.includes("jobsPublic:listArchivedForUser") ||
       message.includes("jobsPublic:getById"))
+  );
+}
+
+function formatJobsDebugError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error ?? "Unknown error");
+}
+
+function JobsMatchInputDebugPanel({
+  jobId,
+  enabled,
+  refreshKey,
+}: {
+  jobId: string;
+  enabled: boolean;
+  refreshKey: number;
+}): JSX.Element | null {
+  const convex = useConvex();
+  const debugInspectMatchInputReference = React.useMemo(
+    () =>
+      ((api as any).jobsPublic?.debugInspectMatchInputByJobId ??
+        "jobsPublic.debugInspectMatchInputByJobId") as any,
+    [],
+  );
+  const [payload, setPayload] = React.useState<
+    JobsMatchInputDebugPayload | null | undefined
+  >(undefined);
+  const [error, setError] = React.useState<string | null>(null);
+  const [isDismissed, setIsDismissed] = React.useState(false);
+  const [copyState, setCopyState] = React.useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
+
+  React.useEffect(() => {
+    setIsDismissed(false);
+    setCopyState("idle");
+  }, [jobId]);
+
+  React.useEffect(() => {
+    if (!enabled || !jobId) {
+      return;
+    }
+
+    let cancelled = false;
+    setPayload(undefined);
+    setError(null);
+
+    void convex
+      .query(debugInspectMatchInputReference, { jobId })
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        setPayload((result ?? null) as JobsMatchInputDebugPayload | null);
+      })
+      .catch((queryError) => {
+        if (cancelled) {
+          return;
+        }
+        setError(formatJobsDebugError(queryError));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [convex, debugInspectMatchInputReference, enabled, jobId, refreshKey]);
+
+  const serializedPayload = React.useMemo(() => {
+    if (payload === undefined) {
+      return null;
+    }
+
+    return JSON.stringify(payload, null, 2);
+  }, [payload]);
+
+  const handleCopy = React.useCallback(() => {
+    const copyText = error ?? serializedPayload;
+    if (!copyText || !navigator.clipboard?.writeText) {
+      setCopyState("failed");
+      return;
+    }
+
+    void navigator.clipboard
+      .writeText(copyText)
+      .then(() => {
+        setCopyState("copied");
+        window.setTimeout(() => {
+          setCopyState("idle");
+        }, 1800);
+      })
+      .catch(() => {
+        setCopyState("failed");
+      });
+  }, [error, serializedPayload]);
+
+  if (!enabled || !jobId || isDismissed) {
+    return null;
+  }
+
+  return (
+    <section
+      className="dasti-empty-state dasti-empty-state--panel"
+      aria-label="Match input debug"
+      data-testid="jobs-match-input-debug-panel"
+      style={{ alignItems: "stretch", gap: 12, padding: 16 }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
+        }}
+      >
+        <div>
+          <div className="dasti-empty-state__title">Debug: match input</div>
+          <p className="dasti-empty-state__subtitle">
+            Dev-only read-only output from <code>jobsPublic.debugInspectMatchInputByJobId</code>.
+          </p>
+        </div>
+        <div
+          className="dasti-jobs-empty-state__actions"
+          style={{ marginLeft: "auto" }}
+        >
+          <button
+            type="button"
+            className="dasti-button dasti-button--pill dasti-button--sm"
+            onClick={handleCopy}
+            disabled={payload === undefined && !error}
+          >
+            {copyState === "copied"
+              ? "Copied"
+              : copyState === "failed"
+                ? "Copy failed"
+                : "Copy JSON"}
+          </button>
+          <button
+            type="button"
+            className="dasti-button dasti-button--pill dasti-button--sm"
+            onClick={() => setIsDismissed(true)}
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="dasti-empty-state__subtitle">
+          <strong>Debug query error:</strong> {error}
+        </div>
+      ) : payload === undefined ? (
+        <div className="dasti-empty-state__subtitle">Loading debug data…</div>
+      ) : (
+        <textarea
+          readOnly
+          value={serializedPayload ?? "null"}
+          rows={18}
+          aria-label="Match input debug output"
+          onFocus={(event) => event.currentTarget.select()}
+          style={{
+            width: "100%",
+            minHeight: 240,
+            resize: "vertical",
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: 12,
+            lineHeight: 1.5,
+            padding: 12,
+            borderRadius: 12,
+            border: "1px solid rgba(148, 163, 184, 0.35)",
+            background: "rgba(15, 23, 42, 0.04)",
+            color: "inherit",
+          }}
+        />
+      )}
+    </section>
   );
 }
 
@@ -470,6 +666,7 @@ function JobsPageContent(): JSX.Element {
     null,
   );
   const [isResumePickerOpen, setIsResumePickerOpen] = React.useState(false);
+  const [selectedJobRefreshKey, setSelectedJobRefreshKey] = React.useState(0);
   const [confirmingPermanentDeleteJobId, setConfirmingPermanentDeleteJobId] =
     React.useState<string | null>(null);
   const [duplicateTransition, setDuplicateTransition] = React.useState<{
@@ -542,7 +739,7 @@ function JobsPageContent(): JSX.Element {
   const selectedJobRecord = useQuery(
     jobByIdReference,
     selectedJobId && isLoaded && isSignedIn && isConvexAuthenticated
-      ? { jobId: selectedJobId }
+      ? { jobId: selectedJobId, clientRefreshKey: selectedJobRefreshKey }
       : "skip",
   ) as JobsPageDetail | undefined;
 
@@ -934,6 +1131,7 @@ function JobsPageContent(): JSX.Element {
           resumeId,
           resumeName,
         });
+        setSelectedJobRefreshKey((key) => key + 1);
         setOptimisticSelectedJob((current) =>
           current && current.id === selectedJob.id
             ? {
@@ -968,6 +1166,7 @@ function JobsPageContent(): JSX.Element {
         resumeId: null,
         resumeName: null,
       });
+      setSelectedJobRefreshKey((key) => key + 1);
       setOptimisticSelectedJob((current) =>
         current && current.id === selectedJob.id
           ? {
@@ -2017,6 +2216,14 @@ function JobsPageContent(): JSX.Element {
 
                     {selectedJob.matchRead ? (
                       <MatchReadBlock matchRead={selectedJob.matchRead} />
+                    ) : null}
+
+                    {isJobsMatchInputDebugEnabled ? (
+                      <JobsMatchInputDebugPanel
+                        jobId={selectedJob.id}
+                        enabled={isLoaded && isSignedIn && isConvexAuthenticated}
+                        refreshKey={selectedJobRefreshKey}
+                      />
                     ) : null}
 
                     {selectedJob.nextStepBlock ? (

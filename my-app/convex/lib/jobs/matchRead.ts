@@ -1,11 +1,16 @@
 import type { CanonicalJobExtraction } from "./canonicalJobs";
 import type { MatchReadSynthesisCache } from "./matchReadSynthesis";
+import {
+  deriveCanonicalProfileKeywords,
+  type StoredUserProfileExperience,
+} from "../userProfiles";
 
 export type MatchReadTier = "strong" | "partial" | "weak" | "unknown";
 export type MatchReadConfidence = "high" | "medium" | "low";
 export type MatchReadFallback =
   | "none"
   | "profile_missing"
+  | "profile_insufficient"
   | "parse_failed"
   | "requirements_missing";
 export type MatchReadMethod = "keyword-overlap" | "llm";
@@ -25,6 +30,40 @@ export type MatchRead = {
   computedAt: number;
   method: MatchReadMethod;
   fallback: MatchReadFallback;
+};
+
+export type MatchReadInputAudit = {
+  sourceProfile: {
+    id: string;
+    version?: number;
+    skills: string[];
+    keywords: string[];
+    normalizedPhrases: string[];
+    normalizedTokens: string[];
+  } | null;
+  job: {
+    id: string;
+    parseVersion?: string | null;
+    parseStatus?: string | null;
+    mustHaves: string[];
+    keywords: string[];
+    signals: Array<{
+      value: string;
+      confidence: number;
+      normalizedValue: string;
+      tokens: string[];
+      matched: boolean;
+    }>;
+  };
+  overlap: {
+    matched: string[];
+    missing: string[];
+    score: number | null;
+    tier: MatchReadTier;
+    confidence: MatchReadConfidence;
+    fallback: MatchReadFallback;
+    method: MatchReadMethod;
+  };
 };
 
 export function buildMatchReadTelemetryArgs(matchRead: MatchRead) {
@@ -56,6 +95,9 @@ type MatchReadProfile = {
   version?: number;
   skills?: string[];
   keywords?: string[];
+  summary?: string;
+  experience?: StoredUserProfileExperience[];
+  raw_text?: string;
 };
 
 export type MatchReadResumeProfile = {
@@ -67,6 +109,9 @@ export type MatchReadResumeProfile = {
   version?: number;
   skills?: string[];
   keywords?: string[];
+  summary?: string;
+  experience?: StoredUserProfileExperience[];
+  raw_text?: string;
 };
 
 export type MatchReadResumeSelection = {
@@ -114,6 +159,25 @@ const MATCH_READ_STOP_WORDS = new Set([
   "their",
   "this",
   "with",
+]);
+
+const MATCH_READ_PLACEHOLDER_PROFILE_TOKENS = new Set([
+  "block",
+  "candidate",
+  "content",
+  "curriculum",
+  "default",
+  "example",
+  "placeholder",
+  "profile",
+  "resume",
+  "section",
+  "summary",
+  "template",
+  "test",
+  "text",
+  "untitled",
+  "vitae",
 ]);
 
 function compactWhitespace(value: string): string {
@@ -227,6 +291,18 @@ function buildProfileSignalState(profile: MatchReadProfile | null) {
   return { phrases, tokens };
 }
 
+function hasMeaningfulProfileSignals(
+  profileState: ReturnType<typeof buildProfileSignalState>,
+): boolean {
+  for (const token of profileState.tokens) {
+    if (!MATCH_READ_PLACEHOLDER_PROFILE_TOKENS.has(token)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function isSignalMatched(
   signal: MatchSignal,
   profileState: ReturnType<typeof buildProfileSignalState>,
@@ -302,7 +378,18 @@ export function buildMatchReadProfile(
     id: profileId,
     ...(profile.version !== undefined ? { version: profile.version } : {}),
     skills: profile.skills ?? [],
-    keywords: profile.keywords ?? [],
+    keywords:
+      profile.keywords && profile.keywords.length > 0
+        ? profile.keywords
+        : deriveCanonicalProfileKeywords({
+            summary: profile.summary,
+            skills: profile.skills,
+            experience: profile.experience,
+            rawText: profile.raw_text,
+          }),
+    ...(profile.summary ? { summary: profile.summary } : {}),
+    ...(profile.experience ? { experience: profile.experience } : {}),
+    ...(profile.raw_text ? { raw_text: profile.raw_text } : {}),
   };
 }
 
@@ -381,6 +468,10 @@ export function resolveMatchReadSourceProfile(args: {
   );
   if (explicitProfile) {
     return explicitProfile;
+  }
+
+  if (storedResume.source === "job") {
+    return null;
   }
 
   return args.profiles[0] ?? args.primaryProfile ?? null;
@@ -492,6 +583,21 @@ export function computeMatchRead(args: {
     };
   }
 
+  if (!hasMeaningfulProfileSignals(profileState)) {
+    return {
+      tier: "unknown",
+      score: null,
+      scoreVisible: false,
+      confidence: "low",
+      matched: [],
+      missing: dedupeStrings(jobSignals.map((signal) => signal.value)),
+      basedOn,
+      computedAt,
+      method: "keyword-overlap",
+      fallback: "profile_insufficient",
+    };
+  }
+
   const matchedSignals = jobSignals.filter((signal) =>
     isSignalMatched(signal, profileState),
   );
@@ -532,4 +638,57 @@ export function computeMatchRead(args: {
       matchRead: baseMatchRead,
     }),
   });
+}
+
+export function buildMatchReadInputAudit(args: {
+  job: MatchReadJob;
+  profile: MatchReadProfile | null;
+  now?: number;
+  synthesis?: MatchReadSynthesisCache | null;
+}): MatchReadInputAudit {
+  const profileState = buildProfileSignalState(args.profile);
+  const jobSignals = buildJobSignals(args.job);
+  const matchRead = computeMatchRead(args);
+
+  return {
+    sourceProfile: args.profile
+      ? {
+          id: String(args.profile.id ?? ""),
+          ...(args.profile.version !== undefined
+            ? { version: args.profile.version }
+            : {}),
+          skills: dedupeStrings(args.profile.skills ?? []),
+          keywords: dedupeStrings(args.profile.keywords ?? []),
+          normalizedPhrases: Array.from(profileState.phrases).sort(),
+          normalizedTokens: Array.from(profileState.tokens).sort(),
+        }
+      : null,
+    job: {
+      id: args.job.id,
+      ...(args.job.parseVersion !== undefined
+        ? { parseVersion: args.job.parseVersion }
+        : {}),
+      ...(args.job.parseStatus !== undefined
+        ? { parseStatus: args.job.parseStatus }
+        : {}),
+      mustHaves: dedupeStrings(args.job.mustHaves ?? []),
+      keywords: dedupeStrings(args.job.keywords ?? []),
+      signals: jobSignals.map((signal) => ({
+        value: signal.value,
+        confidence: signal.confidence,
+        normalizedValue: normalizeSignalValue(signal.value),
+        tokens: tokenizeSignal(signal.value),
+        matched: isSignalMatched(signal, profileState),
+      })),
+    },
+    overlap: {
+      matched: matchRead.matched,
+      missing: matchRead.missing,
+      score: matchRead.score,
+      tier: matchRead.tier,
+      confidence: matchRead.confidence,
+      fallback: matchRead.fallback,
+      method: matchRead.method,
+    },
+  };
 }

@@ -12,7 +12,9 @@ import {
   ensureCanonicalProfileForClerk,
   getPrimaryProfileForClerk,
   listProfilesForClerk,
+  resolveCanonicalProfileKeywordsForWrite,
 } from "./lib/userProfiles";
+import { buildScoringProfileFieldsFromCvDocument } from "./profiles";
 import {
   buildCanonicalJobDraftFromSource,
   flattenExtractionValues,
@@ -25,6 +27,7 @@ import {
 } from "./lib/jobs/canonicalJobs";
 import {
   buildMatchReadProfile,
+  buildMatchReadInputAudit,
   buildMatchReadTelemetryArgs,
   buildMatchReadSynthesisCacheKey,
   computeMatchRead,
@@ -251,6 +254,54 @@ async function scheduleMatchReadComputedMetric(ctx: any, matchRead: MatchRead) {
     internal.metrics.recordMetric,
     buildMatchReadTelemetryArgs(matchRead),
   );
+}
+
+function hasUsableProfileScoringData(profile: any): boolean {
+  return (
+    (Array.isArray(profile?.skills) && profile.skills.length > 0) ||
+    (Array.isArray(profile?.keywords) && profile.keywords.length > 0) ||
+    (typeof profile?.summary === "string" && profile.summary.trim().length > 0) ||
+    (Array.isArray(profile?.experience) && profile.experience.length > 0) ||
+    (typeof profile?.raw_text === "string" && profile.raw_text.trim().length > 0)
+  );
+}
+
+async function backfillResumeProfileScoringFromCvDocument(
+  ctx: any,
+  resumeProfile: any,
+) {
+  if (hasUsableProfileScoringData(resumeProfile)) {
+    return;
+  }
+
+  const scoringFields = buildScoringProfileFieldsFromCvDocument(
+    resumeProfile?.cvDocument,
+  );
+  if (
+    !scoringFields.summary &&
+    scoringFields.skills.length === 0 &&
+    scoringFields.experience.length === 0 &&
+    !scoringFields.raw_text
+  ) {
+    return;
+  }
+
+  await ctx.db.patch(resumeProfile._id, {
+    ...(scoringFields.summary ? { summary: scoringFields.summary } : {}),
+    ...(scoringFields.skills.length > 0 ? { skills: scoringFields.skills } : {}),
+    ...(scoringFields.experience.length > 0
+      ? { experience: scoringFields.experience }
+      : {}),
+    ...(scoringFields.raw_text ? { raw_text: scoringFields.raw_text } : {}),
+    keywords: resolveCanonicalProfileKeywordsForWrite({
+      summary: scoringFields.summary,
+      skills: scoringFields.skills,
+      experience: scoringFields.experience,
+      rawText: scoringFields.raw_text,
+    }),
+    updatedAt: Date.now(),
+    version: (resumeProfile.version ?? 1) + 1,
+  });
 }
 
 async function scheduleMatchReadSynthesisWarm(args: {
@@ -917,6 +968,7 @@ export const createOrReuseFromSource = mutation({
 export const getById = query({
   args: {
     jobId: v.string(),
+    clientRefreshKey: v.optional(v.number()),
   },
   returns: v.union(
     v.null(),
@@ -1138,6 +1190,95 @@ export const getById = query({
   },
 });
 
+// Temporary read-only debug query to inspect the exact match-input chain for one job.
+export const debugInspectMatchInputByJobId = query({
+  args: {
+    jobId: v.string(),
+  },
+  returns: v.union(
+    v.null(),
+    v.object({
+      jobId: v.string(),
+      lastResumeId: v.union(v.string(), v.null()),
+      resolvedProfileId: v.union(v.string(), v.null()),
+      profileSkills: v.array(v.string()),
+      profileKeywords: v.array(v.string()),
+      summary: v.union(v.string(), v.null()),
+      experience: v.array(v.any()),
+      raw_text: v.union(v.string(), v.null()),
+      derivedKeywords: v.array(v.string()),
+      matchReadFallback: v.string(),
+      score: v.union(v.number(), v.null()),
+      matchedSignals: v.array(v.string()),
+      missingSignals: v.array(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const profiles = await listProfilesForClerk(ctx, identity.subject);
+    if (profiles.length === 0) {
+      return null;
+    }
+
+    const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
+    if (!normalizedJobId) {
+      return null;
+    }
+
+    const job = await ctx.db.get(normalizedJobId);
+    if (
+      !job ||
+      !profiles.some((profile) => String(profile._id) === String(job.userId)) ||
+      (job.archivedAt !== null && job.archivedAt !== undefined)
+    ) {
+      return null;
+    }
+
+    const primaryProfile = profiles[0] ?? null;
+    const sourceProfile = resolveMatchReadSourceProfile({
+      job,
+      primaryProfile,
+      profiles,
+    });
+    const scoringProfile = buildMatchReadProfile(sourceProfile);
+    const audit = buildMatchReadInputAudit({
+      job: {
+        id: String(job._id),
+        updatedAt: job.updatedAt,
+        parseVersion: job.parseVersion,
+        parseStatus: job.parseStatus,
+        mustHaves: job.mustHaves ?? [],
+        keywords: job.keywords ?? [],
+        mustHavesExtraction: job.mustHavesExtraction ?? [],
+        keywordsExtraction: job.keywordsExtraction ?? [],
+      },
+      profile: scoringProfile,
+      synthesis: job.matchReadSynthesis ?? null,
+    });
+
+    return {
+      jobId: String(job._id),
+      lastResumeId:
+        typeof job.lastResumeId === "string" ? job.lastResumeId : null,
+      resolvedProfileId: scoringProfile?.id ?? null,
+      profileSkills: sourceProfile?.skills ?? [],
+      profileKeywords: sourceProfile?.keywords ?? [],
+      summary: sourceProfile?.summary ?? null,
+      experience: sourceProfile?.experience ?? [],
+      raw_text: sourceProfile?.raw_text ?? null,
+      derivedKeywords: scoringProfile?.keywords ?? [],
+      matchReadFallback: audit.overlap.fallback,
+      score: audit.overlap.score,
+      matchedSignals: audit.overlap.matched,
+      missingSignals: audit.overlap.missing,
+    };
+  },
+});
+
 export const listForUser = query({
   args: {},
   returns: v.array(
@@ -1299,6 +1440,7 @@ export const setResumeForJob = mutation({
       if (!resumeProfile) {
         throw new Error("Resume not found");
       }
+      await backfillResumeProfileScoringFromCvDocument(ctx, resumeProfile);
     }
 
     await ctx.db.patch(normalizedJobId, {
