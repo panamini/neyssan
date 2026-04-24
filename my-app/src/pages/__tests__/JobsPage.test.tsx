@@ -23,6 +23,9 @@ const setJobResumeMock = vi.fn().mockResolvedValue(null);
 const trackEventMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
 const debugInspectMatchInputMock = vi.fn();
+const convexClientMock = {
+  query: debugInspectMatchInputMock,
+};
 const windowOpenMock = vi.fn();
 const showToastMock = vi.fn();
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -169,9 +172,7 @@ vi.mock("convex/react", () => ({
     isLoading: false,
     isAuthenticated: true,
   }),
-  useConvex: () => ({
-    query: debugInspectMatchInputMock,
-  }),
+  useConvex: () => convexClientMock,
   useQuery: (
     reference: string,
     args?: { jobId?: string; clientRefreshKey?: number } | "skip",
@@ -301,6 +302,14 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
+function enableJobsMatchDebug(): void {
+  (
+    window as Window & {
+      __JOBS_MATCH_READ_DEBUG__?: boolean;
+    }
+  ).__JOBS_MATCH_READ_DEBUG__ = true;
+}
+
 describe("JobsPage", () => {
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -320,6 +329,18 @@ describe("JobsPage", () => {
     updateFieldMock.mockClear();
     windowOpenMock.mockReset();
     vi.stubGlobal("open", windowOpenMock);
+    delete (
+      window as Window & {
+        __JOBS_MATCH_READ_DEBUG__?: boolean;
+        __STRUCTURED_MATCH_READ_DEBUG__?: boolean;
+      }
+    ).__JOBS_MATCH_READ_DEBUG__;
+    delete (
+      window as Window & {
+        __JOBS_MATCH_READ_DEBUG__?: boolean;
+        __STRUCTURED_MATCH_READ_DEBUG__?: boolean;
+      }
+    ).__STRUCTURED_MATCH_READ_DEBUG__;
     listResult = jobsList;
     archivedListResult = [];
     selectedJobResult = {
@@ -507,6 +528,147 @@ describe("JobsPage", () => {
     expect(screen.queryByText("Extraction dashboard")).not.toBeInTheDocument();
   });
 
+  it("does not show the structured shadow comparison for normal detail data", async () => {
+    debugPayload = {
+      ...debugPayload,
+      structuredShadowSummary: {
+        flagEnabled: true,
+        internalViewer: true,
+        status: "available",
+        reason: null,
+        oldScore: 50,
+        oldTier: "partial",
+        structuredScore: 78,
+        structuredTier: "strong",
+        matchedCount: 3,
+        partialCount: 1,
+        missingCount: 0,
+        unknownCount: 2,
+        metadataLeakCount: 0,
+        provenanceComplete: true,
+        jobRequirementCount: 6,
+        jobConstraintCount: 1,
+        profileEvidenceCount: 12,
+        profileConstraintCount: 0,
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.queryByText("Structured shadow comparison")).toBeNull();
+    expect(screen.queryByTestId("jobs-match-input-debug-panel")).toBeNull();
+    expect(debugInspectMatchInputMock).not.toHaveBeenCalled();
+  });
+
+  it("shows debug-only unavailable reasons without structured result values", async () => {
+    enableJobsMatchDebug();
+    debugPayload = {
+      ...debugPayload,
+      structuredShadowSummary: {
+        flagEnabled: true,
+        internalViewer: false,
+        status: "unavailable",
+        reason: "internal_viewer_required",
+        oldScore: 50,
+        oldTier: "partial",
+        structuredScore: null,
+        structuredTier: null,
+        matchedCount: 0,
+        partialCount: 0,
+        missingCount: 0,
+        unknownCount: 0,
+        metadataLeakCount: 0,
+        provenanceComplete: false,
+        jobRequirementCount: 0,
+        jobConstraintCount: 0,
+        profileEvidenceCount: 0,
+        profileConstraintCount: 0,
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      const debugOutput = (
+        screen.getByLabelText("Match input debug output") as HTMLTextAreaElement
+      ).value;
+      expect(debugOutput).toContain("structuredShadowSummary");
+      expect(debugOutput).toContain("internal_viewer_required");
+    });
+    const block = await screen.findByTestId("jobs-structured-shadow-debug");
+    expect(screen.getByText("Internal debug only")).toBeInTheDocument();
+    expect(screen.getByText("Production score remains current match score")).toBeInTheDocument();
+    expect(within(block).getByText("internal_viewer_required")).toBeInTheDocument();
+    expect(within(block).queryByText("Structured shadow")).toBeNull();
+  });
+
+  it("shows old-vs-structured comparison only from allowed debug output", async () => {
+    enableJobsMatchDebug();
+    debugPayload = {
+      ...debugPayload,
+      structuredShadowSummary: {
+        flagEnabled: true,
+        internalViewer: true,
+        status: "available",
+        reason: null,
+        oldScore: 50,
+        oldTier: "partial",
+        structuredScore: 78,
+        structuredTier: "strong",
+        matchedCount: 3,
+        partialCount: 1,
+        missingCount: 0,
+        unknownCount: 2,
+        metadataLeakCount: 0,
+        provenanceComplete: true,
+        jobRequirementCount: 6,
+        jobConstraintCount: 1,
+        profileEvidenceCount: 12,
+        profileConstraintCount: 0,
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const block = await screen.findByTestId("jobs-structured-shadow-debug");
+    expect(within(block).getByText("Old match")).toBeInTheDocument();
+    expect(within(block).getByText("Structured shadow")).toBeInTheDocument();
+    expect(within(block).getByText(/score\s+50/)).toBeInTheDocument();
+    expect(within(block).getByText(/tier\s+partial/)).toBeInTheDocument();
+    expect(within(block).getByText(/score\s+78/)).toBeInTheDocument();
+    expect(within(block).getByText(/tier\s+strong/)).toBeInTheDocument();
+    expect(within(block).getByText(/matched\s+3/)).toBeInTheDocument();
+    expect(within(block).getByText(/partial\s+1/)).toBeInTheDocument();
+    expect(within(block).getByText(/missing\s+0/)).toBeInTheDocument();
+    expect(within(block).getByText(/unknown\s+2/)).toBeInTheDocument();
+    expect(within(block).getByText(/metadata leaks\s+0/)).toBeInTheDocument();
+    expect(within(block).getByText("provenance complete")).toBeInTheDocument();
+    expect(within(block).getByText("operations")).toBeInTheDocument();
+    expect(within(block).getByText("Cross-functional communication")).toBeInTheDocument();
+    expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.queryByText(/AI score/i)).toBeNull();
+    expect(screen.queryByText(/new score/i)).toBeNull();
+  });
+
   it("cleans the displayed missing requirements without changing score or tier", async () => {
     selectedJobResult = {
       ...selectedJob,
@@ -630,6 +792,7 @@ describe("JobsPage", () => {
   });
 
   it("attaches a resume only to the selected job from the paperclip picker", async () => {
+    enableJobsMatchDebug();
     selectedJobResultByRefreshKey[1] = {
       ...selectedJob,
       resumeId: "cv_alpha",
@@ -731,6 +894,7 @@ describe("JobsPage", () => {
   });
 
   it("refreshes match and debug output on the same job after switching and detaching resumes", async () => {
+    enableJobsMatchDebug();
     cvLibraryResult = {
       cvs: [
         { id: "cv_alpha", title: "Primary resume", sections: [] },
