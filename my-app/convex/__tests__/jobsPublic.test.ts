@@ -357,6 +357,263 @@ describe("jobsPublic.listForUser", () => {
 });
 
 describe("jobsPublic.getById", () => {
+  function buildGetByIdProjectionCtx({
+    job,
+    shadowRows = [],
+  }: {
+    job: any;
+    shadowRows?: any[];
+  }) {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        profileId: "cv_primary",
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        skills: ["Legacy React"],
+        keywords: ["legacy ops"],
+        email: "primary@example.com",
+      },
+    ];
+
+    return {
+      auth: {
+        getUserIdentity: async () => ({ subject: "clerk_123" }),
+      },
+      db: {
+        normalizeId(table: string, id: string) {
+          expect(table).toBe("jobs");
+          return id;
+        },
+        get: async (id: string) => (id === job._id ? job : null),
+        query(table: string) {
+          if (table === "userProfiles") {
+            return {
+              withIndex(_indexName: string, buildIndex: any) {
+                const scope = {
+                  eq(_field: string, value: string) {
+                    return value;
+                  },
+                };
+                const clerkId = buildIndex(scope);
+                return {
+                  collect: async () =>
+                    linkedProfiles.filter(
+                      (profile) => profile.clerkId === clerkId,
+                    ),
+                };
+              },
+            };
+          }
+
+          if (table === "proposals") {
+            return {
+              withIndex(_indexName: string, buildIndex: any) {
+                const scope = {
+                  eq(_field: string, _value: string) {
+                    return this;
+                  },
+                };
+                buildIndex(scope);
+                return {
+                  collect: async () => [],
+                };
+              },
+            };
+          }
+
+          if (table === "job_extraction_shadow") {
+            return {
+              withIndex(indexName: string, buildIndex: any) {
+                expect(indexName).toBe("by_job_id");
+                const scope = {
+                  eq(field: string, value: string) {
+                    expect(field).toBe("job_id");
+                    expect(value).toBe(job._id);
+                    return this;
+                  },
+                };
+                buildIndex(scope);
+                return {
+                  collect: async () => shadowRows,
+                };
+              },
+            };
+          }
+
+          throw new Error(`Unexpected table: ${table}`);
+        },
+      },
+    } as any;
+  }
+
+  function buildProjectionJob(overrides: Record<string, unknown> = {}) {
+    return {
+      _id: "job_visible",
+      _creationTime: 100,
+      userId: "profile_primary",
+      title: "Frontend job",
+      company: "Acme",
+      location: "Remote",
+      isSample: false,
+      isFavorite: false,
+      sourceUrl: "https://example.com/job",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      applicationUrl: "",
+      parseStatus: "parsed",
+      parseVersion: "v1b",
+      reviewState: "ready",
+      status: "active",
+      importedAt: 100,
+      updatedAt: 100,
+      lastOpenedAt: 100,
+      archivedAt: null,
+      rawDescription: "Requires Legacy React and legacy ops.",
+      rawLanguageDetected: "en",
+      summary: "Heuristic summary",
+      summaryExtraction: {
+        value: "Heuristic summary",
+        confidence: 0.6,
+        sourceSpan: null,
+      },
+      responsibilities: [],
+      responsibilitiesExtraction: [],
+      keywords: ["legacy ops"],
+      keywordsExtraction: [
+        { value: "legacy ops", confidence: 0.8, sourceSpan: null },
+      ],
+      mustHaves: ["Legacy React"],
+      mustHavesExtraction: [
+        { value: "Legacy React", confidence: 0.9, sourceSpan: null },
+      ],
+      toneCues: [],
+      toneCuesExtraction: [],
+      contacts: [],
+      reviewItems: [],
+      ...overrides,
+    };
+  }
+
+  function buildVisibleShadowRow(overrides: Record<string, unknown> = {}) {
+    return {
+      _id: "shadow_visible",
+      _creationTime: 100,
+      job_id: "job_visible",
+      job_text_hash: "hash",
+      llm_raw_output: {},
+      llm_normalized_output: {
+        summary_short: "LLM display summary",
+        role_title_normalized: "Frontend Job",
+        requirements: [
+          { value: "Modern React", type: "skill", required: true },
+          { value: "Design systems", type: "tool", required: true },
+        ],
+        keywords_canonical: ["react", "design systems"],
+        licenses_or_certifications: [],
+        schedule_constraints: [],
+        environment: {
+          customer_facing: null,
+          retail: null,
+          physical_standing: null,
+          onsite: null,
+        },
+        confidence: "medium",
+      },
+      validation_status: "valid",
+      fallback_used: false,
+      model: "mistral-small-latest",
+      prompt_version: "p9_v1",
+      latency_ms: 10,
+      model_confidence: "medium",
+      final_confidence: "medium",
+      created_at: 200,
+      ...overrides,
+    };
+  }
+
+  it("projects eligible visible LLM extraction without changing scoring fields", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const job = buildProjectionJob();
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        shadowRows: [buildVisibleShadowRow()],
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result).toMatchObject({
+      visibleSummary: "LLM display summary",
+      visibleRequirements: ["Modern React", "Design systems"],
+      visibleKeywords: ["react", "design systems"],
+      visibleExtractionSource: "llm",
+      summary: "Heuristic summary",
+      mustHaves: ["Legacy React"],
+      keywords: ["legacy ops"],
+      mustHavesExtraction: [
+        { value: "Legacy React", confidence: 0.9, sourceSpan: null },
+      ],
+      keywordsExtraction: [
+        { value: "legacy ops", confidence: 0.8, sourceSpan: null },
+      ],
+    });
+    expect(result?.matchRead).toMatchObject({
+      score: 100,
+      tier: "strong",
+      matched: ["Legacy React", "legacy ops"],
+      missing: [],
+    });
+  });
+
+  it("falls back to heuristic visible fields when the flag is off or rows are unsafe", async () => {
+    const job = buildProjectionJob();
+
+    const flagOffResult = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        shadowRows: [buildVisibleShadowRow()],
+      }),
+      { jobId: job._id },
+    );
+
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const unsafeResult = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        shadowRows: [
+          buildVisibleShadowRow({
+            llm_normalized_output: {
+              ...buildVisibleShadowRow().llm_normalized_output,
+              summary_short: "Apply now at https://example.com/jobs",
+            },
+          }),
+        ],
+      }),
+      { jobId: job._id },
+    );
+
+    for (const result of [flagOffResult, unsafeResult]) {
+      expect(result).toMatchObject({
+        visibleSummary: "Heuristic summary",
+        visibleRequirements: ["Legacy React"],
+        visibleKeywords: ["legacy ops"],
+        visibleExtractionSource: "heuristic",
+        summary: "Heuristic summary",
+        mustHaves: ["Legacy React"],
+        keywords: ["legacy ops"],
+      });
+      expect(result?.matchRead).toMatchObject({
+        score: 100,
+        tier: "strong",
+      });
+    }
+  });
+
   it("does not fall back to owner profile scoring when the attached resume cannot be resolved", async () => {
     const linkedProfiles = [
       {
@@ -460,6 +717,22 @@ describe("jobsPublic.getById", () => {
             }
 
             if (table === "metrics") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, _value: string) {
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            if (table === "job_extraction_shadow") {
               return {
                 withIndex(_indexName: string, buildIndex: any) {
                   const scope = {
