@@ -951,7 +951,7 @@ describe("JobsPage", () => {
     const matchRegion = screen.getByLabelText("Match");
     fireEvent.click(
       within(matchRegion).getByRole("button", {
-        name: "Missing from Resume 1",
+        name: "Missing 1",
       }),
     );
     expect(within(matchRegion).getByText("Customer-facing experience")).toBeInTheDocument();
@@ -1295,7 +1295,7 @@ describe("JobsPage", () => {
         resumeName: null,
       });
       expect(
-        screen.getByText("Attach a resume."),
+        screen.getByText("Resume did not load."),
       ).toBeInTheDocument();
       expect(
         screen.getAllByRole("button", { name: "Attach resume" }).length,
@@ -2004,11 +2004,11 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByText("Start with one job decision"),
+      await screen.findByText("Start with one job."),
     ).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Import your first job" }),
+      screen.getByRole("button", { name: "Import job" }),
     );
 
     await waitFor(() => {
@@ -2045,7 +2045,7 @@ describe("JobsPage", () => {
 
     expect(screen.getByText("Loading jobs")).toBeInTheDocument();
     expect(
-      screen.queryByText("Start with one job decision"),
+      screen.queryByText("Start with one job."),
     ).not.toBeInTheDocument();
   });
 
@@ -2104,10 +2104,10 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByText("Start with one job decision"),
+      await screen.findByText("Start with one job."),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Try a sample job" }));
+    fireEvent.click(screen.getByRole("button", { name: "Try a sample" }));
 
     expect(await screen.findAllByText("Sample")).not.toHaveLength(0);
     expect(seedSampleJobMock).toHaveBeenCalledWith({});

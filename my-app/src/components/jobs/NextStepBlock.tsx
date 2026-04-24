@@ -25,12 +25,12 @@ export function NextStepBlock({
       <div className="dasti-proposal-sheet__header">
         <div className="dasti-stack">
           <div className="dasti-brief-card__summary-label">Next step</div>
-          <div className="dasti-empty-state__title">Common next steps</div>
+          <div className="dasti-empty-state__title">Pick a next step.</div>
           {usesCohortData ? (
             <p className="dasti-empty-state__subtitle">{headline}</p>
           ) : (
             <p className="dasti-empty-state__subtitle">
-              Common next steps from the jobs workspace.
+              Pick one.
             </p>
           )}
         </div>
