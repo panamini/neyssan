@@ -31,8 +31,18 @@ type StructuredEvaluationRow = {
   family: EvaluationFamily;
   oldScore: number | null;
   oldTier: MatchReadTier | null;
+  oldProfileKeywordCount: number;
+  oldProfileKeywordJunkExamples: string[];
+  oldDerivedKeywordJunkExamples: string[];
+  oldMissingMetadataExamples: string[];
+  oldSummaryLooksCandidateCentric: boolean;
   structuredScore: number | null;
   structuredTier: MatchReadTier | null;
+  structuredJobRequirementLabels: string[];
+  structuredProfileEvidenceSources: string[];
+  structuredMetadataLeakCount: number;
+  structuredMatchedEvidenceLabels: string[];
+  structuredUnknownLabels: string[];
   matchedCount: number;
   partialCount: number;
   missingCount: number;
@@ -51,10 +61,32 @@ type EvaluationFixture = {
   oldSignals: string[];
   rawLanguageDetected?: string | null;
   metadataTerms?: string[];
+  oldProfileKeywords?: string[];
+  oldDerivedKeywords?: string[];
+  oldSummary?: string;
 };
 
 const MODEL = "mistral-small-latest";
 const PROMPT_VERSION = "p9_v1";
+const OLD_KEYWORD_JUNK_EXAMPLES = [
+  "safety",
+  "conscious",
+  "attentive",
+  "eight",
+  "years",
+  "possible",
+  "nonh",
+] as const;
+const OLD_METADATA_EXAMPLES = ["location", "status", "compensation"] as const;
+const STRUCTURED_METADATA_EXCLUSIONS = [
+  "location",
+  "status",
+  "compensation",
+  "miami",
+  "design",
+  "district",
+  "store",
+] as const;
 
 function extraction(overrides: Partial<NormalizedJobExtraction>): NormalizedJobExtraction {
   const { environment, ...rest } = overrides;
@@ -177,6 +209,19 @@ const fixtures: EvaluationFixture[] = [
       environment: { customer_facing: true, retail: true, physical_standing: true, onsite: true },
     }),
     profile: robertSecurityProfile,
+    oldProfileKeywords: [
+      "safety",
+      "conscious",
+      "attentive",
+      "eight",
+      "years",
+      "possible",
+      "nonh",
+      "investigation skills",
+      "safety compliance",
+    ],
+    oldDerivedKeywords: ["safety", "conscious", "eight", "years", "nonh"],
+    oldSummary: robertSecurityProfile.summary,
     oldSignals: [
       "location",
       "miami",
@@ -534,8 +579,29 @@ function evaluateFixture(fixture: EvaluationFixture): {
         family: fixture.family,
         oldScore: old.score,
         oldTier: old.tier,
+        oldProfileKeywordCount: getOldProfileKeywords(fixture).length,
+        oldProfileKeywordJunkExamples: keywordExamples(
+          getOldProfileKeywords(fixture),
+          OLD_KEYWORD_JUNK_EXAMPLES,
+        ),
+        oldDerivedKeywordJunkExamples: keywordExamples(
+          fixture.oldDerivedKeywords ?? [],
+          OLD_KEYWORD_JUNK_EXAMPLES,
+        ),
+        oldMissingMetadataExamples: keywordExamples(
+          fixture.oldSignals,
+          OLD_METADATA_EXAMPLES,
+        ),
+        oldSummaryLooksCandidateCentric: summaryLooksCandidateCentric(
+          fixture.oldSummary ?? fixture.profile.summary,
+        ),
         structuredScore: null,
         structuredTier: null,
+        structuredJobRequirementLabels: [],
+        structuredProfileEvidenceSources: [],
+        structuredMetadataLeakCount: 0,
+        structuredMatchedEvidenceLabels: [],
+        structuredUnknownLabels: [],
         matchedCount: 0,
         partialCount: 0,
         missingCount: 0,
@@ -548,6 +614,10 @@ function evaluateFixture(fixture: EvaluationFixture): {
   }
 
   const structured = debug.structured;
+  const metadataLeakCount = countMetadataLeaks(
+    structured.jobRequirements,
+    fixture.metadataTerms ?? [],
+  );
   return {
     debug,
     row: {
@@ -555,16 +625,44 @@ function evaluateFixture(fixture: EvaluationFixture): {
       family: fixture.family,
       oldScore: old.score,
       oldTier: old.tier,
+      oldProfileKeywordCount: getOldProfileKeywords(fixture).length,
+      oldProfileKeywordJunkExamples: keywordExamples(
+        getOldProfileKeywords(fixture),
+        OLD_KEYWORD_JUNK_EXAMPLES,
+      ),
+      oldDerivedKeywordJunkExamples: keywordExamples(
+        fixture.oldDerivedKeywords ?? [],
+        OLD_KEYWORD_JUNK_EXAMPLES,
+      ),
+      oldMissingMetadataExamples: keywordExamples(
+        fixture.oldSignals,
+        OLD_METADATA_EXAMPLES,
+      ),
+      oldSummaryLooksCandidateCentric: summaryLooksCandidateCentric(
+        fixture.oldSummary ?? fixture.profile.summary,
+      ),
       structuredScore: structured.structuredScore,
       structuredTier: structured.structuredTier,
+      structuredJobRequirementLabels: structured.jobRequirements.map(
+        (requirement) => requirement.value,
+      ),
+      structuredProfileEvidenceSources: uniqueStrings(
+        structured.profileEvidence.map((evidence) => evidence.evidenceText),
+      ),
+      structuredMetadataLeakCount: metadataLeakCount,
+      structuredMatchedEvidenceLabels: uniqueStrings(
+        [...structured.matched, ...structured.partial]
+          .map((outcome) => outcome.evidence?.evidenceText)
+          .filter((value): value is string => Boolean(value)),
+      ),
+      structuredUnknownLabels: structured.unknown.map(
+        (outcome) => outcome.requirement.value,
+      ),
       matchedCount: structured.matched.length,
       partialCount: structured.partial.length,
       missingCount: structured.missing.length,
       unknownCount: structured.unknown.length,
-      metadataLeakCount: countMetadataLeaks(
-        structured.jobRequirements,
-        fixture.metadataTerms ?? [],
-      ),
+      metadataLeakCount,
       provenanceComplete: hasCompleteProvenance(structured),
       manualExpectedLabel: fixture.manualExpectedLabel,
     },
@@ -615,6 +713,34 @@ function normalize(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+function getOldProfileKeywords(fixture: EvaluationFixture): string[] {
+  if (fixture.oldProfileKeywords) return fixture.oldProfileKeywords;
+  if (Array.isArray(fixture.profile.keywords)) {
+    return (fixture.profile.keywords as unknown[]).map(String);
+  }
+  return [];
+}
+
+function keywordExamples(
+  values: string[],
+  examples: readonly string[],
+): string[] {
+  const normalizedValues = new Set(values.map((value) => normalize(value)));
+  return examples.filter((example) => normalizedValues.has(normalize(example)));
+}
+
+function summaryLooksCandidateCentric(value: unknown): boolean {
+  const summary = normalize(value);
+  return (
+    /\b(security guard|candidate|applicant)\b/.test(summary) &&
+    /\b(eight years|years experience|vip individuals|defense sites)\b/.test(summary)
+  );
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter((value) => normalize(value).length > 0))];
+}
+
 describe("structured match-read evaluation matrix", () => {
   it("records a comparison row for each critical fixture family", () => {
     const rows = fixtures.map((fixture) => evaluateFixture(fixture).row);
@@ -645,8 +771,18 @@ describe("structured match-read evaluation matrix", () => {
         family: expect.any(String),
         oldScore: expect.any(Number),
         oldTier: expect.any(String),
+        oldProfileKeywordCount: expect.any(Number),
+        oldProfileKeywordJunkExamples: expect.any(Array),
+        oldDerivedKeywordJunkExamples: expect.any(Array),
+        oldMissingMetadataExamples: expect.any(Array),
+        oldSummaryLooksCandidateCentric: expect.any(Boolean),
         structuredScore: expect.any(Number),
         structuredTier: expect.any(String),
+        structuredJobRequirementLabels: expect.any(Array),
+        structuredProfileEvidenceSources: expect.any(Array),
+        structuredMetadataLeakCount: 0,
+        structuredMatchedEvidenceLabels: expect.any(Array),
+        structuredUnknownLabels: expect.any(Array),
         matchedCount: expect.any(Number),
         partialCount: expect.any(Number),
         missingCount: expect.any(Number),
@@ -718,6 +854,52 @@ describe("structured match-read evaluation matrix", () => {
     expect(evaluation.row.structuredScore).toBeGreaterThan(0);
     expect(evaluation.row.metadataLeakCount).toBe(0);
     expect(evaluation.row.provenanceComplete).toBe(true);
+  });
+
+  it("separates Kith/Robert old keyword failures from structured evidence diagnostics", () => {
+    const evaluation = evaluateFixture(
+      fixtures.find((fixture) => fixture.fixtureId === "security_kith_robert")!,
+    );
+    const structuredRequirementText = evaluation.row.structuredJobRequirementLabels
+      .map(normalize)
+      .join("\n");
+    const structuredEvidenceText = [
+      ...evaluation.row.structuredProfileEvidenceSources,
+      ...evaluation.row.structuredMatchedEvidenceLabels,
+    ]
+      .map(normalize)
+      .join("\n");
+
+    expect(evaluation.row.oldMissingMetadataExamples).toEqual(
+      expect.arrayContaining(["location", "status", "compensation"]),
+    );
+    expect(evaluation.row.oldProfileKeywordCount).toBeGreaterThan(0);
+    expect([
+      ...evaluation.row.oldProfileKeywordJunkExamples,
+      ...evaluation.row.oldDerivedKeywordJunkExamples,
+    ]).toEqual(expect.arrayContaining(["conscious", "eight", "years", "nonh"]));
+    expect(evaluation.row.oldSummaryLooksCandidateCentric).toBe(true);
+
+    for (const term of STRUCTURED_METADATA_EXCLUSIONS) {
+      expect(structuredRequirementText).not.toContain(term);
+    }
+
+    expect(structuredEvidenceText).toContain("adt security");
+    expect(structuredEvidenceText).toContain("copwatch");
+    expect(structuredEvidenceText).toMatch(
+      /certified protection guard program|cpop/,
+    );
+    expect(structuredEvidenceText).toMatch(
+      /security guard certificate program|socp/,
+    );
+    expect(structuredEvidenceText).toMatch(/reports|observations|cctv/);
+    expect(
+      evaluation.row.structuredMatchedEvidenceLabels.every(
+        (label) => normalize(label).length > 0,
+      ),
+    ).toBe(true);
+    expect(evaluation.row.structuredMetadataLeakCount).toBe(0);
+    expect(evaluation.row.metadataLeakCount).toBe(0);
   });
 
   it("records unknown outcomes instead of confident matches when fixture evidence is absent", () => {
