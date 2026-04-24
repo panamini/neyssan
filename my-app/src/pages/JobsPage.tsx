@@ -2219,7 +2219,13 @@ function JobsPageContent(): JSX.Element {
                     </div>
 
                     {selectedJob.matchRead ? (
-                      <MatchReadBlock matchRead={selectedJob.matchRead} />
+                      <MatchReadBlock
+                        matchRead={selectedJob.matchRead}
+                        visibleRequirements={selectedJob.visibleRequirements}
+                        jobTitle={selectedJob.title}
+                        jobCompany={selectedJob.company}
+                        jobLocation={selectedJob.location}
+                      />
                     ) : null}
 
                     {isJobsMatchInputDebugEnabled ? (
