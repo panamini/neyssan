@@ -171,6 +171,29 @@ function oldKithMatchRead() {
   });
 }
 
+function licenseOnlyShadowRow(requirementValue = "security guard license"): StructuredMatchReadShadowRow {
+  return {
+    ...validKithShadowRow,
+    llm_normalized_output: {
+      summary_short: "Licensed security role.",
+      role_title_normalized: "Security Guard",
+      requirements: [
+        { value: requirementValue, type: "certification", required: true },
+      ],
+      keywords_canonical: [requirementValue],
+      licenses_or_certifications: [requirementValue],
+      schedule_constraints: [],
+      environment: {
+        customer_facing: null,
+        onsite: null,
+        physical_standing: null,
+        retail: null,
+      },
+      confidence: "high",
+    },
+  };
+}
+
 describe("structured match-read shadow scorer", () => {
   it("selects only current-policy valid non-fallback LLM extraction rows", () => {
     expect(
@@ -349,6 +372,141 @@ describe("structured match-read shadow scorer", () => {
     });
   });
 
+  it("does not match license requirements from generic security or safety evidence", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "generic_security_training_license_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "generic_security_profile",
+        summary:
+          "Safety conscious security worker with protection experience and compliance awareness.",
+        skills: ["security operations", "safety compliance"],
+        keywords: ["security", "safety"],
+        certifications: ["Security Awareness Training"],
+        experience: [
+          {
+            company: "Venue Team",
+            title: "Security Guard",
+            description: "Protected guests and monitored entrances.",
+          },
+        ],
+      },
+      shadowRows: [licenseOnlyShadowRow()],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    const licenseOutcome = [
+      ...debug.structured.matched,
+      ...debug.structured.partial,
+      ...debug.structured.unknown,
+    ].find((outcome) => outcome.requirement.value === "security guard license");
+
+    expect(licenseOutcome).toMatchObject({
+      outcome: "unknown",
+      evidence: undefined,
+    });
+  });
+
+  it("matches explicit structured credential evidence for credential requirements", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "explicit_security_license_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "explicit_license_profile",
+        summary: "Security worker.",
+        certifications: ["security guard license"],
+      },
+      shadowRows: [licenseOnlyShadowRow()],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    const licenseOutcome = debug.structured.matched.find(
+      (outcome) => outcome.requirement.value === "security guard license",
+    );
+
+    expect(licenseOutcome).toMatchObject({
+      outcome: "matched",
+      evidence: expect.objectContaining({
+        sourceSection: "certifications",
+        evidenceText: "security guard license",
+      }),
+    });
+  });
+
+  it("treats exact raw text credential evidence as weaker than structured credentials", () => {
+    const rawOnly = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "raw_text_security_license_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "raw_credential_profile",
+        summary: "Security worker.",
+        raw_text: "Security Guard Certificate Program (SOCP), ASIS International.",
+      },
+      shadowRows: [licenseOnlyShadowRow()],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+    const structured = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "structured_security_license_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "structured_credential_profile",
+        summary: "Security worker.",
+        certifications: ["Security Guard Certificate Program (SOCP)"],
+        raw_text: "Security Guard Certificate Program (SOCP), ASIS International.",
+      },
+      shadowRows: [licenseOnlyShadowRow()],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(rawOnly.structured.status).toBe("available");
+    expect(structured.structured.status).toBe("available");
+    if (rawOnly.structured.status !== "available" || structured.structured.status !== "available") {
+      return;
+    }
+
+    const rawOutcome = rawOnly.structured.partial.find(
+      (outcome) => outcome.requirement.value === "security guard license",
+    );
+    const structuredOutcome = structured.structured.matched.find(
+      (outcome) => outcome.requirement.value === "security guard license",
+    );
+
+    expect(rawOutcome).toMatchObject({
+      outcome: "partial",
+      evidence: expect.objectContaining({
+        sourceSection: "raw_text",
+      }),
+    });
+    expect(structuredOutcome).toMatchObject({
+      outcome: "matched",
+      evidence: expect.objectContaining({
+        sourceSection: "certifications",
+      }),
+    });
+  });
+
   it("keeps Pass 2A visible fields projection-only for production match read", () => {
     const old = oldKithMatchRead();
     const debug = buildStructuredMatchReadDebug({
@@ -412,6 +570,16 @@ describe("structured match-read shadow scorer", () => {
       expect.arrayContaining(["Security Guard", "security guard license"]),
     );
     expect(
+      debug.structured.matched.find(
+        (item) => item.requirement.value === "security guard license",
+      )?.evidence,
+    ).toMatchObject({
+      sourceSection: "certifications",
+      evidenceText: expect.stringMatching(
+        /Certified Protection Guard Program|Security Guard Certificate Program|CPOP|SOCP/,
+      ),
+    });
+    expect(
       debug.structured.profileEvidence.map((item) => item.evidenceText).join("\n"),
     ).toEqual(expect.stringContaining("ADT Security"));
     expect(
@@ -420,6 +588,116 @@ describe("structured match-read shadow scorer", () => {
     expect(
       debug.structured.profileEvidence.map((item) => item.evidenceText).join("\n"),
     ).toEqual(expect.stringContaining("Crisis Intervention"));
+  });
+
+  it("caps high-unknown sparse matches below partial confidence", () => {
+    const old = oldKithMatchRead();
+    const debug = buildStructuredMatchReadDebug({
+      old,
+      job: {
+        id: "short_noisy_alpha_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_cashier_sparse",
+        summary: "Cashier with cash handling and customer service experience.",
+        skills: ["cash handling", "customer service"],
+        keywords: ["cash handling", "customer service"],
+        experience: [
+          {
+            company: "Corner Shop",
+            title: "Cashier",
+            description: "Handled the cash drawer during customer rushes.",
+          },
+        ],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Short noisy cashier posting with thin evidence.",
+            role_title_normalized: "Cashier",
+            requirements: [
+              { value: "cash handling", type: "skill", required: true },
+              { value: "customer communication", type: "skill", required: true },
+              { value: "lottery terminal operation", type: "tool", required: true },
+              { value: "inventory reconciliation", type: "skill", required: false },
+            ],
+            keywords_canonical: ["cash handling"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: null,
+              retail: true,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    const matchedScorableCount = debug.structured.matched.filter(
+      (outcome) => outcome.requirement.importance !== "supporting",
+    ).length;
+
+    expect(matchedScorableCount).toBe(1);
+    expect(debug.structured.unknown.length).toBeGreaterThanOrEqual(2);
+    expect(debug.structured.structuredScore).toBeLessThan(35);
+    expect(debug.structured.structuredTier).toBe("weak");
+  });
+
+  it("does not allow strong tier when matched scorable evidence is too thin", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "thin_strong_guard_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "thin_profile",
+        summary: "Certified security guard.",
+        skills: ["security guard"],
+        keywords: ["security guard"],
+        certifications: ["security guard license"],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Sparse licensed security posting.",
+            role_title_normalized: "Security Guard",
+            requirements: [
+              { value: "security guard license", type: "certification", required: true },
+            ],
+            keywords_canonical: ["security guard license"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: null,
+              onsite: null,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    expect(debug.structured.matched).toHaveLength(1);
+    expect(debug.structured.structuredTier).not.toBe("strong");
   });
 
   it("returns unavailable when no valid structured extraction exists", () => {
