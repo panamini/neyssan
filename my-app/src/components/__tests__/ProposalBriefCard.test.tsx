@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import {
   ProposalBriefCard,
@@ -67,6 +67,25 @@ describe("resolveProposalBriefCardTitle", () => {
     });
   });
 
+  it("shows one calm brief status instead of repeating review state copy", () => {
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Operations Associate"
+          jobDescription="Raw job text"
+          summaryText="Operations role summary"
+          parseStatus="parsed"
+          trustState="needs_review"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getAllByText("Check fields")).toHaveLength(1);
+    expect(screen.queryByText("Review state")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Review state:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
+  });
+
   it("renders review cards with current suggested values and keeps review actions", () => {
     render(
       <MemoryRouter>
@@ -117,11 +136,16 @@ describe("resolveProposalBriefCardTitle", () => {
     expect(keywordsCard).not.toBeNull();
     const card = within(keywordsCard as HTMLElement);
     expect(keywordsCard).toHaveAttribute("data-state", "warning");
-    expect(card.getByText("Needs review")).toHaveClass(
+    expect(card.getByText("Check")).toHaveClass(
       "dasti-pill",
       "dasti-pill--warning",
     );
-    expect(card.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    expect(card.getByRole("button", { name: "Keep" })).toHaveClass(
+      "dasti-button",
+      "dasti-button--sm",
+      "dasti-button--pill",
+      "dasti-button--accent",
+    );
     expect(card.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();
   });
 
@@ -153,11 +177,11 @@ describe("resolveProposalBriefCardTitle", () => {
     expect(summaryCard).toHaveAttribute("data-state", "success");
 
     const card = within(summaryCard as HTMLElement);
-    expect(card.getByText("Approved")).toHaveClass(
+    expect(card.getByText("Saved")).toHaveClass(
       "dasti-pill",
       "dasti-pill--success",
     );
-    expect(card.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(card.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
   });
 
   it("renders LLM-backed summary requirements and keywords review cards", () => {
@@ -205,7 +229,7 @@ describe("resolveProposalBriefCardTitle", () => {
     ).toHaveLength(1);
     expect(screen.getAllByText("Guest service").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/guest service/).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: "Keep" })).toHaveLength(3);
     expect(screen.getByRole("button", { name: "Edit Summary" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit Requirements" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();
@@ -248,7 +272,11 @@ describe("resolveProposalBriefCardTitle", () => {
 
     expect(screen.getByText("EXTRACTION. PAUSED.")).toBeInTheDocument();
     expect(screen.getByText(/Job read is out of order/i)).toBeInTheDocument();
-    expect(screen.getByText(/Raw source stays intact/i)).toBeInTheDocument();
+    expect(screen.getByText(/Posting stays intact/i)).toBeInTheDocument();
+    expect(screen.getByText("Imported Posting")).toBeInTheDocument();
+    expect(screen.getByText("Original text stays intact.")).toBeInTheDocument();
+    expect(screen.queryByText("Raw source stays visible here.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open Posting" }));
     expect(screen.getByText("Raw source stays visible here.")).toBeInTheDocument();
     expect(screen.queryByText("Heuristic summary")).not.toBeInTheDocument();
     expect(screen.queryByText("Heuristic visible requirement")).not.toBeInTheDocument();
@@ -258,7 +286,7 @@ describe("resolveProposalBriefCardTitle", () => {
     expect(
       screen.queryByText("At Texas Roadhouse, we are a people-first company."),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit Keywords" })).not.toBeInTheDocument();
   });
 });

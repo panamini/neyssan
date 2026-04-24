@@ -15,7 +15,6 @@ import { api } from "../../convex/_generated/api";
 import { ProposalBriefCard } from "../components/ProposalBriefCard";
 import { FirstRunPanel } from "../components/jobs/FirstRunPanel";
 import { MatchReadBlock } from "../components/jobs/MatchReadBlock";
-import { NextStepBlock } from "../components/jobs/NextStepBlock";
 import { useToast } from "../components/ui/toast";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { getProposalSourceLabel } from "../lib/proposal-source-platforms";
@@ -25,7 +24,6 @@ import {
   createProposalWorkspaceResetState,
   startFreshProposalWorkspace,
 } from "../lib/proposal-workspace-state";
-import { createQuickStartLocationState } from "../lib/quick-start-routing";
 import type { CvDocument } from "../types/cvDocument";
 import { formatUiDate } from "../lib/ui-date";
 
@@ -877,12 +875,38 @@ function buildProposalRoute(jobId: string): string {
   return `/proposal?jobId=${encodeURIComponent(jobId)}`;
 }
 
-function buildResumeRoute(jobId: string): string {
-  return `/cv?jobId=${encodeURIComponent(jobId)}`;
-}
-
 function buildJobsRoute(jobId: string): string {
   return `/jobs/${encodeURIComponent(jobId)}`;
+}
+
+function formatJobMatchDate(computedAt?: number): string | null {
+  if (!computedAt || !Number.isFinite(computedAt)) {
+    return null;
+  }
+  const date = new Date(computedAt);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function resolveJobMatchStatus(matchRead: JobsPageDetail["matchRead"]): string {
+  if (!matchRead) {
+    return "No Match";
+  }
+  if (matchRead.fallback === "none") {
+    return "Matched";
+  }
+  if (
+    matchRead.fallback === "profile_missing" ||
+    matchRead.fallback === "profile_insufficient"
+  ) {
+    return "No Resume";
+  }
+  return "No Brief";
 }
 
 function buildJobsListRoute(view: JobsViewMode): string {
@@ -995,7 +1019,7 @@ function JobsPageContent(): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
   const { jobId: selectedJobId } = useParams<JobsPageRouteParams>();
-  const { cvs, currentCv } = useCvLibrary();
+  const { cvs } = useCvLibrary();
   const { showToast } = useToast();
   const { isLoaded, isSignedIn } = useAuth();
   const {
@@ -1363,11 +1387,13 @@ function JobsPageContent(): JSX.Element {
     [jobs, selectedJobId],
   );
   const selectedJob = optimisticSelectedJob ?? selectedJobRecord ?? null;
+  const selectedMatchDateLabel = formatJobMatchDate(
+    selectedJob?.matchRead?.computedAt,
+  );
   const selectedJobIsLoading =
     Boolean(selectedJobId) &&
     selectedJobRecord === undefined &&
     optimisticSelectedJob === null;
-  const hasResumeWorkspace = cvs.length > 0 || Boolean(currentCv);
   const resumePickerOptions = React.useMemo(
     () =>
       cvs
@@ -1476,25 +1502,6 @@ function JobsPageContent(): JSX.Element {
       setIsSeedingSample(false);
     }
   }, [navigate, seedSampleJob]);
-
-  const handleOpenResumeWithJob = React.useCallback(
-    (jobId: string) => {
-      recordJobDecision("resume", jobId);
-      const target = buildResumeRoute(jobId);
-      if (hasResumeWorkspace) {
-        void navigate(target);
-        return;
-      }
-
-      void navigate(target, {
-        state: createQuickStartLocationState(location.state, {
-          createType: "resume",
-          resumeMode: "upload-only",
-        }),
-      });
-    },
-    [hasResumeWorkspace, location.state, navigate, recordJobDecision],
-  );
 
   const handleAttachResumeToJob = React.useCallback(
     async (resumeId: string) => {
@@ -2194,133 +2201,6 @@ function JobsPageContent(): JSX.Element {
                                     aria-hidden="true"
                                   />
                                 </button>
-                                {isActive ? (
-                                  <div
-                                    ref={resumePickerRef}
-                                    className="dasti-jobs-detail__resume-picker dasti-jobs-row__resume-picker"
-                                  >
-                                    <div
-                                      className={
-                                        selectedJob?.resumeName
-                                          ? "styleforge-active-cv-control styleforge-active-cv-control--loaded dasti-jobs-row__cv-control"
-                                          : "styleforge-active-cv-control styleforge-active-cv-control--ghost dasti-jobs-row__cv-control"
-                                      }
-                                    >
-                                      <button
-                                        type="button"
-                                        className="styleforge-active-cv-control__icon-button"
-                                        aria-label={
-                                          selectedJob?.resumeName
-                                            ? "Remove attached resume"
-                                            : "Attach resume"
-                                        }
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          if (selectedJob?.resumeName) {
-                                            void handleDetachResumeFromJob();
-                                            return;
-                                          }
-                                          setIsResumePickerOpen(
-                                            (current) => !current,
-                                          );
-                                        }}
-                                      >
-                                        <span
-                                          className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--base"
-                                          aria-hidden
-                                        >
-                                          <Paperclip
-                                            size={15}
-                                            strokeWidth={1.8}
-                                          />
-                                        </span>
-                                        {selectedJob?.resumeName ? (
-                                          <span
-                                            className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--hover"
-                                            aria-hidden
-                                          >
-                                            <X size={15} strokeWidth={1.8} />
-                                          </span>
-                                        ) : null}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="styleforge-active-cv-control__body"
-                                        aria-controls={`job-resume-picker-${job.id}`}
-                                        aria-expanded={isResumePickerOpen}
-                                        aria-haspopup="dialog"
-                                        aria-label={
-                                          selectedJob?.resumeName
-                                            ? `Attached resume: ${selectedJob.resumeName}`
-                                            : "Attach resume"
-                                        }
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          setIsResumePickerOpen(
-                                            (current) => !current,
-                                          );
-                                        }}
-                                      >
-                                        <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
-                                          {selectedJob?.resumeName ??
-                                            "Attach resume"}
-                                        </span>
-                                      </button>
-                                    </div>
-                                    {isResumePickerOpen ? (
-                                      <div
-                                        id={`job-resume-picker-${job.id}`}
-                                        role="dialog"
-                                        aria-label="Attach resume"
-                                        className="dasti-jobs-detail__resume-popover dasti-toolbar-drawer-surface"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                        }}
-                                      >
-                                        {resumePickerOptions.length === 0 ? (
-                                          <div className="dasti-jobs-detail__resume-empty">
-                                            No resumes yet. Create one in CvForge.
-                                          </div>
-                                        ) : (
-                                          <div className="dasti-jobs-detail__resume-popover-list">
-                                            {resumePickerOptions.map(
-                                              (option) => (
-                                                <button
-                                                  key={option.id}
-                                                  type="button"
-                                                  className={[
-                                                    "dasti-jobs-detail__resume-option",
-                                                    option.id ===
-                                                    selectedJob?.resumeId
-                                                      ? "dasti-jobs-detail__resume-option--active"
-                                                      : "",
-                                                  ]
-                                                    .filter(Boolean)
-                                                    .join(" ")}
-                                                  aria-label={`Attach ${option.title}`}
-                                                  onClick={() => {
-                                                    void handleAttachResumeToJob(
-                                                      option.id,
-                                                    );
-                                                  }}
-                                                >
-                                                  <span className="dasti-jobs-detail__resume-option-title">
-                                                    {option.title}
-                                                  </span>
-                                                  {option.dateLabel ? (
-                                                    <span className="dasti-jobs-detail__resume-option-meta">
-                                                      {option.dateLabel}
-                                                    </span>
-                                                  ) : null}
-                                                </button>
-                                              ),
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                ) : null}
                               </>
                             ) : null}
                             <div
@@ -2592,6 +2472,148 @@ function JobsPageContent(): JSX.Element {
                       </button>
                     </div>
 
+                    <div className="dasti-jobs-command-bar" aria-label="Job actions">
+                      <div
+                        ref={resumePickerRef}
+                        className="dasti-jobs-detail__resume-picker dasti-jobs-command-bar__resume-picker"
+                      >
+                        <span className="dasti-jobs-command-bar__label">
+                          Resume
+                        </span>
+                        <div
+                          className={
+                            selectedJob.resumeName
+                              ? "styleforge-active-cv-control styleforge-active-cv-control--loaded dasti-jobs-command-bar__cv-control"
+                              : "styleforge-active-cv-control styleforge-active-cv-control--ghost dasti-jobs-command-bar__cv-control"
+                          }
+                        >
+                          <button
+                            type="button"
+                            className="styleforge-active-cv-control__icon-button"
+                            aria-label={
+                              selectedJob.resumeName
+                                ? "Remove attached resume"
+                                : "Attach resume"
+                            }
+                            onClick={() => {
+                              if (selectedJob.resumeName) {
+                                void handleDetachResumeFromJob();
+                                return;
+                              }
+                              setIsResumePickerOpen((current) => !current);
+                            }}
+                          >
+                            <span
+                              className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--base"
+                              aria-hidden
+                            >
+                              <Paperclip size={15} strokeWidth={1.8} />
+                            </span>
+                            {selectedJob.resumeName ? (
+                              <span
+                                className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--hover"
+                                aria-hidden
+                              >
+                                <X size={15} strokeWidth={1.8} />
+                              </span>
+                            ) : null}
+                          </button>
+                          <button
+                            type="button"
+                            className="styleforge-active-cv-control__body"
+                            aria-controls={`job-resume-picker-${selectedJob.id}`}
+                            aria-expanded={isResumePickerOpen}
+                            aria-haspopup="dialog"
+                            aria-label={
+                              selectedJob.resumeName
+                                ? `Attached resume: ${selectedJob.resumeName}`
+                                : "Attach resume"
+                            }
+                            onClick={() => {
+                              setIsResumePickerOpen((current) => !current);
+                            }}
+                          >
+                            <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
+                              {selectedJob.resumeName ?? "Attach resume"}
+                            </span>
+                          </button>
+                        </div>
+                        {isResumePickerOpen ? (
+                          <div
+                            id={`job-resume-picker-${selectedJob.id}`}
+                            role="dialog"
+                            aria-label="Attach resume"
+                            className="dasti-jobs-detail__resume-popover dasti-toolbar-drawer-surface"
+                          >
+                            {resumePickerOptions.length === 0 ? (
+                              <div className="dasti-jobs-detail__resume-empty">
+                                No resumes yet. Create one in CvForge.
+                              </div>
+                            ) : (
+                              <div className="dasti-jobs-detail__resume-popover-list">
+                                {resumePickerOptions.map((option) => (
+                                  <button
+                                    key={option.id}
+                                    type="button"
+                                    className={[
+                                      "dasti-jobs-detail__resume-option",
+                                      option.id === selectedJob.resumeId
+                                        ? "dasti-jobs-detail__resume-option--active"
+                                        : "",
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" ")}
+                                    aria-label={`Attach ${option.title}`}
+                                    onClick={() => {
+                                      void handleAttachResumeToJob(option.id);
+                                    }}
+                                  >
+                                    <span className="dasti-jobs-detail__resume-option-title">
+                                      {option.title}
+                                    </span>
+                                    {option.dateLabel ? (
+                                      <span className="dasti-jobs-detail__resume-option-meta">
+                                        {option.dateLabel}
+                                      </span>
+                                    ) : null}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="dasti-jobs-command-bar__status">
+                        <span className="dasti-jobs-command-bar__label">
+                          Match
+                        </span>
+                        <span className="dasti-jobs-command-bar__value">
+                          {resolveJobMatchStatus(selectedJob.matchRead)}
+                          {selectedMatchDateLabel
+                            ? ` · ${selectedMatchDateLabel}`
+                            : ""}
+                        </span>
+                      </div>
+                      <div className="dasti-jobs-command-bar__actions">
+                        <button
+                          type="button"
+                          className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
+                          onClick={() => {
+                            setSelectedJobRefreshKey((key) => key + 1);
+                          }}
+                        >
+                          Refresh Match
+                        </button>
+                        <button
+                          type="button"
+                          className="dasti-button dasti-button--sm dasti-button--pill dasti-button--primary"
+                          onClick={() => handleCreateProposal(selectedJob.id)}
+                        >
+                          Draft Proposal
+                        </button>
+                      </div>
+                    </div>
+
                     {selectedJob.matchRead ? (
                       <MatchReadBlock
                         matchRead={selectedJob.matchRead}
@@ -2612,37 +2634,6 @@ function JobsPageContent(): JSX.Element {
                         jobId={selectedJob.id}
                         enabled={isLoaded && isSignedIn && isConvexAuthenticated}
                         refreshKey={selectedJobRefreshKey}
-                      />
-                    ) : null}
-
-                    {selectedJob.nextStepBlock ? (
-                      <NextStepBlock
-                        headline={selectedJob.nextStepBlock.headline}
-                        usesCohortData={
-                          selectedJob.nextStepBlock.usesCohortData
-                        }
-                        actions={selectedJob.nextStepBlock.actions.map(
-                          (action) => ({
-                            id: action,
-                            label:
-                              action === "cover_letter"
-                                ? "Generate cover letter"
-                                : action === "resume"
-                                  ? "Open resume with this job"
-                                  : "Mark favorite",
-                          }),
-                        )}
-                        onSelectAction={(actionId) => {
-                          if (actionId === "cover_letter") {
-                            handleCreateProposal(selectedJob.id);
-                            return;
-                          }
-                          if (actionId === "resume") {
-                            handleOpenResumeWithJob(selectedJob.id);
-                            return;
-                          }
-                          void handleSetJobFavorite(selectedJob.id, true);
-                        }}
                       />
                     ) : null}
 
