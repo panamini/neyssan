@@ -852,6 +852,7 @@ describe("structured match-read evaluation matrix", () => {
     expect(evaluation.row.oldScore).toBe(0);
     expect(evaluation.row.oldTier).toBe("weak");
     expect(evaluation.row.structuredScore).toBeGreaterThan(0);
+    expect(evaluation.row.structuredTier).toBe("partial");
     expect(evaluation.row.metadataLeakCount).toBe(0);
     expect(evaluation.row.provenanceComplete).toBe(true);
   });
