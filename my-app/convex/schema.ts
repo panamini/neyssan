@@ -122,6 +122,16 @@ const structuredMatchReviewLabelChoice = v.union(
   v.literal("hard-gate issue"),
 );
 
+const structuredMatchReviewExtractionVerdictChoice = v.union(
+  v.literal("good"),
+  v.literal("too_vague"),
+  v.literal("wrong_focus"),
+  v.literal("noisy"),
+  v.literal("incomplete"),
+  v.literal("metadata_leak"),
+  v.literal("wrong_language"),
+);
+
 const matchReadSynthesisChoice = v.object({
   cacheKey: v.string(),
   status: matchReadSynthesisStatusChoice,
@@ -390,6 +400,15 @@ export default defineSchema({
     structuredScorerVersion: v.string(),
     extractionModel: v.string(),
     extractionPromptVersion: v.string(),
+    extractionSummaryVerdict: v.optional(
+      structuredMatchReviewExtractionVerdictChoice,
+    ),
+    extractionRequirementsVerdict: v.optional(
+      structuredMatchReviewExtractionVerdictChoice,
+    ),
+    extractionKeywordsVerdict: v.optional(
+      structuredMatchReviewExtractionVerdictChoice,
+    ),
     reviewedAt: v.number(),
     scorerVersion: v.object({
       model: v.string(),

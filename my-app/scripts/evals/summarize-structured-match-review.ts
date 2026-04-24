@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import {
+  STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS,
   STRUCTURED_MATCH_REVIEW_LABELS,
   STRUCTURED_MATCH_REVIEW_REQUIRED_CATEGORIES,
   buildStructuredMatchReviewReadout,
@@ -66,6 +67,20 @@ function formatMarkdown(readout: ReturnType<typeof buildStructuredMatchReviewRea
     "",
     "## Label Counts",
     ...formatCountMap(readout.labelCounts).filter((line) => !line.endsWith(": 0")),
+    "",
+    "## Extraction Verdict Counts",
+    "### Summary",
+    ...formatCountMap(readout.extractionVerdictCounts.summary).filter(
+      (line) => !line.endsWith(": 0"),
+    ),
+    "### Requirements",
+    ...formatCountMap(readout.extractionVerdictCounts.requirements).filter(
+      (line) => !line.endsWith(": 0"),
+    ),
+    "### Keywords",
+    ...formatCountMap(readout.extractionVerdictCounts.keywords).filter(
+      (line) => !line.endsWith(": 0"),
+    ),
     "",
     "## Rollout Gate Reasons",
     ...(readout.rolloutGate.reasons.length > 0
@@ -147,6 +162,21 @@ function validateReviewCases(cases: StructuredMatchReviewCase[]) {
       "labels",
       reviewCase.caseId,
     );
+    for (const [fieldName, verdict] of [
+      ["extractionSummaryVerdict", reviewCase.extractionSummaryVerdict],
+      ["extractionRequirementsVerdict", reviewCase.extractionRequirementsVerdict],
+      ["extractionKeywordsVerdict", reviewCase.extractionKeywordsVerdict],
+    ] as const) {
+      if (verdict === undefined) {
+        continue;
+      }
+      validateLiteralSet(
+        [verdict],
+        STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS,
+        fieldName,
+        reviewCase.caseId,
+      );
+    }
   }
 }
 

@@ -200,5 +200,77 @@ describe("structured match internal beta review readout", () => {
     });
     expect(readout.recommendedNextActions).toEqual([]);
   });
-});
 
+  it("counts extraction verdicts and examples without changing rollout gates", () => {
+    const cases = completeThirtyCaseReviewSet();
+    cases[0] = reviewCase("bad_summary", "admin_office", {
+      extractionSummaryVerdict: "too_vague",
+    });
+    cases[1] = reviewCase("noisy_requirements", "technical", {
+      extractionRequirementsVerdict: "noisy",
+    });
+    cases[2] = reviewCase("incomplete_requirements", "retail_service", {
+      extractionRequirementsVerdict: "incomplete",
+    });
+    cases[3] = reviewCase("bad_keywords", "healthcare_regulated", {
+      extractionKeywordsVerdict: "noisy",
+    });
+    cases[4] = reviewCase("metadata_verdict", "short_noisy_scrape", {
+      extractionSummaryVerdict: "metadata_leak",
+    });
+    cases[5] = reviewCase("wrong_language_verdict", "multilingual", {
+      extractionKeywordsVerdict: "wrong_language",
+    });
+    cases[6] = reviewCase("good_extraction", "security_licensed", {
+      extractionSummaryVerdict: "good",
+      extractionRequirementsVerdict: "good",
+      extractionKeywordsVerdict: "good",
+    });
+
+    const readout = buildStructuredMatchReviewReadout(cases);
+
+    expect(readout.extractionVerdictCounts.summary).toMatchObject({
+      good: 1,
+      too_vague: 1,
+      metadata_leak: 1,
+    });
+    expect(readout.extractionVerdictCounts.requirements).toMatchObject({
+      good: 1,
+      noisy: 1,
+      incomplete: 1,
+    });
+    expect(readout.extractionVerdictCounts.keywords).toMatchObject({
+      good: 1,
+      noisy: 1,
+      wrong_language: 1,
+    });
+    expect(readout.examples.badSummary).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ caseId: "bad_summary" }),
+        expect.objectContaining({ caseId: "metadata_verdict" }),
+      ]),
+    );
+    expect(readout.examples.noisyIncompleteRequirements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ caseId: "noisy_requirements" }),
+        expect.objectContaining({ caseId: "incomplete_requirements" }),
+      ]),
+    );
+    expect(readout.examples.badKeywords).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ caseId: "bad_keywords" }),
+        expect.objectContaining({ caseId: "wrong_language_verdict" }),
+      ]),
+    );
+    expect(readout.examples.metadataLeak).toEqual([
+      expect.objectContaining({ caseId: "metadata_verdict" }),
+    ]);
+    expect(readout.examples.wrongLanguage).toEqual([
+      expect.objectContaining({ caseId: "wrong_language_verdict" }),
+    ]);
+    expect(readout.rolloutGate).toEqual({
+      status: "ready",
+      reasons: [],
+    });
+  });
+});
