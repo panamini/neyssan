@@ -7,6 +7,7 @@ import {
   resolveReparsedLocation,
   resolveReviewItemsAfterFieldUpdate,
 } from "../canonicalJobs";
+import { buildMatchReadProfile, computeMatchRead } from "../matchRead";
 
 describe("canonicalJobs", () => {
   it("builds structured extraction records alongside legacy arrays", () => {
@@ -128,6 +129,60 @@ describe("canonicalJobs", () => {
         "farm",
         "home",
       ]),
+    );
+  });
+
+  it("keeps clean title role and requirement-like terms ahead of scraper metadata for match scoring", () => {
+    const draft = buildCanonicalJobDraftFromSource({
+      title: "Security Guard",
+      rawDescription:
+        [
+          "Location Miami Design District Store.",
+          "Status Part-time.",
+          "Compensation discussed during interview.",
+          "We are looking for a customer-facing security guard to maintain safety and prevent loss in a luxury retail store.",
+          "Responsibilities include crowd management, calm communication, observing surveillance cameras, and de-escalation with visitors.",
+          "Guard Card required and retail or loss prevention experience preferred.",
+        ].join(" "),
+      sourceUrl: "https://example.com/jobs/security-guard",
+      sourceType: "extension",
+      sourceDomain: "example.com",
+    });
+
+    expect(draft.mustHaves).toContain("Security Guard");
+    expect(draft.mustHaves.some((signal) => /required|preferred|experience/i.test(signal))).toBe(true);
+    expect(draft.keywords).not.toEqual(
+      expect.arrayContaining(["location", "status", "compensation"]),
+    );
+    expect(draft.keywords.slice(0, 4)).not.toEqual([
+      "miami",
+      "design",
+      "district",
+      "store",
+    ]);
+
+    const matchRead = computeMatchRead({
+      now: 1234,
+      profile: buildMatchReadProfile({
+        profileId: "cv_security",
+        skills: ["Security guard", "Safety compliance"],
+        keywords: ["observing", "surveillance", "investigation"],
+      }),
+      job: {
+        id: "job_security",
+        parseStatus: "parsed",
+        mustHavesExtraction: draft.mustHavesExtraction,
+        keywordsExtraction: draft.keywordsExtraction,
+      },
+    });
+
+    expect(matchRead.fallback).toBe("none");
+    expect(matchRead.score).toBeGreaterThan(0);
+    expect(matchRead.matched).toEqual(
+      expect.arrayContaining(["Security Guard"]),
+    );
+    expect(matchRead.missing).not.toEqual(
+      expect.arrayContaining(["location", "status", "compensation"]),
     );
   });
 

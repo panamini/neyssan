@@ -17,6 +17,7 @@ type MatchRead = {
   fallback:
     | "none"
     | "profile_missing"
+    | "profile_insufficient"
     | "parse_failed"
     | "requirements_missing";
 };
@@ -56,16 +57,38 @@ export function MatchReadBlock({
   }
 
   if (matchRead.fallback === "profile_missing") {
+    const hasResolvedProfile = matchRead.basedOn.profileId.trim().length > 0;
     return (
       <section className="dasti-proposal-sheet" aria-label="Match read">
         <div className="dasti-proposal-sheet__header">
           <div className="dasti-stack">
             <div className="dasti-brief-card__summary-label">Match</div>
             <div className="dasti-empty-state__title">
-              Complete your profile to see match
+              No scoring profile data available
             </div>
             <p className="dasti-empty-state__subtitle">
-              Add skills or keywords to your profile first.
+              {hasResolvedProfile
+                ? "The attached resume is available, but it has no usable skills or keywords for match scoring yet."
+                : "The attached resume could not be resolved to usable skills or keywords for match scoring yet."}
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (matchRead.fallback === "profile_insufficient") {
+    return (
+      <section className="dasti-proposal-sheet" aria-label="Match read">
+        <div className="dasti-proposal-sheet__header">
+          <div className="dasti-stack">
+            <div className="dasti-brief-card__summary-label">Match</div>
+            <div className="dasti-empty-state__title">
+              Insufficient profile data
+            </div>
+            <p className="dasti-empty-state__subtitle">
+              The attached resume only has placeholder or minimal content, so
+              match scoring is not reliable yet.
             </p>
           </div>
         </div>

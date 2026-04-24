@@ -22,6 +22,7 @@ const setJobFavoriteMock = vi.fn().mockResolvedValue(null);
 const setJobResumeMock = vi.fn().mockResolvedValue(null);
 const trackEventMock = vi.fn().mockResolvedValue(null);
 const updateFieldMock = vi.fn().mockResolvedValue(null);
+const debugInspectMatchInputMock = vi.fn();
 const windowOpenMock = vi.fn();
 const showToastMock = vi.fn();
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -155,13 +156,26 @@ const selectedJob = {
 let listResult: typeof jobsList | undefined = jobsList;
 let archivedListResult: typeof archivedJobsList | undefined = [];
 let selectedJobResult: typeof selectedJob | null | undefined = selectedJob;
+let selectedJobResultByRefreshKey: Record<number, typeof selectedJob | null> =
+  {};
+let debugPayload: Record<string, unknown> | null = null;
 let listError: Error | null = null;
+let cvLibraryResult = {
+  cvs: [{ id: "cv_alpha", title: "Primary resume", sections: [] }],
+  currentCv: null,
+};
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
     isLoading: false,
     isAuthenticated: true,
   }),
-  useQuery: (reference: string, args?: { jobId?: string } | "skip") => {
+  useConvex: () => ({
+    query: debugInspectMatchInputMock,
+  }),
+  useQuery: (
+    reference: string,
+    args?: { jobId?: string; clientRefreshKey?: number } | "skip",
+  ) => {
     if (reference === "jobsPublic.listForUser") {
       if (listError) {
         throw listError;
@@ -174,6 +188,12 @@ vi.mock("convex/react", () => ({
     if (reference === "jobsPublic.getById") {
       if (args === "skip" || !args?.jobId) {
         return undefined;
+      }
+      if (
+        args.clientRefreshKey !== undefined &&
+        args.clientRefreshKey in selectedJobResultByRefreshKey
+      ) {
+        return selectedJobResultByRefreshKey[args.clientRefreshKey];
       }
       return selectedJobResult;
     }
@@ -256,10 +276,7 @@ vi.mock("../../components/ui/toast", () => ({
 }));
 
 vi.mock("../../contexts/CvLibraryContext", () => ({
-  useCvLibrary: () => ({
-    cvs: [{ id: "cv_alpha", title: "Primary resume", sections: [] }],
-    currentCv: null,
-  }),
+  useCvLibrary: () => cvLibraryResult,
 }));
 
 function LocationProbe(): JSX.Element {
@@ -311,6 +328,28 @@ describe("JobsPage", () => {
       resumeName: undefined,
       resumeSource: undefined,
       isFavorite: false,
+    };
+    selectedJobResultByRefreshKey = {};
+    debugPayload = {
+      jobId: "job_alpha",
+      lastResumeId: null,
+      resolvedProfileId: "profile_alpha",
+      profileSkills: ["operations"],
+      profileKeywords: ["operations"],
+      summary: "Operations profile",
+      experience: [],
+      raw_text: "operations",
+      derivedKeywords: ["operations"],
+      matchReadFallback: "none",
+      score: 50,
+      matchedSignals: ["operations"],
+      missingSignals: ["Cross-functional communication"],
+    };
+    debugInspectMatchInputMock.mockReset();
+    debugInspectMatchInputMock.mockImplementation(async () => debugPayload);
+    cvLibraryResult = {
+      cvs: [{ id: "cv_alpha", title: "Primary resume", sections: [] }],
+      currentCv: null,
     };
     listError = null;
   });
@@ -512,6 +551,37 @@ describe("JobsPage", () => {
   });
 
   it("attaches a resume only to the selected job from the paperclip picker", async () => {
+    selectedJobResultByRefreshKey[1] = {
+      ...selectedJob,
+      resumeId: "cv_alpha",
+      resumeName: "Primary resume",
+      resumeSource: "job",
+      matchRead: {
+        ...selectedJob.matchRead,
+        tier: "strong",
+        score: 100,
+        confidence: "high",
+        matched: ["Primary resume keyword"],
+        missing: [],
+        basedOn: {
+          ...selectedJob.matchRead.basedOn,
+          profileId: "cv_alpha",
+        },
+      },
+    };
+    setJobResumeMock.mockImplementation(async () => {
+      debugPayload = {
+        jobId: "job_alpha",
+        lastResumeId: "cv_alpha",
+        resolvedProfileId: "cv_alpha",
+        matchReadFallback: "none",
+        score: 100,
+        matchedSignals: ["Primary resume keyword"],
+        missingSignals: [],
+      };
+      return null;
+    });
+
     render(
       <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
         <Routes>
@@ -533,10 +603,15 @@ describe("JobsPage", () => {
         resumeId: "cv_alpha",
         resumeName: "Primary resume",
       });
+      expect(
+        screen.getByRole("button", { name: "Attached resume: Primary resume" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Strong · 100%")).toBeInTheDocument();
+      expect(
+        (screen.getByLabelText("Match input debug output") as HTMLTextAreaElement)
+          .value,
+      ).toContain('"lastResumeId": "cv_alpha"');
     });
-    expect(
-      screen.getByRole("button", { name: "Attached resume: Primary resume" }),
-    ).toBeInTheDocument();
   });
 
   it("detaches the selected job resume from the paperclip picker", async () => {
@@ -574,6 +649,164 @@ describe("JobsPage", () => {
     expect(
       screen.getByRole("button", { name: "Attach a resume" }),
     ).toBeInTheDocument();
+  });
+
+  it("refreshes match and debug output on the same job after switching and detaching resumes", async () => {
+    cvLibraryResult = {
+      cvs: [
+        { id: "cv_alpha", title: "Primary resume", sections: [] },
+        { id: "cv_beta", title: "Secondary resume", sections: [] },
+      ],
+      currentCv: null,
+    };
+    selectedJobResult = {
+      ...selectedJob,
+      resumeId: "cv_alpha",
+      resumeName: "Primary resume",
+      resumeSource: "job",
+      matchRead: {
+        ...selectedJob.matchRead,
+        tier: "partial",
+        score: 50,
+        matched: ["operations"],
+        missing: ["Retail design"],
+        basedOn: {
+          ...selectedJob.matchRead.basedOn,
+          profileId: "cv_alpha",
+        },
+      },
+    };
+    selectedJobResultByRefreshKey[1] = {
+      ...selectedJob,
+      resumeId: "cv_beta",
+      resumeName: "Secondary resume",
+      resumeSource: "job",
+      matchRead: {
+        ...selectedJob.matchRead,
+        tier: "strong",
+        score: 100,
+        confidence: "high",
+        matched: ["Retail design", "Miami"],
+        missing: [],
+        basedOn: {
+          ...selectedJob.matchRead.basedOn,
+          profileId: "cv_beta",
+        },
+      },
+    };
+    selectedJobResultByRefreshKey[2] = {
+      ...selectedJob,
+      resumeId: undefined,
+      resumeName: undefined,
+      resumeSource: undefined,
+      matchRead: {
+        ...selectedJob.matchRead,
+        tier: "unknown",
+        score: null,
+        scoreVisible: false,
+        matched: [],
+        missing: ["Retail design"],
+        fallback: "profile_missing",
+        basedOn: {
+          ...selectedJob.matchRead.basedOn,
+          profileId: "",
+        },
+      },
+    };
+    setJobResumeMock.mockImplementation(
+      async ({ resumeId }: { resumeId: string | null }) => {
+        debugPayload =
+          resumeId === "cv_beta"
+            ? {
+                jobId: "job_alpha",
+                lastResumeId: "cv_beta",
+                resolvedProfileId: "cv_beta",
+                matchReadFallback: "none",
+                score: 100,
+                matchedSignals: ["Retail design", "Miami"],
+                missingSignals: [],
+              }
+            : {
+                jobId: "job_alpha",
+                lastResumeId: null,
+                resolvedProfileId: null,
+                matchReadFallback: "profile_missing",
+                score: null,
+                matchedSignals: [],
+                missingSignals: ["Retail design"],
+              };
+        return null;
+      },
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", {
+        name: "Attached resume: Primary resume",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Attached resume: Primary resume",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Attach Secondary resume" }),
+    );
+
+    await waitFor(() => {
+      expect(setJobResumeMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        resumeId: "cv_beta",
+        resumeName: "Secondary resume",
+      });
+      expect(screen.getByText("Strong · 100%")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", {
+          name: "Attached resume: Secondary resume",
+        }),
+      ).toBeInTheDocument();
+      expect(
+        (screen.getByLabelText("Match input debug output") as HTMLTextAreaElement)
+          .value,
+      ).toContain('"lastResumeId": "cv_beta"');
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Attached resume: Secondary resume",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove attached resume" }),
+    );
+
+    await waitFor(() => {
+      expect(setJobResumeMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        resumeId: null,
+        resumeName: null,
+      });
+      expect(
+        screen.getByText("No scoring profile data available"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Attach a resume" }),
+      ).toBeInTheDocument();
+      expect(
+        (screen.getByLabelText("Match input debug output") as HTMLTextAreaElement)
+          .value,
+      ).toContain('"lastResumeId": null');
+    });
   });
 
   it("marks a job as favorite from the next-step action without navigating away", async () => {
@@ -727,8 +960,14 @@ describe("JobsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit summary" }));
 
-    const summaryEditor = screen.getByRole("textbox");
-    fireEvent.change(summaryEditor, {
+    const summaryEditor = screen
+      .getAllByRole("textbox")
+      .find(
+        (element) =>
+          element.getAttribute("aria-label") !== "Match input debug output",
+      );
+    expect(summaryEditor).toBeDefined();
+    fireEvent.change(summaryEditor as HTMLElement, {
       target: { value: "Updated summary for the saved job brief." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save summary" }));
