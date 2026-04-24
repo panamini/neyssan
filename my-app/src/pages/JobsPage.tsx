@@ -879,36 +879,6 @@ function buildJobsRoute(jobId: string): string {
   return `/jobs/${encodeURIComponent(jobId)}`;
 }
 
-function formatJobMatchDate(computedAt?: number): string | null {
-  if (!computedAt || !Number.isFinite(computedAt)) {
-    return null;
-  }
-  const date = new Date(computedAt);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function resolveJobMatchStatus(matchRead: JobsPageDetail["matchRead"]): string {
-  if (!matchRead) {
-    return "No Match";
-  }
-  if (matchRead.fallback === "none") {
-    return "Matched";
-  }
-  if (
-    matchRead.fallback === "profile_missing" ||
-    matchRead.fallback === "profile_insufficient"
-  ) {
-    return "No Resume";
-  }
-  return "No Brief";
-}
-
 function buildJobsListRoute(view: JobsViewMode): string {
   return view === "archived" ? "/jobs?view=archived" : "/jobs?view=list";
 }
@@ -1387,9 +1357,6 @@ function JobsPageContent(): JSX.Element {
     [jobs, selectedJobId],
   );
   const selectedJob = optimisticSelectedJob ?? selectedJobRecord ?? null;
-  const selectedMatchDateLabel = formatJobMatchDate(
-    selectedJob?.matchRead?.computedAt,
-  );
   const selectedJobIsLoading =
     Boolean(selectedJobId) &&
     selectedJobRecord === undefined &&
@@ -2583,27 +2550,7 @@ function JobsPageContent(): JSX.Element {
                           </div>
                         ) : null}
                       </div>
-                      <div className="dasti-jobs-command-bar__status">
-                        <span className="dasti-jobs-command-bar__label">
-                          Match
-                        </span>
-                        <span className="dasti-jobs-command-bar__value">
-                          {resolveJobMatchStatus(selectedJob.matchRead)}
-                          {selectedMatchDateLabel
-                            ? ` · ${selectedMatchDateLabel}`
-                            : ""}
-                        </span>
-                      </div>
                       <div className="dasti-jobs-command-bar__actions">
-                        <button
-                          type="button"
-                          className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
-                          onClick={() => {
-                            setSelectedJobRefreshKey((key) => key + 1);
-                          }}
-                        >
-                          Refresh Match
-                        </button>
                         <button
                           type="button"
                           className="dasti-button dasti-button--sm dasti-button--pill dasti-button--primary"
@@ -2621,6 +2568,9 @@ function JobsPageContent(): JSX.Element {
                         jobTitle={selectedJob.title}
                         jobCompany={selectedJob.company}
                         jobLocation={selectedJob.location}
+                        onRefreshMatch={() => {
+                          setSelectedJobRefreshKey((key) => key + 1);
+                        }}
                       />
                     ) : null}
 
