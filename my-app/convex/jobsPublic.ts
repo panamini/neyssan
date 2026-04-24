@@ -335,7 +335,7 @@ export const getValidJobExtractionShadowByHash = internalQuery({
     }),
   ),
   handler: async (ctx, args) => {
-    const row = await ctx.db
+    const rows = await ctx.db
       .query("job_extraction_shadow")
       .withIndex("by_cache_identity", (q) =>
         q
@@ -344,7 +344,17 @@ export const getValidJobExtractionShadowByHash = internalQuery({
           .eq("prompt_version", args.promptVersion)
           .eq("validation_status", "valid"),
       )
-      .first();
+      .collect();
+    const row =
+      rows
+        .filter((candidate) => candidate.fallback_used === false)
+        .sort((a, b) => {
+          const createdAtDiff = b.created_at - a.created_at;
+          if (createdAtDiff !== 0) {
+            return createdAtDiff;
+          }
+          return b._creationTime - a._creationTime;
+        })[0] ?? null;
     if (!row) {
       return null;
     }
