@@ -35,6 +35,51 @@ const MARKDOWN_OR_CODE_RE = /```|~~~|^\s{0,3}#{1,6}\s|\[[^\]]+\]\([^)]+\)|<\/?[a
 const RAW_URL_RE = /https?:\/\/|www\./i;
 const ENGLISH_TRANSLATION_RE =
   /\b(the role|this role|you will|you'll|will be responsible|requirements include|we are looking for|candidate will|must have|nice to have)\b/i;
+const SPANISH_LANGUAGE_SIGNAL_RES = [
+  /\beducaci[oó]n\b/i,
+  /\bexperiencia\b/i,
+  /\bgestión\b/i,
+  /\boperaci[oó]n\b/i,
+  /\bverificaci[oó]n\b/i,
+  /\bdetecci[oó]n\b/i,
+  /\bdisponibilidad\b/i,
+  /\btrabajar\b/i,
+  /\bturnos?\b/i,
+  /\bfines de semana\b/i,
+  /\bfestivos?\b/i,
+  /\bhu[eé]spedes?\b/i,
+  /\bseguridad\b/i,
+  /\bmonitoreo\b/i,
+  /\bantecedentes\b/i,
+  /\bprueba de drogas\b/i,
+  /\bcapacidad para\b/i,
+  /\bconocimiento de\b/i,
+  /\bmanejo profesional\b/i,
+  /\batenci[oó]n a\b/i,
+  /\bpara trabajar\b/i,
+  /\bsolo para\b/i,
+];
+const FRENCH_LANGUAGE_SIGNAL_RES = [
+  /\bexp[eé]rience\b/i,
+  /\bcomp[eé]tences?\b/i,
+  /\bgestion\b/i,
+  /\bop[eé]rationnelle\b/i,
+  /\bplanification\b/i,
+  /\b[eé]quipe\b/i,
+  /\btravail\b/i,
+  /\bclient[eè]le\b/i,
+  /\bs[eé]curit[eé]\b/i,
+  /\bcapacit[eé]\b/i,
+  /\bconnaissance\b/i,
+  /\bdisponibilit[eé]\b/i,
+  /\bformation\b/i,
+  /\bdipl[oô]me\b/i,
+  /\bpermis\b/i,
+  /\bcertificat\b/i,
+  /\bpour travailler\b/i,
+  /\bfin de semaine\b/i,
+];
+const MIN_LANGUAGE_SIGNAL_MATCHES = 2;
 
 function compactWhitespace(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -121,17 +166,34 @@ function isMostlyFiller(value: string): boolean {
   return fillerCount / words.length > 0.72;
 }
 
+function hasConfidentLanguageSignal(value: string, patterns: RegExp[]): boolean {
+  let matches = 0;
+  for (const pattern of patterns) {
+    if (pattern.test(value)) {
+      matches += 1;
+    }
+    if (matches >= MIN_LANGUAGE_SIGNAL_MATCHES) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function violatesKnownLanguageSignal(args: {
   rawLanguageDetected?: string | null;
   values: string[];
 }): boolean {
   const language = compactWhitespace(args.rawLanguageDetected).toLowerCase();
-  if (!language.startsWith("fr")) {
-    return false;
-  }
-
   const joined = args.values.join(" ");
-  return ENGLISH_TRANSLATION_RE.test(joined);
+  const hasSpanishSignal = hasConfidentLanguageSignal(joined, SPANISH_LANGUAGE_SIGNAL_RES);
+  const hasFrenchSignal = hasConfidentLanguageSignal(joined, FRENCH_LANGUAGE_SIGNAL_RES);
+  if (language.startsWith("fr")) {
+    return ENGLISH_TRANSLATION_RE.test(joined) || hasSpanishSignal;
+  }
+  if (language.startsWith("en")) {
+    return hasSpanishSignal || hasFrenchSignal;
+  }
+  return false;
 }
 
 export function isJobLlmVisibleExtractionEnabled(
@@ -151,7 +213,15 @@ export function isUiSafeVisibleJobExtraction(args: {
   const summary = compactWhitespace(args.output.summary_short);
   const requirements = compactList(args.output.requirements.map((item) => item.value));
   const keywords = compactList(args.output.keywords_canonical);
-  const allValues = [summary, ...requirements, ...keywords].filter(Boolean);
+  const licensesOrCertifications = compactList(args.output.licenses_or_certifications);
+  const scheduleConstraints = compactList(args.output.schedule_constraints);
+  const allValues = [
+    summary,
+    ...requirements,
+    ...keywords,
+    ...licensesOrCertifications,
+    ...scheduleConstraints,
+  ].filter(Boolean);
 
   if (!summary || summary.length > MAX_SUMMARY_CHARS) {
     return false;
