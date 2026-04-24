@@ -1,4 +1,5 @@
 import React from "react";
+import { selectVisibleMissingRequirements } from "../../lib/jobs/visibleMissingRequirements";
 
 type MatchRead = {
   tier: "strong" | "partial" | "weak" | "unknown";
@@ -37,9 +38,25 @@ function formatTierLabel(tier: MatchRead["tier"]): string {
 
 export function MatchReadBlock({
   matchRead,
+  visibleRequirements = [],
+  jobTitle = null,
+  jobCompany = null,
+  jobLocation = null,
 }: {
   matchRead: MatchRead;
+  visibleRequirements?: string[];
+  jobTitle?: string | null;
+  jobCompany?: string | null;
+  jobLocation?: string | null;
 }): JSX.Element {
+  const visibleMissingRequirements = selectVisibleMissingRequirements({
+    missing: matchRead.missing,
+    visibleRequirements,
+    jobTitle,
+    jobCompany,
+    jobLocation,
+  });
+
   if (matchRead.fallback === "parse_failed") {
     return (
       <section className="dasti-proposal-sheet" aria-label="Match read">
@@ -143,11 +160,11 @@ export function MatchReadBlock({
           </div>
         ) : null}
 
-        {matchRead.missing.length > 0 ? (
+        {visibleMissingRequirements.length > 0 ? (
           <div className="dasti-brief-card__summary-block">
             <div className="dasti-brief-card__summary-label">Missing</div>
             <div className="dasti-jobs-detail-section__stack">
-              {matchRead.missing.map((item) => (
+              {visibleMissingRequirements.map((item) => (
                 <div key={`missing-${item}`} className="dasti-jobs-detail-section__item">
                   {item}
                 </div>

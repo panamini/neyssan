@@ -507,6 +507,56 @@ describe("JobsPage", () => {
     expect(screen.queryByText("Extraction dashboard")).not.toBeInTheDocument();
   });
 
+  it("cleans the displayed missing requirements without changing score or tier", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      visibleRequirements: ["Customer-facing experience"],
+      matchRead: {
+        ...selectedJob.matchRead,
+        tier: "partial",
+        score: 50,
+        missing: [
+          "Paris",
+          "Compensation",
+          "Acme",
+          "Equal opportunity employer",
+          "Customer-facing experience",
+        ],
+      },
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      within(screen.getByLabelText("Match read")).getByText(
+        "Customer-facing experience",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText("Match read")).queryByText("Paris"),
+    ).toBeNull();
+    expect(
+      within(screen.getByLabelText("Match read")).queryByText("Compensation"),
+    ).toBeNull();
+    expect(
+      within(screen.getByLabelText("Match read")).queryByText("Acme"),
+    ).toBeNull();
+    expect(
+      within(screen.getByLabelText("Match read")).queryByText(
+        "Equal opportunity employer",
+      ),
+    ).toBeNull();
+    expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.getByText("Match")).toBeInTheDocument();
+    expect(screen.queryByText("AI extracted")).not.toBeInTheDocument();
+  });
+
   it("opens the paperclip picker from the job detail header", async () => {
     render(
       <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
