@@ -55,6 +55,9 @@ type ProposalBriefCardProps = {
 };
 
 const SUMMARY_EDITOR_ID = "__summary__";
+const EMPTY_STRINGS: string[] = [];
+const EMPTY_REVIEW_ITEMS: ProposalBriefReviewItem[] = [];
+const EMPTY_LINKED_PROPOSALS: ProposalBriefLinkedProposal[] = [];
 
 function formatReviewValue(value: unknown): string {
   if (Array.isArray(value)) {
@@ -92,7 +95,7 @@ function resolveTrustLabel(args: {
   }
 
   if (args.trustState === "needs_review") {
-    return "Needs review";
+    return "Check fields";
   }
 
   if (args.parseStatus === "parsed") {
@@ -112,6 +115,19 @@ function resolveLinkedProposalHref(proposalId: string): string {
 
 function resolveJobHref(jobId: string): string {
   return `/jobs/${encodeURIComponent(jobId)}`;
+}
+
+function resolveReviewItemAnchorId(fieldKey: string): string | undefined {
+  if (fieldKey === "summary") {
+    return "job-summary";
+  }
+  if (fieldKey === "mustHaves" || fieldKey === "requirements") {
+    return "job-requirements";
+  }
+  if (fieldKey === "keywords") {
+    return "job-keywords";
+  }
+  return undefined;
 }
 
 export function resolveProposalBriefCardTitle(args: {
@@ -157,16 +173,16 @@ export function ProposalBriefCard({
   sourcePlatform = null,
   summaryText = null,
   visibleSummaryText = null,
-  requirements = [],
+  requirements = EMPTY_STRINGS,
   visibleRequirements,
-  keywords = [],
+  keywords = EMPTY_STRINGS,
   visibleKeywords,
   extractionUnavailable = false,
   parseStatus = null,
   trustState = null,
   linkedDocumentCount = 0,
-  linkedProposals = [],
-  reviewItems = [],
+  linkedProposals = EMPTY_LINKED_PROPOSALS,
+  reviewItems = EMPTY_REVIEW_ITEMS,
   onSaveField,
   onApproveReviewItem,
   onSaveReviewItem,
@@ -182,6 +198,7 @@ export function ProposalBriefCard({
   const [resolvedItems, setResolvedItems] = React.useState<
     Record<string, { reviewStatus: string; approvedValue?: unknown }>
   >({});
+  const [isPostingOpen, setIsPostingOpen] = React.useState(false);
 
   React.useEffect(() => {
     setEditingItemId(null);
@@ -334,11 +351,6 @@ export function ProposalBriefCard({
               {trustLabel ? (
                 <span className="dasti-brief-card__pill">{trustLabel}</span>
               ) : null}
-              {trustLabel ? (
-                <span className="dasti-brief-card__meta-copy">
-                  Review state: {trustLabel}
-                </span>
-              ) : null}
               {linkedDocumentCount > 0 ? (
                 <span className="dasti-brief-card__meta-copy">
                   {linkedDocumentCount} linked document
@@ -353,14 +365,6 @@ export function ProposalBriefCard({
         <div className="dasti-brief-card__summary">
           <div className="dasti-brief-card__workspace">
             <div className="dasti-brief-card__review-column">
-              {trustLabel ? (
-                <div className="dasti-brief-card__summary-block">
-                  <div className="dasti-brief-card__summary-label">
-                    Review state
-                  </div>
-                  <p className="dasti-brief-card__summary-copy">{trustLabel}</p>
-                </div>
-              ) : null}
               {extractionUnavailable ? (
                 <div className="dasti-brief-card__review-item dasti-brief-card__review-item--unavailable">
                   <div className="dasti-brief-card__review-label">
@@ -369,12 +373,12 @@ export function ProposalBriefCard({
                   <p className="dasti-brief-card__summary-copy">
                     Job read is out of order.
                     <br />
-                    Raw source stays intact.
+                    Posting stays intact.
                   </p>
                 </div>
               ) : null}
               {shouldRenderExtractedSummary ? (
-                <div className="dasti-brief-card__review-item">
+                <div className="dasti-brief-card__review-item" id="job-summary">
                   <div className="dasti-brief-card__review-head">
                     <div>
                       <div className="dasti-brief-card__review-label">
@@ -385,7 +389,7 @@ export function ProposalBriefCard({
                       <div className="dasti-brief-card__review-actions">
                         <button
                           type="button"
-                          className="dasti-brief-card__action dasti-brief-card__action--secondary"
+                          className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
                           aria-label={isSummaryEditing ? "Close summary editor" : "Edit summary"}
                           onClick={() => {
                             setEditingItemId((current) =>
@@ -417,7 +421,7 @@ export function ProposalBriefCard({
                       />
                       <button
                         type="button"
-                        className="dasti-brief-card__action"
+                        className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--accent"
                         aria-label="Save summary"
                         onClick={() => {
                           const nextValue = summaryDraft.trim();
@@ -452,6 +456,7 @@ export function ProposalBriefCard({
                     return (
                       <div
                         key={item.id}
+                        id={resolveReviewItemAnchorId(fieldKey)}
                         className="dasti-brief-card__review-item"
                         data-state={isApproved ? "success" : "warning"}
                       >
@@ -472,14 +477,14 @@ export function ProposalBriefCard({
                                   : "dasti-brief-card__review-state--pending",
                               ].join(" ")}
                             >
-                              {isApproved ? "Approved" : "Needs review"}
+                              {isApproved ? "Saved" : "Check"}
                             </div>
                           </div>
                           <div className="dasti-brief-card__review-actions">
                             {!isApproved ? (
                               <button
                                 type="button"
-                                className="dasti-brief-card__action"
+                                className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--accent"
                                 onClick={() => {
                                   setResolvedItems((current) => ({
                                     ...current,
@@ -492,12 +497,12 @@ export function ProposalBriefCard({
                                   void onApproveReviewItem?.(item);
                                 }}
                               >
-                                Approve
+                                Keep
                               </button>
                             ) : null}
                               <button
                                 type="button"
-                                className="dasti-brief-card__action dasti-brief-card__action--secondary"
+                                className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
                                 aria-label={
                                   isEditing ? `Close ${item.label} editor` : `Edit ${item.label}`
                                 }
@@ -529,7 +534,7 @@ export function ProposalBriefCard({
                             />
                             <button
                               type="button"
-                              className="dasti-brief-card__action"
+                              className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--accent"
                               aria-label={`Save ${item.label}`}
                               onClick={() => {
                                 const nextValue = Array.isArray(item.suggestedValue)
@@ -616,9 +621,33 @@ export function ProposalBriefCard({
               ) : null}
             </div>
             {shouldRenderRawSourceDock ? (
-              <aside className="dasti-brief-card__source-dock">
-                <div className="dasti-brief-card__summary-label">Raw source</div>
-                <p className="dasti-brief-card__description">{jobDescription}</p>
+              <aside
+                id="job-posting"
+                className="dasti-brief-card__source-dock"
+                data-expanded={isPostingOpen ? "true" : "false"}
+              >
+                <div className="dasti-brief-card__source-dock-head">
+                  <div>
+                    <div className="dasti-brief-card__summary-label">
+                      Imported Posting
+                    </div>
+                    <p className="dasti-brief-card__source-dock-note">
+                      Original text stays intact.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
+                    onClick={() => setIsPostingOpen((current) => !current)}
+                  >
+                    {isPostingOpen ? "Close Posting" : "Open Posting"}
+                  </button>
+                </div>
+                {isPostingOpen ? (
+                  <p className="dasti-brief-card__description">
+                    {jobDescription}
+                  </p>
+                ) : null}
               </aside>
             ) : null}
           </div>

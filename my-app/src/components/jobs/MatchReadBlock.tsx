@@ -36,6 +36,22 @@ function formatTierLabel(tier: MatchRead["tier"]): string {
   return "Unknown";
 }
 
+function formatMatchDate(computedAt: number): string | null {
+  if (!Number.isFinite(computedAt) || computedAt <= 0) {
+    return null;
+  }
+
+  const date = new Date(computedAt);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export function MatchReadBlock({
   matchRead,
   visibleRequirements = [],
@@ -49,6 +65,7 @@ export function MatchReadBlock({
   jobCompany?: string | null;
   jobLocation?: string | null;
 }): JSX.Element {
+  const [isExpanded, setIsExpanded] = React.useState(false);
   const visibleMissingRequirements = selectVisibleMissingRequirements({
     missing: matchRead.missing,
     visibleRequirements,
@@ -56,16 +73,21 @@ export function MatchReadBlock({
     jobCompany,
     jobLocation,
   });
+  const scoreLabel =
+    matchRead.scoreVisible && matchRead.score !== null
+      ? `${formatTierLabel(matchRead.tier)} · ${matchRead.score}%`
+      : formatTierLabel(matchRead.tier);
+  const computedDateLabel = formatMatchDate(matchRead.computedAt);
 
   if (matchRead.fallback === "parse_failed") {
     return (
-      <section className="dasti-proposal-sheet" aria-label="Match read">
+      <section className="dasti-proposal-sheet" aria-label="Match">
         <div className="dasti-proposal-sheet__header">
           <div className="dasti-stack">
             <div className="dasti-brief-card__summary-label">Match</div>
-            <div className="dasti-empty-state__title">Match unavailable</div>
+            <div className="dasti-empty-state__title">Posting Needs Work</div>
             <p className="dasti-empty-state__subtitle">
-              Job parsing needs attention before fit can be computed.
+              Review imported posting.
             </p>
           </div>
         </div>
@@ -76,17 +98,17 @@ export function MatchReadBlock({
   if (matchRead.fallback === "profile_missing") {
     const hasResolvedProfile = matchRead.basedOn.profileId.trim().length > 0;
     return (
-      <section className="dasti-proposal-sheet" aria-label="Match read">
+      <section className="dasti-proposal-sheet" aria-label="Match">
         <div className="dasti-proposal-sheet__header">
           <div className="dasti-stack">
             <div className="dasti-brief-card__summary-label">Match</div>
             <div className="dasti-empty-state__title">
-              No scoring profile data available
+              Resume Needs Work
             </div>
             <p className="dasti-empty-state__subtitle">
               {hasResolvedProfile
-                ? "The attached resume is available, but it has no usable skills or keywords for match scoring yet."
-                : "The attached resume could not be resolved to usable skills or keywords for match scoring yet."}
+                ? "Resume has no match data."
+                : "Attach a resume."}
             </p>
           </div>
         </div>
@@ -96,16 +118,15 @@ export function MatchReadBlock({
 
   if (matchRead.fallback === "profile_insufficient") {
     return (
-      <section className="dasti-proposal-sheet" aria-label="Match read">
+      <section className="dasti-proposal-sheet" aria-label="Match">
         <div className="dasti-proposal-sheet__header">
           <div className="dasti-stack">
             <div className="dasti-brief-card__summary-label">Match</div>
             <div className="dasti-empty-state__title">
-              Insufficient profile data
+              Resume Needs Work
             </div>
             <p className="dasti-empty-state__subtitle">
-              The attached resume only has placeholder or minimal content, so
-              match scoring is not reliable yet.
+              Resume has placeholder content.
             </p>
           </div>
         </div>
@@ -115,13 +136,13 @@ export function MatchReadBlock({
 
   if (matchRead.fallback === "requirements_missing") {
     return (
-      <section className="dasti-proposal-sheet" aria-label="Match read">
+      <section className="dasti-proposal-sheet" aria-label="Match">
         <div className="dasti-proposal-sheet__header">
           <div className="dasti-stack">
             <div className="dasti-brief-card__summary-label">Match</div>
-            <div className="dasti-empty-state__title">Match unavailable</div>
+            <div className="dasti-empty-state__title">No Requirements</div>
             <p className="dasti-empty-state__subtitle">
-              We could not find enough job requirements to compute fit yet.
+              Review imported posting.
             </p>
           </div>
         </div>
@@ -130,26 +151,66 @@ export function MatchReadBlock({
   }
 
   return (
-    <section className="dasti-proposal-sheet" aria-label="Match read">
-      <div className="dasti-proposal-sheet__header">
-        <div className="dasti-stack">
+    <section
+      id="job-match"
+      className="dasti-proposal-sheet dasti-match-read"
+      aria-label="Match"
+      data-expanded={isExpanded ? "true" : "false"}
+    >
+      <div className="dasti-proposal-sheet__header dasti-match-read__header">
+        <div className="dasti-stack dasti-match-read__copy">
           <div className="dasti-brief-card__summary-label">Match</div>
-          <div className="dasti-empty-state__title">
-            {formatTierLabel(matchRead.tier)}
-            {matchRead.scoreVisible && matchRead.score !== null
-              ? ` · ${matchRead.score}%`
-              : ""}
+          <div className="dasti-empty-state__title">{scoreLabel}</div>
+          <div className="dasti-match-read__stats">
+            <span className="dasti-match-read__stat">
+              <span className="dasti-match-read__stat-label">
+                Found in Resume
+              </span>
+              <span className="dasti-match-read__stat-value">
+                {matchRead.matched.length}
+              </span>
+            </span>
+            {visibleMissingRequirements.length > 0 ? (
+              <button
+                type="button"
+                className="dasti-match-read__stat dasti-match-read__stat--button dasti-match-read__stat--warning"
+                onClick={() => setIsExpanded(true)}
+              >
+                <span className="dasti-match-read__stat-label">
+                  Missing from Resume
+                </span>
+                <span className="dasti-match-read__stat-value">
+                  {visibleMissingRequirements.length}
+                </span>
+              </button>
+            ) : null}
+            {computedDateLabel ? (
+              <span className="dasti-match-read__stat dasti-match-read__stat--muted">
+                <span className="dasti-match-read__stat-label">Checked</span>
+                <span className="dasti-match-read__stat-value">
+                {computedDateLabel}
+                </span>
+              </span>
+            ) : null}
           </div>
           <p className="dasti-empty-state__subtitle">
-            Confidence: {matchRead.confidence}
+            Compared with {matchRead.basedOn.profileLabel} · {matchRead.confidence} confidence
           </p>
         </div>
+        <button
+          type="button"
+          className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
+          onClick={() => setIsExpanded((current) => !current)}
+        >
+          {isExpanded ? "Close Match" : "Open Match"}
+        </button>
       </div>
 
-      <div className="dasti-brief-card__summary">
+      {isExpanded ? (
+      <div className="dasti-brief-card__summary dasti-match-read__details">
         {matchRead.matched.length > 0 ? (
           <div className="dasti-brief-card__summary-block">
-            <div className="dasti-brief-card__summary-label">Why</div>
+            <div className="dasti-brief-card__summary-label">Matched</div>
             <div className="dasti-jobs-detail-section__stack">
               {matchRead.matched.map((item) => (
                 <div key={`matched-${item}`} className="dasti-jobs-detail-section__item">
@@ -180,6 +241,7 @@ export function MatchReadBlock({
           </p>
         </div>
       </div>
+      ) : null}
     </section>
   );
 }

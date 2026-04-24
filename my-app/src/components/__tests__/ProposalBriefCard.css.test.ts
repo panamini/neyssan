@@ -44,7 +44,7 @@ describe("ProposalBriefCard CSS contracts", () => {
     expect(productCss).toContain(".dasti-proposal-sheet__body--composer::before,");
     expect(productCss).toContain("content: none;");
     expect(productCss).toContain(
-      ".dasti-proposal-sheet__body--composer .dasti-proposal-sheet__body--editable {",
+      ".dasti-proposal-sheet__body--composer .dasti-proposal-source-scroll-region {",
     );
     expect(productCss).toContain("-webkit-mask-image: linear-gradient(");
     expect(productCss).toContain(
@@ -82,6 +82,9 @@ describe("ProposalBriefCard CSS contracts", () => {
     expect(productCss).toContain(".dasti-brief-card__review-item[data-state=\"success\"] {");
     expect(productCss).toContain("background: var(--color-surface-raised);");
     expect(productCss).toContain("border: 1px solid var(--color-border);");
+    expect(productCss).toContain("gap: var(--space-2);");
+    expect(productCss).not.toContain(".dasti-brief-card__action {");
+    expect(productCss).not.toContain(".dasti-brief-card__action--secondary");
     expect(productCss).not.toContain("--brief-review");
     expect(productCss).not.toContain("border-inline-start: 3px solid");
   });
