@@ -10922,6 +10922,17 @@ html:not(.dark) .dasti-proposal-submit {
   line-height: 1.55;
 }
 
+.dasti-brief-card__summary-list {
+  margin: 0;
+  color: var(--ti);
+  font-size: var(--ts);
+  line-height: 1.55;
+}
+
+.dasti-brief-card__summary-list div + div {
+  margin-top: 4px;
+}
+
 .dasti-brief-card__linked-summary {
   display: grid;
   gap: 10px;
