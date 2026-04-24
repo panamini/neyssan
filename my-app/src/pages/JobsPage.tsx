@@ -33,7 +33,41 @@ type JobsPageRouteParams = {
   jobId?: string;
 };
 
-const isJobsMatchInputDebugEnabled = import.meta.env.DEV;
+function isJobsMatchInputDebugUiEnabled(): boolean {
+  if (!import.meta.env.DEV || typeof window === "undefined") {
+    return false;
+  }
+
+  const debugWindow = window as Window & {
+    __JOBS_MATCH_READ_DEBUG__?: boolean;
+    __STRUCTURED_MATCH_READ_DEBUG__?: boolean;
+  };
+  return (
+    debugWindow.__JOBS_MATCH_READ_DEBUG__ === true ||
+    debugWindow.__STRUCTURED_MATCH_READ_DEBUG__ === true
+  );
+}
+
+type JobsStructuredShadowSummary = {
+  flagEnabled: boolean;
+  internalViewer: boolean;
+  status: "available" | "unavailable";
+  reason: string | null;
+  oldScore: number | null;
+  oldTier: "strong" | "partial" | "weak" | "unknown";
+  structuredScore: number | null;
+  structuredTier: "strong" | "partial" | "weak" | "unknown" | null;
+  matchedCount: number;
+  partialCount: number;
+  missingCount: number;
+  unknownCount: number;
+  metadataLeakCount: number;
+  provenanceComplete: boolean;
+  jobRequirementCount: number;
+  jobConstraintCount: number;
+  profileEvidenceCount: number;
+  profileConstraintCount: number;
+};
 
 type JobsMatchInputDebugPayload = {
   jobId: string;
@@ -49,6 +83,7 @@ type JobsMatchInputDebugPayload = {
   score: number | null;
   matchedSignals: string[];
   missingSignals: string[];
+  structuredShadowSummary?: JobsStructuredShadowSummary;
 };
 
 type JobsPageListItem = {
@@ -185,6 +220,158 @@ function formatJobsDebugError(error: unknown): string {
     return error.message;
   }
   return String(error ?? "Unknown error");
+}
+
+function formatDebugScore(value: number | null): string {
+  return value === null ? "null" : String(value);
+}
+
+function resolveJobsDebugPayload(
+  payload: JobsMatchInputDebugPayload | null,
+  serializedPayload?: string | null,
+): JobsMatchInputDebugPayload | null {
+  const rawPayload = payload as unknown;
+  if (typeof rawPayload === "string") {
+    try {
+      return JSON.parse(rawPayload) as JobsMatchInputDebugPayload;
+    } catch {
+      return null;
+    }
+  }
+
+  if (!payload?.structuredShadowSummary && serializedPayload) {
+    try {
+      return JSON.parse(serializedPayload) as JobsMatchInputDebugPayload;
+    } catch {
+      return payload;
+    }
+  }
+
+  return payload;
+}
+
+function JobsStructuredShadowDebugBlock({
+  payload,
+  serializedPayload,
+}: {
+  payload: JobsMatchInputDebugPayload | null;
+  serializedPayload: string | null;
+}): JSX.Element | null {
+  const resolvedPayload = resolveJobsDebugPayload(payload, serializedPayload);
+  const summary = resolvedPayload?.structuredShadowSummary;
+  if (!summary) {
+    return null;
+  }
+
+  const matchedSignals = resolvedPayload?.matchedSignals ?? [];
+  const missingSignals = resolvedPayload?.missingSignals ?? [];
+
+  return (
+    <section
+      aria-label="Structured shadow comparison"
+      data-testid="jobs-structured-shadow-debug"
+      style={{
+        border: "1px solid rgba(148, 163, 184, 0.35)",
+        borderRadius: 12,
+        padding: 12,
+        background: "rgba(255, 255, 255, 0.62)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <div className="dasti-empty-state__title">
+          Structured shadow comparison
+        </div>
+        <span className="dasti-jobs-filter-chip">Internal debug only</span>
+      </div>
+      <p className="dasti-empty-state__subtitle" style={{ marginTop: 6 }}>
+        Production score remains current match score
+      </p>
+
+      {summary.status === "unavailable" ? (
+        <div className="dasti-empty-state__subtitle" style={{ marginTop: 10 }}>
+          <strong>Unavailable reason:</strong> {summary.reason ?? "unknown"}
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 10,
+            marginTop: 12,
+          }}
+        >
+          <div>
+            <div className="dasti-empty-state__subtitle">
+              <strong>Old match</strong>
+            </div>
+            <div>score {formatDebugScore(summary.oldScore)}</div>
+            <div>tier {summary.oldTier}</div>
+            <div>matched {matchedSignals.length}</div>
+            <div>missing {missingSignals.length}</div>
+            {matchedSignals.length > 0 ? (
+              <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                {matchedSignals.map((signal) => (
+                  <li key={`matched-${signal}`}>{signal}</li>
+                ))}
+              </ul>
+            ) : null}
+            {missingSignals.length > 0 ? (
+              <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                {missingSignals.map((signal) => (
+                  <li key={`missing-${signal}`}>{signal}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+
+          <div>
+            <div className="dasti-empty-state__subtitle">
+              <strong>Structured shadow</strong>
+            </div>
+            <div>score {formatDebugScore(summary.structuredScore)}</div>
+            <div>tier {summary.structuredTier ?? "null"}</div>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                marginTop: 8,
+              }}
+            >
+              <span className="dasti-jobs-filter-chip">
+                matched {summary.matchedCount}
+              </span>
+              <span className="dasti-jobs-filter-chip">
+                partial {summary.partialCount}
+              </span>
+              <span className="dasti-jobs-filter-chip">
+                missing {summary.missingCount}
+              </span>
+              <span className="dasti-jobs-filter-chip">
+                unknown {summary.unknownCount}
+              </span>
+              <span className="dasti-jobs-filter-chip">
+                metadata leaks {summary.metadataLeakCount}
+              </span>
+              <span className="dasti-jobs-filter-chip">
+                {summary.provenanceComplete
+                  ? "provenance complete"
+                  : "provenance incomplete"}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function JobsMatchInputDebugPanel({
@@ -332,26 +519,32 @@ function JobsMatchInputDebugPanel({
       ) : payload === undefined ? (
         <div className="dasti-empty-state__subtitle">Loading debug data…</div>
       ) : (
-        <textarea
-          readOnly
-          value={serializedPayload ?? "null"}
-          rows={18}
-          aria-label="Match input debug output"
-          onFocus={(event) => event.currentTarget.select()}
-          style={{
-            width: "100%",
-            minHeight: 240,
-            resize: "vertical",
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-            fontSize: 12,
-            lineHeight: 1.5,
-            padding: 12,
-            borderRadius: 12,
-            border: "1px solid rgba(148, 163, 184, 0.35)",
-            background: "rgba(15, 23, 42, 0.04)",
-            color: "inherit",
-          }}
-        />
+        <>
+          <JobsStructuredShadowDebugBlock
+            payload={payload}
+            serializedPayload={serializedPayload}
+          />
+          <textarea
+            readOnly
+            value={serializedPayload ?? "null"}
+            rows={18}
+            aria-label="Match input debug output"
+            onFocus={(event) => event.currentTarget.select()}
+            style={{
+              width: "100%",
+              minHeight: 240,
+              resize: "vertical",
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              fontSize: 12,
+              lineHeight: 1.5,
+              padding: 12,
+              borderRadius: 12,
+              border: "1px solid rgba(148, 163, 184, 0.35)",
+              background: "rgba(15, 23, 42, 0.04)",
+              color: "inherit",
+            }}
+          />
+        </>
       )}
     </section>
   );
@@ -626,6 +819,7 @@ function JobsPageContent(): JSX.Element {
     isAuthenticated: isConvexAuthenticated,
     isLoading: isConvexAuthLoading,
   } = useConvexAuth();
+  const isJobsMatchInputDebugEnabled = isJobsMatchInputDebugUiEnabled();
   const holdListViewOpen = React.useMemo(
     () => new URLSearchParams(location.search).get("view") === "list",
     [location.search],
