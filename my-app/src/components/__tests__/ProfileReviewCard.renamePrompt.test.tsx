@@ -117,7 +117,7 @@ describe("ProfileReviewCard rename prompt", () => {
 
     render(<ProfileReviewCard />);
 
-    expect(screen.queryByText("Rename CV")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rename resume")).not.toBeInTheDocument();
     expect(
       screen.queryByPlaceholderText("e.g. Jane Doe — Product Manager"),
     ).not.toBeInTheDocument();
@@ -137,7 +137,7 @@ describe("ProfileReviewCard rename prompt", () => {
 
     render(<ProfileReviewCard />);
 
-    expect(screen.queryByText("Rename CV")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rename resume")).not.toBeInTheDocument();
     expect(
       screen.queryByPlaceholderText("e.g. Jane Doe — Product Manager"),
     ).not.toBeInTheDocument();

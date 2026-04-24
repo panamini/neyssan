@@ -1378,7 +1378,7 @@ function JobsPageContent(): JSX.Element {
       setIsResumePickerOpen(false);
     } catch (error) {
       showToast(
-        error instanceof Error ? error.message : "Could not detach the resume.",
+        error instanceof Error ? error.message : "Detach failed. Try again.",
         { variant: "error" },
       );
     }
@@ -1421,7 +1421,7 @@ function JobsPageContent(): JSX.Element {
             : current,
         );
         showToast(
-          error instanceof Error ? error.message : "Could not update favorite.",
+          error instanceof Error ? error.message : "Favorite update failed.",
           { variant: "error" },
         );
       }
@@ -1607,7 +1607,7 @@ function JobsPageContent(): JSX.Element {
       } catch (error) {
         showToast("Archive failed", {
           variant: "error",
-          description: formatJobsActionError(error, "Could not archive this job."),
+          description: formatJobsActionError(error, "Try again."),
         });
       }
     },
@@ -1624,7 +1624,7 @@ function JobsPageContent(): JSX.Element {
       } catch (error) {
         showToast("Restore failed", {
           variant: "error",
-          description: formatJobsActionError(error, "Could not restore this job."),
+          description: formatJobsActionError(error, "Try again."),
         });
       }
     },
@@ -1640,7 +1640,7 @@ function JobsPageContent(): JSX.Element {
       } catch (error) {
         showToast("Delete failed", {
           variant: "error",
-          description: formatJobsActionError(error, "Could not delete this job."),
+          description: formatJobsActionError(error, "Try again."),
         });
       }
     },
@@ -1663,7 +1663,7 @@ function JobsPageContent(): JSX.Element {
         setDuplicateTransition(null);
         showToast("Duplicate failed", {
           variant: "error",
-          description: formatJobsActionError(error, "Could not duplicate this job."),
+          description: formatJobsActionError(error, "Try again."),
         });
       }
     },
@@ -1672,9 +1672,9 @@ function JobsPageContent(): JSX.Element {
 
   const authStatusMessage =
     !isLoaded || isConvexAuthLoading
-      ? "Loading…"
+      ? "Loading"
       : !isSignedIn || !isConvexAuthenticated
-        ? "Sign in to view jobs."
+        ? "Sign in to see jobs."
         : null;
   const isJobsListLoading =
     !authStatusMessage &&
@@ -1701,8 +1701,7 @@ function JobsPageContent(): JSX.Element {
           <div className="dasti-stack">
             <h1 className="dasti-stack__title">Jobs</h1>
             <p className="dasti-stack__subtitle dasti-jobs-page__subtitle">
-              Reopen opportunities, review trust, and launch document work
-              without turning the workspace into a CRM.
+              Saved jobs. Review. Act.
             </p>
           </div>
         </div>
@@ -1715,7 +1714,7 @@ function JobsPageContent(): JSX.Element {
 
         {isJobsListLoading ? (
           <div className="dasti-hint" style={{ padding: "var(--space-5) 0" }}>
-            Loading jobs…
+            Loading jobs
           </div>
         ) : null}
 
@@ -1900,8 +1899,8 @@ function JobsPageContent(): JSX.Element {
                     </div>
                     <p className="dasti-empty-state__subtitle">
                       {jobsView === "archived"
-                        ? "Archived jobs will appear here after you archive them."
-                        : "Try a broader query or reset the trust filter."}
+                        ? "Archive a job to see it here."
+                        : "Try a wider search."}
                     </p>
                   </div>
                 ) : (
@@ -2030,7 +2029,7 @@ function JobsPageContent(): JSX.Element {
                                         aria-label={
                                           selectedJob?.resumeName
                                             ? "Remove attached resume"
-                                            : "Open resume picker"
+                                            : "Attach resume"
                                         }
                                         onClick={(event) => {
                                           event.stopPropagation();
@@ -2070,7 +2069,7 @@ function JobsPageContent(): JSX.Element {
                                         aria-label={
                                           selectedJob?.resumeName
                                             ? `Attached resume: ${selectedJob.resumeName}`
-                                            : "Attach a resume"
+                                            : "Attach resume"
                                         }
                                         onClick={(event) => {
                                           event.stopPropagation();
@@ -2081,7 +2080,7 @@ function JobsPageContent(): JSX.Element {
                                       >
                                         <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
                                           {selectedJob?.resumeName ??
-                                            "Attach CV"}
+                                            "Attach resume"}
                                         </span>
                                       </button>
                                     </div>
@@ -2089,7 +2088,7 @@ function JobsPageContent(): JSX.Element {
                                       <div
                                         id={`job-resume-picker-${job.id}`}
                                         role="dialog"
-                                        aria-label="Attach a resume"
+                                        aria-label="Attach resume"
                                         className="dasti-jobs-detail__resume-popover dasti-toolbar-drawer-surface"
                                         onClick={(event) => {
                                           event.stopPropagation();
@@ -2097,8 +2096,7 @@ function JobsPageContent(): JSX.Element {
                                       >
                                         {resumePickerOptions.length === 0 ? (
                                           <div className="dasti-jobs-detail__resume-empty">
-                                            No local resumes found yet. Create
-                                            or import one in CvForge.
+                                            No resumes yet. Create one in CvForge.
                                           </div>
                                         ) : (
                                           <div className="dasti-jobs-detail__resume-popover-list">
@@ -2257,7 +2255,7 @@ function JobsPageContent(): JSX.Element {
                                           >
                                             <span className="dasti-cv-style-presets__option-copy">
                                               <span className="dasti-cv-style-presets__option-title">
-                                                Confirm delete
+                                                Confirm
                                               </span>
                                             </span>
                                           </button>
@@ -2293,7 +2291,7 @@ function JobsPageContent(): JSX.Element {
                                         >
                                           <span className="dasti-cv-style-presets__option-copy">
                                             <span className="dasti-cv-style-presets__option-title">
-                                              Delete permanently
+                                              Delete forever
                                             </span>
                                           </span>
                                         </button>
@@ -2319,7 +2317,7 @@ function JobsPageContent(): JSX.Element {
               >
                 {!selectedJobId ? null : selectedJobIsLoading ? (
                   <div className="dasti-empty-state dasti-empty-state--panel">
-                    <div className="dasti-empty-state__title">Loading job…</div>
+                    <div className="dasti-empty-state__title">Loading job</div>
                   </div>
                 ) : !selectedJob ? (
                   <div className="dasti-empty-state dasti-empty-state--panel">
@@ -2327,8 +2325,7 @@ function JobsPageContent(): JSX.Element {
                       Job unavailable
                     </div>
                     <p className="dasti-empty-state__subtitle">
-                      This job could not be loaded. Open another job from the
-                      list to continue.
+                      Could not load this job. Open another.
                     </p>
                   </div>
                 ) : (
@@ -2444,7 +2441,7 @@ function JobsPageContent(): JSX.Element {
                                 ? "Generate cover letter"
                                 : action === "resume"
                                   ? "Open resume with this job"
-                                  : "Add to favorites",
+                                  : "Mark favorite",
                           }),
                         )}
                         onSelectAction={(actionId) => {
