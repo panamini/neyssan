@@ -11000,17 +11000,28 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-brief-card__review-item {
   display: grid;
   gap: 10px;
-  padding: 12px;
-  border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--color-border-selected) 44%, transparent);
-  background: color-mix(in srgb, var(--color-surface-muted) 90%, var(--color-accent) 10%);
+  padding: var(--space-3);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  transition:
+    background-color var(--motion-hover-duration) var(--motion-hover-ease),
+    border-color var(--motion-hover-duration) var(--motion-hover-ease),
+    box-shadow var(--motion-hover-duration) var(--motion-hover-ease),
+    transform var(--motion-press-duration) var(--motion-press-ease);
+}
+
+.dasti-brief-card__review-item[data-state="warning"] {
+  border-color: var(--color-border);
+}
+
+.dasti-brief-card__review-item[data-state="success"] {
+  border-color: var(--color-border);
 }
 
 .dasti-brief-card__review-item--unavailable {
   border-style: dashed;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--color-surface-muted) 92%, var(--color-accent) 8%), transparent),
-    color-mix(in srgb, var(--color-surface) 88%, var(--color-border-selected) 12%);
+  background: var(--color-surface);
 }
 
 .dasti-brief-card__review-head {
@@ -11027,9 +11038,14 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-brief-card__review-state {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--tm2);
+  width: fit-content;
+  margin-top: var(--space-1);
+}
+
+.dasti-brief-card__review-source {
+  color: var(--color-text-muted);
+  font-size: var(--tx);
+  line-height: 1.55;
 }
 
 .dasti-brief-card__review-actions {
@@ -11054,12 +11070,6 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-brief-card__action--secondary {
   background: color-mix(in srgb, var(--color-surface) 82%, var(--ti) 18%);
   color: var(--ti);
-}
-
-.dasti-brief-card__review-source {
-  color: var(--tm2);
-  font-size: var(--tx);
-  line-height: 1.55;
 }
 
 .dasti-brief-card__review-bullets {

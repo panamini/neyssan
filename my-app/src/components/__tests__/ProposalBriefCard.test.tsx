@@ -116,9 +116,48 @@ describe("resolveProposalBriefCardTitle", () => {
         .find((card) => card !== null) ?? null;
     expect(keywordsCard).not.toBeNull();
     const card = within(keywordsCard as HTMLElement);
-    expect(card.getByText("Needs review")).toBeInTheDocument();
+    expect(keywordsCard).toHaveAttribute("data-state", "warning");
+    expect(card.getByText("Needs review")).toHaveClass(
+      "dasti-pill",
+      "dasti-pill--warning",
+    );
     expect(card.getByRole("button", { name: "Approve" })).toBeInTheDocument();
     expect(card.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();
+  });
+
+  it("marks approved review cards with success state instead of pending warning", () => {
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Security Guard"
+          jobDescription="Raw job text"
+          reviewItems={[
+            {
+              id: "summary",
+              fieldKey: "summary",
+              label: "Summary",
+              reviewStatus: "approved",
+              suggestedValue: "Approved job summary",
+              approvedValue: "Approved job summary",
+              sourceText: "Approved job summary",
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+
+    const summaryCard = screen
+      .getByText("Summary")
+      .closest(".dasti-brief-card__review-item");
+    expect(summaryCard).not.toBeNull();
+    expect(summaryCard).toHaveAttribute("data-state", "success");
+
+    const card = within(summaryCard as HTMLElement);
+    expect(card.getByText("Approved")).toHaveClass(
+      "dasti-pill",
+      "dasti-pill--success",
+    );
+    expect(card.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
 
   it("renders LLM-backed summary requirements and keywords review cards", () => {
