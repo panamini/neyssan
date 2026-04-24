@@ -8,7 +8,8 @@ import {
 } from "./jobExtractionSchema";
 import { normalizeRawJobTextForHash } from "./normalizeJobExtraction";
 
-export const PROMPT_VERSION = "p9_v1";
+export const PROMPT_VERSION = "p9_v2";
+export const DEFAULT_JOB_EXTRACTION_MODEL = "ministral-3b-2512";
 
 const MISTRAL_CHAT_COMPLETIONS_URL = "https://api.mistral.ai/v1/chat/completions";
 const REQUEST_TIMEOUT_MS = 4000;
@@ -23,7 +24,14 @@ export type JobExtractionRequestBody = {
   model: string;
   temperature: number;
   max_tokens: number;
-  response_format: { type: "json_object" };
+  response_format: {
+    type: "json_schema";
+    json_schema: {
+      name: "normalized_job_extraction";
+      strict: true;
+      schema: Record<string, unknown>;
+    };
+  };
   messages: Array<{ role: "system" | "user"; content: string }>;
 };
 
@@ -63,6 +71,80 @@ const FALLBACK_EXTRACTION: NormalizedJobExtraction = {
   confidence: "low",
 };
 
+const BOOLEAN_OR_NULL_JSON_SCHEMA = {
+  anyOf: [{ type: "boolean" }, { type: "null" }],
+} as const;
+
+export const NORMALIZED_JOB_EXTRACTION_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "summary_short",
+    "role_title_normalized",
+    "requirements",
+    "keywords_canonical",
+    "licenses_or_certifications",
+    "schedule_constraints",
+    "environment",
+    "confidence",
+  ],
+  properties: {
+    summary_short: { type: "string" },
+    role_title_normalized: { type: "string" },
+    requirements: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["value", "type", "required"],
+        properties: {
+          value: { type: "string" },
+          type: {
+            type: "string",
+            enum: [
+              "skill",
+              "experience",
+              "tool",
+              "education",
+              "certification",
+              "language",
+              "constraint",
+            ],
+          },
+          required: { type: "boolean" },
+        },
+      },
+    },
+    keywords_canonical: {
+      type: "array",
+      items: { type: "string" },
+    },
+    licenses_or_certifications: {
+      type: "array",
+      items: { type: "string" },
+    },
+    schedule_constraints: {
+      type: "array",
+      items: { type: "string" },
+    },
+    environment: {
+      type: "object",
+      additionalProperties: false,
+      required: ["customer_facing", "retail", "physical_standing", "onsite"],
+      properties: {
+        customer_facing: BOOLEAN_OR_NULL_JSON_SCHEMA,
+        retail: BOOLEAN_OR_NULL_JSON_SCHEMA,
+        physical_standing: BOOLEAN_OR_NULL_JSON_SCHEMA,
+        onsite: BOOLEAN_OR_NULL_JSON_SCHEMA,
+      },
+    },
+    confidence: {
+      type: "string",
+      enum: ["high", "medium", "low"],
+    },
+  },
+} as const;
+
 function compactWhitespace(value: string): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
@@ -91,12 +173,21 @@ export function resolveJobExtractionModel(config: {
   mistralModel?: string | null;
   model?: string | null;
 } = llmConfig): string {
+  const configMistralModel =
+    config === llmConfig && !process.env.MISTRAL_MODEL
+      ? null
+      : config.mistralModel;
+  const configModel =
+    config === llmConfig && !process.env.LLM_MODEL
+      ? null
+      : config.model;
+
   return (
     process.env.JOB_EXTRACTION_MISTRAL_MODEL ??
     process.env.MISTRAL_MODEL ??
-    config.mistralModel ??
-    config.model ??
-    "mistral-small-latest"
+    configMistralModel ??
+    configModel ??
+    DEFAULT_JOB_EXTRACTION_MODEL
   );
 }
 
@@ -127,7 +218,14 @@ export function buildJobExtractionRequestBody(
     model,
     temperature: JOB_EXTRACTION_TEMPERATURE,
     max_tokens: JOB_EXTRACTION_MAX_TOKENS,
-    response_format: { type: "json_object" },
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "normalized_job_extraction",
+        strict: true,
+        schema: NORMALIZED_JOB_EXTRACTION_JSON_SCHEMA,
+      },
+    },
     messages: [
       {
         role: "system",
@@ -153,13 +251,14 @@ export function buildJobExtractionRequestBody(
           "- deduplicate aggressively",
           "- prefer noun phrases",
           "- output only meaningful requirements",
+          "- every requirement object must include value, type, and required",
           "",
           "LANGUAGE:",
           "- Preserve the original language of the job post.",
           "- Do not translate.",
           "- All extracted fields should remain in the same language as the source job post whenever possible.",
           "",
-          "If unsure, omit the field.",
+          "If unsure, keep required JSON keys present; use empty arrays for absent lists and null for unknown environment booleans.",
         ].join("\n"),
       },
       {

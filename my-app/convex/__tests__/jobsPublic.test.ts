@@ -11,6 +11,7 @@ import {
   listForUser,
   parseCreatedJob,
   restoreArchivedJob,
+  runShadowJobExtraction,
   setJobFavorite,
   setResumeForJob,
   storeJobExtractionShadow,
@@ -525,8 +526,8 @@ describe("jobsPublic.getById", () => {
       },
       validation_status: "valid",
       fallback_used: false,
-      model: "mistral-small-latest",
-      prompt_version: "p9_v1",
+      model: "ministral-3b-2512",
+      prompt_version: "p9_v2",
       latency_ms: 10,
       model_confidence: "medium",
       final_confidence: "medium",
@@ -1105,8 +1106,8 @@ describe("jobsPublic.debugInspectMatchInputByJobId", () => {
         },
         validation_status: "valid",
         fallback_used: false,
-        model: "mistral-small-latest",
-        prompt_version: "p9_v1",
+        model: "ministral-3b-2512",
+        prompt_version: "p9_v2",
         created_at: 100,
       },
     ];
@@ -2007,10 +2008,14 @@ describe("jobsPublic job extraction shadow cache", () => {
     validation_status: "valid",
     fallback_used: false,
     model: "mistral-small-latest",
-    prompt_version: "p9_v1",
+    prompt_version: "p9_v2",
     model_confidence: "high",
     final_confidence: "high",
     created_at: 100,
+  };
+  const ministralRow = {
+    ...validRow,
+    model: "ministral-3b-2512",
   };
 
   function buildCacheCtx(rows: Array<typeof validRow>) {
@@ -2052,7 +2057,7 @@ describe("jobsPublic job extraction shadow cache", () => {
       {
         jobTextHash: "hash_1",
         model: "mistral-small-latest",
-        promptVersion: "p9_v1",
+        promptVersion: "p9_v2",
       },
     );
 
@@ -2065,16 +2070,47 @@ describe("jobsPublic job extraction shadow cache", () => {
       {
         jobTextHash: "hash_1",
         model: "ministral-3b-2512",
-        promptVersion: "p9_v1",
+        promptVersion: "p9_v2",
       },
     );
 
     expect(result).toBeNull();
   });
 
-  it("does not cache-hit when the prompt version differs", async () => {
+  it("ignores old mistral-small-latest cache rows when current model is Ministral 3 3B", async () => {
     const result = await getValidJobExtractionShadowByHash._handler(
       buildCacheCtx([validRow]) as any,
+      {
+        jobTextHash: "hash_1",
+        model: "ministral-3b-2512",
+        promptVersion: "p9_v2",
+      },
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("cache-hits Ministral 3 3B rows under the current prompt version", async () => {
+    const result = await getValidJobExtractionShadowByHash._handler(
+      buildCacheCtx([ministralRow]) as any,
+      {
+        jobTextHash: "hash_1",
+        model: "ministral-3b-2512",
+        promptVersion: "p9_v2",
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        model: "ministral-3b-2512",
+        prompt_version: "p9_v2",
+      }),
+    );
+  });
+
+  it("ignores old p9_v1 rows under the current prompt version", async () => {
+    const result = await getValidJobExtractionShadowByHash._handler(
+      buildCacheCtx([{ ...validRow, prompt_version: "p9_v1" }]) as any,
       {
         jobTextHash: "hash_1",
         model: "mistral-small-latest",
@@ -2091,7 +2127,7 @@ describe("jobsPublic job extraction shadow cache", () => {
       {
         jobTextHash: "hash_1",
         model: "mistral-small-latest",
-        promptVersion: "p9_v1",
+        promptVersion: "p9_v2",
       },
     );
 
@@ -2134,7 +2170,7 @@ describe("jobsPublic job extraction shadow cache", () => {
       {
         jobTextHash: "hash_1",
         model: "mistral-small-latest",
-        promptVersion: "p9_v1",
+        promptVersion: "p9_v2",
       },
     );
 
@@ -2163,7 +2199,7 @@ describe("jobsPublic job extraction shadow cache", () => {
         validationStatus: "invalid_json",
         fallbackUsed: true,
         model: "mistral-small-latest",
-        promptVersion: "p9_v1",
+        promptVersion: "p9_v2",
         latencyMs: 123,
         modelConfidence: null,
         finalConfidence: "medium",
@@ -2177,6 +2213,87 @@ describe("jobsPublic job extraction shadow cache", () => {
         llm_normalized_output: null,
         validation_status: "invalid_json",
         fallback_used: true,
+      }),
+    );
+  });
+
+  it("shadow writer persists the exact resolved Ministral 3 3B model", async () => {
+    vi.stubEnv("JOB_LLM_EXTRACTION_SHADOW", "1");
+    vi.stubEnv("JOB_EXTRACTION_MISTRAL_MODEL", "ministral-3b-2512");
+    vi.stubEnv("MISTRAL_MODEL", "mistral-small-latest");
+    vi.stubEnv("MISTRAL_API_KEY", "sk-test");
+    const originalFetch = globalThis.fetch;
+    const inserts: any[] = [];
+    const job = {
+      _id: "job_shadow" as any,
+      title: "Security Guard",
+      rawDescription: "Required: guard card and weekend availability.",
+      sourceUrl: "https://example.com/security-guard",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      applicationUrl: "",
+      company: "",
+      location: "",
+    };
+    const output = {
+      summary_short: "Customer-facing security guard role",
+      role_title_normalized: "Security Guard",
+      requirements: [
+        { value: "Guard card", type: "certification", required: true },
+      ],
+      keywords_canonical: ["security"],
+      licenses_or_certifications: ["Guard card"],
+      schedule_constraints: ["Weekend availability"],
+      environment: {
+        customer_facing: true,
+        retail: true,
+        physical_standing: true,
+        onsite: true,
+      },
+      confidence: "high",
+    };
+
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: JSON.stringify(output) } }],
+      }),
+    })) as unknown as typeof fetch;
+
+    try {
+      let queryCount = 0;
+      await runShadowJobExtraction._handler(
+        {
+          runQuery: async () => {
+            queryCount += 1;
+            return queryCount === 1 ? job : null;
+          },
+          runMutation: async (_functionReference: unknown, args: any) => {
+            await storeJobExtractionShadow._handler(
+              {
+                db: {
+                  insert: async (table: string, value: unknown) => {
+                    expect(table).toBe("job_extraction_shadow");
+                    inserts.push(value);
+                  },
+                },
+              } as any,
+              args,
+            );
+          },
+        } as any,
+        { jobId: "job_shadow" as any },
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(inserts[0]).toEqual(
+      expect.objectContaining({
+        model: "ministral-3b-2512",
+        prompt_version: "p9_v2",
+        validation_status: "valid",
+        fallback_used: false,
       }),
     );
   });
