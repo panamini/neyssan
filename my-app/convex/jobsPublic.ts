@@ -251,7 +251,14 @@ function isStructuredMatchReviewLabel(
 
 function resolveStructuredMatchReviewAppGitCommitSha(): string | null {
   for (const key of STRUCTURED_MATCH_REVIEW_APP_GIT_COMMIT_SHA_ENV_KEYS) {
-    const value = String(process.env[key] ?? "").trim();
+    let value = "";
+    try {
+      value = String(process.env[key] ?? "").trim();
+    } catch {
+      // Local Convex rejects env names >=40 chars. Keep the long production key
+      // supported where available, but allow local collection to use fallbacks.
+      value = "";
+    }
     if (value) {
       return value;
     }
