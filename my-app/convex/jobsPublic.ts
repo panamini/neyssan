@@ -68,6 +68,7 @@ import {
 } from "./lib/jobs/structuredMatchRead";
 import {
   STRUCTURED_MATCH_REVIEW_LABELS,
+  STRUCTURED_MATCH_REVIEW_SCORER_VERSION,
   type StructuredMatchReviewLabel,
 } from "./lib/jobs/structuredMatchReview";
 
@@ -94,6 +95,13 @@ const STRUCTURED_MATCH_READ_INTERNAL_EMAILS_ENV =
   "STRUCTURED_MATCH_READ_INTERNAL_EMAILS";
 const STRUCTURED_MATCH_READ_INTERNAL_UI_ENV =
   "STRUCTURED_MATCH_READ_INTERNAL_UI";
+const STRUCTURED_MATCH_REVIEW_APP_GIT_COMMIT_SHA_ENV_KEYS = [
+  "STRUCTURED_MATCH_REVIEW_APP_GIT_COMMIT_SHA",
+  "APP_GIT_COMMIT_SHA",
+  "VERCEL_GIT_COMMIT_SHA",
+  "GIT_COMMIT_SHA",
+  "VITE_GIT_COMMIT_SHA",
+] as const;
 const STRUCTURED_DEBUG_METADATA_VALUES = new Set([
   "location",
   "status",
@@ -239,6 +247,17 @@ function isStructuredMatchReviewLabel(
   return STRUCTURED_MATCH_REVIEW_LABELS.includes(
     value as StructuredMatchReviewLabel,
   );
+}
+
+function resolveStructuredMatchReviewAppGitCommitSha(): string | null {
+  for (const key of STRUCTURED_MATCH_REVIEW_APP_GIT_COMMIT_SHA_ENV_KEYS) {
+    const value = String(process.env[key] ?? "").trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
 }
 
 function buildUnavailableStructuredShadow(
@@ -2099,6 +2118,12 @@ export const recordStructuredMatchReview = mutation({
     if (!isStructuredMatchReviewLabel(args.label)) {
       throw new Error("Invalid structured match review label");
     }
+    const appGitCommitSha = resolveStructuredMatchReviewAppGitCommitSha();
+    if (!appGitCommitSha) {
+      throw new Error(
+        "Structured match review versioning is not configured: missing app git commit SHA",
+      );
+    }
 
     const profiles = await listProfilesForClerk(ctx, identity.subject);
     if (profiles.length === 0) {
@@ -2168,6 +2193,8 @@ export const recordStructuredMatchReview = mutation({
       (sourceProfile as any)?.profileId ?? (sourceProfile as any)?._id ?? "",
     );
     const normalizedNotes = String(args.notes ?? "").trim();
+    const extractionModel = resolveJobExtractionModel();
+    const reviewedAt = Date.now();
     const reviewId = await ctx.db.insert("structured_match_reviews", {
       reviewerId: identity.subject,
       reviewerEmail: identity.email ?? null,
@@ -2188,11 +2215,16 @@ export const recordStructuredMatchReview = mutation({
       provenanceComplete: summary.provenanceComplete,
       reviewerLabel: args.label,
       ...(normalizedNotes ? { notes: normalizedNotes } : {}),
+      appGitCommitSha,
+      structuredScorerVersion: STRUCTURED_MATCH_REVIEW_SCORER_VERSION,
+      extractionModel,
+      extractionPromptVersion: PROMPT_VERSION,
+      reviewedAt,
       scorerVersion: {
-        model: resolveJobExtractionModel(),
+        model: extractionModel,
         promptVersion: PROMPT_VERSION,
       },
-      createdAt: Date.now(),
+      createdAt: reviewedAt,
     });
 
     return { reviewId: String(reviewId) };

@@ -386,6 +386,11 @@ export default defineSchema({
     provenanceComplete: v.boolean(),
     reviewerLabel: structuredMatchReviewLabelChoice,
     notes: v.optional(v.string()),
+    appGitCommitSha: v.string(),
+    structuredScorerVersion: v.string(),
+    extractionModel: v.string(),
+    extractionPromptVersion: v.string(),
+    reviewedAt: v.number(),
     scorerVersion: v.object({
       model: v.string(),
       promptVersion: v.string(),
