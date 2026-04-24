@@ -153,7 +153,7 @@ function isGenericProposalTitle(value: string): boolean {
 
 function resolveDocumentTitles(
   entries: Array<Pick<SidebarDoc, "key" | "rawTitle">>,
-  baseLabel: "Resume" | "Proposal",
+  baseLabel: "Resume" | "Cover letter",
   isGenericTitle: (value: string) => boolean,
 ): Map<string, string> {
   const titles = new Map<string, string>();
@@ -170,8 +170,8 @@ function resolveDocumentTitles(
     titles.set(
       entry.key,
       untitledCount === 1
-        ? `Untitled ${baseLabel}`
-        : `Untitled ${baseLabel} ${untitledCount}`,
+        ? `Untitled ${baseLabel.toLowerCase()}`
+        : `Untitled ${baseLabel.toLowerCase()} ${untitledCount}`,
     );
   }
 
@@ -311,7 +311,7 @@ function SidebarDocumentSection({
             to={allHref}
             className="sb-section__all-link"
           >
-            {`All ${allLabel.toLowerCase()} (${allCount}) →`}
+            {`All ${allLabel.toLowerCase()} (${allCount})`}
           </Link>
         </>
       ) : (
@@ -752,7 +752,7 @@ export const Sidebar: React.FC = () => {
           ? String(currentCv.id)
           : null;
   const activeResumeTitle = activeResumeKey
-    ? resumeTitles.get(activeResumeKey) ?? "Untitled Resume"
+    ? resumeTitles.get(activeResumeKey) ?? "Untitled resume"
     : null;
   const activeResumeHref = activeResumeKey
     ? `/cv?id=${encodeURIComponent(activeResumeKey)}`
@@ -763,7 +763,7 @@ export const Sidebar: React.FC = () => {
         .slice(0, MAX_RECENT_ITEMS)
         .map((doc) => ({
           key: doc.key,
-          title: resumeTitles.get(doc.key) ?? "Untitled Resume",
+          title: resumeTitles.get(doc.key) ?? "Untitled resume",
           href: `/cv?id=${encodeURIComponent(doc.key)}`,
           onFollow: doc.onOpen,
           onDelete: () => handleDeleteResume(doc.key),
@@ -798,7 +798,7 @@ export const Sidebar: React.FC = () => {
     const normalizedTitle =
       normalizeLabel(effectiveProposalOutputDraft.proposalDocumentTitle) ||
       normalizeLabel(effectiveProposalComposeDraft?.jobTitle) ||
-      "Saved proposal";
+      "Saved cover letter";
     const optimisticTimestamp = Date.now();
 
     return {
@@ -914,14 +914,14 @@ export const Sidebar: React.FC = () => {
     () =>
       resolveDocumentTitles(
         proposalDocsForTitles,
-        "Cover Letter",
+        "Cover letter",
         isGenericProposalTitle,
       ),
     [proposalDocsForTitles],
   );
 
   const activeProposalTitle = activeProposalKey
-    ? proposalTitles.get(activeProposalKey) ?? "Untitled Cover Letter"
+    ? proposalTitles.get(activeProposalKey) ?? "Untitled cover letter"
     : null;
 
   const recentProposalItems = React.useMemo(
@@ -930,7 +930,7 @@ export const Sidebar: React.FC = () => {
         .slice(0, MAX_RECENT_ITEMS)
         .map((doc) => ({
           key: doc.key,
-          title: proposalTitles.get(doc.key) ?? "Untitled Cover Letter",
+          title: proposalTitles.get(doc.key) ?? "Untitled cover letter",
           href:
             doc.key === "__draft__" ? "/proposal" : buildSavedProposalHref(doc.key),
           onFollow:
@@ -1025,7 +1025,7 @@ export const Sidebar: React.FC = () => {
       {sidebarCollapsed ? (
         <nav className="sb__nav sb__nav--rail" aria-label="Primary sidebar">
           <SidebarRailButton
-            label="Quick Start"
+            label="Start"
             icon={<Check size={16} strokeWidth={1.5} aria-hidden="true" />}
             active={false}
             onClick={handleOpenQuickStart}
@@ -1086,7 +1086,7 @@ export const Sidebar: React.FC = () => {
         <nav className="sb__nav sb__nav--stack" aria-label="Primary sidebar">
           <div
             className="sb-section"
-            aria-label="Quick Start"
+            aria-label="Start"
             style={{ paddingBottom: "var(--space-2)" }}
           >
             <button
@@ -1101,7 +1101,7 @@ export const Sidebar: React.FC = () => {
                 textAlign: "left",
               }}
             >
-              Quick Start
+              Start
             </button>
           </div>
 
@@ -1120,7 +1120,7 @@ export const Sidebar: React.FC = () => {
           <SidebarDocumentSection
             sectionLabel="Resumes"
             hasDocuments={hasResumeDocuments}
-            createLabel="New Resume"
+            createLabel="New resume"
             allLabel="Resumes"
             allCount={resumeDocs.length}
             items={recentResumeItems}
@@ -1131,7 +1131,7 @@ export const Sidebar: React.FC = () => {
           <SidebarDocumentSection
             sectionLabel="Cover letters"
             hasDocuments={hasProposalDocuments}
-            createLabel="New Cover Letter"
+            createLabel="New cover letter"
             allLabel="Cover letters"
             allCount={proposalTotalCount}
             items={recentProposalItems}
@@ -1170,7 +1170,7 @@ export const Sidebar: React.FC = () => {
         {!sidebarCollapsed ? (
           <div className="sb-footer__account">
             <div className="sb-footer__title">
-              {user?.firstName ?? user?.username ?? "Account"}
+              {user?.firstName ?? user?.username ?? "You"}
             </div>
             <div className="sb-footer__subtitle">
               {isConvexAuthLoading
@@ -1200,9 +1200,9 @@ export const Sidebar: React.FC = () => {
               onClick={toggleDarkMode}
               aria-pressed={isDarkMode}
               aria-label={
-                isDarkMode ? "Switch to light mode" : "Switch to dark mode"
+                isDarkMode ? "Light mode" : "Dark mode"
               }
-              title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+              title={isDarkMode ? "Light mode" : "Dark mode"}
             >
               {isDarkMode ? (
                 <Sun size={14} strokeWidth={1.6} aria-hidden="true" />

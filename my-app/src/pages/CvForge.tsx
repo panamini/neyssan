@@ -568,9 +568,9 @@ export function CvForge(): JSX.Element {
     [authoritativeResume],
   );
   const hasTrustedExport = authoritativeExportModel !== null;
-  const exportStatusLabel = hasTrustedExport ? "ATS Ready" : "Standard Export";
+  const exportStatusLabel = hasTrustedExport ? "ATS Ready" : "Standard export";
   const exportStatusDescription = hasTrustedExport
-    ? "Trusted Mistral v3"
+    ? "Mistral v3"
     : "Not ATS-verified";
 
   const handleResumeExport = React.useCallback(
@@ -586,7 +586,7 @@ export function CvForge(): JSX.Element {
       );
 
       if (!currentCv) {
-        showToast("Open or create a CV before exporting", {
+        showToast("Open a resume first.", {
           variant: "warning",
         });
         return;
@@ -598,9 +598,9 @@ export function CvForge(): JSX.Element {
         request.format === "pdf" ? `pdf:${request.mode}` : request.format;
       setExportingFormat(exportKey);
       try {
-        const exported =
+        await (
           request.format === "pdf" || request.format === "docx"
-            ? await (async () => {
+            ? (async () => {
                 const source =
                   request.format === "pdf" && request.mode === "styled"
                     ? buildStyledResumePrintSource({
@@ -682,18 +682,19 @@ export function CvForge(): JSX.Element {
                 });
               })()
             : hasTrustedExport && authoritativeResume
-              ? await downloadAuthoritativeResumeExport({
+              ? downloadAuthoritativeResumeExport({
                   authoritativeResume,
                   format: request.format,
                 })
-              : await downloadStandardResumeExport({
+              : downloadStandardResumeExport({
                   document: exportCurrentCv,
                   format: request.format,
-                });
-        showToast(`Exported ${exported.filename}`, { variant: "success" });
+                })
+        );
+        showToast("Exported.", { variant: "success" });
       } catch (error) {
         console.error("[CvForge] export failed", error);
-        showToast("Resume export failed", { variant: "error" });
+        showToast("Export failed.", { variant: "error" });
       } finally {
         setExportingFormat(null);
       }
@@ -900,7 +901,7 @@ export function CvForge(): JSX.Element {
       className="dasti-icon-button"
       aria-label="Open resume preview"
       onClick={() => setWorkspaceMode("preview")}
-      data-toolbar-tooltip="Switch to preview"
+      data-toolbar-tooltip="Preview"
       data-no-pan="true"
     >
       <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
@@ -919,9 +920,9 @@ export function CvForge(): JSX.Element {
     <button
       type="button"
       className="dasti-cv-workbench-toggle__button"
-      aria-label="Back to resume editing"
+      aria-label="Open resume edit"
       onClick={() => setWorkspaceMode("edit")}
-      data-toolbar-tooltip="Back to edit"
+      data-toolbar-tooltip="Edit"
       data-no-pan="true"
     >
       <PenLine size={15} strokeWidth={1.9} aria-hidden="true" />

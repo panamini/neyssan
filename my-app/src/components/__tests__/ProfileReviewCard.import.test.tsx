@@ -126,9 +126,9 @@ describe("ProfileReviewCard import", () => {
 
     const { container } = render(<ProfileReviewCard />);
 
-    expect(screen.getByRole("button", { name: "Import CV" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import resume" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Import CV" }));
+    await user.click(screen.getByRole("button", { name: "Import resume" }));
     const input = container.querySelector(
       'input[type="file"]',
     ) as HTMLInputElement | null;
@@ -165,7 +165,7 @@ describe("ProfileReviewCard import", () => {
     render(<ProfileReviewCard />);
 
     expect(
-      screen.queryByText(/Import your existing CV or start from scratch/i),
+      screen.queryByText(/No resume\. Import or start fresh/i),
     ).not.toBeInTheDocument();
   });
 
@@ -271,7 +271,7 @@ describe("ProfileReviewCard import", () => {
     await user.click(screen.getByRole("button", { name: "Manage sections" }));
 
     expect(screen.getByText("Add sections")).toBeInTheDocument();
-    expect(screen.getByText("Remove optional sections")).toBeInTheDocument();
+    expect(screen.getByText("Remove sections")).toBeInTheDocument();
     expect(screen.getByText("Languages")).toBeInTheDocument();
     expect(screen.getByText("Remove Achievements")).toBeInTheDocument();
   });
@@ -351,7 +351,7 @@ describe("ProfileReviewCard import", () => {
 
     const view = render(<ProfileReviewCard />);
 
-    await user.click(screen.getByRole("button", { name: "Import CV" }));
+    await user.click(screen.getByRole("button", { name: "Import resume" }));
 
     const input = view.container.querySelector(
       'input[type="file"]',
@@ -432,7 +432,7 @@ describe("ProfileReviewCard import", () => {
 
     const { container } = render(<ProfileReviewCard />);
 
-    await user.click(screen.getByRole("button", { name: "Import CV" }));
+    await user.click(screen.getByRole("button", { name: "Import resume" }));
 
     const input = container.querySelector(
       'input[type="file"]',
@@ -471,7 +471,7 @@ describe("ProfileReviewCard import", () => {
 
     const { container } = render(<ProfileReviewCard />);
 
-    await user.click(screen.getByRole("button", { name: "Import CV" }));
+    await user.click(screen.getByRole("button", { name: "Import resume" }));
 
     expect(
       screen.queryByRole("button", { name: /Import text PDF or TXT/i }),
@@ -483,7 +483,7 @@ describe("ProfileReviewCard import", () => {
     expect(
       screen.queryByText(/Image-based PDF, screenshot, or photo/i),
     ).toBeNull();
-    expect(screen.getByRole("button", { name: "Import CV" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import resume" })).toBeInTheDocument();
   });
 
   it("shows a dismissible import warning banner before the inline review list", async () => {
@@ -506,7 +506,7 @@ describe("ProfileReviewCard import", () => {
       screen.getByRole("status", { name: "Import warning" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Review flagged fields" }),
+      screen.getByRole("button", { name: "Review flags" }),
     ).toBeInTheDocument();
     expect(
       screen.getByLabelText("Import review checks"),
@@ -628,7 +628,7 @@ describe("ProfileReviewCard import", () => {
 
     render(<ProfileReviewCard />);
 
-    expect(screen.queryByText("Rename CV")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rename resume")).not.toBeInTheDocument();
     expect(renameCvMock).not.toHaveBeenCalled();
   });
 
@@ -660,7 +660,7 @@ describe("ProfileReviewCard import", () => {
 
     const view = render(<ProfileReviewCard />);
 
-    expect(screen.queryByText("Rename CV")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rename resume")).not.toBeInTheDocument();
 
     cvLibraryState.currentCv = {
       ...cvLibraryState.currentCv,
@@ -689,7 +689,7 @@ describe("ProfileReviewCard import", () => {
     view.rerender(<ProfileReviewCard />);
 
     await waitFor(() => {
-      expect(screen.queryByText("Rename CV")).not.toBeInTheDocument();
+      expect(screen.queryByText("Rename resume")).not.toBeInTheDocument();
     });
   });
 
@@ -713,7 +713,7 @@ describe("ProfileReviewCard import", () => {
 
     expect(exportCvMock).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("button", { name: "Review flagged fields again" }),
+      screen.getByRole("button", { name: "Review again" }),
     ).toBeInTheDocument();
   });
 
@@ -734,7 +734,7 @@ describe("ProfileReviewCard import", () => {
     render(<ProfileReviewCard />);
 
     const reviewToggle = screen.getByRole("button", {
-      name: "Review import changes",
+      name: "Review import",
     });
     const reviewSection = screen.getByLabelText("Import review checks");
 
@@ -744,16 +744,16 @@ describe("ProfileReviewCard import", () => {
     await user.click(reviewToggle);
 
     expect(reviewToggle).toHaveAttribute("aria-expanded", "true");
-    expect(reviewToggle).toHaveAccessibleName("Review import changes");
+    expect(reviewToggle).toHaveAccessibleName("Review import");
     expect(reviewSection).toHaveAttribute("data-collapsed", "false");
     expect(
-      screen.getByText("Clean flagged parser noise here before generating proposals."),
+      screen.getByText("Clean flagged fields before drafting."),
     ).toBeInTheDocument();
 
     await user.click(reviewToggle);
 
     expect(reviewToggle).toHaveAttribute("aria-expanded", "true");
-    expect(reviewToggle).toHaveAccessibleName("Review import changes");
+    expect(reviewToggle).toHaveAccessibleName("Review import");
     expect(reviewSection).toHaveAttribute("data-collapsed", "false");
   });
 
@@ -773,7 +773,7 @@ describe("ProfileReviewCard import", () => {
 
     render(<ProfileReviewCard />);
 
-    await user.click(screen.getByRole("button", { name: "Review import changes" }));
+    await user.click(screen.getByRole("button", { name: "Review import" }));
     expect(screen.getByLabelText("Import review checks")).toHaveAttribute(
       "data-collapsed",
       "false",
@@ -830,7 +830,7 @@ describe("ProfileReviewCard import", () => {
     const { container } = render(<ProfileReviewCard />);
 
     expect(
-      screen.getAllByRole("button", { name: "Resume recovery review" }).length,
+      screen.getAllByRole("button", { name: "Open recovery" }).length,
     ).toBeGreaterThan(0);
 
     await user.click(
@@ -884,10 +884,10 @@ describe("ProfileReviewCard import", () => {
 
     const banner = screen.getByRole("status", { name: "Import warning" });
     expect(
-      within(banner).getByRole("button", { name: "Review flagged fields" }),
+      within(banner).getByRole("button", { name: "Review flags" }),
     ).toBeInTheDocument();
     await user.click(
-      within(banner).getByRole("button", { name: "Resume recovery review" }),
+      within(banner).getByRole("button", { name: "Open recovery" }),
     );
 
     expect(screen.getByLabelText("Import recovery review")).toBeInTheDocument();
@@ -936,7 +936,7 @@ describe("ProfileReviewCard import", () => {
     const { container } = render(<ProfileReviewCard />);
 
     expect(
-      screen.getAllByRole("button", { name: "Reopen recovery workspace" }).length,
+      screen.getAllByRole("button", { name: "Reopen recovery" }).length,
     ).toBeGreaterThan(0);
     expect(
       screen.getByText(/Recovery review saved — reopen 1 reviewed item/i),
@@ -996,7 +996,7 @@ describe("ProfileReviewCard import", () => {
     await user.click(screen.getAllByRole("button", { name: "Close recovery workspace" })[0]);
 
     expect(screen.queryByLabelText("Import recovery review")).toBeNull();
-    expect(screen.getAllByRole("button", { name: "Reopen recovery workspace" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Reopen recovery" }).length).toBeGreaterThan(0);
   });
 
   it("clears local recovery UI when switching to a brand-new resume", async () => {
@@ -1038,7 +1038,7 @@ describe("ProfileReviewCard import", () => {
 
     const view = render(<ProfileReviewCard />);
 
-    await user.click(screen.getAllByRole("button", { name: "Reopen recovery workspace" })[0]);
+    await user.click(screen.getAllByRole("button", { name: "Reopen recovery" })[0]);
     expect(screen.getByLabelText("Import recovery review")).toBeInTheDocument();
 
     cvLibraryState.currentCv = {
@@ -1107,7 +1107,7 @@ describe("ProfileReviewCard import", () => {
 
     view.rerender(<ProfileReviewCard />);
 
-    expect(screen.queryByRole("button", { name: "Reopen recovery workspace" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reopen recovery" })).toBeNull();
   });
 
   it("includes the new text-backed sections in the add sections drawer", () => {
@@ -1224,7 +1224,7 @@ describe("ProfileReviewCard import", () => {
       screen.getByText(/Import review incomplete — 1 item pending/i),
     ).toBeInTheDocument();
     expect(
-      screen.getAllByRole("button", { name: "Resume recovery review" }).length,
+      screen.getAllByRole("button", { name: "Open recovery" }).length,
     ).toBeGreaterThan(0);
   });
 
@@ -1280,7 +1280,7 @@ describe("ProfileReviewCard import", () => {
         screen.queryByText(/Import review incomplete — 1 item pending/i),
       ).not.toBeInTheDocument();
       expect(
-        screen.getAllByRole("button", { name: "Resume recovery review" }).length,
+        screen.getAllByRole("button", { name: "Open recovery" }).length,
       ).toBeGreaterThan(0);
     } finally {
       vi.useRealTimers();
@@ -1330,7 +1330,7 @@ describe("ProfileReviewCard import", () => {
 
     expect(screen.queryByText(/Import review incomplete — 1 item pending/i)).toBeNull();
     expect(
-      screen.getAllByRole("button", { name: "Resume recovery review" }).length,
+      screen.getAllByRole("button", { name: "Open recovery" }).length,
     ).toBeGreaterThan(0);
   });
 
@@ -1386,7 +1386,7 @@ describe("ProfileReviewCard import", () => {
         screen.queryByText(/Recovery review saved — reopen 1 reviewed item/i),
       ).not.toBeInTheDocument();
       expect(
-        screen.getAllByRole("button", { name: "Reopen recovery workspace" }).length,
+        screen.getAllByRole("button", { name: "Reopen recovery" }).length,
       ).toBeGreaterThan(0);
     } finally {
       vi.useRealTimers();
@@ -1416,7 +1416,7 @@ describe("ProfileReviewCard import", () => {
       actionGroup?.querySelector('[aria-label="Export ATS PDF"]'),
     ).not.toBeNull();
     expect(
-      actionGroup?.querySelector('[aria-label="Review import changes"]'),
+      actionGroup?.querySelector('[aria-label="Review import"]'),
     ).not.toBeNull();
   });
 
