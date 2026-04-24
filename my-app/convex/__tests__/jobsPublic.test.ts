@@ -1602,6 +1602,126 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
       "Structured match review versioning is not configured: missing app git commit SHA",
     );
   });
+
+  it("uses the short app git commit fallback for local Convex collection", async () => {
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+    vi.stubEnv("APP_GIT_COMMIT_SHA", "localfallbacksha");
+
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        profileId: "cv_primary",
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        skills: ["Airtable"],
+        keywords: ["Airtable", "Program management"],
+        summary: "Operations lead with Airtable and program management experience.",
+        email: "primary@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_review_structured",
+      _creationTime: 100,
+      userId: "profile_primary",
+      title: "Operations role",
+      company: "Acme",
+      location: "Remote",
+      isSample: false,
+      isFavorite: false,
+      sourceUrl: "https://example.com/job",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      applicationUrl: "",
+      parseStatus: "parsed",
+      parseVersion: "v1b",
+      reviewState: "ready",
+      status: "active",
+      importedAt: 100,
+      updatedAt: 100,
+      lastOpenedAt: 100,
+      archivedAt: null,
+      lastResumeId: "cv_primary",
+      rawLanguageDetected: "en",
+      mustHaves: ["Airtable"],
+      keywords: [],
+      mustHavesExtraction: [],
+      keywordsExtraction: [],
+      reviewItems: [],
+    };
+    const inserts: Array<{ table: string; value: Record<string, unknown> }> = [];
+
+    await recordStructuredMatchReview._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({
+            subject: "clerk_123",
+            email: "internal@example.com",
+          }),
+        },
+        db: {
+          normalizeId: () => job._id,
+          get: async () => job,
+          insert: async (table: string, value: Record<string, unknown>) => {
+            inserts.push({ table, value });
+            return "structured_review_1";
+          },
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex: (_indexName: string, buildIndex: any) => {
+                  buildIndex({ eq: (_field: string, value: string) => value });
+                  return { collect: async () => linkedProfiles };
+                },
+              };
+            }
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex: (_indexName: string, buildIndex: any) => {
+                  buildIndex({ eq: (_field: string, value: string) => value });
+                  return {
+                    collect: async () => [
+                      {
+                        llm_normalized_output: {
+                          summary_short: "Operations role.",
+                          role_title_normalized: "Operations Manager",
+                          requirements: [
+                            { value: "Airtable", type: "skill", required: true },
+                          ],
+                          keywords_canonical: ["Airtable"],
+                          licenses_or_certifications: [],
+                          schedule_constraints: [],
+                          environment: {
+                            customer_facing: null,
+                            retail: null,
+                            physical_standing: null,
+                            onsite: null,
+                          },
+                          confidence: "high",
+                        },
+                        validation_status: "valid",
+                        fallback_used: false,
+                        model: "ministral-3b-2512",
+                        prompt_version: "p9_v2",
+                        created_at: 100,
+                      },
+                    ],
+                  };
+                },
+              };
+            }
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: job._id, label: "good" },
+    );
+
+    expect(inserts[0]?.value.appGitCommitSha).toBe("localfallbacksha");
+  });
 });
 
 describe("jobsPublic.setResumeForJob", () => {
