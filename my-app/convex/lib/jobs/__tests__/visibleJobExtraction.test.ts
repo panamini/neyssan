@@ -79,6 +79,45 @@ const spanishSecurityOutput: NormalizedJobExtraction = {
   confidence: "high",
 };
 
+const italianSecurityOutput: NormalizedJobExtraction = {
+  ...englishOutput,
+  summary_short:
+    "Sicurezza alberghiera con gestione degli ospiti e monitoraggio dei sistemi.",
+  role_title_normalized: "Addetto alla Sicurezza",
+  requirements: [
+    { value: "Esperienza nella gestione dei sistemi CCTV", type: "experience", required: true },
+    { value: "Disponibilità a lavorare su turni e fine settimana", type: "constraint", required: true },
+  ],
+  keywords_canonical: ["sicurezza", "gestione ospiti", "turni"],
+  schedule_constraints: ["turni", "fine settimana", "festivi"],
+};
+
+const portugueseSecurityOutput: NormalizedJobExtraction = {
+  ...englishOutput,
+  summary_short:
+    "Segurança hoteleira com atendimento a hóspedes e monitoramento de sistemas.",
+  role_title_normalized: "Assistente de Segurança",
+  requirements: [
+    { value: "Experiência em gestão de sistemas CCTV", type: "experience", required: true },
+    { value: "Disponibilidade para trabalhar em turnos e fins de semana", type: "constraint", required: true },
+  ],
+  keywords_canonical: ["segurança", "hóspedes", "turnos"],
+  schedule_constraints: ["turnos", "fins de semana", "feriados"],
+};
+
+const germanSecurityOutput: NormalizedJobExtraction = {
+  ...englishOutput,
+  summary_short:
+    "Hotelsicherheit mit Betreuung von Gästen und Überwachung von Systemen.",
+  role_title_normalized: "Sicherheitsmitarbeiter",
+  requirements: [
+    { value: "Erfahrung mit der Verwaltung von CCTV-Systemen", type: "experience", required: true },
+    { value: "Verfügbarkeit für Schichten, Wochenenden und Feiertage", type: "constraint", required: true },
+  ],
+  keywords_canonical: ["Sicherheit", "Gäste", "Schichten"],
+  schedule_constraints: ["Schichten", "Wochenenden", "Feiertage"],
+};
+
 const technicalEnglishOutput: NormalizedJobExtraction = {
   ...englishOutput,
   summary_short: "Builds SaaS reporting tools with React, SQL, and HIPAA-aware workflows.",
@@ -267,6 +306,22 @@ describe("selectVisibleJobExtraction", () => {
     });
   });
 
+  it.each([
+    ["Italian", italianSecurityOutput],
+    ["Portuguese", portugueseSecurityOutput],
+    ["German", germanSecurityOutput],
+  ])("rejects %s LLM output for an English source job", (_language, output) => {
+    expect(
+      select({
+        rawLanguageDetected: "en",
+        shadowRows: [row({ llm_normalized_output: output })],
+      }),
+    ).toMatchObject({
+      source: "heuristic",
+      summary: "Heuristic summary",
+    });
+  });
+
   it("accepts English LLM output for an English source job", () => {
     expect(
       select({
@@ -293,6 +348,20 @@ describe("selectVisibleJobExtraction", () => {
 
     expect(result.source).toBe("llm");
     expect(result.summary).toBe(baseOutput.summary_short);
+  });
+
+  it.each([
+    ["it", italianSecurityOutput],
+    ["pt-BR", portugueseSecurityOutput],
+    ["de", germanSecurityOutput],
+  ])("accepts %s LLM output for a matching source job", (rawLanguageDetected, output) => {
+    const result = select({
+      rawLanguageDetected,
+      shadowRows: [row({ llm_normalized_output: output })],
+    });
+
+    expect(result.source).toBe("llm");
+    expect(result.summary).toBe(output.summary_short);
   });
 
   it("does not treat technical acronyms and named codes as wrong-language signals", () => {
