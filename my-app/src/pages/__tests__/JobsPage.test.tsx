@@ -15,6 +15,9 @@ const archiveJobMock = vi.fn().mockResolvedValue(null);
 const deleteArchivedJobMock = vi.fn().mockResolvedValue(null);
 const duplicateJobMock = vi.fn().mockResolvedValue({ jobId: "job_duplicate" });
 const markOpenedMock = vi.fn().mockResolvedValue(null);
+const recordStructuredMatchReviewMock = vi.fn().mockResolvedValue({
+  reviewId: "structured_review_1",
+});
 const recordFirstRunPathMock = vi.fn().mockResolvedValue(null);
 const restoreArchivedJobMock = vi.fn().mockResolvedValue(null);
 const seedSampleJobMock = vi.fn().mockResolvedValue({ jobId: "job_sample" });
@@ -228,6 +231,9 @@ vi.mock("convex/react", () => ({
     if (reference === "jobsPublic.markOpened") {
       return markOpenedMock;
     }
+    if (reference === "jobsPublic.recordStructuredMatchReview") {
+      return recordStructuredMatchReviewMock;
+    }
     if (reference === "jobsPublic.setResumeForJob") {
       return setJobResumeMock;
     }
@@ -263,6 +269,7 @@ vi.mock("../../../convex/_generated/api", () => ({
       listArchivedForUser: "jobsPublic.listArchivedForUser",
       trackEvent: "jobsPublic.trackEvent",
       markOpened: "jobsPublic.markOpened",
+      recordStructuredMatchReview: "jobsPublic.recordStructuredMatchReview",
       setResumeForJob: "jobsPublic.setResumeForJob",
       setJobFavorite: "jobsPublic.setJobFavorite",
       updateField: "jobsPublic.updateField",
@@ -310,6 +317,35 @@ function enableJobsMatchDebug(): void {
   ).__JOBS_MATCH_READ_DEBUG__ = true;
 }
 
+function buildStructuredShadowSummary(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    flagEnabled: true,
+    internalViewer: true,
+    uiEnabled: true,
+    status: "available",
+    reason: null,
+    oldScore: 50,
+    oldTier: "partial",
+    structuredScore: 78,
+    structuredTier: "strong",
+    matchedCount: 3,
+    partialCount: 1,
+    missingCount: 0,
+    unknownCount: 2,
+    hardGateMissingCount: 0,
+    metadataLeakCount: 0,
+    languagePreserved: true,
+    provenanceComplete: true,
+    jobRequirementCount: 6,
+    jobConstraintCount: 1,
+    profileEvidenceCount: 12,
+    profileConstraintCount: 0,
+    ...overrides,
+  };
+}
+
 describe("JobsPage", () => {
   beforeEach(() => {
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -318,6 +354,7 @@ describe("JobsPage", () => {
     deleteArchivedJobMock.mockClear();
     duplicateJobMock.mockClear();
     markOpenedMock.mockClear();
+    recordStructuredMatchReviewMock.mockClear();
     recordFirstRunPathMock.mockClear();
     restoreArchivedJobMock.mockClear();
     seedSampleJobMock.mockReset();
@@ -627,26 +664,7 @@ describe("JobsPage", () => {
   it("does not show the structured shadow comparison for normal detail data", async () => {
     debugPayload = {
       ...debugPayload,
-      structuredShadowSummary: {
-        flagEnabled: true,
-        internalViewer: true,
-        status: "available",
-        reason: null,
-        oldScore: 50,
-        oldTier: "partial",
-        structuredScore: 78,
-        structuredTier: "strong",
-        matchedCount: 3,
-        partialCount: 1,
-        missingCount: 0,
-        unknownCount: 2,
-        metadataLeakCount: 0,
-        provenanceComplete: true,
-        jobRequirementCount: 6,
-        jobConstraintCount: 1,
-        profileEvidenceCount: 12,
-        profileConstraintCount: 0,
-      },
+      structuredShadowSummary: buildStructuredShadowSummary(),
     };
 
     render(
@@ -661,6 +679,147 @@ describe("JobsPage", () => {
     expect(screen.queryByText("Structured shadow comparison")).toBeNull();
     expect(screen.queryByTestId("jobs-match-input-debug-panel")).toBeNull();
     expect(debugInspectMatchInputMock).not.toHaveBeenCalled();
+  });
+
+  it("hides the internal structured panel when the shadow flag is off", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      structuredShadowSummary: buildStructuredShadowSummary({
+        flagEnabled: false,
+        status: "unavailable",
+        reason: "shadow_disabled",
+      }),
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.queryByTestId("jobs-structured-shadow-internal-panel")).toBeNull();
+    expect(screen.queryByText("Structured shadow")).toBeNull();
+  });
+
+  it("hides the internal structured panel for a non-allowlisted user", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      structuredShadowSummary: buildStructuredShadowSummary({
+        internalViewer: false,
+        status: "unavailable",
+        reason: "internal_viewer_required",
+      }),
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.queryByTestId("jobs-structured-shadow-internal-panel")).toBeNull();
+    expect(screen.queryByText("Structured shadow")).toBeNull();
+  });
+
+  it("shows allowlisted reviewers the current match beside structured shadow without forbidden copy", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      structuredShadowSummary: buildStructuredShadowSummary(),
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const panel = await screen.findByTestId("jobs-structured-shadow-internal-panel");
+    expect(within(panel).getByText("Current match")).toBeInTheDocument();
+    expect(within(panel).getByText("Structured shadow")).toBeInTheDocument();
+    expect(
+      within(panel).getByText("Production score remains the current match score."),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByText("Structured shadow is internal review only."),
+    ).toBeInTheDocument();
+    expect(within(panel).getByText(/score\s+50/)).toBeInTheDocument();
+    expect(within(panel).getByText(/tier\s+partial/)).toBeInTheDocument();
+    expect(within(panel).getByText(/score\s+78/)).toBeInTheDocument();
+    expect(within(panel).getByText(/tier\s+strong/)).toBeInTheDocument();
+    expect(within(panel).getByText(/matched\s+3/)).toBeInTheDocument();
+    expect(within(panel).getByText(/partial\s+1/)).toBeInTheDocument();
+    expect(within(panel).getByText(/unknown\s+2/)).toBeInTheDocument();
+    expect(within(panel).getByText(/hard-gate missing\s+0/)).toBeInTheDocument();
+    expect(within(panel).getByText(/metadata leaks\s+0/)).toBeInTheDocument();
+    expect(within(panel).getByText("language preserved")).toBeInTheDocument();
+    expect(within(panel).getByText("provenance complete")).toBeInTheDocument();
+    expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.queryByText(/AI score/i)).toBeNull();
+    expect(screen.queryByText(/New score/i)).toBeNull();
+    expect(screen.queryByText(/Better score/i)).toBeNull();
+    expect(screen.queryByText(/Recommended score/i)).toBeNull();
+  });
+
+  it("logs an internal review label without affecting the production score or tier", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      structuredShadowSummary: buildStructuredShadowSummary(),
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const panel = await screen.findByTestId("jobs-structured-shadow-internal-panel");
+    fireEvent.change(within(panel).getByLabelText("Reviewer label"), {
+      target: { value: "false weak" },
+    });
+    fireEvent.change(within(panel).getByLabelText("Review notes"), {
+      target: { value: "Needs another evidence pass." },
+    });
+    fireEvent.click(within(panel).getByRole("button", { name: "Log review" }));
+
+    await waitFor(() => {
+      expect(recordStructuredMatchReviewMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+        label: "false weak",
+        notes: "Needs another evidence pass.",
+      });
+    });
+    expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
+    expect(within(panel).getByText(/tier\s+partial/)).toBeInTheDocument();
+  });
+
+  it("hides the structured panel when rollback disables the internal UI flag", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      structuredShadowSummary: buildStructuredShadowSummary({
+        uiEnabled: false,
+      }),
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.queryByTestId("jobs-structured-shadow-internal-panel")).toBeNull();
   });
 
   it("shows debug-only unavailable reasons without structured result values", async () => {
