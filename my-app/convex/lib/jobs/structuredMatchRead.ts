@@ -819,9 +819,31 @@ function requirementWeight(requirement: JobRequirementEntity): number {
   return 0;
 }
 
-function resolveStructuredTier(score: number): MatchReadTier {
-  if (score >= 75) return "strong";
-  if (score >= 40) return "partial";
+function resolveStructuredTier(score: number, outcomes: StructuredOutcome[]): MatchReadTier {
+  const requiredOutcomes = outcomes.filter(
+    (outcome) =>
+      outcome.requirement.importance === "required" &&
+      requirementWeight(outcome.requirement) > 0,
+  );
+  const matchedRequiredCount = requiredOutcomes.filter(
+    (outcome) => outcome.outcome === "matched",
+  ).length;
+  const matchedScorableCount = outcomes.filter(
+    (outcome) =>
+      outcome.outcome === "matched" &&
+      requirementWeight(outcome.requirement) > 0,
+  ).length;
+  const matchedRequiredCoverage =
+    requiredOutcomes.length > 0 ? matchedRequiredCount / requiredOutcomes.length : 0;
+
+  if (
+    score >= 90 &&
+    matchedRequiredCoverage >= 0.67 &&
+    matchedScorableCount >= 2
+  ) {
+    return "strong";
+  }
+  if (score >= 35) return "partial";
   return "weak";
 }
 
@@ -925,7 +947,7 @@ function scoreOutcomes(outcomes: StructuredOutcome[]): number {
   }
 
   // Pass 3A shadow scoring is intentionally simple: required=1, preferred=0.5,
-  // matched=full, partial=half, unknown=low neutral credit, missing=zero.
+  // matched=full, partial=half, unknown/missing=zero.
   // Supporting requirements are reported for diagnostics but do not affect score.
   let possible = 0;
   let earned = 0;
@@ -934,10 +956,26 @@ function scoreOutcomes(outcomes: StructuredOutcome[]): number {
     possible += weight;
     if (outcome.outcome === "matched") earned += weight;
     if (outcome.outcome === "partial") earned += weight * 0.5;
-    if (outcome.outcome === "unknown") earned += weight * 0.25;
   }
 
-  return possible > 0 ? Math.round((earned / possible) * 100) : 0;
+  const rawScore = possible > 0 ? Math.round((earned / possible) * 100) : 0;
+  const matchedScorableCount = scored.filter(
+    (outcome) => outcome.outcome === "matched",
+  ).length;
+  const unknownScorableCount = scored.filter(
+    (outcome) => outcome.outcome === "unknown",
+  ).length;
+  const unknownCoverage = unknownScorableCount / scored.length;
+  let cappedScore = rawScore;
+
+  if (scored.length < 2 || matchedScorableCount < 2) {
+    cappedScore = Math.min(cappedScore, 70);
+  }
+  if (unknownCoverage >= 0.4) {
+    cappedScore = Math.min(cappedScore, 70);
+  }
+
+  return cappedScore;
 }
 
 function oldDebugShape(
@@ -1005,7 +1043,7 @@ export function buildStructuredMatchReadDebug(args: {
     structured: {
       status: "available",
       structuredScore,
-      structuredTier: resolveStructuredTier(structuredScore),
+      structuredTier: resolveStructuredTier(structuredScore, outcomes),
       matched: outcomes.filter((outcome) => outcome.outcome === "matched"),
       partial: outcomes.filter((outcome) => outcome.outcome === "partial"),
       missing: outcomes.filter((outcome) => outcome.outcome === "missing"),
