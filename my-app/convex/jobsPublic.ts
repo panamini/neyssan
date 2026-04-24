@@ -1,6 +1,7 @@
 import {
   internalAction,
   internalMutation,
+  internalQuery,
   mutation,
   query,
 } from "./_generated/server";
@@ -17,6 +18,7 @@ import {
 import { buildScoringProfileFieldsFromCvDocument } from "./profiles";
 import {
   buildCanonicalJobDraftFromSource,
+  buildNormalizedJobExtractionFromHeuristic,
   flattenExtractionValues,
   type CanonicalJobExtraction,
   resolveReparsedCompany,
@@ -47,9 +49,23 @@ import {
   synthesizeMatchReadWithMistral,
   type MatchReadSynthesisCache,
 } from "./lib/jobs/matchReadSynthesis";
+import {
+  extractJobStructuredWithMetadata,
+  hashNormalizedJobText,
+  isJobLlmExtractionShadowEnabled,
+  PROMPT_VERSION,
+  resolveJobExtractionModel,
+} from "./lib/jobs/llmExtractJob";
 
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
+const jobExtractionShadowValidationStatus = v.union(
+  v.literal("valid"),
+  v.literal("invalid_json"),
+  v.literal("schema_invalid"),
+  v.literal("empty_signal"),
+  v.literal("low_confidence"),
+);
 // PRD gate: switch cohort language only after >=500 job_decision_made events.
 // Local safety rail: also require >=10 decisions inside the current match tier.
 const COHORT_MIN_TIER_DECISIONS = 10;
@@ -255,6 +271,208 @@ async function scheduleMatchReadComputedMetric(ctx: any, matchRead: MatchRead) {
     buildMatchReadTelemetryArgs(matchRead),
   );
 }
+
+export const getJobForShadowExtraction = internalQuery({
+  args: {
+    jobId: v.id("jobs"),
+  },
+  returns: v.union(
+    v.null(),
+    v.object({
+      jobId: v.id("jobs"),
+      title: v.string(),
+      rawDescription: v.string(),
+      sourceUrl: v.string(),
+      sourceDomain: v.string(),
+      sourceType: v.string(),
+      applicationUrl: v.string(),
+      company: v.string(),
+      location: v.string(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job) {
+      return null;
+    }
+
+    return {
+      jobId: args.jobId,
+      title: job.title,
+      rawDescription: job.rawDescription,
+      sourceUrl: job.sourceUrl,
+      sourceDomain: job.sourceDomain,
+      sourceType: job.sourceType,
+      applicationUrl: job.applicationUrl,
+      company: job.company,
+      location: job.location,
+    };
+  },
+});
+
+export const getValidJobExtractionShadowByHash = internalQuery({
+  args: {
+    jobTextHash: v.string(),
+    model: v.string(),
+    promptVersion: v.string(),
+  },
+  returns: v.union(
+    v.null(),
+    v.object({
+      llm_raw_output: v.any(),
+      llm_normalized_output: v.any(),
+      validation_status: jobExtractionShadowValidationStatus,
+      fallback_used: v.boolean(),
+      model: v.string(),
+      prompt_version: v.string(),
+      model_confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
+      final_confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("job_extraction_shadow")
+      .withIndex("by_cache_identity", (q) =>
+        q
+          .eq("job_text_hash", args.jobTextHash)
+          .eq("model", args.model)
+          .eq("prompt_version", args.promptVersion)
+          .eq("validation_status", "valid"),
+      )
+      .first();
+    if (!row) {
+      return null;
+    }
+
+    return {
+      llm_raw_output: row.llm_raw_output,
+      llm_normalized_output: row.llm_normalized_output,
+      validation_status: row.validation_status,
+      fallback_used: row.fallback_used,
+      model: row.model,
+      prompt_version: row.prompt_version,
+      model_confidence: row.model_confidence ?? null,
+      final_confidence: row.final_confidence ?? null,
+    };
+  },
+});
+
+export const storeJobExtractionShadow = internalMutation({
+  args: {
+    jobId: v.id("jobs"),
+    jobTextHash: v.string(),
+    llmRawOutput: v.any(),
+    llmNormalizedOutput: v.any(),
+    validationStatus: jobExtractionShadowValidationStatus,
+    fallbackUsed: v.boolean(),
+    model: v.string(),
+    promptVersion: v.string(),
+    latencyMs: v.number(),
+    modelConfidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
+    finalConfidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
+    createdAt: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.insert("job_extraction_shadow", {
+      job_id: args.jobId,
+      job_text_hash: args.jobTextHash,
+      llm_raw_output: args.llmRawOutput,
+      llm_normalized_output: args.llmNormalizedOutput,
+      validation_status: args.validationStatus,
+      fallback_used: args.fallbackUsed,
+      model: args.model,
+      prompt_version: args.promptVersion,
+      latency_ms: args.latencyMs,
+      model_confidence: args.modelConfidence,
+      final_confidence: args.finalConfidence,
+      created_at: args.createdAt,
+    });
+
+    return null;
+  },
+});
+
+export const runShadowJobExtraction = internalAction({
+  args: {
+    jobId: v.id("jobs"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    if (!isJobLlmExtractionShadowEnabled()) {
+      return null;
+    }
+
+    const job = await ctx.runQuery(
+      (internal as any).jobsPublic.getJobForShadowExtraction,
+      { jobId: args.jobId },
+    );
+    if (!job || !String(job.rawDescription ?? "").trim()) {
+      return null;
+    }
+
+    // P9 Pass 1 contract: LLM extraction is shadow-only structured understanding.
+    // Deterministic scoring remains authoritative and must keep reading heuristic job fields.
+    // No visible rollout should happen before manual review confirms LLM extraction is
+    // cleaner than heuristic extraction on representative samples, including multilingual cases.
+    const jobTextHash = await hashNormalizedJobText(job.rawDescription);
+    const model = resolveJobExtractionModel();
+    const cached = await ctx.runQuery(
+      (internal as any).jobsPublic.getValidJobExtractionShadowByHash,
+      { jobTextHash, model, promptVersion: PROMPT_VERSION },
+    );
+
+    if (cached) {
+      await ctx.runMutation((internal as any).jobsPublic.storeJobExtractionShadow, {
+        jobId: args.jobId,
+        jobTextHash,
+        llmRawOutput: cached.llm_raw_output,
+        llmNormalizedOutput: cached.llm_normalized_output,
+        validationStatus: "valid",
+        fallbackUsed: cached.fallback_used,
+        model: cached.model,
+        promptVersion: cached.prompt_version || PROMPT_VERSION,
+        latencyMs: 0,
+        modelConfidence: cached.model_confidence ?? null,
+        finalConfidence: cached.final_confidence ?? null,
+        createdAt: Date.now(),
+      });
+      return null;
+    }
+
+    const result = await extractJobStructuredWithMetadata(job.rawDescription, {
+      model,
+      fallback: () =>
+        buildNormalizedJobExtractionFromHeuristic({
+          title: job.title,
+          rawDescription: job.rawDescription,
+          sourceUrl: job.sourceUrl,
+          sourceDomain: job.sourceDomain,
+          sourceType: job.sourceType,
+          applicationUrl: job.applicationUrl,
+          company: job.company,
+          location: job.location,
+        }),
+    });
+
+    await ctx.runMutation((internal as any).jobsPublic.storeJobExtractionShadow, {
+      jobId: args.jobId,
+      jobTextHash,
+      llmRawOutput: result.rawOutput,
+      llmNormalizedOutput: result.llmNormalizedOutput,
+      validationStatus: result.validationStatus,
+      fallbackUsed: result.fallbackUsed,
+      model: result.model,
+      promptVersion: result.promptVersion,
+      latencyMs: result.latencyMs,
+      modelConfidence: result.modelConfidence,
+      finalConfidence: result.finalConfidence,
+      createdAt: Date.now(),
+    });
+
+    return null;
+  },
+});
 
 function hasUsableProfileScoringData(profile: any): boolean {
   return (
@@ -2085,6 +2303,16 @@ export const parseCreatedJob = internalMutation({
         reviewItems: draft.reviewItems,
         updatedAt: Date.now(),
       });
+
+      if (isJobLlmExtractionShadowEnabled()) {
+        // Pass 2 guardrail: keep any future visible_source_decision stable per job.
+        // Shadow output must not flip UI/source behavior after the heuristic parse is shown.
+        await ctx.scheduler.runAfter(
+          0,
+          (internal as any).jobsPublic.runShadowJobExtraction,
+          { jobId: normalizedJobId },
+        );
+      }
     } catch (error) {
       console.error("[jobsPublic.parseCreatedJob] parse failed", error);
       await ctx.db.patch(normalizedJobId, {
