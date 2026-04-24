@@ -955,6 +955,135 @@ function buildExtractionProjection(args: {
   }));
 }
 
+function projectReviewItemsWithVisibleExtraction(args: {
+  reviewItems: any[];
+  visibleExtraction: VisibleJobExtractionSelection;
+}) {
+  if (args.visibleExtraction.source !== "llm") {
+    return args.reviewItems;
+  }
+
+  const allowedReviewItems = args.reviewItems.filter(
+    (item) => String(item.fieldKey ?? "") !== "responsibilities",
+  );
+
+  const buildLlmReviewItem = (args: {
+    id: string;
+    fieldKey: string;
+    label: string;
+    suggestedValue: string | string[];
+  }) => {
+    const existing = allowedReviewItems.find(
+      (item) => String(item.fieldKey ?? "") === args.fieldKey,
+    );
+    const approvedValueMatches =
+      existing?.reviewStatus === "approved" &&
+      JSON.stringify(existing.approvedValue) === JSON.stringify(args.suggestedValue);
+    return {
+      ...(existing ?? {}),
+      id: existing?.id ?? args.id,
+      fieldKey: args.fieldKey,
+      label: existing?.label ?? args.label,
+      reviewStatus: approvedValueMatches ? "approved" : "pending",
+      suggestedValue: args.suggestedValue,
+      approvedValue: approvedValueMatches ? existing.approvedValue : undefined,
+      sourceText: Array.isArray(args.suggestedValue)
+        ? args.suggestedValue.join("\n")
+        : args.suggestedValue,
+      confidence: Math.max(Number(existing?.confidence ?? 0), 0.9),
+      updatedAt:
+        typeof existing?.updatedAt === "number" ? existing.updatedAt : 0,
+    };
+  };
+
+  const llmBackedItems = [
+    ...(args.visibleExtraction.summary
+      ? [
+          buildLlmReviewItem({
+            id: "llm_visible_summary",
+            fieldKey: "summary",
+            label: "Summary",
+            suggestedValue: args.visibleExtraction.summary,
+          }),
+        ]
+      : []),
+    ...(args.visibleExtraction.requirements.length > 0
+      ? [
+          buildLlmReviewItem({
+            id: "llm_visible_must_haves",
+            fieldKey: "mustHaves",
+            label: "Requirements",
+            suggestedValue: args.visibleExtraction.requirements,
+          }),
+        ]
+      : []),
+    ...(args.visibleExtraction.keywords.length > 0
+      ? [
+          buildLlmReviewItem({
+            id: "llm_visible_keywords",
+            fieldKey: "keywords",
+            label: "Keywords",
+            suggestedValue: args.visibleExtraction.keywords,
+          }),
+        ]
+      : []),
+  ];
+
+  return llmBackedItems.flatMap((item) => {
+    const fieldKey = String(item.fieldKey ?? "");
+    const nextSuggestedValue =
+      fieldKey === "keywords"
+        ? args.visibleExtraction.keywords
+        : fieldKey === "mustHaves" || fieldKey === "requirements"
+          ? args.visibleExtraction.requirements
+          : fieldKey === "summary" && args.visibleExtraction.summary
+            ? args.visibleExtraction.summary
+            : undefined;
+
+    if (nextSuggestedValue === undefined) {
+      return [item];
+    }
+
+    return [{
+      ...item,
+      suggestedValue: nextSuggestedValue,
+      sourceText: Array.isArray(nextSuggestedValue)
+        ? nextSuggestedValue.join("\n")
+        : String(nextSuggestedValue),
+      confidence: Math.max(Number(item.confidence ?? 0), 0.9),
+    }];
+  });
+}
+
+async function resolveVisibleExtractionForJob(ctx: any, job: any) {
+  const shadowRows = await ctx.db
+    .query("job_extraction_shadow")
+    .withIndex("by_job_id", (q: any) => q.eq("job_id", job._id))
+    .collect();
+  const visibleFallbackMustHaves =
+    Array.isArray(job.mustHavesExtraction) && job.mustHavesExtraction.length > 0
+      ? flattenExtractionValues(job.mustHavesExtraction)
+      : (job.mustHaves ?? []);
+  const visibleFallbackKeywords =
+    Array.isArray(job.keywordsExtraction) && job.keywordsExtraction.length > 0
+      ? flattenExtractionValues(job.keywordsExtraction)
+      : (job.keywords ?? []);
+
+  return selectVisibleJobExtraction({
+    flagEnabled: isJobLlmVisibleExtractionEnabled(),
+    shadowRows,
+    heuristic: {
+      summary:
+        typeof job.summaryExtraction?.value === "string"
+          ? job.summaryExtraction.value
+          : job.summary,
+      requirements: visibleFallbackMustHaves,
+      keywords: visibleFallbackKeywords,
+    },
+    rawLanguageDetected: job.rawLanguageDetected,
+  });
+}
+
 function buildJobProjection(
   job: any,
   matchRead: ReturnType<typeof computeMatchRead> | null = null,
@@ -1040,6 +1169,10 @@ function buildJobProjection(
       },
       rawLanguageDetected: job.rawLanguageDetected,
     });
+  const reviewItems = projectReviewItemsWithVisibleExtraction({
+    reviewItems: job.reviewItems ?? [],
+    visibleExtraction: visibleSelection,
+  });
 
   return {
     id: String(job._id),
@@ -1053,7 +1186,10 @@ function buildJobProjection(
     sourceType: job.sourceType,
     applicationUrl: job.applicationUrl,
     parseStatus: job.parseStatus,
-    reviewState: job.reviewState,
+    reviewState:
+      visibleSelection.source === "llm"
+        ? resolveCanonicalJobReviewState(reviewItems)
+        : job.reviewState,
     summary: summaryExtraction.value,
     summaryExtraction,
     visibleSummary: visibleSelection.summary,
@@ -1078,7 +1214,7 @@ function buildJobProjection(
     nextStepBlock,
     linkedProposalCount,
     linkedProposals,
-    reviewItems: (job.reviewItems ?? []).map((item: any) => ({
+    reviewItems: reviewItems.map((item: any) => ({
       id: item.id,
       fieldKey: item.fieldKey,
       label: item.label,
@@ -2432,8 +2568,13 @@ export const approveReviewItem = mutation({
     }
 
     const now = Date.now();
-    const reviewItems = resolveReviewItemsAfterApprove({
+    const visibleExtraction = await resolveVisibleExtractionForJob(ctx, job);
+    const projectedReviewItems = projectReviewItemsWithVisibleExtraction({
       reviewItems: job.reviewItems ?? [],
+      visibleExtraction,
+    });
+    const reviewItems = resolveReviewItemsAfterApprove({
+      reviewItems: projectedReviewItems,
       reviewItemId: args.reviewItemId,
       now,
     });

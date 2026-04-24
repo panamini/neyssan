@@ -424,9 +424,9 @@ describe("JobsPage", () => {
     expect(
       (await screen.findAllByText("Cross-functional communication")).length,
     ).toBeGreaterThan(0);
-    expect(
-      (await screen.findAllByText("Responsibilities")).length,
-    ).toBeGreaterThan(0);
+    expect(await screen.findByText("EXTRACTION. PAUSED.")).toBeInTheDocument();
+    expect(screen.getByText(/Job read is out of order/i)).toBeInTheDocument();
+    expect(screen.queryByText("Responsibilities")).not.toBeInTheDocument();
     expect(
       await screen.findByRole("link", {
         name: /Open linked proposal Operations Associate cover letter/i,
@@ -465,20 +465,6 @@ describe("JobsPage", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
-
-    await waitFor(() => {
-      expect(screen.getAllByText("Ready").length).toBeGreaterThan(0);
-    });
-    expect(approveReviewItemMock).toHaveBeenCalledWith({
-      jobId: "job_alpha",
-      reviewItemId: "review_1",
-    });
-    expect(trackEventMock).toHaveBeenCalledWith({
-      event: "import_accepted",
-      jobId: "job_alpha",
-      fieldKey: "responsibilities",
-    });
     expect(markOpenedMock).toHaveBeenCalledWith({ jobId: "job_alpha" });
 
     fireEvent.click(
@@ -506,6 +492,41 @@ describe("JobsPage", () => {
       visibleRequirements: ["LLM visible requirement"],
       visibleKeywords: ["llm keyword"],
       visibleExtractionSource: "llm",
+      reviewItems: [
+        {
+          id: "summary",
+          fieldKey: "summary",
+          label: "Summary",
+          reviewStatus: "pending",
+          suggestedValue: "LLM visible summary for the selected job.",
+          approvedValue: undefined,
+          sourceText: "LLM visible summary for the selected job.",
+          confidence: 0.9,
+          updatedAt: 1711003000000,
+        },
+        {
+          id: "must_haves",
+          fieldKey: "mustHaves",
+          label: "Requirements",
+          reviewStatus: "pending",
+          suggestedValue: ["LLM visible requirement"],
+          approvedValue: undefined,
+          sourceText: "LLM visible requirement",
+          confidence: 0.9,
+          updatedAt: 1711003000000,
+        },
+        {
+          id: "keywords",
+          fieldKey: "keywords",
+          label: "Keywords",
+          reviewStatus: "pending",
+          suggestedValue: ["llm keyword"],
+          approvedValue: undefined,
+          sourceText: "llm keyword",
+          confidence: 0.9,
+          updatedAt: 1711003000000,
+        },
+      ],
     } as typeof selectedJob;
 
     render(
@@ -517,15 +538,90 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByText("LLM visible summary for the selected job."),
-    ).toBeInTheDocument();
-    expect(screen.getByText("LLM visible requirement")).toBeInTheDocument();
-    expect(screen.getByText("llm keyword")).toBeInTheDocument();
+      (await screen.findAllByText("LLM visible summary for the selected job."))
+        .length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("LLM visible requirement").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("llm keyword").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Needs review").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(3);
+    expect(screen.getByText("Summary")).toBeInTheDocument();
+    expect(screen.getAllByText("Requirements").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Keywords").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole("button", { name: "Edit Summary" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Requirements" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();
+    expect(screen.queryByText("Responsibilities")).not.toBeInTheDocument();
+    expect(screen.queryByText("EXTRACTION. PAUSED.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Run recurring workflows")).not.toBeInTheDocument();
     expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
     expect(screen.getByText("Match")).toBeInTheDocument();
     expect(screen.queryByText("AI extracted")).not.toBeInTheDocument();
     expect(screen.queryByText("visibleExtractionSource")).not.toBeInTheDocument();
     expect(screen.queryByText("Extraction dashboard")).not.toBeInTheDocument();
+  });
+
+  it("shows a branded unavailable state instead of heuristic extraction fallback", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      summary: "Heuristic summary should stay hidden.",
+      visibleSummary: "Heuristic visible summary should stay hidden.",
+      mustHaves: ["Heuristic requirement should stay hidden"],
+      visibleRequirements: ["Heuristic visible requirement should stay hidden"],
+      keywords: ["location", "status", "compensation"],
+      visibleKeywords: ["location", "status", "compensation"],
+      visibleExtractionSource: "heuristic",
+      rawDescription: "Raw source remains visible for this job.",
+      reviewItems: [
+        {
+          id: "review_heuristic_keywords",
+          fieldKey: "keywords",
+          label: "Keywords",
+          reviewStatus: "pending",
+          suggestedValue: ["location", "status", "compensation"],
+          approvedValue: undefined,
+          sourceText: "location status compensation",
+          confidence: 0.42,
+          updatedAt: 1711003000000,
+        },
+        {
+          id: "review_heuristic_responsibilities",
+          fieldKey: "responsibilities",
+          label: "Responsibilities",
+          reviewStatus: "pending",
+          suggestedValue: ["At Texas Roadhouse, we are a people-first company."],
+          approvedValue: undefined,
+          sourceText: "At Texas Roadhouse, we are a people-first company.",
+          confidence: 0.52,
+          updatedAt: 1711003000000,
+        },
+      ],
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("EXTRACTION. PAUSED.")).toBeInTheDocument();
+    expect(screen.getByText(/Job read is out of order/i)).toBeInTheDocument();
+    expect(screen.getByText(/Raw source stays intact/i)).toBeInTheDocument();
+    expect(screen.getByText("Raw source remains visible for this job.")).toBeInTheDocument();
+    expect(screen.queryByText("Heuristic summary should stay hidden.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Heuristic visible requirement should stay hidden"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("location, status, compensation")).not.toBeInTheDocument();
+    expect(screen.queryByText("location status compensation")).not.toBeInTheDocument();
+    expect(screen.queryByText("Responsibilities")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("At Texas Roadhouse, we are a people-first company."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.getByText("Match")).toBeInTheDocument();
   });
 
   it("does not show the structured shadow comparison for normal detail data", async () => {
@@ -1191,6 +1287,14 @@ describe("JobsPage", () => {
   });
 
   it("saves summary edits inline from the brief card", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      visibleSummary: selectedJob.summary,
+      visibleRequirements: selectedJob.mustHaves,
+      visibleKeywords: selectedJob.keywords,
+      visibleExtractionSource: "llm",
+    } as typeof selectedJob;
+
     render(
       <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
         <Routes>
