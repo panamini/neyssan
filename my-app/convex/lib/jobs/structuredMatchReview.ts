@@ -1,5 +1,8 @@
 import type { MatchReadTier } from "./matchRead";
 
+export const STRUCTURED_MATCH_REVIEW_SCORER_VERSION =
+  "structured-match-read-shadow-v1";
+
 export const STRUCTURED_MATCH_REVIEW_REQUIRED_CATEGORIES = [
   "security_licensed",
   "retail_service",
@@ -61,6 +64,11 @@ export type StructuredMatchReviewCase = {
   productionTier: MatchReadTier | null;
   productionScore: number | null;
   productionScoreChanged?: boolean;
+  appGitCommitSha?: string;
+  structuredScorerVersion?: string;
+  extractionModel?: string;
+  extractionPromptVersion?: string;
+  reviewedAt?: number;
   matchedCount: number;
   partialCount: number;
   missingCount: number;
