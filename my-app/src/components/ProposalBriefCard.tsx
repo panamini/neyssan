@@ -450,13 +450,28 @@ export function ProposalBriefCard({
                     const fieldKey = String(item.fieldKey ?? "");
 
                     return (
-                      <div key={item.id} className="dasti-brief-card__review-item">
+                      <div
+                        key={item.id}
+                        className="dasti-brief-card__review-item"
+                        data-state={isApproved ? "success" : "warning"}
+                      >
                         <div className="dasti-brief-card__review-head">
                           <div>
                             <div className="dasti-brief-card__review-label">
                               {item.label}
                             </div>
-                            <div className="dasti-brief-card__review-state">
+                            <div
+                              className={[
+                                "dasti-brief-card__review-state",
+                                "dasti-pill",
+                                isApproved
+                                  ? "dasti-pill--success"
+                                  : "dasti-pill--warning",
+                                isApproved
+                                  ? "dasti-brief-card__review-state--approved"
+                                  : "dasti-brief-card__review-state--pending",
+                              ].join(" ")}
+                            >
                               {isApproved ? "Approved" : "Needs review"}
                             </div>
                           </div>

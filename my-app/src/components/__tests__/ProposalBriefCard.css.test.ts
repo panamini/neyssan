@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 
 const productCssPath = resolve(process.cwd(), "src/styles/product.css");
 const productCss = readFileSync(productCssPath, "utf8");
+const primitivesCssPath = resolve(process.cwd(), "src/styles/primitives.css");
+const primitivesCss = readFileSync(primitivesCssPath, "utf8");
+const foundationCssPath = resolve(process.cwd(), "src/styles/foundation.css");
+const foundationCss = readFileSync(foundationCssPath, "utf8");
 
 describe("ProposalBriefCard CSS contracts", () => {
   it("defines a compact workbench capsule aligned with the detached compose toolbar column", () => {
@@ -71,5 +75,33 @@ describe("ProposalBriefCard CSS contracts", () => {
     expect(productCss).toContain(
       "var(--proposal-motion-compose-exit-shift)",
     );
+  });
+
+  it("uses semantic review states instead of accent-tinting every review card", () => {
+    expect(productCss).toContain(".dasti-brief-card__review-item[data-state=\"warning\"] {");
+    expect(productCss).toContain(".dasti-brief-card__review-item[data-state=\"success\"] {");
+    expect(productCss).toContain("background: var(--color-surface-raised);");
+    expect(productCss).toContain("border: 1px solid var(--color-border);");
+    expect(productCss).not.toContain("--brief-review");
+    expect(productCss).not.toContain("border-inline-start: 3px solid");
+  });
+
+  it("keeps local status pills aligned with the dasti preview catalog", () => {
+    expect(primitivesCss).toContain(".dasti-pill {");
+    expect(primitivesCss).toContain(
+      "gap: calc((var(--space-1) + var(--space-2)) / 2);",
+    );
+    expect(primitivesCss).toContain("padding: 0 var(--space-3);");
+    expect(primitivesCss).toContain("background: var(--color-surface-muted);");
+    expect(primitivesCss).toContain("background: var(--color-accent-pale);");
+    expect(primitivesCss).toContain("color: var(--color-accent-hover);");
+    expect(primitivesCss).toContain("background: var(--color-success-soft);");
+    expect(primitivesCss).toContain("color: var(--color-success-ink);");
+    expect(primitivesCss).toContain("background: var(--color-warning-soft);");
+    expect(primitivesCss).toContain("color: var(--color-warning-ink);");
+    expect(foundationCss).toContain("--okb: hsl(150, 42%, 94%);");
+    expect(foundationCss).toContain("--wab: hsl(36, 80%, 94%);");
+    expect(foundationCss).toContain("--okb: hsl(150, 32%, 16%);");
+    expect(foundationCss).toContain("--wab: hsl(36, 44%, 16%);");
   });
 });
