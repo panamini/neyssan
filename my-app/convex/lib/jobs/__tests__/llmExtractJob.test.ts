@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildJobExtractionRequestBody,
+  DEFAULT_JOB_EXTRACTION_MODEL,
   extractJobStructuredWithMetadata,
   hashNormalizedJobText,
   isCompleteJsonObjectText,
@@ -9,7 +10,10 @@ import {
   PROMPT_VERSION,
   resolveJobExtractionModel,
 } from "../llmExtractJob";
-import type { NormalizedJobExtraction } from "../jobExtractionSchema";
+import {
+  classifyJobExtractionPayload,
+  type NormalizedJobExtraction,
+} from "../jobExtractionSchema";
 
 const validExtraction: NormalizedJobExtraction = {
   summary_short: "Customer-facing security role",
@@ -66,18 +70,51 @@ describe("llmExtractJob", () => {
     vi.unstubAllEnvs();
   });
 
-  it("builds a constrained Mistral JSON request with deterministic controls", () => {
-    const body = buildJobExtractionRequestBody("Raw job text", "mistral-small-latest");
+  it("builds a constrained Mistral JSON schema request with deterministic controls", () => {
+    const body = buildJobExtractionRequestBody("Raw job text", DEFAULT_JOB_EXTRACTION_MODEL);
+    const responseFormat = body.response_format as any;
+    const schema = responseFormat.json_schema?.schema;
+    const requirementSchema = schema.properties.requirements.items;
+    const environmentSchema = schema.properties.environment;
 
-    expect(body.model).toBe("mistral-small-latest");
+    expect(body.model).toBe("ministral-3b-2512");
     expect(body.temperature).toBe(0.1);
     expect(body.max_tokens).toBe(1400);
-    expect(body.response_format).toEqual({ type: "json_object" });
+    expect(responseFormat.type).toBe("json_schema");
+    expect(responseFormat.json_schema.name).toBe("normalized_job_extraction");
+    expect(responseFormat.json_schema.strict).toBe(true);
+    expect(schema.required).toEqual([
+      "summary_short",
+      "role_title_normalized",
+      "requirements",
+      "keywords_canonical",
+      "licenses_or_certifications",
+      "schedule_constraints",
+      "environment",
+      "confidence",
+    ]);
+    expect(requirementSchema.required).toEqual(["value", "type", "required"]);
+    expect(requirementSchema.properties.type.enum).toEqual([
+      "skill",
+      "experience",
+      "tool",
+      "education",
+      "certification",
+      "language",
+      "constraint",
+    ]);
+    expect(environmentSchema.required).toEqual([
+      "customer_facing",
+      "retail",
+      "physical_standing",
+      "onsite",
+    ]);
     expect(body.messages[0].content).toContain("Return ONLY valid JSON");
     expect(body.messages[0].content).toContain("Preserve the original language");
     expect(body.messages[0].content).toContain("Do not translate");
     expect(body.messages[1].content).toContain("Schema:");
-    expect(PROMPT_VERSION).toBe("p9_v1");
+    expect(PROMPT_VERSION).toBe("p9_v2");
+    expect(PROMPT_VERSION).not.toBe("p9_v1");
   });
 
   it("keeps requirement-heavy sections when prompt text is too long", () => {
@@ -169,6 +206,104 @@ describe("llmExtractJob", () => {
     expect(result.latencyMs).toBeGreaterThanOrEqual(0);
   });
 
+  it("keeps app-level validation authoritative and falls back for schema-invalid model output", async () => {
+    const schemaInvalidOutput = {
+      summary_short: "Retail security role",
+      role_title_normalized: "Security Guard",
+      requirements: [
+        { value: "guard card", type: "licenses_or_certifications" },
+        { value: "weekend shifts", type: "schedule_constraints" },
+      ],
+      keywords_canonical: ["retail security"],
+      licenses_or_certifications: ["guard card"],
+      schedule_constraints: ["weekend shifts"],
+      environment: {
+        customer_facing: true,
+      },
+      confidence: "high",
+    };
+
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: JSON.stringify(schemaInvalidOutput) } }],
+      }),
+    })) as unknown as typeof fetch;
+
+    const result = await extractJobStructuredWithMetadata("Guard card required", {
+      fallback: heuristicFallback,
+    });
+
+    expect(result.validationStatus).toBe("schema_invalid");
+    expect(result.fallbackUsed).toBe(true);
+    expect(result.llmNormalizedOutput).toBeNull();
+    expect(result.normalizedOutput.summary_short).toBe("Heuristic fallback");
+  });
+
+  it("captures the four JSON-mode probe failure shapes as schema-invalid fixtures", () => {
+    const outputs = [
+      {
+        summary_short: "Retail store night shift security guard",
+        role_title_normalized: "security_guard_retail_night_shift",
+        requirements: [
+          { value: "guard card required", type: "constraint" },
+          { value: "writing incident reports", type: "responsibility" },
+        ],
+        keywords_canonical: ["security_guard"],
+        licenses_or_certifications: ["guard_card"],
+        schedule_constraints: ["weekend_availability"],
+        environment: { customer_facing: true },
+        confidence: "high",
+      },
+      {
+        summary_short: "Retail security guard with loss prevention focus",
+        role_title_normalized: "Retail Security Guard",
+        requirements: [
+          { value: "guard card required", type: "license" },
+          { value: "weekend and holiday availability", type: "schedule_constraints" },
+        ],
+        keywords_canonical: ["retail security"],
+        licenses_or_certifications: ["guard card"],
+        schedule_constraints: ["weekend availability"],
+        environment: { customer_facing: true, onsite: true },
+        confidence: "high",
+      },
+      {
+        summary_short: "Agent sécurité magasin",
+        role_title_normalized: "agent sécurité magasin",
+        requirements: [
+          { value: "carte professionnelle valide", type: "licenses_or_certifications" },
+          { value: "disponibilité le week-end", type: "schedule_constraints" },
+        ],
+        keywords_canonical: ["agent sécurité"],
+        licenses_or_certifications: ["carte professionnelle"],
+        schedule_constraints: ["disponibilité week-end"],
+        environment: { customer_facing: true },
+        confidence: "high",
+      },
+      {
+        summary_short: "Retail security associate",
+        role_title_normalized: "Retail Security Associate",
+        requirements: [
+          { value: "guard card", type: "licenses_or_certifications" },
+          { value: "weekend/holiday shifts", type: "schedule_constraints" },
+        ],
+        keywords_canonical: ["retail security"],
+        licenses_or_certifications: ["guard card"],
+        schedule_constraints: ["weekend shifts", "holiday shifts"],
+        environment: { customer_facing: true },
+        confidence: "high",
+      },
+    ];
+
+    expect(outputs.map((output) => classifyJobExtractionPayload(output).validationStatus)).toEqual([
+      "schema_invalid",
+      "schema_invalid",
+      "schema_invalid",
+      "schema_invalid",
+    ]);
+  });
+
   it("preserves non-English model output without translation", async () => {
     const frenchExtraction: NormalizedJobExtraction = {
       summary_short: "Assurer la sécurité des clients en magasin",
@@ -210,12 +345,44 @@ describe("llmExtractJob", () => {
     expect(result.normalizedOutput.summary_short).not.toMatch(/\bsecurity\b/i);
   });
 
-  it("uses ministral-3b-2512 only when already configured", () => {
+  it("defaults job extraction to the Ministral 3 3B Instruct API slug", () => {
+    expect(resolveJobExtractionModel()).toBe("ministral-3b-2512");
+    expect(DEFAULT_JOB_EXTRACTION_MODEL).toBe("ministral-3b-2512");
+    expect(PROMPT_VERSION).toBe("p9_v2");
+  });
+
+  it("uses JOB_EXTRACTION_MISTRAL_MODEL when configured", () => {
+    vi.stubEnv("JOB_EXTRACTION_MISTRAL_MODEL", "ministral-3b-2512");
+
+    expect(resolveJobExtractionModel({ mistralModel: "mistral-small-latest" })).toBe(
+      "ministral-3b-2512",
+    );
+  });
+
+  it("gives JOB_EXTRACTION_MISTRAL_MODEL precedence over MISTRAL_MODEL", () => {
+    vi.stubEnv("JOB_EXTRACTION_MISTRAL_MODEL", "ministral-3b-2512");
+    vi.stubEnv("MISTRAL_MODEL", "mistral-small-latest");
+
+    expect(resolveJobExtractionModel()).toBe("ministral-3b-2512");
+  });
+
+  it("keeps the configured fallback order after job-specific env", () => {
+    vi.stubEnv("MISTRAL_MODEL", "mistral-small-latest");
+
+    expect(resolveJobExtractionModel({ mistralModel: "ministral-3b-2512" })).toBe(
+      "mistral-small-latest",
+    );
+  });
+
+  it("uses config fallback values before the built-in default", () => {
     expect(resolveJobExtractionModel({ mistralModel: "ministral-3b-2512" })).toBe(
       "ministral-3b-2512",
     );
     expect(resolveJobExtractionModel({ mistralModel: "mistral-small-latest" })).toBe(
       "mistral-small-latest",
     );
+    expect(
+      resolveJobExtractionModel({ mistralModel: null, model: "mistral-large-latest" }),
+    ).toBe("mistral-large-latest");
   });
 });
