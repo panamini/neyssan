@@ -61,6 +61,10 @@ import {
   selectVisibleJobExtraction,
   type VisibleJobExtractionSelection,
 } from "./lib/jobs/visibleJobExtraction";
+import {
+  buildStructuredMatchReadDebug,
+  isStructuredMatchReadShadowEnabled,
+} from "./lib/jobs/structuredMatchRead";
 
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
@@ -1492,6 +1496,7 @@ export const debugInspectMatchInputByJobId = query({
       score: v.union(v.number(), v.null()),
       matchedSignals: v.array(v.string()),
       missingSignals: v.array(v.string()),
+      structuredShadow: v.any(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -1526,20 +1531,53 @@ export const debugInspectMatchInputByJobId = query({
       profiles,
     });
     const scoringProfile = buildMatchReadProfile(sourceProfile);
-    const audit = buildMatchReadInputAudit({
-      job: {
-        id: String(job._id),
-        updatedAt: job.updatedAt,
-        parseVersion: job.parseVersion,
-        parseStatus: job.parseStatus,
-        mustHaves: job.mustHaves ?? [],
-        keywords: job.keywords ?? [],
-        mustHavesExtraction: job.mustHavesExtraction ?? [],
-        keywordsExtraction: job.keywordsExtraction ?? [],
-      },
+    const matchReadJobInput = {
+      id: String(job._id),
+      updatedAt: job.updatedAt,
+      parseVersion: job.parseVersion,
+      parseStatus: job.parseStatus,
+      mustHaves: job.mustHaves ?? [],
+      keywords: job.keywords ?? [],
+      mustHavesExtraction: job.mustHavesExtraction ?? [],
+      keywordsExtraction: job.keywordsExtraction ?? [],
+    };
+    const matchRead = computeMatchRead({
+      job: matchReadJobInput,
       profile: scoringProfile,
       synthesis: job.matchReadSynthesis ?? null,
     });
+    const audit = buildMatchReadInputAudit({
+      job: matchReadJobInput,
+      profile: scoringProfile,
+      synthesis: job.matchReadSynthesis ?? null,
+    });
+    const structuredShadow = isStructuredMatchReadShadowEnabled()
+      ? buildStructuredMatchReadDebug({
+          old: matchRead,
+          job: {
+            id: String(job._id),
+            rawLanguageDetected: job.rawLanguageDetected,
+          },
+          profile: sourceProfile,
+          shadowRows: await ctx.db
+            .query("job_extraction_shadow")
+            .withIndex("by_job_id", (q) => q.eq("job_id", normalizedJobId))
+            .collect(),
+        })
+      : {
+          old: {
+            score: matchRead.score,
+            tier: matchRead.tier,
+            matched: matchRead.matched,
+            missing: matchRead.missing,
+            method: matchRead.method,
+            fallback: matchRead.fallback,
+          },
+          structured: {
+            status: "unavailable",
+            reason: "shadow_disabled",
+          },
+        };
 
     return {
       jobId: String(job._id),
@@ -1556,6 +1594,7 @@ export const debugInspectMatchInputByJobId = query({
       score: audit.overlap.score,
       matchedSignals: audit.overlap.matched,
       missingSignals: audit.overlap.missing,
+      structuredShadow,
     };
   },
 });
