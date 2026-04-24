@@ -874,6 +874,26 @@ describe("structured match-read evaluation matrix", () => {
     expect(evaluation.row.provenanceComplete).toBe(true);
   });
 
+  it("allows the healthcare regulated fixture to proceed when the required credential is present", () => {
+    const evaluation = evaluateFixture(
+      fixtures.find((fixture) => fixture.fixtureId === "healthcare_medical_assistant")!,
+    );
+
+    expect(evaluation.row.family).toBe("healthcare_regulated");
+    expect(evaluation.row.structuredTier).toBe("strong");
+    expect(evaluation.debug.structured.status).toBe("available");
+    if (evaluation.debug.structured.status !== "available") return;
+
+    expect(evaluation.debug.structured.hardGateMissing).toEqual([]);
+    expect(
+      evaluation.debug.structured.matched.some(
+        (outcome) =>
+          outcome.requirement.value === "medical assistant certification" &&
+          outcome.evidence?.sourceSection === "certifications",
+      ),
+    ).toBe(true);
+  });
+
   it("separates Kith/Robert old keyword failures from structured evidence diagnostics", () => {
     const evaluation = evaluateFixture(
       fixtures.find((fixture) => fixture.fixtureId === "security_kith_robert")!,
