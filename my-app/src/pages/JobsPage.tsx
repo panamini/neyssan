@@ -51,6 +51,7 @@ function isJobsMatchInputDebugUiEnabled(): boolean {
 type JobsStructuredShadowSummary = {
   flagEnabled: boolean;
   internalViewer: boolean;
+  uiEnabled: boolean;
   status: "available" | "unavailable";
   reason: string | null;
   oldScore: number | null;
@@ -61,7 +62,9 @@ type JobsStructuredShadowSummary = {
   partialCount: number;
   missingCount: number;
   unknownCount: number;
+  hardGateMissingCount: number;
   metadataLeakCount: number;
+  languagePreserved: boolean;
   provenanceComplete: boolean;
   jobRequirementCount: number;
   jobConstraintCount: number;
@@ -197,12 +200,26 @@ type JobsPageDetail = {
   } | null;
   linkedProposalCount: number;
   linkedProposals: JobsPageLinkedProposal[];
+  structuredShadowSummary?: JobsStructuredShadowSummary | null;
   reviewItems: JobsPageReviewItem[];
 } | null;
 
 type JobsSortOrder = "recent" | "oldest" | "title" | "company";
 type JobsMatchFilter = "all" | "strong" | "partial" | "weak" | "unknown";
 type JobsViewMode = "active" | "archived";
+
+const STRUCTURED_MATCH_REVIEW_LABELS = [
+  "good",
+  "acceptable but conservative",
+  "false weak",
+  "false strong",
+  "overmatched",
+  "undermatched",
+  "evidence missing",
+  "language issue",
+  "metadata leak",
+  "hard-gate issue",
+] as const;
 
 function isMissingJobsFunctionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
@@ -370,6 +387,172 @@ function JobsStructuredShadowDebugBlock({
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+function JobsStructuredShadowInternalPanel({
+  jobId,
+  summary,
+}: {
+  jobId: string;
+  summary?: JobsStructuredShadowSummary | null;
+}): JSX.Element | null {
+  const recordStructuredMatchReview = useMutation(
+    ((api as any).jobsPublic?.recordStructuredMatchReview ??
+      "jobsPublic.recordStructuredMatchReview") as any,
+  );
+  const [reviewLabel, setReviewLabel] =
+    React.useState<(typeof STRUCTURED_MATCH_REVIEW_LABELS)[number]>("good");
+  const [notes, setNotes] = React.useState("");
+  const [submitState, setSubmitState] = React.useState<
+    "idle" | "saving" | "saved" | "failed"
+  >("idle");
+
+  React.useEffect(() => {
+    setReviewLabel("good");
+    setNotes("");
+    setSubmitState("idle");
+  }, [jobId]);
+
+  if (
+    !summary ||
+    !summary.flagEnabled ||
+    !summary.internalViewer ||
+    !summary.uiEnabled ||
+    summary.status !== "available"
+  ) {
+    return null;
+  }
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitState("saving");
+    void recordStructuredMatchReview({
+      jobId,
+      label: reviewLabel,
+      notes,
+    })
+      .then(() => {
+        setSubmitState("saved");
+      })
+      .catch(() => {
+        setSubmitState("failed");
+      });
+  };
+
+  return (
+    <section
+      aria-label="Structured shadow internal review"
+      data-testid="jobs-structured-shadow-internal-panel"
+      className="dasti-proposal-sheet"
+    >
+      <div className="dasti-proposal-sheet__header">
+        <div className="dasti-stack">
+          <div className="dasti-brief-card__summary-label">
+            Internal review
+          </div>
+          <div className="dasti-empty-state__title">
+            Structured match shadow
+          </div>
+          <p className="dasti-empty-state__subtitle">
+            Production score remains the current match score.
+          </p>
+          <p className="dasti-empty-state__subtitle">
+            Structured shadow is internal review only.
+          </p>
+        </div>
+      </div>
+
+      <div className="dasti-brief-card__summary">
+        <div className="dasti-brief-card__summary-block">
+          <div className="dasti-brief-card__summary-label">Current match</div>
+          <div>score {formatDebugScore(summary.oldScore)}</div>
+          <div>tier {summary.oldTier}</div>
+        </div>
+
+        <div className="dasti-brief-card__summary-block">
+          <div className="dasti-brief-card__summary-label">
+            Structured shadow
+          </div>
+          <div>score {formatDebugScore(summary.structuredScore)}</div>
+          <div>tier {summary.structuredTier ?? "null"}</div>
+          <div className="dasti-jobs-filter-chips" style={{ marginTop: 8 }}>
+            <span className="dasti-jobs-filter-chip">
+              matched {summary.matchedCount}
+            </span>
+            <span className="dasti-jobs-filter-chip">
+              partial {summary.partialCount}
+            </span>
+            <span className="dasti-jobs-filter-chip">
+              unknown {summary.unknownCount}
+            </span>
+            <span className="dasti-jobs-filter-chip">
+              hard-gate missing {summary.hardGateMissingCount}
+            </span>
+            <span className="dasti-jobs-filter-chip">
+              metadata leaks {summary.metadataLeakCount}
+            </span>
+            <span className="dasti-jobs-filter-chip">
+              {summary.languagePreserved
+                ? "language preserved"
+                : "language issue"}
+            </span>
+            <span className="dasti-jobs-filter-chip">
+              {summary.provenanceComplete
+                ? "provenance complete"
+                : "provenance incomplete"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <form className="dasti-stack" onSubmit={handleSubmit}>
+        <label className="dasti-jobs-toolbar__select">
+          <span className="dasti-brief-card__summary-label">
+            Reviewer label
+          </span>
+          <select
+            className="dasti-select dasti-select--sm"
+            aria-label="Reviewer label"
+            value={reviewLabel}
+            onChange={(event) =>
+              setReviewLabel(
+                event.target
+                  .value as (typeof STRUCTURED_MATCH_REVIEW_LABELS)[number],
+              )
+            }
+          >
+            {STRUCTURED_MATCH_REVIEW_LABELS.map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="dasti-jobs-toolbar__search">
+          <span className="dasti-brief-card__summary-label">Review notes</span>
+          <textarea
+            className="dasti-select"
+            aria-label="Review notes"
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            rows={3}
+          />
+        </label>
+        <button
+          type="submit"
+          className="dasti-button dasti-button--pill dasti-button--sm"
+          disabled={submitState === "saving"}
+        >
+          {submitState === "saving" ? "Logging review" : "Log review"}
+        </button>
+        {submitState === "saved" ? (
+          <div className="dasti-empty-state__subtitle">Review logged.</div>
+        ) : submitState === "failed" ? (
+          <div className="dasti-empty-state__subtitle">Review logging failed.</div>
+        ) : null}
+      </form>
     </section>
   );
 }
@@ -2418,6 +2601,11 @@ function JobsPageContent(): JSX.Element {
                         jobLocation={selectedJob.location}
                       />
                     ) : null}
+
+                    <JobsStructuredShadowInternalPanel
+                      jobId={selectedJob.id}
+                      summary={selectedJob.structuredShadowSummary}
+                    />
 
                     {isJobsMatchInputDebugEnabled ? (
                       <JobsMatchInputDebugPanel

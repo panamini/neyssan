@@ -66,6 +66,10 @@ import {
   isStructuredMatchReadShadowEnabled,
   type StructuredMatchReadDebug,
 } from "./lib/jobs/structuredMatchRead";
+import {
+  STRUCTURED_MATCH_REVIEW_LABELS,
+  type StructuredMatchReviewLabel,
+} from "./lib/jobs/structuredMatchReview";
 
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
@@ -88,6 +92,8 @@ const STRUCTURED_MATCH_READ_INTERNAL_VIEWERS_ENV =
   "STRUCTURED_MATCH_READ_INTERNAL_VIEWERS";
 const STRUCTURED_MATCH_READ_INTERNAL_EMAILS_ENV =
   "STRUCTURED_MATCH_READ_INTERNAL_EMAILS";
+const STRUCTURED_MATCH_READ_INTERNAL_UI_ENV =
+  "STRUCTURED_MATCH_READ_INTERNAL_UI";
 const STRUCTURED_DEBUG_METADATA_VALUES = new Set([
   "location",
   "status",
@@ -113,6 +119,7 @@ const STRUCTURED_DEBUG_METADATA_RE =
 type StructuredShadowSummary = {
   flagEnabled: boolean;
   internalViewer: boolean;
+  uiEnabled: boolean;
   status: "available" | "unavailable";
   reason: string | null;
   oldScore: number | null;
@@ -123,7 +130,9 @@ type StructuredShadowSummary = {
   partialCount: number;
   missingCount: number;
   unknownCount: number;
+  hardGateMissingCount: number;
   metadataLeakCount: number;
+  languagePreserved: boolean;
   provenanceComplete: boolean;
   jobRequirementCount: number;
   jobConstraintCount: number;
@@ -136,6 +145,50 @@ type StructuredInternalIdentity = {
   email?: string | null;
   tokenIdentifier?: string | null;
 };
+
+const structuredMatchTierValidator = v.union(
+  v.literal("strong"),
+  v.literal("partial"),
+  v.literal("weak"),
+  v.literal("unknown"),
+);
+
+const structuredShadowSummaryValidator = v.object({
+  flagEnabled: v.boolean(),
+  internalViewer: v.boolean(),
+  uiEnabled: v.boolean(),
+  status: v.union(v.literal("available"), v.literal("unavailable")),
+  reason: v.union(v.string(), v.null()),
+  oldScore: v.union(v.number(), v.null()),
+  oldTier: structuredMatchTierValidator,
+  structuredScore: v.union(v.number(), v.null()),
+  structuredTier: v.union(structuredMatchTierValidator, v.null()),
+  matchedCount: v.number(),
+  partialCount: v.number(),
+  missingCount: v.number(),
+  unknownCount: v.number(),
+  hardGateMissingCount: v.number(),
+  metadataLeakCount: v.number(),
+  languagePreserved: v.boolean(),
+  provenanceComplete: v.boolean(),
+  jobRequirementCount: v.number(),
+  jobConstraintCount: v.number(),
+  profileEvidenceCount: v.number(),
+  profileConstraintCount: v.number(),
+});
+
+const structuredMatchReviewLabelValidator = v.union(
+  v.literal("good"),
+  v.literal("acceptable but conservative"),
+  v.literal("false weak"),
+  v.literal("false strong"),
+  v.literal("overmatched"),
+  v.literal("undermatched"),
+  v.literal("evidence missing"),
+  v.literal("language issue"),
+  v.literal("metadata leak"),
+  v.literal("hard-gate issue"),
+);
 
 function normalizeDebugToken(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -171,6 +224,21 @@ function isStructuredMatchReadInternalViewer(
     identity.email,
     identity.tokenIdentifier,
   ].some((value) => allowlist.has(normalizeDebugToken(value)));
+}
+
+function isStructuredMatchReadInternalUiEnabled(
+  rawValue: string | undefined = process.env[STRUCTURED_MATCH_READ_INTERNAL_UI_ENV],
+): boolean {
+  const normalized = normalizeDebugToken(rawValue);
+  return normalized === "1" || normalized === "true" || normalized === "on";
+}
+
+function isStructuredMatchReviewLabel(
+  value: unknown,
+): value is StructuredMatchReviewLabel {
+  return STRUCTURED_MATCH_REVIEW_LABELS.includes(
+    value as StructuredMatchReviewLabel,
+  );
 }
 
 function buildUnavailableStructuredShadow(
@@ -232,16 +300,37 @@ function hasCompleteStructuredProvenance(
   return entitiesHaveProvenance && outcomesHaveEvidence;
 }
 
+function hasStructuredLanguagePreserved(args: {
+  rawLanguageDetected?: string | null;
+  structured: Extract<StructuredMatchReadDebug["structured"], { status: "available" }>;
+}): boolean {
+  const language = normalizeDebugToken(args.rawLanguageDetected);
+  if (!language.startsWith("fr")) {
+    return true;
+  }
+
+  const values = [
+    ...args.structured.jobRequirements.map((requirement) => requirement.value),
+    ...args.structured.profileEvidence.map((evidence) => evidence.evidenceText),
+  ]
+    .map(normalizeDebugToken)
+    .join("\n");
+  return /\b(francais|français|support client|gestion des demandes)\b/i.test(values);
+}
+
 function buildStructuredShadowSummary(args: {
   debug: StructuredMatchReadDebug;
   flagEnabled: boolean;
   internalViewer: boolean;
+  uiEnabled: boolean;
+  rawLanguageDetected?: string | null;
 }): StructuredShadowSummary {
   const { debug } = args;
   if (debug.structured.status !== "available") {
     return {
       flagEnabled: args.flagEnabled,
       internalViewer: args.internalViewer,
+      uiEnabled: args.uiEnabled,
       status: "unavailable",
       reason: debug.structured.reason,
       oldScore: debug.old.score,
@@ -252,7 +341,9 @@ function buildStructuredShadowSummary(args: {
       partialCount: 0,
       missingCount: 0,
       unknownCount: 0,
+      hardGateMissingCount: 0,
       metadataLeakCount: 0,
+      languagePreserved: false,
       provenanceComplete: false,
       jobRequirementCount: 0,
       jobConstraintCount: 0,
@@ -264,6 +355,7 @@ function buildStructuredShadowSummary(args: {
   return {
     flagEnabled: args.flagEnabled,
     internalViewer: args.internalViewer,
+    uiEnabled: args.uiEnabled,
     status: "available",
     reason: null,
     oldScore: debug.old.score,
@@ -274,7 +366,12 @@ function buildStructuredShadowSummary(args: {
     partialCount: debug.structured.partial.length,
     missingCount: debug.structured.missing.length,
     unknownCount: debug.structured.unknown.length,
+    hardGateMissingCount: debug.structured.hardGateMissing.length,
     metadataLeakCount: countStructuredMetadataLeaks(debug.structured),
+    languagePreserved: hasStructuredLanguagePreserved({
+      rawLanguageDetected: args.rawLanguageDetected,
+      structured: debug.structured,
+    }),
     provenanceComplete: hasCompleteStructuredProvenance(debug.structured),
     jobRequirementCount: debug.structured.jobRequirements.length,
     jobConstraintCount: debug.structured.jobConstraints.length,
@@ -1109,6 +1206,7 @@ function buildJobProjection(
     updatedAt: number;
   }> = [],
   visibleExtraction?: VisibleJobExtractionSelection,
+  structuredShadowSummary: StructuredShadowSummary | null = null,
 ) {
   const responsibilitiesExtraction = buildExtractionProjection({
     job,
@@ -1214,6 +1312,7 @@ function buildJobProjection(
     nextStepBlock,
     linkedProposalCount,
     linkedProposals,
+    structuredShadowSummary,
     reviewItems: reviewItems.map((item: any) => ({
       id: item.id,
       fieldKey: item.fieldKey,
@@ -1226,6 +1325,40 @@ function buildJobProjection(
       updatedAt: item.updatedAt,
     })),
   };
+}
+
+async function resolveStructuredShadowSummaryForInternalUi(args: {
+  identity: StructuredInternalIdentity | null;
+  job: any;
+  matchRead: MatchRead;
+  sourceProfile: CanonicalUserProfile | MatchReadResumeProfile | null;
+  shadowRows: any[];
+}): Promise<StructuredShadowSummary | null> {
+  const flagEnabled = isStructuredMatchReadShadowEnabled();
+  const uiEnabled = isStructuredMatchReadInternalUiEnabled();
+  const internalViewer = isStructuredMatchReadInternalViewer(args.identity);
+  if (!flagEnabled || !uiEnabled || !internalViewer) {
+    return null;
+  }
+
+  const debug = buildStructuredMatchReadDebug({
+    old: args.matchRead,
+    job: {
+      id: String(args.job._id),
+      rawLanguageDetected: args.job.rawLanguageDetected,
+    },
+    profile: args.sourceProfile,
+    shadowRows: args.shadowRows,
+  });
+  const summary = buildStructuredShadowSummary({
+    debug,
+    flagEnabled,
+    internalViewer,
+    uiEnabled,
+    rawLanguageDetected: args.job.rawLanguageDetected,
+  });
+
+  return summary.status === "available" ? summary : null;
 }
 
 async function requireCanonicalUserProfile(ctx: any) {
@@ -1695,6 +1828,7 @@ export const getById = query({
           updatedAt: v.number(),
         }),
       ),
+      structuredShadowSummary: v.union(v.null(), structuredShadowSummaryValidator),
       reviewItems: v.array(
         v.object({
           id: v.string(),
@@ -1711,10 +1845,8 @@ export const getById = query({
     }),
   ),
   handler: async (ctx, args) => {
-    const profiles = await listProfilesForClerk(
-      ctx,
-      (await ctx.auth.getUserIdentity())?.subject ?? "",
-    );
+    const identity = await ctx.auth.getUserIdentity();
+    const profiles = await listProfilesForClerk(ctx, identity?.subject ?? "");
     if (profiles.length === 0) {
       return null;
     }
@@ -1797,6 +1929,14 @@ export const getById = query({
       },
       rawLanguageDetected: job.rawLanguageDetected,
     });
+    const structuredShadowSummary =
+      await resolveStructuredShadowSummaryForInternalUi({
+        identity,
+        job,
+        matchRead,
+        sourceProfile: matchReadProfile,
+        shadowRows,
+      });
 
     return buildJobProjection(
       job,
@@ -1806,6 +1946,7 @@ export const getById = query({
       linkedProposals.length,
       projectedLinkedProposals,
       visibleExtraction,
+      structuredShadowSummary,
     );
   },
 });
@@ -1832,37 +1973,7 @@ export const debugInspectMatchInputByJobId = query({
       matchedSignals: v.array(v.string()),
       missingSignals: v.array(v.string()),
       structuredShadow: v.any(),
-      structuredShadowSummary: v.object({
-        flagEnabled: v.boolean(),
-        internalViewer: v.boolean(),
-        status: v.union(v.literal("available"), v.literal("unavailable")),
-        reason: v.union(v.string(), v.null()),
-        oldScore: v.union(v.number(), v.null()),
-        oldTier: v.union(
-          v.literal("strong"),
-          v.literal("partial"),
-          v.literal("weak"),
-          v.literal("unknown"),
-        ),
-        structuredScore: v.union(v.number(), v.null()),
-        structuredTier: v.union(
-          v.literal("strong"),
-          v.literal("partial"),
-          v.literal("weak"),
-          v.literal("unknown"),
-          v.null(),
-        ),
-        matchedCount: v.number(),
-        partialCount: v.number(),
-        missingCount: v.number(),
-        unknownCount: v.number(),
-        metadataLeakCount: v.number(),
-        provenanceComplete: v.boolean(),
-        jobRequirementCount: v.number(),
-        jobConstraintCount: v.number(),
-        profileEvidenceCount: v.number(),
-        profileConstraintCount: v.number(),
-      }),
+      structuredShadowSummary: structuredShadowSummaryValidator,
     }),
   ),
   handler: async (ctx, args) => {
@@ -1940,6 +2051,8 @@ export const debugInspectMatchInputByJobId = query({
       debug: structuredShadow,
       flagEnabled: structuredShadowFlagEnabled,
       internalViewer: structuredShadowInternalViewer,
+      uiEnabled: isStructuredMatchReadInternalUiEnabled(),
+      rawLanguageDetected: job.rawLanguageDetected,
     });
 
     return {
@@ -1960,6 +2073,129 @@ export const debugInspectMatchInputByJobId = query({
       structuredShadow,
       structuredShadowSummary,
     };
+  },
+});
+
+export const recordStructuredMatchReview = mutation({
+  args: {
+    jobId: v.string(),
+    label: structuredMatchReviewLabelValidator,
+    notes: v.optional(v.string()),
+  },
+  returns: v.object({
+    reviewId: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    if (!isStructuredMatchReadShadowEnabled()) {
+      throw new Error("Structured match shadow is disabled");
+    }
+    if (!isStructuredMatchReadInternalViewer(identity)) {
+      throw new Error("Internal structured match reviewer required");
+    }
+    if (!isStructuredMatchReviewLabel(args.label)) {
+      throw new Error("Invalid structured match review label");
+    }
+
+    const profiles = await listProfilesForClerk(ctx, identity.subject);
+    if (profiles.length === 0) {
+      throw new Error("No reviewer profile available");
+    }
+
+    const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
+    if (!normalizedJobId) {
+      throw new Error("Job not found");
+    }
+
+    const job = await ctx.db.get(normalizedJobId);
+    if (
+      !job ||
+      !profiles.some((profile) => String(profile._id) === String(job.userId)) ||
+      (job.archivedAt !== null && job.archivedAt !== undefined)
+    ) {
+      throw new Error("Job not found");
+    }
+
+    const primaryProfile = profiles[0] ?? null;
+    const sourceProfile = resolveMatchReadSourceProfile({
+      job,
+      primaryProfile,
+      profiles,
+    });
+    const matchReadJobInput = {
+      id: String(job._id),
+      updatedAt: job.updatedAt,
+      parseVersion: job.parseVersion,
+      parseStatus: job.parseStatus,
+      mustHaves: job.mustHaves ?? [],
+      keywords: job.keywords ?? [],
+      mustHavesExtraction: job.mustHavesExtraction ?? [],
+      keywordsExtraction: job.keywordsExtraction ?? [],
+    };
+    const matchRead = computeMatchRead({
+      job: matchReadJobInput,
+      profile: buildMatchReadProfile(sourceProfile),
+      synthesis: job.matchReadSynthesis ?? null,
+    });
+    const shadowRows = await ctx.db
+      .query("job_extraction_shadow")
+      .withIndex("by_job_id", (q) => q.eq("job_id", normalizedJobId))
+      .collect();
+    const debug = buildStructuredMatchReadDebug({
+      old: matchRead,
+      job: {
+        id: String(job._id),
+        rawLanguageDetected: job.rawLanguageDetected,
+      },
+      profile: sourceProfile,
+      shadowRows,
+    });
+    const summary = buildStructuredShadowSummary({
+      debug,
+      flagEnabled: true,
+      internalViewer: true,
+      uiEnabled: isStructuredMatchReadInternalUiEnabled(),
+      rawLanguageDetected: job.rawLanguageDetected,
+    });
+    if (summary.status !== "available") {
+      throw new Error("Structured match shadow is unavailable");
+    }
+
+    const profileId = String(
+      (sourceProfile as any)?.profileId ?? (sourceProfile as any)?._id ?? "",
+    );
+    const normalizedNotes = String(args.notes ?? "").trim();
+    const reviewId = await ctx.db.insert("structured_match_reviews", {
+      reviewerId: identity.subject,
+      reviewerEmail: identity.email ?? null,
+      jobId: String(job._id),
+      profileId,
+      resumeId: typeof job.lastResumeId === "string" ? job.lastResumeId : null,
+      productionScore: matchRead.score,
+      productionTier: matchRead.tier,
+      structuredScore: summary.structuredScore,
+      structuredTier: summary.structuredTier,
+      matchedCount: summary.matchedCount,
+      partialCount: summary.partialCount,
+      missingCount: summary.missingCount,
+      unknownCount: summary.unknownCount,
+      hardGateMissingCount: summary.hardGateMissingCount,
+      metadataLeakCount: summary.metadataLeakCount,
+      languagePreserved: summary.languagePreserved,
+      provenanceComplete: summary.provenanceComplete,
+      reviewerLabel: args.label,
+      ...(normalizedNotes ? { notes: normalizedNotes } : {}),
+      scorerVersion: {
+        model: resolveJobExtractionModel(),
+        promptVersion: PROMPT_VERSION,
+      },
+      createdAt: Date.now(),
+    });
+
+    return { reviewId: String(reviewId) };
   },
 });
 
@@ -2519,16 +2755,10 @@ export const updateField = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const profile = await requireCanonicalUserProfile(ctx);
-    const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
-    if (!normalizedJobId) {
-      throw new Error("Invalid jobId");
-    }
-
-    const job = await ctx.db.get(normalizedJobId);
-    if (!job || String(job.userId) !== String(profile._id)) {
-      throw new Error("Job not found");
-    }
+    const { normalizedJobId, job } = await requireJobForLinkedProfile(
+      ctx,
+      args.jobId,
+    );
 
     const now = Date.now();
     const reviewItems = resolveReviewItemsAfterFieldUpdate({
@@ -2556,16 +2786,10 @@ export const approveReviewItem = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const profile = await requireCanonicalUserProfile(ctx);
-    const normalizedJobId = ctx.db.normalizeId("jobs", args.jobId);
-    if (!normalizedJobId) {
-      throw new Error("Invalid jobId");
-    }
-
-    const job = await ctx.db.get(normalizedJobId);
-    if (!job || String(job.userId) !== String(profile._id)) {
-      throw new Error("Job not found");
-    }
+    const { normalizedJobId, job } = await requireJobForLinkedProfile(
+      ctx,
+      args.jobId,
+    );
 
     const now = Date.now();
     const visibleExtraction = await resolveVisibleExtractionForJob(ctx, job);
