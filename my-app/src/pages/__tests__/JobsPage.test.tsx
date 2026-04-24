@@ -538,9 +538,9 @@ describe("JobsPage", () => {
     );
 
     expect(
-      (await screen.findAllByText("LLM visible summary for the selected job."))
-        .length,
-    ).toBeGreaterThanOrEqual(2);
+      await screen.findByText("LLM visible summary for the selected job."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Extracted summary")).not.toBeInTheDocument();
     expect(screen.getAllByText("LLM visible requirement").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("llm keyword").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Needs review").length).toBeGreaterThanOrEqual(2);
