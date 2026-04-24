@@ -874,6 +874,185 @@ describe("structured match-read shadow scorer", () => {
     expect(debug.structured.structuredTier).not.toBe("strong");
   });
 
+  it("marks missing required regulated credentials as hard-gate missing and prevents strong tier", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "healthcare_hard_gate_missing_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_patient_intake_no_cert",
+        summary: "Patient intake specialist with clinic front desk experience.",
+        skills: ["patient intake", "HIPAA compliance"],
+        keywords: ["patient intake", "HIPAA"],
+        experience: [
+          {
+            company: "Community Clinic",
+            title: "Patient Intake Coordinator",
+            description: "Handled patient intake and HIPAA-compliant chart updates.",
+          },
+        ],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Medical Assistant role requiring certification and patient intake.",
+            role_title_normalized: "Medical Assistant",
+            requirements: [
+              { value: "medical assistant certification", type: "certification", required: true },
+              { value: "patient intake", type: "skill", required: true },
+              { value: "HIPAA compliance", type: "skill", required: true },
+            ],
+            keywords_canonical: ["medical assistant", "patient intake", "HIPAA"],
+            licenses_or_certifications: ["medical assistant certification"],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    expect(debug.structured.hardGateMissing).toEqual([
+      expect.objectContaining({
+        outcome: "hard_gate_missing",
+        evidence: undefined,
+        requirement: expect.objectContaining({
+          value: "medical assistant certification",
+        }),
+        reason: expect.stringContaining("Required regulated credential"),
+      }),
+    ]);
+    expect(debug.structured.structuredTier).not.toBe("strong");
+  });
+
+  it("allows present regulated credentials to score normally", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "healthcare_hard_gate_present_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_medical_assistant",
+        summary: "Certified medical assistant with patient intake and HIPAA compliance experience.",
+        skills: ["patient intake", "HIPAA compliance"],
+        keywords: ["patient intake", "HIPAA"],
+        certifications: ["medical assistant certification"],
+        experience: [
+          {
+            company: "Community Clinic",
+            title: "Medical Assistant",
+            description: "Handled patient intake and HIPAA-compliant chart updates.",
+          },
+        ],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Medical Assistant role requiring certification and patient intake.",
+            role_title_normalized: "Medical Assistant",
+            requirements: [
+              { value: "medical assistant certification", type: "certification", required: true },
+              { value: "patient intake", type: "skill", required: true },
+              { value: "HIPAA compliance", type: "skill", required: true },
+            ],
+            keywords_canonical: ["medical assistant", "patient intake", "HIPAA"],
+            licenses_or_certifications: ["medical assistant certification"],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    expect(debug.structured.hardGateMissing).toEqual([]);
+    expect(
+      debug.structured.matched.find(
+        (outcome) => outcome.requirement.value === "medical assistant certification",
+      ),
+    ).toMatchObject({
+      outcome: "matched",
+      evidence: expect.objectContaining({
+        sourceSection: "certifications",
+      }),
+    });
+    expect(debug.structured.structuredTier).toBe("strong");
+  });
+
+  it("does not hard gate optional or generic training certifications", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "optional_training_not_hard_gate_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_retail_no_training",
+        summary: "Retail associate with customer service and cash handling experience.",
+        skills: ["customer service", "cash handling"],
+        keywords: ["customer service", "cash handling"],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Retail Associate role with optional training preference.",
+            role_title_normalized: "Retail Associate",
+            requirements: [
+              { value: "customer service", type: "skill", required: true },
+              { value: "product knowledge training certificate", type: "certification", required: false },
+            ],
+            keywords_canonical: ["customer service"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: null,
+              retail: true,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    expect(debug.structured.hardGateMissing).toEqual([]);
+    expect(debug.structured.unknown.map((outcome) => outcome.requirement.value)).toContain(
+      "product knowledge training certificate",
+    );
+  });
+
   it("returns unavailable when no valid structured extraction exists", () => {
     const debug = buildStructuredMatchReadDebug({
       old: oldKithMatchRead(),
