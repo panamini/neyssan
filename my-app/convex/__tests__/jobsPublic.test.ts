@@ -1533,6 +1533,9 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
         jobId: job._id,
         label: "false weak",
         notes: "Structured scorer underweighted the role evidence.",
+        extractionSummaryVerdict: "good",
+        extractionRequirementsVerdict: "incomplete",
+        extractionKeywordsVerdict: "noisy",
       },
     );
 
@@ -1560,6 +1563,9 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
         provenanceComplete: true,
         reviewerLabel: "false weak",
         notes: "Structured scorer underweighted the role evidence.",
+        extractionSummaryVerdict: "good",
+        extractionRequirementsVerdict: "incomplete",
+        extractionKeywordsVerdict: "noisy",
         appGitCommitSha: "abc123review",
         structuredScorerVersion: "structured-match-read-shadow-v1",
         extractionModel: "ministral-3b-2512",
@@ -1572,6 +1578,37 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
         createdAt: expect.any(Number),
       },
     });
+  });
+
+  it("rejects invalid extraction verdict values", async () => {
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+    vi.stubEnv("STRUCTURED_MATCH_REVIEW_APP_GIT_COMMIT_SHA", "abc123review");
+
+    await expect(
+      recordStructuredMatchReview._handler(
+        {
+          auth: {
+            getUserIdentity: async () => ({
+              subject: "clerk_123",
+              email: "internal@example.com",
+            }),
+          },
+          db: {
+            query: () => {
+              throw new Error("verdict validation should happen before db reads");
+            },
+          },
+        } as any,
+        {
+          jobId: "job_review_structured",
+          label: "good",
+          extractionSummaryVerdict: "too_broad",
+        } as any,
+      ),
+    ).rejects.toThrow(
+      "Invalid structured match review extractionSummaryVerdict",
+    );
   });
 
   it("rejects review records that cannot be tied to an app git commit", async () => {
