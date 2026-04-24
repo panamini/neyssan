@@ -101,6 +101,14 @@ const matchReadSynthesisStatusChoice = v.union(
   v.literal("error"),
 );
 
+const jobExtractionShadowValidationStatusChoice = v.union(
+  v.literal("valid"),
+  v.literal("invalid_json"),
+  v.literal("schema_invalid"),
+  v.literal("empty_signal"),
+  v.literal("low_confidence"),
+);
+
 const matchReadSynthesisChoice = v.object({
   cacheKey: v.string(),
   status: matchReadSynthesisStatusChoice,
@@ -314,6 +322,25 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_dedupe", ["userId", "dedupeKey"])
     .index("by_user_updated", ["userId", "updatedAt"]),
+
+  job_extraction_shadow: defineTable({
+    job_id: v.id("jobs"),
+    job_text_hash: v.string(),
+    llm_raw_output: v.any(),
+    llm_normalized_output: v.any(),
+    validation_status: jobExtractionShadowValidationStatusChoice,
+    fallback_used: v.boolean(),
+    model: v.string(),
+    prompt_version: v.string(),
+    latency_ms: v.number(),
+    model_confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
+    final_confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
+    created_at: v.number(),
+  })
+    .index("by_job_id", ["job_id"])
+    .index("by_job_text_hash", ["job_text_hash"])
+    .index("by_cache_identity", ["job_text_hash", "model", "prompt_version", "validation_status"])
+    .index("by_hash_status", ["job_text_hash", "validation_status"]),
 
   userProfiles: defineTable({
     // External canonical profile id (used by upsertProfile)
