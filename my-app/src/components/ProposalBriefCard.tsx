@@ -75,6 +75,10 @@ function formatReviewValueList(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function normalizeComparableText(value: unknown): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
 function resolveTrustLabel(args: {
   parseStatus?: string | null;
   trustState?: string | null;
@@ -215,6 +219,17 @@ export function ProposalBriefCard({
         visibleKeywords,
       });
   const summaryValue = String(resolvedSummaryText ?? "").trim();
+  const hasDuplicateSummaryReviewItem =
+    summaryValue.length > 0 &&
+    visibleReviewItems.some(
+      (item) =>
+        String(item.fieldKey ?? "") === "summary" &&
+        normalizeComparableText(
+          formatReviewValue(item.approvedValue ?? item.suggestedValue),
+        ) === normalizeComparableText(summaryValue),
+    );
+  const shouldRenderExtractedSummary =
+    Boolean(resolvedSummaryText) && !hasDuplicateSummaryReviewItem;
   const isSummaryEditing = editingItemId === SUMMARY_EDITOR_ID;
   const summaryDraft = draftValues[SUMMARY_EDITOR_ID] ?? summaryValue;
 
@@ -358,7 +373,7 @@ export function ProposalBriefCard({
                   </p>
                 </div>
               ) : null}
-              {resolvedSummaryText ? (
+              {shouldRenderExtractedSummary ? (
                 <div className="dasti-brief-card__review-item">
                   <div className="dasti-brief-card__review-head">
                     <div>

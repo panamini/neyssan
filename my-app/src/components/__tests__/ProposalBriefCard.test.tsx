@@ -160,9 +160,10 @@ describe("resolveProposalBriefCardTitle", () => {
       </MemoryRouter>,
     );
 
+    expect(screen.queryByText("Extracted summary")).not.toBeInTheDocument();
     expect(
-      screen.getAllByText("Host at Texas Roadhouse; greets guests.").length,
-    ).toBeGreaterThanOrEqual(2);
+      screen.getAllByText("Host at Texas Roadhouse; greets guests."),
+    ).toHaveLength(1);
     expect(screen.getAllByText("Guest service").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/guest service/).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(3);
