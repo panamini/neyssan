@@ -34,6 +34,19 @@ export const STRUCTURED_MATCH_REVIEW_LABELS = [
 export type StructuredMatchReviewLabel =
   (typeof STRUCTURED_MATCH_REVIEW_LABELS)[number];
 
+export const STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS = [
+  "good",
+  "too_vague",
+  "wrong_focus",
+  "noisy",
+  "incomplete",
+  "metadata_leak",
+  "wrong_language",
+] as const;
+
+export type StructuredMatchReviewExtractionVerdict =
+  (typeof STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS)[number];
+
 export const STRUCTURED_MATCH_REVIEW_BLOCKER_LABELS = [
   "overmatched",
   "metadata leak",
@@ -46,7 +59,12 @@ export type StructuredMatchReviewExampleKind =
   | "falseWeak"
   | "overconfidentPartial"
   | "extractionCorrectEvidenceFailed"
-  | "evidenceCorrectTierWrong";
+  | "evidenceCorrectTierWrong"
+  | "badSummary"
+  | "noisyIncompleteRequirements"
+  | "badKeywords"
+  | "metadataLeak"
+  | "wrongLanguage";
 
 export type StructuredMatchRecommendedNextAction =
   | "add fixtures"
@@ -68,6 +86,9 @@ export type StructuredMatchReviewCase = {
   structuredScorerVersion?: string;
   extractionModel?: string;
   extractionPromptVersion?: string;
+  extractionSummaryVerdict?: StructuredMatchReviewExtractionVerdict;
+  extractionRequirementsVerdict?: StructuredMatchReviewExtractionVerdict;
+  extractionKeywordsVerdict?: StructuredMatchReviewExtractionVerdict;
   reviewedAt?: number;
   matchedCount: number;
   partialCount: number;
@@ -94,6 +115,10 @@ export type StructuredMatchReviewReadout = {
   coverageByCategory: Record<StructuredMatchReviewCategory, number>;
   missingCategories: StructuredMatchReviewCategory[];
   labelCounts: Record<StructuredMatchReviewLabel, number>;
+  extractionVerdictCounts: Record<
+    "summary" | "requirements" | "keywords",
+    Record<StructuredMatchReviewExtractionVerdict, number>
+  >;
   blockerLabelCounts: Partial<Record<StructuredMatchReviewLabel, number>>;
   examples: Record<StructuredMatchReviewExampleKind, StructuredMatchReviewExample[]>;
   rolloutGate: {
@@ -123,6 +148,25 @@ function emptyLabelCounts(): Record<StructuredMatchReviewLabel, number> {
   ) as Record<StructuredMatchReviewLabel, number>;
 }
 
+function emptyExtractionVerdictCounts(): Record<
+  "summary" | "requirements" | "keywords",
+  Record<StructuredMatchReviewExtractionVerdict, number>
+> {
+  const emptyCounts = () =>
+    Object.fromEntries(
+      STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS.map((verdict) => [
+        verdict,
+        0,
+      ]),
+    ) as Record<StructuredMatchReviewExtractionVerdict, number>;
+
+  return {
+    summary: emptyCounts(),
+    requirements: emptyCounts(),
+    keywords: emptyCounts(),
+  };
+}
+
 function emptyExamples(): Record<StructuredMatchReviewExampleKind, StructuredMatchReviewExample[]> {
   return {
     falseStrong: [],
@@ -130,6 +174,11 @@ function emptyExamples(): Record<StructuredMatchReviewExampleKind, StructuredMat
     overconfidentPartial: [],
     extractionCorrectEvidenceFailed: [],
     evidenceCorrectTierWrong: [],
+    badSummary: [],
+    noisyIncompleteRequirements: [],
+    badKeywords: [],
+    metadataLeak: [],
+    wrongLanguage: [],
   };
 }
 
@@ -178,6 +227,7 @@ export function buildStructuredMatchReviewReadout(
 ): StructuredMatchReviewReadout {
   const coverageByCategory = emptyCoverage();
   const labelCounts = emptyLabelCounts();
+  const extractionVerdictCounts = emptyExtractionVerdictCounts();
   const blockerLabelCounts: Partial<Record<StructuredMatchReviewLabel, number>> = {};
   const examples = emptyExamples();
   const gateReasons: string[] = [];
@@ -195,6 +245,49 @@ export function buildStructuredMatchReviewReadout(
 
     for (const kind of reviewCase.exampleKinds ?? []) {
       addExample(examples, kind, reviewCase);
+    }
+
+    if (reviewCase.extractionSummaryVerdict) {
+      extractionVerdictCounts.summary[reviewCase.extractionSummaryVerdict] += 1;
+      if (reviewCase.extractionSummaryVerdict !== "good") {
+        addExample(examples, "badSummary", reviewCase);
+      }
+    }
+    if (reviewCase.extractionRequirementsVerdict) {
+      extractionVerdictCounts.requirements[
+        reviewCase.extractionRequirementsVerdict
+      ] += 1;
+      if (
+        reviewCase.extractionRequirementsVerdict === "noisy" ||
+        reviewCase.extractionRequirementsVerdict === "incomplete"
+      ) {
+        addExample(examples, "noisyIncompleteRequirements", reviewCase);
+      }
+    }
+    if (reviewCase.extractionKeywordsVerdict) {
+      extractionVerdictCounts.keywords[reviewCase.extractionKeywordsVerdict] +=
+        1;
+      if (reviewCase.extractionKeywordsVerdict !== "good") {
+        addExample(examples, "badKeywords", reviewCase);
+      }
+    }
+    if (
+      reviewCase.extractionSummaryVerdict === "metadata_leak" ||
+      reviewCase.extractionRequirementsVerdict === "metadata_leak" ||
+      reviewCase.extractionKeywordsVerdict === "metadata_leak" ||
+      reviewCase.metadataLeakCount > 0 ||
+      reviewCase.labels.includes("metadata leak")
+    ) {
+      addExample(examples, "metadataLeak", reviewCase);
+    }
+    if (
+      reviewCase.extractionSummaryVerdict === "wrong_language" ||
+      reviewCase.extractionRequirementsVerdict === "wrong_language" ||
+      reviewCase.extractionKeywordsVerdict === "wrong_language" ||
+      !reviewCase.languagePreserved ||
+      reviewCase.labels.includes("language issue")
+    ) {
+      addExample(examples, "wrongLanguage", reviewCase);
     }
 
     if (
@@ -324,6 +417,7 @@ export function buildStructuredMatchReviewReadout(
     coverageByCategory,
     missingCategories,
     labelCounts,
+    extractionVerdictCounts,
     blockerLabelCounts,
     examples,
     rolloutGate: {

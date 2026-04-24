@@ -26,6 +26,8 @@ The old beta JSONL may be used as historical context only. Go/no-go decisions fo
 
 Collect 100 additional internal review cases.
 
+The first 10 records collected before extraction verdict support are pre-extraction-verdict smoke records. Keep them for debugging history, but exclude them from the official 100-case review count and rollout decisions.
+
 Suggested sampling quota:
 
 - security/licensed: 12
@@ -65,6 +67,9 @@ Each reviewed job/profile pair should log:
 - language preserved
 - provenance complete
 - reviewer label
+- extraction summary verdict
+- extraction requirements verdict
+- extraction keywords verdict
 - optional notes
 
 ## Allowed Labels
@@ -79,6 +84,44 @@ Each reviewed job/profile pair should log:
 - language issue
 - metadata leak
 - hard-gate issue
+
+## Extraction Verdicts
+
+Allowed values:
+
+- good
+- too_vague
+- wrong_focus
+- noisy
+- incomplete
+- metadata_leak
+- wrong_language
+
+Summary verdict:
+
+- good: concise, job-focused, source-language preserved
+- too_vague: generic and not useful
+- wrong_focus: candidate/company-focused instead of role-focused
+- metadata_leak: includes pay/location/source metadata as summary content
+- wrong_language: not in source language
+
+Requirements verdict:
+
+- good: actionable role requirements
+- noisy: mixed with boilerplate
+- incomplete: misses obvious role requirements
+- metadata_leak: includes pay/location/company/source metadata
+- wrong_language: not in source language
+
+Keywords verdict:
+
+- good: short canonical job-relevant concepts
+- noisy: weak/generic concepts
+- incomplete: misses core concepts
+- metadata_leak: includes location/status/pay/company/source terms
+- wrong_language: not in source language
+
+Extraction verdicts are readout diagnostics only. They are not rollout blockers unless reviewers also apply existing blocker labels such as `metadata leak` or `language issue`.
 
 ## Stop Rules
 

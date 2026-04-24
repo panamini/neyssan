@@ -67,8 +67,10 @@ import {
   type StructuredMatchReadDebug,
 } from "./lib/jobs/structuredMatchRead";
 import {
+  STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS,
   STRUCTURED_MATCH_REVIEW_LABELS,
   STRUCTURED_MATCH_REVIEW_SCORER_VERSION,
+  type StructuredMatchReviewExtractionVerdict,
   type StructuredMatchReviewLabel,
 } from "./lib/jobs/structuredMatchReview";
 
@@ -198,6 +200,16 @@ const structuredMatchReviewLabelValidator = v.union(
   v.literal("hard-gate issue"),
 );
 
+const structuredMatchReviewExtractionVerdictValidator = v.union(
+  v.literal("good"),
+  v.literal("too_vague"),
+  v.literal("wrong_focus"),
+  v.literal("noisy"),
+  v.literal("incomplete"),
+  v.literal("metadata_leak"),
+  v.literal("wrong_language"),
+);
+
 function normalizeDebugToken(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
 }
@@ -246,6 +258,14 @@ function isStructuredMatchReviewLabel(
 ): value is StructuredMatchReviewLabel {
   return STRUCTURED_MATCH_REVIEW_LABELS.includes(
     value as StructuredMatchReviewLabel,
+  );
+}
+
+function isStructuredMatchReviewExtractionVerdict(
+  value: unknown,
+): value is StructuredMatchReviewExtractionVerdict {
+  return STRUCTURED_MATCH_REVIEW_EXTRACTION_VERDICTS.includes(
+    value as StructuredMatchReviewExtractionVerdict,
   );
 }
 
@@ -2107,6 +2127,15 @@ export const recordStructuredMatchReview = mutation({
     jobId: v.string(),
     label: structuredMatchReviewLabelValidator,
     notes: v.optional(v.string()),
+    extractionSummaryVerdict: v.optional(
+      structuredMatchReviewExtractionVerdictValidator,
+    ),
+    extractionRequirementsVerdict: v.optional(
+      structuredMatchReviewExtractionVerdictValidator,
+    ),
+    extractionKeywordsVerdict: v.optional(
+      structuredMatchReviewExtractionVerdictValidator,
+    ),
   },
   returns: v.object({
     reviewId: v.string(),
@@ -2124,6 +2153,18 @@ export const recordStructuredMatchReview = mutation({
     }
     if (!isStructuredMatchReviewLabel(args.label)) {
       throw new Error("Invalid structured match review label");
+    }
+    for (const [fieldName, verdict] of [
+      ["extractionSummaryVerdict", args.extractionSummaryVerdict],
+      ["extractionRequirementsVerdict", args.extractionRequirementsVerdict],
+      ["extractionKeywordsVerdict", args.extractionKeywordsVerdict],
+    ] as const) {
+      if (
+        verdict !== undefined &&
+        !isStructuredMatchReviewExtractionVerdict(verdict)
+      ) {
+        throw new Error(`Invalid structured match review ${fieldName}`);
+      }
     }
     const appGitCommitSha = resolveStructuredMatchReviewAppGitCommitSha();
     if (!appGitCommitSha) {
@@ -2222,6 +2263,18 @@ export const recordStructuredMatchReview = mutation({
       provenanceComplete: summary.provenanceComplete,
       reviewerLabel: args.label,
       ...(normalizedNotes ? { notes: normalizedNotes } : {}),
+      ...(args.extractionSummaryVerdict
+        ? { extractionSummaryVerdict: args.extractionSummaryVerdict }
+        : {}),
+      ...(args.extractionRequirementsVerdict
+        ? {
+            extractionRequirementsVerdict:
+              args.extractionRequirementsVerdict,
+          }
+        : {}),
+      ...(args.extractionKeywordsVerdict
+        ? { extractionKeywordsVerdict: args.extractionKeywordsVerdict }
+        : {}),
       appGitCommitSha,
       structuredScorerVersion: STRUCTURED_MATCH_REVIEW_SCORER_VERSION,
       extractionModel,
