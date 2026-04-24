@@ -110,6 +110,31 @@ function validateReviewCases(cases: StructuredMatchReviewCase[]) {
     if (!reviewCase.caseId) {
       throw new Error("Every review case must include caseId.");
     }
+    if (!reviewCase.appGitCommitSha) {
+      throw new Error(
+        `${reviewCase.caseId} is invalid for rollout decisions: missing appGitCommitSha.`,
+      );
+    }
+    if (!reviewCase.structuredScorerVersion) {
+      throw new Error(
+        `${reviewCase.caseId} is invalid for rollout decisions: missing structuredScorerVersion.`,
+      );
+    }
+    if (!reviewCase.extractionModel) {
+      throw new Error(
+        `${reviewCase.caseId} is invalid for rollout decisions: missing extractionModel.`,
+      );
+    }
+    if (!reviewCase.extractionPromptVersion) {
+      throw new Error(
+        `${reviewCase.caseId} is invalid for rollout decisions: missing extractionPromptVersion.`,
+      );
+    }
+    if (typeof reviewCase.reviewedAt !== "number") {
+      throw new Error(
+        `${reviewCase.caseId} is invalid for rollout decisions: missing reviewedAt.`,
+      );
+    }
     validateLiteralSet(
       [reviewCase.category],
       STRUCTURED_MATCH_REVIEW_REQUIRED_CATEGORIES,

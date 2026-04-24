@@ -1,6 +1,11 @@
+import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
 import type { NormalizedJobExtraction } from "../../convex/lib/jobs/jobExtractionSchema";
+import {
+  PROMPT_VERSION,
+  resolveJobExtractionModel,
+} from "../../convex/lib/jobs/llmExtractJob";
 import type { MatchRead, MatchReadTier } from "../../convex/lib/jobs/matchRead";
 import {
   buildStructuredMatchReadDebug,
@@ -8,6 +13,7 @@ import {
 } from "../../convex/lib/jobs/structuredMatchRead";
 import {
   STRUCTURED_MATCH_REVIEW_BLOCKER_LABELS,
+  STRUCTURED_MATCH_REVIEW_SCORER_VERSION,
   type StructuredMatchReviewCase,
   type StructuredMatchReviewLabel,
 } from "../../convex/lib/jobs/structuredMatchReview";
@@ -31,11 +37,38 @@ type ReviewFixture = {
   languageProbe?: RegExp;
 };
 
-const MODEL = "mistral-small-latest";
-const PROMPT_VERSION = "p9_v2";
+const MODEL = resolveJobExtractionModel();
 const BLOCKER_LABELS = new Set<StructuredMatchReviewLabel>(
   STRUCTURED_MATCH_REVIEW_BLOCKER_LABELS,
 );
+
+function resolveReviewAppGitCommitSha(): string {
+  const envValue =
+    process.env.STRUCTURED_MATCH_REVIEW_APP_GIT_COMMIT_SHA ??
+    process.env.APP_GIT_COMMIT_SHA ??
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+    process.env.GIT_COMMIT_SHA ??
+    process.env.VITE_GIT_COMMIT_SHA;
+  const normalizedEnvValue = String(envValue ?? "").trim();
+  if (normalizedEnvValue) {
+    return normalizedEnvValue;
+  }
+
+  return execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+}
+
+const APP_GIT_COMMIT_SHA = resolveReviewAppGitCommitSha();
+const REVIEWED_AT = Date.now();
+
+function currentReviewVersioning() {
+  return {
+    appGitCommitSha: APP_GIT_COMMIT_SHA,
+    structuredScorerVersion: STRUCTURED_MATCH_REVIEW_SCORER_VERSION,
+    extractionModel: MODEL,
+    extractionPromptVersion: PROMPT_VERSION,
+    reviewedAt: REVIEWED_AT,
+  };
+}
 
 function extraction(overrides: Partial<NormalizedJobExtraction>): NormalizedJobExtraction {
   const { environment, ...rest } = overrides;
@@ -473,7 +506,10 @@ function deriveLabels(
 function regenerateCase(base: ReviewCaseRecord): ReviewCaseRecord {
   const fixture = fixturesByCaseId[base.caseId];
   if (!fixture) {
-    return base;
+    return {
+      ...base,
+      ...currentReviewVersioning(),
+    };
   }
 
   const debug = buildStructuredMatchReadDebug({
@@ -498,6 +534,7 @@ function regenerateCase(base: ReviewCaseRecord): ReviewCaseRecord {
       productionScore: base.productionScore,
       productionTier: base.productionTier,
       productionScoreChanged: false,
+      ...currentReviewVersioning(),
       matchedCount: 0,
       partialCount: 0,
       missingCount: 0,
@@ -527,6 +564,7 @@ function regenerateCase(base: ReviewCaseRecord): ReviewCaseRecord {
     productionScore: base.productionScore,
     productionTier: base.productionTier,
     productionScoreChanged: false,
+    ...currentReviewVersioning(),
     matchedCount: structured.matched.length,
     partialCount: structured.partial.length,
     missingCount: structured.missing.length + structured.hardGateMissing.length,

@@ -1380,6 +1380,7 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
   it("logs reviewer label with current production and structured values without mutating production match", async () => {
     vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
     vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+    vi.stubEnv("STRUCTURED_MATCH_REVIEW_APP_GIT_COMMIT_SHA", "abc123review");
 
     const linkedProfiles = [
       {
@@ -1559,8 +1560,47 @@ describe("jobsPublic.recordStructuredMatchReview", () => {
         provenanceComplete: true,
         reviewerLabel: "false weak",
         notes: "Structured scorer underweighted the role evidence.",
+        appGitCommitSha: "abc123review",
+        structuredScorerVersion: "structured-match-read-shadow-v1",
+        extractionModel: "ministral-3b-2512",
+        extractionPromptVersion: "p9_v2",
+        reviewedAt: expect.any(Number),
+        scorerVersion: {
+          model: "ministral-3b-2512",
+          promptVersion: "p9_v2",
+        },
+        createdAt: expect.any(Number),
       },
     });
+  });
+
+  it("rejects review records that cannot be tied to an app git commit", async () => {
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
+
+    await expect(
+      recordStructuredMatchReview._handler(
+        {
+          auth: {
+            getUserIdentity: async () => ({
+              subject: "clerk_123",
+              email: "internal@example.com",
+            }),
+          },
+          db: {
+            query: () => {
+              throw new Error("versioning failure should happen before db reads");
+            },
+          },
+        } as any,
+        {
+          jobId: "job_review_structured",
+          label: "good",
+        },
+      ),
+    ).rejects.toThrow(
+      "Structured match review versioning is not configured: missing app git commit SHA",
+    );
   });
 });
 
