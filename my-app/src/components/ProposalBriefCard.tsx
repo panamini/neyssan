@@ -37,6 +37,7 @@ type ProposalBriefCardProps = {
   visibleRequirements?: string[];
   keywords?: string[];
   visibleKeywords?: string[];
+  extractionUnavailable?: boolean;
   parseStatus?: string | null;
   trustState?: string | null;
   linkedDocumentCount?: number;
@@ -61,6 +62,17 @@ function formatReviewValue(value: unknown): string {
   }
 
   return String(value ?? "").trim();
+}
+
+function formatReviewValueList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  return String(value ?? "")
+    .split(/\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function resolveTrustLabel(args: {
@@ -145,6 +157,7 @@ export function ProposalBriefCard({
   visibleRequirements,
   keywords = [],
   visibleKeywords,
+  extractionUnavailable = false,
   parseStatus = null,
   trustState = null,
   linkedDocumentCount = 0,
@@ -172,11 +185,13 @@ export function ProposalBriefCard({
     setResolvedItems({});
   }, [reviewItems, summaryText, visibleSummaryText]);
 
-  const visibleReviewItems = reviewItems.map((item) => ({
-    ...item,
-    reviewStatus: resolvedItems[item.id]?.reviewStatus ?? item.reviewStatus,
-    approvedValue: resolvedItems[item.id]?.approvedValue ?? item.approvedValue,
-  }));
+  const visibleReviewItems = extractionUnavailable
+    ? []
+    : reviewItems.map((item) => ({
+        ...item,
+        reviewStatus: resolvedItems[item.id]?.reviewStatus ?? item.reviewStatus,
+        approvedValue: resolvedItems[item.id]?.approvedValue ?? item.approvedValue,
+      }));
   const shouldRenderRawSourceDock =
     !hideRawSource && Boolean(jobDescription);
   const resolvedCardTitle = resolveProposalBriefCardTitle({
@@ -185,16 +200,20 @@ export function ProposalBriefCard({
   });
   const {
     summaryText: resolvedSummaryText,
-    requirements: resolvedRequirements,
-    keywords: resolvedKeywords,
-  } = resolveProposalBriefCardDisplayContent({
-    summaryText,
-    visibleSummaryText,
-    requirements,
-    visibleRequirements,
-    keywords,
-    visibleKeywords,
-  });
+  } = extractionUnavailable
+    ? {
+        summaryText: null,
+        requirements: [],
+        keywords: [],
+      }
+    : resolveProposalBriefCardDisplayContent({
+        summaryText,
+        visibleSummaryText,
+        requirements,
+        visibleRequirements,
+        keywords,
+        visibleKeywords,
+      });
   const summaryValue = String(resolvedSummaryText ?? "").trim();
   const isSummaryEditing = editingItemId === SUMMARY_EDITOR_ID;
   const summaryDraft = draftValues[SUMMARY_EDITOR_ID] ?? summaryValue;
@@ -327,6 +346,18 @@ export function ProposalBriefCard({
                   <p className="dasti-brief-card__summary-copy">{trustLabel}</p>
                 </div>
               ) : null}
+              {extractionUnavailable ? (
+                <div className="dasti-brief-card__review-item dasti-brief-card__review-item--unavailable">
+                  <div className="dasti-brief-card__review-label">
+                    EXTRACTION. PAUSED.
+                  </div>
+                  <p className="dasti-brief-card__summary-copy">
+                    Job read is out of order.
+                    <br />
+                    Raw source stays intact.
+                  </p>
+                </div>
+              ) : null}
               {resolvedSummaryText ? (
                 <div className="dasti-brief-card__review-item">
                   <div className="dasti-brief-card__review-head">
@@ -389,26 +420,6 @@ export function ProposalBriefCard({
                   )}
                 </div>
               ) : null}
-              {resolvedRequirements.length > 0 ? (
-                <div className="dasti-brief-card__summary-block">
-                  <div className="dasti-brief-card__summary-label">
-                    Requirements
-                  </div>
-                  <div className="dasti-brief-card__summary-list">
-                    {resolvedRequirements.map((requirement) => (
-                      <div key={requirement}>{requirement}</div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-              {resolvedKeywords.length > 0 ? (
-                <div className="dasti-brief-card__summary-block">
-                  <div className="dasti-brief-card__summary-label">Keywords</div>
-                  <p className="dasti-brief-card__summary-copy">
-                    {resolvedKeywords.join(", ")}
-                  </p>
-                </div>
-              ) : null}
               {visibleReviewItems.length > 0 ? (
                 <div className="dasti-brief-card__review-list">
                   {visibleReviewItems.map((item) => {
@@ -416,8 +427,12 @@ export function ProposalBriefCard({
                     const currentValue = formatReviewValue(
                       item.approvedValue ?? item.suggestedValue,
                     );
+                    const currentListValue = formatReviewValueList(
+                      item.approvedValue ?? item.suggestedValue,
+                    );
                     const draftValue = draftValues[item.id] ?? currentValue;
                     const isApproved = item.reviewStatus === "approved";
+                    const fieldKey = String(item.fieldKey ?? "");
 
                     return (
                       <div key={item.id} className="dasti-brief-card__review-item">
@@ -508,9 +523,25 @@ export function ProposalBriefCard({
                             </button>
                           </div>
                         ) : null}
-                        <div className="dasti-brief-card__review-source">
-                          {item.sourceText}
-                        </div>
+                        {fieldKey === "mustHaves" || fieldKey === "requirements" ? (
+                          <ul className="dasti-brief-card__review-bullets">
+                            {currentListValue.map((entry) => (
+                              <li key={entry}>{entry}</li>
+                            ))}
+                          </ul>
+                        ) : fieldKey === "keywords" ? (
+                          <div className="dasti-brief-card__review-chips">
+                            {currentListValue.map((entry) => (
+                              <span key={entry} className="dasti-brief-card__review-chip">
+                                {entry}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="dasti-brief-card__review-source">
+                            {item.sourceText}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
