@@ -455,9 +455,10 @@ describe("JobsPage", () => {
     expect(
       await screen.findByText("Northwind · Location unavailable"),
     ).toBeInTheDocument();
-    expect(await screen.findByText("Match")).toBeInTheDocument();
+    expect((await screen.findAllByText("Match")).length).toBeGreaterThan(0);
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
     expect(await screen.findByText("Weak")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open Match" }));
     expect(
       (await screen.findAllByText("Cross-functional communication")).length,
     ).toBeGreaterThan(0);
@@ -469,17 +470,26 @@ describe("JobsPage", () => {
         name: /Open linked proposal Operations Associate cover letter/i,
       }),
     ).toHaveAttribute("href", "/proposal?view=saved&id=proposal_1");
-    expect(await screen.findByText("Review state")).toBeInTheDocument();
+    expect(await screen.findByText("Check fields")).toBeInTheDocument();
+    expect(screen.queryByText("Review state")).not.toBeInTheDocument();
+    const jobActions = screen.getByLabelText("Job actions");
     expect(
-      screen.getByRole("button", { name: "Open resume with this job" }),
+      within(jobActions).getByRole("button", {
+        name: "Draft Proposal",
+      }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Common next steps")).toBeInTheDocument();
+    expect(screen.queryByText("Common next steps")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Next step" })).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Attach a resume" }),
-    ).toBeInTheDocument();
+      within(jobActions).getAllByRole("button", { name: "Attach resume" })
+        .length,
+    ).toBeGreaterThan(0);
     expect(
-      screen.getByRole("button", { name: "Add to favorites" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Add to favorites" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Mark favorite" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open" }),
     ).not.toBeInTheDocument();
@@ -496,30 +506,13 @@ describe("JobsPage", () => {
       });
     });
     const linkedDocuments = screen.getByText("Linked documents");
-    const rawSource = screen.getByText("Raw source");
+    const importedPosting = screen.getByText("Imported Posting");
     expect(
-      linkedDocuments.compareDocumentPosition(rawSource) &
+      linkedDocuments.compareDocumentPosition(importedPosting) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
     expect(markOpenedMock).toHaveBeenCalledWith({ jobId: "job_alpha" });
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open resume with this job" }),
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
-        "/cv?jobId=job_alpha",
-      );
-    });
-    expect(trackEventMock).toHaveBeenCalledWith({
-      event: "job_decision_made",
-      jobId: "job_alpha",
-      outcome: "resume",
-      timeToDecisionMs: expect.any(Number),
-      tier: "partial",
-    });
   });
 
   it("renders visible extraction fields on the selected detail without changing score UI", async () => {
@@ -580,9 +573,9 @@ describe("JobsPage", () => {
     expect(screen.queryByText("Extracted summary")).not.toBeInTheDocument();
     expect(screen.getAllByText("LLM visible requirement").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("llm keyword").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Needs review").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(3);
-    expect(screen.getByText("Summary")).toBeInTheDocument();
+    expect(screen.getAllByText("Check").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByRole("button", { name: "Keep" })).toHaveLength(3);
+    expect(screen.getAllByText("Summary").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Requirements").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Keywords").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("button", { name: "Edit Summary" })).toBeInTheDocument();
@@ -592,7 +585,7 @@ describe("JobsPage", () => {
     expect(screen.queryByText("EXTRACTION. PAUSED.")).not.toBeInTheDocument();
     expect(screen.queryByText("Run recurring workflows")).not.toBeInTheDocument();
     expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
-    expect(screen.getByText("Match")).toBeInTheDocument();
+    expect(screen.getAllByText("Match").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("AI extracted")).not.toBeInTheDocument();
     expect(screen.queryByText("visibleExtractionSource")).not.toBeInTheDocument();
     expect(screen.queryByText("Extraction dashboard")).not.toBeInTheDocument();
@@ -645,7 +638,12 @@ describe("JobsPage", () => {
 
     expect(await screen.findByText("EXTRACTION. PAUSED.")).toBeInTheDocument();
     expect(screen.getByText(/Job read is out of order/i)).toBeInTheDocument();
-    expect(screen.getByText(/Raw source stays intact/i)).toBeInTheDocument();
+    expect(screen.getByText(/Posting stays intact/i)).toBeInTheDocument();
+    expect(screen.getByText("Imported Posting")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Raw source remains visible for this job."),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open Posting" }));
     expect(screen.getByText("Raw source remains visible for this job.")).toBeInTheDocument();
     expect(screen.queryByText("Heuristic summary should stay hidden.")).not.toBeInTheDocument();
     expect(
@@ -658,7 +656,7 @@ describe("JobsPage", () => {
       screen.queryByText("At Texas Roadhouse, we are a people-first company."),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
-    expect(screen.getByText("Match")).toBeInTheDocument();
+    expect(screen.getAllByText("Match").length).toBeGreaterThanOrEqual(1);
   });
 
   it("does not show the structured shadow comparison for normal detail data", async () => {
@@ -950,27 +948,29 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
+    const matchRegion = screen.getByLabelText("Match");
+    fireEvent.click(
+      within(matchRegion).getByRole("button", {
+        name: "Missing from Resume 1",
+      }),
+    );
+    expect(within(matchRegion).getByText("Customer-facing experience")).toBeInTheDocument();
     expect(
-      within(screen.getByLabelText("Match read")).getByText(
-        "Customer-facing experience",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByLabelText("Match read")).queryByText("Paris"),
+      within(matchRegion).queryByText("Paris"),
     ).toBeNull();
     expect(
-      within(screen.getByLabelText("Match read")).queryByText("Compensation"),
+      within(matchRegion).queryByText("Compensation"),
     ).toBeNull();
     expect(
-      within(screen.getByLabelText("Match read")).queryByText("Acme"),
+      within(matchRegion).queryByText("Acme"),
     ).toBeNull();
     expect(
-      within(screen.getByLabelText("Match read")).queryByText(
+      within(matchRegion).queryByText(
         "Equal opportunity employer",
       ),
     ).toBeNull();
     expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
-    expect(screen.getByText("Match")).toBeInTheDocument();
+    expect(screen.getAllByText("Match").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("AI extracted")).not.toBeInTheDocument();
   });
 
@@ -992,11 +992,11 @@ describe("JobsPage", () => {
     );
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Attach a resume" }),
+      (await screen.findAllByRole("button", { name: "Attach resume" }))[0],
     );
 
     expect(
-      screen.getByRole("dialog", { name: "Attach a resume" }),
+      screen.getByRole("dialog", { name: "Attach resume" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Attach Primary resume" }),
@@ -1029,7 +1029,7 @@ describe("JobsPage", () => {
     );
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Generate cover letter" }),
+      await screen.findByRole("button", { name: "Draft Proposal" }),
     );
 
     await waitFor(() => {
@@ -1088,7 +1088,7 @@ describe("JobsPage", () => {
     );
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Attach a resume" }),
+      (await screen.findAllByRole("button", { name: "Attach resume" }))[0],
     );
     fireEvent.click(
       screen.getByRole("button", { name: "Attach Primary resume" }),
@@ -1144,8 +1144,8 @@ describe("JobsPage", () => {
       });
     });
     expect(
-      screen.getByRole("button", { name: "Attach a resume" }),
-    ).toBeInTheDocument();
+      screen.getAllByRole("button", { name: "Attach resume" }).length,
+    ).toBeGreaterThan(0);
   });
 
   it("refreshes match and debug output on the same job after switching and detaching resumes", async () => {
@@ -1295,11 +1295,11 @@ describe("JobsPage", () => {
         resumeName: null,
       });
       expect(
-        screen.getByText("No scoring profile data available"),
+        screen.getByText("Attach a resume."),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: "Attach a resume" }),
-      ).toBeInTheDocument();
+        screen.getAllByRole("button", { name: "Attach resume" }).length,
+      ).toBeGreaterThan(0);
       expect(
         (screen.getByLabelText("Match input debug output") as HTMLTextAreaElement)
           .value,
@@ -1307,7 +1307,7 @@ describe("JobsPage", () => {
     });
   });
 
-  it("marks a job as favorite from the next-step action without navigating away", async () => {
+  it("keeps favorite actions out of job actions while exposing the resume picker", async () => {
     render(
       <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
         <Routes>
@@ -1333,22 +1333,23 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
+    const jobActions = await screen.findByLabelText("Job actions");
     expect(
-      await screen.findByRole("button", { name: "Add to favorites" }),
+      within(jobActions).getByRole("button", {
+        name: "Draft Proposal",
+      }),
     ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Add to favorites" }));
-
-    await waitFor(() => {
-      expect(setJobFavoriteMock).toHaveBeenCalledWith({
-        jobId: "job_alpha",
-        isFavorite: true,
-      });
-    });
-    expect(screen.getByTestId("jobs-location")).toHaveTextContent(
-      "/jobs/job_alpha",
-    );
-    expect(screen.getAllByText("Favorite").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("region", { name: "Next step" })).toBeNull();
+    expect(
+      within(jobActions).getAllByRole("button", { name: "Attach resume" })
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      within(jobActions).queryByRole("button", { name: "Add to favorites" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(jobActions).queryByRole("button", { name: "Mark favorite" }),
+    ).not.toBeInTheDocument();
   });
 
   it("toggles favorite on from the jobs list row", async () => {
@@ -1777,9 +1778,9 @@ describe("JobsPage", () => {
       }),
     );
     fireEvent.click(
-      screen.getByRole("menuitem", { name: "Delete permanently" }),
+      screen.getByRole("menuitem", { name: "Delete forever" }),
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Confirm delete" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Confirm" }));
 
     await waitFor(() => {
       expect(deleteArchivedJobMock).toHaveBeenCalledWith({
@@ -1814,7 +1815,7 @@ describe("JobsPage", () => {
       screen.getByRole("menuitem", { name: "Duplicate" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("menuitem", { name: "Delete permanently" }),
+      screen.queryByRole("menuitem", { name: "Delete forever" }),
     ).not.toBeInTheDocument();
   });
 
@@ -2042,7 +2043,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Loading jobs…")).toBeInTheDocument();
+    expect(screen.getByText("Loading jobs")).toBeInTheDocument();
     expect(
       screen.queryByText("Start with one job decision"),
     ).not.toBeInTheDocument();
