@@ -79,7 +79,70 @@ const FRENCH_LANGUAGE_SIGNAL_RES = [
   /\bpour travailler\b/i,
   /\bfin de semaine\b/i,
 ];
+const ITALIAN_LANGUAGE_SIGNAL_RES = [
+  /\besperienza\b/i,
+  /\bcompetenze?\b/i,
+  /\bgestione\b/i,
+  /\boperazioni?\b/i,
+  /\bsicurezza\b/i,
+  /\bclienti\b/i,
+  /\bospiti\b/i,
+  /\bdisponibilit[aà]\b/i,
+  /\bturni\b/i,
+  /\bfine settimana\b/i,
+  /\bfestivi\b/i,
+  /\bistruzione\b/i,
+  /\bdiploma\b/i,
+  /\bconoscenza\b/i,
+  /\bcapacit[aà] di\b/i,
+  /\bper lavorare\b/i,
+];
+const PORTUGUESE_LANGUAGE_SIGNAL_RES = [
+  /\bexperi[eê]ncia\b/i,
+  /\bcompet[eê]ncias?\b/i,
+  /\bgest[aã]o\b/i,
+  /\bopera[cç][aã]o\b/i,
+  /\bseguran[cç]a\b/i,
+  /\bclientes\b/i,
+  /\bh[oó]spedes\b/i,
+  /\bdisponibilidade\b/i,
+  /\bturnos?\b/i,
+  /\bfins de semana\b/i,
+  /\bferiados\b/i,
+  /\bensino\b/i,
+  /\bdiploma\b/i,
+  /\bconhecimento\b/i,
+  /\bcapacidade de\b/i,
+  /\bpara trabalhar\b/i,
+];
+const GERMAN_LANGUAGE_SIGNAL_RES = [
+  /\berfahrung\b/i,
+  /\bf[aä]higkeiten\b/i,
+  /\bkenntnisse\b/i,
+  /\bverwaltung\b/i,
+  /\bbetrieb\b/i,
+  /\bsicherheit\b/i,
+  /\bkunden\b/i,
+  /\bg[aä]ste\b/i,
+  /\bverf[uü]gbarkeit\b/i,
+  /\bschichten\b/i,
+  /\bwochenenden\b/i,
+  /\bfeiertage\b/i,
+  /\bschulabschluss\b/i,
+  /\bausbildung\b/i,
+  /\bf[aä]higkeit\b/i,
+  /\bf[uü]r die arbeit\b/i,
+];
 const MIN_LANGUAGE_SIGNAL_MATCHES = 2;
+const LANGUAGE_SIGNAL_GROUPS = [
+  { language: "es", patterns: SPANISH_LANGUAGE_SIGNAL_RES },
+  { language: "fr", patterns: FRENCH_LANGUAGE_SIGNAL_RES },
+  { language: "it", patterns: ITALIAN_LANGUAGE_SIGNAL_RES },
+  { language: "pt", patterns: PORTUGUESE_LANGUAGE_SIGNAL_RES },
+  { language: "de", patterns: GERMAN_LANGUAGE_SIGNAL_RES },
+] as const;
+
+type SupportedSourceLanguage = "en" | (typeof LANGUAGE_SIGNAL_GROUPS)[number]["language"];
 
 function compactWhitespace(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -179,21 +242,48 @@ function hasConfidentLanguageSignal(value: string, patterns: RegExp[]): boolean 
   return false;
 }
 
+function resolveSupportedSourceLanguage(value: unknown): SupportedSourceLanguage | null {
+  const language = compactWhitespace(value).toLowerCase();
+  if (language.startsWith("en")) {
+    return "en";
+  }
+  for (const group of LANGUAGE_SIGNAL_GROUPS) {
+    if (language.startsWith(group.language)) {
+      return group.language;
+    }
+  }
+  return null;
+}
+
+function hasDifferentSupportedLanguageSignal(
+  value: string,
+  sourceLanguage: SupportedSourceLanguage,
+): boolean {
+  return LANGUAGE_SIGNAL_GROUPS.some(
+    (group) =>
+      group.language !== sourceLanguage &&
+      hasConfidentLanguageSignal(value, group.patterns),
+  );
+}
+
 function violatesKnownLanguageSignal(args: {
   rawLanguageDetected?: string | null;
   values: string[];
 }): boolean {
-  const language = compactWhitespace(args.rawLanguageDetected).toLowerCase();
+  const sourceLanguage = resolveSupportedSourceLanguage(args.rawLanguageDetected);
+  if (!sourceLanguage) {
+    return false;
+  }
+
   const joined = args.values.join(" ");
-  const hasSpanishSignal = hasConfidentLanguageSignal(joined, SPANISH_LANGUAGE_SIGNAL_RES);
-  const hasFrenchSignal = hasConfidentLanguageSignal(joined, FRENCH_LANGUAGE_SIGNAL_RES);
-  if (language.startsWith("fr")) {
-    return ENGLISH_TRANSLATION_RE.test(joined) || hasSpanishSignal;
+  const hasDifferentLanguageSignal = hasDifferentSupportedLanguageSignal(
+    joined,
+    sourceLanguage,
+  );
+  if (sourceLanguage === "en") {
+    return hasDifferentLanguageSignal;
   }
-  if (language.startsWith("en")) {
-    return hasSpanishSignal || hasFrenchSignal;
-  }
-  return false;
+  return ENGLISH_TRANSLATION_RE.test(joined) || hasDifferentLanguageSignal;
 }
 
 export function isJobLlmVisibleExtractionEnabled(
