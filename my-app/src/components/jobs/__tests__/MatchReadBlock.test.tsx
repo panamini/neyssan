@@ -41,7 +41,8 @@ describe("MatchReadBlock", () => {
 
     expect(screen.queryByText("No scoring profile data available")).toBeNull();
     expect(screen.getByText("Strong · 100%")).toBeInTheDocument();
-    expect(screen.getByText("Found in Resume")).toBeInTheDocument();
+    expect(screen.getByText("Matched")).toBeInTheDocument();
+    expect(screen.queryByText(/Confidence/)).toBeNull();
     expect(screen.queryByText("Airtable")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Open Match" }));
     expect(screen.getByText("Airtable")).toBeInTheDocument();
@@ -62,8 +63,8 @@ describe("MatchReadBlock", () => {
       />,
     );
 
-    expect(screen.getByText("Resume Needs Work")).toBeInTheDocument();
-    expect(screen.getByText("Resume has no match data.")).toBeInTheDocument();
+    expect(screen.getByText("No resume signal")).toBeInTheDocument();
+    expect(screen.getByText("Resume has no keywords yet.")).toBeInTheDocument();
     expect(
       screen.queryByText("Complete your profile to see match"),
     ).toBeNull();
@@ -83,9 +84,9 @@ describe("MatchReadBlock", () => {
       />,
     );
 
-    expect(screen.getByText("Resume Needs Work")).toBeInTheDocument();
+    expect(screen.getByText("Resume too thin")).toBeInTheDocument();
     expect(
-      screen.getByText("Resume has placeholder content."),
+      screen.getByText("Add summary, skills, or experience."),
     ).toBeInTheDocument();
     expect(screen.queryByText("No scoring profile data available")).toBeNull();
   });
@@ -104,10 +105,11 @@ describe("MatchReadBlock", () => {
     );
 
     expect(screen.queryByText("No scoring profile data available")).toBeNull();
-    expect(screen.queryByText("Resume Needs Work")).toBeNull();
+    expect(screen.queryByText("No resume signal")).toBeNull();
+    expect(screen.queryByText("Resume too thin")).toBeNull();
     expect(screen.getByText("Weak · 0%")).toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: "Missing from Resume 2" }),
+      screen.getByRole("button", { name: "Missing 2" }),
     );
     expect(screen.getByText("Program management")).toBeInTheDocument();
   });
@@ -134,9 +136,9 @@ describe("MatchReadBlock", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Missing from Resume 1" }),
+      screen.getByRole("button", { name: "Missing 1" }),
     );
-    expect(screen.getByText("Missing")).toBeInTheDocument();
+    expect(screen.getAllByText("Missing").length).toBeGreaterThanOrEqual(1);
     expect(
       screen.getByText("Customer-facing experience"),
     ).toBeInTheDocument();

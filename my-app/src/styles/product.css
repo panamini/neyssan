@@ -10457,7 +10457,7 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-jobs-command-bar {
   display: grid;
-  grid-template-columns: minmax(220px, 1.1fr) minmax(140px, 0.8fr) auto;
+  grid-template-columns: minmax(220px, 1fr) auto;
   gap: var(--space-2);
   align-items: center;
   padding: var(--space-2);
@@ -10662,40 +10662,53 @@ html:not(.dark) .dasti-proposal-submit {
   min-width: 0;
 }
 
+.dasti-match-read__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
 .dasti-match-read__stats {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
+  align-items: center;
   margin-block-start: var(--space-2);
 }
 
 .dasti-match-read__stat {
-  display: inline-grid;
-  grid-template-columns: auto;
-  gap: 2px;
-  min-width: 92px;
-  padding: 7px 10px;
-  border: 1px solid var(--border-field);
-  border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--color-surface-muted) 72%, transparent);
-  color: var(--color-text);
-  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--pill-height-md);
+  min-width: 0;
+  padding: var(--pill-padding-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-caption-size);
+  font-weight: var(--font-label-weight);
+  line-height: 1;
+  text-align: start;
 }
 
 .dasti-match-read__stat-label {
-  color: var(--color-text-subtle);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: 0;
   line-height: 1;
-  text-transform: uppercase;
+  text-transform: none;
+  white-space: nowrap;
 }
 
 .dasti-match-read__stat-value {
-  color: var(--color-text);
-  font-size: var(--text-body-sm-size);
-  font-weight: var(--font-label-weight);
-  line-height: var(--text-body-sm-line);
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
 }
 
 .dasti-match-read__stat--button {
@@ -10709,21 +10722,9 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-match-read__stat--warning {
-  background: color-mix(
-    in srgb,
-    var(--color-warning-soft) 68%,
-    var(--color-surface-muted) 32%
-  );
+  background: var(--color-warning-soft);
+  border-color: transparent;
   color: var(--color-warning-ink);
-}
-
-.dasti-match-read__stat--warning .dasti-match-read__stat-value {
-  color: var(--color-warning-ink);
-}
-
-.dasti-match-read__stat--muted {
-  min-width: 76px;
-  opacity: 0.82;
 }
 
 .dasti-match-read__details {

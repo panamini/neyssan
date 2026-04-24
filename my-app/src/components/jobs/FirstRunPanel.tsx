@@ -36,10 +36,9 @@ export function FirstRunPanel({
   return (
     <div className="dasti-empty-state dasti-jobs-empty-state">
       <ClipboardText size={34} strokeWidth={1.25} aria-hidden="true" />
-      <div className="dasti-empty-state__title">Start with one job decision</div>
+      <div className="dasti-empty-state__title">Start with one job.</div>
       <p className="dasti-empty-state__subtitle">
-        Import a real role or open a hand-crafted sample so the full jobs flow is
-        usable in under ten seconds.
+        Import a role. Or try a sample.
       </p>
       <div className="dasti-jobs-empty-state__actions">
         <button
@@ -51,7 +50,7 @@ export function FirstRunPanel({
             onImportFirstJob();
           }}
         >
-          Import your first job
+          Import job
         </button>
         <button
           type="button"
@@ -62,7 +61,7 @@ export function FirstRunPanel({
             void onTrySampleJob();
           }}
         >
-          {isSeedingSample ? "Loading sample…" : "Try a sample job"}
+          {isSeedingSample ? "Loading sample" : "Try a sample"}
         </button>
       </div>
       {errorMessage ? (
