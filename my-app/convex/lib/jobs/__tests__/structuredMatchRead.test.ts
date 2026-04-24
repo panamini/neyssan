@@ -230,6 +230,103 @@ describe("structured match-read shadow scorer", () => {
     ).toBeNull();
   });
 
+  it("rejects translated English shadow rows for French source-language jobs", () => {
+    const translatedFrenchJob: NormalizedJobExtraction = {
+      summary_short: "Customer support role tracking incoming requests.",
+      role_title_normalized: "Customer Support Specialist",
+      requirements: [
+        { value: "customer support", type: "skill", required: true },
+        { value: "ticket management", type: "skill", required: true },
+        { value: "fluent French", type: "language", required: true },
+      ],
+      keywords_canonical: ["customer support", "ticket management", "French"],
+      licenses_or_certifications: [],
+      schedule_constraints: [],
+      environment: {
+        customer_facing: true,
+        onsite: false,
+        physical_standing: null,
+        retail: null,
+      },
+      confidence: "high",
+    };
+
+    expect(
+      selectEligibleStructuredJobExtraction({
+        model: "mistral-small-latest",
+        promptVersion: "p9_v2",
+        rawLanguageDetected: "fr",
+        shadowRows: [
+          {
+            ...validKithShadowRow,
+            llm_normalized_output: translatedFrenchJob,
+          },
+        ],
+      }),
+    ).toBeNull();
+  });
+
+  it("prefers source-language French rows over newer translated rows", () => {
+    const translatedFrenchJob: NormalizedJobExtraction = {
+      summary_short: "Customer support role tracking incoming requests.",
+      role_title_normalized: "Customer Support Specialist",
+      requirements: [
+        { value: "customer support", type: "skill", required: true },
+        { value: "ticket management", type: "skill", required: true },
+        { value: "fluent French", type: "language", required: true },
+      ],
+      keywords_canonical: ["customer support", "ticket management", "French"],
+      licenses_or_certifications: [],
+      schedule_constraints: [],
+      environment: {
+        customer_facing: true,
+        onsite: false,
+        physical_standing: null,
+        retail: null,
+      },
+      confidence: "high",
+    };
+    const sourceLanguageFrenchJob: NormalizedJobExtraction = {
+      summary_short: "Poste de support client avec suivi des demandes.",
+      role_title_normalized: "Charge de support client",
+      requirements: [
+        { value: "support client", type: "skill", required: true },
+        { value: "gestion des demandes", type: "skill", required: true },
+        { value: "Francais courant", type: "language", required: true },
+      ],
+      keywords_canonical: ["support client", "gestion des demandes", "Francais"],
+      licenses_or_certifications: [],
+      schedule_constraints: [],
+      environment: {
+        customer_facing: true,
+        onsite: false,
+        physical_standing: null,
+        retail: null,
+      },
+      confidence: "high",
+    };
+
+    expect(
+      selectEligibleStructuredJobExtraction({
+        model: "mistral-small-latest",
+        promptVersion: "p9_v2",
+        rawLanguageDetected: "fr",
+        shadowRows: [
+          {
+            ...validKithShadowRow,
+            llm_normalized_output: sourceLanguageFrenchJob,
+            created_at: 100,
+          },
+          {
+            ...validKithShadowRow,
+            llm_normalized_output: translatedFrenchJob,
+            created_at: 200,
+          },
+        ],
+      })?.normalizedOutput.role_title_normalized,
+    ).toBe("Charge de support client");
+  });
+
   it("excludes metadata from job requirement entities and keeps constraints separate", () => {
     const debug = buildStructuredMatchReadDebug({
       old: oldKithMatchRead(),
