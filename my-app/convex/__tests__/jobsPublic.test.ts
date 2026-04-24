@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  approveReviewItem,
   archiveJob,
   debugInspectMatchInputByJobId,
   deleteArchivedJob,
@@ -538,7 +539,40 @@ describe("jobsPublic.getById", () => {
 
   it("projects eligible visible LLM extraction without changing scoring fields", async () => {
     vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
-    const job = buildProjectionJob();
+    const job = buildProjectionJob({
+      reviewItems: [
+        {
+          id: "must_haves",
+          fieldKey: "mustHaves",
+          label: "Must-haves",
+          reviewStatus: "pending",
+          suggestedValue: ["Legacy React"],
+          sourceText: "Requires Legacy React.",
+          confidence: 0.9,
+          updatedAt: 100,
+        },
+        {
+          id: "keywords",
+          fieldKey: "keywords",
+          label: "Keywords",
+          reviewStatus: "pending",
+          suggestedValue: ["legacy ops"],
+          sourceText: "legacy ops",
+          confidence: 0.8,
+          updatedAt: 100,
+        },
+        {
+          id: "responsibilities",
+          fieldKey: "responsibilities",
+          label: "Responsibilities",
+          reviewStatus: "pending",
+          suggestedValue: ["Legacy responsibility"],
+          sourceText: "Legacy responsibility.",
+          confidence: 0.52,
+          updatedAt: 100,
+        },
+      ],
+    });
 
     const result = await getById._handler(
       buildGetByIdProjectionCtx({
@@ -563,6 +597,33 @@ describe("jobsPublic.getById", () => {
         { value: "legacy ops", confidence: 0.8, sourceSpan: null },
       ],
     });
+    expect(result?.reviewItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldKey: "summary",
+          label: "Summary",
+          suggestedValue: "LLM display summary",
+          reviewStatus: "pending",
+          updatedAt: expect.any(Number),
+        }),
+        expect.objectContaining({
+          fieldKey: "mustHaves",
+          label: "Must-haves",
+          suggestedValue: ["Modern React", "Design systems"],
+          reviewStatus: "pending",
+          updatedAt: expect.any(Number),
+        }),
+        expect.objectContaining({
+          fieldKey: "keywords",
+          suggestedValue: ["react", "design systems"],
+          reviewStatus: "pending",
+          updatedAt: expect.any(Number),
+        }),
+      ]),
+    );
+    expect(result?.reviewItems.map((item) => item.fieldKey)).not.toContain(
+      "responsibilities",
+    );
     expect(result?.matchRead).toMatchObject({
       score: 100,
       tier: "strong",
@@ -572,7 +633,30 @@ describe("jobsPublic.getById", () => {
   });
 
   it("falls back to heuristic visible fields when the flag is off or rows are unsafe", async () => {
-    const job = buildProjectionJob();
+    const job = buildProjectionJob({
+      reviewItems: [
+        {
+          id: "responsibilities",
+          fieldKey: "responsibilities",
+          label: "Responsibilities",
+          reviewStatus: "pending",
+          suggestedValue: ["Legacy responsibility"],
+          sourceText: "Legacy responsibility.",
+          confidence: 0.52,
+          updatedAt: 100,
+        },
+        {
+          id: "keywords",
+          fieldKey: "keywords",
+          label: "Keywords",
+          reviewStatus: "pending",
+          suggestedValue: ["legacy ops"],
+          sourceText: "legacy ops",
+          confidence: 0.8,
+          updatedAt: 100,
+        },
+      ],
+    });
 
     const flagOffResult = await getById._handler(
       buildGetByIdProjectionCtx({
@@ -607,6 +691,16 @@ describe("jobsPublic.getById", () => {
         summary: "Heuristic summary",
         mustHaves: ["Legacy React"],
         keywords: ["legacy ops"],
+        reviewItems: [
+          expect.objectContaining({
+            fieldKey: "responsibilities",
+            suggestedValue: ["Legacy responsibility"],
+          }),
+          expect.objectContaining({
+            fieldKey: "keywords",
+            suggestedValue: ["legacy ops"],
+          }),
+        ],
       });
       expect(result?.matchRead).toMatchObject({
         score: 100,
@@ -744,6 +838,22 @@ describe("jobsPublic.getById", () => {
                   buildIndex(scope);
                   return {
                     collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            if (table === "activeCvSnapshots") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    unique: async () => null,
                   };
                 },
               };
@@ -1922,6 +2032,451 @@ describe("jobsPublic.setJobFavorite", () => {
       },
     ]);
     expect(job.isFavorite).toBe(true);
+  });
+});
+
+describe("jobsPublic.approveReviewItem", () => {
+  it("persists projected Mistral review-card values when visible extraction is active", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        email: "primary@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_alpha",
+      userId: "profile_primary",
+      title: "Security Guard",
+      summary: "Heuristic summary",
+      summaryExtraction: { value: "Heuristic summary", confidence: 0.6, sourceSpan: null },
+      rawLanguageDetected: "en",
+      mustHaves: ["Location Miami"],
+      mustHavesExtraction: [{ value: "Location Miami", confidence: 0.4, sourceSpan: null }],
+      keywords: ["location", "miami", "status"],
+      keywordsExtraction: [
+        { value: "location", confidence: 0.4, sourceSpan: null },
+        { value: "miami", confidence: 0.4, sourceSpan: null },
+        { value: "status", confidence: 0.4, sourceSpan: null },
+      ],
+      reviewItems: [
+        {
+          id: "summary",
+          fieldKey: "summary",
+          label: "Summary",
+          reviewStatus: "pending",
+          suggestedValue: "Heuristic summary",
+          sourceText: "Heuristic summary",
+          confidence: 0.4,
+          updatedAt: 100,
+        },
+        {
+          id: "must_haves",
+          fieldKey: "mustHaves",
+          label: "Must-haves",
+          reviewStatus: "pending",
+          suggestedValue: ["Location Miami"],
+          sourceText: "Location Miami",
+          confidence: 0.4,
+          updatedAt: 100,
+        },
+        {
+          id: "keywords",
+          fieldKey: "keywords",
+          label: "Keywords",
+          reviewStatus: "pending",
+          suggestedValue: ["location", "miami", "status"],
+          sourceText: "Location Miami Status",
+          confidence: 0.4,
+          updatedAt: 100,
+        },
+      ],
+    };
+    const patchCalls: Array<{ id: string; patch: Record<string, unknown> }> =
+      [];
+
+    const result = await approveReviewItem._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          patch: async (id: string, patch: Record<string, unknown>) => {
+            patchCalls.push({ id, patch });
+            Object.assign(job, patch);
+          },
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(indexName: string, buildIndex: any) {
+                  expect(indexName).toBe("by_job_id");
+                  const scope = {
+                    eq(field: string, value: string) {
+                      expect(field).toBe("job_id");
+                      expect(value).toBe(job._id);
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => [
+                      {
+                        job_id: job._id,
+                        llm_normalized_output: {
+                          summary_short: "Retail security role.",
+                          role_title_normalized: "Security Guard",
+                          requirements: [
+                            {
+                              value: "Valid state security guard license",
+                              type: "certification",
+                              required: true,
+                            },
+                          ],
+                          keywords_canonical: [
+                            "security guard",
+                            "retail security",
+                            "loss prevention",
+                          ],
+                          licenses_or_certifications: [],
+                          schedule_constraints: [],
+                          environment: {
+                            customer_facing: true,
+                            retail: true,
+                            physical_standing: true,
+                            onsite: true,
+                          },
+                          confidence: "high",
+                        },
+                        validation_status: "valid",
+                        fallback_used: false,
+                        model: "ministral-3b-2512",
+                        prompt_version: "p9_v2",
+                        created_at: 200,
+                      },
+                    ],
+                  };
+                },
+              };
+            }
+
+            if (table === "activeCvSnapshots") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    unique: async () => null,
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: "job_alpha", reviewItemId: "keywords" },
+    );
+
+    expect(result).toBeNull();
+    expect(patchCalls[0]?.patch.keywords).toEqual([
+      "security guard",
+      "retail security",
+      "loss prevention",
+    ]);
+    expect(patchCalls[0]?.patch.reviewState).toBe("needs_review");
+    expect(patchCalls[0]?.patch.reviewItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldKey: "keywords",
+          reviewStatus: "approved",
+          approvedValue: ["security guard", "retail security", "loss prevention"],
+        }),
+      ]),
+    );
+
+    const mustHavesResult = await approveReviewItem._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          patch: async (id: string, patch: Record<string, unknown>) => {
+            patchCalls.push({ id, patch });
+            Object.assign(job, patch);
+          },
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(indexName: string, buildIndex: any) {
+                  expect(indexName).toBe("by_job_id");
+                  const scope = {
+                    eq(field: string, value: string) {
+                      expect(field).toBe("job_id");
+                      expect(value).toBe(job._id);
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => [
+                      {
+                        job_id: job._id,
+                        llm_normalized_output: {
+                          summary_short: "Retail security role.",
+                          role_title_normalized: "Security Guard",
+                          requirements: [
+                            {
+                              value: "Valid state security guard license",
+                              type: "certification",
+                              required: true,
+                            },
+                          ],
+                          keywords_canonical: [
+                            "security guard",
+                            "retail security",
+                            "loss prevention",
+                          ],
+                          licenses_or_certifications: [],
+                          schedule_constraints: [],
+                          environment: {
+                            customer_facing: true,
+                            retail: true,
+                            physical_standing: true,
+                            onsite: true,
+                          },
+                          confidence: "high",
+                        },
+                        validation_status: "valid",
+                        fallback_used: false,
+                        model: "ministral-3b-2512",
+                        prompt_version: "p9_v2",
+                        created_at: 200,
+                      },
+                    ],
+                  };
+                },
+              };
+            }
+
+            if (table === "activeCvSnapshots") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    unique: async () => null,
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: "job_alpha", reviewItemId: "must_haves" },
+    );
+
+    expect(mustHavesResult).toBeNull();
+    expect(patchCalls[1]?.patch.mustHaves).toEqual([
+      "Valid state security guard license",
+    ]);
+    expect(patchCalls[1]?.patch.reviewState).toBe("needs_review");
+    expect(patchCalls[1]?.patch.reviewItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldKey: "mustHaves",
+          reviewStatus: "approved",
+          approvedValue: ["Valid state security guard license"],
+        }),
+      ]),
+    );
+
+    const summaryResult = await approveReviewItem._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          patch: async (id: string, patch: Record<string, unknown>) => {
+            patchCalls.push({ id, patch });
+            Object.assign(job, patch);
+          },
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(indexName: string, buildIndex: any) {
+                  expect(indexName).toBe("by_job_id");
+                  const scope = {
+                    eq(field: string, value: string) {
+                      expect(field).toBe("job_id");
+                      expect(value).toBe(job._id);
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => [
+                      {
+                        job_id: job._id,
+                        llm_normalized_output: {
+                          summary_short: "Retail security role.",
+                          role_title_normalized: "Security Guard",
+                          requirements: [
+                            {
+                              value: "Valid state security guard license",
+                              type: "certification",
+                              required: true,
+                            },
+                          ],
+                          keywords_canonical: [
+                            "security guard",
+                            "retail security",
+                            "loss prevention",
+                          ],
+                          licenses_or_certifications: [],
+                          schedule_constraints: [],
+                          environment: {
+                            customer_facing: true,
+                            retail: true,
+                            physical_standing: true,
+                            onsite: true,
+                          },
+                          confidence: "high",
+                        },
+                        validation_status: "valid",
+                        fallback_used: false,
+                        model: "ministral-3b-2512",
+                        prompt_version: "p9_v2",
+                        created_at: 200,
+                      },
+                    ],
+                  };
+                },
+              };
+            }
+
+            if (table === "activeCvSnapshots") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    unique: async () => null,
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { jobId: "job_alpha", reviewItemId: "summary" },
+    );
+
+    expect(summaryResult).toBeNull();
+    expect(patchCalls[2]?.patch.summary).toBe("Retail security role.");
+    expect(patchCalls[2]?.patch.reviewState).toBe("ready");
+    expect(patchCalls[2]?.patch.reviewItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldKey: "summary",
+          reviewStatus: "approved",
+          approvedValue: "Retail security role.",
+        }),
+      ]),
+    );
   });
 });
 

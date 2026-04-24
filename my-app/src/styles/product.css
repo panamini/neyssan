@@ -11006,6 +11006,13 @@ html:not(.dark) .dasti-proposal-submit {
   background: color-mix(in srgb, var(--color-surface-muted) 90%, var(--color-accent) 10%);
 }
 
+.dasti-brief-card__review-item--unavailable {
+  border-style: dashed;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-surface-muted) 92%, var(--color-accent) 8%), transparent),
+    color-mix(in srgb, var(--color-surface) 88%, var(--color-border-selected) 12%);
+}
+
 .dasti-brief-card__review-head {
   display: flex;
   align-items: start;
@@ -11053,6 +11060,56 @@ html:not(.dark) .dasti-proposal-submit {
   color: var(--tm2);
   font-size: var(--tx);
   line-height: 1.55;
+}
+
+.dasti-brief-card__review-bullets {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ti);
+  font-size: var(--ts);
+  line-height: var(--ls);
+}
+
+.dasti-brief-card__review-bullets li {
+  position: relative;
+  padding-inline-start: 18px;
+}
+
+.dasti-brief-card__review-bullets li::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 0.72em;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--ac);
+  opacity: 0.82;
+}
+
+.dasti-brief-card__review-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dasti-brief-card__review-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  background: color-mix(in srgb, var(--color-surface-raised) 82%, var(--ac) 6%);
+  color: var(--tm2);
+  font-size: var(--tx);
+  font-weight: 700;
+  line-height: var(--lx);
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 640px) {

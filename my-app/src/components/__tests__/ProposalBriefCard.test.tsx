@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+import { render, screen, within } from "@testing-library/react";
 
 import {
+  ProposalBriefCard,
   resolveProposalBriefCardDisplayContent,
   resolveProposalBriefCardTitle,
 } from "../ProposalBriefCard";
@@ -62,5 +65,160 @@ describe("resolveProposalBriefCardTitle", () => {
       requirements: ["Heuristic requirement"],
       keywords: ["heuristic"],
     });
+  });
+
+  it("renders review cards with current suggested values and keeps review actions", () => {
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Security Guard"
+          jobDescription="Raw job text"
+          summaryText="Heuristic summary"
+          visibleSummaryText="Mistral summary"
+          requirements={["Heuristic requirement"]}
+          visibleRequirements={["Mistral requirement"]}
+          keywords={["location", "miami", "status"]}
+          visibleKeywords={["security guard", "loss prevention"]}
+          reviewItems={[
+            {
+              id: "must_haves",
+              fieldKey: "mustHaves",
+              label: "Requirements",
+              reviewStatus: "pending",
+              suggestedValue: ["Mistral requirement"],
+              sourceText: "Mistral requirement",
+            },
+            {
+              id: "keywords",
+              fieldKey: "keywords",
+              label: "Keywords",
+              reviewStatus: "pending",
+              suggestedValue: ["security guard", "loss prevention"],
+              sourceText: "security guard\nloss prevention",
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Mistral summary")).toBeInTheDocument();
+    expect(screen.getByText("Mistral requirement")).toBeInTheDocument();
+    expect(screen.getAllByText(/security guard/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/location miami status/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("At Texas Roadhouse, we are a people-first company."),
+    ).not.toBeInTheDocument();
+
+    const keywordsCard =
+      screen
+        .getAllByText("Keywords")
+        .map((label) => label.closest(".dasti-brief-card__review-item"))
+        .find((card) => card !== null) ?? null;
+    expect(keywordsCard).not.toBeNull();
+    const card = within(keywordsCard as HTMLElement);
+    expect(card.getByText("Needs review")).toBeInTheDocument();
+    expect(card.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    expect(card.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();
+  });
+
+  it("renders LLM-backed summary requirements and keywords review cards", () => {
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Host"
+          jobDescription="Raw job text"
+          visibleSummaryText="Host at Texas Roadhouse; greets guests."
+          visibleRequirements={["Guest service", "Teamwork"]}
+          visibleKeywords={["guest service", "wait management"]}
+          reviewItems={[
+            {
+              id: "summary",
+              fieldKey: "summary",
+              label: "Summary",
+              reviewStatus: "pending",
+              suggestedValue: "Host at Texas Roadhouse; greets guests.",
+              sourceText: "Host at Texas Roadhouse; greets guests.",
+            },
+            {
+              id: "must_haves",
+              fieldKey: "mustHaves",
+              label: "Requirements",
+              reviewStatus: "pending",
+              suggestedValue: ["Guest service", "Teamwork"],
+              sourceText: "Guest service\nTeamwork",
+            },
+            {
+              id: "keywords",
+              fieldKey: "keywords",
+              label: "Keywords",
+              reviewStatus: "pending",
+              suggestedValue: ["guest service", "wait management"],
+              sourceText: "guest service\nwait management",
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getAllByText("Host at Texas Roadhouse; greets guests.").length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Guest service").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/guest service/).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(3);
+    expect(screen.getByRole("button", { name: "Edit Summary" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Requirements" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();
+  });
+
+  it("renders unavailable state instead of heuristic extraction or review cards", () => {
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Host"
+          jobDescription="Raw source stays visible here."
+          summaryText="Heuristic summary"
+          visibleSummaryText="Heuristic visible summary"
+          requirements={["Heuristic requirement"]}
+          visibleRequirements={["Heuristic visible requirement"]}
+          keywords={["location", "status", "compensation"]}
+          visibleKeywords={["location", "status", "compensation"]}
+          extractionUnavailable={true}
+          reviewItems={[
+            {
+              id: "responsibilities",
+              fieldKey: "responsibilities",
+              label: "Responsibilities",
+              reviewStatus: "pending",
+              suggestedValue: ["At Texas Roadhouse, we are a people-first company."],
+              sourceText: "At Texas Roadhouse, we are a people-first company.",
+            },
+            {
+              id: "keywords",
+              fieldKey: "keywords",
+              label: "Keywords",
+              reviewStatus: "pending",
+              suggestedValue: ["location", "status", "compensation"],
+              sourceText: "location status compensation",
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("EXTRACTION. PAUSED.")).toBeInTheDocument();
+    expect(screen.getByText(/Job read is out of order/i)).toBeInTheDocument();
+    expect(screen.getByText(/Raw source stays intact/i)).toBeInTheDocument();
+    expect(screen.getByText("Raw source stays visible here.")).toBeInTheDocument();
+    expect(screen.queryByText("Heuristic summary")).not.toBeInTheDocument();
+    expect(screen.queryByText("Heuristic visible requirement")).not.toBeInTheDocument();
+    expect(screen.queryByText("location, status, compensation")).not.toBeInTheDocument();
+    expect(screen.queryByText("location status compensation")).not.toBeInTheDocument();
+    expect(screen.queryByText("Responsibilities")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("At Texas Roadhouse, we are a people-first company."),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit Keywords" })).not.toBeInTheDocument();
   });
 });
