@@ -324,6 +324,8 @@ function buildStructuredShadowSummary(
     flagEnabled: true,
     internalViewer: true,
     uiEnabled: true,
+    advisoryBetaEnabled: false,
+    advisoryBetaViewer: false,
     status: "available",
     reason: null,
     oldScore: 50,
@@ -766,7 +768,128 @@ describe("JobsPage", () => {
     expect(screen.queryByText(/Recommended score/i)).toBeNull();
   });
 
-  it("logs an internal review label without affecting the production score or tier", async () => {
+  it("shows advisory beta users a structured preview without changing product behavior", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      structuredShadowSummary: buildStructuredShadowSummary({
+        internalViewer: false,
+        uiEnabled: false,
+        advisoryBetaEnabled: true,
+        advisoryBetaViewer: true,
+      }),
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const panel = await screen.findByTestId("jobs-structured-preview-advisory-panel");
+    expect(screen.queryByTestId("jobs-structured-shadow-internal-panel")).toBeNull();
+    expect(within(panel).getAllByText("Structured preview").length).toBeGreaterThan(0);
+    expect(within(panel).getByText("Current match")).toBeInTheDocument();
+    expect(
+      within(panel).getByText(
+        "Experimental match read. Production score remains authoritative.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(panel).getByText(/score\s+50/)).toBeInTheDocument();
+    expect(within(panel).getByText(/tier\s+partial/)).toBeInTheDocument();
+    expect(within(panel).getByText(/score\s+78/)).toBeInTheDocument();
+    expect(within(panel).getByText(/tier\s+strong/)).toBeInTheDocument();
+    expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Draft Proposal" })).toBeInTheDocument();
+    expect(screen.queryByText(/AI score/i)).toBeNull();
+    expect(screen.queryByText(/New score/i)).toBeNull();
+    expect(screen.queryByText(/Better score/i)).toBeNull();
+    expect(screen.queryByText(/Recommended score/i)).toBeNull();
+  });
+
+  it("hides advisory structured preview when the advisory beta flag is off", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      structuredShadowSummary: buildStructuredShadowSummary({
+        internalViewer: false,
+        uiEnabled: false,
+        advisoryBetaEnabled: false,
+        advisoryBetaViewer: true,
+      }),
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.queryByTestId("jobs-structured-preview-advisory-panel")).toBeNull();
+    expect(screen.queryByText("Experimental match read. Production score remains authoritative.")).toBeNull();
+  });
+
+  it("hides advisory structured preview for non-beta users", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      structuredShadowSummary: buildStructuredShadowSummary({
+        internalViewer: false,
+        uiEnabled: false,
+        advisoryBetaEnabled: true,
+        advisoryBetaViewer: false,
+      }),
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.queryByTestId("jobs-structured-preview-advisory-panel")).toBeNull();
+    expect(screen.queryByText("Structured preview")).toBeNull();
+  });
+
+  it("keeps structured preview out of match filtering and list badges", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      structuredShadowSummary: buildStructuredShadowSummary({
+        internalViewer: false,
+        uiEnabled: false,
+        advisoryBetaEnabled: true,
+        advisoryBetaViewer: true,
+        structuredTier: "strong",
+        structuredScore: 92,
+      }),
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
+    expect(await screen.findByTestId("jobs-structured-preview-advisory-panel")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Draft Proposal" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Match Strong" }));
+
+    expect(screen.getByText("0 of 2")).toBeInTheDocument();
+    expect(
+      screen.getByText(/No jobs match this search/i),
+    ).toBeInTheDocument();
+  });
+
+  it("logs an internal review label and extraction verdicts without affecting the production score or tier", async () => {
     selectedJobResult = {
       ...selectedJob,
       structuredShadowSummary: buildStructuredShadowSummary(),
@@ -784,6 +907,15 @@ describe("JobsPage", () => {
     fireEvent.change(within(panel).getByLabelText("Reviewer label"), {
       target: { value: "false weak" },
     });
+    fireEvent.change(within(panel).getByLabelText("Summary verdict"), {
+      target: { value: "too_vague" },
+    });
+    fireEvent.change(within(panel).getByLabelText("Requirements verdict"), {
+      target: { value: "incomplete" },
+    });
+    fireEvent.change(within(panel).getByLabelText("Keywords verdict"), {
+      target: { value: "noisy" },
+    });
     fireEvent.change(within(panel).getByLabelText("Review notes"), {
       target: { value: "Needs another evidence pass." },
     });
@@ -793,6 +925,9 @@ describe("JobsPage", () => {
       expect(recordStructuredMatchReviewMock).toHaveBeenCalledWith({
         jobId: "job_alpha",
         label: "false weak",
+        extractionSummaryVerdict: "too_vague",
+        extractionRequirementsVerdict: "incomplete",
+        extractionKeywordsVerdict: "noisy",
         notes: "Needs another evidence pass.",
       });
     });
@@ -818,6 +953,29 @@ describe("JobsPage", () => {
 
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
     expect(screen.queryByTestId("jobs-structured-shadow-internal-panel")).toBeNull();
+  });
+
+  it("hides the advisory structured preview when rollback disables advisory beta", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      structuredShadowSummary: buildStructuredShadowSummary({
+        internalViewer: false,
+        uiEnabled: false,
+        advisoryBetaEnabled: false,
+        advisoryBetaViewer: true,
+      }),
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.queryByTestId("jobs-structured-preview-advisory-panel")).toBeNull();
   });
 
   it("shows debug-only unavailable reasons without structured result values", async () => {
@@ -2112,6 +2270,7 @@ describe("JobsPage", () => {
     expect(await screen.findAllByText("Sample")).not.toHaveLength(0);
     expect(seedSampleJobMock).toHaveBeenCalledWith({});
   });
+
 
   it("renders recovery guidance when the jobs query is missing from the local Convex runtime", async () => {
     listError = new Error(

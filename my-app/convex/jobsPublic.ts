@@ -97,6 +97,10 @@ const STRUCTURED_MATCH_READ_INTERNAL_EMAILS_ENV =
   "STRUCTURED_MATCH_READ_INTERNAL_EMAILS";
 const STRUCTURED_MATCH_READ_INTERNAL_UI_ENV =
   "STRUCTURED_MATCH_READ_INTERNAL_UI";
+const STRUCTURED_MATCH_READ_ADVISORY_BETA_ENV =
+  "STRUCTURED_MATCH_READ_ADVISORY_BETA";
+const STRUCTURED_MATCH_READ_BETA_VIEWERS_ENV =
+  "STRUCTURED_MATCH_READ_BETA_VIEWERS";
 const STRUCTURED_MATCH_REVIEW_APP_GIT_COMMIT_SHA_ENV_KEYS = [
   "STRUCTURED_MATCH_REVIEW_APP_GIT_COMMIT_SHA",
   "APP_GIT_COMMIT_SHA",
@@ -130,6 +134,8 @@ type StructuredShadowSummary = {
   flagEnabled: boolean;
   internalViewer: boolean;
   uiEnabled: boolean;
+  advisoryBetaEnabled: boolean;
+  advisoryBetaViewer: boolean;
   status: "available" | "unavailable";
   reason: string | null;
   oldScore: number | null;
@@ -167,6 +173,8 @@ const structuredShadowSummaryValidator = v.object({
   flagEnabled: v.boolean(),
   internalViewer: v.boolean(),
   uiEnabled: v.boolean(),
+  advisoryBetaEnabled: v.boolean(),
+  advisoryBetaViewer: v.boolean(),
   status: v.union(v.literal("available"), v.literal("unavailable")),
   reason: v.union(v.string(), v.null()),
   oldScore: v.union(v.number(), v.null()),
@@ -251,6 +259,33 @@ function isStructuredMatchReadInternalUiEnabled(
 ): boolean {
   const normalized = normalizeDebugToken(rawValue);
   return normalized === "1" || normalized === "true" || normalized === "on";
+}
+
+function isStructuredMatchReadAdvisoryBetaEnabled(
+  rawValue: string | undefined = process.env[STRUCTURED_MATCH_READ_ADVISORY_BETA_ENV],
+): boolean {
+  const normalized = normalizeDebugToken(rawValue);
+  return normalized === "1" || normalized === "true" || normalized === "on";
+}
+
+function isStructuredMatchReadBetaViewer(
+  identity: StructuredInternalIdentity | null,
+  rawAllowlist: string | undefined = process.env[STRUCTURED_MATCH_READ_BETA_VIEWERS_ENV],
+): boolean {
+  if (!identity) {
+    return false;
+  }
+
+  const allowlist = parseStructuredInternalAllowlist(rawAllowlist);
+  if (allowlist.size === 0) {
+    return false;
+  }
+
+  return [
+    identity.subject,
+    identity.email,
+    identity.tokenIdentifier,
+  ].some((value) => allowlist.has(normalizeDebugToken(value)));
 }
 
 function isStructuredMatchReviewLabel(
@@ -369,6 +404,8 @@ function buildStructuredShadowSummary(args: {
   flagEnabled: boolean;
   internalViewer: boolean;
   uiEnabled: boolean;
+  advisoryBetaEnabled: boolean;
+  advisoryBetaViewer: boolean;
   rawLanguageDetected?: string | null;
 }): StructuredShadowSummary {
   const { debug } = args;
@@ -377,6 +414,8 @@ function buildStructuredShadowSummary(args: {
       flagEnabled: args.flagEnabled,
       internalViewer: args.internalViewer,
       uiEnabled: args.uiEnabled,
+      advisoryBetaEnabled: args.advisoryBetaEnabled,
+      advisoryBetaViewer: args.advisoryBetaViewer,
       status: "unavailable",
       reason: debug.structured.reason,
       oldScore: debug.old.score,
@@ -402,6 +441,8 @@ function buildStructuredShadowSummary(args: {
     flagEnabled: args.flagEnabled,
     internalViewer: args.internalViewer,
     uiEnabled: args.uiEnabled,
+    advisoryBetaEnabled: args.advisoryBetaEnabled,
+    advisoryBetaViewer: args.advisoryBetaViewer,
     status: "available",
     reason: null,
     oldScore: debug.old.score,
@@ -1382,8 +1423,12 @@ async function resolveStructuredShadowSummaryForInternalUi(args: {
 }): Promise<StructuredShadowSummary | null> {
   const flagEnabled = isStructuredMatchReadShadowEnabled();
   const uiEnabled = isStructuredMatchReadInternalUiEnabled();
+  const advisoryBetaEnabled = isStructuredMatchReadAdvisoryBetaEnabled();
   const internalViewer = isStructuredMatchReadInternalViewer(args.identity);
-  if (!flagEnabled || !uiEnabled || !internalViewer) {
+  const advisoryBetaViewer = isStructuredMatchReadBetaViewer(args.identity);
+  const canViewInternal = uiEnabled && internalViewer;
+  const canViewAdvisory = advisoryBetaEnabled && advisoryBetaViewer;
+  if (!flagEnabled || (!canViewInternal && !canViewAdvisory)) {
     return null;
   }
 
@@ -1401,6 +1446,8 @@ async function resolveStructuredShadowSummaryForInternalUi(args: {
     flagEnabled,
     internalViewer,
     uiEnabled,
+    advisoryBetaEnabled,
+    advisoryBetaViewer,
     rawLanguageDetected: args.job.rawLanguageDetected,
   });
 
@@ -2098,6 +2145,8 @@ export const debugInspectMatchInputByJobId = query({
       flagEnabled: structuredShadowFlagEnabled,
       internalViewer: structuredShadowInternalViewer,
       uiEnabled: isStructuredMatchReadInternalUiEnabled(),
+      advisoryBetaEnabled: isStructuredMatchReadAdvisoryBetaEnabled(),
+      advisoryBetaViewer: isStructuredMatchReadBetaViewer(identity),
       rawLanguageDetected: job.rawLanguageDetected,
     });
 
@@ -2148,8 +2197,12 @@ export const recordStructuredMatchReview = mutation({
     if (!isStructuredMatchReadShadowEnabled()) {
       throw new Error("Structured match shadow is disabled");
     }
-    if (!isStructuredMatchReadInternalViewer(identity)) {
-      throw new Error("Internal structured match reviewer required");
+    const advisoryBetaEnabled = isStructuredMatchReadAdvisoryBetaEnabled();
+    const isReviewViewer =
+      isStructuredMatchReadInternalViewer(identity) ||
+      (advisoryBetaEnabled && isStructuredMatchReadBetaViewer(identity));
+    if (!isReviewViewer) {
+      throw new Error("Structured match reviewer required");
     }
     if (!isStructuredMatchReviewLabel(args.label)) {
       throw new Error("Invalid structured match review label");
@@ -2229,8 +2282,10 @@ export const recordStructuredMatchReview = mutation({
     const summary = buildStructuredShadowSummary({
       debug,
       flagEnabled: true,
-      internalViewer: true,
+      internalViewer: isStructuredMatchReadInternalViewer(identity),
       uiEnabled: isStructuredMatchReadInternalUiEnabled(),
+      advisoryBetaEnabled,
+      advisoryBetaViewer: isStructuredMatchReadBetaViewer(identity),
       rawLanguageDetected: job.rawLanguageDetected,
     });
     if (summary.status !== "available") {
