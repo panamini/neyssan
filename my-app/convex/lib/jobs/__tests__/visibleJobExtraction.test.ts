@@ -30,6 +30,68 @@ const baseOutput: NormalizedJobExtraction = {
   confidence: "medium",
 };
 
+const englishOutput: NormalizedJobExtraction = {
+  summary_short: "Monitors hotel security systems and supports guest safety.",
+  role_title_normalized: "Security Attendant",
+  requirements: [
+    { value: "Monitor CCTV, access control, and alarm systems", type: "skill", required: true },
+    { value: "Document security incidents in detail", type: "skill", required: true },
+    { value: "High school diploma or equivalent", type: "education", required: true },
+  ],
+  keywords_canonical: ["hotel security", "CCTV", "access control", "guest safety"],
+  licenses_or_certifications: ["CT Guard Card"],
+  schedule_constraints: ["Overnight shifts", "Weekends", "Holidays"],
+  environment: {
+    customer_facing: true,
+    retail: null,
+    physical_standing: true,
+    onsite: true,
+  },
+  confidence: "high",
+};
+
+const spanishSecurityOutput: NormalizedJobExtraction = {
+  summary_short:
+    "Vigilancia y seguridad en hotel con atención a huéspedes y manejo de sistemas de monitoreo.",
+  role_title_normalized: "Asistente de Seguridad",
+  requirements: [
+    { value: "Educación secundaria o equivalente", type: "education", required: true },
+    {
+      value: "Experiencia en gestión de sistemas de circuito cerrado de televisión (CCTV)",
+      type: "experience",
+      required: true,
+    },
+    {
+      value: "Disponibilidad para trabajar en turnos nocturnos, fines de semana y festivos",
+      type: "constraint",
+      required: true,
+    },
+  ],
+  keywords_canonical: ["seguridad hotelera", "monitoreo CCTV", "atención a huéspedes"],
+  licenses_or_certifications: ["CT Guard Card"],
+  schedule_constraints: ["turnos nocturnos", "fines de semana", "festivos"],
+  environment: {
+    customer_facing: true,
+    retail: null,
+    physical_standing: true,
+    onsite: true,
+  },
+  confidence: "high",
+};
+
+const technicalEnglishOutput: NormalizedJobExtraction = {
+  ...englishOutput,
+  summary_short: "Builds SaaS reporting tools with React, SQL, and HIPAA-aware workflows.",
+  requirements: [
+    { value: "React and TypeScript application development", type: "skill", required: true },
+    { value: "SQL data modeling for SaaS analytics", type: "tool", required: true },
+    { value: "HIPAA-aware workflow implementation", type: "constraint", required: true },
+  ],
+  keywords_canonical: ["React", "SQL", "SaaS", "HIPAA", "API"],
+  licenses_or_certifications: [],
+  schedule_constraints: [],
+};
+
 function row(
   overrides: Partial<VisibleJobExtractionShadowRow> = {},
 ): VisibleJobExtractionShadowRow {
@@ -188,6 +250,60 @@ describe("selectVisibleJobExtraction", () => {
       }),
     ).toMatchObject({
       source: "heuristic",
+    });
+  });
+
+  it("rejects Spanish LLM output for an English source job", () => {
+    expect(
+      select({
+        rawLanguageDetected: "en",
+        shadowRows: [row({ llm_normalized_output: spanishSecurityOutput })],
+      }),
+    ).toMatchObject({
+      source: "heuristic",
+      summary: "Heuristic summary",
+      requirements: ["Heuristic requirement"],
+      keywords: ["heuristic"],
+    });
+  });
+
+  it("accepts English LLM output for an English source job", () => {
+    expect(
+      select({
+        rawLanguageDetected: "en",
+        shadowRows: [row({ llm_normalized_output: englishOutput })],
+      }),
+    ).toEqual({
+      source: "llm",
+      summary: englishOutput.summary_short,
+      requirements: [
+        "Monitor CCTV, access control, and alarm systems",
+        "Document security incidents in detail",
+        "High school diploma or equivalent",
+      ],
+      keywords: ["hotel security", "CCTV", "access control", "guest safety"],
+    });
+  });
+
+  it("accepts French LLM output for a French source job", () => {
+    const result = select({
+      rawLanguageDetected: "fr",
+      shadowRows: [row({ llm_normalized_output: baseOutput })],
+    });
+
+    expect(result.source).toBe("llm");
+    expect(result.summary).toBe(baseOutput.summary_short);
+  });
+
+  it("does not treat technical acronyms and named codes as wrong-language signals", () => {
+    expect(
+      select({
+        rawLanguageDetected: "en",
+        shadowRows: [row({ llm_normalized_output: technicalEnglishOutput })],
+      }),
+    ).toMatchObject({
+      source: "llm",
+      keywords: ["React", "SQL", "SaaS", "HIPAA", "API"],
     });
   });
 });
