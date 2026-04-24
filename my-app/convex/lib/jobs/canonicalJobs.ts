@@ -1,3 +1,5 @@
+import type { NormalizedJobExtraction } from "./jobExtractionSchema";
+
 export type CanonicalJobParseStatus =
   | "imported"
   | "parsing"
@@ -781,6 +783,81 @@ export function buildCanonicalJobDraftFromSource(args: {
     status: "active",
     archivedAt: null as number | null,
     reviewItems,
+  };
+}
+
+function inferRequirementType(value: string): NormalizedJobExtraction["requirements"][number]["type"] {
+  if (/\b(certifi(?:ed|cation)|license[ds]?|guard card|permit)\b/i.test(value)) {
+    return "certification";
+  }
+  if (/\b(degree|diploma|bachelor|master|education)\b/i.test(value)) {
+    return "education";
+  }
+  if (/\b(language|english|french|spanish|german|italian|portuguese)\b/i.test(value)) {
+    return "language";
+  }
+  if (/\b(shift|schedule|weekend|onsite|standing|availability)\b/i.test(value)) {
+    return "constraint";
+  }
+  if (/\b(tool|software|system|platform|workspace|notion|airtable|excel|google)\b/i.test(value)) {
+    return "tool";
+  }
+  if (/\b(experience|background|years?)\b/i.test(value)) {
+    return "experience";
+  }
+  return "skill";
+}
+
+function extractMatchingValues(values: string[], pattern: RegExp): string[] {
+  return values.filter((value) => pattern.test(value));
+}
+
+export function buildNormalizedJobExtractionFromHeuristic(args: {
+  title: string;
+  rawDescription: string;
+  sourceUrl?: string;
+  sourceDomain?: string;
+  sourceType?: string;
+  applicationUrl?: string;
+  company?: string;
+  location?: string;
+}): NormalizedJobExtraction {
+  const draft = buildCanonicalJobDraftFromSource(args);
+  const requirementValues = [...draft.mustHaves, ...draft.responsibilities].filter(Boolean);
+  const requirements = requirementValues.map((value) => ({
+    value,
+    type: inferRequirementType(value),
+    required: draft.mustHaves.includes(value),
+  }));
+
+  return {
+    summary_short: draft.summary,
+    role_title_normalized: draft.title,
+    requirements,
+    keywords_canonical: draft.keywords,
+    licenses_or_certifications: extractMatchingValues(
+      requirementValues,
+      /\b(certifi(?:ed|cation)|license[ds]?|guard card|permit)\b/i,
+    ),
+    schedule_constraints: extractMatchingValues(
+      requirementValues,
+      /\b(shift|schedule|weekend|availability|full[- ]time|part[- ]time)\b/i,
+    ),
+    environment: {
+      customer_facing: /\b(customer[- ]facing|visitors?|clients?|customers?)\b/i.test(
+        draft.rawDescription,
+      )
+        ? true
+        : null,
+      retail: /\bretail|store\b/i.test(draft.rawDescription) ? true : null,
+      physical_standing: /\bstanding|stand for|physical\b/i.test(draft.rawDescription)
+        ? true
+        : null,
+      onsite: /\bonsite|on-site|in office|store\b/i.test(draft.rawDescription)
+        ? true
+        : null,
+    },
+    confidence: requirements.length >= 2 ? "medium" : "low",
   };
 }
 

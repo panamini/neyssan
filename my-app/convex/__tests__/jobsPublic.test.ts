@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   archiveJob,
@@ -6,12 +6,19 @@ import {
   deleteArchivedJob,
   duplicateJob,
   getById,
+  getValidJobExtractionShadowByHash,
   listArchivedForUser,
   listForUser,
+  parseCreatedJob,
   restoreArchivedJob,
   setJobFavorite,
   setResumeForJob,
+  storeJobExtractionShadow,
 } from "../jobsPublic";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("jobsPublic.listForUser", () => {
   it("returns jobs across linked profiles without reading active CV state", async () => {
@@ -1357,5 +1364,203 @@ describe("jobsPublic.setJobFavorite", () => {
       },
     ]);
     expect(job.isFavorite).toBe(true);
+  });
+});
+
+describe("jobsPublic.parseCreatedJob shadow extraction", () => {
+  function buildParseContext() {
+    const job = {
+      _id: "job_shadow",
+      title: "Security Guard",
+      company: "",
+      location: "",
+      rawDescription:
+        "Required: guard card, retail loss prevention experience, and weekend availability.",
+      sourceUrl: "https://example.com/security-guard",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      applicationUrl: "",
+    };
+    const patchCalls: Array<{ id: string; patch: Record<string, unknown> }> = [];
+    const scheduleCalls: Array<{ delay: number; args: Record<string, unknown> }> = [];
+
+    return {
+      patchCalls,
+      scheduleCalls,
+      ctx: {
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          patch: async (id: string, patch: Record<string, unknown>) => {
+            patchCalls.push({ id, patch });
+          },
+        },
+        scheduler: {
+          runAfter: async (
+            delay: number,
+            _functionReference: unknown,
+            args: Record<string, unknown>,
+          ) => {
+            scheduleCalls.push({ delay, args });
+          },
+        },
+      },
+    };
+  }
+
+  it("does not schedule shadow extraction when the feature flag is off", async () => {
+    vi.stubEnv("JOB_LLM_EXTRACTION_SHADOW", "0");
+    const { ctx, scheduleCalls } = buildParseContext();
+
+    await parseCreatedJob._handler(ctx as any, { jobId: "job_shadow" });
+
+    expect(scheduleCalls).toEqual([]);
+  });
+
+  it("schedules shadow extraction after heuristic parsing when the feature flag is on", async () => {
+    vi.stubEnv("JOB_LLM_EXTRACTION_SHADOW", "1");
+    const { ctx, patchCalls, scheduleCalls } = buildParseContext();
+
+    await parseCreatedJob._handler(ctx as any, { jobId: "job_shadow" });
+
+    expect(patchCalls[0]?.patch).toEqual(
+      expect.objectContaining({
+        parseStatus: "parsed",
+        mustHaves: expect.any(Array),
+        keywords: expect.any(Array),
+      }),
+    );
+    expect(scheduleCalls).toEqual([
+      {
+        delay: 0,
+        args: { jobId: "job_shadow" },
+      },
+    ]);
+  });
+});
+
+describe("jobsPublic job extraction shadow cache", () => {
+  const validRow = {
+    llm_raw_output: "{\"summary_short\":\"ok\"}",
+    llm_normalized_output: { summary_short: "ok" },
+    validation_status: "valid",
+    fallback_used: false,
+    model: "mistral-small-latest",
+    prompt_version: "p9_v1",
+    model_confidence: "high",
+    final_confidence: "high",
+  };
+
+  function buildCacheCtx(rows: Array<typeof validRow>) {
+    return {
+      db: {
+        query(table: string) {
+          expect(table).toBe("job_extraction_shadow");
+          return {
+            withIndex(indexName: string, buildIndex: any) {
+              expect(indexName).toBe("by_cache_identity");
+              const criteria: Record<string, unknown> = {};
+              const scope = {
+                eq(field: string, value: unknown) {
+                  criteria[field] = value;
+                  return this;
+                },
+              };
+              buildIndex(scope);
+              return {
+                first: async () =>
+                  rows.find(
+                    (row) =>
+                      criteria.job_text_hash === "hash_1" &&
+                      row.model === criteria.model &&
+                      row.prompt_version === criteria.prompt_version &&
+                      row.validation_status === criteria.validation_status,
+                  ) ?? null,
+              };
+            },
+          };
+        },
+      },
+    };
+  }
+
+  it("cache-hits only with the same job text hash, model, prompt version, and valid status", async () => {
+    const result = await getValidJobExtractionShadowByHash._handler(
+      buildCacheCtx([validRow]) as any,
+      {
+        jobTextHash: "hash_1",
+        model: "mistral-small-latest",
+        promptVersion: "p9_v1",
+      },
+    );
+
+    expect(result?.llm_normalized_output).toEqual({ summary_short: "ok" });
+  });
+
+  it("does not cache-hit when the model differs", async () => {
+    const result = await getValidJobExtractionShadowByHash._handler(
+      buildCacheCtx([validRow]) as any,
+      {
+        jobTextHash: "hash_1",
+        model: "ministral-3b-2512",
+        promptVersion: "p9_v1",
+      },
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("does not cache-hit when the prompt version differs", async () => {
+    const result = await getValidJobExtractionShadowByHash._handler(
+      buildCacheCtx([validRow]) as any,
+      {
+        jobTextHash: "hash_1",
+        model: "mistral-small-latest",
+        promptVersion: "p9_v2",
+      },
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it("stores fallback output separately by leaving llm_normalized_output null", async () => {
+    const inserts: unknown[] = [];
+
+    await storeJobExtractionShadow._handler(
+      {
+        db: {
+          insert: async (table: string, value: unknown) => {
+            expect(table).toBe("job_extraction_shadow");
+            inserts.push(value);
+          },
+        },
+      } as any,
+      {
+        jobId: "job_shadow" as any,
+        jobTextHash: "hash_1",
+        llmRawOutput: "{\"summary_short\":\"partial\"",
+        llmNormalizedOutput: null,
+        validationStatus: "invalid_json",
+        fallbackUsed: true,
+        model: "mistral-small-latest",
+        promptVersion: "p9_v1",
+        latencyMs: 123,
+        modelConfidence: null,
+        finalConfidence: "medium",
+        createdAt: 456,
+      },
+    );
+
+    expect(inserts[0]).toEqual(
+      expect.objectContaining({
+        llm_raw_output: "{\"summary_short\":\"partial\"",
+        llm_normalized_output: null,
+        validation_status: "invalid_json",
+        fallback_used: true,
+      }),
+    );
   });
 });
