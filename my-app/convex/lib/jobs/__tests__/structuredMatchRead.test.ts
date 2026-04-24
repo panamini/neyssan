@@ -266,6 +266,83 @@ describe("structured match-read shadow scorer", () => {
     );
   });
 
+  it("excludes retail benefits and brand boilerplate from scorable requirements", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "retail_service_alpha_metadata_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_retail_service",
+        summary: "Retail associate with customer service and cash handling experience.",
+        skills: ["customer service", "cash handling"],
+        keywords: ["customer service", "cash handling"],
+        experience: [
+          {
+            company: "City Market",
+            title: "Retail Associate",
+            description: "Helped customers and operated the cash drawer.",
+          },
+        ],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Retail Associate role with boilerplate in the scrape.",
+            role_title_normalized: "Retail Associate",
+            requirements: [
+              { value: "customer service", type: "skill", required: true },
+              { value: "cash handling", type: "skill", required: true },
+              { value: "employee discount and benefits package", type: "skill", required: false },
+              { value: "Kith brand story and culture", type: "skill", required: false },
+              { value: "source platform: Greenhouse", type: "skill", required: false },
+              { value: "join our team and enjoy a great place to work", type: "skill", required: false },
+              { value: "compensation $18/hr", type: "skill", required: false },
+              { value: "Miami store location", type: "skill", required: false },
+              { value: "apply now to join our retail team", type: "skill", required: false },
+            ],
+            keywords_canonical: ["customer service", "cash handling"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: null,
+              retail: true,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    const requirementText = debug.structured.jobRequirements
+      .map((requirement) => requirement.value.toLowerCase())
+      .join("\n");
+
+    expect(requirementText).toContain("customer service");
+    expect(requirementText).toContain("cash handling");
+    expect(requirementText).not.toContain("benefits");
+    expect(requirementText).not.toContain("employee discount");
+    expect(requirementText).not.toContain("brand story");
+    expect(requirementText).not.toContain("source platform");
+    expect(requirementText).not.toContain("join our team");
+    expect(requirementText).not.toContain("great place to work");
+    expect(requirementText).not.toContain("compensation");
+    expect(requirementText).not.toContain("miami");
+    expect(requirementText).not.toContain("apply now");
+    expect(debug.structured.matched.map((outcome) => outcome.requirement.value)).toEqual(
+      expect.arrayContaining(["Retail Associate", "customer service", "cash handling"]),
+    );
+  });
+
   it("emits profile evidence from structured sections with provenance", () => {
     const evidence = buildStructuredProfileEvidence(robertProfile);
 
