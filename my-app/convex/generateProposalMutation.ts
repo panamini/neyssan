@@ -4433,7 +4433,7 @@ function isClosingDiscussionSentence(sentence: string): boolean {
 const GENERIC_BODY_ONLY_SENTENCE_PATTERNS = [
   /^what interests me about this role\b/i,
   /^i(?:'m| am) interested in\b/i,
-  /^i(?:'m| am) drawn to\b/i,
+  /^i(?:'m| am)(?:\s+particularly)?\s+drawn to\b/i,
   /^the day-to-day work(?: itself)?\b/i,
   /^the day-to-day work and operating context\b/i,
   /^the role appears to depend on\b/i,
@@ -4495,7 +4495,7 @@ const NO_CONTEXT_POSITION_DETAILS_HIGHLIGHT_PATTERN =
 const NO_CONTEXT_BARE_JD_SUMMARY_FRAGMENT_PATTERN =
   /^the\s+responsibilities?\s+(?:outlined|described)(?:[—–,:-]\s*|\s+)such\s+as\b/i;
 const NO_CONTEXT_WEAK_OPPORTUNITY_APPEAL_PATTERN =
-  /^(?:the\s+(?:opportunity|chance|responsibilit(?:y|ies)|role|position)\b[^.!?\n]{0,180}\b(?:appeals?\s+to\s+me|is\s+(?:especially|particularly)\s+(?:appealing|compelling)|stands?\s+out)\b)/i;
+  /^(?:the\s+(?:opportunity|chance|responsibilit(?:y|ies)|role|position)\b[^.!?\n]{0,180}\b(?:appeals?\s+to\s+me|is\s+(?:especially|particularly)\s+(?:appealing|compelling)|stands?\s+out|resonates?\s+with\s+my\s+(?:understanding|commitment))\b)/i;
 const NO_CONTEXT_ENVIRONMENT_ADMIRATION_PATTERN =
   /^(?:the\s+[^.!?\n]{0,180}\b(?:resort(?:-style)?|property|location|amenities|setting|atmosphere|environment|waterfront|waterslides?|mission\s+bay|seaworld|belmont\s+park|attractions?|hospitality|guest\s+experience)\b[^.!?\n]{0,180}\b(?:appeals?|is\s+(?:especially|particularly)\s+(?:appealing|compelling)|stands?\s+out|presents?\s+(?:an\s+)?(?:engaging|dynamic|rewarding|challenging)\s+(?:work\s+)?environment|creates?\s+(?:an\s+)?(?:engaging|dynamic)\s+setting|makes?\s+it\s+an\s+attractive\s+place\s+to\s+work|adds?\s+a\s+dynamic\s+element|offers?\s+(?:a\s+)?dynamic\s+environment)\b|the\s+opportunity\s+to\s+work\b[^.!?\n]{0,180}\b(?:resort(?:-style)?|indoor\s+and\s+outdoor|varying\s+environments?)\b[^.!?\n]{0,120}\b(?:appeals?|is\s+(?:especially|particularly)\s+(?:appealing|compelling))\b)/i;
 const NO_CONTEXT_PSEUDO_CAPABILITY_PATTERN =
@@ -6857,6 +6857,54 @@ function buildFailOpenCoverLetterBodyCandidateFromContent(args: {
   return stripTrailingClosingDiscussion(compactWhitespace(withoutMeta));
 }
 
+function failOpenCoverLetterBodyIsSaveable(args: {
+  body: string;
+  noContextMode: boolean;
+  acceptanceMode?: ProposalBodyAcceptanceMode;
+}): boolean {
+  const sentences = splitParagraphs(args.body).flatMap((paragraph) =>
+    splitSentences(paragraph),
+  );
+  const sentenceLooksNoContextRepairTemplate = (sentence: string): boolean =>
+    /^(?:the\s+work\s+seems\s+to\s+call\s+for\s+consistency,\s+organization,\s+and\s+clear\s+communication\s+from\s+day\s+to\s+day|the\s+day-to-day\s+work\s+itself\s+is\s+the\s+part\s+of\s+the\s+role\s+that\s+stands\s+out\s+to\s+me\s+most|the\s+role\s+appears\s+to\s+depend\s+on\s+steady\s+follow-through,\s+clear\s+communication,\s+and\s+organized\s+day-to-day\s+coordination)\.?$/i.test(
+      compactWhitespace(sentence),
+    );
+  const sentenceLooksNoContextInterestOnlyLine = (
+    sentence: string,
+  ): boolean =>
+    /^i(?:['’]m| am)\s+interested\s+in\s+learning\s+more\s+about\s+the\s+role\.?$/i.test(
+      compactWhitespace(sentence),
+    );
+  if (
+    args.noContextMode &&
+    sentences.length > 0 &&
+    sentences.length <= 2 &&
+    sentences.some(sentenceLooksNoContextRepairTemplate) &&
+    sentences.every(
+      (sentence) =>
+        sentenceLooksNoContextRepairTemplate(sentence) ||
+        sentenceLooksNoContextInterestOnlyLine(sentence),
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    hasSaveableBodyContent({
+      body: args.body,
+      format: "cover_letter",
+      noContextMode: args.noContextMode,
+      acceptanceMode: args.acceptanceMode,
+    })
+  ) {
+    return true;
+  }
+
+  return args.noContextMode
+    ? hasNarrowNoContextGroundedFinalizationContent(args.body)
+    : hasNarrowCvBackedGroundedRescueContent(args.body);
+}
+
 function buildFailOpenCoverLetterOutput(args: {
   content: string;
   outputLanguage: ProposalOutputLanguage;
@@ -6885,6 +6933,35 @@ function buildFailOpenCoverLetterOutput(args: {
   } catch {
     return body;
   }
+}
+
+function buildSaveableFailOpenCoverLetterOutput(args: {
+  content: string;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+  voicePreset: ProposalVoicePreset;
+  noContextMode: boolean;
+  acceptanceMode?: ProposalBodyAcceptanceMode;
+}): string | null {
+  const output = buildFailOpenCoverLetterOutput(args);
+  if (!output) {
+    return null;
+  }
+
+  const body = sanitizeGeneratedProposalBody({
+    content: output,
+    format: "cover_letter",
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  });
+
+  return failOpenCoverLetterBodyIsSaveable({
+    body,
+    noContextMode: args.noContextMode,
+    acceptanceMode: args.acceptanceMode,
+  })
+    ? output
+    : null;
 }
 
 function selectProposalBodyCandidateOrThrow(args: {
@@ -6978,7 +7055,14 @@ function selectProposalBodyCandidateOrThrow(args: {
       outputLanguage: args.outputLanguage,
       candidateName: args.candidateName,
     });
-    if (failOpenCandidate) {
+    if (
+      failOpenCandidate &&
+      failOpenCoverLetterBodyIsSaveable({
+        body: failOpenCandidate,
+        noContextMode: args.noContextMode,
+        acceptanceMode: args.acceptanceMode,
+      })
+    ) {
       if (args.debugTrace) {
         args.debugTrace.cleanedBodySelection.selectedCandidate = "fail_open";
         args.debugTrace.cleanedBodySelection.selectedBody = failOpenCandidate;
@@ -8152,23 +8236,24 @@ export function finalizeProposalForPersistence(args: {
       })
     ) {
       const failOpenOutput =
-        buildFailOpenCoverLetterOutput({
+        buildSaveableFailOpenCoverLetterOutput({
           content: guarded,
           outputLanguage: args.outputLanguage,
           candidateName: args.candidateName,
           voicePreset: args.voicePreset,
           noContextMode: args.noContextMode,
+          acceptanceMode,
         }) ??
-        buildFailOpenCoverLetterOutput({
+        buildSaveableFailOpenCoverLetterOutput({
           content: finalized,
           outputLanguage: args.outputLanguage,
           candidateName: args.candidateName,
           voicePreset: args.voicePreset,
           noContextMode: args.noContextMode,
-        });
+          acceptanceMode,
+      });
       if (failOpenOutput) {
         guarded = failOpenOutput;
-        usedFailOpenPersistenceFallback = true;
       }
     }
   }
@@ -8195,24 +8280,35 @@ export function finalizeProposalForPersistence(args: {
       });
     } catch (error) {
       const failOpenOutput =
-        buildFailOpenCoverLetterOutput({
+        buildSaveableFailOpenCoverLetterOutput({
           content: guarded,
           outputLanguage: args.outputLanguage,
           candidateName: args.candidateName,
           voicePreset: args.voicePreset,
           noContextMode: args.noContextMode,
+          acceptanceMode,
         }) ??
-        buildFailOpenCoverLetterOutput({
+        buildSaveableFailOpenCoverLetterOutput({
           content: finalized,
           outputLanguage: args.outputLanguage,
           candidateName: args.candidateName,
           voicePreset: args.voicePreset,
           noContextMode: args.noContextMode,
+          acceptanceMode,
         });
       if (!failOpenOutput) {
         throw error;
       }
       guarded = failOpenOutput;
+      assertSavedOutputHasSubstantiveBody({
+        content: guarded,
+        format: args.format,
+        outputLanguage: args.outputLanguage,
+        candidateName: args.candidateName,
+        noContextMode: args.noContextMode,
+        acceptanceMode,
+        debugTrace: args.debugTrace,
+      });
       usedFailOpenPersistenceFallback = true;
     }
   } else if (args.format !== "cover_letter") {

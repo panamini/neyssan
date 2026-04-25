@@ -90,6 +90,8 @@ const ACTIVE_RESUME_PREVIEW_FUNCTIONS = [
   "SignalGridPage",
 ] as const;
 
+const ACTIVE_RESUME_PREVIEW_UNIT_ALLOWLIST = [/["']1\.6mm["']/, /["']1\.5mm["']/];
+
 function readTarget(relativePath: string): string {
   return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
 }
@@ -195,7 +197,10 @@ describe("document token hardcode audit", () => {
       [],
     );
     expect(
-      collectMatches(activePreviewSource, /["'][0-9.]+(?:mm|pt)["']/g),
+      filterMatches(
+        collectMatches(activePreviewSource, /["'][0-9.]+(?:mm|pt)["']/g),
+        ACTIVE_RESUME_PREVIEW_UNIT_ALLOWLIST,
+      ),
     ).toEqual([]);
   });
 

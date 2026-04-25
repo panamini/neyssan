@@ -394,10 +394,7 @@ describe("premium cover letter prompt contract", () => {
       "Opening: position through the strongest relevant evidence",
     );
     expect(prompt).toContain(
-      "EmployerValueBlock: explain why that evidence matters",
-    );
-    expect(prompt).toContain(
-      "without claiming direct target-role experience, direct responsibility for the target role's core work, or experience as the target role.",
+      "EmployerValueBlock: move directly to an employer-facing implication",
     );
     expect(prompt).toContain('"opening":"string"');
     expect(prompt).toContain('"employerValueBlock":"string"');
@@ -472,7 +469,7 @@ describe("premium cover letter prompt contract", () => {
       "Preset contract for expert: compact, professional, and controlled;",
     );
     expect(expertPrompt).toContain(
-      "use one measured analytical sentence about the role's workflow, demands, or operating context",
+      "make one precise employer-facing observation about what controlled execution produces for this specific role",
     );
     expect(engagingPrompt).toContain(
       "Preset contract for engaging: warmer but restrained;",
