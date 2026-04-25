@@ -12,6 +12,7 @@ import {
   listForUser,
   parseCreatedJob,
   recordStructuredMatchReview,
+  refreshStructuredMatch,
   restoreArchivedJob,
   runShadowJobExtraction,
   setJobFavorite,
@@ -19,6 +20,7 @@ import {
   storeJobExtractionShadow,
   updateField,
 } from "../jobsPublic";
+import { hashNormalizedJobText } from "../lib/jobs/llmExtractJob";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -541,7 +543,7 @@ describe("jobsPublic.getById", () => {
     };
   }
 
-  it("projects eligible visible LLM extraction without changing scoring fields", async () => {
+  it("projects eligible visible LLM extraction and structured match-read fields", async () => {
     vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
     const job = buildProjectionJob({
       reviewItems: [
@@ -629,10 +631,24 @@ describe("jobsPublic.getById", () => {
       "responsibilities",
     );
     expect(result?.matchRead).toMatchObject({
-      score: 100,
-      tier: "strong",
-      matched: ["Legacy React", "legacy ops"],
-      missing: [],
+      score: 25,
+      tier: "weak",
+      scoreVisible: true,
+      confidence: expect.any(String),
+      matched: ["Modern React"],
+      missing: ["Design systems"],
+      method: "llm",
+      fallback: "none",
+    });
+    expect(result?.matchReview).toMatchObject({
+      verdict: "probably_skip",
+      score: 25,
+      suggested_next_step: "skip",
+      evidence: [
+        expect.objectContaining({
+          job_signal: "Modern React",
+        }),
+      ],
     });
   });
 
@@ -707,13 +723,13 @@ describe("jobsPublic.getById", () => {
         ],
       });
       expect(result?.matchRead).toMatchObject({
-        score: 100,
-        tier: "strong",
+        score: 25,
+        tier: "weak",
       });
     }
   });
 
-  it("projects structured shadow summary only for allowlisted internal UI without changing production match read", async () => {
+  it("projects structured shadow summary only for allowlisted internal UI", async () => {
     vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
     vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_UI", "true");
     vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_VIEWERS", "internal@example.com");
@@ -732,18 +748,18 @@ describe("jobsPublic.getById", () => {
     );
 
     expect(result?.matchRead).toMatchObject({
-      score: 100,
-      tier: "strong",
-      matched: ["Legacy React", "legacy ops"],
-      missing: [],
+      score: 25,
+      tier: "weak",
+      matched: ["Modern React"],
+      missing: ["Design systems"],
     });
     expect(result?.structuredShadowSummary).toMatchObject({
       flagEnabled: true,
       internalViewer: true,
       uiEnabled: true,
       status: "available",
-      oldScore: 100,
-      oldTier: "strong",
+      oldScore: null,
+      oldTier: "unknown",
       structuredScore: expect.any(Number),
       structuredTier: expect.any(String),
       matchedCount: expect.any(Number),
@@ -778,8 +794,8 @@ describe("jobsPublic.getById", () => {
     );
 
     expect(result?.matchRead).toMatchObject({
-      score: 100,
-      tier: "strong",
+      score: 25,
+      tier: "weak",
     });
     expect(result?.structuredShadowSummary).toMatchObject({
       flagEnabled: true,
@@ -788,8 +804,8 @@ describe("jobsPublic.getById", () => {
       advisoryBetaEnabled: true,
       advisoryBetaViewer: true,
       status: "available",
-      oldScore: 100,
-      oldTier: "strong",
+      oldScore: null,
+      oldTier: "unknown",
     });
   });
 
@@ -813,8 +829,8 @@ describe("jobsPublic.getById", () => {
     );
 
     expect(result?.matchRead).toMatchObject({
-      score: 100,
-      tier: "strong",
+      score: 25,
+      tier: "weak",
     });
     expect(result?.structuredShadowSummary).toBeNull();
   });
@@ -839,8 +855,8 @@ describe("jobsPublic.getById", () => {
     );
 
     expect(result?.matchRead).toMatchObject({
-      score: 100,
-      tier: "strong",
+      score: 25,
+      tier: "weak",
     });
     expect(result?.structuredShadowSummary).toBeNull();
   });
@@ -865,8 +881,8 @@ describe("jobsPublic.getById", () => {
     );
 
     expect(result?.matchRead).toMatchObject({
-      score: 100,
-      tier: "strong",
+      score: 25,
+      tier: "weak",
     });
     expect(result?.structuredShadowSummary).toMatchObject({
       advisoryBetaEnabled: true,
@@ -895,8 +911,8 @@ describe("jobsPublic.getById", () => {
 
     expect(result?.structuredShadowSummary).toBeNull();
     expect(result?.matchRead).toMatchObject({
-      score: 100,
-      tier: "strong",
+      score: 25,
+      tier: "weak",
     });
   });
 
@@ -921,8 +937,8 @@ describe("jobsPublic.getById", () => {
 
     expect(result?.structuredShadowSummary).toBeNull();
     expect(result?.matchRead).toMatchObject({
-      score: 100,
-      tier: "strong",
+      score: 25,
+      tier: "weak",
     });
   });
 
@@ -947,8 +963,8 @@ describe("jobsPublic.getById", () => {
 
     expect(result?.structuredShadowSummary).toBeNull();
     expect(result?.matchRead).toMatchObject({
-      score: 100,
-      tier: "strong",
+      score: 25,
+      tier: "weak",
     });
   });
 
@@ -1111,11 +1127,11 @@ describe("jobsPublic.getById", () => {
 
     expect(result?.resumeId).toBe("cv_missing");
     expect(result?.matchRead).toMatchObject({
-      fallback: "profile_missing",
+      fallback: "structured_pending",
       tier: "unknown",
       score: null,
       matched: [],
-      missing: ["Airtable", "Program management"],
+      missing: [],
     });
   });
 });
@@ -1244,9 +1260,9 @@ describe("jobsPublic.debugInspectMatchInputByJobId", () => {
       profileKeywords: [],
       summary: "Operations lead with Airtable workflow automation experience.",
       raw_text: "airtable automation program management",
-      matchReadFallback: "none",
-      score: 100,
-      matchedSignals: ["Airtable", "Program management"],
+      matchReadFallback: "structured_pending",
+      score: null,
+      matchedSignals: [],
       missingSignals: [],
     });
     expect(result?.experience).toEqual([
@@ -1528,8 +1544,8 @@ describe("jobsPublic.debugInspectMatchInputByJobId", () => {
       internalViewer: true,
       status: "available",
       reason: null,
-      oldScore: 100,
-      oldTier: "strong",
+      oldScore: null,
+      oldTier: "unknown",
       structuredScore: expect.any(Number),
       structuredTier: expect.any(String),
       matchedCount: expect.any(Number),
@@ -3348,6 +3364,158 @@ describe("jobsPublic.approveReviewItem", () => {
         }),
       ]),
     );
+  });
+});
+
+describe("jobsPublic.refreshStructuredMatch", () => {
+  function buildRefreshContext(shadowRows: unknown[] = []) {
+    const linkedProfiles = [
+      {
+        _id: "profile_primary",
+        _creationTime: 100,
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        email: "primary@example.com",
+      },
+    ];
+    const job = {
+      _id: "job_alpha",
+      userId: "profile_primary",
+      rawDescription: "Required: guard card and retail loss prevention.",
+      updatedAt: 100,
+    };
+    const scheduleCalls: Array<{ delay: number; args: Record<string, unknown> }> = [];
+
+    return {
+      scheduleCalls,
+      ctx: {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          normalizeId(table: string, id: string) {
+            expect(table).toBe("jobs");
+            return id;
+          },
+          get: async (id: string) => (id === job._id ? job : null),
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => shadowRows,
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+        scheduler: {
+          runAfter: async (
+            delay: number,
+            _functionReference: unknown,
+            args: Record<string, unknown>,
+          ) => {
+            scheduleCalls.push({ delay, args });
+          },
+        },
+      },
+    };
+  }
+
+  it("queues structured extraction when the current job has no valid structured row", async () => {
+    const { ctx, scheduleCalls } = buildRefreshContext();
+
+    await expect(
+      refreshStructuredMatch._handler(ctx as any, { jobId: "job_alpha" }),
+    ).resolves.toEqual({ queued: true });
+
+    expect(scheduleCalls).toEqual([
+      {
+        delay: 0,
+        args: {
+          jobId: "job_alpha",
+          force: true,
+        },
+      },
+    ]);
+  });
+
+  it("does not queue Mistral extraction when a current valid structured row exists", async () => {
+    const currentHash = await hashNormalizedJobText(
+      "Required: guard card and retail loss prevention.",
+    );
+    const { ctx, scheduleCalls } = buildRefreshContext([
+      {
+        job_text_hash: currentHash,
+        model: "ministral-3b-2512",
+        prompt_version: "p9_v2",
+        validation_status: "valid",
+        fallback_used: false,
+      },
+    ]);
+
+    await expect(
+      refreshStructuredMatch._handler(ctx as any, { jobId: "job_alpha" }),
+    ).resolves.toEqual({ queued: false });
+
+    expect(scheduleCalls).toEqual([]);
+  });
+
+  it("queues structured extraction when the valid row is for stale job text", async () => {
+    const staleHash = await hashNormalizedJobText("Old job description.");
+    const { ctx, scheduleCalls } = buildRefreshContext([
+      {
+        job_text_hash: staleHash,
+        model: "ministral-3b-2512",
+        prompt_version: "p9_v2",
+        validation_status: "valid",
+        fallback_used: false,
+      },
+    ]);
+
+    await expect(
+      refreshStructuredMatch._handler(ctx as any, { jobId: "job_alpha" }),
+    ).resolves.toEqual({ queued: true });
+
+    expect(scheduleCalls).toEqual([
+      {
+        delay: 0,
+        args: {
+          jobId: "job_alpha",
+          force: true,
+        },
+      },
+    ]);
   });
 });
 

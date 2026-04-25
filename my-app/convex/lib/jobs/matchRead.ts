@@ -12,7 +12,8 @@ export type MatchReadFallback =
   | "profile_missing"
   | "profile_insufficient"
   | "parse_failed"
-  | "requirements_missing";
+  | "requirements_missing"
+  | "structured_pending";
 export type MatchReadMethod = "keyword-overlap" | "llm";
 
 export type MatchRead = {
