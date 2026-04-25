@@ -270,7 +270,7 @@ function SemanticLengthBadge({ count }: { count: number }): JSX.Element {
   return (
     <span
       className={`dasti-pill dasti-proposal-character-badge dasti-length-signal dasti-length-signal--${zone}`}
-      title={`${count.toLocaleString()} characters — ${label} length`}
+      title={`${count.toLocaleString()} chars · ${label}`}
     >
       <span className="dasti-length-signal__bar" aria-hidden="true">
         <span
@@ -1135,9 +1135,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       aria-label={
         mode === "preview" ? "Switch to edit mode" : "Switch to preview mode"
       }
-      data-toolbar-tooltip={
-        mode === "preview" ? "Switch to edit" : "Switch to preview"
-      }
+      data-toolbar-tooltip={mode === "preview" ? "Edit" : "Preview"}
       data-no-pan="true"
     >
       {mode === "preview" ? (
@@ -1166,8 +1164,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         })()}
         title={
           resolvedCharacterLimitSelection.advisory
-            ? "Approximate platform target. Treat this as a friendly guide, not a confirmed hard cap."
-            : "Current draft length versus the selected limit."
+            ? "Approximate target. Not a hard cap."
+            : "Draft length vs limit."
         }
       >
         {formatCharacterCountLabel({
@@ -1708,7 +1706,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                                   }
                                   onBlur={() => onContactLineCommit?.()}
                                   className="dasti-proposal-editor-page__field-input"
-                                  placeholder="phone, email, website"
+                                  placeholder="Phone, email, website"
                                 />
                               </label>
                             ) : null}
@@ -1883,7 +1881,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                         updateEditableScrollEdges();
                         scheduleTextareaSelectionCheck();
                       }}
-                      placeholder="Content will appear here…"
+                      placeholder="Content appears here"
                       className="dasti-proposal-sheet__body--editable dasti-proposal-editor-page__textarea"
                       style={{
                         fontFamily: documentTypography.fontFamily,
@@ -2012,7 +2010,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               color: "var(--tm2)",
             }}
           >
-            Generating…
+            Generating
           </p>
         </div>
       </div>
@@ -2050,7 +2048,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           className="rounded-[var(--radius-card)] border border-[color:var(--er)] [background:var(--erb)] p-6"
         >
           <div className="text-sm font-medium [color:var(--ert)]">
-            Proposal generation failed
+            Generation failed.
           </div>
           <p className="mt-2 text-sm leading-6 [color:var(--ti)]">{error}</p>
           {isDev && errorDetail && (
@@ -2082,7 +2080,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             textAlign: "center",
           }}
         >
-          Generate a proposal to see the results here.
+          No draft yet. Generate one.
         </p>
       </div>
     );
@@ -2099,8 +2097,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       >
         {queuedPreviewActionLabel ? (
           <div className="dasti-proposal-editor-hint" role="status" aria-live="polite">
-            Select a paragraph, then tap{" "}
-            {queuedPreviewActionLabel.toLowerCase()} in the toolbar.
+            Pick a paragraph, then tap {queuedPreviewActionLabel.toLowerCase()}.
           </div>
         ) : null}
         {renderDocumentStage()}
@@ -2126,7 +2123,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           onSelect={scheduleTextareaSelectionCheck}
           onMouseUp={scheduleTextareaSelectionCheck}
           onKeyUp={scheduleTextareaSelectionCheck}
-          placeholder="Content will appear here…"
+          placeholder="Content appears here"
           className="dasti-proposal-sheet__body--editable"
           style={{
             fontFamily: documentTypography.fontFamily,
