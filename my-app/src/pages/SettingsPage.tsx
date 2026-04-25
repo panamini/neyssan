@@ -72,9 +72,9 @@ const EMPTY_PRESET: PresetSlot = {
 type ToneId = "signature" | "expert" | "engaging" | null;
 const TONE_OPTIONS: { id: ToneId; label: string; description: string; Icon: typeof Wand2 }[] = [
   { id: null, label: getVoicePresetDisplayLabel(null), description: "Adapts to the role.", Icon: Wand2 },
-  { id: "signature", label: getVoicePresetDisplayLabel("signature"), description: "Warm and approachable.", Icon: Feather },
-  { id: "expert", label: getVoicePresetDisplayLabel("expert"), description: "Natural and credible.", Icon: PenNib },
-  { id: "engaging", label: getVoicePresetDisplayLabel("engaging"), description: "Formal and composed.", Icon: Stamp },
+  { id: "signature", label: getVoicePresetDisplayLabel("signature"), description: "Conversational. Like you wrote it.", Icon: Feather },
+  { id: "expert", label: getVoicePresetDisplayLabel("expert"), description: "Composed. Measured pacing.", Icon: PenNib },
+  { id: "engaging", label: getVoicePresetDisplayLabel("engaging"), description: "Approachable. Personal touches.", Icon: Stamp },
 ];
 
 // ─── Style options ─────────────────────────────────────────────────────────────
