@@ -12,7 +12,8 @@
   --ap: hsl(155, 20%, 88%);
   --as: hsla(155, 22%, 30%, 0.09);
   --fr: hsla(155, 22%, 30%, 0.2);
-  --op: hsl(155, 18%, 95%);
+  --color-on-accent: hsl(155, 18%, 95%);
+  --op: var(--color-on-accent);
 }
 .dark.pal-sauge {
   --ac: hsl(155, 28%, 62%);
@@ -20,7 +21,8 @@
   --ap: hsl(155, 22%, 20%);
   --as: hsla(155, 28%, 62%, 0.12);
   --fr: hsla(155, 28%, 62%, 0.24);
-  --op: hsl(80, 5%, 7%);
+  --color-on-accent: hsl(80, 5%, 7%);
+  --op: var(--color-on-accent);
 }
 
 /* Ocre */
@@ -30,7 +32,8 @@
   --ap: hsl(36, 30%, 90%);
   --as: hsla(34, 38%, 32%, 0.09);
   --fr: hsla(34, 38%, 32%, 0.2);
-  --op: hsl(36, 28%, 96%);
+  --color-on-accent: hsl(36, 28%, 96%);
+  --op: var(--color-on-accent);
 }
 .dark.pal-ocre {
   --ac: hsl(36, 32%, 64%);
@@ -38,7 +41,8 @@
   --ap: hsl(36, 18%, 18%);
   --as: hsla(36, 32%, 64%, 0.12);
   --fr: hsla(36, 32%, 64%, 0.24);
-  --op: hsl(80, 5%, 7%);
+  --color-on-accent: hsl(80, 5%, 7%);
+  --op: var(--color-on-accent);
 }
 
 /* Pierre */
@@ -48,7 +52,8 @@
   --ap: hsl(220, 14%, 90%);
   --as: hsla(220, 14%, 30%, 0.09);
   --fr: hsla(220, 14%, 30%, 0.2);
-  --op: hsl(220, 14%, 96%);
+  --color-on-accent: hsl(220, 14%, 96%);
+  --op: var(--color-on-accent);
 }
 .dark.pal-pierre {
   --ac: hsl(220, 18%, 62%);
@@ -56,7 +61,8 @@
   --ap: hsl(220, 14%, 16%);
   --as: hsla(220, 18%, 62%, 0.12);
   --fr: hsla(220, 18%, 62%, 0.24);
-  --op: hsl(80, 5%, 7%);
+  --color-on-accent: hsl(80, 5%, 7%);
+  --op: var(--color-on-accent);
 }
 
 /* Bordeaux */
@@ -66,7 +72,8 @@
   --ap: hsl(350, 18%, 90%);
   --as: hsla(348, 22%, 30%, 0.09);
   --fr: hsla(348, 22%, 30%, 0.2);
-  --op: hsl(350, 18%, 96%);
+  --color-on-accent: hsl(350, 18%, 96%);
+  --op: var(--color-on-accent);
 }
 .dark.pal-bordeaux {
   --ac: hsl(348, 26%, 60%);
@@ -74,7 +81,8 @@
   --ap: hsl(348, 16%, 16%);
   --as: hsla(348, 26%, 60%, 0.12);
   --fr: hsla(348, 26%, 60%, 0.24);
-  --op: hsl(80, 5%, 7%);
+  --color-on-accent: hsl(80, 5%, 7%);
+  --op: var(--color-on-accent);
 }
 
 /* Encre */
@@ -84,7 +92,8 @@
   --ap: hsl(200, 14%, 88%);
   --as: hsla(200, 18%, 24%, 0.09);
   --fr: hsla(200, 18%, 24%, 0.2);
-  --op: hsl(200, 14%, 96%);
+  --color-on-accent: hsl(200, 14%, 96%);
+  --op: var(--color-on-accent);
 }
 .dark.pal-encre {
   --ac: hsl(200, 20%, 60%);
@@ -92,5 +101,6 @@
   --ap: hsl(200, 14%, 16%);
   --as: hsla(200, 20%, 60%, 0.12);
   --fr: hsla(200, 20%, 60%, 0.24);
-  --op: hsl(80, 5%, 7%);
+  --color-on-accent: hsl(80, 5%, 7%);
+  --op: var(--color-on-accent);
 }

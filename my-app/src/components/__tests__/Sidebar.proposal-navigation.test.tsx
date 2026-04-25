@@ -23,6 +23,10 @@ const mockCvLibraryState = {
   deleteCv: vi.fn(),
 };
 
+const mockAuthState = {
+  isSignedIn: true,
+};
+
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
     isLoading: false,
@@ -66,7 +70,7 @@ vi.mock("../../../convex/_generated/api", () => ({
 vi.mock("@clerk/clerk-react", () => ({
   useAuth: () => ({
     isLoaded: true,
-    isSignedIn: true,
+    isSignedIn: mockAuthState.isSignedIn,
   }),
   useUser: () => ({
     user: {
@@ -171,6 +175,7 @@ describe("Sidebar proposal navigation", () => {
     mockCvLibraryState.loadCv.mockReset();
     mockCvLibraryState.createNewCv.mockReset();
     mockCvLibraryState.deleteCv.mockReset();
+    mockAuthState.isSignedIn = true;
   });
 
   it("does not clear stored proposal draft when the collapsed proposals control re-enters the workspace", () => {
@@ -223,6 +228,29 @@ describe("Sidebar proposal navigation", () => {
     expect(
       screen.getByRole("button", { name: "Open account menu" }),
     ).toBeInTheDocument();
+  });
+
+  it("uses the sidebar footer as the signed-out sign-in entry", () => {
+    mockAuthState.isSignedIn = false;
+
+    render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/cv" element={<CvRoute />} />
+          <Route path="/proposal" element={<ProposalRouteProbe />} />
+          <Route path="/sign-in" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+
+    expect(screen.getByTestId("sidebar-location")).toHaveTextContent(
+      "/sign-in::null",
+    );
+    expect(screen.getByText("Sign In")).toBeInTheDocument();
+    expect(screen.getByText("Save draft")).toBeInTheDocument();
   });
 
   it("renders a top-level Jobs navigation entry", () => {
@@ -286,7 +314,7 @@ describe("Sidebar proposal navigation", () => {
     });
   });
 
-  it("opens Quick Start as a shell-level action from the current workspace", () => {
+  it("opens Start as a shell-level action from the current workspace", () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <Sidebar />
@@ -298,7 +326,7 @@ describe("Sidebar proposal navigation", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Quick Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
 
     expect(mockCvLibraryState.createNewCv).not.toHaveBeenCalled();
     expect(screen.getByTestId("sidebar-location")).toHaveTextContent(
