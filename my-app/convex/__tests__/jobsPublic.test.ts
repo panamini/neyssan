@@ -757,6 +757,124 @@ describe("jobsPublic.getById", () => {
     });
   });
 
+  it("projects advisory structured preview for any viewer in local development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_ADVISORY_BETA", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_ADVISORY_BETA_ALL", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_BETA_VIEWERS", "*");
+    const job = buildProjectionJob();
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        shadowRows: [buildVisibleShadowRow()],
+        identity: {
+          subject: "clerk_123",
+          email: "dev@example.com",
+        },
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result?.matchRead).toMatchObject({
+      score: 100,
+      tier: "strong",
+    });
+    expect(result?.structuredShadowSummary).toMatchObject({
+      flagEnabled: true,
+      internalViewer: false,
+      uiEnabled: false,
+      advisoryBetaEnabled: true,
+      advisoryBetaViewer: true,
+      status: "available",
+      oldScore: 100,
+      oldTier: "strong",
+    });
+  });
+
+  it("does not expose advisory preview to wildcard viewers outside local development", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_ADVISORY_BETA", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_BETA_VIEWERS", "*");
+    const job = buildProjectionJob();
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        shadowRows: [buildVisibleShadowRow()],
+        identity: {
+          subject: "clerk_123",
+          email: "dev@example.com",
+        },
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result?.matchRead).toMatchObject({
+      score: 100,
+      tier: "strong",
+    });
+    expect(result?.structuredShadowSummary).toBeNull();
+  });
+
+  it("does not expose advisory preview to the explicit all flag outside local development", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_ADVISORY_BETA", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_ADVISORY_BETA_ALL", "true");
+    const job = buildProjectionJob();
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        shadowRows: [buildVisibleShadowRow()],
+        identity: {
+          subject: "clerk_123",
+          email: "dev@example.com",
+        },
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result?.matchRead).toMatchObject({
+      score: 100,
+      tier: "strong",
+    });
+    expect(result?.structuredShadowSummary).toBeNull();
+  });
+
+  it("still requires an allowlisted viewer outside local development", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_ADVISORY_BETA", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_BETA_VIEWERS", "internal@example.com");
+    const job = buildProjectionJob();
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        shadowRows: [buildVisibleShadowRow()],
+        identity: {
+          subject: "clerk_123",
+          email: "internal@example.com",
+        },
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result?.matchRead).toMatchObject({
+      score: 100,
+      tier: "strong",
+    });
+    expect(result?.structuredShadowSummary).toMatchObject({
+      advisoryBetaEnabled: true,
+      advisoryBetaViewer: true,
+      status: "available",
+    });
+  });
+
   it("does not project structured shadow summary when rollback UI flag is off", async () => {
     vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
     vi.stubEnv("STRUCTURED_MATCH_READ_INTERNAL_UI", "false");
@@ -770,6 +888,58 @@ describe("jobsPublic.getById", () => {
         identity: {
           subject: "clerk_123",
           email: "internal@example.com",
+        },
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result?.structuredShadowSummary).toBeNull();
+    expect(result?.matchRead).toMatchObject({
+      score: 100,
+      tier: "strong",
+    });
+  });
+
+  it("does not project advisory preview when advisory beta is disabled", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_ADVISORY_BETA", "false");
+    vi.stubEnv("STRUCTURED_MATCH_READ_BETA_VIEWERS", "*");
+    const job = buildProjectionJob();
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        shadowRows: [buildVisibleShadowRow()],
+        identity: {
+          subject: "clerk_123",
+          email: "dev@example.com",
+        },
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result?.structuredShadowSummary).toBeNull();
+    expect(result?.matchRead).toMatchObject({
+      score: 100,
+      tier: "strong",
+    });
+  });
+
+  it("does not project advisory preview when shadow is disabled", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("STRUCTURED_MATCH_READ_SHADOW", "false");
+    vi.stubEnv("STRUCTURED_MATCH_READ_ADVISORY_BETA", "true");
+    vi.stubEnv("STRUCTURED_MATCH_READ_BETA_VIEWERS", "*");
+    const job = buildProjectionJob();
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        shadowRows: [buildVisibleShadowRow()],
+        identity: {
+          subject: "clerk_123",
+          email: "dev@example.com",
         },
       }),
       { jobId: job._id },
