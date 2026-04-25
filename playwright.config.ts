@@ -143,7 +143,7 @@ export default defineConfig({
     // },
   ],
 
-  /* The app stack is started by run.sh local-fast locally/CI. */
+  /* The app stack is started before Playwright by run.sh. */
   // webServer: {
   //   command: 'npm run start',
   //   url: 'http://localhost:3000',

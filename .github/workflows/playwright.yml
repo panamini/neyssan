@@ -19,14 +19,19 @@ jobs:
       run: npm ci --prefix my-app
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
-    - name: Start local app stack
-      run: OPEN_BROWSER=0 ./run.sh local-fast
-    - name: Check local app stack
-      run: ./run.sh status
+    - name: Check Playwright app URL
+      run: |
+        if [ -z "${PLAYWRIGHT_APP_URL:-}" ]; then
+          echo "::error::Set the repository variable PLAYWRIGHT_APP_URL to the app URL Playwright should test."
+          exit 1
+        fi
+        curl --fail --show-error --silent --head "${PLAYWRIGHT_APP_URL}"
+      env:
+        PLAYWRIGHT_APP_URL: ${{ vars.PLAYWRIGHT_APP_URL }}
     - name: Run Playwright tests
       run: npx playwright test
       env:
-        PLAYWRIGHT_APP_URL: http://127.0.0.1:5173
+        PLAYWRIGHT_APP_URL: ${{ vars.PLAYWRIGHT_APP_URL }}
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
