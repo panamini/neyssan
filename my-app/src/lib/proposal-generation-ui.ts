@@ -11,13 +11,15 @@ const CONTROLLED_PROPOSAL_PROVIDER_TRANSPORT_ERROR_MESSAGE_PREFIX =
 const CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_PREFIX =
   "Proposal generation failed closed during finalization.";
 const FRIENDLY_PROVIDER_BUSY_MESSAGE =
-  "Proposal generation is temporarily busy because the model provider is rate limited. Please wait a moment and try again.";
+  "Model provider rate limited. Try again in a moment.";
 const FRIENDLY_PROVIDER_TRANSPORT_ERROR_MESSAGE =
-  "Proposal generation is temporarily unavailable because the model provider request could not be completed. Please try again.";
+  "Model provider unreachable. Try again.";
 const FALLBACK_TO_CHATGPT_BUSY_MESSAGE =
   "Generated with ChatGPT because Mistral was temporarily busy.";
 const FALLBACK_TO_CHATGPT_TRANSPORT_MESSAGE =
   "Generated with ChatGPT because the Mistral request could not be completed.";
+const JOB_ONLY_TOO_THIN_MESSAGE =
+  "Job description alone is too thin. Attach a resume or add background.";
 
 export type ProposalGenerationFallbackInfo = {
   requestedModelType?: string | null;
@@ -76,7 +78,7 @@ export function getProposalGenerationUiErrorMessage(args: {
   const rawMessage =
     args.error instanceof Error
       ? args.error.message
-      : "Failed to generate proposal. Please try again.";
+      : "Generation failed. Try again.";
   if (
     rawMessage.includes(CONTROLLED_PROPOSAL_PROVIDER_BUSY_CODE) ||
     rawMessage.includes(CONTROLLED_PROPOSAL_PROVIDER_BUSY_MESSAGE_PREFIX)
@@ -99,14 +101,14 @@ export function getProposalGenerationUiErrorMessage(args: {
 
   if (args.proposalType === "cover_letter") {
     return args.hasCandidateContext
-      ? "A grounded cover letter could not be generated from the current CV and job description. Review the active CV details or try a more specific role description."
-      : "A grounded cover letter could not be generated from the job description alone. Add a CV or more concrete background details and try again.";
+      ? "Cover letter not grounded in your resume and the job. Review your resume, or sharpen the role description."
+      : JOB_ONLY_TOO_THIN_MESSAGE;
   }
 
   if (args.proposalType === "application_message") {
     return args.hasCandidateContext
-      ? "A grounded application message could not be generated from the current CV and job description. Review the active CV details or try again."
-      : "A grounded application message could not be generated from the current job description alone. Add a CV or more concrete background details and try again.";
+      ? "Application message not grounded in your resume and the job. Review your resume, or try again."
+      : JOB_ONLY_TOO_THIN_MESSAGE;
   }
 
   return args.hasCandidateContext
