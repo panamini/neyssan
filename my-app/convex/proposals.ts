@@ -80,6 +80,7 @@ const proposalVerbatiStyleChoice = v.object({
 export const storeProposal = internalMutation({
   args: {
     userId: v.id("userProfiles"),
+    jobId: v.optional(v.string()),
     title: v.string(),
     content: v.string(),
     status: v.string(),
@@ -183,6 +184,7 @@ export const listUserProposals = internalQuery({
 export const updateProposal = internalMutation({
   args: {
     id: v.id("proposals"),
+    jobId: v.optional(v.string()),
     sections: v.array(
       v.object({
         type: v.union(v.literal("text"), v.literal("code"), v.literal("image")),

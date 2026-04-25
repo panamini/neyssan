@@ -6,6 +6,10 @@ import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { CvForge } from "../CvForge";
 
+const { useCvLibraryMock } = vi.hoisted(() => ({
+  useCvLibraryMock: vi.fn(),
+}));
+
 vi.mock("../../components/ProfileReviewCard", () => ({
   ProfileReviewCard: ({
     cvId,
@@ -17,11 +21,15 @@ vi.mock("../../components/ProfileReviewCard", () => ({
     toolbarPrimaryControl?: React.ReactNode;
   }) => (
     <div>
-      <div className="dasti-workbench-top-left-slot--cv">
-        <div className="dasti-cv-workbench-toggle">{toolbarLeadControl}</div>
+      <div className="dasti-cv-edit-toolbar">
+        <div className="dasti-workbench-top-left-slot--cv">
+          <div className="dasti-cv-workbench-toggle">{toolbarLeadControl}</div>
+        </div>
+        <div className="dasti-workbench-top-right-slot--cv">
+          {toolbarPrimaryControl}
+        </div>
       </div>
       <div>Mock profile editor {cvId ?? "none"}</div>
-      {toolbarPrimaryControl}
     </div>
   ),
 }));
@@ -63,22 +71,53 @@ vi.mock("../../components/EmbeddedStyleInspector", () => ({
 }));
 
 vi.mock("convex/react", () => ({
-  useQuery: vi.fn(() => ({
-    preset1: {
-      verbatiStyle: {
-        familyId: "editorial",
-        layout: "editorial",
-        typography: "quiet-editorial",
-        palette: "pierre",
-      },
-      voicePreset: null,
-      name: "Stone Editorial",
-    },
-    preset2: null,
-    preset3: null,
-    activeSlot: 1,
+  useConvexAuth: vi.fn(() => ({
+    isAuthenticated: true,
+    isLoading: false,
   })),
+  useMutation: vi.fn(() => vi.fn(async () => undefined)),
+  useQuery: vi.fn((reference: string, args?: unknown) => {
+    if (reference === "proposalSettings.getPresets") {
+      return {
+        preset1: {
+          fontPairId: "quiet-editorial",
+          styleChoice: "balanced",
+          paletteOverride: "pierre",
+          accentHex: null,
+          voicePreset: null,
+          name: "Stone Swiss",
+        },
+        preset2: null,
+        preset3: null,
+        activeSlot: 1,
+      };
+    }
+    if (reference === "jobsPublic.getById") {
+      if (args === "skip") {
+        return undefined;
+      }
+      return {
+        id: "job_123",
+        title: "Senior Product Designer",
+        company: "Acme",
+      };
+    }
+    return null;
+  }),
   useAction: vi.fn(() => undefined),
+}));
+
+vi.mock("../../../convex/_generated/api", () => ({
+  api: {
+    proposalSettings: {
+      getPresets: "proposalSettings.getPresets",
+    },
+    jobsPublic: {
+      getById: "jobsPublic.getById",
+      approveReviewItem: "jobsPublic.approveReviewItem",
+      updateField: "jobsPublic.updateField",
+    },
+  },
 }));
 
 vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
@@ -86,11 +125,13 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
     hostMode,
     layoutMode,
     railLeadControl,
+    railTrailingControl,
     stylePreset,
   }: {
     hostMode?: "panel" | "workspace";
     layoutMode?: "rail" | "stacked";
     railLeadControl?: React.ReactNode;
+    railTrailingControl?: React.ReactNode;
     stylePreset?: {
       layout?: string | null;
       typography?: string | null;
@@ -103,15 +144,78 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
         Preview style: {stylePreset?.layout ?? "none"}|
         {stylePreset?.typography ?? "none"}|{stylePreset?.palette ?? "none"}
       </div>
-      {railLeadControl}
+      <div className="dasti-preview-toolbar">
+        <div className="dasti-preview-toolbar__lead">{railLeadControl}</div>
+        <div className="dasti-preview-toolbar__trailing">
+          {railTrailingControl}
+        </div>
+      </div>
     </div>
   ),
 }));
+
+vi.mock("../../components/useStructuredMistralImport", () => ({
+  TRUSTED_MISTRAL_FILE_INPUT_ACCEPT: ".pdf",
+  useStructuredMistralImport: () => ({
+    importFile: vi.fn(),
+  }),
+}));
+
+vi.mock("../../contexts/CvLibraryContext", () => ({
+  useCvLibrary: () => useCvLibraryMock(),
+}));
+
+function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
+  const now = "2026-04-17T12:00:00.000Z";
+  const currentCv = {
+    id: "cv_123",
+    title: "Untitled CV",
+    metadata: {
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+      verbatiStyle: {
+        layout: "swiss",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      },
+    },
+    sections: [
+      {
+        id: "profile-cv_123",
+        type: "profile",
+        title: "Profile",
+        blocks: [],
+        structuredContent: [
+          {
+            id: "profile-item-cv_123",
+            name: "Ada Lovelace",
+            desiredPosition: "Product Designer",
+          },
+        ],
+      },
+    ],
+  };
+
+  return {
+    currentCv,
+    currentCvId: "cv_123",
+    createNewCv: vi.fn(async () => undefined),
+    importCv: vi.fn(async () => undefined),
+    cvs: [currentCv],
+    isLibraryHydrated: true,
+    lastLibraryFetchFailed: false,
+    loadCv: vi.fn(() => true),
+    ...overrides,
+  };
+}
 
 describe("CvForge workspace mode", () => {
   beforeEach(() => {
     window.localStorage.removeItem("dasti:cv-forge-workspace-mode:v1");
     window.localStorage.setItem("twoweeks:quick-start-completed", "1");
+    useCvLibraryMock.mockReset();
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState());
   });
 
   it("switches between edit and preview workbench modes and persists the choice", async () => {
@@ -132,6 +236,13 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByRole("button", { name: "Open saved resume styles" }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Loaded")).not.toBeInTheDocument();
+    expect(container.querySelector(".dasti-cv-active-toolbar-pill")).toBeNull();
+    expect(
+      screen.queryByRole("button", {
+        name: /Switch CV\. Active CV:/i,
+      }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open text styles" }),
     ).toBeInTheDocument();
@@ -154,14 +265,16 @@ describe("CvForge workspace mode", () => {
     );
 
     expect(
-      screen.queryByText("Mock profile editor cv_123"),
-    ).not.toBeInTheDocument();
-    expect(
       screen.getByText("Preview host: workspace / layout: stacked"),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Loaded")).not.toBeInTheDocument();
+    expect(container.querySelector(".dasti-cv-active-toolbar-pill")).toBeNull();
     expect(
       container.querySelector(".dasti-cv-preview-workbench"),
     ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-cv-edit-workbench-shell"),
+    ).toBeFalsy();
     expect(
       container.querySelector(".dasti-workbench-top-left-slot--cv-preview"),
     ).toBeFalsy();
@@ -246,10 +359,10 @@ describe("CvForge workspace mode", () => {
       screen.getByRole("button", { name: "Open saved resume styles" }),
     );
 
-    await user.click(screen.getByRole("menuitemradio", { name: /Stone Editorial/i }));
+    await user.click(screen.getByRole("menuitemradio", { name: /Stone Swiss/i }));
 
     expect(
-      screen.getByText("Preview style: editorial|quiet-editorial|pierre"),
+      screen.getByText("Preview style: swiss|quiet-editorial|pierre"),
     ).toBeInTheDocument();
   });
 
@@ -273,5 +386,83 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByText("Preview style: editorial|soft-serif|encre"),
     ).toBeInTheDocument();
+  });
+
+  it("shows a compact job-context chip instead of an embedded brief card and can clear it", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123&jobId=job_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText("For: Senior Product Designer @ Acme"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Loaded")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: /Switch CV\. Active CV:/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Back to job" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Loading saved job brief…"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Saved job context is unavailable for this resume session."),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear job context" }));
+
+    expect(
+      screen.queryByText("For: Senior Product Designer @ Acme"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Mock profile editor cv_123")).toBeInTheDocument();
+  });
+
+  it("shows only the saved cv library when the picker is loaded", () => {
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv: null,
+        currentCvId: null,
+      }),
+    );
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Choose your CV")).toBeInTheDocument();
+    expect(screen.getByText("Open a saved CV.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Open a saved CV, import a new one, or start from scratch."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Import new" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start from scratch" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open selected CV" }),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector(".dasti-doc-card--chooser.dasti-doc-card--selected"),
+    ).toBeTruthy();
+  });
+
+  it("opens the loaded workspace cv instead of reopening the picker when no id param is present", () => {
+    render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Mock profile editor cv_123")).toBeInTheDocument();
+    expect(screen.queryByText("Choose your CV")).not.toBeInTheDocument();
   });
 });

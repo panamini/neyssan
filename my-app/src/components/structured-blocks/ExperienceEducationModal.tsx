@@ -33,6 +33,7 @@ import { Button } from "../ui/button";
 import { useToast } from "../ui/toast";
 import { CvModalShell } from "./CvModalShell";
 import { useCvAiCapabilities } from "../../hooks/use-cv-ai-capabilities";
+import { AI_UNAVAILABLE_TOAST } from "../../lib/toast-copy";
 import FloatingAiToolbar, { type InlineAiActionId } from "../FloatingAiToolbar";
 import { deriveResponsibilityBullets } from "../../lib/resumeResponsibilityAuthority";
 import {
@@ -908,7 +909,7 @@ export function ExperienceModal({
 
   async function handleRunResponsibilitiesAi(idx: number) {
     if (!cvAiCapabilities.isSupported("improve_experience_responsibilities")) {
-      showToast("Responsibilities AI unavailable", {
+      showToast(AI_UNAVAILABLE_TOAST, {
         variant: "warning",
         description: cvAiCapabilities.staleMessage,
       });
@@ -955,7 +956,7 @@ export function ExperienceModal({
       );
       const rawMessage =
         error instanceof Error ? error.message : String(error ?? "");
-      showToast("Responsibilities AI unavailable", {
+      showToast(AI_UNAVAILABLE_TOAST, {
         variant: "error",
         description: /ArgumentValidationError/i.test(rawMessage)
           ? "The CV AI backend schema is stale. Run `npx convex codegen` or restart `npx convex dev`, then reload the page."

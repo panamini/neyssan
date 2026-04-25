@@ -68,7 +68,7 @@ export function CVReviewerOverlay({
               <label htmlFor="use-mapper-stripping-checkbox" className="ml-1 text-sm">Use mapper stripping</label>
             </div>
 
-            <Button onClick={() => { onClose(); try { showToast("Closed reviewer — no changes applied", { variant: "warning" }); } catch (e) {} }} className="px-3 py-1 rounded bg-surface-muted">Close</Button>
+            <Button onClick={() => { onClose(); try { showToast("Closed. No changes.", { variant: "warning" }); } catch (e) {} }} className="px-3 py-1 rounded bg-surface-muted">Close</Button>
           </div>
         </div>
 

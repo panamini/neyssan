@@ -28,6 +28,8 @@ convex/_generated
 
 /testdata/cv
 /testdata/
+env.md
+mistral_integration_backend.md
 
 # Temporary audit artifacts
 tmp-audit/

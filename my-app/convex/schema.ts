@@ -71,6 +71,81 @@ const proposalCharacterLimitModeChoice = v.union(
   v.literal("custom"),
 );
 
+const canonicalJobParseStatusChoice = v.union(
+  v.literal("imported"),
+  v.literal("parsing"),
+  v.literal("parsed"),
+  v.literal("failed"),
+);
+
+const canonicalJobReviewStateChoice = v.union(
+  v.literal("pending"),
+  v.literal("needs_review"),
+  v.literal("ready"),
+);
+
+const canonicalJobSourceSpanChoice = v.object({
+  start: v.number(),
+  end: v.number(),
+});
+
+const canonicalJobExtractionChoice = v.object({
+  value: v.string(),
+  confidence: v.number(),
+  sourceSpan: v.union(canonicalJobSourceSpanChoice, v.null()),
+});
+
+const matchReadSynthesisStatusChoice = v.union(
+  v.literal("pending"),
+  v.literal("ready"),
+  v.literal("error"),
+);
+
+const jobExtractionShadowValidationStatusChoice = v.union(
+  v.literal("valid"),
+  v.literal("invalid_json"),
+  v.literal("schema_invalid"),
+  v.literal("empty_signal"),
+  v.literal("low_confidence"),
+);
+
+const structuredMatchReviewLabelChoice = v.union(
+  v.literal("good"),
+  v.literal("acceptable but conservative"),
+  v.literal("false weak"),
+  v.literal("false strong"),
+  v.literal("overmatched"),
+  v.literal("undermatched"),
+  v.literal("evidence missing"),
+  v.literal("language issue"),
+  v.literal("metadata leak"),
+  v.literal("hard-gate issue"),
+);
+
+const structuredMatchReviewExtractionVerdictChoice = v.union(
+  v.literal("good"),
+  v.literal("too_vague"),
+  v.literal("wrong_focus"),
+  v.literal("noisy"),
+  v.literal("incomplete"),
+  v.literal("metadata_leak"),
+  v.literal("wrong_language"),
+);
+
+const matchReadSynthesisChoice = v.object({
+  cacheKey: v.string(),
+  status: matchReadSynthesisStatusChoice,
+  provider: v.string(),
+  model: v.string(),
+  computedAt: v.optional(v.number()),
+  matched: v.optional(v.array(v.string())),
+  missing: v.optional(v.array(v.string())),
+  promptTokens: v.optional(v.number()),
+  completionTokens: v.optional(v.number()),
+  estimatedCostUsd: v.optional(v.number()),
+  error: v.optional(v.string()),
+});
+
 const proposalVerbatiStyleChoice = v.object({
   layout: v.string(),
   typography: v.string(),
@@ -121,6 +196,7 @@ export default defineSchema({
 
   proposals: defineTable({
     userId: v.id("userProfiles"), // Changed to v.id("userProfiles") to reference userProfiles table
+    jobId: v.optional(v.string()),
     title: v.string(),
     content: v.string(),
     status: v.string(),
@@ -196,6 +272,7 @@ export default defineSchema({
     }),
   })
     .index("by_user", ["userId"])
+    .index("by_job", ["jobId"])
     .index("by_status", ["status"])
     .index("by_platform", ["metadata.platform"])
     .index("by_created", ["createdAt"])
@@ -203,6 +280,7 @@ export default defineSchema({
 
   proposalHandoffs: defineTable({
     handoffId: v.string(),
+    handoffToken: v.string(),
     clerkId: v.string(),
     jobTitle: v.string(),
     jobDescription: v.string(),
@@ -212,6 +290,135 @@ export default defineSchema({
   })
     .index("by_handoff_id", ["handoffId"])
     .index("by_clerk_id", ["clerkId"]),
+
+  jobs: defineTable({
+    userId: v.id("userProfiles"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    importedAt: v.number(),
+    lastOpenedAt: v.number(),
+    sourceUrl: v.string(),
+    sourceDomain: v.string(),
+    sourceType: v.string(),
+    applicationUrl: v.string(),
+    dedupeKey: v.string(),
+    parseVersion: v.string(),
+    parseStatus: canonicalJobParseStatusChoice,
+    reviewState: canonicalJobReviewStateChoice,
+    title: v.string(),
+    company: v.string(),
+    location: v.string(),
+    rawDescription: v.string(),
+    rawLanguageDetected: v.string(),
+    summary: v.string(),
+    summaryExtraction: v.optional(canonicalJobExtractionChoice),
+    responsibilities: v.array(v.string()),
+    responsibilitiesExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
+    keywords: v.array(v.string()),
+    keywordsExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
+    mustHaves: v.array(v.string()),
+    mustHavesExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
+    toneCues: v.array(v.string()),
+    toneCuesExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
+    contacts: v.array(v.string()),
+    lastResumeId: v.optional(v.union(v.string(), v.null())),
+    lastResumeName: v.optional(v.union(v.string(), v.null())),
+    matchReadSynthesis: v.optional(matchReadSynthesisChoice),
+    isSample: v.optional(v.boolean()),
+    isFavorite: v.optional(v.boolean()),
+    status: v.string(),
+    archivedAt: v.optional(v.union(v.number(), v.null())),
+    reviewItems: v.array(
+      v.object({
+        id: v.string(),
+        fieldKey: v.string(),
+        label: v.string(),
+        reviewStatus: v.union(v.literal("pending"), v.literal("approved")),
+        suggestedValue: v.any(),
+        approvedValue: v.optional(v.any()),
+        sourceText: v.string(),
+        confidence: v.number(),
+        updatedAt: v.number(),
+      }),
+    ),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_dedupe", ["userId", "dedupeKey"])
+    .index("by_user_updated", ["userId", "updatedAt"]),
+
+  job_extraction_shadow: defineTable({
+    job_id: v.id("jobs"),
+    job_text_hash: v.string(),
+    llm_raw_output: v.any(),
+    llm_normalized_output: v.any(),
+    validation_status: jobExtractionShadowValidationStatusChoice,
+    fallback_used: v.boolean(),
+    model: v.string(),
+    prompt_version: v.string(),
+    latency_ms: v.number(),
+    model_confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
+    final_confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
+    created_at: v.number(),
+  })
+    .index("by_job_id", ["job_id"])
+    .index("by_job_text_hash", ["job_text_hash"])
+    .index("by_cache_identity", ["job_text_hash", "model", "prompt_version", "validation_status"])
+    .index("by_hash_status", ["job_text_hash", "validation_status"]),
+
+  structured_match_reviews: defineTable({
+    reviewerId: v.string(),
+    reviewerEmail: v.union(v.string(), v.null()),
+    jobId: v.string(),
+    profileId: v.string(),
+    resumeId: v.union(v.string(), v.null()),
+    productionScore: v.union(v.number(), v.null()),
+    productionTier: v.union(
+      v.literal("strong"),
+      v.literal("partial"),
+      v.literal("weak"),
+      v.literal("unknown"),
+    ),
+    structuredScore: v.union(v.number(), v.null()),
+    structuredTier: v.union(
+      v.literal("strong"),
+      v.literal("partial"),
+      v.literal("weak"),
+      v.literal("unknown"),
+      v.null(),
+    ),
+    matchedCount: v.number(),
+    partialCount: v.number(),
+    missingCount: v.number(),
+    unknownCount: v.number(),
+    hardGateMissingCount: v.number(),
+    metadataLeakCount: v.number(),
+    languagePreserved: v.boolean(),
+    provenanceComplete: v.boolean(),
+    reviewerLabel: structuredMatchReviewLabelChoice,
+    notes: v.optional(v.string()),
+    appGitCommitSha: v.string(),
+    structuredScorerVersion: v.string(),
+    extractionModel: v.string(),
+    extractionPromptVersion: v.string(),
+    extractionSummaryVerdict: v.optional(
+      structuredMatchReviewExtractionVerdictChoice,
+    ),
+    extractionRequirementsVerdict: v.optional(
+      structuredMatchReviewExtractionVerdictChoice,
+    ),
+    extractionKeywordsVerdict: v.optional(
+      structuredMatchReviewExtractionVerdictChoice,
+    ),
+    reviewedAt: v.number(),
+    scorerVersion: v.object({
+      model: v.string(),
+      promptVersion: v.string(),
+    }),
+    createdAt: v.number(),
+  })
+    .index("by_job_profile", ["jobId", "profileId"])
+    .index("by_reviewer", ["reviewerId"])
+    .index("by_created", ["createdAt"]),
 
   userProfiles: defineTable({
     // External canonical profile id (used by upsertProfile)
@@ -274,9 +481,12 @@ export default defineSchema({
       name: v.optional(v.string()),
     }), v.null())),
     proposalActivePresetSlot: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
+    defaultResumeId: v.optional(v.union(v.string(), v.null())),
+    defaultResumeName: v.optional(v.union(v.string(), v.null())),
     // New optional profile fields for ingestion
     summary: v.optional(v.string()),
     skills: v.optional(v.array(v.string())),
+    keywords: v.optional(v.array(v.string())),
     experience: v.optional(
       v.array(
         v.object({

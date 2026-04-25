@@ -216,6 +216,7 @@ export type GenerateProposalArgs = {
 export const generateProposalArgs = {
   jobTitle: v.string(),
   jobDescription: v.string(),
+  jobId: v.optional(v.string()),
   clientRunId: v.optional(v.string()),
   proposalType: proposalTypeChoice,
   voicePreset: v.optional(v.union(proposalVoicePresetChoice, v.null())),
@@ -9092,6 +9093,7 @@ export async function handleGenerateProposal(
     await ensureGenerationActive();
     proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
       userId: userProfile._id,
+      jobId: args.jobId,
       title: defaultStoredTitle,
       content: proposalContent,
       status: "pending",
@@ -9102,7 +9104,7 @@ export async function handleGenerateProposal(
       metrics: {},
       metadata: buildProposalRoutingMetadata({
         base: proposalMetadataBase,
-        jobId: "DEV_STUB",
+        jobId: args.jobId ?? "DEV_STUB",
         routing: routingTrace,
         tags: [`model:dev_stub`],
         provenance: getExecutionProvenance(),
@@ -9592,6 +9594,7 @@ export async function handleGenerateProposal(
         await ensureGenerationActive();
         proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
           userId: userProfile._id,
+          jobId: args.jobId,
           title: defaultStoredTitle,
           content: structuredPersistencePayload.content,
           status: "pending",
@@ -9602,7 +9605,7 @@ export async function handleGenerateProposal(
           metrics: {},
           metadata: buildProposalRoutingMetadata({
             base: proposalMetadataBase,
-            jobId: "N/A",
+            jobId: args.jobId ?? "N/A",
             routing: routingTrace,
             provenance: getExecutionProvenance(),
             tags: [
@@ -9632,6 +9635,7 @@ export async function handleGenerateProposal(
         await ensureGenerationActive();
         proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
           userId: userProfile._id,
+          jobId: args.jobId,
           title: defaultStoredTitle,
           content: premiumPersistencePayload.content,
           status: "pending",
@@ -9642,7 +9646,7 @@ export async function handleGenerateProposal(
           metrics: {},
           metadata: buildProposalRoutingMetadata({
             base: proposalMetadataBase,
-            jobId: "N/A",
+            jobId: args.jobId ?? "N/A",
             routing: routingTrace,
             provenance: getExecutionProvenance(),
             tags: [
@@ -9724,6 +9728,7 @@ export async function handleGenerateProposal(
           await ensureGenerationActive();
           proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
             userId: userProfile._id,
+            jobId: args.jobId,
             title: resolveStoredProposalTitle({
               jobTitle: effectiveJobTitle,
               parsedTitle: parsed.title,
@@ -9741,7 +9746,7 @@ export async function handleGenerateProposal(
             metrics: metricsForDb,
             metadata: buildProposalRoutingMetadata({
               base: proposalMetadataBase,
-              jobId: "N/A",
+              jobId: args.jobId ?? "N/A",
               routing: routingTrace,
               provenance: getExecutionProvenance(),
               tags: [
@@ -9764,6 +9769,7 @@ export async function handleGenerateProposal(
           await ensureGenerationActive();
           proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
             userId: userProfile._id,
+            jobId: args.jobId,
             title: defaultStoredTitle,
             content: proposalContent,
             status: "pending",
@@ -9774,7 +9780,7 @@ export async function handleGenerateProposal(
             metrics: {},
             metadata: buildProposalRoutingMetadata({
               base: proposalMetadataBase,
-              jobId: "N/A",
+              jobId: args.jobId ?? "N/A",
               routing: routingTrace,
               provenance: getExecutionProvenance(),
               tags: [
@@ -9932,6 +9938,7 @@ export async function handleGenerateProposal(
         await ensureGenerationActive();
         proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
           userId: userProfile._id,
+          jobId: args.jobId,
           title: defaultStoredTitle,
           content: proposalContent,
           status: "pending",
@@ -9942,7 +9949,7 @@ export async function handleGenerateProposal(
           metrics: {},
           metadata: buildProposalRoutingMetadata({
             base: proposalMetadataBase,
-            jobId: "N/A",
+            jobId: args.jobId ?? "N/A",
             routing: routingTrace,
             provenance: getExecutionProvenance(),
             tags: [

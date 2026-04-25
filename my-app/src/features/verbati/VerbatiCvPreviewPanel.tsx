@@ -272,7 +272,7 @@ export function VerbatiCvPreviewPanel({
           type="button"
           className="dasti-icon-button"
           onClick={() => handleCycleBundle(-1)}
-          aria-label={`Show previous resume style: ${previousBundleLabel}`}
+          aria-label={`Previous style: ${previousBundleLabel}`}
           data-toolbar-tooltip={previousBundleLabel}
         >
           <ArrowLeft size={16} strokeWidth={1.8} aria-hidden="true" />
@@ -281,7 +281,7 @@ export function VerbatiCvPreviewPanel({
           type="button"
           className="dasti-icon-button"
           onClick={() => handleCycleBundle(1)}
-          aria-label={`Show next resume style: ${nextBundleLabel}`}
+          aria-label={`Next style: ${nextBundleLabel}`}
           data-toolbar-tooltip={nextBundleLabel}
         >
           <ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />
@@ -307,17 +307,17 @@ export function VerbatiCvPreviewPanel({
           }
           aria-label={
             isActivePreview
-              ? "Switch to sample preview"
+              ? "Show sample resume"
               : hasCurrentCv
-                ? "Switch to active CV preview"
-                : "Active CV preview unavailable"
+                ? "Show your resume"
+                : "Resume unavailable"
           }
           title={
             isActivePreview
-              ? "Preview the sample CV"
+              ? "Sample resume"
               : hasCurrentCv
-                ? "Preview the active CV"
-                : "Active CV preview unavailable"
+                ? "Your resume"
+                : "Unavailable"
           }
           disabled={!isActivePreview && !hasCurrentCv}
         >
@@ -338,20 +338,20 @@ export function VerbatiCvPreviewPanel({
           }
           aria-label={
             isActivePreview
-              ? "Previewing active CV"
+              ? "Your resume"
               : hasCurrentCv
-                ? "Previewing sample CV"
-                : "Previewing sample CV because the active CV is unavailable"
+                ? "Sample resume"
+                : "Sample resume. Your resume is unavailable."
           }
           title={
             isActivePreview
-              ? currentCv?.title ?? "Active CV"
-              : "Verbati sample CV"
+              ? currentCv?.title ?? "Your resume"
+              : "Sample resume"
           }
           disabled={!isActivePreview && !hasActiveResume}
         >
           <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
-            {isActivePreview ? currentCv?.title ?? "Active CV" : "Sample CV"}
+            {isActivePreview ? currentCv?.title ?? "Your resume" : "Sample resume"}
           </span>
         </button>
       </div>
@@ -371,8 +371,7 @@ export function VerbatiCvPreviewPanel({
             lineHeight: 1.55,
           }}
         >
-          The active CV is still too sparse for a faithful render. Add enough
-          profile, summary, or experience content to stabilize the live preview.
+          Resume too sparse. Add profile, summary, or experience.
         </div>
       ) : null}
 

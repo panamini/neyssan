@@ -766,6 +766,26 @@ export function getActiveLocalPersonalizationSource(): {
   }
 
   const activeCvId = readStoredProposalAttachedCvId();
+  return getLocalPersonalizationSourceByCvId(activeCvId);
+}
+
+export function getLocalPersonalizationSourceByCvId(
+  cvId: string | null | undefined,
+): {
+  title: string | null;
+  personalizationContext: ProposalPersonalizationContext | null;
+  richness?: ProposalPersonalizationRichness;
+  email?: string | null;
+  phone?: string | null;
+  linkedin?: string | null;
+  website?: string | null;
+  location?: string | null;
+} {
+  if (!hasLocalStorage()) {
+    return { title: null, personalizationContext: null };
+  }
+
+  const activeCvId = compactWhitespace(String(cvId ?? ""));
   if (!activeCvId) {
     return { title: null, personalizationContext: null };
   }
@@ -856,10 +876,14 @@ export function buildAppProposalPersonalizationPayload(source: {
   };
 }
 
-export function listLocalCvPickerOptions(): LocalCvPickerOption[] {
+export function listLocalCvPickerOptions(
+  activeCvIdOverride?: string | null,
+): LocalCvPickerOption[] {
   if (!hasLocalStorage()) return [];
 
-  const activeCvId = readStoredProposalAttachedCvId();
+  const activeCvId =
+    compactWhitespace(String(activeCvIdOverride ?? "")) ||
+    readStoredProposalAttachedCvId();
   const libraryDocs = getLibraryDocuments();
   const candidateIds = new Set<string>();
 

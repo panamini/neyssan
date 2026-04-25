@@ -98,7 +98,7 @@ vi.mock("../SelectedBlockInspector", () => ({
 }));
 
 vi.mock("../StructuredUploadButton", () => ({
-  default: () => <button type="button">Import CV</button>,
+  default: () => <button type="button">Import resume</button>,
 }));
 
 vi.mock("../ImportWarningBanner", () => ({
@@ -894,7 +894,7 @@ describe("ProfileReviewCard organize sections", () => {
     await user.click(screen.getByRole("button", { name: "Organize sections" }));
 
     const resetButton = screen.getByRole("button", {
-      name: "Reset to recommended/default order",
+      name: "Reset order",
     });
     expect(
       resetButton.closest('[aria-label="Organize top-level sections"]'),
@@ -1071,7 +1071,7 @@ describe("ProfileReviewCard organize sections", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Reset to recommended/default order",
+        name: "Reset order",
       }),
     );
 
@@ -1141,7 +1141,7 @@ describe("ProfileReviewCard organize sections", () => {
     await user.click(screen.getByRole("button", { name: "Organize sections" }));
     await user.click(
       screen.getByRole("button", {
-        name: "Reset to recommended/default order",
+        name: "Reset order",
       }),
     );
 

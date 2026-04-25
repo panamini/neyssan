@@ -100,9 +100,9 @@ describe("ImportRecoveryPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add to section" }));
     expect(onAssignFragment).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Select text in this block to assign it.")).toBeInTheDocument();
+    expect(screen.getByText("Select text to assign.")).toBeInTheDocument();
     expect(
-      screen.getByText("Tip: Extract coherent phrases/sentences for best results."),
+      screen.getByText("Pick whole phrases or sentences."),
     ).toBeInTheDocument();
   });
 
@@ -396,12 +396,12 @@ describe("ImportRecoveryPanel", () => {
     expect(screen.getByText("Applies to remaining unassigned text.")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Accept imports the remaining unassigned text into Summary. Added fragments stay included.",
+        "Sends remaining text to Summary. Assigned fragments stay.",
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Ignore affects only remaining unassigned text. Saved fragments remain included.",
+        "Ignore affects unassigned text. Saved fragments stay.",
       ),
     ).toBeInTheDocument();
   });
@@ -481,7 +481,7 @@ describe("ImportRecoveryPanel", () => {
 
     expect(
       screen.getByText(
-        /Confidence is unusually low across much of this CV/i,
+        /Low confidence across this resume/i,
       ),
     ).toBeInTheDocument();
   });

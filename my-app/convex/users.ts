@@ -10,6 +10,7 @@ import type { ProposalTemplateId } from "./lib/proposals/renderTemplates";
 import {
   getPrimaryProfileForClerk,
   listProfilesForClerk,
+  resolveCanonicalProfileKeywordsForWrite,
 } from "./lib/userProfiles";
 import {
   canonicalizeUserProfileMetadata,
@@ -31,6 +32,13 @@ export type UserProfile = {
     tonePreference: string;
     autoSend: boolean;
   };
+  summary?: string;
+  skills?: string[];
+  keywords?: string[];
+  experience?: Array<Record<string, unknown>>;
+  education?: Array<Record<string, unknown>>;
+  linkedIn?: string;
+  raw_text?: string;
   proposalVoicePreset?:
     | "signature"
     | "expert"
@@ -103,6 +111,7 @@ export const getProfileById = internalQuery({
       updatedAt: v.optional(v.number()),
       summary: v.optional(v.string()),
       skills: v.optional(v.array(v.string())),
+      keywords: v.optional(v.array(v.string())),
       experience: v.optional(v.array(v.any())),
       education: v.optional(v.array(v.any())),
       linkedIn: v.optional(v.string()),
@@ -151,6 +160,7 @@ export const updateUserProfile = internalMutation({
       email: v.optional(v.string()),
       summary: v.optional(v.string()),
       skills: v.optional(v.array(v.string())),
+      keywords: v.optional(v.array(v.string())),
       experience: v.optional(
         v.array(
           v.object({
@@ -200,6 +210,14 @@ export const updateUserProfile = internalMutation({
         updateData[key] =
           key === "metadata" ? canonicalizeUserProfileMetadata(value) : value;
       }
+    });
+
+    updateData.keywords = resolveCanonicalProfileKeywordsForWrite({
+      nextKeywords: profileData.keywords,
+      summary: updateData.summary ?? user.summary,
+      skills: updateData.skills ?? user.skills,
+      experience: updateData.experience ?? user.experience,
+      rawText: updateData.raw_text ?? user.raw_text,
     });
 
     return await ctx.db.patch(user._id, updateData);

@@ -12,8 +12,10 @@ export const PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT =
 export const PROPOSAL_WORKSPACE_RESET_STATE_KEY =
   "proposalWorkspaceResetToken";
 export const PROPOSAL_ENTRY_INTENT_STATE_KEY = "proposalEntryIntent";
+export const PROPOSAL_JOB_IMPORT_FOCUS_STATE_KEY = "jobImportFocus";
 
 export type ProposalEntryIntent = "cover-letter-start";
+export type JobImportFocus = "supported-sites";
 
 export type StoredProposalComposeDraft = {
   jobTitle?: string;
@@ -112,6 +114,7 @@ export function startFreshProposalWorkspace(): void {
 
 export function createProposalWorkspaceResetState(options?: {
   entryIntent?: ProposalEntryIntent | null;
+  jobImportFocus?: JobImportFocus | null;
 }): Record<string, string> {
   const nextState: Record<string, string> = {
     [PROPOSAL_WORKSPACE_RESET_STATE_KEY]: `${Date.now()}`,
@@ -119,6 +122,10 @@ export function createProposalWorkspaceResetState(options?: {
 
   if (options?.entryIntent === "cover-letter-start") {
     nextState[PROPOSAL_ENTRY_INTENT_STATE_KEY] = options.entryIntent;
+  }
+
+  if (options?.jobImportFocus === "supported-sites") {
+    nextState[PROPOSAL_JOB_IMPORT_FOCUS_STATE_KEY] = options.jobImportFocus;
   }
 
   return nextState;
@@ -150,4 +157,15 @@ export function readProposalEntryIntent(
   const intent = (value as Record<string, unknown>)[PROPOSAL_ENTRY_INTENT_STATE_KEY];
 
   return intent === "cover-letter-start" ? intent : null;
+}
+
+export function readProposalJobImportFocus(
+  value: unknown,
+): JobImportFocus | null {
+  if (!value || typeof value !== "object") return null;
+  const focus = (value as Record<string, unknown>)[
+    PROPOSAL_JOB_IMPORT_FOCUS_STATE_KEY
+  ];
+
+  return focus === "supported-sites" ? focus : null;
 }

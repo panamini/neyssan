@@ -34,6 +34,7 @@ import {
   type SaveStatus,
 } from "../components/ui/SaveIndicator";
 import { useToast } from "../components/ui/toast";
+import { AUTH_REQUIRED_TOAST } from "../lib/toast-copy";
 import type { FormValues } from "../components/ProposalInputForm.schemas";
 import {
   beginStructuredImportTimingTrace,
@@ -46,17 +47,15 @@ import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { api } from "../../convex/_generated/api";
 import {
   buildAppProposalPersonalizationPayload,
-  clearActiveLocalCvId,
   getProposalApplicantHeaderData,
   getProposalApplicantIdentity,
-  getActiveLocalPersonalizationSource,
+  getLocalPersonalizationSourceByCvId,
   getLocalActiveCvSnapshotById,
   getLocalCvDocumentById,
   getProposalAttachedCvId,
-  getProposalAttachedCvLocalDocument,
   listLocalCvPickerOptions,
-  PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
   setProposalAttachedCvId,
+  clearProposalAttachedCvId,
   type ProposalApplicantHeaderData,
 } from "../lib/proposal-personalization";
 import { type ProposalGenerationFallbackInfo } from "../lib/proposal-generation-ui";
@@ -68,6 +67,7 @@ import {
 } from "../lib/proposal-output-draft";
 import {
   readProposalEntryIntent,
+  readProposalJobImportFocus,
   readProposalWorkspaceResetToken,
   readStoredProposalComposeDraft,
   writeStoredProposalComposeDraft,
@@ -167,10 +167,63 @@ import {
 
 type ProposalForgePrefill = {
   handoffId: string;
+  jobId?: string;
   jobTitle: string;
   jobDescription: string;
   sourceUrl?: string;
   platform?: string;
+} | null;
+
+type ProposalForgeHandoffRecord = {
+  handoffId: string;
+  jobTitle: string;
+  jobDescription: string;
+  sourceUrl?: string;
+  platform?: string;
+  createdAt?: number;
+} | null;
+
+type ProposalForgeReviewItem = {
+  id: string;
+  fieldKey: string;
+  label: string;
+  reviewStatus: string;
+  suggestedValue: unknown;
+  approvedValue?: unknown;
+  sourceText: string;
+};
+
+type ProposalForgeLinkedProposal = {
+  id: string;
+  title: string;
+  status: string;
+  updatedAt: number;
+};
+
+type ProposalForgeCanonicalJob = {
+  id: string;
+  title: string;
+  company: string;
+  sourceUrl: string;
+  sourceDomain: string;
+  sourceType: string;
+  applicationUrl: string;
+  parseStatus: string;
+  reviewState: string;
+  summary: string;
+  rawDescription: string;
+  responsibilities: string[];
+  keywords: string[];
+  mustHaves: string[];
+  toneCues: string[];
+  contacts: string[];
+  status: string;
+  resumeId?: string;
+  resumeName?: string;
+  resumeSource?: "job" | "default";
+  linkedProposalCount: number;
+  linkedProposals: ProposalForgeLinkedProposal[];
+  reviewItems: ProposalForgeReviewItem[];
 } | null;
 
 type ProposalForgeView = "compose" | "saved";
@@ -387,20 +440,24 @@ function buildProfessionalApplicationSubject(args: {
   return `Application for the position of ${jobTitle}`;
 }
 
-function readAttachedCvSelection(): {
+function resolveAttachedCvSelectionById(
+  cvId: string | null | undefined,
+  fallbackTitle?: string | null,
+): {
   id: string | null;
   title: string | null;
 } {
-  const attachedCvId = getProposalAttachedCvId();
-  if (!attachedCvId) {
+  const normalizedCvId = normalizeSourceCvId(cvId);
+  if (!normalizedCvId) {
     return { id: null, title: null };
   }
 
-  const attachedSnapshot = getLocalActiveCvSnapshotById(attachedCvId);
-
   return {
-    id: attachedCvId,
-    title: attachedSnapshot?.title ?? null,
+    id: normalizedCvId,
+    title:
+      getLocalActiveCvSnapshotById(normalizedCvId)?.title ??
+      fallbackTitle?.trim() ??
+      null,
   };
 }
 
@@ -675,6 +732,10 @@ export function ProposalForge(): JSX.Element {
     React.useState<StoredProposalOutputDraft | null>(() =>
       readStoredProposalOutputDraft(),
     );
+  const canonicalJobId = React.useMemo(
+    () => new URLSearchParams(search).get("jobId"),
+    [search],
+  );
   const writeStoredOutputDraft = React.useCallback(
     (nextDraft: StoredProposalOutputDraft | null) => {
       const storageSnapshots = readProposalStyleTraceStorageSnapshots();
@@ -714,18 +775,31 @@ export function ProposalForge(): JSX.Element {
     },
     [traceProposalStyle],
   );
+  const initialAttachedCvSelection = React.useMemo(
+    () =>
+      canonicalJobId
+        ? { id: null, title: null }
+        : resolveAttachedCvSelectionById(getProposalAttachedCvId()),
+    [canonicalJobId],
+  );
   const [attachedCvId, setAttachedCvId] = React.useState<string | null>(
-    () => readAttachedCvSelection().id,
+    initialAttachedCvSelection.id,
   );
   const [attachedCvTitle, setAttachedCvTitle] = React.useState<string | null>(
-    () => readAttachedCvSelection().title,
+    initialAttachedCvSelection.title,
   );
+  const [pendingScopedCvSelection, setPendingScopedCvSelection] = React.useState<{
+    id: string | null;
+    title: string | null;
+  } | null>(null);
+  const lastRequestedScopedCvSyncKeyRef = React.useRef<string | null>(null);
+  const lastScopedJobIdRef = React.useRef<string | null>(null);
   const activeCvProposalStylePreset = React.useMemo(() => {
     if (!attachedCvId) {
       return null;
     }
 
-    const attachedCvDocument = getProposalAttachedCvLocalDocument();
+    const attachedCvDocument = getLocalCvDocumentById(attachedCvId);
     if (!attachedCvDocument) {
       return null;
     }
@@ -779,8 +853,8 @@ export function ProposalForge(): JSX.Element {
     [activeCvProposalStylePreset, storedOutputStylePreset],
   );
   const activePersonalizationSource = React.useMemo(
-    () => getActiveLocalPersonalizationSource(),
-    [attachedCvId, attachedCvTitle],
+    () => getLocalPersonalizationSourceByCvId(attachedCvId),
+    [attachedCvId],
   );
   const initialApplicantIdentity = React.useMemo(
     () => getProposalApplicantIdentity(activePersonalizationSource),
@@ -804,57 +878,13 @@ export function ProposalForge(): JSX.Element {
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
-  const refreshAttachedCvSelection = React.useCallback(() => {
-    const nextAttachedSelection = readAttachedCvSelection();
-    setAttachedCvId(nextAttachedSelection.id);
-    setAttachedCvTitle(nextAttachedSelection.title);
-  }, []);
-
-  React.useEffect(() => {
-    refreshAttachedCvSelection();
-  }, [refreshAttachedCvSelection]);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const handleAttachedCvRefresh = () => {
-      refreshAttachedCvSelection();
-    };
-
-    window.addEventListener(
-      PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
-      handleAttachedCvRefresh,
-    );
-    window.addEventListener("storage", handleAttachedCvRefresh);
-    window.addEventListener("focus", handleAttachedCvRefresh);
-
-    return () => {
-      window.removeEventListener(
-        PROPOSAL_ATTACHED_CV_UPDATED_EVENT,
-        handleAttachedCvRefresh,
-      );
-      window.removeEventListener("storage", handleAttachedCvRefresh);
-      window.removeEventListener("focus", handleAttachedCvRefresh);
-    };
-  }, [refreshAttachedCvSelection]);
-
-  const handleAttachedCvChange = React.useCallback(
-    (nextId: string | null) => {
-      if (nextId === null) {
-        clearActiveLocalCvId();
-      } else {
-        setIsCoverLetterStartSessionActive(false);
-        setShowExtensionHelper(false);
-      }
-      refreshAttachedCvSelection();
-    },
-    [refreshAttachedCvSelection],
-  );
 
   const handoffId = React.useMemo(
     () => new URLSearchParams(search).get("handoffId"),
+    [search],
+  );
+  const handoffToken = React.useMemo(
+    () => new URLSearchParams(search).get("handoffToken"),
     [search],
   );
   const selectedProposalId = React.useMemo(
@@ -876,31 +906,83 @@ export function ProposalForge(): JSX.Element {
     () => readProposalEntryIntent(location.state as unknown),
     [location.state],
   );
+  const proposalJobImportFocus = React.useMemo(
+    () => readProposalJobImportFocus(location.state as unknown),
+    [location.state],
+  );
   const shouldInitializeCoverLetterStartSession =
     requestedView === "compose" &&
     proposalEntryIntent === "cover-letter-start" &&
-    !handoffId;
+    !handoffId &&
+    !canonicalJobId;
   React.useEffect(() => {
     if (
       requestedView === "compose" &&
       proposalEntryIntent === "cover-letter-start" &&
-      !handoffId
+      !handoffId &&
+      !canonicalJobId
     ) {
       setIsCoverLetterStartSessionActive(true);
-      setShowExtensionHelper(false);
+      setShowExtensionHelper(proposalJobImportFocus === "supported-sites");
       return;
     }
 
     setShowExtensionHelper(false);
-  }, [handoffId, proposalEntryIntent, proposalWorkspaceResetToken, requestedView]);
+  }, [
+    canonicalJobId,
+    handoffId,
+    proposalEntryIntent,
+    proposalJobImportFocus,
+    proposalWorkspaceResetToken,
+    requestedView,
+  ]);
   const {
     isLoading: isConvexAuthLoading,
     isAuthenticated: isConvexAuthenticated,
   } = useConvexAuth();
   const generateProposalAction = useAction(api.functions.generateProposal);
   const updateProposal = useMutation(api.updateProposalPublic.default);
+  const approveJobReviewItem = useMutation(
+    (api as any).jobsPublic?.approveReviewItem ?? "jobsPublic.approveReviewItem",
+  );
+  const updateJobField = useMutation(
+    (api as any).jobsPublic?.updateField ?? "jobsPublic.updateField",
+  );
+  const setJobResume = useMutation(
+    ((api as any).jobsPublic?.setResumeForJob ??
+      "jobsPublic.setResumeForJob") as any,
+  );
   const createProposal = useMutation(
     (api as any).createProposalPublic?.default ?? "createProposalPublic.default",
+  );
+  const handleAttachedCvChange = React.useCallback(
+    (nextId: string | null) => {
+      if (nextId !== null) {
+        setIsCoverLetterStartSessionActive(false);
+        setShowExtensionHelper(false);
+      }
+
+      if (!canonicalJobId) {
+        const nextSelection = resolveAttachedCvSelectionById(nextId);
+        if (nextSelection.id) {
+          setProposalAttachedCvId(nextSelection.id);
+        } else {
+          clearProposalAttachedCvId();
+        }
+        setAttachedCvId(nextSelection.id);
+        setAttachedCvTitle(nextSelection.title);
+        setPendingScopedCvSelection(null);
+        lastRequestedScopedCvSyncKeyRef.current = null;
+        return;
+      }
+
+      const nextSelection = resolveAttachedCvSelectionById(nextId);
+      setAttachedCvId(nextSelection.id);
+      setAttachedCvTitle(nextSelection.title);
+      setPendingScopedCvSelection(nextSelection);
+      lastRequestedScopedCvSyncKeyRef.current = null;
+    },
+    [canonicalJobId],
   );
   const currentProposalSettings = useQuery(
     api.proposalSettings.getCurrent,
@@ -1105,7 +1187,11 @@ export function ProposalForge(): JSX.Element {
   const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
   const [isCoverLetterStartSessionActive, setIsCoverLetterStartSessionActive] =
     React.useState(() => shouldInitializeCoverLetterStartSession);
-  const [showExtensionHelper, setShowExtensionHelper] = React.useState(false);
+  const [showExtensionHelper, setShowExtensionHelper] = React.useState(
+    () =>
+      shouldInitializeCoverLetterStartSession &&
+      proposalJobImportFocus === "supported-sites",
+  );
   const [coverLetterInlineImportPhase, setCoverLetterInlineImportPhase] =
     React.useState<ProposalInlineImportPhase>("idle");
   const [coverLetterInlineImportFileName, setCoverLetterInlineImportFileName] =
@@ -1324,7 +1410,7 @@ export function ProposalForge(): JSX.Element {
 
   const showConvexAuthRequiredToast = React.useCallback(
     (actionLabel: string) => {
-      showToast("Sign in required", {
+      showToast(AUTH_REQUIRED_TOAST, {
         variant: "warning",
         description: `${actionLabel} is unavailable until the proposal workspace is authenticated.`,
       });
@@ -1332,23 +1418,226 @@ export function ProposalForge(): JSX.Element {
     [showToast],
   );
 
+  const publicHandoffRecord = useQuery(
+    ((api as any).proposalHandoffs?.getPublic ??
+      "proposalHandoffs.getPublic") as any,
+    handoffId && handoffToken ? { handoffId, handoffToken } : "skip",
+  ) as ProposalForgeHandoffRecord | undefined;
   const handoffRecord = useQuery(
     api.proposalHandoffs.get,
-    handoffId && isConvexAuthenticated ? { handoffId } : "skip",
+    handoffId && !handoffToken && isConvexAuthenticated ? { handoffId } : "skip",
+  ) as ProposalForgeHandoffRecord | undefined;
+  const canonicalJobRecord = useQuery(
+    ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
+    canonicalJobId && isConvexAuthenticated ? { jobId: canonicalJobId } : "skip",
+  ) as ProposalForgeCanonicalJob | undefined;
+  const canonicalRecordCvSelection = React.useMemo(
+    () =>
+      resolveAttachedCvSelectionById(
+        canonicalJobRecord?.resumeId,
+        canonicalJobRecord?.resumeName,
+      ),
+    [canonicalJobRecord?.resumeId, canonicalJobRecord?.resumeName],
   );
 
-  const prefill = React.useMemo<ProposalForgePrefill>(() => {
-    if (!handoffRecord) return null;
+  React.useEffect(() => {
+    if (lastScopedJobIdRef.current === canonicalJobId) {
+      return;
+    }
+
+    lastScopedJobIdRef.current = canonicalJobId;
+    lastRequestedScopedCvSyncKeyRef.current = null;
+    setPendingScopedCvSelection(null);
+
+    if (!canonicalJobId) {
+      const nextSelection = resolveAttachedCvSelectionById(getProposalAttachedCvId());
+      setAttachedCvId(nextSelection.id);
+      setAttachedCvTitle(nextSelection.title);
+    }
+  }, [canonicalJobId]);
+
+  React.useEffect(() => {
+    if (!canonicalJobId) {
+      return;
+    }
+
+    if (
+      pendingScopedCvSelection &&
+      pendingScopedCvSelection.id === canonicalRecordCvSelection.id
+    ) {
+      setPendingScopedCvSelection(null);
+      lastRequestedScopedCvSyncKeyRef.current = null;
+    }
+
+    if (pendingScopedCvSelection) {
+      return;
+    }
+
+    setAttachedCvId(canonicalRecordCvSelection.id);
+    setAttachedCvTitle(canonicalRecordCvSelection.title);
+  }, [
+    canonicalJobId,
+    canonicalRecordCvSelection.id,
+    canonicalRecordCvSelection.title,
+    pendingScopedCvSelection,
+  ]);
+
+  React.useEffect(() => {
+    if (
+      !canonicalJobId ||
+      !pendingScopedCvSelection ||
+      !isConvexAuthenticated ||
+      isConvexAuthLoading
+    ) {
+      return;
+    }
+
+    const syncKey = `${canonicalJobId}:${pendingScopedCvSelection.id ?? ""}`;
+    if (lastRequestedScopedCvSyncKeyRef.current === syncKey) {
+      return;
+    }
+
+    lastRequestedScopedCvSyncKeyRef.current = syncKey;
+    const requestedSelection = pendingScopedCvSelection;
+
+    void setJobResume({
+      jobId: canonicalJobId,
+      resumeId: requestedSelection.id,
+      resumeName: requestedSelection.title,
+    }).catch((error: unknown) => {
+      lastRequestedScopedCvSyncKeyRef.current = null;
+      setPendingScopedCvSelection(null);
+      setAttachedCvId(canonicalRecordCvSelection.id);
+      setAttachedCvTitle(canonicalRecordCvSelection.title);
+      showToast("Attach failed.", { variant: "error" });
+    });
+  }, [
+    canonicalJobId,
+    canonicalRecordCvSelection.id,
+    canonicalRecordCvSelection.title,
+    isConvexAuthLoading,
+    isConvexAuthenticated,
+    pendingScopedCvSelection,
+    setJobResume,
+    showToast,
+  ]);
+
+  const canonicalPrefill = React.useMemo<ProposalForgePrefill>(() => {
+    if (!canonicalJobRecord) {
+      return null;
+    }
+
     return {
-      handoffId: handoffRecord.handoffId,
-      jobTitle: handoffRecord.jobTitle,
-      jobDescription: handoffRecord.jobDescription,
-      sourceUrl: handoffRecord.sourceUrl,
-      platform: handoffRecord.platform,
+      handoffId: `job:${canonicalJobRecord.id}`,
+      jobId: canonicalJobRecord.id,
+      jobTitle: canonicalJobRecord.title,
+      jobDescription: canonicalJobRecord.rawDescription,
+      sourceUrl: canonicalJobRecord.sourceUrl,
+      platform:
+        canonicalJobRecord.sourceDomain || canonicalJobRecord.sourceType,
     };
-  }, [handoffRecord]);
+  }, [canonicalJobRecord]);
+  const handoffPrefill = React.useMemo<ProposalForgePrefill>(() => {
+    const resolvedHandoffRecord = publicHandoffRecord ?? handoffRecord;
+    if (!resolvedHandoffRecord || !handoffId) {
+      return null;
+    }
+
+    return {
+      handoffId,
+      ...(canonicalJobId ? { jobId: canonicalJobId } : null),
+      jobTitle: resolvedHandoffRecord.jobTitle,
+      jobDescription: resolvedHandoffRecord.jobDescription,
+      sourceUrl: resolvedHandoffRecord.sourceUrl,
+      platform: resolvedHandoffRecord.platform,
+    };
+  }, [canonicalJobId, handoffId, handoffRecord, publicHandoffRecord]);
+  const publicHandoffSeedKey = React.useMemo(
+    () => (handoffId && handoffToken ? `${handoffId}:${handoffToken}` : null),
+    [handoffId, handoffToken],
+  );
+  const [lockedPublicHandoffPrefill, setLockedPublicHandoffPrefill] =
+    React.useState<ProposalForgePrefill>(null);
+
+  React.useEffect(() => {
+    if (!publicHandoffSeedKey || !handoffPrefill) {
+      return;
+    }
+
+    if (
+      lockedPublicHandoffPrefill?.handoffId === handoffPrefill.handoffId &&
+      lockedPublicHandoffPrefill?.jobId === handoffPrefill.jobId &&
+      lockedPublicHandoffPrefill?.jobTitle === handoffPrefill.jobTitle &&
+      lockedPublicHandoffPrefill?.jobDescription === handoffPrefill.jobDescription &&
+      lockedPublicHandoffPrefill?.sourceUrl === handoffPrefill.sourceUrl &&
+      lockedPublicHandoffPrefill?.platform === handoffPrefill.platform
+    ) {
+      return;
+    }
+
+    setLockedPublicHandoffPrefill(handoffPrefill);
+  }, [
+    handoffPrefill,
+    lockedPublicHandoffPrefill?.handoffId,
+    lockedPublicHandoffPrefill?.jobId,
+    lockedPublicHandoffPrefill?.jobDescription,
+    lockedPublicHandoffPrefill?.jobTitle,
+    lockedPublicHandoffPrefill?.platform,
+    lockedPublicHandoffPrefill?.sourceUrl,
+    publicHandoffSeedKey,
+  ]);
+
+  React.useEffect(() => {
+    if (publicHandoffSeedKey) {
+      return;
+    }
+
+    if (
+      lockedPublicHandoffPrefill?.jobId &&
+      canonicalJobId &&
+      canonicalJobId !== lockedPublicHandoffPrefill.jobId
+    ) {
+      setLockedPublicHandoffPrefill(null);
+    }
+  }, [
+    canonicalJobId,
+    lockedPublicHandoffPrefill?.jobId,
+    publicHandoffSeedKey,
+  ]);
+
+  const activeLockedPublicHandoffPrefill = React.useMemo<ProposalForgePrefill>(() => {
+    if (!lockedPublicHandoffPrefill) {
+      return null;
+    }
+
+    if (
+      canonicalJobId &&
+      lockedPublicHandoffPrefill.jobId &&
+      canonicalJobId !== lockedPublicHandoffPrefill.jobId
+    ) {
+      return null;
+    }
+
+    return lockedPublicHandoffPrefill;
+  }, [canonicalJobId, lockedPublicHandoffPrefill]);
+
+  const prefill = React.useMemo<ProposalForgePrefill>(() => {
+    if (activeLockedPublicHandoffPrefill) {
+      return activeLockedPublicHandoffPrefill;
+    }
+    if (handoffPrefill) {
+      return handoffPrefill;
+    }
+    if (canonicalPrefill) {
+      return {
+        ...canonicalPrefill,
+      };
+    }
+    return null;
+  }, [activeLockedPublicHandoffPrefill, canonicalPrefill, handoffPrefill]);
 
   const proposalHeaderSourceJobTitle =
+    canonicalJobRecord?.title?.trim() ||
     composePreviewValues?.jobTitle?.trim() ||
     outputSourceComposeDraft?.jobTitle?.trim() ||
     composeDraftInitialSeed?.jobTitle?.trim() ||
@@ -1356,6 +1645,7 @@ export function ProposalForge(): JSX.Element {
     prefill?.jobTitle?.trim() ||
     "";
   const proposalHeaderSourceDescription =
+    canonicalJobRecord?.rawDescription?.trim() ||
     composePreviewValues?.jobDescription?.trim() ||
     outputSourceComposeDraft?.jobDescription?.trim() ||
     composeDraftInitialSeed?.jobDescription?.trim() ||
@@ -1597,6 +1887,7 @@ export function ProposalForge(): JSX.Element {
 
     consumedHandoffIdRef.current = prefill.handoffId;
     params.delete("handoffId");
+    params.delete("handoffToken");
     const nextSearch = params.toString();
     void navigate(nextSearch ? `/proposal?${nextSearch}` : "/proposal", {
       replace: true,
@@ -3509,16 +3800,30 @@ export function ProposalForge(): JSX.Element {
 
     setComposeFormInstanceKey((currentKey) => currentKey + 1);
     resetProposalWorkspace();
-    void navigate("/proposal", {
-      replace: true,
-      state:
-        proposalEntryIntent === "cover-letter-start"
-          ? { proposalEntryIntent }
-          : null,
-    });
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: location.search,
+      },
+      {
+        replace: true,
+        state:
+          proposalEntryIntent === "cover-letter-start"
+            ? {
+                proposalEntryIntent,
+                ...(proposalJobImportFocus === "supported-sites"
+                  ? { jobImportFocus: proposalJobImportFocus }
+                  : {}),
+              }
+            : null,
+      },
+    );
   }, [
+    location.pathname,
+    location.search,
     navigate,
     proposalEntryIntent,
+    proposalJobImportFocus,
     proposalWorkspaceResetToken,
     resetProposalWorkspace,
   ]);
@@ -3562,17 +3867,15 @@ export function ProposalForge(): JSX.Element {
       return values.voicePreset;
     }
 
-    const activeLocalPersonalization = getActiveLocalPersonalizationSource();
     return (
       selectAutoTone({
         jobTitle: values.jobTitle,
         jobDescription: values.jobDescription,
-        personalizationContext:
-          activeLocalPersonalization.personalizationContext,
-        personalizationRichness: activeLocalPersonalization.richness,
+        personalizationContext: activePersonalizationSource.personalizationContext,
+        personalizationRichness: activePersonalizationSource.richness,
       }).preset ?? DEFAULT_PROPOSAL_VOICE_PRESET
     );
-  }, []);
+  }, [activePersonalizationSource]);
 
   const buildStoredProposalComposeDraftSnapshot = React.useCallback(
     (values: FormValues): StoredProposalComposeDraft => {
@@ -3909,11 +4212,10 @@ export function ProposalForge(): JSX.Element {
       logStructuredImportTiming(trace, "proposal_inline.finalize.start", {
         cvId: nextCvId,
       });
-      setProposalAttachedCvId(nextCvId);
+      handleAttachedCvChange(nextCvId);
       setShowExtensionHelper(false);
       setIsCoverLetterStartSessionActive(false);
       setIsComposePanelVisible(true);
-      refreshAttachedCvSelection();
       resetCoverLetterInlineImportUi();
       setCoverLetterInlineImportError(null);
       scheduleJobDescriptionFocus();
@@ -3922,7 +4224,7 @@ export function ProposalForge(): JSX.Element {
       });
     },
     [
-      refreshAttachedCvSelection,
+      handleAttachedCvChange,
       resetCoverLetterInlineImportUi,
       scheduleJobDescriptionFocus,
     ],
@@ -4133,7 +4435,7 @@ export function ProposalForge(): JSX.Element {
     (values: FormValues) => {
       cancelPendingComposeDraftSync();
       setComposePreviewValues(buildStoredProposalComposeDraftSnapshot(values));
-      const personalizationSource = getActiveLocalPersonalizationSource();
+      const personalizationSource = activePersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
         personalizationSource,
       );
@@ -4177,6 +4479,7 @@ export function ProposalForge(): JSX.Element {
       setFallbackInfo(null);
     },
     [
+      activePersonalizationSource,
       buildStoredProposalComposeDraftSnapshot,
       cancelPendingComposeDraftSync,
       formatProposalTypeLabel,
@@ -4192,7 +4495,7 @@ export function ProposalForge(): JSX.Element {
       nextProposalId?: Id<"proposals">,
     ) => {
       cancelPendingComposeDraftSync();
-      const personalizationSource = getActiveLocalPersonalizationSource();
+      const personalizationSource = activePersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
         personalizationSource,
       );
@@ -4296,6 +4599,7 @@ export function ProposalForge(): JSX.Element {
       setLoading(false);
     },
     [
+      activePersonalizationSource,
       cancelPendingComposeDraftSync,
       effectiveProposalStylePresetWithPalette,
       effectiveProposalTemplateId,
@@ -4319,7 +4623,7 @@ export function ProposalForge(): JSX.Element {
     (message: string, values: FormValues, rawReason?: string | null) => {
       cancelPendingComposeDraftSync();
       setComposePreviewValues(buildStoredProposalComposeDraftSnapshot(values));
-      const personalizationSource = getActiveLocalPersonalizationSource();
+      const personalizationSource = activePersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
         personalizationSource,
       );
@@ -4358,6 +4662,7 @@ export function ProposalForge(): JSX.Element {
       setFallbackInfo(null);
     },
     [
+      activePersonalizationSource,
       buildStoredProposalComposeDraftSnapshot,
       cancelPendingComposeDraftSync,
       formatProposalTypeLabel,
@@ -4423,14 +4728,14 @@ export function ProposalForge(): JSX.Element {
         // and stop retrying invalid mutations until a fresh generation happens.
         setGeneratedProposalId(null);
         generatedProposalIdRef.current = null;
-        showToast("Draft detached", {
+        showToast("Detached.", {
           variant: "error",
           description:
             "This proposal draft no longer exists on the server. Generate again to save new edits.",
         });
         return;
       }
-      showToast("Draft update failed", {
+      showToast("Save failed.", {
         variant: "error",
         description:
           "The proposal text changed locally but could not be saved.",
@@ -4466,13 +4771,13 @@ export function ProposalForge(): JSX.Element {
         content: trimmed,
         metadata: savedProposalRenderMetadata,
       });
-      showToast("Saved proposal updated", {
+      showToast("Saved.", {
         variant: "success",
         description: "Edits were applied to the saved proposal.",
       });
     } catch (error) {
       console.error("Failed to persist saved proposal edits:", error);
-      showToast("Saved proposal update failed", {
+      showToast("Save failed.", {
         variant: "error",
         description: "The saved proposal could not be updated.",
       });
@@ -4749,10 +5054,10 @@ export function ProposalForge(): JSX.Element {
           copyFeedbackTimeoutRef.current = null;
         }, 2000);
       }
-      showToast("Proposal copied", { variant: "success" });
+      showToast("Copied.", { variant: "success" });
     } catch (copyError) {
       console.warn("Failed to copy proposal:", copyError);
-      showToast("Copy failed", {
+      showToast("Copy failed.", {
         variant: "error",
         description: "Clipboard access was unavailable.",
       });
@@ -4836,7 +5141,7 @@ export function ProposalForge(): JSX.Element {
         setOutputSourceComposeDraft(composeDraft);
         setComposeDraftInitialSeed(composeDraft);
         if (openedSavedProposalSourceCvId) {
-          setProposalAttachedCvId(openedSavedProposalSourceCvId);
+          handleAttachedCvChange(openedSavedProposalSourceCvId);
         }
       } catch {
         // Ignore storage failures and continue with the in-memory draft.
@@ -4893,7 +5198,7 @@ export function ProposalForge(): JSX.Element {
     setError(null);
     setStatusMessage(null);
     setErrorDetail(null);
-    showToast("Copied to live draft", {
+    showToast("Copied to draft.", {
       variant: "success",
       description: restoredSourceJobDescription
         ? "A detached draft copy is ready with the saved proposal and its source brief."
@@ -4942,13 +5247,13 @@ export function ProposalForge(): JSX.Element {
       await persistOpenedSavedProposal({
         metadata: nextMetadata,
       });
-      showToast("Reset to CV style", {
+      showToast("Reset to resume style.", {
         variant: "success",
         description: "The saved proposal will follow its source CV style again.",
       });
     } catch (error) {
       console.error("Failed to reset saved proposal style:", error);
-      showToast("Reset failed", {
+      showToast("Reset failed.", {
         variant: "error",
         description: "The saved proposal could not be reset to its CV style.",
       });
@@ -5014,10 +5319,10 @@ export function ProposalForge(): JSX.Element {
         composeAutosaveTimeoutRef.current = null;
       }
       setComposeSaveStatus("idle");
-      showToast("Proposal deleted", { variant: "success" });
+      showToast("Deleted.", { variant: "success" });
     } catch (deleteError) {
       console.error("Failed to delete proposal draft:", deleteError);
-      showToast("Delete failed", {
+      showToast("Delete failed.", {
         variant: "error",
         description: "The generated proposal could not be removed.",
       });
@@ -5102,14 +5407,14 @@ export function ProposalForge(): JSX.Element {
       params.set("id", String(persistedProposalId));
       const nextSearch = params.toString();
       void navigate(nextSearch ? `/proposal?${nextSearch}` : "/proposal");
-      showToast("Saved to library", {
+      showToast("Saved.", {
         variant: "success",
         description:
           "This proposal is now in Proposal Library. Open the saved copy there or duplicate it back into draft when you want a new variation.",
       });
     } catch (saveError) {
       console.error("Failed to save proposal draft to library:", saveError);
-      showToast("Save failed", {
+      showToast("Save failed.", {
         variant: "error",
         description: "The proposal could not be saved to the library.",
       });
@@ -5132,9 +5437,19 @@ export function ProposalForge(): JSX.Element {
 
   const isSavedView = requestedView === "saved";
   const hasLocalResumes = React.useMemo(
-    () => listLocalCvPickerOptions().length > 0,
-    [attachedCvId, attachedCvTitle],
+    () => listLocalCvPickerOptions(attachedCvId).length > 0,
+    [attachedCvId],
   );
+  const attachedCvDisplayTitle = React.useMemo(() => {
+    if (!attachedCvId) return null;
+    return (
+      listLocalCvPickerOptions(attachedCvId).find(
+        (option) => option.id === attachedCvId,
+      )?.title ??
+      attachedCvTitle ??
+      null
+    );
+  }, [attachedCvId, attachedCvTitle]);
   const proposalTwoPaneMinViewportWidth = 1440;
   const proposalWorkspaceOutputShellInlineSize =
     "calc(var(--document-sheet-inline-size) - (var(--s4) * 2))";
@@ -5150,11 +5465,13 @@ export function ProposalForge(): JSX.Element {
   const storedComposeDraft =
     typeof window !== "undefined" ? readStoredProposalComposeDraft() : null;
   const briefJobDescription =
+    canonicalJobRecord?.rawDescription?.trim() ||
     composePreviewValues?.jobDescription?.trim() ||
     prefill?.jobDescription?.trim() ||
     storedComposeDraft?.jobDescription?.trim() ||
     "";
   const briefSourceUrl =
+    canonicalJobRecord?.sourceUrl ??
     outputSourceComposeDraft?.sourceUrl ??
     composePreviewValues?.sourceUrl ??
     composeDraftInitialSeed?.sourceUrl ??
@@ -5164,6 +5481,7 @@ export function ProposalForge(): JSX.Element {
     prefill?.sourceUrl ??
     null;
   const briefSourcePlatform =
+    canonicalJobRecord?.sourceDomain ??
     outputSourceComposeDraft?.platform ??
     composePreviewValues?.platform ??
     composeDraftInitialSeed?.platform ??
@@ -5173,7 +5491,9 @@ export function ProposalForge(): JSX.Element {
     prefill?.platform ??
     null;
   const hasMeaningfulComposeDraft = Boolean(
-    composePreviewValues?.jobTitle?.trim() ||
+    canonicalJobRecord?.title?.trim() ||
+      canonicalJobRecord?.rawDescription?.trim() ||
+      composePreviewValues?.jobTitle?.trim() ||
       composePreviewValues?.jobDescription?.trim() ||
       composeDraftInitialSeed?.jobTitle?.trim() ||
       composeDraftInitialSeed?.jobDescription?.trim() ||
@@ -5435,7 +5755,7 @@ export function ProposalForge(): JSX.Element {
           : source.content.trim().length > 0);
 
       if (!hasExportableContent) {
-        showToast("Proposal export unavailable", {
+        showToast("Export unavailable.", {
           variant: "warning",
           description: "Generate or open a proposal before exporting.",
         });
@@ -5531,10 +5851,10 @@ export function ProposalForge(): JSX.Element {
               : undefined,
         });
 
-        showToast(`Exported ${exported.filename}`, { variant: "success" });
+        showToast("Exported.", { variant: "success" });
       } catch (error) {
         console.error("[ProposalForge] export failed", error);
-        showToast("Proposal export failed", { variant: "error" });
+        showToast("Export failed.", { variant: "error" });
       } finally {
         setProposalExportingFormat(null);
       }
@@ -5556,10 +5876,16 @@ export function ProposalForge(): JSX.Element {
     ],
   );
   const briefJobTitle =
+    canonicalJobRecord?.title?.trim() ||
     composePreviewValues?.jobTitle?.trim() ||
     prefill?.jobTitle?.trim() ||
     storedComposeDraft?.jobTitle?.trim() ||
     "";
+  const briefSummaryText = canonicalJobRecord?.summary?.trim() || null;
+  const briefTrustState = canonicalJobRecord?.reviewState ?? null;
+  const briefReviewItems = canonicalJobRecord?.reviewItems ?? [];
+  const briefLinkedDocumentCount = canonicalJobRecord?.linkedProposalCount ?? 0;
+  const briefLinkedProposals = canonicalJobRecord?.linkedProposals ?? [];
   const hasBriefContent = Boolean(briefJobDescription);
   const showBriefCard =
     hasBriefContent && !isBriefExpanded && showComposePanel;
@@ -5574,14 +5900,20 @@ export function ProposalForge(): JSX.Element {
     !isCompactComposeLayout &&
     !shouldShowDesktopBriefCapsule;
   const isLoadingHandoff =
-    Boolean(handoffId) &&
-    (isConvexAuthLoading ||
-      (isConvexAuthenticated && handoffRecord === undefined));
+    !prefill?.handoffId &&
+    ((Boolean(handoffId && handoffToken) && publicHandoffRecord === undefined) ||
+      (Boolean(handoffId && !handoffToken) &&
+        (isConvexAuthLoading ||
+          (isConvexAuthenticated && handoffRecord === undefined))) ||
+      (Boolean(canonicalJobId) &&
+        (isConvexAuthLoading ||
+          (isConvexAuthenticated && canonicalJobRecord === undefined))));
   const shouldShowCoverLetterStartSurface =
     !isSavedView &&
     proposalEntryIntent === "cover-letter-start" &&
     isCoverLetterStartSessionActive &&
     !handoffId &&
+    !canonicalJobId &&
     !isLoadingHandoff &&
     !attachedCvId &&
     !hasMeaningfulComposeDraft &&
@@ -5674,8 +6006,8 @@ export function ProposalForge(): JSX.Element {
       if (coverLetterInlineImportPhase === "preparing") {
         return {
           isBusy,
-          label: "Preparing resume import...",
-          hint: "Checking the file before upload.",
+          label: "Preparing import",
+          hint: "Checking the file.",
           fileName: coverLetterInlineImportFileName,
           error: coverLetterInlineImportError,
         };
@@ -5683,8 +6015,8 @@ export function ProposalForge(): JSX.Element {
       if (coverLetterInlineImportPhase === "retrying") {
         return {
           isBusy,
-          label: "Retrying resume import...",
-          hint: "The connection dropped. The same import is retrying now.",
+          label: "Retrying import",
+          hint: "Connection dropped. Retrying.",
           fileName: coverLetterInlineImportFileName,
           error: coverLetterInlineImportError,
         };
@@ -5692,8 +6024,8 @@ export function ProposalForge(): JSX.Element {
       if (coverLetterInlineImportPhase === "finalizing") {
         return {
           isBusy,
-          label: "Opening imported resume...",
-          hint: "Attaching the imported resume to this cover letter.",
+          label: "Opening resume",
+          hint: "Attaching to this cover letter.",
           fileName: coverLetterInlineImportFileName,
           error: coverLetterInlineImportError,
         };
@@ -5701,8 +6033,8 @@ export function ProposalForge(): JSX.Element {
       if (coverLetterInlineImportPhase === "importing") {
         return {
           isBusy,
-          label: "Importing resume...",
-          hint: "Running the trusted Mistral import. This can take a few seconds.",
+          label: "Importing",
+          hint: "Trusted import. Takes a few seconds.",
           fileName: coverLetterInlineImportFileName,
           error: coverLetterInlineImportError,
         };
@@ -5710,7 +6042,7 @@ export function ProposalForge(): JSX.Element {
       return {
         isBusy,
         label: "Import a resume",
-        hint: "Upload a trusted PDF or image and attach it here.",
+        hint: "Upload a PDF or image.",
         fileName: coverLetterInlineImportFileName,
         error: coverLetterInlineImportError,
       };
@@ -5999,7 +6331,7 @@ export function ProposalForge(): JSX.Element {
       onChange={handleToolbarVoicePresetChange}
       onToggleCvPicker={handleToolbarCvPickerToggle}
       onClearCv={() => handleAttachedCvChange(null)}
-      cvTitle={attachedCvTitle}
+      cvTitle={attachedCvDisplayTitle}
       isCvPickerOpen={isCvPickerOpen}
       disabled={loading || isLoadingHandoff}
       collapsed
@@ -6022,7 +6354,7 @@ export function ProposalForge(): JSX.Element {
       onChange={handleToolbarVoicePresetChange}
       onToggleCvPicker={handleToolbarCvPickerToggle}
       onClearCv={() => handleAttachedCvChange(null)}
-      cvTitle={attachedCvTitle}
+      cvTitle={attachedCvDisplayTitle}
       isCvPickerOpen={isCvPickerOpen}
       disabled={loading || isLoadingHandoff}
       compact={isCompactComposeLayout}
@@ -6197,6 +6529,11 @@ export function ProposalForge(): JSX.Element {
                   <CoverLetterStartSurface
                     hasResumes={hasLocalResumes}
                     showExtensionHelper={showExtensionHelper}
+                    initialRoute={
+                      proposalJobImportFocus === "supported-sites"
+                        ? "job"
+                        : "root"
+                    }
                     importResumeState={coverLetterInlineImportState}
                     onBackToQuickStart={
                       proposalEntryIntent === "cover-letter-start"
@@ -6261,14 +6598,43 @@ export function ProposalForge(): JSX.Element {
                             .join(" ")}
                         >
                           <ProposalBriefCard
-                            documentTitle={
-                              proposalDocumentTitle ||
-                              briefJobTitle ||
-                              "Generated proposal"
+                            sourceJobTitle={briefJobTitle}
+                            outputDocumentTitle={
+                              proposalDocumentTitle || "Generated proposal"
                             }
+                            jobId={canonicalJobId}
                             jobDescription={briefJobDescription}
+                            summaryText={briefSummaryText}
+                            parseStatus={canonicalJobRecord?.parseStatus ?? null}
+                            trustState={briefTrustState}
+                            linkedDocumentCount={briefLinkedDocumentCount}
+                            linkedProposals={briefLinkedProposals}
+                            reviewItems={briefReviewItems}
+                            onApproveReviewItem={
+                              canonicalJobRecord
+                                ? async (item) => {
+                                    await approveJobReviewItem({
+                                      jobId: canonicalJobRecord.id,
+                                      reviewItemId: item.id,
+                                    });
+                                  }
+                                : undefined
+                            }
+                            onSaveReviewItem={
+                              canonicalJobRecord
+                                ? async (item, nextValue) => {
+                                    await updateJobField({
+                                      jobId: canonicalJobRecord.id,
+                                      fieldKey: item.fieldKey,
+                                      value: nextValue,
+                                    });
+                                  }
+                                : undefined
+                            }
+                            focusMode={showBriefCard}
                             onToggleBrief={handleOpenComposeBrief}
                             variant={shouldShowDesktopBriefCapsule ? "compact" : "card"}
+                            hideRawSource={showBriefCard}
                             sourceUrl={briefSourceUrl}
                             sourcePlatform={briefSourcePlatform}
                           />
@@ -6285,7 +6651,7 @@ export function ProposalForge(): JSX.Element {
                       >
                         {isLoadingHandoff ? (
                           <div style={{ paddingTop: "var(--s2)" }}>
-                            <p className="dasti-hint">Loading imported job offer…</p>
+                            <p className="dasti-hint">Loading saved job brief…</p>
                           </div>
                         ) : (
                           <ProposalInputForm
@@ -6296,6 +6662,7 @@ export function ProposalForge(): JSX.Element {
                             onError={handleProposalError}
                             onValuesChange={handleProposalFormValuesChange}
                             onActiveCvChange={handleAttachedCvChange}
+                            activeCvId={attachedCvId}
                             prefill={prefill}
                             cvPickerOpen={isCvPickerOpen}
                             onCvPickerOpenChange={setIsCvPickerOpen}
@@ -6307,6 +6674,7 @@ export function ProposalForge(): JSX.Element {
                             initialComposeDraft={composeDraftInitialSeed}
                             sourceUrl={briefSourceUrl}
                             sourcePlatform={briefSourcePlatform}
+                            canonicalJobId={canonicalJobId}
                             onGenerateControlChange={handleComposeGenerateControlChange}
                             headerAction={
                               hasBriefContent ? (

@@ -19,6 +19,7 @@ type CoverLetterStartRoute = "root" | "job" | "resume";
 type Props = {
   hasResumes: boolean;
   showExtensionHelper: boolean;
+  initialRoute?: CoverLetterStartRoute;
   importResumeState: CoverLetterStartSurfaceImportState;
   onBackToQuickStart?: (() => void) | null;
   onClose: () => void;
@@ -31,6 +32,7 @@ type Props = {
 export function CoverLetterStartSurface({
   hasResumes,
   showExtensionHelper,
+  initialRoute = "root",
   importResumeState,
   onBackToQuickStart = null,
   onClose,
@@ -39,7 +41,10 @@ export function CoverLetterStartSurface({
   onPasteJobOffer,
   onUseChromeExtension,
 }: Props): JSX.Element {
-  const [route, setRoute] = React.useState<CoverLetterStartRoute>("root");
+  const [route, setRoute] = React.useState<CoverLetterStartRoute>(initialRoute);
+  React.useEffect(() => {
+    setRoute(initialRoute);
+  }, [initialRoute]);
   const extensionSourceLinks = React.useMemo(
     () => getProposalExtensionSourceLinks(),
     [],
@@ -128,7 +133,7 @@ export function CoverLetterStartSurface({
                 {route === "root"
                   ? "Pick one path and keep moving."
                   : route === "job"
-                    ? "Choose one way to capture the role."
+                    ? "Pick how you capture the role."
                     : "Attach it before you write."}
               </p>
             </header>
@@ -137,14 +142,14 @@ export function CoverLetterStartSurface({
               <div className="dasti-quick-start-sheet__choice-grid">
                 <QuickStartChoiceCard
                   label="Bring in the job"
-                  hint="Use the extension or paste the job offer."
+                  hint="Use the extension or paste the offer."
                   onClick={() => setRoute("job")}
                   className="dasti-quick-start-sheet__choice-card"
                   primaryAction
                 />
                 <QuickStartChoiceCard
                   label="Bring in your resume"
-                  hint="Use an existing resume or import a new one."
+                  hint="Pick a saved resume or import one."
                   onClick={() => setRoute("resume")}
                   className="dasti-quick-start-sheet__choice-card"
                 />
@@ -157,7 +162,7 @@ export function CoverLetterStartSurface({
                   label="Capture the role"
                   hint={
                     showExtensionHelper
-                      ? "Use the TwoWeeks extension on a supported site."
+                      ? "Use the Twoweeks extension on a supported site."
                       : "Pull it in from a supported site."
                   }
                   onClick={onUseChromeExtension}
@@ -213,7 +218,7 @@ export function CoverLetterStartSurface({
                 />
                 <QuickStartChoiceCard
                   label="Paste job offer"
-                  hint="Open the editor and focus the brief."
+                  hint="Open the editor. Focus the brief."
                   onClick={onPasteJobOffer}
                   className="dasti-quick-start-sheet__choice-card"
                 />
@@ -224,8 +229,8 @@ export function CoverLetterStartSurface({
               <div className="dasti-quick-start-sheet__choice-grid">
                 {hasResumes ? (
                   <QuickStartChoiceCard
-                    label="Use a resume"
-                    hint="Pick from your existing resume library."
+                    label="Pick a resume"
+                    hint="From your saved resumes."
                     onClick={onUseResume}
                     className="dasti-quick-start-sheet__choice-card"
                     primaryAction

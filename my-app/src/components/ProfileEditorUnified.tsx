@@ -200,19 +200,19 @@ export default function ProfileEditorUnified() {
       } 
     } catch (e) {
       console.error("Upload/ingest failed", e);
-      showToast("Upload failed: " + String(e), { variant: "error" });
+      showToast("Upload failed.", { variant: "error" });
     }
   }
 
   async function reapplyRefine() {
     try {
       if (!profile) {
-        showToast("No profile loaded to refine", { variant: "warning" });
+        showToast("No resume loaded.", { variant: "warning" });
         return;
       }
       const pid = profile?._id;
       if (!pid) {
-        showToast("Cannot determine profile id", { variant: "warning" });
+        console.warn("Cannot determine profile id");
         return;
       }
       const resp = await fetch(`${baseUrl}/api/v1/llm-refine`, {
@@ -227,7 +227,7 @@ export default function ProfileEditorUnified() {
       }
     } catch (e) {
       console.error("Reapply refine failed", e);
-      showToast("Reapply refine failed: " + String(e), { variant: "error" });
+      showToast("Refine failed.", { variant: "error" });
     }
   }
 
@@ -277,7 +277,7 @@ export default function ProfileEditorUnified() {
               onClick={async () =>{
                 // Retry Convex persist for current placeholder if present
                 if (!placeholderId) {
-                  showToast("No placeholder available to retry", { variant: "warning" });
+                  showToast("Nothing to retry.", { variant: "warning" });
                   return;
                 }
                 try {
@@ -296,7 +296,7 @@ export default function ProfileEditorUnified() {
                   }, 800);
                 } catch (err) {
                   console.error("Retry Convex persist failed", err);
-                  showToast("Retry failed: " + String(err), { variant: "error" });
+                  showToast("Retry failed.", { variant: "error" });
                 }
               }}
               className="px-3 py-2 rounded-md text-background bg-accent"
