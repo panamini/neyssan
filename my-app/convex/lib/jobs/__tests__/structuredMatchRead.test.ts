@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { computeMatchRead } from "../matchRead";
 import {
+  buildJobMatchReviewFromStructuredDebug,
+  buildVisibleMatchReadFromStructuredDebug,
   buildStructuredMatchReadDebug,
   buildStructuredProfileEvidence,
   isStructuredMatchReadShadowEnabled,
@@ -440,6 +442,74 @@ describe("structured match-read shadow scorer", () => {
     );
   });
 
+  it("keeps vague soft/process phrases out of user-facing missing requirements", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "soft_process_requirement_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_designer",
+        summary: "Designer with ecommerce production experience.",
+        skills: ["Figma", "layout design"],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Production design role with tool requirements.",
+            role_title_normalized: "Production Designer",
+            requirements: [
+              { value: "Figma", type: "tool", required: true },
+              { value: "Strong attention to detail", type: "skill", required: true },
+              { value: "Ability to follow style guides accurately", type: "skill", required: true },
+            ],
+            keywords_canonical: ["Figma", "production design"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: null,
+              onsite: null,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    const supportingRequirements = debug.structured.jobRequirements
+      .filter((requirement) => requirement.importance === "supporting")
+      .map((requirement) => requirement.value);
+    const userFacingMissing = [
+      ...debug.structured.missing,
+      ...debug.structured.unknown.filter(
+        (outcome) => outcome.requirement.importance !== "supporting",
+      ),
+      ...debug.structured.hardGateMissing,
+    ].map((outcome) => outcome.requirement.value);
+
+    expect(supportingRequirements).toEqual(
+      expect.arrayContaining([
+        "Strong attention to detail",
+        "Ability to follow style guides accurately",
+      ]),
+    );
+    expect(userFacingMissing).not.toEqual(
+      expect.arrayContaining([
+        "Strong attention to detail",
+        "Ability to follow style guides accurately",
+      ]),
+    );
+  });
+
   it("emits profile evidence from structured sections with provenance", () => {
     const evidence = buildStructuredProfileEvidence(robertProfile);
 
@@ -764,6 +834,220 @@ describe("structured match-read shadow scorer", () => {
     ).toEqual(expect.stringContaining("Crisis Intervention"));
   });
 
+  it("uses general structured CV evidence for common cross-role requirements", () => {
+    const old = oldKithMatchRead();
+    const debug = buildStructuredMatchReadDebug({
+      old,
+      job: {
+        id: "common_cross_role_requirements_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_common_cross_role",
+        summary:
+          "Operations coordinator with customer service experience, report writing, stakeholder interviews, tablet app workflows, and a bachelor's degree.",
+        skills: ["customer service", "digital record keeping"],
+        experience: [
+          {
+            company: "City Services",
+            title: "Customer Service Associate",
+            description:
+              "Helped visitors, completed daily reports, interviewed customers for intake notes, and used tablet apps for digital records.",
+          },
+        ],
+        cvDocument: {
+          metadata: {
+            authoritativeResume: {
+              normalized: {
+                education: [
+                  {
+                    degree: "Bachelor of Arts",
+                    institution: "State College",
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Operations role requiring customer-facing communication and digital tools.",
+            role_title_normalized: "Operations Associate",
+            requirements: [
+              { value: "Basic computer knowledge", type: "skill", required: true },
+              { value: "Strong communication skills", type: "skill", required: true },
+              { value: "High school diploma or equivalent", type: "education", required: true },
+              { value: "Customer service experience", type: "experience", required: true },
+              { value: "Comfortable using a computer/tablet", type: "tool", required: true },
+            ],
+            keywords_canonical: [
+              "computer",
+              "communication",
+              "customer service",
+            ],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: true,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    const matchedOrPartial = [
+      ...debug.structured.matched,
+      ...debug.structured.partial,
+    ].map((outcome) => outcome.requirement.value);
+    const missing = [
+      ...debug.structured.missing,
+      ...debug.structured.unknown,
+      ...debug.structured.hardGateMissing,
+    ].map((outcome) => outcome.requirement.value);
+
+    expect(matchedOrPartial).toEqual(
+      expect.arrayContaining([
+        "Basic computer knowledge",
+        "Strong communication skills",
+        "High school diploma or equivalent",
+        "Customer service experience",
+        "Comfortable using a computer/tablet",
+      ]),
+    );
+    expect(missing).not.toEqual(
+      expect.arrayContaining([
+        "Basic computer knowledge",
+        "Strong communication skills",
+        "High school diploma or equivalent",
+        "Customer service experience",
+        "Comfortable using a computer/tablet",
+      ]),
+    );
+    expect(debug.structured.structuredScore).toBeGreaterThan(0);
+  });
+
+  it("keeps a directional nonzero score when role evidence is clear but exact requirements are still missing", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "directional_role_signal_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_event_coordinator",
+        summary: "Event coordinator with venue operations experience.",
+        experience: [
+          {
+            company: "City Venue",
+            title: "Event Coordinator",
+            description: "Coordinated event setup, vendor handoffs, and guest flow.",
+          },
+        ],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Event Coordinator role with several specific requirements.",
+            role_title_normalized: "Event Coordinator",
+            requirements: [
+              { value: "Forklift certification", type: "certification", required: true },
+              { value: "Payroll system administration", type: "tool", required: true },
+              { value: "French fluency", type: "language", required: false },
+            ],
+            keywords_canonical: ["event coordination", "forklift", "payroll"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    expect(debug.structured.structuredScore).toBeGreaterThan(0);
+    expect(debug.structured.structuredScore).toBeLessThan(35);
+    expect(debug.structured.structuredTier).toBe("weak");
+    expect(debug.structured.matched.map((outcome) => outcome.requirement.value)).toEqual(
+      expect.arrayContaining(["Event Coordinator"]),
+    );
+    expect(
+      [
+        ...debug.structured.unknown,
+        ...debug.structured.hardGateMissing,
+      ].map((outcome) => outcome.requirement.value),
+    ).toEqual(
+      expect.arrayContaining([
+        "Forklift certification",
+        "Payroll system administration",
+        "French fluency",
+      ]),
+    );
+  });
+
+  it("adapts available structured scoring into the visible match-read shape", () => {
+    const old = oldKithMatchRead();
+    const debug = buildStructuredMatchReadDebug({
+      old,
+      job: {
+        id: "kx792v2vx1ptxz2c4x4y5zxf4x85eqj2",
+        rawLanguageDetected: "en",
+      },
+      profile: robertProfile,
+      shadowRows: [validKithShadowRow],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+    const visible = buildVisibleMatchReadFromStructuredDebug({
+      pendingMatchRead: old,
+      debug,
+      now: 4321,
+    });
+
+    expect(visible.score).toBeGreaterThan(0);
+    expect(visible.scoreVisible).toBe(true);
+    expect(visible.method).toBe("llm");
+    expect(visible.fallback).toBe("none");
+    expect(visible.computedAt).toBe(4321);
+    expect(visible.matched).toEqual(
+      expect.arrayContaining(["Security Guard", "security guard license"]),
+    );
+    expect(visible.missing).not.toEqual(
+      expect.arrayContaining([
+        "location",
+        "miami",
+        "design",
+        "district",
+        "store",
+        "status",
+        "part-time",
+        "compensation",
+      ]),
+    );
+  });
+
   it("caps high-unknown sparse matches below partial confidence", () => {
     const old = oldKithMatchRead();
     const debug = buildStructuredMatchReadDebug({
@@ -1051,6 +1335,442 @@ describe("structured match-read shadow scorer", () => {
     expect(debug.structured.unknown.map((outcome) => outcome.requirement.value)).toContain(
       "product knowledge training certificate",
     );
+  });
+
+  it("builds a user-facing review for semantic protection/security alignment without exact keyword dependence", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "unarmed_airport_security_semantic_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_protection_guard_no_license",
+        summary:
+          "Protection guard with patrol, incident response, public safety, and visitor support experience.",
+        skills: ["incident response", "customer service", "site safety"],
+        experience: [
+          {
+            company: "Metro Protection",
+            title: "Protection Guard",
+            description:
+              "Patrolled airport public areas, monitored access points, handled incident response, and supported passengers with customer service.",
+          },
+        ],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short:
+              "Unarmed airport security guard role focused on patrol, public safety, incident response, and customer service.",
+            role_title_normalized: "Unarmed Security Guard",
+            requirements: [
+              { value: "patrol airport public areas", type: "experience", required: true },
+              { value: "incident response", type: "skill", required: true },
+              { value: "customer service", type: "skill", required: true },
+              { value: "guard card/license preferred", type: "certification", required: false },
+            ],
+            keywords_canonical: [
+              "unarmed security",
+              "airport patrol",
+              "incident response",
+              "customer service",
+            ],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: true,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    const review = buildJobMatchReviewFromStructuredDebug(debug);
+
+    expect(review.verdict).toEqual(expect.stringMatching(/^(strong_lead|possible_lead)$/));
+    expect(review.score).toBeGreaterThan(55);
+    expect(review.suggested_next_step).toBe("apply_if_requirement_true");
+    expect(review.why_this_may_interest_you.join("\n").toLowerCase()).toContain(
+      "incident response",
+    );
+    expect(review.watch_out.join("\n").toLowerCase()).toMatch(/guard card|license/);
+    expect(review.missing_or_unclear_requirements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          requirement: "guard card/license preferred",
+          severity: "unclear",
+        }),
+      ]),
+    );
+    expect(review.missing_or_unclear_requirements).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          requirement: "guard card/license preferred",
+          severity: "blocking",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps standalone generic fragments out of structured missing requirements", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "generic_requirement_fragments_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_security_patrol",
+        summary: "Security guard with patrol experience.",
+        skills: ["security patrol"],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Security patrol role with noisy requirement fragments.",
+            role_title_normalized: "Security Guard",
+            requirements: [
+              { value: "security patrol", type: "skill", required: true },
+              { value: "valid", type: "skill", required: true },
+              { value: "ability", type: "skill", required: true },
+              { value: "preferred", type: "skill", required: false },
+              { value: "lift", type: "constraint", required: true },
+              { value: "more", type: "skill", required: false },
+            ],
+            keywords_canonical: ["security patrol"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: null,
+              onsite: true,
+              physical_standing: true,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    const userFacingMissing = [
+      ...debug.structured.missing,
+      ...debug.structured.unknown,
+      ...debug.structured.hardGateMissing,
+    ].map((outcome) => outcome.requirement.value.toLowerCase());
+
+    for (const genericFragment of ["valid", "ability", "preferred", "lift", "more"]) {
+      expect(
+        debug.structured.jobRequirements.map((item) => item.value.toLowerCase()),
+      ).not.toContain(genericFragment);
+      expect(userFacingMissing).not.toContain(genericFragment);
+    }
+  });
+
+  it("flags a required security license as an important risk without inferring credentials", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "required_security_license_no_inference_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_security_no_license",
+        summary: "Protection guard with patrol and incident response experience.",
+        skills: ["security patrol", "incident response"],
+        experience: [
+          {
+            company: "Metro Protection",
+            title: "Protection Guard",
+            description: "Patrolled public sites and handled incident response.",
+          },
+        ],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Security guard role requiring license, patrol, and incident response.",
+            role_title_normalized: "Security Guard",
+            requirements: [
+              { value: "security guard license", type: "certification", required: true },
+              { value: "security patrol", type: "skill", required: true },
+              { value: "incident response", type: "skill", required: true },
+            ],
+            keywords_canonical: ["security guard", "security patrol", "incident response"],
+            licenses_or_certifications: ["security guard license"],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: true,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    const review = buildJobMatchReviewFromStructuredDebug(debug);
+
+    expect(review.missing_or_unclear_requirements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          requirement: "security guard license",
+          severity: "important",
+        }),
+      ]),
+    );
+    expect(review.evidence.map((item) => item.job_signal)).not.toContain(
+      "security guard license",
+    );
+    expect(review.suggested_next_step).toBe("apply_if_requirement_true");
+    expect(review.score).toBeLessThan(90);
+  });
+
+  it("returns a probably-skip review for a clearly unrelated specialist job", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "security_profile_unrelated_specialist_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: robertProfile,
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Frontend platform engineer role focused on React and API architecture.",
+            role_title_normalized: "Frontend Platform Engineer",
+            requirements: [
+              { value: "React", type: "skill", required: true },
+              { value: "TypeScript", type: "skill", required: true },
+              { value: "API architecture", type: "skill", required: true },
+            ],
+            keywords_canonical: ["React", "TypeScript", "API architecture"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: null,
+              onsite: false,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    const review = buildJobMatchReviewFromStructuredDebug(debug);
+
+    expect(review.verdict).toBe("probably_skip");
+    expect(review.suggested_next_step).toBe("skip");
+    expect(review.score).toBeLessThan(35);
+  });
+
+  it("uses project and achievement body text as concrete tool and outcome evidence", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "technical_project_evidence_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_project_evidence",
+        summary: "Product builder with dashboard experience.",
+        projects: [
+          {
+            name: "Customer onboarding dashboard",
+            description: "Built React and TypeScript workflows backed by API integration.",
+          },
+        ],
+        achievements: [
+          {
+            title: "Activation improvement",
+            description: "Improved customer onboarding activation by 22%.",
+          },
+        ],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Frontend role building onboarding dashboards.",
+            role_title_normalized: "Frontend Engineer",
+            requirements: [
+              { value: "React", type: "tool", required: true },
+              { value: "API integration", type: "tool", required: true },
+              { value: "customer onboarding", type: "skill", required: false },
+            ],
+            keywords_canonical: ["React", "API integration", "customer onboarding"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: null,
+              onsite: null,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    expect(debug.structured.matched).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          requirement: expect.objectContaining({ value: "React" }),
+          evidence: expect.objectContaining({
+            sourceSection: "projects",
+            evidenceText: expect.stringContaining("React and TypeScript"),
+          }),
+        }),
+        expect.objectContaining({
+          requirement: expect.objectContaining({ value: "API integration" }),
+          evidence: expect.objectContaining({
+            sourceSection: "projects",
+          }),
+        }),
+      ]),
+    );
+    expect(debug.structured.profileEvidence.map((item) => item.evidenceText).join("\n")).toEqual(
+      expect.stringContaining("Improved customer onboarding activation"),
+    );
+  });
+
+  it("lets summary support general requirements but caps it below a full match", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "summary_support_cap_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_summary_only",
+        summary:
+          "Security operations professional with incident response and visitor safety experience.",
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Security operations role.",
+            role_title_normalized: "Security Operations Specialist",
+            requirements: [
+              { value: "incident response", type: "skill", required: true },
+            ],
+            keywords_canonical: ["incident response"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: null,
+              onsite: null,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    expect(debug.structured.matched).toEqual([]);
+    expect(debug.structured.partial).toEqual([
+      expect.objectContaining({
+        requirement: expect.objectContaining({ value: "incident response" }),
+        evidence: expect.objectContaining({
+          sourceSection: "summary",
+        }),
+      }),
+    ]);
+    expect(debug.structured.structuredScore).toBe(50);
+  });
+
+  it("uses affiliations and additional information as capped support evidence", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "additional_affiliations_support_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_additional_affiliations",
+        affiliations: [
+          {
+            organization: "National Public Safety Association",
+            role: "Member",
+          },
+        ],
+        additional_information: [
+          "Completed first aid training and emergency response workshops.",
+        ],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Public safety support role.",
+            role_title_normalized: "Public Safety Officer",
+            requirements: [
+              { value: "public safety", type: "skill", required: true },
+              { value: "first aid training", type: "certification", required: false },
+            ],
+            keywords_canonical: ["public safety", "first aid"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: null,
+              onsite: null,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    expect(debug.structured.matched).toEqual([]);
+    expect(debug.structured.partial.map((outcome) => outcome.evidence?.sourceSection)).toEqual(
+      expect.arrayContaining(["affiliations", "additional_information"]),
+    );
+    expect(debug.structured.structuredTier).toBe("partial");
+    expect(debug.structured.structuredScore).toBeLessThan(75);
   });
 
   it("returns unavailable when no valid structured extraction exists", () => {
