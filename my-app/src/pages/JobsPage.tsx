@@ -198,7 +198,6 @@ type JobsPageDetail = {
     verdict:
       | "strong_lead"
       | "possible_lead"
-      | "weak_lead"
       | "probably_skip"
       | "not_enough_signal";
     score?: number | null;
