@@ -7,6 +7,7 @@ import { Button } from "../ui/button";
 import { useToast } from "../ui/toast";
 import { CvModalShell } from "./CvModalShell";
 import { useCvAiCapabilities } from "../../hooks/use-cv-ai-capabilities";
+import { AI_UNAVAILABLE_TOAST } from "../../lib/toast-copy";
 
 interface AchievementsModalProps {
   open: boolean;
@@ -276,7 +277,7 @@ export function AchievementsModal({
 
   async function handleRunAchievementAi(idx: number) {
     if (!cvAiCapabilities.isSupported("improve_achievement_line")) {
-      showToast("Achievement AI unavailable", {
+      showToast(AI_UNAVAILABLE_TOAST, {
         variant: "warning",
         description: cvAiCapabilities.staleMessage,
       });
@@ -314,7 +315,7 @@ export function AchievementsModal({
       );
       const rawMessage =
         error instanceof Error ? error.message : String(error ?? "");
-      showToast("Achievement AI unavailable", {
+      showToast(AI_UNAVAILABLE_TOAST, {
         variant: "error",
         description: /ArgumentValidationError/i.test(rawMessage)
           ? "The CV AI backend schema is stale. Run `npx convex codegen` or restart `npx convex dev`, then reload the page."
