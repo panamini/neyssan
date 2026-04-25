@@ -339,7 +339,8 @@ function splitResponsibilitiesText(input: unknown): string[] {
   const rawLines = normalized
     .split(/\n+/)
     .map((line) => line.replace(/^[\-\u2012\u2013\u2014\u2015*\u2022\s]+/, "").trim())
-    .filter((line) => line.length > 0);
+    .filter((line) => line.length > 0)
+    .filter((line) => !isDriverLicenseLikeValue(line));
   if (!rawLines.length) return [];
 
   const candidateLines: string[] = [];
@@ -1024,11 +1025,21 @@ function extractFirstSentence(text: string): string {
 
 function stripDrivingLicense(value: string): string {
   if (!value) return value;
+  if (isDriverLicenseLikeValue(value)) return "";
   return value
     .replace(/\bdriving\s+licen[cs]e\b/gi, "")
     .replace(/\bdriving\s+permit\b/gi, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+function isDriverLicenseLikeValue(value: unknown): boolean {
+  const cleaned = coerceString(value);
+  if (!cleaned) return false;
+  if (!/\bdriv(?:er|ing)\s+(?:licen[cs]e|permit)\b/i.test(cleaned)) {
+    return false;
+  }
+  return cleaned.split(/\s+/).filter(Boolean).length <= 8;
 }
 
 function extractPlaceOfBirth(text: string): { cleaned: string; place?: string } {
@@ -3104,7 +3115,7 @@ function filterRawSection(rawSections: RawSection[], key: SectionKey, options?: 
 }
 
 const DATE_RANGE_RE =
-  /\b(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{4})\b\s*(?:[\u2012\u2013\u2014\u2015\-]|to)\s*\b(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{4}|present|current|till\s+date|till\s+now|till\s+present|till\s+today)\b/gi;
+  /\b(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{4})\b\s*(?:[\u2012\u2013\u2014\u2015\-]|to)\s*\b(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{4}|present|current|till\s+date|till\s+now|till\s+present|till\s+today)\b/i;
 const SINGLE_DATE_RE = /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{4}\b/i;
 const BULLET_PREFIX_RE = /^[\-•*]/;
 const NARRATIVE_VERB_RE = /\b(responsible|maintaining|logging|utilizing|apprehending|monitoring|ensur(?:e|ing)|develop(?:ed|ing)|manage(?:d|ment)|coordinating|attending|providing)\b/i;
@@ -3430,6 +3441,41 @@ function parseExperienceBlock(content: string, idx: number) {
     return null;
   }
 
+  const inlineHeaderRange = (lines[0]?.match(DATE_RANGE_RE) || [])[0];
+  if (inlineHeaderRange && lines.length >= 2 && !BULLET_PREFIX_RE.test(lines[1] ?? "")) {
+    const role = stripDrivingLicense(cleanLine((lines[0] ?? "").replace(inlineHeaderRange, "")));
+    const { company, location } = splitCompanyLocation(lines[1] ?? "");
+    const parsedRange = parseDateRange(inlineHeaderRange);
+    const payloadLines = lines
+      .slice(2)
+      .map((line) => line.replace(/^[\-•*\s]+/, "").trim())
+      .filter(Boolean);
+    const responsibilityBullets = dedupeStringsCaseInsensitive(
+      [
+        ...deferredResponsibilityLines,
+        ...payloadLines.flatMap((line) => splitResponsibilitiesText(line)),
+      ],
+    );
+    const achievements = dedupeStringsCaseInsensitive(
+      responsibilityBullets.filter(looksLikeAchievementBullet),
+    );
+
+    if (role && company && responsibilityBullets.length) {
+      return {
+        id: coerceId(null, "exp", idx),
+        company: stripDrivingLicense(company),
+        position: role,
+        startDate: parsedRange.startDate,
+        endDate: parsedRange.endDate,
+        isCurrent: parsedRange.isCurrent,
+        location: stripDrivingLicense(location ?? ""),
+        responsibilities: responsibilityBullets.join("\n"),
+        responsibilityBullets,
+        achievements,
+      };
+    }
+  }
+
   let header = lines.shift() ?? "";
   header = header.replace(/^LANGUAGES\s*/i, "").trim();
   if (looksLikeResponsibilitySentence(header)) {
@@ -3595,6 +3641,7 @@ function consumeLeadingResponsibilityLines(lines: string[]): { deferred: string[
   let cursor = 0;
   while (cursor < lines.length) {
     const candidate = lines[cursor]?.replace(/^[\-•*\u2022]+\s*/, "").trim();
+    if (candidate && (DATE_RANGE_RE.test(candidate) || SINGLE_DATE_RE.test(candidate))) break;
     if (!candidate || !looksLikeResponsibilitySentence(candidate)) break;
     deferred.push(candidate);
     cursor += 1;
@@ -4666,7 +4713,11 @@ function canonicalizeExperience(
       hasCompany &&
       !hasPosition &&
       looksLikeResponsibilitySentence(company);
-    const hasNonEmployerCompanyField = hasCompany && looksLikeNonEmployerCompanyField(company, position);
+    const hasNonEmployerCompanyField =
+      hasCompany &&
+      looksLikeNonEmployerCompanyField(company, position) &&
+      !hasDates &&
+      !hasContent;
 
     if (hasStructuralFieldContamination || hasHeaderEchoLocation || hasNarrativeCompanyOnly || hasNonEmployerCompanyField) {
       return false;

@@ -2285,9 +2285,10 @@ describe("proposal writer prompt contract", () => {
       });
 
       expect(trace.finalOutput).toBeUndefined();
-      expect(trace.failureStage).toBe("substantive_body_assertion");
-      expect(trace.noContextLeadCleanup?.removedSentences).toContain(
-        "The day-to-day work itself is the part of the role that stands out to me most.",
+      expect(trace.failureStage).toBe("cleaned_body_selection");
+      expect(trace.cleanedBodySelection.selectedBody).toBeNull();
+      expect(trace.cleanedBodySelection.aggressive.saveableSentences).toEqual(
+        [],
       );
     }
   });

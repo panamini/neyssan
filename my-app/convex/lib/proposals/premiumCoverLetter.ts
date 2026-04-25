@@ -1255,6 +1255,21 @@ export function buildPremiumCoverLetterPrompt(args: {
   const presetGuidance = resolvePremiumCoverLetterPresetGuidance(
     args.brief.preset,
   );
+  const { requiredMoves, forbiddenMoves, ...structuredBrief } = args.brief;
+  const contextGuidance =
+    args.brief.contextClass === "cv_adjacent"
+      ? [
+          "For cv_adjacent, keep the transfer honest and concrete; phrase the link as what this background helps with in the role's actual work, not as a generalized explanation of fit or a claim of direct target-role experience.",
+          "For cv_adjacent, translate adjacent workflow evidence into role value without implying the candidate has already done the target role itself.",
+        ]
+      : args.brief.contextClass === "no_cv"
+        ? [
+            "For no_cv, there is no supported candidate history. Use job-offer work surfaces not prior history.",
+            "For no_cv, stay in first person and sound like a candidate, not a role summary or memo; vary the opening and avoid repeated stems like 'I am drawn to work...', 'I am applying... with a clear focus on...', 'This role centers on...', or 'The highest-value work...'.",
+            "For no_cv, do not claim prior roles, achievements, credentials, tool usage, readiness, or impact; keep employerValueBlock on operational consequence and closeLine on modest first-person ownership.",
+            "For no_cv, ground opening and proof in concrete role priorities.",
+          ]
+        : [];
   return [
     "You write premium employment cover-letter body parts.",
     "Use only the brief facts. Do not invent experience, responsibilities, achievements, credentials, or compensating evidence.",
@@ -1265,10 +1280,7 @@ export function buildPremiumCoverLetterPrompt(args: {
     "Preset affects rhetorical texture only. It must not change truthfulness, claim strength, or evidence priority.",
     "Across cv_direct and cv_adjacent modes, sound like a person making a case in a letter, not a memo explaining why the evidence is relevant.",
     presetGuidance,
-    "For cv_adjacent, keep the transfer honest and concrete; phrase the link as what this background helps with in the role's actual work, not as a generalized explanation of fit or a claim of direct target-role experience.",
-    "For no_cv, there is no supported candidate history. Use job-offer work surfaces not prior history.",
-    "For no_cv, stay in first person and sound like a candidate, not a role summary or memo; vary the opening and avoid repeated stems like 'I am drawn to work...', 'I am applying... with a clear focus on...', 'This role centers on...', or 'The highest-value work...'.",
-    "For no_cv, do not claim prior roles, achievements, credentials, tool usage, readiness, or impact; keep employerValueBlock on operational consequence and closeLine on modest first-person ownership.",
+    ...contextGuidance,
     "Return exactly one JSON object with this schema and no extra text:",
     JSON.stringify({
       opening: "string",
@@ -1280,11 +1292,9 @@ export function buildPremiumCoverLetterPrompt(args: {
     "Opening: position through the strongest relevant evidence, not generic fit language.",
     "ProofBlock: develop the top evidence first, then add one supporting concrete detail when available.",
     "EmployerValueBlock: move directly to an employer-facing implication — what cleaner, faster, or more reliable looks like when this evidence is applied in this specific role. Write it as a natural continuation of the proof, not as a step back to explain why the proof matters. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise.",
-    "For cv_adjacent, translate adjacent workflow evidence into role value without implying the candidate has already done the target role itself.",
-    "For no_cv, ground opening and proof in concrete role priorities.",
     "CloseLine: one short forward-looking sentence that is role-specific and situational — it can reference a concrete next step, a specific contribution, or a detail from the operating context of this role. Vary the shape each time.",
     "Banned openers for any block: 'That combination', 'Applied to', 'Applied in', 'Applied here', 'That kind of', 'That background'. Banned close stems: 'I would welcome the chance to', \"I'd welcome the chance to\", 'I would bring that same', 'I would bring that level'.",
-    `Structured brief: ${JSON.stringify(args.brief)}`,
+    `Structured brief: ${JSON.stringify(structuredBrief)}`,
   ].join("\n");
 }
 
