@@ -224,6 +224,7 @@ const FRENCH_TO_ENGLISH_TRANSLATION_RE =
 const PARTIAL_SCORE_THRESHOLD = 35;
 const DIRECTIONAL_ROLE_ALIGNMENT_SCORE_FLOOR = 24;
 const DIRECTIONAL_NARRATIVE_ALIGNMENT_SCORE_FLOOR = 16;
+const ROLE_FAMILY_MULTIPLE_SIGNAL_SCORE_FLOOR = 55;
 const HIGH_UNKNOWN_COVERAGE_THRESHOLD = 0.4;
 const MIN_MATCHED_SCORABLE_FOR_CONFIDENT_TIER = 2;
 const TOKEN_STOP_WORDS = new Set([
@@ -1416,9 +1417,47 @@ function directionalFitFloor(outcomes: StructuredOutcome[]): number {
   return 0;
 }
 
+function roleFamilyEvidenceScoreFloor(outcomes: StructuredOutcome[]): number {
+  const hasHardGateMissing = outcomes.some(
+    (outcome) => outcome.outcome === "hard_gate_missing",
+  );
+  if (hasHardGateMissing) {
+    return 0;
+  }
+
+  const hasRoleFamilyOverlap = outcomes.some(
+    (outcome) =>
+      outcome.requirement.category === "title" &&
+      (outcome.outcome === "matched" || outcome.outcome === "partial") &&
+      outcome.evidence &&
+      ["experience_title", "desired_position", "headline", "summary"].includes(
+        outcome.evidence.sourceSection,
+      ),
+  );
+  if (!hasRoleFamilyOverlap) {
+    return 0;
+  }
+
+  const positiveScorableEvidenceCount = outcomes.filter(
+    (outcome) =>
+      requirementWeight(outcome.requirement) > 0 &&
+      outcome.requirement.category !== "title" &&
+      (outcome.outcome === "matched" || outcome.outcome === "partial") &&
+      outcome.evidence,
+  ).length;
+
+  if (positiveScorableEvidenceCount >= 2) {
+    return ROLE_FAMILY_MULTIPLE_SIGNAL_SCORE_FLOOR;
+  }
+  return 0;
+}
+
 function scoreOutcomes(outcomes: StructuredOutcome[]): number {
   const scored = outcomes.filter((outcome) => requirementWeight(outcome.requirement) > 0);
-  const fitFloor = directionalFitFloor(outcomes);
+  const fitFloor = Math.max(
+    directionalFitFloor(outcomes),
+    roleFamilyEvidenceScoreFloor(outcomes),
+  );
   if (scored.length === 0) {
     return fitFloor;
   }
