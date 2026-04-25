@@ -35,9 +35,8 @@ function buildMatchReview(
   return {
     verdict: "possible_lead",
     score: 68,
-    confidence: 0.72,
-    one_liner:
-      "Possible lead: some overlap is visible, with a few checks left.",
+    confidence: 0.65,
+    one_liner: "Partial match. A few checks left.",
     why_this_may_interest_you: [
       "Operations overlaps.",
       "Customer-facing work is relevant.",
@@ -72,7 +71,7 @@ describe("MatchReadBlock", () => {
     expect(screen.getByText("Matched")).toBeInTheDocument();
     expect(screen.queryByText(/Confidence/)).toBeNull();
     expect(screen.queryByText("Airtable")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Open Match" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open match" }));
     expect(screen.getByText("Airtable")).toBeInTheDocument();
     expect(screen.getByText("Program management")).toBeInTheDocument();
   });
@@ -142,7 +141,7 @@ describe("MatchReadBlock", () => {
     expect(screen.queryByText("Weak · 0%")).toBeNull();
     expect(screen.getByText("Match pending")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh Match" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh match" }));
     expect(onRefreshMatch).toHaveBeenCalledTimes(1);
   });
 
@@ -189,12 +188,8 @@ describe("MatchReadBlock", () => {
       />,
     );
 
-    expect(screen.getByText("Possible lead · 68%")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Possible lead: some overlap is visible, with a few checks left.",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Partial · 68%")).toBeInTheDocument();
+    expect(screen.getByText("Partial match. A few checks left.")).toBeInTheDocument();
     expect(screen.getByText("Operations overlaps.")).toBeInTheDocument();
     expect(
       screen.getByText("Customer-facing work is relevant."),
@@ -202,6 +197,7 @@ describe("MatchReadBlock", () => {
     expect(screen.getByText("Report writing overlaps.")).toBeInTheDocument();
     expect(screen.getByText("Guard card/license unclear.")).toBeInTheDocument();
     expect(screen.getByText("Weekend availability is a check.")).toBeInTheDocument();
+    expect(screen.queryByText("Possible lead · 68%")).toBeNull();
     expect(screen.queryByText("Partial · 50%")).toBeNull();
   });
 

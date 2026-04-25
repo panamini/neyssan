@@ -643,7 +643,7 @@ describe("jobsPublic.getById", () => {
     expect(result?.matchReview).toMatchObject({
       verdict: "probably_skip",
       score: 25,
-      suggested_next_step: "skip",
+      suggested_next_step: "review_manually",
       evidence: [
         expect.objectContaining({
           job_signal: "Modern React",

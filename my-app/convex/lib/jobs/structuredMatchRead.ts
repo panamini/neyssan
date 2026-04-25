@@ -121,7 +121,6 @@ export type StructuredMatchReadDebug = {
 export type JobMatchReviewVerdict =
   | "strong_lead"
   | "possible_lead"
-  | "weak_lead"
   | "probably_skip"
   | "not_enough_signal";
 
@@ -1580,43 +1579,57 @@ function uniqueByRequirementValue(outcomes: StructuredOutcome[]): StructuredOutc
   return result;
 }
 
-function resolveJobMatchReviewVerdict(args: {
-  score: number;
-  structured: AvailableStructuredMatchDebug;
-}): JobMatchReviewVerdict {
-  const hasProfileEvidence = args.structured.profileEvidence.length > 0;
-  if (!hasProfileEvidence) {
-    return "not_enough_signal";
-  }
-  if (args.score >= 75) return "strong_lead";
-  if (args.score >= 55) return "possible_lead";
-  if (args.score >= 35) return "weak_lead";
-  if (args.score > 0) return "probably_skip";
-
-  const hasAnyScorableRequirement = [
-    ...args.structured.matched,
-    ...args.structured.partial,
-    ...args.structured.missing,
-    ...args.structured.hardGateMissing,
-    ...args.structured.unknown,
-  ].some((outcome) => requirementWeight(outcome.requirement) > 0);
-
-  return hasAnyScorableRequirement ? "probably_skip" : "not_enough_signal";
+function hasProfileEvidenceForReview(
+  structured: AvailableStructuredMatchDebug,
+): boolean {
+  return structured.profileEvidence.length > 0;
 }
 
-function oneLinerForVerdict(verdict: JobMatchReviewVerdict): string {
-  switch (verdict) {
-    case "strong_lead":
-      return "Strong match. Clear overlap.";
-    case "possible_lead":
-      return "Partial match. A few checks left.";
-    case "weak_lead":
-      return "Weak match. Limited overlap.";
-    case "probably_skip":
-      return "Skip. Little overlap.";
-    case "not_enough_signal":
-      return "Not enough signal. Job or resume too thin.";
+function verdictForTier(tier: MatchReadTier): JobMatchReviewVerdict {
+  switch (tier) {
+    case "strong":
+      return "strong_lead";
+    case "partial":
+      return "possible_lead";
+    case "weak":
+      return "probably_skip";
+    case "unknown":
+      return "not_enough_signal";
   }
+}
+
+function oneLinerForTier(tier: MatchReadTier): string {
+  switch (tier) {
+    case "strong":
+      return "Strong match. Clear overlap.";
+    case "partial":
+      return "Partial match. A few checks left.";
+    case "weak":
+      return "Weak match. Limited overlap.";
+    case "unknown":
+      return "Not enough signal.";
+  }
+}
+
+function reviewTierForStructured(
+  structured: AvailableStructuredMatchDebug,
+): MatchReadTier {
+  if (!hasProfileEvidenceForReview(structured)) {
+    return "unknown";
+  }
+
+  const hasAnyScorableRequirement = [
+    ...structured.matched,
+    ...structured.partial,
+    ...structured.missing,
+    ...structured.hardGateMissing,
+    ...structured.unknown,
+  ].some((outcome) => requirementWeight(outcome.requirement) > 0);
+  if (!hasAnyScorableRequirement) {
+    return "unknown";
+  }
+
+  return structured.structuredTier;
 }
 
 function stripSensitiveVisibleText(value: string): string {
@@ -1819,7 +1832,7 @@ function buildWatchOut(
 }
 
 function confidenceForJobMatchReview(args: {
-  verdict: JobMatchReviewVerdict;
+  tier: MatchReadTier;
   structured: AvailableStructuredMatchDebug;
   missingOrUnclear: JobMatchReview["missing_or_unclear_requirements"];
 }): number {
@@ -1834,15 +1847,13 @@ function confidenceForJobMatchReview(args: {
     (item) => item.severity === "blocking",
   );
   const base =
-    args.verdict === "strong_lead"
+    args.tier === "strong"
       ? 0.82
-      : args.verdict === "possible_lead"
-        ? 0.72
-        : args.verdict === "weak_lead"
-          ? 0.58
-          : args.verdict === "probably_skip"
-            ? 0.5
-            : 0.25;
+      : args.tier === "partial"
+        ? 0.65
+        : args.tier === "weak"
+          ? 0.5
+          : 0.25;
 
   return Number(
     clampConfidence(
@@ -1852,11 +1863,10 @@ function confidenceForJobMatchReview(args: {
 }
 
 function suggestedNextStepForReview(args: {
-  verdict: JobMatchReviewVerdict;
+  tier: MatchReadTier;
   missingOrUnclear: JobMatchReview["missing_or_unclear_requirements"];
 }): JobMatchReviewSuggestedNextStep {
-  if (args.verdict === "probably_skip") return "skip";
-  if (args.verdict === "not_enough_signal") return "review_manually";
+  if (args.tier === "unknown") return "review_manually";
 
   const hasBlocking = args.missingOrUnclear.some(
     (item) => item.severity === "blocking",
@@ -1877,8 +1887,9 @@ function suggestedNextStepForReview(args: {
     return "apply_if_requirement_true";
   }
 
-  if (args.verdict === "weak_lead") return "review_manually";
-  return "apply";
+  if (args.tier === "strong") return "apply";
+  if (args.tier === "partial") return "apply";
+  return "review_manually";
 }
 
 function unavailableJobMatchReview(): JobMatchReview {
@@ -1886,7 +1897,7 @@ function unavailableJobMatchReview(): JobMatchReview {
     verdict: "not_enough_signal",
     score: 0,
     confidence: 0,
-    one_liner: oneLinerForVerdict("not_enough_signal"),
+    one_liner: oneLinerForTier("unknown"),
     why_this_may_interest_you: [],
     watch_out: [],
     suggested_next_step: "review_manually",
@@ -1904,10 +1915,11 @@ export function buildJobMatchReviewFromStructuredDebug(
 
   const structured = debug.structured;
   const score = clampReviewScore(structured.structuredScore);
-  const verdict = resolveJobMatchReviewVerdict({ score, structured });
-  if (verdict === "not_enough_signal") {
+  const tier = reviewTierForStructured(structured);
+  if (tier === "unknown") {
     return unavailableJobMatchReview();
   }
+  const verdict = verdictForTier(tier);
   const missingOrUnclear = buildMissingOrUnclearRequirements(structured);
   const evidence = buildReviewEvidence(structured);
   const watchOut = buildWatchOut(missingOrUnclear);
@@ -1916,12 +1928,12 @@ export function buildJobMatchReviewFromStructuredDebug(
     verdict,
     score,
     confidence: confidenceForJobMatchReview({
-      verdict,
+      tier,
       structured,
       missingOrUnclear,
     }),
     one_liner: sanitizeVisibleMatchReviewText(
-      oneLinerForVerdict(verdict),
+      oneLinerForTier(tier),
       MAX_ONE_LINER_CHARS,
     ),
     why_this_may_interest_you: buildWhyThisMayInterestYou([
@@ -1930,7 +1942,7 @@ export function buildJobMatchReviewFromStructuredDebug(
     ]),
     watch_out: watchOut,
     suggested_next_step: suggestedNextStepForReview({
-      verdict,
+      tier,
       missingOrUnclear,
     }),
     missing_or_unclear_requirements: missingOrUnclear,

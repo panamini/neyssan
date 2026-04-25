@@ -28,7 +28,6 @@ type JobMatchReview = {
   verdict:
     | "strong_lead"
     | "possible_lead"
-    | "weak_lead"
     | "probably_skip"
     | "not_enough_signal";
   score?: number | null;
@@ -62,24 +61,9 @@ function formatTierLabel(tier: MatchRead["tier"]): string {
     return "Partial";
   }
   if (tier === "weak") {
-    return "Possible fit";
+    return "Weak";
   }
   return "Unknown";
-}
-
-function formatReviewVerdictLabel(verdict: JobMatchReview["verdict"]): string {
-  switch (verdict) {
-    case "strong_lead":
-      return "Strong lead";
-    case "possible_lead":
-      return "Possible lead";
-    case "weak_lead":
-      return "Weak lead";
-    case "probably_skip":
-      return "Probably skip";
-    case "not_enough_signal":
-      return "Not enough signal";
-  }
 }
 
 function formatSuggestedNextStepLabel(
@@ -151,11 +135,11 @@ export function MatchReadBlock({
       : formatTierLabel(matchRead.tier);
 
   if (hasUsableMatchReview(matchReview)) {
-    const verdictLabel = formatReviewVerdictLabel(matchReview.verdict);
+    const tierLabel = formatTierLabel(matchRead.tier);
     const reviewScoreLabel = formatReviewScore(matchReview.score);
     const titleLabel = reviewScoreLabel
-      ? `${verdictLabel} · ${reviewScoreLabel}`
-      : verdictLabel;
+      ? `${tierLabel} · ${reviewScoreLabel}`
+      : tierLabel;
     const oneLiner = matchReview.one_liner.trim();
     const whyItems = matchReview.why_this_may_interest_you
       .map((item) => item.trim())
