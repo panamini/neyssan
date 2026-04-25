@@ -9,6 +9,7 @@ import { clientFormatCompleteCV } from '../../../utils/simpleClientParse';
 
 const CONVEX_URL = import.meta.env?.VITE_CONVEX_URL ?? "";
 const CONVEX_SITE_URL = CONVEX_URL.replace('.cloud', '.site');
+const DEBUG_TOASTS = import.meta.env?.DEV === true;
 
 export function useLlmRefinement(
   rawTextLocal: string,
@@ -66,7 +67,9 @@ export function useLlmRefinement(
       const msg = String(e?.message ?? e);
       if (msg.includes('Could not find public function') || msg.includes('Did you forget to run `npx convex')) {
         skipHttpFallback = true;
-        try { showToast('Convex action not available: run `npx convex dev` or deploy the functions (npx convex deploy)', { variant: 'warning' }); } catch (er) {}
+        if (DEBUG_TOASTS) {
+          try { showToast('Convex action unavailable.', { variant: 'warning' }); } catch (er) {}
+        }
       }
     }
 
@@ -82,7 +85,9 @@ export function useLlmRefinement(
       } catch (e: any) {
         const msg = String(e?.message ?? e);
         if (msg.includes('Failed to fetch') || msg.includes('403') || msg.includes('CORS') || msg.includes('preflight')) {
-          try { showToast('Backend HTTP parse blocked by CORS. Prefer running Convex dev or use the client parser.', { variant: 'warning' }); } catch (er) {}
+          if (DEBUG_TOASTS) {
+            try { showToast('Backend parse blocked.', { variant: 'warning' }); } catch (er) {}
+          }
         }
       }
     }
@@ -186,7 +191,7 @@ export function useLlmRefinement(
           if (jid) {
             setJobId(jid);
             setStatus('enqueued');
-            try { showToast('Queued refine job', { variant: 'success' }); } catch { /* no-op */ }
+            try { showToast('Queued.', { variant: 'success' }); } catch { /* no-op */ }
             setIsPolling(true);
             return;
           }
@@ -199,7 +204,9 @@ export function useLlmRefinement(
           const msg = String((e as Error)?.message ?? e);
           // Common stub client message when functions are unavailable
           if (msg.includes('Could not find public function') || msg.includes('Did you forget to run `npx convex`')) {
-            try { showToast('Convex functions unavailable. Start `npx convex dev` or deploy.', { variant: 'warning' }); } catch { /* no-op */ }
+            if (DEBUG_TOASTS) {
+              try { showToast('Convex unavailable.', { variant: 'warning' }); } catch { /* no-op */ }
+            }
             setMessage({ type: 'error', text: 'Convex functions unavailable' });
             setStatus('failed');
             return;
@@ -220,7 +227,9 @@ export function useLlmRefinement(
 
     // Optional HTTP fallback (only if a site URL is configured)
     if (!CONVEX_SITE_URL) {
-      try { showToast('Convex URL not configured (VITE_CONVEX_URL). Cannot enqueue refine.', { variant: 'warning' }); } catch { /* no-op */ }
+      if (DEBUG_TOASTS) {
+        try { showToast('Convex URL missing.', { variant: 'warning' }); } catch { /* no-op */ }
+      }
       setStatus('failed');
       return;
     }
@@ -233,7 +242,7 @@ export function useLlmRefinement(
         const jid = String(data.jobId);
         setJobId(jid);
         setStatus('enqueued');
-        try { showToast('Queued refine job', { variant: 'success' }); } catch { /* no-op */ }
+        try { showToast('Queued.', { variant: 'success' }); } catch { /* no-op */ }
         setIsPolling(true);
         return;
       }

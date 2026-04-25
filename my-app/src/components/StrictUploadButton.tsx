@@ -373,9 +373,9 @@ export function StrictUploadButton(props: StrictUploadButtonProps) {
         const rawText = await parseRawText(file);
         if (!rawText) {
           setStatus("error");
-          setErrorMsg("Could not extract text from the file.");
+          setErrorMsg("Extraction failed.");
           try {
-            showToast("Could not extract text from the file.", {
+            showToast("Extraction failed.", {
               variant: "warning",
             });
           } catch {
@@ -387,9 +387,9 @@ export function StrictUploadButton(props: StrictUploadButtonProps) {
         const payload = await callStrictServer(rawText);
         if (!payload) {
           setStatus("error");
-          setErrorMsg("Strict extraction failed or returned empty payload.");
+          setErrorMsg("Extraction failed.");
           try {
-            showToast("Strict extraction failed or returned empty payload.", {
+            showToast("Extraction failed.", {
               variant: "warning",
             });
           } catch {
@@ -429,7 +429,7 @@ export function StrictUploadButton(props: StrictUploadButtonProps) {
 
         setStatus("success");
         try {
-          showToast("Strict extraction completed", { variant: "success" });
+          showToast("Extracted.", { variant: "success" });
         } catch {
           /* noop */
         }

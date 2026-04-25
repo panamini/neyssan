@@ -133,11 +133,11 @@ describe("ProposalInputForm auto tone submit", () => {
 
     render(<ProposalInputForm onSubmit={handleSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
     fireEvent.change(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
       {
         target: {
           value:
@@ -181,11 +181,11 @@ describe("ProposalInputForm auto tone submit", () => {
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
     fireEvent.change(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
       {
         target: {
           value:

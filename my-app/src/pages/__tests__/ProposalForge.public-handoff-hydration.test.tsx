@@ -247,9 +247,9 @@ describe("ProposalForge public handoff hydration", () => {
   it("hydrates the real visible compose inputs from the public handoff before auth is ready", async () => {
     render(renderProposalForge());
 
-    const jobTitleInput = await screen.findByPlaceholderText("Enter Job Title");
+    const jobTitleInput = await screen.findByPlaceholderText("Job title");
     const jobDescriptionInput = await screen.findByPlaceholderText(
-      "Paste or write the job offer here…",
+      "Paste job offer",
     );
 
     expect(jobTitleInput).toHaveValue("Imported Product Ops Lead");
@@ -281,11 +281,11 @@ describe("ProposalForge public handoff hydration", () => {
       view.rerender(renderProposalForge());
     });
 
-    expect(screen.getByPlaceholderText("Enter Job Title")).toHaveValue(
+    expect(screen.getByPlaceholderText("Job title")).toHaveValue(
       "Imported Product Ops Lead",
     );
     expect(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
     ).toHaveValue(
       "Own project coordination, keep handoffs clear, and maintain delivery momentum.",
     );
@@ -294,9 +294,9 @@ describe("ProposalForge public handoff hydration", () => {
   it("preserves user edits when the canonical job resolves after handoff hydration", async () => {
     const view = render(renderProposalForge());
 
-    const jobTitleInput = await screen.findByPlaceholderText("Enter Job Title");
+    const jobTitleInput = await screen.findByPlaceholderText("Job title");
     const jobDescriptionInput = await screen.findByPlaceholderText(
-      "Paste or write the job offer here…",
+      "Paste job offer",
     );
 
     fireEvent.change(jobTitleInput, { target: { value: "Edited Product Ops Lead" } });
@@ -318,12 +318,12 @@ describe("ProposalForge public handoff hydration", () => {
     });
 
     await waitFor(() =>
-      expect(screen.getByPlaceholderText("Enter Job Title")).toHaveValue(
+      expect(screen.getByPlaceholderText("Job title")).toHaveValue(
         "Edited Product Ops Lead",
       ),
     );
     expect(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
     ).toHaveValue(
       "Edited job description that should remain visible after canonical hydration.",
     );
