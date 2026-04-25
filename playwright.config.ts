@@ -65,12 +65,11 @@ function resolveLocalChromiumExecutable(): string | undefined {
 }
 
 const localChromiumExecutable = resolveLocalChromiumExecutable();
-
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
-  testDir: './e2e',
+  testDir: 'e2e',
   testMatch: '**/*.spec.ts',
   /* Run tests in files in parallel */
   fullyParallel: true,
@@ -143,9 +142,9 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm --prefix my-app run build && npm --prefix my-app run preview -- --host 127.0.0.1 --port 4173 --strictPort',
+    command: 'npm --prefix my-app run pw:preview',
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
+    timeout: 180 * 1000,
   },
 });

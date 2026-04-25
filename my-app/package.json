@@ -10,6 +10,7 @@
     "dev:backend": "STRUCTURED_UPLOAD_PREFER_LOOPBACK=1 convex dev --local",
     "predev": "convex dev --until-success && convex dashboard",
     "build": "tsc -b && vite build",
+    "pw:preview": "vite build && vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "lint": "tsc && eslint .  --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest --run --exclude pdf-ingest/*",
