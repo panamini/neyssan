@@ -1443,6 +1443,143 @@ describe("structured match-read shadow scorer", () => {
     );
   });
 
+  it("floors same-family security guard matches with concrete responsibility evidence above probably-skip", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "security_role_family_floor_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_security_role_family_floor",
+        summary: "Protection guard with building patrol and incident report experience.",
+        skills: ["building patrol", "incident reports"],
+        experience: [
+          {
+            company: "Metro Protection",
+            title: "Protection Guard",
+            description:
+              "Performed building patrol and prepared incident reports for supervisors.",
+          },
+        ],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short:
+              "Security guard role covering patrol, incident reporting, access checks, and a preferred license.",
+            role_title_normalized: "Security Guard",
+            requirements: [
+              { value: "building patrol", type: "experience", required: true },
+              { value: "incident reports", type: "skill", required: true },
+              { value: "access control checks", type: "skill", required: true },
+              { value: "security guard license preferred", type: "certification", required: false },
+            ],
+            keywords_canonical: ["security guard", "building patrol", "incident reports"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: null,
+              onsite: true,
+              physical_standing: true,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    const review = buildJobMatchReviewFromStructuredDebug(debug);
+
+    expect(debug.structured.hardGateMissing).toEqual([]);
+    expect(debug.structured.structuredTier).toBe("partial");
+    expect(debug.structured.structuredScore).toBeGreaterThanOrEqual(55);
+    expect(review.verdict).toBe("possible_lead");
+    expect(review.one_liner).toBe("Partial match. A few checks left.");
+    expect(review.watch_out.join("\n").toLowerCase()).toContain("license");
+  });
+
+  it("floors same-family teacher matches with degree and student-teaching evidence above probably-skip", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "teacher_role_family_floor_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_teacher_role_family_floor",
+        summary: "Kindergarten teacher with student teaching and classroom lesson planning experience.",
+        education: [
+          {
+            degree: "Bachelor of Arts",
+            field: "Elementary Education",
+            institution: "State College",
+          },
+        ],
+        experience: [
+          {
+            company: "Oak Primary School",
+            title: "Kindergarten Teacher",
+            description:
+              "Completed student teaching, prepared classroom lessons, and supported early learners.",
+          },
+        ],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short:
+              "Kindergarten teacher role with classroom instruction, student teaching, degree, and state credential preference.",
+            role_title_normalized: "Kindergarten Teacher",
+            requirements: [
+              { value: "classroom lesson planning", type: "skill", required: true },
+              { value: "student teaching", type: "experience", required: true },
+              { value: "bachelor degree", type: "education", required: true },
+              { value: "state teaching credential preferred", type: "certification", required: false },
+            ],
+            keywords_canonical: [
+              "kindergarten teacher",
+              "student teaching",
+              "classroom lesson planning",
+              "bachelor degree",
+            ],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    expect(debug.structured.status).toBe("available");
+    if (debug.structured.status !== "available") return;
+
+    const review = buildJobMatchReviewFromStructuredDebug(debug);
+
+    expect(debug.structured.hardGateMissing).toEqual([]);
+    expect(debug.structured.structuredTier).toBe("partial");
+    expect(debug.structured.structuredScore).toBeGreaterThanOrEqual(55);
+    expect(review.verdict).toBe("possible_lead");
+    expect(review.one_liner).toBe("Partial match. A few checks left.");
+    expect(review.watch_out.join("\n").toLowerCase()).toContain("credential");
+  });
+
   it("compresses long raw evidence into short user-facing review copy", () => {
     const longEvidence =
       "Led customer intake, report writing, and follow-up coordination across multiple queues. " +
