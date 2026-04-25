@@ -109,7 +109,7 @@
 }
 
 .fraunces {
-  font-family: var(--font-heading-family);
+  font-family: var(--font-serif-display);
   letter-spacing: var(--tracking-tight);
 }
 

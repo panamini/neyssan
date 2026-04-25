@@ -242,7 +242,7 @@ export function SkillsDrawer({
                   className={[
                     "px-3 py-1.5 text-sm rounded-md focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]",
                     tab === "manage"
-                      ? "[background:var(--ac)] [color:var(--op)]"
+                      ? "[background:var(--ac)] [color:var(--color-on-accent)]"
                       : "[color:var(--tm2)] hover:[background:var(--sf2)]",
                   ].join(" ")}
                 >
@@ -256,7 +256,7 @@ export function SkillsDrawer({
                   className={[
                     "px-3 py-1.5 text-sm rounded-md focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]",
                     tab === "ai"
-                      ? "[background:var(--ac)] [color:var(--op)]"
+                      ? "[background:var(--ac)] [color:var(--color-on-accent)]"
                       : "[color:var(--tm2)] hover:[background:var(--sf2)]",
                   ].join(" ")}
                 >

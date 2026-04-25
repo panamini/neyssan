@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/clerk-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
+  ArrowSquareOut,
   ClipboardText,
   DotsThree,
   FileText,
@@ -2616,34 +2617,54 @@ function JobsPageContent(): JSX.Element {
                           ) : null}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        className="dasti-icon-button"
-                        aria-pressed={selectedJob.isFavorite}
-                        aria-label={
-                          selectedJob.isFavorite
-                            ? "Remove job from favorites"
-                            : "Mark job as favorite"
-                        }
-                        title={
-                          selectedJob.isFavorite
-                            ? "Remove from favorites"
-                            : "Mark favorite"
-                        }
-                        onClick={() => {
-                          void handleSetJobFavorite(
-                            selectedJob.id,
-                            !selectedJob.isFavorite,
-                          );
-                        }}
-                      >
-                        <Star
-                          size={17}
-                          strokeWidth={1.8}
-                          weight={selectedJob.isFavorite ? "fill" : "regular"}
-                          aria-hidden="true"
-                        />
-                      </button>
+                      <div className="dasti-jobs-detail__topline-actions">
+                        <button
+                          type="button"
+                          className="dasti-icon-button"
+                          aria-pressed={selectedJob.isFavorite}
+                          aria-label={
+                            selectedJob.isFavorite
+                              ? "Remove job from favorites"
+                              : "Mark job as favorite"
+                          }
+                          title={
+                            selectedJob.isFavorite
+                              ? "Remove from favorites"
+                              : "Mark favorite"
+                          }
+                          onClick={() => {
+                            void handleSetJobFavorite(
+                              selectedJob.id,
+                              !selectedJob.isFavorite,
+                            );
+                          }}
+                        >
+                          <Star
+                            size={17}
+                            strokeWidth={1.8}
+                            weight={selectedJob.isFavorite ? "fill" : "regular"}
+                            aria-hidden="true"
+                          />
+                        </button>
+                        {selectedSourceLabel && selectedJob.sourceUrl ? (
+                          <button
+                            type="button"
+                            className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost dasti-jobs-detail__source-action"
+                            aria-label={`Open original job offer on ${selectedSourceLabel}`}
+                            title={`Open original job offer on ${selectedSourceLabel}`}
+                            onClick={() =>
+                              handleOpenJobSource(selectedJob.sourceUrl)
+                            }
+                          >
+                            <span>{`From ${selectedSourceLabel}`}</span>
+                            <ArrowSquareOut
+                              size={13}
+                              strokeWidth={1.8}
+                              aria-hidden="true"
+                            />
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="dasti-jobs-command-bar" aria-label="Job actions">
@@ -2801,6 +2822,7 @@ function JobsPageContent(): JSX.Element {
                       sourceJobTitle={selectedJob.title}
                       outputDocumentTitle={null}
                       jobDescription={selectedJob.rawDescription}
+                      showHeader={false}
                       sourceUrl={selectedJob.sourceUrl}
                       sourcePlatform={selectedJob.sourceType}
                       summaryText={selectedJob.summary}
@@ -2818,8 +2840,15 @@ function JobsPageContent(): JSX.Element {
                       linkedProposals={selectedJob.linkedProposals}
                       reviewItems={selectedJob.reviewItems}
                       onSaveField={handleSaveField}
-                      onApproveReviewItem={handleApproveReviewItem}
-                      onSaveReviewItem={handleSaveReviewItem}
+                      onApproveReviewItem={(item) =>
+                        handleApproveReviewItem(item as JobsPageReviewItem)
+                      }
+                      onSaveReviewItem={(item, nextValue) =>
+                        handleSaveReviewItem(
+                          item as JobsPageReviewItem,
+                          nextValue,
+                        )
+                      }
                     />
                   </div>
                 )}
