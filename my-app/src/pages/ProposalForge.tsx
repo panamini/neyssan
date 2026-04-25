@@ -5996,8 +5996,8 @@ export function ProposalForge(): JSX.Element {
       if (coverLetterInlineImportPhase === "preparing") {
         return {
           isBusy,
-          label: "Preparing resume import...",
-          hint: "Checking the file before upload.",
+          label: "Preparing import",
+          hint: "Checking the file.",
           fileName: coverLetterInlineImportFileName,
           error: coverLetterInlineImportError,
         };
@@ -6005,8 +6005,8 @@ export function ProposalForge(): JSX.Element {
       if (coverLetterInlineImportPhase === "retrying") {
         return {
           isBusy,
-          label: "Retrying resume import...",
-          hint: "The connection dropped. The same import is retrying now.",
+          label: "Retrying import",
+          hint: "Connection dropped. Retrying.",
           fileName: coverLetterInlineImportFileName,
           error: coverLetterInlineImportError,
         };
@@ -6014,8 +6014,8 @@ export function ProposalForge(): JSX.Element {
       if (coverLetterInlineImportPhase === "finalizing") {
         return {
           isBusy,
-          label: "Opening imported resume...",
-          hint: "Attaching the imported resume to this cover letter.",
+          label: "Opening resume",
+          hint: "Attaching to this cover letter.",
           fileName: coverLetterInlineImportFileName,
           error: coverLetterInlineImportError,
         };
@@ -6023,8 +6023,8 @@ export function ProposalForge(): JSX.Element {
       if (coverLetterInlineImportPhase === "importing") {
         return {
           isBusy,
-          label: "Importing resume...",
-          hint: "Running the trusted Mistral import. This can take a few seconds.",
+          label: "Importing",
+          hint: "Trusted import. Takes a few seconds.",
           fileName: coverLetterInlineImportFileName,
           error: coverLetterInlineImportError,
         };
@@ -6032,7 +6032,7 @@ export function ProposalForge(): JSX.Element {
       return {
         isBusy,
         label: "Import a resume",
-        hint: "Upload a trusted PDF or image and attach it here.",
+        hint: "Upload a PDF or image.",
         fileName: coverLetterInlineImportFileName,
         error: coverLetterInlineImportError,
       };
