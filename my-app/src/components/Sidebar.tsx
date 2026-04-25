@@ -1152,8 +1152,8 @@ export const Sidebar: React.FC = () => {
             type="button"
             className="sb-footer__account-button"
             onClick={handleAccountClick}
-            aria-label={isSignedIn ? "Open account menu" : "Sign in"}
-            title={isSignedIn ? "Account" : "Sign in"}
+            aria-label={isSignedIn ? "Open account menu" : "Sign In"}
+            title={isSignedIn ? "Account" : "Sign In"}
           >
             <User size={18} strokeWidth={1.8} aria-hidden="true" />
           </button>
@@ -1170,14 +1170,16 @@ export const Sidebar: React.FC = () => {
         {!sidebarCollapsed ? (
           <div className="sb-footer__account">
             <div className="sb-footer__title">
-              {user?.firstName ?? user?.username ?? "You"}
+              {isSignedIn
+                ? user?.firstName ?? user?.username ?? "You"
+                : "Sign In"}
             </div>
             <div className="sb-footer__subtitle">
-              {isConvexAuthLoading
+              {isSignedIn && isConvexAuthLoading
                 ? "Loading"
                 : isSignedIn
                   ? "Signed in"
-                  : "Guest"}
+                  : "Save draft"}
             </div>
           </div>
         ) : null}
