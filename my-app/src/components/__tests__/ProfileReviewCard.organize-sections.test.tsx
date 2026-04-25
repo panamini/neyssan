@@ -517,9 +517,9 @@ describe("ProfileReviewCard organize sections", () => {
     const languagesActions = within(languagesRow).getByTestId(
       "organize-section-actions-languages-section",
     );
-    expect(Array.from(languagesRow.children)).toHaveLength(3);
-    expect(languagesRow.children[1]).toBe(languagesMetaRow);
-    expect(languagesRow.children[2]).toBe(languagesActions);
+    expect(Array.from(languagesRow.children)).toHaveLength(4);
+    expect(languagesRow.children[2]).toBe(languagesMetaRow);
+    expect(languagesRow.children[3]).toBe(languagesActions);
     expect(languagesRow).toHaveClass("section-container-header");
     expect(languagesTitle).toHaveClass("cv-section-heading");
     expect(
@@ -537,11 +537,13 @@ describe("ProfileReviewCard organize sections", () => {
     expect(languagesRow.querySelector(".cv-organize-section-row__body")).toBeNull();
     expect(languagesRow.querySelector(".cv-organize-section-row__footer")).toBeNull();
     expect(languagesActions).toBeInTheDocument();
+    expect(languagesRow.children[0]).toContainElement(
+      screen.getByTestId("organize-section-drag-handle-languages-section"),
+    );
     expect(getActionLabels(languagesActions)).toEqual([
       "Hide Languages section",
       "Move Languages section up",
       "Move Languages section down",
-      "Drag Languages section",
     ]);
 
     await user.click(
