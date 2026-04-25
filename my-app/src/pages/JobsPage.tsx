@@ -1563,6 +1563,20 @@ function JobsPageContent(): JSX.Element {
         .sort((left, right) => right.dateSortValue - left.dateSortValue),
     [cvs],
   );
+  const selectedJobResumeDisplayName = React.useMemo(() => {
+    if (selectedJob?.resumeName) {
+      return selectedJob.resumeName;
+    }
+
+    if (!selectedJob?.resumeId) {
+      return null;
+    }
+
+    return (
+      resumePickerOptions.find((option) => option.id === selectedJob.resumeId)
+        ?.title ?? null
+    );
+  }, [resumePickerOptions, selectedJob?.resumeId, selectedJob?.resumeName]);
 
   const recordJobDecision = React.useCallback(
     (outcome: "cover_letter" | "resume" | "bounce", jobId: string) => {
@@ -2642,21 +2656,21 @@ function JobsPageContent(): JSX.Element {
                         </span>
                         <div
                           className={
-                            selectedJob.resumeName
-                              ? "styleforge-active-cv-control styleforge-active-cv-control--loaded dasti-jobs-command-bar__cv-control"
-                              : "styleforge-active-cv-control styleforge-active-cv-control--ghost dasti-jobs-command-bar__cv-control"
+                            selectedJobResumeDisplayName
+                              ? "styleforge-active-cv-control styleforge-active-cv-control--loaded dasti-jobs-command-bar__cv-control dasti-jobs-command-bar__cv-control--full-label"
+                              : "styleforge-active-cv-control styleforge-active-cv-control--ghost dasti-jobs-command-bar__cv-control dasti-jobs-command-bar__cv-control--full-label"
                           }
                         >
                           <button
                             type="button"
                             className="styleforge-active-cv-control__icon-button"
                             aria-label={
-                              selectedJob.resumeName
+                              selectedJobResumeDisplayName
                                 ? "Remove attached resume"
                                 : "Attach resume"
                             }
                             onClick={() => {
-                              if (selectedJob.resumeName) {
+                              if (selectedJobResumeDisplayName) {
                                 void handleDetachResumeFromJob();
                                 return;
                               }
@@ -2669,7 +2683,7 @@ function JobsPageContent(): JSX.Element {
                             >
                               <Paperclip size={15} strokeWidth={1.8} />
                             </span>
-                            {selectedJob.resumeName ? (
+                            {selectedJobResumeDisplayName ? (
                               <span
                                 className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--hover"
                                 aria-hidden
@@ -2685,8 +2699,8 @@ function JobsPageContent(): JSX.Element {
                             aria-expanded={isResumePickerOpen}
                             aria-haspopup="dialog"
                             aria-label={
-                              selectedJob.resumeName
-                                ? `Attached resume: ${selectedJob.resumeName}`
+                              selectedJobResumeDisplayName
+                                ? `Attached resume: ${selectedJobResumeDisplayName}`
                                 : "Attach resume"
                             }
                             onClick={() => {
@@ -2694,7 +2708,7 @@ function JobsPageContent(): JSX.Element {
                             }}
                           >
                             <span className="dasti-proposal-chip__label dasti-proposal-chip__label--resume">
-                              {selectedJob.resumeName ?? "Attach resume"}
+                              {selectedJobResumeDisplayName ?? "Attach resume"}
                             </span>
                           </button>
                         </div>

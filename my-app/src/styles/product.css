@@ -10481,6 +10481,26 @@ html:not(.dark) .dasti-proposal-submit {
   max-width: 280px;
 }
 
+.dasti-jobs-command-bar__cv-control--full-label {
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: min(420px, 100%);
+}
+
+.dasti-jobs-command-bar__cv-control--full-label
+  .styleforge-active-cv-control__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-inline-start: var(--space-2);
+  padding-inline-end: var(--space-3);
+}
+
+.dasti-jobs-command-bar__cv-control--full-label
+  .dasti-proposal-chip__label--resume {
+  max-width: none;
+  min-width: 0;
+}
+
 .dasti-jobs-command-bar__status {
   display: grid;
   gap: 3px;
