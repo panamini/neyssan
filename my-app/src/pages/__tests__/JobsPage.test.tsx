@@ -1373,6 +1373,30 @@ describe("JobsPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("opens the source URL from the job detail header and keeps the brief card title out of the embedded panel", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const sourceButton = await screen.findByRole("button", {
+      name: "Open original job offer on LinkedIn",
+    });
+    fireEvent.click(sourceButton);
+
+    expect(windowOpenMock).toHaveBeenCalledWith(
+      "https://www.linkedin.com/jobs/view/alpha",
+      "_blank",
+      "noopener",
+    );
+    expect(
+      screen.queryByRole("heading", { name: "Operations Associate" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("navigates to the canonical Proposal Forge job route from the job page", async () => {
     selectedJobResult = {
       ...selectedJob,

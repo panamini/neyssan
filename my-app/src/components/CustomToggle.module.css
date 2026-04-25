@@ -29,14 +29,14 @@
 
 .active {
   background-color: var(--ac);
-  color: var(--op);
+  color: var(--color-on-accent);
   border-color: transparent;
 }
 
 /* Dark mode active — tokens auto-adaptent */
 .dark .active {
   background-color: var(--ac);
-  color: var(--op);
+  color: var(--color-on-accent);
 }
 
 .inactive {

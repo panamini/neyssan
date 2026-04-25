@@ -279,6 +279,29 @@ function SectionCard(props: {
       }}
     >
       <div
+        className="cv-organize-section-row__handle"
+        data-testid={`organize-section-handle-slot-${sectionId}`}
+      >
+        {showDragHandle ? (
+          <button
+            type="button"
+            className="dasti-icon-button"
+            aria-label={`Drag ${sectionTitle} section`}
+            title={`Drag ${sectionTitle} section`}
+            data-testid={`organize-section-drag-handle-${sectionId}`}
+            {...dragHandleAttributes}
+            {...dragHandleListeners}
+          >
+            <GripHorizontal size={16} strokeWidth={1.9} aria-hidden="true" />
+          </button>
+        ) : (
+          <span
+            className="cv-organize-section-row__handle-spacer"
+            aria-hidden="true"
+          />
+        )}
+      </div>
+      <div
         className="cv-organize-section-row__primary"
         data-testid={`organize-section-primary-${sectionId}`}
       >
@@ -369,19 +392,6 @@ function SectionCard(props: {
             disabled={!rowState.canMoveDown}
           >
             <ArrowDown size={16} strokeWidth={1.7} aria-hidden="true" />
-          </button>
-        ) : null}
-        {showDragHandle ? (
-          <button
-            type="button"
-            className="dasti-icon-button"
-            aria-label={`Drag ${sectionTitle} section`}
-            title={`Drag ${sectionTitle} section`}
-            data-testid={`organize-section-drag-handle-${sectionId}`}
-            {...dragHandleAttributes}
-            {...dragHandleListeners}
-          >
-            <GripHorizontal size={16} strokeWidth={1.9} aria-hidden="true" />
           </button>
         ) : null}
       </div>
