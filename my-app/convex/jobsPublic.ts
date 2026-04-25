@@ -99,6 +99,8 @@ const STRUCTURED_MATCH_READ_INTERNAL_UI_ENV =
   "STRUCTURED_MATCH_READ_INTERNAL_UI";
 const STRUCTURED_MATCH_READ_ADVISORY_BETA_ENV =
   "STRUCTURED_MATCH_READ_ADVISORY_BETA";
+const STRUCTURED_MATCH_READ_ADVISORY_BETA_ALL_ENV =
+  "STRUCTURED_MATCH_READ_ADVISORY_BETA_ALL";
 const STRUCTURED_MATCH_READ_BETA_VIEWERS_ENV =
   "STRUCTURED_MATCH_READ_BETA_VIEWERS";
 const STRUCTURED_MATCH_REVIEW_APP_GIT_COMMIT_SHA_ENV_KEYS = [
@@ -268,12 +270,40 @@ function isStructuredMatchReadAdvisoryBetaEnabled(
   return normalized === "1" || normalized === "true" || normalized === "on";
 }
 
+function isStructuredMatchReadAdvisoryBetaAllEnabled(
+  rawValue: string | undefined = process.env[STRUCTURED_MATCH_READ_ADVISORY_BETA_ALL_ENV],
+): boolean {
+  const normalized = normalizeDebugToken(rawValue);
+  return normalized === "1" || normalized === "true" || normalized === "on";
+}
+
+function isStructuredMatchReadAdvisoryBetaLocalDev(): boolean {
+  const nodeEnv = normalizeDebugToken(process.env.NODE_ENV);
+  if (nodeEnv === "development") {
+    return true;
+  }
+
+  const deployment = normalizeDebugToken(process.env.CONVEX_DEPLOYMENT);
+  if (deployment.startsWith("dev:") || deployment.startsWith("local:")) {
+    return true;
+  }
+
+  return (
+    nodeEnv !== "production" &&
+    isStructuredMatchReadAdvisoryBetaAllEnabled()
+  );
+}
+
 function isStructuredMatchReadBetaViewer(
   identity: StructuredInternalIdentity | null,
   rawAllowlist: string | undefined = process.env[STRUCTURED_MATCH_READ_BETA_VIEWERS_ENV],
 ): boolean {
   if (!identity) {
     return false;
+  }
+
+  if (isStructuredMatchReadAdvisoryBetaLocalDev()) {
+    return true;
   }
 
   const allowlist = parseStructuredInternalAllowlist(rawAllowlist);
