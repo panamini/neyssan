@@ -1196,7 +1196,7 @@ export function SelectedBlockInspector({
               <button
                 type="button"
                 onClick={handleSave}
-                className="px-3 py-2 [background:var(--ac)] [color:var(--op)] rounded"
+                className="px-3 py-2 [background:var(--ac)] [color:var(--color-on-accent)] rounded"
               >
                 Save
               </button>
@@ -1884,7 +1884,7 @@ export function SelectedBlockInspector({
                 e.stopPropagation();
                 void handleSave();
               }}
-              className="px-3 py-2 [background:var(--ac)] [color:var(--op)] rounded disabled:opacity-50"
+              className="px-3 py-2 [background:var(--ac)] [color:var(--color-on-accent)] rounded disabled:opacity-50"
               disabled={isCommitting}
               aria-busy={isCommitting}
             >

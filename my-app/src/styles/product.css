@@ -970,7 +970,7 @@
 
 .sb-doc-confirm__yes:hover {
   background: var(--er);
-  color: var(--op);
+  color: var(--color-on-accent);
   border-color: var(--er);
 }
 
@@ -7597,7 +7597,7 @@ html:not(.dark) .dasti-proposal-submit {
 }
 .ctb-btn--primary {
   background: var(--ac);
-  color: var(--op);
+  color: var(--color-on-accent);
   border: 1px solid transparent;
 }
 .ctb-btn--primary:hover {
@@ -7754,7 +7754,7 @@ html:not(.dark) .dasti-proposal-submit {
 .cv-organize-section-row {
   --cv-organize-action-rail-width: calc((var(--hs) * 4) + (var(--s1) * 3));
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(
       var(--cv-organize-action-rail-width),
       auto
     );
@@ -7762,11 +7762,34 @@ html:not(.dark) .dasti-proposal-submit {
   gap: var(--space-3);
   min-block-size: var(--section-header-block-size);
   border-bottom: none;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
+  border-top-left-radius: var(--radius-card);
+  border-top-right-radius: var(--radius-card);
   box-shadow: none;
-  overflow: visible;
+  overflow: hidden;
   z-index: 1;
+  background-clip: padding-box;
+}
+
+.cv-organize-section-row__handle {
+  min-inline-size: var(--hs);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.cv-organize-section-row__handle .dasti-icon-button {
+  cursor: grab;
+}
+
+.cv-organize-section-row[data-section-dragging="true"]
+  .cv-organize-section-row__handle .dasti-icon-button {
+  cursor: grabbing;
+}
+
+.cv-organize-section-row__handle-spacer {
+  display: block;
+  inline-size: var(--hs);
+  block-size: var(--hs);
 }
 
 .cv-organize-section-row[data-section-drop-target="true"] {
@@ -10434,6 +10457,22 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-jobs-detail__identity {
   display: grid;
   gap: var(--space-1);
+}
+
+.dasti-jobs-detail__topline-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.dasti-jobs-detail__source-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
 }
 
 .dasti-jobs-detail__title {
@@ -15093,4 +15132,183 @@ html:not(.dark) .dasti-proposal-submit {
 [data-preview-focus="true"] {
   animation: dasti-section-focus-pulse 0.9s ease forwards;
   border-radius: var(--radius-card, 6px);
+}
+
+/* ── Auth route: one app-owned card; Clerk inherits dasti chrome tokens ── */
+.dasti-auth-page {
+  box-sizing: border-box;
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  overflow-y: auto;
+  padding: clamp(var(--space-5), 5vw, var(--space-8));
+  background:
+    radial-gradient(
+      circle at 50% 0%,
+      color-mix(in srgb, var(--color-surface-raised) 78%, transparent) 0%,
+      transparent 42%
+    ),
+    var(--color-canvas);
+}
+
+.dasti-auth-card {
+  width: min(100%, var(--card-rail-sm));
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-lg, var(--shc));
+  color: var(--color-text);
+}
+
+.dasti-auth-card__header {
+  padding: clamp(var(--space-4), 3.5vw, var(--space-6))
+    clamp(var(--space-5), 4vw, var(--space-7)) var(--space-3);
+}
+
+.dasti-auth-card__eyebrow {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-subtle);
+  font-family: var(--font-mono-family);
+  font-size: var(--text-caption-size);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wide);
+  line-height: var(--text-caption-line);
+  text-transform: uppercase;
+}
+
+.dasti-auth-card__title {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-heading-family);
+  font-size: var(--text-display-size);
+  font-weight: var(--font-heading-weight);
+  letter-spacing: var(--tracking-display);
+  line-height: var(--text-display-line);
+}
+
+.dasti-auth-card__subtitle {
+  max-width: 34ch;
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-family: var(--font-body-family);
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
+}
+
+.dasti-auth-card .cl-rootBox,
+.dasti-auth-card .cl-cardBox,
+.dasti-auth-card .cl-card {
+  width: 100%;
+}
+
+.dasti-auth-card .cl-cardBox,
+.dasti-auth-card .cl-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dasti-auth-card .cl-header {
+  display: none;
+}
+
+.dasti-auth-card .cl-main {
+  padding: var(--space-3) clamp(var(--space-5), 4vw, var(--space-7))
+    var(--space-5);
+}
+
+.dasti-auth-card .cl-socialButtonsBlockButton,
+.dasti-auth-card .cl-formFieldInput,
+.dasti-auth-card .cl-formButtonPrimary {
+  min-height: var(--control-md);
+  border-radius: var(--radius-control);
+  font-family: var(--font-body-family);
+  font-size: var(--text-body-sm-size);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-auth-card .cl-socialButtonsBlockButton {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+
+.dasti-auth-card .cl-socialButtonsBlockButton:hover,
+.dasti-auth-card .cl-formButtonPrimary:hover {
+  transform: translateY(-1px);
+}
+
+.dasti-auth-card .cl-formFieldInput {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  box-shadow: none;
+}
+
+.dasti-auth-card .cl-formFieldInput:focus {
+  border-color: var(--color-accent);
+  box-shadow: var(--focus-shadow-soft);
+}
+
+.dasti-auth-card .cl-formButtonPrimary {
+  border: 1px solid transparent;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.dasti-auth-card .cl-formButtonPrimary:hover {
+  background: var(--color-accent-hover);
+}
+
+.dasti-auth-card .cl-footer {
+  border-top: 1px solid var(--color-border);
+  background: transparent;
+}
+
+.dasti-auth-card .cl-footerPages,
+.dasti-auth-card .cl-footerAction {
+  background: transparent;
+}
+
+.dasti-auth-card .cl-footerAction {
+  padding-block: var(--space-4);
+}
+
+.dasti-auth-card .cl-footerPages {
+  padding-block: var(--space-3);
+}
+
+.dasti-auth-card .cl-footerActionLink {
+  color: var(--color-text);
+  font-weight: var(--font-label-weight);
+}
+
+.dasti-auth-card .cl-internal-pe6vm4 {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-accent-soft) 24%, transparent) 0 6px,
+      transparent 6px 12px
+    ),
+    transparent;
+}
+
+@media (max-width: 540px) {
+  .dasti-auth-page {
+    align-items: stretch;
+    padding: var(--space-4);
+  }
+
+  .dasti-auth-card {
+    width: 100%;
+  }
 }
