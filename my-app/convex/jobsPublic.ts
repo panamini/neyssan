@@ -66,6 +66,7 @@ import {
   type StructuredMatchReviewExtractionVerdict,
   type StructuredMatchReviewLabel,
 } from "./lib/jobs/structuredMatchReview";
+import { buildLiveMatchReviewRecord } from "./lib/jobs/liveMatchReviewExport";
 
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
@@ -252,6 +253,65 @@ const structuredMatchReviewExtractionVerdictValidator = v.union(
   v.literal("metadata_leak"),
   v.literal("wrong_language"),
 );
+
+const liveMatchReviewHumanLabelValidator = v.union(
+  v.literal("makes_sense"),
+  v.literal("too_harsh"),
+  v.literal("too_generous"),
+  v.literal("wrong_reason"),
+  v.literal("credential_wrong"),
+  v.literal("unsafe_or_leaky"),
+  v.literal("not_enough_signal_correct"),
+  v.literal("not_enough_signal_wrong"),
+);
+
+const liveMatchReviewFailureTypeValidator = v.union(
+  v.literal("false_zero"),
+  v.literal("dangerous_overmatch"),
+  v.literal("credential_hallucination"),
+  v.literal("preferred_as_blocker"),
+  v.literal("generic_fragment_leak"),
+  v.literal("raw_evidence_leak"),
+  v.literal("verdict_reason_contradiction"),
+  v.literal("bad_next_step"),
+  v.literal("no_signal_misclassified"),
+  v.literal("too_harsh"),
+  v.literal("too_generous"),
+  v.literal("unclear_copy"),
+);
+
+const liveMatchReviewRecordValidator = v.object({
+  jobId: v.string(),
+  jobTitle: v.string(),
+  company: v.union(v.string(), v.null()),
+  profileLabel: v.union(v.string(), v.null()),
+  tier: v.union(
+    v.literal("strong"),
+    v.literal("partial"),
+    v.literal("weak"),
+    v.literal("unknown"),
+  ),
+  verdict: v.union(
+    v.literal("strong_lead"),
+    v.literal("possible_lead"),
+    v.literal("probably_skip"),
+    v.literal("not_enough_signal"),
+  ),
+  score: v.union(v.number(), v.null()),
+  one_liner: v.union(v.string(), v.null()),
+  why_this_may_interest_you: v.array(v.string()),
+  watch_out: v.array(v.string()),
+  suggested_next_step: v.union(v.string(), v.null()),
+  visible_requirements_summary: v.array(v.string()),
+  hard_gate_status: v.union(
+    v.literal("present"),
+    v.literal("none"),
+    v.literal("unknown"),
+  ),
+  human_label: v.union(liveMatchReviewHumanLabelValidator, v.null()),
+  failure_types: v.array(liveMatchReviewFailureTypeValidator),
+  reviewer_notes: v.string(),
+});
 
 function normalizeDebugToken(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -2323,6 +2383,109 @@ export const listForUser = query({
     }
 
     return listProjectedJobsForProfiles(ctx, profiles);
+  },
+});
+
+export const exportLiveMatchReviewRecordsForUser = query({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(liveMatchReviewRecordValidator),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    if (!isStructuredMatchReadInternalViewer(identity)) {
+      throw new Error("Structured match reviewer required");
+    }
+
+    const profiles = await listProfilesForClerk(ctx, identity.subject);
+    const normalizedProfiles = normalizeProjectionProfiles(profiles);
+    if (normalizedProfiles.length === 0) {
+      return [];
+    }
+
+    const limit = Math.max(1, Math.min(50, Math.floor(args.limit ?? 50)));
+    const primaryProfile = normalizedProfiles[0] ?? null;
+    const jobGroups = await Promise.all(
+      normalizedProfiles.map((profile) =>
+        listJobsForProfileId(ctx, String(profile._id ?? profile.id ?? "")),
+      ),
+    );
+    const jobs = jobGroups
+      .flat()
+      .filter(
+        (job: any) =>
+          job.archivedAt === null || job.archivedAt === undefined,
+      )
+      .sort(
+        (left: any, right: any) =>
+          Number(right.updatedAt ?? right.importedAt ?? 0) -
+          Number(left.updatedAt ?? left.importedAt ?? 0),
+      )
+      .slice(0, limit);
+
+    return Promise.all(
+      jobs.map(async (job: any) => {
+        const storedResume = resolveStoredResumeSelection({
+          job,
+          primaryProfile,
+        });
+        const matchReadProfile = resolveMatchReadSourceProfile({
+          job,
+          primaryProfile,
+          profiles: normalizedProfiles,
+        });
+        const pendingMatchRead = buildStructuredPendingMatchRead({
+          jobId: String(job._id),
+          profileId: String(
+            (matchReadProfile as any)?.profileId ??
+              (matchReadProfile as any)?._id ??
+              (matchReadProfile as any)?.id ??
+              "",
+          ),
+        });
+        const shadowRows = await ctx.db
+          .query("job_extraction_shadow")
+          .withIndex("by_job_id", (q: any) => q.eq("job_id", job._id))
+          .collect();
+        const structuredDebug = buildStructuredMatchReadDebug({
+          old: pendingMatchRead,
+          job: {
+            id: String(job._id),
+            rawLanguageDetected: job.rawLanguageDetected,
+          },
+          profile: matchReadProfile,
+          shadowRows,
+        });
+        const matchRead = buildVisibleMatchReadFromStructuredDebug({
+          pendingMatchRead,
+          debug: structuredDebug,
+        });
+        const matchReview = buildJobMatchReviewFromStructuredDebug(structuredDebug);
+        const visibleExtraction = await resolveVisibleExtractionForJob(ctx, job);
+        const hardGateMissingCount =
+          structuredDebug.structured.status === "available"
+            ? structuredDebug.structured.hardGateMissing.length
+            : null;
+
+        return buildLiveMatchReviewRecord({
+          jobId: String(job._id),
+          jobTitle: job.title,
+          company: job.company,
+          profileLabel:
+            storedResume.resumeName ??
+            (matchReadProfile as any)?.name ??
+            (matchReadProfile as any)?.profileId ??
+            null,
+          tier: matchRead.tier,
+          matchReview,
+          visibleRequirements: visibleExtraction.requirements,
+          hardGateMissingCount,
+        });
+      }),
+    );
   },
 });
 
