@@ -57,7 +57,7 @@
 
 .SwitchThumb {
   display: block;
-  background-color: var(--op);
+  background-color: var(--color-on-accent);
   border-radius: var(--rp);
   box-shadow: 0 2px 2px var(--shadow-color);
   transition: transform 100ms var(--ez);

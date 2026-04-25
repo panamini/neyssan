@@ -94,7 +94,7 @@ export function BlockEditor({
             <button
               type="button"
               onClick={handleSave}
-              className="px-3 py-1 [background:var(--ac)] [color:var(--op)] rounded hover:brightness-110"
+              className="px-3 py-1 [background:var(--ac)] [color:var(--color-on-accent)] rounded hover:brightness-110"
             >
               Save
             </button>
