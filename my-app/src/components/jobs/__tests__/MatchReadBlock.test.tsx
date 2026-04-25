@@ -5,6 +5,9 @@ import { describe, expect, it } from "vitest";
 import { MatchReadBlock } from "../MatchReadBlock";
 
 type MatchReadProps = React.ComponentProps<typeof MatchReadBlock>["matchRead"];
+type MatchReviewProps = NonNullable<
+  React.ComponentProps<typeof MatchReadBlock>["matchReview"]
+>;
 
 function buildMatchRead(overrides: Partial<MatchReadProps> = {}): MatchReadProps {
   return {
@@ -22,6 +25,31 @@ function buildMatchRead(overrides: Partial<MatchReadProps> = {}): MatchReadProps
     computedAt: 1234,
     method: "llm",
     fallback: "none",
+    ...overrides,
+  };
+}
+
+function buildMatchReview(
+  overrides: Partial<MatchReviewProps> = {},
+): MatchReviewProps {
+  return {
+    verdict: "possible_lead",
+    score: 68,
+    confidence: 0.72,
+    one_liner:
+      "Possible lead: some overlap is visible, with a few checks left.",
+    why_this_may_interest_you: [
+      "Operations overlaps.",
+      "Customer-facing work is relevant.",
+      "Report writing overlaps.",
+    ],
+    watch_out: [
+      "Guard card/license unclear.",
+      "Weekend availability is a check.",
+    ],
+    suggested_next_step: "apply",
+    missing_or_unclear_requirements: [],
+    evidence: [],
     ...overrides,
   };
 }
@@ -151,5 +179,49 @@ describe("MatchReadBlock", () => {
     expect(screen.queryByText("Acme")).toBeNull();
     expect(screen.queryByText("Equal opportunity employer")).toBeNull();
     expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
+  });
+
+  it("renders a compact match review panel when the backend projection provides one", () => {
+    render(
+      <MatchReadBlock
+        matchRead={buildMatchRead()}
+        matchReview={buildMatchReview()}
+      />,
+    );
+
+    expect(screen.getByText("Possible lead · 68%")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Possible lead: some overlap is visible, with a few checks left.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Operations overlaps.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Customer-facing work is relevant."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Report writing overlaps.")).toBeInTheDocument();
+    expect(screen.getByText("Guard card/license unclear.")).toBeInTheDocument();
+    expect(screen.getByText("Weekend availability is a check.")).toBeInTheDocument();
+    expect(screen.queryByText("Partial · 50%")).toBeNull();
+  });
+
+  it("falls back to matchRead when a review is probably skip with no score", () => {
+    render(
+      <MatchReadBlock
+        matchRead={buildMatchRead()}
+        matchReview={buildMatchReview({
+          verdict: "probably_skip",
+          score: 0,
+          one_liner: "Probably skip: little overlap shows up.",
+          why_this_may_interest_you: [],
+          watch_out: [],
+          suggested_next_step: "skip",
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
+    expect(screen.queryByText("Probably skip · 0%")).toBeNull();
+    expect(screen.queryByText("Operations overlaps.")).toBeNull();
   });
 });

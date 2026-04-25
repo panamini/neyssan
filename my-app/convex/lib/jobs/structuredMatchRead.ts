@@ -158,6 +158,8 @@ export type JobMatchReview = {
   }[];
 };
 
+type JobMatchReviewRequirement = JobMatchReview["missing_or_unclear_requirements"][number];
+
 export type StructuredMatchReadShadowRow = {
   llm_normalized_output: unknown;
   validation_status?: string | null;
@@ -239,6 +241,18 @@ const TOKEN_STOP_WORDS = new Set([
   "with",
   "years",
 ]);
+const MATCH_REVIEW_EMAIL_RE =
+  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
+const MATCH_REVIEW_PHONE_RE =
+  /\b(?:\+?\d[\d\s().-]{7,}\d)\b/g;
+const MATCH_REVIEW_UUID_RE =
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
+const MATCH_REVIEW_DEBUG_PHRASE_RE = /\bmaps to profile evidence:?/gi;
+const MATCH_REVIEW_NOISE_PHRASE_RE =
+  /\bNo concrete profile evidence was strong enough[^.]*\.?/gi;
+const MAX_ONE_LINER_CHARS = 120;
+const MAX_REVIEW_REASON_CHARS = 80;
+const MAX_REVIEW_CAUTION_CHARS = 100;
 
 function compactWhitespace(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -1570,6 +1584,10 @@ function resolveJobMatchReviewVerdict(args: {
   score: number;
   structured: AvailableStructuredMatchDebug;
 }): JobMatchReviewVerdict {
+  const hasProfileEvidence = args.structured.profileEvidence.length > 0;
+  if (!hasProfileEvidence) {
+    return "not_enough_signal";
+  }
   if (args.score >= 75) return "strong_lead";
   if (args.score >= 55) return "possible_lead";
   if (args.score >= 35) return "weak_lead";
@@ -1589,16 +1607,113 @@ function resolveJobMatchReviewVerdict(args: {
 function oneLinerForVerdict(verdict: JobMatchReviewVerdict): string {
   switch (verdict) {
     case "strong_lead":
-      return "Strong lead: the role aligns with concrete profile evidence.";
+      return "Strong match. Clear overlap.";
     case "possible_lead":
-      return "Possible lead: there is meaningful overlap, with a few requirements to confirm.";
+      return "Partial match. A few checks left.";
     case "weak_lead":
-      return "Weak lead: some adjacent signal exists, but the fit is limited.";
+      return "Weak match. Limited overlap.";
     case "probably_skip":
-      return "Probably skip: the current profile evidence does not map to the role.";
+      return "Skip. Little overlap.";
     case "not_enough_signal":
-      return "Not enough signal: the job or profile data is not ready for a useful review.";
+      return "Not enough signal. Job or resume too thin.";
   }
+}
+
+function stripSensitiveVisibleText(value: string): string {
+  return compactWhitespace(value)
+    .replace(MATCH_REVIEW_EMAIL_RE, "")
+    .replace(MATCH_REVIEW_PHONE_RE, "")
+    .replace(MATCH_REVIEW_UUID_RE, "")
+    .replace(MATCH_REVIEW_NOISE_PHRASE_RE, "Not enough signal.")
+    .replace(MATCH_REVIEW_DEBUG_PHRASE_RE, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function truncateVisibleText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  const slice = value.slice(0, maxLength).trimEnd();
+  const lastSpace = slice.lastIndexOf(" ");
+  if (lastSpace <= maxLength * 0.6) {
+    return slice;
+  }
+  return slice.slice(0, lastSpace).trimEnd();
+}
+
+function sanitizeVisibleMatchReviewText(
+  value: string,
+  maxLength: number,
+): string {
+  return truncateVisibleText(stripSensitiveVisibleText(value), maxLength);
+}
+
+function capitalizeFirst(value: string): string {
+  if (!value) {
+    return value;
+  }
+  return value[0].toUpperCase() + value.slice(1);
+}
+
+function summarizeRequirementForUser(value: string): string {
+  const cleaned = stripSensitiveVisibleText(value)
+    .replace(/\b(preferred|required|optional|desired|nice to have)\b/gi, "")
+    .replace(/\b(profile|resume|evidence)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return "";
+  }
+
+  return capitalizeFirst(truncateVisibleText(cleaned, 48));
+}
+
+function evidenceSuffixForRequirement(outcome: StructuredOutcome): string {
+  if (
+    outcome.requirement.category === "license" ||
+    outcome.requirement.category === "certification" ||
+    outcome.requirement.category === "education" ||
+    outcome.requirement.category === "language"
+  ) {
+    return outcome.outcome === "partial" ? "mostly matches." : "is covered.";
+  }
+
+  return outcome.outcome === "partial" ? "mostly overlaps." : "overlaps.";
+}
+
+function formatVisibleEvidenceForUser(outcome: StructuredOutcome): string {
+  const label = summarizeRequirementForUser(outcome.requirement.value);
+  if (!label) {
+    return "";
+  }
+
+  return sanitizeVisibleMatchReviewText(
+    `${label} ${evidenceSuffixForRequirement(outcome)}`,
+    MAX_REVIEW_REASON_CHARS,
+  );
+}
+
+function formatRequirementCautionForUser(
+  item: JobMatchReviewRequirement,
+): string {
+  const label = summarizeRequirementForUser(item.requirement);
+  if (!label) {
+    return "";
+  }
+
+  const isCredentialLike = /\b(license|credential|certif|permit|guard card)\b/i.test(
+    label,
+  );
+  const summary = isCredentialLike
+    ? `${label} unclear.`
+    : item.severity === "blocking"
+      ? `${label} may block.`
+      : `${label} evidence is light.`;
+
+  return sanitizeVisibleMatchReviewText(summary, MAX_REVIEW_CAUTION_CHARS);
 }
 
 function severityForUnresolvedOutcome(
@@ -1624,14 +1739,25 @@ function severityForUnresolvedOutcome(
 
 function reasonForUnresolvedOutcome(outcome: StructuredOutcome): string {
   if (outcome.outcome === "hard_gate_missing") {
-    return outcome.reason;
+    return formatRequirementCautionForUser({
+      requirement: outcome.requirement.value,
+      severity: "blocking",
+      reason: outcome.reason,
+    });
   }
   if (isCredentialRequirement(outcome.requirement)) {
-    return outcome.requirement.importance === "required"
-      ? "The job asks for this credential, but the profile does not show it explicitly."
-      : "The job mentions this credential as preferred or unclear, and the profile does not show it explicitly.";
+    return formatRequirementCautionForUser({
+      requirement: outcome.requirement.value,
+      severity:
+        outcome.requirement.importance === "required" ? "important" : "unclear",
+      reason: outcome.reason,
+    });
   }
-  return outcome.reason;
+  return formatRequirementCautionForUser({
+    requirement: outcome.requirement.value,
+    severity: outcome.requirement.importance === "required" ? "unclear" : "minor",
+    reason: outcome.reason,
+  });
 }
 
 function buildMissingOrUnclearRequirements(
@@ -1657,20 +1783,22 @@ function buildReviewEvidence(
     .filter((outcome) => outcome.evidence)
     .map((outcome) => ({
       job_signal: outcome.requirement.value,
-      profile_signal: outcome.evidence?.evidenceText ?? "",
-      explanation: outcome.reason,
+      profile_signal: sanitizeVisibleMatchReviewText(
+        outcome.evidence?.evidenceText ?? "",
+        MAX_REVIEW_REASON_CHARS,
+      ),
+      explanation: sanitizeVisibleMatchReviewText(
+        outcome.reason,
+        MAX_REVIEW_REASON_CHARS,
+      ),
     }));
 }
 
 function buildWhyThisMayInterestYou(
-  evidence: JobMatchReview["evidence"],
+  evidence: StructuredOutcome[],
 ): string[] {
   return evidence
-    .map((item) =>
-      compactWhitespace(
-        `${item.job_signal} maps to profile evidence: ${item.profile_signal}`,
-      ),
-    )
+    .map((outcome) => formatVisibleEvidenceForUser(outcome))
     .filter(Boolean)
     .slice(0, 3);
 }
@@ -1686,7 +1814,7 @@ function buildWatchOut(
   };
   return [...missingOrUnclear]
     .sort((left, right) => priority[left.severity] - priority[right.severity])
-    .map((item) => `${item.requirement}: ${item.reason}`)
+    .map((item) => formatRequirementCautionForUser(item))
     .slice(0, 2);
 }
 
@@ -1753,14 +1881,14 @@ function suggestedNextStepForReview(args: {
   return "apply";
 }
 
-function unavailableJobMatchReview(reason: string): JobMatchReview {
+function unavailableJobMatchReview(): JobMatchReview {
   return {
     verdict: "not_enough_signal",
     score: 0,
     confidence: 0,
     one_liner: oneLinerForVerdict("not_enough_signal"),
     why_this_may_interest_you: [],
-    watch_out: [`Structured review unavailable: ${reason}`],
+    watch_out: [],
     suggested_next_step: "review_manually",
     missing_or_unclear_requirements: [],
     evidence: [],
@@ -1771,12 +1899,15 @@ export function buildJobMatchReviewFromStructuredDebug(
   debug: StructuredMatchReadDebug,
 ): JobMatchReview {
   if (debug.structured.status !== "available") {
-    return unavailableJobMatchReview(debug.structured.reason);
+    return unavailableJobMatchReview();
   }
 
   const structured = debug.structured;
   const score = clampReviewScore(structured.structuredScore);
   const verdict = resolveJobMatchReviewVerdict({ score, structured });
+  if (verdict === "not_enough_signal") {
+    return unavailableJobMatchReview();
+  }
   const missingOrUnclear = buildMissingOrUnclearRequirements(structured);
   const evidence = buildReviewEvidence(structured);
   const watchOut = buildWatchOut(missingOrUnclear);
@@ -1789,8 +1920,14 @@ export function buildJobMatchReviewFromStructuredDebug(
       structured,
       missingOrUnclear,
     }),
-    one_liner: oneLinerForVerdict(verdict),
-    why_this_may_interest_you: buildWhyThisMayInterestYou(evidence),
+    one_liner: sanitizeVisibleMatchReviewText(
+      oneLinerForVerdict(verdict),
+      MAX_ONE_LINER_CHARS,
+    ),
+    why_this_may_interest_you: buildWhyThisMayInterestYou([
+      ...structured.matched,
+      ...structured.partial,
+    ]),
     watch_out: watchOut,
     suggested_next_step: suggestedNextStepForReview({
       verdict,
