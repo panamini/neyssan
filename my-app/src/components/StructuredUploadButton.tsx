@@ -152,7 +152,7 @@ export function StructuredUploadButton({
           onRetrying: () => {
             console.info("Connection lost, retrying upload…");
             try {
-              showToast("Connection lost, retrying upload…", {
+              showToast("Retrying upload.", {
                 variant: "neutral",
               });
             } catch {
@@ -161,7 +161,7 @@ export function StructuredUploadButton({
           },
           onRetrySucceeded: () => {
             try {
-              showToast("Upload retry succeeded", { variant: "success" });
+              showToast("Uploaded.", { variant: "success" });
             } catch {
               /* noop */
             }
@@ -219,11 +219,11 @@ export function StructuredUploadButton({
         if (outcome.emptyReason ?? diagnosticsEmptyReason) {
           const emptyReason = outcome.emptyReason ?? diagnosticsEmptyReason;
           setEmptyReason(
-            `Parser returned empty result: ${emptyReason}`,
+            `Empty result. ${emptyReason}`,
           );
           try {
             showToast(
-              `Parser returned empty result: ${emptyReason}`,
+              `Empty result. ${emptyReason}`,
               { variant: "warning" },
             );
           } catch {
@@ -233,7 +233,7 @@ export function StructuredUploadButton({
           setEmptyReason(null);
           try {
             showToast(
-              "Structured extraction completed",
+              "Extracted.",
               { variant: "success" },
             );
           } catch {
@@ -242,11 +242,11 @@ export function StructuredUploadButton({
         }
       } catch (err: any) {
         if (!isCurrentRequest()) return;
-        let toastMessage = "Upload failed";
+        let toastMessage = "Upload failed.";
         const errorData =
           err && typeof err === "object" ? (err as any).data : null;
         if (errorData && typeof errorData === "object" && errorData.code) {
-          toastMessage = `Upload failed — code: ${errorData.code}`;
+          toastMessage = "Upload failed.";
           if (errorData.detail) {
             console.error(
               "[StructuredUploadButton] parser detail",
@@ -259,7 +259,7 @@ export function StructuredUploadButton({
           "message" in err &&
           err.message
         ) {
-          toastMessage = `Upload failed — ${err.message}`;
+          toastMessage = "Upload failed.";
         }
         setErrorMsg(toastMessage);
         setEmptyReason(null);
@@ -350,24 +350,17 @@ export function StructuredUploadButton({
             ? latestPayload?.debug?.rawParser
             : rawTextForCopy;
       if (value == null) {
-        showToast("Nothing to copy", { variant: "warning" });
+        showToast("Nothing to copy.", { variant: "warning" });
         return;
       }
       const text = kind === "rawText" ? String(value) : JSON.stringify(value, null, 2);
       try {
         await navigator.clipboard.writeText(text);
         setCopyFeedback(kind);
-        showToast(
-          kind === "normalized"
-            ? "Copied normalized JSON"
-            : kind === "parser"
-              ? "Copied raw parser JSON"
-              : "Copied raw text",
-          { variant: "success" },
-        );
+        showToast("Copied.", { variant: "success" });
       } catch (err) {
         console.error("[StructuredUploadButton] copy failed", err);
-        showToast("Copy failed", { variant: "destructive" });
+        showToast("Copy failed.", { variant: "destructive" });
       }
     },
     [latestPayload, rawTextForCopy, showToast],

@@ -4,7 +4,10 @@ import {
   canonicalizeUserProfileMetadata,
   userProfileMetadataValidator,
 } from "./lib/userProfileMetadata";
-import { getPrimaryProfileForClerk } from "./lib/userProfiles";
+import {
+  getPrimaryProfileForClerk,
+  resolveCanonicalProfileKeywordsForWrite,
+} from "./lib/userProfiles";
 
 export function resolvePatchProfileRow<T extends { clerkId?: string | undefined }>(
   rows: T[],
@@ -25,15 +28,214 @@ export function resolvePatchProfileRow<T extends { clerkId?: string | undefined 
   return unclaimed ?? null;
 }
 
+function compactScoringText(value: unknown): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function dedupeScoringStrings(values: unknown[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const value of values) {
+    const text = compactScoringText(value);
+    if (!text) {
+      continue;
+    }
+
+    const key = text.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    out.push(text);
+  }
+
+  return out;
+}
+
+function extractTextFromRichValue(value: unknown): string {
+  if (value == null) {
+    return "";
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    return compactScoringText(value);
+  }
+
+  if (Array.isArray(value)) {
+    return compactScoringText(value.map(extractTextFromRichValue).join(" "));
+  }
+
+  if (typeof value !== "object") {
+    return "";
+  }
+
+  const record = value as Record<string, unknown>;
+  const direct = [
+    record.text,
+    record.plainText,
+    record.summary,
+    record.name,
+    record.company,
+    record.title,
+    record.position,
+    record.description,
+    record.responsibilities,
+    record.responsibilityBullets,
+    record.achievements,
+  ]
+    .map(extractTextFromRichValue)
+    .filter(Boolean);
+  const nested = [record.content, record.children, record.contentText]
+    .map(extractTextFromRichValue)
+    .filter(Boolean);
+
+  return compactScoringText([...direct, ...nested].join(" "));
+}
+
+function extractSectionText(section: Record<string, any>): string {
+  const structuredText = extractTextFromRichValue(section.structuredContent);
+  const blockText = Array.isArray(section.blocks)
+    ? section.blocks.map(extractTextFromRichValue).join(" ")
+    : "";
+
+  return compactScoringText([structuredText, blockText].join(" "));
+}
+
+function extractSummarySectionText(section: Record<string, any>): string {
+  return (
+    compactScoringText(extractTextFromRichValue(section.structuredContent)) ||
+    compactScoringText(
+      Array.isArray(section.blocks)
+        ? section.blocks.map(extractTextFromRichValue).join(" ")
+        : "",
+    )
+  );
+}
+
+function coerceCvExperienceEntry(entry: Record<string, any>) {
+  const description = compactScoringText(
+    [
+      extractTextFromRichValue(entry.description),
+      extractTextFromRichValue(entry.responsibilities),
+      extractTextFromRichValue(entry.responsibilityBullets),
+      extractTextFromRichValue(entry.achievements),
+    ].join(" "),
+  );
+  const company = compactScoringText(entry.company ?? entry.employer ?? "");
+  const title = compactScoringText(entry.title ?? entry.position ?? entry.jobTitle ?? "");
+
+  if (!company && !title && !description) {
+    return null;
+  }
+
+  return {
+    company,
+    title,
+    ...(entry.startDate !== undefined ? { startDate: entry.startDate } : {}),
+    ...(entry.endDate !== undefined ? { endDate: entry.endDate } : {}),
+    ...(description ? { description } : {}),
+  };
+}
+
+export function buildScoringProfileFieldsFromCvDocument(
+  cvDocument: unknown,
+): {
+  summary?: string;
+  skills: string[];
+  experience: Array<{
+    company: string;
+    title: string;
+    startDate?: string | number | null;
+    endDate?: string | number | null;
+    description?: string;
+  }>;
+  raw_text?: string;
+} {
+  if (!cvDocument || typeof cvDocument !== "object") {
+    return { skills: [], experience: [] };
+  }
+
+  const cv = cvDocument as Record<string, any>;
+  const sections = Array.isArray(cv.sections) ? cv.sections : [];
+  const rawTextParts: string[] = [];
+  const skills: unknown[] = [];
+  const experience: Array<{
+    company: string;
+    title: string;
+    startDate?: string | number | null;
+    endDate?: string | number | null;
+    description?: string;
+  }> = [];
+  let summary = compactScoringText(extractTextFromRichValue(cv.summary)) || undefined;
+
+  for (const section of sections) {
+    if (!section || typeof section !== "object") {
+      continue;
+    }
+
+    const sectionRecord = section as Record<string, any>;
+    const sectionText = extractSectionText(sectionRecord);
+    if (sectionText) {
+      rawTextParts.push(sectionText);
+    }
+
+    if (sectionRecord.type === "summary" && !summary) {
+      summary = extractSummarySectionText(sectionRecord) || undefined;
+    }
+
+    if (sectionRecord.type === "skills") {
+      let foundStructuredSkills = false;
+      if (Array.isArray(sectionRecord.structuredContent)) {
+        for (const item of sectionRecord.structuredContent) {
+          if (item && typeof item === "object") {
+            skills.push((item as Record<string, unknown>).name ?? item);
+            foundStructuredSkills = true;
+          } else {
+            skills.push(item);
+            foundStructuredSkills = true;
+          }
+        }
+      }
+      if (!foundStructuredSkills && sectionText) {
+        skills.push(...sectionText.split(/[,•\n]/g));
+      }
+    }
+
+    if (
+      sectionRecord.type === "experience" &&
+      Array.isArray(sectionRecord.structuredContent)
+    ) {
+      for (const item of sectionRecord.structuredContent) {
+        if (!item || typeof item !== "object") {
+          continue;
+        }
+
+        const nextEntry = coerceCvExperienceEntry(item as Record<string, any>);
+        if (nextEntry) {
+          experience.push(nextEntry);
+        }
+      }
+    }
+  }
+
+  const raw_text = compactScoringText(rawTextParts.join("\n\n")) || undefined;
+
+  return {
+    ...(summary ? { summary } : {}),
+    skills: dedupeScoringStrings(skills),
+    experience,
+    ...(raw_text ? { raw_text } : {}),
+  };
+}
+
 export const get = internalQuery({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    return await ctx.db
-      .query("userProfiles")
-      .filter((q) => q.eq(q.field("clerkId"), identity.subject))
-      .first();
+    return await getPrimaryProfileForClerk(ctx, identity.subject);
   },
 });
 
@@ -50,10 +252,7 @@ export const upsert = internalMutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    const existing = await ctx.db
-      .query("userProfiles")
-      .filter((q) => q.eq(q.field("clerkId"), identity.subject))
-      .first();
+    const existing = await getPrimaryProfileForClerk(ctx, identity.subject);
 
     if (existing) {
       return ctx.db.patch(existing._id, {
@@ -86,6 +285,7 @@ export const patch = mutation({
         raw_text: v.optional(v.string()),
         linkedIn: v.optional(v.string()),
         skills: v.optional(v.array(v.string())),
+        keywords: v.optional(v.array(v.string())),
         experience: v.optional(
           v.array(
             v.object({
@@ -144,20 +344,63 @@ export const patch = mutation({
     // If no existing doc and profileId was provided, create a new draft document (autosave can create drafts).
     if (!existing && args.profileId) {
       const incoming: any = (args.profile as any) || {};
+      const patchPayload: any =
+        args.patch && typeof args.patch === "object" ? args.patch : {};
+      const cvScoringFields = buildScoringProfileFieldsFromCvDocument(
+        patchPayload.cvDocument ?? incoming.cvDocument,
+      );
+      const rawText =
+        patchPayload && Array.isArray(patchPayload.rawSections)
+          ? patchPayload.rawSections
+              .map((s: any) => String(s.content ?? ""))
+              .join("\n\n")
+          : (incoming.rawText ??
+            incoming.raw_text ??
+            patchPayload.rawText ??
+            patchPayload.raw_text ??
+            cvScoringFields.raw_text);
+      const summary =
+        incoming.summary ?? patchPayload.summary ?? cvScoringFields.summary;
+      const skills =
+        Array.isArray(incoming.skills) && incoming.skills.length > 0
+          ? incoming.skills
+          : Array.isArray(patchPayload.skills) && patchPayload.skills.length > 0
+            ? patchPayload.skills
+            : cvScoringFields.skills;
+      const experience =
+        Array.isArray(incoming.experience) && incoming.experience.length > 0
+          ? incoming.experience
+          : Array.isArray(patchPayload.experience) &&
+              patchPayload.experience.length > 0
+            ? patchPayload.experience
+            : cvScoringFields.experience;
+      const explicitKeywords =
+        Array.isArray(incoming.keywords) && incoming.keywords.length > 0
+          ? incoming.keywords
+          : Array.isArray(patchPayload.keywords) && patchPayload.keywords.length > 0
+            ? patchPayload.keywords
+            : undefined;
       const doc: any = {
         profileId: args.profileId,
         clerkId: identity?.subject ?? undefined,
-        email: incoming.email ?? identity?.email ?? "",
+        email: incoming.email ?? patchPayload.email ?? identity?.email ?? "",
         achievements: incoming.achievements ?? [],
-        skills: incoming.skills ?? [],
-        languages: incoming.languages ?? [],
-        experience: incoming.experience ?? [],
-        education: incoming.education ?? [],
-        contact: incoming.contact ?? undefined,
-        name: incoming.name ?? identity?.name ?? undefined,
-        summary: incoming.summary ?? undefined,
+        skills,
+        keywords: resolveCanonicalProfileKeywordsForWrite({
+          nextKeywords: explicitKeywords,
+          summary,
+          skills,
+          experience,
+          rawText,
+        }),
+        languages: incoming.languages ?? patchPayload.languages ?? [],
+        experience,
+        education: incoming.education ?? patchPayload.education ?? [],
+        contact: incoming.contact ?? patchPayload.contact ?? undefined,
+        name: incoming.name ?? patchPayload.name ?? identity?.name ?? undefined,
+        summary,
         idempotencyKeys: Array.isArray(incoming.idempotencyKeys) ? incoming.idempotencyKeys : [],
-        preferences: args.patch?.preferences ?? incoming.preferences ?? {
+        preferences: patchPayload.preferences ?? incoming.preferences ?? {
           autoSend: false,
           rateLimits: undefined,
           tonePreference: "neutral",
@@ -169,23 +412,20 @@ export const patch = mutation({
       };
 
       const initialMetadata = canonicalizeUserProfileMetadata(
-        args.patch?.metadata ?? incoming.metadata,
+        patchPayload.metadata ?? incoming.metadata,
       );
       if (initialMetadata !== undefined) {
         doc.metadata = initialMetadata;
       }
 
-      if (args.patch?.cvDocument !== undefined) {
-        doc.cvDocument = args.patch.cvDocument;
+      if (patchPayload.cvDocument !== undefined) {
+        doc.cvDocument = patchPayload.cvDocument;
       } else if (incoming.cvDocument !== undefined) {
         doc.cvDocument = incoming.cvDocument;
       }
 
-      // If autosave sent rich `rawSections`, convert to a single raw_text field to match the table schema.
-      if (args.patch && Array.isArray(args.patch.rawSections)) {
-        doc.raw_text = args.patch.rawSections.map((s: any) => String(s.content ?? "")).join("\n\n");
-      } else if (incoming.rawText || incoming.raw_text) {
-        doc.raw_text = incoming.rawText ?? incoming.raw_text;
+      if (rawText) {
+        doc.raw_text = rawText;
       }
 
       const convexId = await ctx.db.insert("userProfiles", doc as any);
@@ -209,6 +449,7 @@ export const patch = mutation({
 
       if (args.profile.summary !== undefined) updates.summary = args.profile.summary;
       if (args.profile.skills !== undefined) updates.skills = args.profile.skills;
+      if (args.profile.keywords !== undefined) updates.keywords = args.profile.keywords;
       if (args.profile.experience !== undefined) updates.experience = args.profile.experience;
       if (args.profile.education !== undefined) updates.education = args.profile.education;
       if (args.profile.name !== undefined) updates.name = args.profile.name;
@@ -227,6 +468,14 @@ export const patch = mutation({
         updates.metadata = md;
       }
 
+      updates.keywords = resolveCanonicalProfileKeywordsForWrite({
+        nextKeywords: args.profile.keywords,
+        summary: updates.summary ?? existing.summary,
+        skills: updates.skills ?? existing.skills,
+        experience: updates.experience ?? existing.experience,
+        rawText: updates.raw_text ?? existing.raw_text,
+      });
+
       return ctx.db.patch(existing._id, updates);
     }
 
@@ -240,6 +489,7 @@ export const patch = mutation({
         "rawText",
         "email",
         "skills",
+        "keywords",
         "languages",
         "contact",
         "experience",
@@ -262,6 +512,38 @@ export const patch = mutation({
           if (key === "rawText") updates.raw_text = args.patch[key];
           else updates[key] = args.patch[key];
         }
+      }
+
+      const cvScoringFields = buildScoringProfileFieldsFromCvDocument(
+        args.patch.cvDocument,
+      );
+      if (
+        updates.summary === undefined &&
+        !compactScoringText(existing.summary ?? "") &&
+        cvScoringFields.summary
+      ) {
+        updates.summary = cvScoringFields.summary;
+      }
+      if (
+        updates.skills === undefined &&
+        (existing.skills?.length ?? 0) === 0 &&
+        cvScoringFields.skills.length > 0
+      ) {
+        updates.skills = cvScoringFields.skills;
+      }
+      if (
+        updates.experience === undefined &&
+        (existing.experience?.length ?? 0) === 0 &&
+        cvScoringFields.experience.length > 0
+      ) {
+        updates.experience = cvScoringFields.experience;
+      }
+      if (
+        updates.raw_text === undefined &&
+        !compactScoringText(existing.raw_text ?? "") &&
+        cvScoringFields.raw_text
+      ) {
+        updates.raw_text = cvScoringFields.raw_text;
       }
 
       if (identity && !existing.clerkId) {
@@ -293,6 +575,16 @@ export const patch = mutation({
         delete md.authoritativeResume;
         updates.metadata = md;
       }
+
+      updates.keywords = resolveCanonicalProfileKeywordsForWrite({
+        nextKeywords: Array.isArray(args.patch.keywords)
+          ? args.patch.keywords
+          : undefined,
+        summary: updates.summary ?? existing.summary,
+        skills: updates.skills ?? existing.skills,
+        experience: updates.experience ?? existing.experience,
+        rawText: updates.raw_text ?? existing.raw_text,
+      });
 
       return ctx.db.patch(existing._id, updates);
     }
@@ -337,6 +629,7 @@ export const saveProfile = mutation({
       email: incoming.email ?? "",
       summary: incoming.summary ?? undefined,
       skills: dedupeStrings(incoming.skills),
+      keywords: dedupeStrings(incoming.keywords),
       languages: dedupeStrings(incoming.languages),
       contact: incoming.contact ?? undefined,
       experience: incoming.experience ?? [],
@@ -366,6 +659,22 @@ export const saveProfile = mutation({
         languages: (normalizedProfile.languages && normalizedProfile.languages.length > 0) ? normalizedProfile.languages : (existing.languages ?? []),
         contact: normalizedProfile.contact ?? existing.contact ?? undefined,
         skills: (normalizedProfile.skills && normalizedProfile.skills.length > 0) ? normalizedProfile.skills : (existing.skills ?? []),
+        keywords: resolveCanonicalProfileKeywordsForWrite({
+          nextKeywords:
+            normalizedProfile.keywords && normalizedProfile.keywords.length > 0
+              ? normalizedProfile.keywords
+              : undefined,
+          summary: normalizedProfile.summary ?? existing.summary,
+          skills:
+            (normalizedProfile.skills && normalizedProfile.skills.length > 0)
+              ? normalizedProfile.skills
+              : (existing.skills ?? []),
+          experience:
+            (normalizedProfile.experience && normalizedProfile.experience.length > 0)
+              ? normalizedProfile.experience
+              : (existing.experience ?? []),
+          rawText: existing.raw_text,
+        }),
         experience: (normalizedProfile.experience && normalizedProfile.experience.length > 0) ? normalizedProfile.experience : (existing.experience ?? []),
         education: (normalizedProfile.education && normalizedProfile.education.length > 0) ? normalizedProfile.education : (existing.education ?? []),
         achievements: (normalizedProfile.achievements && normalizedProfile.achievements.length > 0) ? normalizedProfile.achievements : (existing.achievements ?? []),
@@ -391,6 +700,15 @@ export const saveProfile = mutation({
         ...(normalizedProfile.languages !== undefined && { languages: normalizedProfile.languages }),
         ...(normalizedProfile.contact !== undefined && { contact: normalizedProfile.contact }),
         skills: normalizedProfile.skills,
+        keywords: resolveCanonicalProfileKeywordsForWrite({
+          nextKeywords:
+            normalizedProfile.keywords.length > 0
+              ? normalizedProfile.keywords
+              : undefined,
+          summary: normalizedProfile.summary,
+          skills: normalizedProfile.skills,
+          experience: normalizedProfile.experience,
+        }),
         experience: normalizedProfile.experience,
         education: normalizedProfile.education,
         achievements: normalizedProfile.achievements,

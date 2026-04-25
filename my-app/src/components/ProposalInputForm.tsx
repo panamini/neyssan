@@ -28,8 +28,8 @@ import {
 import {
   buildAppProposalPersonalizationPayload,
   clearActiveLocalCvId,
-  formatCvDisplaySubtitle,
   getActiveLocalPersonalizationSource,
+  getLocalPersonalizationSourceByCvId,
   getLocalActiveCvSnapshotById,
   listLocalCvPickerOptions,
   setActiveLocalCvId,
@@ -44,7 +44,6 @@ import {
   type ProposalGenerationRequestPayload,
 } from "../lib/proposal-generation-request";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
-import { formatUiDate } from "../lib/ui-date";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import { getProposalSourceLabel } from "../lib/proposal-source-platforms";
@@ -70,6 +69,7 @@ import {
   type ProposalGenerateButtonVisualState,
 } from "./ProposalGenerateGlyph";
 import { buildProposalSourceSummary } from "../lib/proposal-source-summary";
+import { CvPickerCard } from "./cv/CvPickerCard";
 
 interface ProposalInputFormProps {
   onSubmit: (
@@ -89,6 +89,7 @@ interface ProposalInputFormProps {
   onValuesChange?: (values: FormValues) => void;
   prefill?: {
     handoffId: string;
+    jobId?: string;
     jobTitle: string;
     jobDescription: string;
     sourceUrl?: string;
@@ -106,6 +107,7 @@ interface ProposalInputFormProps {
   /** Optional external tone source used by workspace-level toolbars. */
   externalVoicePreset?: FormValues["voicePreset"] | null;
   onActiveCvChange?: (cvId: string | null) => void;
+  activeCvId?: string | null;
   headerLabel?: string | null;
   headerAction?: React.ReactNode;
   jobDescriptionPlaceholder?: string;
@@ -113,6 +115,7 @@ interface ProposalInputFormProps {
   onGenerateControlChange?: (control: ProposalGenerateControl | null) => void;
   sourceUrl?: string | null;
   sourcePlatform?: string | null;
+  canonicalJobId?: string | null;
 }
 
 export type ProposalGenerateControl = {
@@ -136,8 +139,8 @@ const DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE =
 
 const VISIBLE_MODEL_OPTIONS = [{ value: "chatgpt", label: "ChatGPT" }] as const;
 const VISIBLE_PROPOSAL_TYPE_OPTIONS = [
-  { value: "cover_letter", label: "Cover Letter" },
-  { value: "freelance_proposal", label: "Freelance Proposal" },
+  { value: "cover_letter", label: "Cover letter" },
+  { value: "freelance_proposal", label: "Freelance proposal" },
 ] as const;
 
 const TONE_OPTIONS: Array<{
@@ -165,7 +168,7 @@ const TONE_OPTIONS: Array<{
 const AUTO_TONE_OPTION = {
   id: null,
   uiLabel: getVoicePresetDisplayLabel(null),
-  description: "Adapt the tone to the client and context.",
+  description: "Auto-fit to the client.",
 } as const;
 
 const VISIBLE_TONE_OPTION_IDS = new Set<ProposalVoicePreset>(
@@ -307,13 +310,15 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   suppressToneControls = false,
   externalVoicePreset,
   onActiveCvChange,
+  activeCvId,
   headerLabel = null,
   headerAction = null,
-  jobDescriptionPlaceholder = "Paste or write the job offer here…",
+  jobDescriptionPlaceholder = "Paste job offer",
   initialComposeDraft = null,
   onGenerateControlChange,
   sourceUrl: liveSourceUrl = null,
   sourcePlatform: liveSourcePlatform = null,
+  canonicalJobId = null,
 }) => {
   const navigate = useNavigate();
   const hasHeaderLabel = Boolean(headerLabel);
@@ -344,13 +349,16 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [, setVoicePresetSaveError] = React.useState<string | null>(null);
+  const hasControlledActiveCvId = activeCvId !== undefined;
   const [activeCvSource, setActiveCvSource] = React.useState(() =>
-    getActiveLocalPersonalizationSource(),
+    hasControlledActiveCvId
+      ? getLocalPersonalizationSourceByCvId(activeCvId)
+      : getActiveLocalPersonalizationSource(),
   );
   const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
   const [pendingCvId, setPendingCvId] = React.useState<string | null>(null);
   const [cvOptions, setCvOptions] = React.useState<LocalCvPickerOption[]>(() =>
-    listLocalCvPickerOptions(),
+    listLocalCvPickerOptions(hasControlledActiveCvId ? activeCvId : undefined),
   );
   const { loadCv } = useCvLibrary();
   const {
@@ -398,9 +406,15 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   );
 
   const refreshActiveCvState = React.useCallback(() => {
-    setActiveCvSource(getActiveLocalPersonalizationSource());
-    setCvOptions(listLocalCvPickerOptions());
-  }, []);
+    setActiveCvSource(
+      hasControlledActiveCvId
+        ? getLocalPersonalizationSourceByCvId(activeCvId)
+        : getActiveLocalPersonalizationSource(),
+    );
+    setCvOptions(
+      listLocalCvPickerOptions(hasControlledActiveCvId ? activeCvId : undefined),
+    );
+  }, [activeCvId, hasControlledActiveCvId]);
 
   const clearGenerateButtonTimers = React.useCallback(() => {
     for (const timerId of generateButtonTimersRef.current) {
@@ -848,7 +862,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     activeGenerationClientRunIdRef.current = clientRunId;
     stopRequestedRunIdRef.current = null;
 
-    const currentActiveCvSource = getActiveLocalPersonalizationSource();
+    const currentActiveCvSource = hasControlledActiveCvId
+      ? getLocalPersonalizationSourceByCvId(activeCvId)
+      : getActiveLocalPersonalizationSource();
     const hasCandidateContext = Boolean(
       currentActiveCvSource.personalizationContext,
     );
@@ -867,6 +883,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         ...buildProposalGenerationRequest(
           normalizedValues,
           buildAppProposalPersonalizationPayload(currentActiveCvSource),
+          undefined,
+          canonicalJobId,
         ),
         clientRunId,
       };
@@ -928,7 +946,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           });
         }
       } else {
-        const nextErrorMessage = "No proposal returned from the server.";
+        const nextErrorMessage = "Empty response. Try again.";
         setErrorMessage(nextErrorMessage);
         onError?.(nextErrorMessage, normalizedValues);
       }
@@ -970,10 +988,20 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   }
 
   function handleOpenCvPicker() {
-    const nextOptions = listLocalCvPickerOptions();
-    setActiveCvSource(getActiveLocalPersonalizationSource());
+    const nextOptions = listLocalCvPickerOptions(
+      hasControlledActiveCvId ? activeCvId : undefined,
+    );
+    setActiveCvSource(
+      hasControlledActiveCvId
+        ? getLocalPersonalizationSourceByCvId(activeCvId)
+        : getActiveLocalPersonalizationSource(),
+    );
     setCvOptions(nextOptions);
-    setPendingCvId(nextOptions.find((option) => option.isActive)?.id ?? null);
+    setPendingCvId(
+      activeCvId ??
+        nextOptions.find((option) => option.isActive)?.id ??
+        null,
+    );
     setCvPickerOpen(true);
   }
 
@@ -1016,7 +1044,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   );
 
   function handleSelectCv(id: string) {
-    setActiveLocalCvId(id);
+    if (!hasControlledActiveCvId) {
+      setActiveLocalCvId(id);
+    }
     refreshActiveCvState();
     setPendingCvId(id);
     setCvPickerOpen(false);
@@ -1025,11 +1055,17 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   }
 
   function handleClearCv() {
-    clearActiveLocalCvId();
+    if (!hasControlledActiveCvId) {
+      clearActiveLocalCvId();
+    }
     setCvPickerOpen(false);
     setPendingCvId(null);
     setActiveCvSource({ title: null, personalizationContext: null });
-    setCvOptions(listLocalCvPickerOptions());
+    setCvOptions(
+      listLocalCvPickerOptions(
+        hasControlledActiveCvId ? null : undefined,
+      ),
+    );
     lastSharedSnapshotSyncStateRef.current = "none";
     if (!canPersistProposalWorkspaceState) {
       onActiveCvChange?.(null);
@@ -1045,7 +1081,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   }
 
   function handleOpenCvInForge(id: string) {
-    setActiveLocalCvId(id);
+    if (!hasControlledActiveCvId) {
+      setActiveLocalCvId(id);
+    }
     loadCv(id);
     refreshActiveCvState();
     setPendingCvId(id);
@@ -1343,11 +1381,11 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       >
         <DialogContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Select the resume Proposal Forge should use for personalization.
+            Pick a resume to personalize the letter.
           </p>
           {cvOptions.length === 0 ? (
             <div className="border px-4 py-4 text-sm text-muted-foreground [background:var(--sf2)] [border-color:var(--color-border)] [border-radius:var(--radius-card)]">
-              No local resumes found yet. Create or import one in Resume.
+              No resumes. Create or import.
             </div>
           ) : (
             <div
@@ -1365,48 +1403,13 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                 const isSelected =
                   pendingCvId === option.id ||
                   (pendingCvId === null && option.isActive);
-                const chooserDateSource =
-                  option.updatedAt ?? option.createdAt ?? null;
-                const chooserDate = formatUiDate(chooserDateSource);
                 return (
-                  <button
+                  <CvPickerCard
                     key={option.id}
-                    type="button"
-                    className={clsx(
-                      "dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser dasti-doc-card--cv-library",
-                      isSelected && "dasti-doc-card--selected",
-                    )}
-                    aria-pressed={isSelected}
-                    onClick={() => setPendingCvId(option.id)}
-                  >
-                    <div className="dasti-doc-card__stack">
-                      <div className="dasti-doc-card__header">
-                        <div className="dasti-doc-card__title-frame">
-                          <h3 className="dasti-doc-card__title">
-                            {option.title}
-                          </h3>
-                        </div>
-                      </div>
-
-                      <div className="dasti-doc-card__meta">
-                        {formatCvDisplaySubtitle({
-                          title: option.title,
-                          profileName: option.profileName,
-                          desiredPosition: option.desiredPosition,
-                          email: option.email,
-                          linkedin: option.linkedin,
-                          website: option.website,
-                          phone: option.phone,
-                        }) || "Draft resume"}
-                      </div>
-
-                      <div className="dasti-doc-card__footer dasti-doc-card__footer--chooser dasti-doc-card__footer--stamp-only">
-                        <div className="dasti-doc-card__stamp">
-                          {chooserDate ?? ""}
-                        </div>
-                      </div>
-                    </div>
-                  </button>
+                    option={option}
+                    selected={isSelected}
+                    onSelect={setPendingCvId}
+                  />
                 );
               })}
             </div>
@@ -1451,7 +1454,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
               disabled={!pendingCvId}
             >
               <Check size={16} strokeWidth={1.9} aria-hidden />
-              <span>Confirm</span>
+              <span>Use resume</span>
             </button>
           </div>
         </DialogContent>
@@ -1496,7 +1499,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                             "dasti-proposal-title-input",
                             "dasti-proposal-title-input--with-header-action",
                           )}
-                          placeholder="Enter Job Title"
+                          placeholder="Job title"
                           autoComplete="off"
                         />
                         {headerAction}
@@ -1510,7 +1513,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                           styles.jobTitleField,
                           "dasti-proposal-title-input",
                         )}
-                        placeholder="Enter Job Title"
+                        placeholder="Job title"
                         autoComplete="off"
                       />
                     )}
@@ -1542,7 +1545,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                             <div className="dasti-proposal-source-summary__job-offer-row">
                               <div className="dasti-proposal-source-summary__job-offer-copy">
                                 <span className="dasti-proposal-source-summary__job-offer-kicker">
-                                  Job Offer
+                                  Job offer
                                 </span>
                                 {resolvedDraftSourceUrl ? (
                                   <a
@@ -1693,8 +1696,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                         </div>
                       ) : (
                         <p className="dasti-proposal-source-raw__collapsed-copy">
-                          The original job offer stays intact for generation and
-                          can be reopened here any time.
+                          Still saved. Expand to edit.
                         </p>
                       )}
                     </div>
@@ -1850,11 +1852,11 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                   >
                     {activeCvTitle ? (
                       <>
-                        Using <strong>{activeCvTitle}</strong> to personalize
-                        voice, details, and styling.
+                        Using <strong>{activeCvTitle}</strong> for tone and
+                        detail.
                       </>
                     ) : (
-                      "Attach a resume to pull in your experience, voice, and style before you generate."
+                      "No resume attached. Attach one to personalize."
                     )}
                   </div>
                 ) : null}
@@ -1904,12 +1906,12 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     {
                       value: "cover_letter",
                       label: "Letter",
-                      desc: "Cover letter for a job application",
+                      desc: "For a job application.",
                     },
                     {
                       value: "freelance_proposal",
                       label: "Proposal",
-                      desc: "Freelance proposal for a project",
+                      desc: "For a freelance project.",
                     },
                   ] as const
                 )

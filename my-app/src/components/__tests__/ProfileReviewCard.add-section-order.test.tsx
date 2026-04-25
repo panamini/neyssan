@@ -111,7 +111,7 @@ vi.mock("../SelectedBlockInspector", () => ({
 }));
 
 vi.mock("../StructuredUploadButton", () => ({
-  default: () => <button type="button">Import CV</button>,
+  default: () => <button type="button">Import resume</button>,
 }));
 
 vi.mock("../ImportWarningBanner", () => ({

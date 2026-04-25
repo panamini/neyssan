@@ -47,6 +47,15 @@ const APP_BASE_URL = resolveAppBaseUrl(
   process.env.PLASMO_PUBLIC_APP_BASE_URL ?? process.env.PLASMO_PUBLIC_CLERK_SYNC_HOST ?? ""
 );
 const AUTH_DEBUG_PREFIX = "[clerk-sync][background]";
+const SUPPORTED_EXTENSION_TAB_PATTERNS = [
+  "https://*.upwork.com/*",
+  "https://*.indeed.com/*",
+  "https://*.linkedin.com/*",
+  "https://*.ziprecruiter.com/*",
+  "https://*.ziprecruiter.fr/*",
+  "https://www.hellowork.com/fr-fr/emplois/*",
+  "https://*.hellowork.com/fr-fr/emplois/*",
+];
 
 type SessionSyncResult = {
   signedIn: boolean;
@@ -194,6 +203,36 @@ async function performBackgroundSessionSync(trigger: string) {
   return result;
 }
 
+async function refreshSupportedTabsAfterExtensionUpdate() {
+  if (!chrome.tabs?.query) {
+    return;
+  }
+
+  try {
+    const tabs = await chrome.tabs.query({ url: SUPPORTED_EXTENSION_TAB_PATTERNS });
+    for (const tab of tabs) {
+      if (typeof tab.id !== "number") {
+        continue;
+      }
+
+      chrome.tabs.reload(tab.id, {}, () => {
+        if (chrome.runtime.lastError) {
+          logAuthDebug("tab-reload-skipped", {
+            tabId: tab.id,
+            error: chrome.runtime.lastError.message,
+          });
+        }
+      });
+    }
+
+    logAuthDebug("supported-tabs-refreshed", { count: tabs.length });
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown supported-tab refresh error";
+    logAuthDebug("supported-tabs-refresh-error", { error: errorMessage });
+  }
+}
+
 (async () => {
   logAuthDebug("background-init", {
     syncHost: SYNC_HOST || null,
@@ -204,6 +243,10 @@ async function performBackgroundSessionSync(trigger: string) {
   const result = await performBackgroundSessionSync("initial-load");
   logAuthDebug("initial-convex-token-state", { hasConvexToken: Boolean(result.token) });
 })();
+
+chrome.runtime.onInstalled.addListener(() => {
+  void refreshSupportedTabsAfterExtensionUpdate();
+});
 
 setInterval(async () => {
   const result = await performBackgroundSessionSync("periodic-interval");
@@ -216,8 +259,11 @@ setInterval(async () => {
 interface JobData {
   platform: string;
   title: string;
+  company?: string;
+  location?: string;
   description?: string;
   url: string;
+  jobId?: string;
   proposalType?: ExtensionProposalType;
   formalityLevel?: "informal" | "formal" | "neutral";
   creativity?: "low" | "medium" | "high";
@@ -244,6 +290,8 @@ interface ActiveCvSnapshot {
 interface Message {
   action:
     | "generateProposal"
+    | "saveJob"
+    | "getJobSaveState"
     | "saveProposal"
     | "ingestProfile"
     | "openProposalForge"
@@ -277,6 +325,12 @@ interface Message {
   switch (message.action) {
     case "generateProposal":
       generateProposalHandler(message, sendResponse);
+      return true;
+    case "saveJob":
+      saveJobHandler(message, sendResponse);
+      return true;
+    case "getJobSaveState":
+      getJobSaveStateHandler(message, sendResponse);
       return true;
     case "saveProposal":
       saveProposalHandler(message, sendResponse);
@@ -348,6 +402,9 @@ async function generateProposalHandler(
     if (message.jobData?.creativity) {
       generateArgs.creativity = message.jobData.creativity;
     }
+    if (message.jobData?.jobId) {
+      generateArgs.jobId = message.jobData.jobId;
+    }
 
     if (!message.useCurrentCvContext) {
       generateArgs.personalizationMode = "explicit_only";
@@ -401,9 +458,98 @@ async function saveProposalHandler(
   }
 }
 
+async function saveJobHandler(
+  message: Message,
+  sendResponse: (response: {
+    success: boolean;
+    jobId?: string;
+    dedupeHit?: boolean;
+    parseStatus?: string;
+    reviewState?: string;
+    error?: string;
+  }) => void,
+) {
+  try {
+    currentToken = await requireCurrentSessionToken();
+    convex.setAuth(currentToken ?? "");
+
+    const jobData = message.jobData;
+    if (!jobData?.title || !jobData?.url) {
+      throw new Error("Missing job data for canonical save");
+    }
+
+    const result = await convex.mutation(
+      (api as any).jobsPublic.createOrReuseFromSource,
+      {
+        title: jobData.title,
+        company: jobData.company || "",
+        location: jobData.location || "",
+        rawDescription: jobData.description || "",
+        sourceUrl: jobData.url,
+        sourceType: jobData.platform || "manual",
+        applicationUrl: jobData.url,
+      },
+    );
+
+    sendResponse({
+      success: true,
+      jobId: result.jobId,
+      dedupeHit: result.dedupeHit,
+      parseStatus: result.parseStatus,
+      reviewState: result.reviewState,
+    });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Save job error:", errorMessage, error);
+    sendResponse({ success: false, error: errorMessage });
+  }
+}
+
+async function getJobSaveStateHandler(
+  message: Message,
+  sendResponse: (response: {
+    success: boolean;
+    jobId?: string;
+    parseStatus?: string;
+    reviewState?: string;
+    error?: string;
+  }) => void,
+) {
+  try {
+    currentToken = await requireCurrentSessionToken();
+    convex.setAuth(currentToken ?? "");
+
+    const jobId = message.jobData?.jobId;
+    if (!jobId) {
+      throw new Error("Missing jobId for job state lookup");
+    }
+
+    const job = await convex.query((api as any).jobsPublic.getById, { jobId });
+    if (!job) {
+      throw new Error("Saved job not found");
+    }
+
+    sendResponse({
+      success: true,
+      jobId,
+      parseStatus: job.parseStatus,
+      reviewState: job.reviewState,
+    });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Get job save state error:", errorMessage, error);
+    sendResponse({ success: false, error: errorMessage });
+  }
+}
+
 async function openProposalForgeHandler(
   message: Message,
-  sendResponse: (response: { success: boolean; error?: string }) => void
+  sendResponse: (response: {
+    success: boolean;
+    jobId?: string;
+    dedupeHit?: boolean;
+    error?: string;
+  }) => void
 ) {
   try {
     currentToken = await requireCurrentSessionToken();
@@ -414,16 +560,43 @@ async function openProposalForgeHandler(
     }
 
     convex.setAuth(currentToken ?? "");
-    const handoff = await convex.mutation((api as any).proposalHandoffs.create, {
-      jobTitle: jobData.title,
-      jobDescription: jobData.description || "",
-      sourceUrl: jobData.url,
-      platform: jobData.platform || "manual",
-    });
+    const saveResult = jobData.jobId
+      ? {
+          jobId: jobData.jobId,
+          dedupeHit: true,
+        }
+      : await convex.mutation((api as any).jobsPublic.createOrReuseFromSource, {
+          title: jobData.title,
+          company: jobData.company || "",
+          location: jobData.location || "",
+          rawDescription: jobData.description || "",
+          sourceUrl: jobData.url,
+          sourceType: jobData.platform || "manual",
+          applicationUrl: jobData.url,
+        });
 
-    const url = `${buildAppUrl("/proposal", APP_BASE_URL)}?handoffId=${encodeURIComponent(handoff.handoffId)}`;
+    const handoffResult = await convex.mutation(
+      ((api as any).proposalHandoffs?.create ?? "proposalHandoffs.create") as any,
+      {
+        jobTitle: jobData.title,
+        jobDescription: jobData.description || "",
+        sourceUrl: jobData.url,
+        platform: jobData.platform || "manual",
+      },
+    );
+
+    const params = new URLSearchParams({
+      jobId: saveResult.jobId,
+      handoffId: handoffResult.handoffId,
+      handoffToken: handoffResult.handoffToken,
+    });
+    const url = `${buildAppUrl("/proposal", APP_BASE_URL)}?${params.toString()}`;
     chrome.tabs.create({ url });
-    sendResponse({ success: true });
+    sendResponse({
+      success: true,
+      jobId: saveResult.jobId,
+      dedupeHit: Boolean(saveResult.dedupeHit),
+    });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Open Proposal Forge error:", errorMessage, error);

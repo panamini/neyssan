@@ -260,6 +260,7 @@ export default mutation({
       content?: string;
       sections?: Array<{ type: "text" | "code" | "image"; content: string }>;
       status?: string;
+      jobId?: string;
       metadata?: typeof proposal.metadata;
       updatedAt: number;
       version: number;
@@ -315,6 +316,7 @@ export default mutation({
         ...proposal.metadata,
         ...args.metadata,
       };
+      patch.jobId = args.metadata?.jobId ?? proposal.jobId;
     }
 
     await ctx.db.patch(args.id, patch);
