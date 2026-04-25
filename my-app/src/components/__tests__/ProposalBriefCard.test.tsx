@@ -86,6 +86,33 @@ describe("resolveProposalBriefCardTitle", () => {
     expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
   });
 
+  it("can hide the embedded header when the brief is shown inside another page header", () => {
+    render(
+      <MemoryRouter>
+        <ProposalBriefCard
+          sourceJobTitle="Operations Associate"
+          jobDescription="Raw job text"
+          summaryText="Operations role summary"
+          sourceUrl="https://www.linkedin.com/jobs/view/alpha"
+          sourcePlatform="linkedin"
+          showHeader={false}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "Operations Associate" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", {
+        name: "Open original job offer on LinkedIn",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Operations role summary"),
+    ).toBeInTheDocument();
+  });
+
   it("renders review cards with current suggested values and keeps review actions", () => {
     render(
       <MemoryRouter>

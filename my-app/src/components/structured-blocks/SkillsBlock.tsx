@@ -166,7 +166,7 @@ export function SkillsBlock({
         <button
           type="button"
           onClick={() => handleAdd(input)}
-          className="px-2 py-1 text-sm font-medium rounded [background:var(--ac)] [color:var(--op)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+          className="px-2 py-1 text-sm font-medium rounded [background:var(--ac)] [color:var(--color-on-accent)] hover:brightness-110 focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
           aria-label="Add skill"
         >
           <Plus size={14} />

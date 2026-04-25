@@ -13,7 +13,7 @@
   .border-bo  { border-color: var(--bo); }
   .border-bm  { border-color: var(--bm); }
   .bg-ac      { background-color: var(--ac); }
-  .text-op    { color: var(--op); }
+  .text-op    { color: var(--color-on-accent); }
   .text-ok    { color: var(--ok); }
   .text-okt   { color: var(--okt); }
   .bg-okb     { background-color: var(--okb); }
