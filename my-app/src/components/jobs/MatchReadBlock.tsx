@@ -195,7 +195,7 @@ export function MatchReadBlock({
                 className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
                 onClick={onRefreshMatch}
               >
-                Refresh Match
+                Refresh match
               </button>
             ) : null}
           </div>
@@ -334,7 +334,7 @@ export function MatchReadBlock({
                 className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
                 onClick={onRefreshMatch}
               >
-                Refresh Match
+                Refresh match
               </button>
             ) : null}
           </div>
@@ -386,7 +386,7 @@ export function MatchReadBlock({
               className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
               onClick={onRefreshMatch}
             >
-              Refresh Match
+              Refresh match
             </button>
           ) : null}
           <button
@@ -394,7 +394,7 @@ export function MatchReadBlock({
             className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
             onClick={() => setIsExpanded((current) => !current)}
           >
-            {isExpanded ? "Close Match" : "Open Match"}
+            {isExpanded ? "Close match" : "Open match"}
           </button>
         </div>
       </div>
