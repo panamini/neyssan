@@ -108,7 +108,16 @@ function formatReviewScore(score: JobMatchReview["score"]): string | null {
 function hasUsableMatchReview(
   matchReview: JobMatchReview | null | undefined,
 ): matchReview is JobMatchReview {
-  return Boolean(matchReview && matchReview.verdict !== "not_enough_signal");
+  if (!matchReview) {
+    return false;
+  }
+  if (matchReview.verdict === "not_enough_signal") {
+    return false;
+  }
+  if (matchReview.verdict === "probably_skip" && (matchReview.score ?? 0) <= 0) {
+    return false;
+  }
+  return true;
 }
 
 export function MatchReadBlock({

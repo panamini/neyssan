@@ -124,10 +124,8 @@ function buildMatchReview(
     score: 68,
     confidence: 0.72,
     one_liner:
-      "Possible lead: there is meaningful overlap, with a few requirements to confirm.",
-    why_this_may_interest_you: [
-      "Operations maps to profile evidence: recurring operations ownership.",
-    ],
+      "Possible lead: some overlap is visible, with a few checks left.",
+    why_this_may_interest_you: ["Operations overlaps."],
     watch_out: [],
     suggested_next_step: "apply",
     missing_or_unclear_requirements: [],
@@ -1202,11 +1200,11 @@ describe("JobsPage", () => {
         verdict: "possible_lead",
         score: 68,
         one_liner:
-          "Possible lead: strong operations overlap, with one requirement to confirm.",
+          "Possible lead: some overlap is visible, with a few checks left.",
         why_this_may_interest_you: [
-          "Operations maps to profile evidence: recurring operations ownership.",
-          "Coordination maps to profile evidence: cross-team planning.",
-          "Airtable maps to profile evidence: workflow tracking.",
+          "Operations overlaps.",
+          "Coordination overlaps.",
+          "Airtable overlaps.",
           "This fourth reason should stay hidden.",
         ],
         suggested_next_step: "apply",
@@ -1225,23 +1223,23 @@ describe("JobsPage", () => {
     expect(within(matchRegion).getByText("Possible lead · 68%")).toBeInTheDocument();
     expect(
       within(matchRegion).getByText(
-        "Possible lead: strong operations overlap, with one requirement to confirm.",
+        "Possible lead: some overlap is visible, with a few checks left.",
       ),
     ).toBeInTheDocument();
     expect(within(matchRegion).getByText("Apply")).toBeInTheDocument();
     expect(
       within(matchRegion).getByText(
-        "Operations maps to profile evidence: recurring operations ownership.",
+        "Operations overlaps.",
       ),
     ).toBeInTheDocument();
     expect(
       within(matchRegion).getByText(
-        "Coordination maps to profile evidence: cross-team planning.",
+        "Coordination overlaps.",
       ),
     ).toBeInTheDocument();
     expect(
       within(matchRegion).getByText(
-        "Airtable maps to profile evidence: workflow tracking.",
+        "Airtable overlaps.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -1257,8 +1255,8 @@ describe("JobsPage", () => {
         verdict: "possible_lead",
         score: 62,
         watch_out: [
-          "Guard card/license preferred: confirm you have this credential before applying.",
-          "Weekend availability: confirm the schedule works.",
+          "Guard card/license unclear.",
+          "Weekend availability is a check.",
           "This third watch-out should stay hidden.",
         ],
         suggested_next_step: "apply_if_requirement_true",
@@ -1285,12 +1283,12 @@ describe("JobsPage", () => {
     expect(within(matchRegion).getByText("Apply if true")).toBeInTheDocument();
     expect(
       within(matchRegion).getByText(
-        "Guard card/license preferred: confirm you have this credential before applying.",
+        "Guard card/license unclear.",
       ),
     ).toBeInTheDocument();
     expect(
       within(matchRegion).getByText(
-        "Weekend availability: confirm the schedule works.",
+        "Weekend availability is a check.",
       ),
     ).toBeInTheDocument();
     expect(

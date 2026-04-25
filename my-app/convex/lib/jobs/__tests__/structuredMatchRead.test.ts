@@ -196,6 +196,28 @@ function licenseOnlyShadowRow(requirementValue = "security guard license"): Stru
   };
 }
 
+type VisibleJobMatchReview = ReturnType<typeof buildJobMatchReviewFromStructuredDebug>;
+
+function visibleReviewText(review: VisibleJobMatchReview): string {
+  return [review.one_liner, ...review.why_this_may_interest_you, ...review.watch_out].join(
+    "\n",
+  );
+}
+
+function expectCompactReviewCopy(review: VisibleJobMatchReview): void {
+  expect(review.one_liner.length).toBeLessThanOrEqual(120);
+  for (const item of review.why_this_may_interest_you) {
+    expect(item.length).toBeLessThanOrEqual(80);
+  }
+  for (const item of review.watch_out) {
+    expect(item.length).toBeLessThanOrEqual(100);
+  }
+  expect(visibleReviewText(review)).not.toMatch(/maps to profile evidence/i);
+  expect(visibleReviewText(review)).not.toMatch(
+    /No concrete profile evidence was strong enough/i,
+  );
+}
+
 describe("structured match-read shadow scorer", () => {
   it("selects only current-policy valid non-fallback LLM extraction rows", () => {
     expect(
@@ -1402,6 +1424,7 @@ describe("structured match-read shadow scorer", () => {
       "incident response",
     );
     expect(review.watch_out.join("\n").toLowerCase()).toMatch(/guard card|license/);
+    expectCompactReviewCopy(review);
     expect(review.missing_or_unclear_requirements).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1418,6 +1441,218 @@ describe("structured match-read shadow scorer", () => {
         }),
       ]),
     );
+  });
+
+  it("compresses long raw evidence into short user-facing review copy", () => {
+    const longEvidence =
+      "Led customer intake, report writing, and follow-up coordination across multiple queues. " +
+      "This raw paragraph should not surface in the visible review.";
+
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "long_review_copy_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_long_review_copy",
+        summary: longEvidence,
+        experience: [
+          {
+            company: "Northwind",
+            title: "Operations Associate",
+            description: longEvidence,
+          },
+        ],
+        skills: ["customer service", "report writing"],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Operations role with customer contact and reporting.",
+            role_title_normalized: "Operations Associate",
+            requirements: [
+              { value: "customer service", type: "skill", required: true },
+              { value: "report writing", type: "skill", required: true },
+              { value: "coordination", type: "skill", required: true },
+            ],
+            keywords_canonical: ["customer service", "report writing", "coordination"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    const review = buildJobMatchReviewFromStructuredDebug(debug);
+
+    expect(review.verdict).toEqual(expect.stringMatching(/^(strong_lead|possible_lead)$/));
+    expectCompactReviewCopy(review);
+    expect(visibleReviewText(review)).not.toContain(longEvidence);
+    expect(review.why_this_may_interest_you.join(" ")).toContain("Customer service");
+    expect(review.why_this_may_interest_you.join(" ")).toContain("Report writing");
+  });
+
+  it("redacts email phone and UUID-like text from visible review copy", () => {
+    const piiBlob =
+      "alex@example.com +1 (415) 555-2671 123e4567-e89b-12d3-a456-426614174000";
+
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "pii_review_copy_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_pii_review_copy",
+        summary: piiBlob,
+        experience: [
+          {
+            company: "Metro Ops",
+            title: "Operations Associate",
+            description: `Handled intake, reporting, and follow-up. ${piiBlob}`,
+          },
+        ],
+        skills: ["customer service", "report writing"],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Customer-facing operations role.",
+            role_title_normalized: "Operations Associate",
+            requirements: [
+              { value: "customer service", type: "skill", required: true },
+              { value: "report writing", type: "skill", required: true },
+            ],
+            keywords_canonical: ["customer service", "report writing"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    const review = buildJobMatchReviewFromStructuredDebug(debug);
+    const visibleText = visibleReviewText(review);
+
+    expect(review.verdict).toEqual(expect.stringMatching(/^(strong_lead|possible_lead)$/));
+    expectCompactReviewCopy(review);
+    expect(visibleText).not.toContain("alex@example.com");
+    expect(visibleText).not.toContain("555-2671");
+    expect(visibleText).not.toContain("123e4567-e89b-12d3-a456-426614174000");
+  });
+
+  it("omits debug phrasing from visible review copy", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "debug_phrase_copy_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {
+        _id: "profile_debug_phrase_copy",
+        summary: "Protection guard with patrol and incident response experience.",
+        skills: ["incident response", "customer service"],
+      },
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Unarmed airport security guard role.",
+            role_title_normalized: "Unarmed Security Guard",
+            requirements: [
+              { value: "incident response", type: "skill", required: true },
+              { value: "customer service", type: "skill", required: true },
+              { value: "guard card/license preferred", type: "certification", required: false },
+            ],
+            keywords_canonical: ["incident response", "customer service"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: true,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    const review = buildJobMatchReviewFromStructuredDebug(debug);
+    const visibleText = visibleReviewText(review);
+
+    expectCompactReviewCopy(review);
+    expect(visibleText).not.toMatch(/maps to profile evidence/i);
+    expect(visibleText).not.toMatch(/No concrete profile evidence was strong enough/i);
+  });
+
+  it("returns not enough signal when profile evidence is missing", () => {
+    const debug = buildStructuredMatchReadDebug({
+      old: oldKithMatchRead(),
+      job: {
+        id: "missing_profile_review_regression",
+        rawLanguageDetected: "en",
+      },
+      profile: {},
+      shadowRows: [
+        {
+          ...validKithShadowRow,
+          llm_normalized_output: {
+            summary_short: "Operations role with customer contact.",
+            role_title_normalized: "Operations Associate",
+            requirements: [
+              { value: "customer service", type: "skill", required: true },
+              { value: "report writing", type: "skill", required: true },
+            ],
+            keywords_canonical: ["customer service", "report writing"],
+            licenses_or_certifications: [],
+            schedule_constraints: [],
+            environment: {
+              customer_facing: true,
+              onsite: true,
+              physical_standing: null,
+              retail: null,
+            },
+            confidence: "high",
+          },
+        },
+      ],
+      model: "mistral-small-latest",
+      promptVersion: "p9_v2",
+    });
+
+    const review = buildJobMatchReviewFromStructuredDebug(debug);
+
+    expect(review.verdict).toBe("not_enough_signal");
+    expect(review.one_liner).toContain("Not enough signal");
+    expect(review.one_liner).not.toContain("Probably skip");
+    expect(review.suggested_next_step).toBe("review_manually");
+    expect(review.why_this_may_interest_you).toEqual([]);
+    expect(review.watch_out).toEqual([]);
   });
 
   it("keeps standalone generic fragments out of structured missing requirements", () => {
