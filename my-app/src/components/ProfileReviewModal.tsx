@@ -175,10 +175,10 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
       setSuggestions(null);
       await handleSave(false);
       setReviewerVisible(false);
-      showToast("Applied remaining sections and saved — Undo available", { variant: "success" });
+      showToast("Applied. Undo available.", { variant: "success" });
     } catch (err) {
       setForm(prevForm);
-      showToast("Failed to apply remaining sections", { variant: "error" });
+      showToast("Apply failed.", { variant: "error" });
     }
   }, [cvState?.mappedSections, form, handleSave, setSuggestions, showToast, updateForm]);
 
@@ -189,7 +189,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
         setSuggestions(lastAppliedSnapshot.previousSuggestions);
       }
       setLastAppliedSnapshot(null);
-      showToast("Last change undone", { variant: "success" });
+      showToast("Undone.", { variant: "success" });
     }
   };
 

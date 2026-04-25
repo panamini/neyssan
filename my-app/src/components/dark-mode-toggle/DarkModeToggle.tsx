@@ -63,7 +63,7 @@ const DarkModeToggle = ({ compact = false }: DarkModeToggleProps) => {
         ) : (
           <Sun className="w-4 h-4" aria-hidden />
         )}
-        <span className="sr-only">Toggle Dark Mode</span>
+        <span className="sr-only">Toggle dark mode</span>
       </button>
     );
   }
@@ -89,7 +89,7 @@ const DarkModeToggle = ({ compact = false }: DarkModeToggleProps) => {
       ) : (
         <Sun className="dasti-theme-switch__glyph" aria-hidden />
       )}
-      <span className="sr-only">Toggle Dark Mode</span>
+      <span className="sr-only">Toggle dark mode</span>
     </button>
   );
 };

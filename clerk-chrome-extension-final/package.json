@@ -10,9 +10,9 @@
     "dev:local": "node ./scripts/run-plasmo-local.mjs dev",
     "build": "npm run build:prod",
     "build:local": "node ./scripts/run-plasmo-local.mjs build",
-    "build:prod": "npm run clean:build && plasmo build --target=chrome-mv3-prod && node ./scripts/prune-build-outputs.mjs chrome-mv3-prod",
+    "build:prod": "npm run clean:build && plasmo build --target=chrome-mv3-prod && node ./scripts/normalize-build-target.mjs chrome-mv3-prod && node ./scripts/prune-build-outputs.mjs chrome-mv3-prod",
     "package": "npm run package:prod",
-    "package:prod": "npm run build:prod && plasmo package --target=chrome-mv3-prod"
+    "package:prod": "npm run build:prod && node ./scripts/package-build-output.mjs chrome-mv3-prod"
   },
   "dependencies": {
     "@clerk/chrome-extension": "^2.2.10",

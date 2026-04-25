@@ -25,6 +25,7 @@ import {
 import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { useCvAiCapabilities } from "../hooks/use-cv-ai-capabilities";
+import { AI_UNAVAILABLE_TOAST } from "../lib/toast-copy";
 import {
   makeAffiliationItem,
   makeCertificationItem,
@@ -1107,7 +1108,7 @@ export default function SectionEditor({
       console.error(`[SectionEditor] ${actionLabel} failed`, error);
       const rawMessage =
         error instanceof Error ? error.message : String(error ?? "");
-      showToast("CV AI unavailable", {
+      showToast(AI_UNAVAILABLE_TOAST, {
         variant: "error",
         description: /ArgumentValidationError/i.test(rawMessage)
           ? "The CV AI backend schema is stale. Run `npx convex codegen` or restart `npx convex dev`, then reload the page."
@@ -1117,7 +1118,7 @@ export default function SectionEditor({
     [showToast],
   );
   const showCvAiRefreshToast = useCallback(() => {
-    showToast("CV AI unavailable", {
+    showToast(AI_UNAVAILABLE_TOAST, {
       variant: "warning",
       description: cvAiCapabilities.staleMessage,
     });
@@ -2578,7 +2579,7 @@ export default function SectionEditor({
             className="cv-section-heading cursor-pointer"
             onClick={() => openHobbiesModal()}
           >
-            {section.title}
+            {formatSectionDisplayTitle(section, { fallback: "Hobbies" })}
           </h3>
           <div className="flex items-center gap-1">
             {renderAiMenuTrigger({

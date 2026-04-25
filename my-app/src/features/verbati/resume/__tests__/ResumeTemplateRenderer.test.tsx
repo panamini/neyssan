@@ -95,6 +95,10 @@ function getRenderedCssVarNames(node: HTMLElement): string[] {
     .sort();
 }
 
+function isSelectedProjectItemId(value: string | null): value is string {
+  return typeof value === "string" && !value.endsWith(":description");
+}
+
 function repeatWords(label: string, count: number) {
   return Array.from({ length: count }, (_, index) => `${label}-${index + 1}`).join(" ");
 }
@@ -897,14 +901,14 @@ describe("ResumeTemplateRenderer", () => {
         '[data-preview-section="selected_projects"][data-preview-item-id]',
       ) ?? [],
       (node) => node.getAttribute("data-preview-item-id"),
-    ).filter((value): value is string => Boolean(value) && !value.endsWith(":description"));
+    ).filter(isSelectedProjectItemId);
     expect(
       Array.from(
         pages[plannedProjectPageIndices[1]]?.querySelectorAll(
           '[data-preview-section="selected_projects"][data-preview-item-id]',
         ) ?? [],
         (node) => node.getAttribute("data-preview-item-id"),
-      ).filter((value): value is string => Boolean(value) && !value.endsWith(":description")),
+      ).filter(isSelectedProjectItemId),
     ).toEqual(["project-tail-3", "project-tail-4"]);
     expect(renderedHeadPageProjectIds).toEqual(["project-tail-1", "project-tail-2"]);
     expect(
@@ -955,7 +959,7 @@ describe("ResumeTemplateRenderer", () => {
           '[data-preview-section="selected_projects"][data-preview-item-id]',
         ) ?? [],
         (node) => node.getAttribute("data-preview-item-id"),
-      ).filter((value): value is string => Boolean(value) && !value.endsWith(":description")),
+      ).filter(isSelectedProjectItemId),
     ).toEqual(["project-tail-1", "project-tail-2"]);
     expect(
       pages[projectPageIndex - 1]?.querySelector(
@@ -998,7 +1002,7 @@ describe("ResumeTemplateRenderer", () => {
           '[data-preview-section="selected_projects"][data-preview-item-id]',
         ) ?? [],
         (node) => node.getAttribute("data-preview-item-id"),
-      ).filter((value): value is string => Boolean(value) && !value.endsWith(":description")),
+      ).filter(isSelectedProjectItemId),
     ).toEqual(["project-tail-1", "project-tail-2"]);
     expect(
       pages[projectPageIndex - 1]?.querySelector(

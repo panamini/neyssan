@@ -86,6 +86,14 @@ vi.mock("../../lib/proposal-personalization", () => ({
   }),
   getLocalActiveCvSnapshotById: (id: string) =>
     id === "cv_alpha" ? { title: "Alex Martin Resume" } : null,
+  getLocalPersonalizationSourceByCvId: (id: string | null) => ({
+    title: id === "cv_alpha" ? "Alex Martin Resume" : null,
+    personalizationContext: null,
+  }),
+  listLocalCvPickerOptions: () =>
+    mockAttachedCvId === "cv_alpha"
+      ? [{ id: "cv_alpha", title: "Alex Martin Resume", isActive: true }]
+      : [],
   getLocalCvDocumentById: (id: string) => (id === "cv_alpha" ? mockSourceCv : null),
   getProposalApplicantHeaderData: () => ({
     name: "Alex Martin",
@@ -231,7 +239,7 @@ describe("ProposalForge save to library", () => {
       proposalDocumentTitle: "Operations Associate saved",
     });
     expect(mockShowToast).toHaveBeenCalledWith(
-      "Saved to library",
+      "Saved.",
       expect.objectContaining({
         variant: "success",
       }),

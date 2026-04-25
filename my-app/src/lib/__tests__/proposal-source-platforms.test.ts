@@ -22,7 +22,7 @@ describe("proposal source platforms", () => {
 
   it("keeps the install CTA centralized", () => {
     expect(PROPOSAL_EXTENSION_INSTALL_LINK.label).toBe(
-      "Install TwoWeeks extension",
+      "Install extension",
     );
     expect(PROPOSAL_EXTENSION_INSTALL_LINK.href).toBe(
       "https://chromewebstore.google.com/",

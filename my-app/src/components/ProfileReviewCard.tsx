@@ -853,7 +853,7 @@ export function ProfileReviewCard({
       {
         value: "additional_information",
         label: ADDITIONAL_INFORMATION_SECTION_TITLE,
-        description: "Extra details and references",
+        description: "Extras and references",
         sectionType: "text",
         sectionTitle: ADDITIONAL_INFORMATION_SECTION_TITLE,
         removable: true,
@@ -861,7 +861,7 @@ export function ProfileReviewCard({
       {
         value: "affiliations",
         label: "Affiliations",
-        description: "Memberships and associations",
+        description: "Memberships and groups",
         sectionType: "text",
         sectionTitle: "Affiliations",
         removable: true,
@@ -869,7 +869,7 @@ export function ProfileReviewCard({
       {
         value: "hobbies",
         label: "Hobbies",
-        description: "Interests and personal activities",
+        description: "Interests and activities",
         sectionType: "text",
         sectionTitle: "Hobbies",
         removable: true,
@@ -877,7 +877,7 @@ export function ProfileReviewCard({
       {
         value: "custom",
         label: "Add your own",
-        description: "Create a custom titled section",
+        description: "Custom section title",
         sectionType: "text",
         isCustom: true,
         removable: true,
@@ -1108,16 +1108,16 @@ export function ProfileReviewCard({
     reorderSections(buildRecommendedSectionOrder(sections) as any);
   }, [reorderSections, sections]);
   const reviewChecksLabel = isImportReviewAcknowledged
-    ? "Review flagged fields again"
-    : "Review flagged fields";
+    ? "Review again"
+    : "Review flags";
   const recoveryEntryLabel = pendingRecoveryImport
-    ? "Close recovery workspace"
+    ? "Close recovery"
     : hasCompletedRecoverySession
-      ? "Reopen recovery workspace"
-      : "Resume recovery review";
+      ? "Reopen recovery"
+      : "Open recovery";
   const toolbarImportEntryLabel = hasPendingRecoveryEntryPoint
     ? recoveryEntryLabel
-    : "Review import changes";
+    : "Review import";
   const rawTextForCopy =
     coerceDebugPayloadText((latestStructuredPayload as any)?.rawText) ??
     coerceDebugPayloadText(
@@ -1386,7 +1386,7 @@ export function ProfileReviewCard({
       }
       return true;
     } catch {
-      pushToast("Failed to clear recovery");
+      pushToast("Clear failed.");
       return false;
     }
   }
@@ -1511,7 +1511,7 @@ export function ProfileReviewCard({
   function handleExportClick(format: ResumeExportRequest) {
     if (importSignals.length > 0 && !isImportReviewAcknowledged) {
       handleImportReviewEntryPoint();
-      pushToast("Review the flagged fields before exporting this CV.");
+      pushToast("Review flags first.");
       return;
     }
 
@@ -1527,7 +1527,7 @@ export function ProfileReviewCard({
     renameCv(renameTargetCvId, nextTitle);
     setRenameDraftTitle(nextTitle);
     setIsRenameDialogOpen(false);
-    pushToast("CV title updated");
+    pushToast("Renamed.");
   }
 
   async function importSectionsIntoFreshCv(
@@ -1535,14 +1535,14 @@ export function ProfileReviewCard({
     structured?: StructuredPayload | null,
   ) {
     if (!Array.isArray(updated) || updated.length === 0) {
-      pushToast("No importable sections were found");
+      pushToast("Nothing to import.");
       return;
     }
 
     const now = new Date().toISOString();
     const importedDoc: CvDocument = {
       id: uuidv4(),
-      title: deriveCvTitleFromSections(updated as any, "Imported CV"),
+      title: deriveCvTitleFromSections(updated as any, "Imported resume"),
       metadata: mergeImportedAuthoritativeResume(
         {
           createdAt: now,
@@ -1570,7 +1570,7 @@ export function ProfileReviewCard({
         openImportedTitleRenameDialog(importedDoc);
       }
     } catch {
-      pushToast("Failed to import CV");
+      pushToast("Import failed.");
     }
   }
 
@@ -1591,7 +1591,7 @@ export function ProfileReviewCard({
         id: uuidv4(),
         title: deriveCvTitleFromSections(
           args.updatedSections as any,
-          "Imported CV",
+          "Imported resume",
         ),
         metadata: mergeExplicitAuthoritativeResume(
           mergeImportedAuthoritativeResume(
@@ -1674,7 +1674,7 @@ export function ProfileReviewCard({
       }
       return true;
     } catch {
-      pushToast("Failed to apply reviewed import");
+      pushToast("Apply failed.");
       return false;
     }
   }
@@ -1876,12 +1876,12 @@ export function ProfileReviewCard({
     } catch {
       /* noop */
     }
-    pushToast("Import cancelled");
+    pushToast("Cancelled.");
   }
 
   async function discardRecoveryImport() {
     const didClear = await clearPersistedRecoverySession({
-      toastMessage: "Recovery cleared",
+      toastMessage: "Cleared.",
     });
     if (!didClear) return;
   }
@@ -2249,7 +2249,7 @@ export function ProfileReviewCard({
         (entry) => entry.value === String(optionValue ?? "").trim(),
       );
       if (!option) {
-        pushToast("Choose a section type to add");
+        pushToast("Pick a section.");
         return;
       }
       const type = option.sectionType;
@@ -2270,7 +2270,7 @@ export function ProfileReviewCard({
         (currentCv?.sections ?? sections).map((s) => String((s as any).type)),
       );
       if (typedSingletons.has(type) && existingTypes.has(type)) {
-        pushToast(`Section "${type}" already exists`);
+        pushToast(`"${type}" exists.`);
         return;
       }
 
@@ -2282,7 +2282,7 @@ export function ProfileReviewCard({
               ?.trim() ?? ""
           : String(option.sectionTitle ?? "").trim();
         if (!requestedTitle) {
-          pushToast("Section name is required");
+          pushToast("Name required.");
           return;
         }
         const existingTextTitles = new Set(
@@ -2295,7 +2295,7 @@ export function ProfileReviewCard({
             ),
         );
         if (existingTextTitles.has(requestedTitle.toLowerCase())) {
-          pushToast(`Section "${requestedTitle}" already exists`);
+          pushToast(`"${requestedTitle}" exists.`);
           return;
         }
         newSection = buildTextSection(requestedTitle);
@@ -2329,7 +2329,7 @@ export function ProfileReviewCard({
 
           let matched = tmpl.sections.find((s) => s.type === (type as any));
           if (!matched) {
-            pushToast(`Section type "${type}" is not available`);
+            pushToast(`"${type}" unavailable.`);
             return;
           }
 
@@ -2339,7 +2339,7 @@ export function ProfileReviewCard({
           // If template generation fails, fail safely instead of creating a legacy text section.
           // eslint-disable-next-line no-console
           console.error("[ProfileReviewCard] generateCvTemplate failed", err);
-          pushToast("Failed to create section");
+          pushToast("Create failed.");
           return;
         }
       }
@@ -2352,13 +2352,13 @@ export function ProfileReviewCard({
       } else {
         addSection(newSection);
       }
-      pushToast(`${newSection.title || option.label} added`);
+      pushToast("Added.");
       setRecentlyAddedSectionType(option.value);
       setIsManageSectionsMenuOpen(false);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[ProfileReviewCard] addSection failed", err);
-      pushToast("Failed to add section");
+      pushToast("Add failed.");
     }
   }
 
@@ -2367,7 +2367,7 @@ export function ProfileReviewCard({
       removableAddedSections.map((section) => section.sectionId),
     );
     if (removableSectionIds.size === 0) {
-      pushToast("No added sections to remove");
+      pushToast("Nothing to remove.");
       return;
     }
 
@@ -2376,25 +2376,25 @@ export function ProfileReviewCard({
     );
 
     if (nextSections.length === sections.length) {
-      pushToast("No added sections to remove");
+      pushToast("Nothing to remove.");
       return;
     }
 
     if (nextSections.length === 0) {
-      pushToast("Core sections must remain in the CV");
+      pushToast("Core sections are required.");
       return;
     }
 
     reorderSections(nextSections as any);
     setIsManageSectionsMenuOpen(false);
     setRecentlyAddedSectionType("");
-    pushToast("Added sections removed");
+    pushToast("Removed.");
   }
 
   function handleRemoveAddedSection(sectionId: string) {
     const normalizedSectionId = String(sectionId ?? "").trim();
     if (!normalizedSectionId) {
-      pushToast("Choose a section to remove");
+      pushToast("Pick a section.");
       return;
     }
 
@@ -2403,7 +2403,7 @@ export function ProfileReviewCard({
     );
 
     if (nextSections.length === sections.length) {
-      pushToast("Section not found");
+      pushToast("Section not found.");
       return;
     }
 
@@ -2414,7 +2414,7 @@ export function ProfileReviewCard({
       removableAddedSections.find(
         (section) => section.sectionId === normalizedSectionId,
       )?.label ?? "Section";
-    pushToast(`${removedLabel} removed`);
+    pushToast(`${removedLabel} removed.`);
   }
 
   return (
@@ -2424,9 +2424,9 @@ export function ProfileReviewCard({
         currentTitle={renameDraftTitle}
         onClose={closeRenameDialog}
         onSave={handleRenameSave}
-        title="Rename CV"
-        placeholder="e.g. Jane Doe — Product Manager"
-        saveLabel="Save title"
+        title="Rename resume"
+        placeholder="Jane Doe — Product Manager"
+        saveLabel="Save"
       />
 
       {/* Always mount the inspector; it renders null when no selection to avoid mount/unmount churn */}
@@ -2483,7 +2483,7 @@ export function ProfileReviewCard({
                   Import review
                 </div>
                 <p className="dasti-inline-review__summary">
-                  Clean flagged parser noise here before generating proposals.
+                  Clean flagged fields before drafting.
                 </p>
               </div>
               <div className="dasti-inline-review__header-actions">
@@ -2495,7 +2495,7 @@ export function ProfileReviewCard({
                 >
                   {isImportReviewAcknowledged
                     ? "Review acknowledged"
-                    : "Review required before export"}
+                    : "Review required"}
                 </div>
                 <button
                   type="button"
@@ -2595,8 +2595,8 @@ export function ProfileReviewCard({
             <div className="dasti-inline-review__eyebrow">Import recovery</div>
             <div className="dasti-import-recovery__resume-title">
               {hasCompletedRecoverySession
-                ? `Recovery review saved — reopen ${resumableRecoveryItemCount} reviewed item${resumableRecoveryItemCount === 1 ? "" : "s"}`
-                : `Import review incomplete — ${resumableRecoveryItemCount} item${resumableRecoveryItemCount === 1 ? "" : "s"} pending`}
+                ? `Recovery saved. Reopen ${resumableRecoveryItemCount} reviewed.`
+                : `Review incomplete. ${resumableRecoveryItemCount} pending.`}
             </div>
           </div>
           <div className="dasti-import-recovery__resume-actions">
@@ -2715,11 +2715,10 @@ export function ProfileReviewCard({
           </div>
           <div>
             <h2 className="dasti-empty-state__title">
-              Import your existing CV or start from scratch.
+              No resume. Import or start fresh.
             </h2>
             <p className="dasti-empty-state__subtitle">
-              Bring in an existing resume, begin a clean draft, or open one from
-              the library before generating proposals.
+              Paste a file. Draft from zero. Open library.
             </p>
           </div>
           <div
@@ -2732,7 +2731,7 @@ export function ProfileReviewCard({
           >
             <StructuredUploadButton
               contextKey="cvforge-empty-state"
-              label="Import CV"
+              label="Import resume"
               onApplyToSections={(updated, structured) => {
                 void importSectionsIntoFreshCv(
                   updated,
@@ -2751,7 +2750,7 @@ export function ProfileReviewCard({
               }}
               className="dasti-button dasti-button--primary dasti-button--pill"
             >
-              Start from scratch
+              Start fresh
             </button>
             <button
               type="button"
@@ -2816,7 +2815,7 @@ export function ProfileReviewCard({
                   className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm"
                   onClick={handleResetOrganizeSectionsOrder}
                 >
-                  Reset to recommended/default order
+                  Reset order
                 </button>
               ) : null}
               {addableSectionOptions.length > 0 ||
@@ -2895,7 +2894,7 @@ export function ProfileReviewCard({
                       {removableAddedSections.length > 0 ? (
                         <>
                           <div className="dasti-add-section-menu__heading">
-                            Remove optional sections
+                            Remove sections
                           </div>
                           {removableAddedSections.map((section) => {
                             const sectionLabel = section.label;
@@ -2927,7 +2926,7 @@ export function ProfileReviewCard({
                               <div className="dasti-menu-option__row">
                                 <div className="dasti-menu-option__copy">
                                   <div className="dasti-menu-option__title">
-                                    Remove all optional sections
+                                    Remove all
                                   </div>
                                 </div>
                               </div>
@@ -2938,7 +2937,7 @@ export function ProfileReviewCard({
                       {addableSectionOptions.length === 0 &&
                       removableAddedSections.length === 0 ? (
                         <div className="dasti-add-section-menu__empty">
-                          All optional sections are already configured.
+                          All sections added.
                         </div>
                       ) : null}
                     </div>
@@ -3067,7 +3066,7 @@ export function ProfileReviewCard({
               >
                 <FileText size={24} strokeWidth={1.3} />
                 <span style={{ fontSize: "var(--ts)", fontWeight: 500 }}>
-                  No sections yet — add one below
+                  No sections. Add one below.
                 </span>
               </div>
             ) : isOrganizeSectionsMode ? (
@@ -3103,10 +3102,10 @@ export function ProfileReviewCard({
               >
                 <FileText size={24} strokeWidth={1.3} />
                 <span style={{ fontSize: "var(--ts)", fontWeight: 500 }}>
-                  All editable sections are hidden from the live preview.
+                  All sections hidden.
                 </span>
                 <span style={{ fontSize: "var(--text-body-sm-size)" }}>
-                  Open Organize sections to show them again.
+                  Open organize to show them.
                 </span>
               </div>
             ) : DISABLE_DND_FOR_DEBUG ? (

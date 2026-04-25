@@ -17,10 +17,22 @@ export const config: PlasmoContentScript = {
 interface JobData {
   platform: string;
   title: string;
+  company?: string;
+  location?: string;
   description?: string;
   url: string;
+  jobId?: string;
   proposalType?: "technical" | "creative" | "cover_letter" | "application_message" | "freelance_proposal";
 }
+
+type SavedJobState = {
+  jobId?: string;
+  dedupeHit?: boolean;
+  parseStatus: "parsing" | "parsed" | "failed";
+  reviewState?: string;
+  savedAt: number;
+  sourceTitle?: string;
+};
 
 interface ActiveCvSnapshot {
   title: string;
@@ -59,6 +71,84 @@ type ProfilePayload = {
 };
 
 const USE_CURRENT_CV_CONTEXT_STORAGE_KEY = "useCurrentCvContext";
+const SAVED_JOB_STATE_STORAGE_PREFIX = "neyssanSavedJobState:v1:";
+
+function buildSavedJobStateStorageKey(url: string): string {
+  return `${SAVED_JOB_STATE_STORAGE_PREFIX}${url}`;
+}
+
+function persistSavedJobState(url: string, state: SavedJobState) {
+  chrome.storage.local.set({
+    [buildSavedJobStateStorageKey(url)]: state,
+  });
+}
+
+function readSavedJobState(url: string): Promise<SavedJobState | null> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([buildSavedJobStateStorageKey(url)], (result) => {
+      resolve(result?.[buildSavedJobStateStorageKey(url)] ?? null);
+    });
+  });
+}
+
+function resolveSavedJobMessage(state: SavedJobState): {
+  kind: "error" | "success" | "info";
+  message: string;
+} {
+  if (state.parseStatus === "failed") {
+    return {
+      kind: "error",
+      message: "Job saved, but parsing failed. Open saved Job to review it.",
+    };
+  }
+
+  if (state.dedupeHit) {
+    return {
+      kind: "info",
+      message: "Already saved. Open saved Job to continue from the existing brief.",
+    };
+  }
+
+  if (state.reviewState === "ready") {
+    return {
+      kind: "success",
+      message: "Job saved. Ready for document generation.",
+    };
+  }
+
+  if (state.reviewState === "needs_review") {
+    return {
+      kind: "info",
+      message: "Job saved. Needs review before it becomes trusted.",
+    };
+  }
+
+  return {
+    kind: "info",
+    message: "Job saved. Parsing is still in progress.",
+  };
+}
+
+function reconcileSavedJobState(
+  currentState: SavedJobState,
+  response: {
+    jobId?: string;
+    parseStatus?: string;
+    reviewState?: string;
+  },
+): SavedJobState {
+  return {
+    ...currentState,
+    jobId: response.jobId ?? currentState.jobId,
+    parseStatus:
+      response.parseStatus === "failed"
+        ? "failed"
+        : response.parseStatus === "parsed"
+          ? "parsed"
+          : "parsing",
+    reviewState: response.reviewState ?? currentState.reviewState,
+  };
+}
 
 function Toast({ message, onClose }: { message: string | null; onClose: () => void }) {
   useEffect(() => {
@@ -146,10 +236,12 @@ export function ProposalPreview() {
   const [toast, setToast] = useState<string | null>(null);
   const [inlineStatus, setInlineStatus] = useState<{ kind: "error" | "success" | "info"; message: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingJob, setIsSavingJob] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isOpeningInApp, setIsOpeningInApp] = useState(false);
   const [activeCvSnapshot, setActiveCvSnapshot] = useState<ActiveCvSnapshot | null>(null);
   const [useCurrentCvContext, setUseCurrentCvContext] = useState(false);
+  const [savedJobState, setSavedJobState] = useState<SavedJobState | null>(null);
   const nextGenerateRunIdRef = useRef(0);
   const activeGenerateRunIdRef = useRef<number | null>(null);
   const isAuthSyncInFlightRef = useRef(false);
@@ -220,9 +312,83 @@ export function ProposalPreview() {
     proposalType === "cover_letter" || proposalType === "application_message";
 
   useEffect(() => {
+    let isActive = true;
+    void readSavedJobState(jobData.url).then((state) => {
+      if (!isActive) {
+        return;
+      }
+
+      setSavedJobState(state);
+      if (state?.jobId) {
+        setJobData((current) =>
+          current.url === jobData.url && current.jobId !== state.jobId
+            ? { ...current, jobId: state.jobId }
+            : current,
+        );
+        chrome.runtime.sendMessage(
+          {
+            action: "getJobSaveState",
+            jobData: {
+              ...jobData,
+              jobId: state.jobId,
+            },
+          },
+          (response) => {
+            if (!isActive || chrome.runtime.lastError || !response?.success) {
+              return;
+            }
+
+            const reconciledState = reconcileSavedJobState(state, response);
+            setSavedJobState(reconciledState);
+            persistSavedJobState(jobData.url, reconciledState);
+          },
+        );
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [jobData.url]);
+
+  useEffect(() => {
+    if (!savedJobState?.jobId || savedJobState.parseStatus !== "parsing") {
+      return;
+    }
+
+    let isActive = true;
+    const intervalId = window.setInterval(() => {
+      chrome.runtime.sendMessage(
+        {
+          action: "getJobSaveState",
+          jobData: {
+            ...jobData,
+            jobId: savedJobState.jobId,
+          },
+        },
+        (response) => {
+          if (!isActive || chrome.runtime.lastError || !response?.success) {
+            return;
+          }
+
+          const reconciledState = reconcileSavedJobState(savedJobState, response);
+          setSavedJobState(reconciledState);
+          persistSavedJobState(jobData.url, reconciledState);
+        },
+      );
+    }, 2500);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(intervalId);
+    };
+  }, [jobData, savedJobState]);
+
+  useEffect(() => {
     const platform = detectPlatform(window.location.href);
     let urlPollId: number | null = null;
     let scrapeRetryIds: number[] = [];
+    let authRetryIds: number[] = [];
     let mutationObserver: MutationObserver | null = null;
     let observerTimeoutId: number | null = null;
     let observerDebounceId: number | null = null;
@@ -296,6 +462,14 @@ export function ProposalPreview() {
       refreshActiveCvSnapshot();
     });
     syncAuthFromBackgroundSilently("content-mount");
+    authRetryIds = [300, 1000, 2500].map((delay) =>
+      window.setTimeout(() => {
+        void applyStoredAuthSnapshot().then(() => {
+          refreshActiveCvSnapshot();
+          syncAuthFromBackgroundSilently(`content-auth-retry-${delay}`);
+        });
+      }, delay),
+    );
 
     chrome.storage.local.get([USE_CURRENT_CV_CONTEXT_STORAGE_KEY], (result) => {
       setUseCurrentCvContext(Boolean(result?.[USE_CURRENT_CV_CONTEXT_STORAGE_KEY]));
@@ -350,6 +524,7 @@ export function ProposalPreview() {
       chrome.storage.onChanged.removeListener(updateAuth);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      authRetryIds.forEach((id) => window.clearTimeout(id));
       scrapeRetryIds.forEach((id) => window.clearTimeout(id));
       mutationObserver?.disconnect();
       if (observerTimeoutId !== null) {
@@ -448,6 +623,71 @@ export function ProposalPreview() {
     });
   };
 
+  const handleSaveJob = () => {
+    if (!jobData.title.trim() || !(jobData.description || "").trim()) {
+      showToast("Add a job title and description first.");
+      showInlineStatus("error", "Save job failed: add a title and description first.");
+      return;
+    }
+
+    const optimisticState: SavedJobState = {
+      jobId: jobData.jobId,
+      parseStatus: "parsing",
+      reviewState: "pending",
+      savedAt: Date.now(),
+      sourceTitle: jobData.title,
+    };
+
+    setIsSavingJob(true);
+    setSavedJobState(optimisticState);
+    persistSavedJobState(jobData.url, optimisticState);
+    showInlineStatus("info", "Job saved · Parsing…");
+
+    chrome.runtime.sendMessage({ action: "saveJob", jobData }, (response) => {
+      setIsSavingJob(false);
+      if (chrome.runtime.lastError) {
+        const err = getRuntimeErrorMessage();
+        const failedState: SavedJobState = {
+          ...optimisticState,
+          parseStatus: "failed",
+        };
+        setSavedJobState(failedState);
+        persistSavedJobState(jobData.url, failedState);
+        showToast(`Failed to save job: ${err}`);
+        showInlineStatus("error", `Save job failed: ${err}`);
+        return;
+      }
+
+      if (response && response.success && response.jobId) {
+        const nextState: SavedJobState = {
+          jobId: response.jobId,
+          dedupeHit: Boolean(response.dedupeHit),
+          parseStatus: response.parseStatus === "failed" ? "failed" : response.parseStatus === "parsed" ? "parsed" : "parsing",
+          reviewState: response.reviewState,
+          savedAt: Date.now(),
+          sourceTitle: jobData.title,
+        };
+        setJobData((current) => ({ ...current, jobId: response.jobId }));
+        setSavedJobState(nextState);
+        persistSavedJobState(jobData.url, nextState);
+        const status = resolveSavedJobMessage(nextState);
+        showToast(nextState.dedupeHit ? "Job already saved" : "Job saved");
+        showInlineStatus(status.kind, status.message);
+        return;
+      }
+
+      const err = response?.error || "Unknown error";
+      const failedState: SavedJobState = {
+        ...optimisticState,
+        parseStatus: "failed",
+      };
+      setSavedJobState(failedState);
+      persistSavedJobState(jobData.url, failedState);
+      showToast(`Failed to save job: ${err}`);
+      showInlineStatus("error", `Save job failed: ${err}`);
+    });
+  };
+
   const handleOpenInProposalForge = () => {
     setIsOpeningInApp(true);
     setInlineStatus(null);
@@ -460,8 +700,26 @@ export function ProposalPreview() {
         return;
       }
       if (response && response.success) {
-        showToast("Opened Proposal Forge");
-        showInlineStatus("success", "Opened Proposal Forge in a new tab.");
+        if (response.jobId) {
+          const nextState: SavedJobState = {
+            jobId: response.jobId,
+            dedupeHit: Boolean(response.dedupeHit),
+            parseStatus: savedJobState?.parseStatus ?? "parsing",
+            reviewState: savedJobState?.reviewState ?? "needs_review",
+            savedAt: Date.now(),
+            sourceTitle: jobData.title,
+          };
+          setJobData((current) => ({ ...current, jobId: response.jobId }));
+          setSavedJobState(nextState);
+          persistSavedJobState(jobData.url, nextState);
+        }
+        showToast(response?.dedupeHit ? "Opened saved Job" : "Opened Proposal Forge");
+        showInlineStatus(
+          "success",
+          response?.dedupeHit
+            ? "Opened saved Job in Proposal Forge."
+            : "Opened Job Brief in Proposal Forge.",
+        );
       } else {
         const err = response?.error || "Unknown error";
         showToast(`Failed to open Proposal Forge: ${err}`);
@@ -568,9 +826,15 @@ export function ProposalPreview() {
     }
   };
 
+  const primaryOpenLabel =
+    savedJobState?.jobId || jobData.jobId ? "Open saved Job" : "Open in Proposal Forge";
+  const savedJobPill = savedJobState
+    ? resolveSavedJobMessage(savedJobState)
+    : null;
+
   return (
     <>
-      <div id="proposal-preview-root" style={{ position: "fixed", bottom: "20px", right: "20px", width: "420px", padding: "18px", background: "white", border: "1px solid #e5e7eb", borderRadius: "10px", boxShadow: "0 8px 30px rgba(2,6,23,0.2)", zIndex: 99999, fontFamily: "inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto" }}>
+      <div id="proposal-preview-root" style={{ position: "fixed", bottom: "20px", right: "20px", width: "420px", padding: "18px", background: "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,250,252,0.98))", border: "1px solid rgba(148,163,184,0.26)", borderRadius: "14px", boxShadow: "0 18px 44px rgba(15,23,42,0.18)", zIndex: 99999, fontFamily: "'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif", backdropFilter: "blur(16px)" }}>
         <h3 style={{ margin: 0, marginBottom: 8, fontSize: 16 }}>Proposal Preview</h3>
         <div
           style={{
@@ -615,6 +879,39 @@ export function ProposalPreview() {
             </div>
           )}
         </div>
+
+        {savedJobPill ? (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: "10px 12px",
+              borderRadius: 10,
+              border:
+                savedJobPill.kind === "error"
+                  ? "1px solid #fecaca"
+                  : savedJobPill.kind === "success"
+                    ? "1px solid #bbf7d0"
+                    : "1px solid #bfdbfe",
+              background:
+                savedJobPill.kind === "error"
+                  ? "#fff7f7"
+                  : savedJobPill.kind === "success"
+                    ? "#f4fff7"
+                    : "#f5f9ff",
+              color:
+                savedJobPill.kind === "error"
+                  ? "#991b1b"
+                  : savedJobPill.kind === "success"
+                    ? "#166534"
+                    : "#1d4ed8",
+            }}
+          >
+            <div style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.72 }}>
+              Saved Job
+            </div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>{savedJobPill.message}</div>
+          </div>
+        ) : null}
 
         <div
           style={{
@@ -680,6 +977,25 @@ export function ProposalPreview() {
           </button>
 
           <button
+            onClick={handleSaveJob}
+            disabled={isSavingJob}
+            style={{
+              padding: "10px 14px",
+              background: savedJobState?.jobId ? "#ecfccb" : "#111827",
+              color: savedJobState?.jobId ? "#365314" : "white",
+              border: savedJobState?.jobId ? "1px solid #bef264" : "none",
+              borderRadius: 8,
+              cursor: isSavingJob ? "not-allowed" : "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8
+            }}
+            title="Save this job into the canonical Job object before generating documents"
+          >
+            {isSavingJob ? <Spinner /> : savedJobState?.jobId ? "Saved job" : "Save Job"}
+          </button>
+
+          <button
             onClick={handleOpenInProposalForge}
             disabled={isOpeningInApp}
             style={{
@@ -693,9 +1009,9 @@ export function ProposalPreview() {
               alignItems: "center",
               gap: 8
             }}
-            title="Open the scraped job in Proposal Forge to choose a CV and generate there"
+            title="Open this job in Proposal Forge to review the brief and generate documents"
           >
-            {isOpeningInApp ? <Spinner /> : "Open in Proposal Forge"}
+            {isOpeningInApp ? <Spinner /> : primaryOpenLabel}
           </button>
 
           <button
@@ -998,6 +1314,40 @@ function normalizeScrapedText(value: string | null | undefined): string | undefi
   return normalized || undefined;
 }
 
+function clampScrapedField(value: string | undefined, maxLength = 120): string | undefined {
+  const normalized = normalizeScrapedText(value);
+  if (!normalized) return undefined;
+  return normalized.slice(0, maxLength).trim() || undefined;
+}
+
+function sanitizeScrapedCompany(value: string | undefined): string | undefined {
+  const normalized = clampScrapedField(value, 120);
+  if (!normalized) return undefined;
+
+  const cleaned = normalized
+    .split("\n")[0]
+    .replace(/\s*[·•]\s*\d+(?:st|nd|rd|th)\+?\s*$/i, "")
+    .replace(/\s*[·•]\s*(?:followers?|follower)\b.*$/i, "")
+    .replace(/\s*[·•]\s*(?:reposted|easy apply|actively hiring|new)\b.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clampScrapedField(cleaned, 120);
+}
+
+function sanitizeScrapedLocation(value: string | undefined): string | undefined {
+  const normalized = clampScrapedField(value, 120);
+  if (!normalized) return undefined;
+
+  const cleaned = normalized
+    .split("\n")[0]
+    .replace(/\s*[·•]\s*(?:reposted|easy apply|actively hiring|new)\b.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clampScrapedField(cleaned, 120);
+}
+
 function textFromNode(node: Element | null): string | undefined {
   if (!node) return undefined;
   if (node instanceof HTMLMetaElement) {
@@ -1173,6 +1523,49 @@ function findJobPostingJsonLdRecord(): Record<string, unknown> | undefined {
   }
 
   return undefined;
+}
+
+function extractCompanyFromJobPosting(record: Record<string, unknown> | undefined): string | undefined {
+  if (!record) return undefined;
+  const hiringOrganization = record.hiringOrganization;
+  if (!hiringOrganization || typeof hiringOrganization !== "object") return undefined;
+  return sanitizeScrapedCompany(
+    typeof (hiringOrganization as Record<string, unknown>).name === "string"
+      ? ((hiringOrganization as Record<string, unknown>).name as string)
+      : undefined
+  );
+}
+
+function extractLocationFromJobPosting(record: Record<string, unknown> | undefined): string | undefined {
+  if (!record) return undefined;
+
+  const locationEntries = Array.isArray(record.jobLocation)
+    ? record.jobLocation
+    : record.jobLocation
+      ? [record.jobLocation]
+      : [];
+  const candidates: string[] = [];
+
+  for (const entry of locationEntries) {
+    if (!entry || typeof entry !== "object") continue;
+    const address =
+      typeof (entry as Record<string, unknown>).address === "object"
+        ? ((entry as Record<string, unknown>).address as Record<string, unknown>)
+        : (entry as Record<string, unknown>);
+    const formatted = [
+      typeof address.addressLocality === "string" ? address.addressLocality : undefined,
+      typeof address.addressRegion === "string" ? address.addressRegion : undefined,
+      typeof address.addressCountry === "string" ? address.addressCountry : undefined,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join(", ");
+    const location = sanitizeScrapedLocation(formatted);
+    if (location) {
+      candidates.push(location);
+    }
+  }
+
+  return candidates[0];
 }
 
 function isLikelySerializedAppStateText(text: string): boolean {
@@ -1422,6 +1815,7 @@ function pickBestIndeedDescriptionFallback(): string | undefined {
 }
 
 function scrapeIndeedJobData(): JobData {
+  const jobPosting = findJobPostingJsonLdRecord();
   const rawTitle =
     queryFirstMeaningfulText([
       'h1[data-testid="jobsearch-JobInfoHeader-title"]',
@@ -1446,10 +1840,29 @@ function scrapeIndeedJobData(): JobData {
     ], 120) ||
     findJobPostingJsonLdField("description") ||
     pickBestIndeedDescriptionFallback();
+  const company =
+    sanitizeScrapedCompany(
+      queryFirstMeaningfulText([
+        '[data-testid="inlineHeader-companyName"]',
+        '[data-testid="jobsearch-JobInfoHeader-companyName"]',
+        '[data-company-name="true"]',
+        '.jobsearch-InlineCompanyRating div:first-child',
+      ], 2),
+    ) || extractCompanyFromJobPosting(jobPosting);
+  const location =
+    sanitizeScrapedLocation(
+      queryFirstMeaningfulText([
+        '[data-testid="jobsearch-JobInfoHeader-companyLocation"]',
+        '[data-testid="inlineHeader-companyLocation"]',
+        '.jobsearch-JobInfoHeader-subtitle div',
+      ], 2),
+    ) || extractLocationFromJobPosting(jobPosting);
 
   return {
     platform: "indeed",
     title,
+    company,
+    location,
     description,
     url: window.location.href
   };
@@ -1514,6 +1927,7 @@ function pickBestLinkedInDescriptionFallback(): string | undefined {
 }
 
 function scrapeLinkedInJobData(): JobData {
+  const jobPosting = findJobPostingJsonLdRecord();
   const isRejected = (text: string) => isLikelyLinkedInShellText(text) || isLikelySerializedAppStateText(text);
   const title =
     queryFirstMeaningfulText([
@@ -1554,10 +1968,30 @@ function scrapeLinkedInJobData(): JobData {
     findContentNearHeading(["about the job", "job details"], 80, isRejected) ||
     findJobPostingJsonLdField("description") ||
     pickBestLinkedInDescriptionFallback();
+  const company =
+    sanitizeScrapedCompany(
+      queryFirstMeaningfulText([
+        ".job-details-jobs-unified-top-card__company-name a",
+        ".job-details-jobs-unified-top-card__company-name",
+        ".jobs-unified-top-card__company-name a",
+        ".jobs-unified-top-card__company-name",
+      ], 2),
+    ) || extractCompanyFromJobPosting(jobPosting);
+  const location =
+    sanitizeScrapedLocation(
+      queryFirstMeaningfulText([
+        ".job-details-jobs-unified-top-card__primary-description-container",
+        ".job-details-jobs-unified-top-card__primary-description",
+        ".jobs-unified-top-card__primary-description-container",
+        ".jobs-unified-top-card__subtitle-primary-grouping",
+      ], 2),
+    ) || extractLocationFromJobPosting(jobPosting);
 
   return {
     platform: "linkedin",
     title,
+    company,
+    location,
     description,
     url: window.location.href
   };
@@ -1901,12 +2335,6 @@ function scrapeZipRecruiterJobData(): JobData {
 
   const company = extractZipRecruiterCompanyFromJobPosting(jobPosting) || headerMeta.company;
   const location = extractZipRecruiterLocationFromJobPosting(jobPosting) || headerMeta.location;
-  const salary = extractZipRecruiterSalaryFromJobPosting(jobPosting) || headerMeta.salary;
-  const metadataLines = [
-    company ? `Company: ${company}` : undefined,
-    location ? `Location: ${location}` : undefined,
-    salary ? `Salary: ${salary}` : undefined
-  ].filter((value): value is string => Boolean(value));
 
   const body =
     queryFirstFilteredDescriptionText([
@@ -1927,15 +2355,13 @@ function scrapeZipRecruiterJobData(): JobData {
     cleanZipRecruiterDescriptionText(findJobPostingJsonLdField("description")) ||
     pickBestZipRecruiterDescriptionFallback();
 
-  const description = normalizeScrapedText(
-    [metadataLines.length ? metadataLines.join("\n") : undefined, cleanZipRecruiterDescriptionText(body)]
-      .filter((value): value is string => Boolean(value))
-      .join("\n\n")
-  ) || undefined;
+  const description = cleanZipRecruiterDescriptionText(body) || undefined;
 
   return {
     platform: "ziprecruiter",
     title,
+    company: sanitizeScrapedCompany(company),
+    location: sanitizeScrapedLocation(location),
     description,
     url: window.location.href
   };
@@ -2169,26 +2595,6 @@ function scrapeHelloWorkJobData(): JobData {
           }`
         )
       : undefined);
-  const contractType =
-    headerMeta.contractType ||
-    (typeof agentOffer?.ContractType === "string" ? normalizeScrapedText(agentOffer.ContractType) : undefined);
-  const salary =
-    headerMeta.salary ||
-    (typeof (((jobPosting?.baseSalary as Record<string, unknown> | undefined)?.value as Record<string, unknown> | undefined)?.value) === "string"
-      ? normalizeScrapedText(
-          `${(((jobPosting?.baseSalary as Record<string, unknown>).value as Record<string, unknown>).value as string)} ${
-            typeof (jobPosting?.salaryCurrency) === "string" ? (jobPosting.salaryCurrency as string) : ""
-          }`.trim()
-        )
-      : undefined);
-
-  const metadataLines = [
-    company ? `Entreprise: ${company}` : undefined,
-    location ? `Lieu: ${location}` : undefined,
-    contractType ? `Contrat: ${contractType}` : undefined,
-    salary ? `Salaire: ${salary}` : undefined
-  ].filter((value): value is string => Boolean(value));
-
   const scriptSections = [
     typeof agentOffer?.Description === "string"
       ? normalizeScrapedText(`Les missions du poste\n${agentOffer.Description}`)
@@ -2200,21 +2606,18 @@ function scrapeHelloWorkJobData(): JobData {
 
   const description =
     normalizeScrapedText(
-      [
-        metadataLines.length ? metadataLines.join("\n") : undefined,
-        domSections ||
-          (scriptSections.length ? scriptSections.join("\n\n") : undefined) ||
-          cleanHelloWorkDescriptionText(
-            typeof jobPosting?.description === "string" ? htmlToStructuredText(jobPosting.description) : undefined
-          )
-      ]
-        .filter((value): value is string => Boolean(value))
-        .join("\n\n")
+      domSections ||
+        (scriptSections.length ? scriptSections.join("\n\n") : undefined) ||
+        cleanHelloWorkDescriptionText(
+          typeof jobPosting?.description === "string" ? htmlToStructuredText(jobPosting.description) : undefined
+        )
     ) || undefined;
 
   return {
     platform: "hellowork",
     title,
+    company: sanitizeScrapedCompany(company),
+    location: sanitizeScrapedLocation(location),
     description,
     url: window.location.href
   };
@@ -2677,6 +3080,8 @@ function mergeJobData(current: JobData, next: JobData): JobData {
       next.title && next.title !== "Untitled"
         ? next.title
         : current.title,
+    company: sanitizeScrapedCompany(next.company) || sanitizeScrapedCompany(current.company),
+    location: sanitizeScrapedLocation(next.location) || sanitizeScrapedLocation(current.location),
     description:
       nextDescriptionScore >= currentDescriptionScore
         ? normalizeScrapedText(next.description) || current.description

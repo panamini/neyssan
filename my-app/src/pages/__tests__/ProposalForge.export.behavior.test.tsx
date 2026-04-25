@@ -238,18 +238,18 @@ describe("ProposalForge export behavior", () => {
         format: "pdf",
         mode: "styled",
         stylePreset: expect.objectContaining({
-          layout: "two-column",
-          typography: "mono-signal",
-          palette: "sauge",
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "pierre",
         }),
         data: expect.objectContaining({
           kind: "proposal",
           renderSource: "preview",
-          templateId: "two_column_rail",
+          templateId: "swiss_margin",
           stylePreset: expect.objectContaining({
-            layout: "two-column",
-            typography: "mono-signal",
-            palette: "sauge",
+            layout: "swiss",
+            typography: "quiet-editorial",
+            palette: "pierre",
           }),
         }),
       }),
@@ -406,7 +406,7 @@ describe("ProposalForge export behavior", () => {
       expect(exportButton).not.toBeDisabled();
     });
 
-    expect(showToastMock).toHaveBeenCalledWith("Exported Proposal - ATS.pdf", {
+    expect(showToastMock).toHaveBeenCalledWith("Exported.", {
       variant: "success",
     });
   });

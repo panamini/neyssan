@@ -6,7 +6,10 @@ import {
   canonicalizeUserProfileMetadata,
   userProfileMetadataValidator,
 } from "./lib/userProfileMetadata";
-import { getPrimaryProfileForClerk } from "./lib/userProfiles";
+import {
+  getPrimaryProfileForClerk,
+  resolveCanonicalProfileKeywordsForWrite,
+} from "./lib/userProfiles";
 
 const publicUserProfileValidator = v.object({
   _id: v.id("userProfiles"),
@@ -26,6 +29,7 @@ const publicUserProfileValidator = v.object({
   }),
   summary: v.optional(v.string()),
   skills: v.optional(v.array(v.string())),
+  keywords: v.optional(v.array(v.string())),
   experience: v.optional(
     v.array(
       v.object({
@@ -74,6 +78,7 @@ type UserProfile = {
   };
   summary?: string;
   skills?: string[];
+  keywords?: string[];
   experience?: {
     company: string;
     title: string;
@@ -150,6 +155,7 @@ function projectProfileDoc(prof: any): Exclude<UserProfile, null> {
     preferences: prof.preferences,
     summary: prof.summary ?? undefined,
     skills: prof.skills ?? undefined,
+    keywords: prof.keywords ?? undefined,
     experience: prof.experience ?? undefined,
     education: prof.education ?? undefined,
     linkedIn: prof.linkedIn ?? undefined,
@@ -245,6 +251,7 @@ export default mutation({
       // preserve LinkedIn/original URL separately
       linkedIn: v.optional(v.string()),
       skills: v.optional(v.array(v.string())),
+      keywords: v.optional(v.array(v.string())),
       experience: v.optional(
         v.array(
           v.object({
@@ -307,6 +314,14 @@ export default mutation({
     if (args.profile.metadata !== undefined) {
       updates.metadata = canonicalizeUserProfileMetadata(args.profile.metadata);
     }
+
+    updates.keywords = resolveCanonicalProfileKeywordsForWrite({
+      nextKeywords: args.profile.keywords,
+      summary: updates.summary ?? existing.summary,
+      skills: updates.skills ?? existing.skills,
+      experience: updates.experience ?? existing.experience,
+      rawText: updates.raw_text ?? existing.raw_text,
+    });
 
     await ctx.db.patch(existing._id, updates);
     return null;
