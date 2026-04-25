@@ -5,6 +5,7 @@ import {
   type NormalizedJobExtraction,
 } from "./jobExtractionSchema";
 import { PROMPT_VERSION, resolveJobExtractionModel } from "./llmExtractJob";
+import { isGenericRequirement } from "./normalizeJobExtraction";
 
 export type RequirementCategory =
   | "title"
@@ -117,6 +118,46 @@ export type StructuredMatchReadDebug = {
       };
 };
 
+export type JobMatchReviewVerdict =
+  | "strong_lead"
+  | "possible_lead"
+  | "weak_lead"
+  | "probably_skip"
+  | "not_enough_signal";
+
+export type JobMatchReviewSuggestedNextStep =
+  | "apply"
+  | "apply_if_requirement_true"
+  | "improve_profile_first"
+  | "skip"
+  | "review_manually";
+
+export type JobMatchReviewRequirementSeverity =
+  | "minor"
+  | "important"
+  | "blocking"
+  | "unclear";
+
+export type JobMatchReview = {
+  verdict: JobMatchReviewVerdict;
+  score: number;
+  confidence: number;
+  one_liner: string;
+  why_this_may_interest_you: string[];
+  watch_out: string[];
+  suggested_next_step: JobMatchReviewSuggestedNextStep;
+  missing_or_unclear_requirements: {
+    requirement: string;
+    severity: JobMatchReviewRequirementSeverity;
+    reason: string;
+  }[];
+  evidence: {
+    job_signal: string;
+    profile_signal: string;
+    explanation: string;
+  }[];
+};
+
 export type StructuredMatchReadShadowRow = {
   llm_normalized_output: unknown;
   validation_status?: string | null;
@@ -156,6 +197,13 @@ const METADATA_VALUES = new Set([
   "part-time",
   "full-time",
 ]);
+const STANDALONE_GENERIC_REQUIREMENT_FRAGMENTS = new Set([
+  "ability",
+  "lift",
+  "more",
+  "preferred",
+  "valid",
+]);
 
 const METADATA_TEXT_RE =
   /\b(equal opportunity|eeo|privacy|cookie|cookies|terms of use|all rights reserved|apply now|share this job|save job|posted \d+|people clicked apply|source platform|kith treats|kith brand|brand story|company culture|our culture|company mission|mission statement|join our team|great place to work|why join|who we are|about the job|about the role|compensation|benefits package|employee discount|perks?|status:|location:)\b/i;
@@ -164,6 +212,8 @@ const LOCATION_OR_COMP_RE =
 const SCHEDULE_RE = /\b(weekend|holiday|shift|schedule|availability|overnight|evening)\b/i;
 const PHYSICAL_RE = /\b(stand|standing|lift|lifting|walk|bending|twisting|climbing|physical|25lbs|pounds)\b/i;
 const WORK_AUTH_RE = /\b(work authorization|visa|authorized to work|sponsorship)\b/i;
+const SOFT_PROCESS_REQUIREMENT_RE =
+  /\b(attention to detail|detail[- ]oriented|follow(?:ing)? (?:style )?guides?|style guides?|accurately|accuracy|organized|self[- ]starter|fast[- ]paced|team player|positive attitude|reliable|dependable|work independently|multitask|multi-task|prioriti[sz]e|problem[- ]solving|adaptable|flexible|excellent communication|strong communication skills?)\b/i;
 const ENGLISH_TRANSLATION_RE =
   /\b(the role|this role|you will|you'll|will be responsible|requirements include|we are looking for|candidate will|must have|nice to have)\b/i;
 const FRENCH_SOURCE_SIGNAL_RE =
@@ -171,6 +221,8 @@ const FRENCH_SOURCE_SIGNAL_RE =
 const FRENCH_TO_ENGLISH_TRANSLATION_RE =
   /\b(customer support|support specialist|ticket management|incoming requests|fluent french|french fluency|customer-facing|tracking requests)\b/i;
 const PARTIAL_SCORE_THRESHOLD = 35;
+const DIRECTIONAL_ROLE_ALIGNMENT_SCORE_FLOOR = 24;
+const DIRECTIONAL_NARRATIVE_ALIGNMENT_SCORE_FLOOR = 16;
 const HIGH_UNKNOWN_COVERAGE_THRESHOLD = 0.4;
 const MIN_MATCHED_SCORABLE_FOR_CONFIDENT_TIER = 2;
 const TOKEN_STOP_WORDS = new Set([
@@ -211,9 +263,9 @@ function dedupeByValue<T extends { value: string; category?: string }>(values: T
 }
 
 function tokenize(value: string): string[] {
-  return (lowerCompact(value).match(/[a-z0-9+#./-]{3,}/g) ?? []).filter(
-    (token) => !TOKEN_STOP_WORDS.has(token),
-  );
+  return (lowerCompact(value).match(/[a-z0-9+#./-]{3,}/g) ?? [])
+    .map((token) => token.replace(/^[./-]+|[./-]+$/g, ""))
+    .filter((token) => token.length >= 3 && !TOKEN_STOP_WORDS.has(token));
 }
 
 function isMetadataValue(value: string): boolean {
@@ -224,6 +276,41 @@ function isMetadataValue(value: string): boolean {
     METADATA_TEXT_RE.test(normalized) ||
     /^[-\d\s$.,/hr]+$/.test(normalized)
   );
+}
+
+function isStandaloneGenericRequirementFragment(value: string): boolean {
+  const normalized = lowerCompact(value)
+    .replace(/[^a-z0-9+#./\s-]/g, " ")
+    .replace(/[-_/]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (STANDALONE_GENERIC_REQUIREMENT_FRAGMENTS.has(normalized)) {
+    return true;
+  }
+
+  const tokens = tokenize(value);
+  return (
+    tokens.length === 1 &&
+    STANDALONE_GENERIC_REQUIREMENT_FRAGMENTS.has(tokens[0] ?? "")
+  );
+}
+
+function isNonScorableRequirementValue(value: string): boolean {
+  return (
+    isMetadataValue(value) ||
+    isGenericRequirement(value) ||
+    isStandaloneGenericRequirementFragment(value)
+  );
+}
+
+function requirementImportanceForValue(
+  requirement: { required: boolean },
+  value: string,
+): JobRequirementEntity["importance"] {
+  if (SOFT_PROCESS_REQUIREMENT_RE.test(value)) {
+    return "supporting";
+  }
+  return requirement.required ? "required" : "preferred";
 }
 
 function violatesKnownLanguageSignal(args: {
@@ -403,7 +490,7 @@ function buildStructuredJobEntities(output: NormalizedJobExtraction): Structured
 
   output.requirements.forEach((requirement, index) => {
     const value = compactWhitespace(requirement.value);
-    if (isMetadataValue(value)) {
+    if (isNonScorableRequirementValue(value)) {
       return;
     }
 
@@ -428,7 +515,7 @@ function buildStructuredJobEntities(output: NormalizedJobExtraction): Structured
         id: `job-requirement-${index}`,
         category: categoryFromRequirementType(requirement.type, value),
         value,
-        importance: requirement.required ? "required" : "preferred",
+        importance: requirementImportanceForValue(requirement, value),
         confidence,
         section: "requirements",
       }),
@@ -436,7 +523,20 @@ function buildStructuredJobEntities(output: NormalizedJobExtraction): Structured
   });
 
   output.licenses_or_certifications.forEach((value, index) => {
-    if (isMetadataValue(value)) return;
+    if (isNonScorableRequirementValue(value)) return;
+    const normalizedCredential = lowerCompact(value);
+    const isAlreadyRepresented = requirements.some((requirement) => {
+      if (!["license", "certification"].includes(requirement.category)) {
+        return false;
+      }
+      const normalizedRequirement = lowerCompact(requirement.value);
+      return (
+        normalizedRequirement === normalizedCredential ||
+        normalizedRequirement.includes(normalizedCredential) ||
+        normalizedCredential.includes(normalizedRequirement)
+      );
+    });
+    if (isAlreadyRepresented) return;
     requirements.push(
       createJobRequirement({
         id: `job-license-certification-${index}`,
@@ -452,7 +552,7 @@ function buildStructuredJobEntities(output: NormalizedJobExtraction): Structured
   });
 
   output.schedule_constraints.forEach((value, index) => {
-    if (isMetadataValue(value)) return;
+    if (isNonScorableRequirementValue(value)) return;
     constraints.push(
       createJobConstraint({
         id: `job-schedule-${index}`,
@@ -539,6 +639,29 @@ function toStringList(values: unknown): string[] {
   }).filter(Boolean);
 }
 
+function toRichTextList(...values: unknown[]): string[] {
+  const result: string[] = [];
+
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (typeof value === "string" || typeof value === "number") {
+      const text = compactWhitespace(value);
+      if (text) result.push(text);
+      return;
+    }
+    if (value && typeof value === "object") {
+      const text = collectText(value);
+      if (text) result.push(text);
+    }
+  };
+
+  values.forEach(visit);
+  return result;
+}
+
 function pushEvidence(
   evidence: ProfileEvidenceEntity[],
   args: {
@@ -571,6 +694,23 @@ function pushEvidence(
     confidence: args.confidence,
     ...(args.dateRange ? { dateRange: args.dateRange } : {}),
   });
+}
+
+function inferSupportEvidenceCategory(
+  sourceSection: string,
+  value: string,
+): RequirementCategory {
+  const text = lowerCompact(value);
+  if (sourceSection === "publications") return "communication";
+  if (sourceSection === "additional_information" && hasCredentialSignal(text)) {
+    return /\blicen[cs]e|guard card|permit\b/i.test(text)
+      ? "license"
+      : "certification";
+  }
+  if (/\bcommunicat|customer|client|guest|visitor|crowd|stakeholder|presentation|writing|report\b/i.test(text)) {
+    return "communication";
+  }
+  return "skill";
 }
 
 function splitCoursework(value: unknown): string[] {
@@ -657,6 +797,13 @@ export function buildStructuredProfileEvidence(profile: unknown): ProfileEvidenc
   });
   pushEvidence(evidence, {
     category: "role_alignment",
+    value: profileRecord.summary ?? normalized.summaryFirstSentence ?? normalized.summary,
+    sourceSection: "summary",
+    source: profileRecord.summary ? "profile_field" : "cv_document",
+    confidence: 0.55,
+  });
+  pushEvidence(evidence, {
+    category: "skill",
     value: profileRecord.summary ?? normalized.summaryFirstSentence ?? normalized.summary,
     sourceSection: "summary",
     source: profileRecord.summary ? "profile_field" : "cv_document",
@@ -758,19 +905,50 @@ export function buildStructuredProfileEvidence(profile: unknown): ProfileEvidenc
   }
 
   for (const [section, values] of [
-    ["projects", profileRecord.projects ?? normalized.projects],
-    ["achievements", profileRecord.achievements ?? normalized.achievements],
-    ["awards", profileRecord.awards ?? normalized.awards],
-    ["publications", profileRecord.publications ?? normalized.publications],
-    ["volunteer", profileRecord.volunteer ?? normalized.volunteer ?? normalized.volunteering],
+    ["projects", [profileRecord.projects, normalized.projects]],
+    ["achievements", [profileRecord.achievements, normalized.achievements]],
+    ["awards", [profileRecord.awards, normalized.awards]],
+    ["publications", [profileRecord.publications, normalized.publications]],
+    ["volunteer", [profileRecord.volunteer, normalized.volunteer, normalized.volunteering]],
+    [
+      "affiliations",
+      [
+        profileRecord.affiliations,
+        profileRecord.professionalAffiliations,
+        profileRecord.memberships,
+        profileRecord.associations,
+        normalized.affiliations,
+        normalized.professionalAffiliations,
+        normalized.memberships,
+        normalized.associations,
+      ],
+    ],
+    [
+      "additional_information",
+      [
+        profileRecord.additional_information,
+        profileRecord.additionalInformation,
+        profileRecord.additionalInfo,
+        normalized.additional_information,
+        normalized.additionalInformation,
+        normalized.additionalInfo,
+      ],
+    ],
   ] as const) {
-    for (const value of toStringList(values)) {
+    for (const value of toRichTextList(values)) {
       pushEvidence(evidence, {
-        category: section === "publications" ? "communication" : "skill",
+        category: inferSupportEvidenceCategory(section, value),
         value,
         sourceSection: section,
         source: "cv_document",
-        confidence: 0.78,
+        confidence:
+          section === "projects"
+            ? 0.86
+            : section === "achievements"
+              ? 0.82
+              : section === "affiliations" || section === "additional_information"
+                ? 0.65
+                : 0.78,
       });
     }
   }
@@ -900,17 +1078,24 @@ function isStructuredCredentialEvidence(evidence: ProfileEvidenceEntity): boolea
 
 function credentialRoleTokens(requirement: JobRequirementEntity): string[] {
   const credentialWords = new Set([
+    "active",
+    "applicable",
+    "card",
     "certificate",
     "certification",
     "certified",
     "credential",
+    "current",
     "license",
     "licensed",
     "licence",
     "licenced",
     "permit",
+    "preferred",
     "program",
+    "required",
     "training",
+    "valid",
   ]);
   return tokenize(requirement.value).filter((token) => !credentialWords.has(token));
 }
@@ -990,6 +1175,30 @@ function synonymScore(requirement: JobRequirementEntity, evidence: ProfileEviden
   if (/\binvestigation|investigat/.test(requirementText) && /\binvestigat|interviewing/.test(evidenceText)) {
     return 0.75;
   }
+  if (
+    /\b(computer|tablet|device|basic computer)\b/.test(requirementText) &&
+    /\b(computer|tablet|smart devices?|cctv|app|equipment controls?|report(?:s|ing)?|recording information)\b/.test(evidenceText)
+  ) {
+    return 0.8;
+  }
+  if (
+    /\bcommunicat|communication skills?\b/.test(requirementText) &&
+    /\b(report writing|reports?|writing|interviewing|present(?:ing|ation)?|stakeholder|witness(?:es)?|signatures?|crisis intervention|de[- ]?escalation)\b/.test(evidenceText)
+  ) {
+    return 0.78;
+  }
+  if (
+    /\b(high school|diploma|equivalent|ged)\b/.test(requirementText) &&
+    /\b(bachelor|degree|college|university|criminal justice|high school|diploma|ged)\b/.test(evidenceText)
+  ) {
+    return 0.85;
+  }
+  if (
+    /\bcustomer service|customer-facing|guest|visitor\b/.test(requirementText) &&
+    /\b(customer service|customer-facing|client service|guest service|visitor support|front desk|hospitality|retail|sales|support|call center|cashier)\b/.test(evidenceText)
+  ) {
+    return 0.55;
+  }
   return 0;
 }
 
@@ -997,10 +1206,94 @@ function categoryCompatible(requirement: JobRequirementEntity, evidence: Profile
   if (requirement.category === evidence.category) return true;
   if (requirement.category === "license" && evidence.category === "certification") return true;
   if (requirement.category === "certification" && evidence.category === "education") return true;
-  if (requirement.category === "experience" && evidence.category === "title") return true;
-  if (requirement.category === "communication" && evidence.category === "skill") return true;
-  if (requirement.category === "skill" && evidence.category === "education") return true;
+  if (
+    requirement.category === "experience" &&
+    (evidence.category === "title" || evidence.sourceSection === "experience_description")
+  ) {
+    return true;
+  }
+  if (
+    requirement.category === "communication" &&
+    (evidence.category === "skill" ||
+      evidence.sourceSection === "experience_description" ||
+      evidence.sourceSection === "education" ||
+      evidence.sourceSection === "raw_text")
+  ) {
+    return true;
+  }
+  if (
+    requirement.category === "education" &&
+    (evidence.category === "education" ||
+      evidence.sourceSection === "summary" ||
+      evidence.sourceSection === "education" ||
+      evidence.sourceSection === "raw_text")
+  ) {
+    return true;
+  }
+  if (
+    requirement.category === "skill" &&
+    (evidence.category === "education" ||
+      evidence.sourceSection === "experience_description" ||
+      evidence.sourceSection === "raw_text")
+  ) {
+    return true;
+  }
+  if (
+    requirement.category === "tool" &&
+    (["skill", "experience", "education", "communication", "tool"].includes(evidence.category) ||
+      [
+        "skills",
+        "projects",
+        "experience_description",
+        "education",
+        "achievements",
+        "additional_information",
+      ].includes(evidence.sourceSection))
+  ) {
+    return true;
+  }
   return false;
+}
+
+function sourceSectionScoreCap(evidence: ProfileEvidenceEntity): number {
+  switch (evidence.sourceSection) {
+    case "experience_title":
+    case "experience_description":
+      return 0.95;
+    case "experience_company":
+      return 0.75;
+    case "certifications":
+      return 0.95;
+    case "skills":
+      return 0.86;
+    case "education":
+    case "education_field":
+    case "achievements":
+      return 0.82;
+    case "projects":
+      return 0.86;
+    case "languages":
+    case "awards":
+    case "publications":
+    case "volunteer":
+      return 0.78;
+    case "affiliations":
+    case "additional_information":
+      return 0.65;
+    case "summary":
+      return 0.55;
+    case "desired_position":
+    case "headline":
+      return 0.45;
+    case "raw_text":
+      return 0.65;
+    default:
+      return Math.max(0, Math.min(1, evidence.confidence));
+  }
+}
+
+function capEvidenceScore(score: number, evidence: ProfileEvidenceEntity): number {
+  return Math.min(score, sourceSectionScoreCap(evidence));
 }
 
 function evidenceScore(
@@ -1014,7 +1307,7 @@ function evidenceScore(
     hasStructuredCredentialEvidence: args.hasStructuredCredentialEvidence,
   });
   if (credentialScore !== null) {
-    return credentialScore;
+    return capEvidenceScore(credentialScore, evidence);
   }
 
   if (!categoryCompatible(requirement, evidence)) {
@@ -1025,7 +1318,10 @@ function evidenceScore(
   const evidenceTokens = new Set(tokenize(`${evidence.value} ${evidence.evidenceText}`));
   if (requirementTokens.length === 0) return 0;
   const overlap = requirementTokens.filter((token) => evidenceTokens.has(token)).length / requirementTokens.length;
-  return Math.max(overlap, synonymScore(requirement, evidence));
+  return capEvidenceScore(
+    Math.max(overlap, synonymScore(requirement, evidence)),
+    evidence,
+  );
 }
 
 function classifyOutcome(
@@ -1076,10 +1372,42 @@ function classifyOutcome(
   };
 }
 
+function directionalFitFloor(outcomes: StructuredOutcome[]): number {
+  const positiveSupporting = outcomes.filter(
+    (outcome) =>
+      outcome.requirement.importance === "supporting" &&
+      (outcome.outcome === "matched" || outcome.outcome === "partial") &&
+      outcome.evidence,
+  );
+
+  const hasConcreteRoleAlignment = positiveSupporting.some(
+    (outcome) =>
+      outcome.requirement.category === "title" &&
+      ["experience_title", "desired_position"].includes(
+        outcome.evidence?.sourceSection ?? "",
+      ),
+  );
+  if (hasConcreteRoleAlignment) {
+    return DIRECTIONAL_ROLE_ALIGNMENT_SCORE_FLOOR;
+  }
+
+  const hasNarrativeRoleAlignment = positiveSupporting.some(
+    (outcome) =>
+      outcome.requirement.category === "title" &&
+      ["headline", "summary"].includes(outcome.evidence?.sourceSection ?? ""),
+  );
+  if (hasNarrativeRoleAlignment) {
+    return DIRECTIONAL_NARRATIVE_ALIGNMENT_SCORE_FLOOR;
+  }
+
+  return 0;
+}
+
 function scoreOutcomes(outcomes: StructuredOutcome[]): number {
   const scored = outcomes.filter((outcome) => requirementWeight(outcome.requirement) > 0);
+  const fitFloor = directionalFitFloor(outcomes);
   if (scored.length === 0) {
-    return 0;
+    return fitFloor;
   }
 
   // Pass 3A shadow scoring is intentionally simple: required=1, preferred=0.5,
@@ -1134,7 +1462,7 @@ function scoreOutcomes(outcomes: StructuredOutcome[]): number {
     cappedScore = Math.min(cappedScore, 70);
   }
 
-  return cappedScore;
+  return Math.max(cappedScore, fitFloor);
 }
 
 function oldDebugShape(
@@ -1147,6 +1475,352 @@ function oldDebugShape(
     missing: old.missing,
     method: old.method,
     fallback: old.fallback,
+  };
+}
+
+function dedupeOutcomeValues(outcomes: StructuredOutcome[]): string[] {
+  const values: string[] = [];
+  const seen = new Set<string>();
+
+  for (const outcome of outcomes) {
+    const value = compactWhitespace(outcome.requirement.value);
+    const key = lowerCompact(value);
+    if (!value || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    values.push(value);
+  }
+
+  return values;
+}
+
+export function buildVisibleMatchReadFromStructuredDebug(args: {
+  pendingMatchRead: MatchRead;
+  debug: StructuredMatchReadDebug;
+  now?: number;
+}): MatchRead {
+  if (args.debug.structured.status !== "available") {
+    return args.pendingMatchRead;
+  }
+
+  const structured = args.debug.structured;
+  const matched = dedupeOutcomeValues([
+    ...structured.matched,
+    ...structured.partial,
+  ]);
+  const missing = dedupeOutcomeValues([
+    ...structured.missing,
+    ...structured.hardGateMissing,
+    ...structured.unknown.filter(
+      (outcome) => outcome.requirement.importance !== "supporting",
+    ),
+  ]);
+  const positiveCount = structured.matched.length + structured.partial.length;
+  const blockingCount = structured.missing.length + structured.hardGateMissing.length;
+  const confidence: MatchRead["confidence"] =
+    positiveCount >= 3 && blockingCount === 0
+      ? "high"
+      : positiveCount > 0
+        ? "medium"
+        : "low";
+
+  return {
+    ...args.pendingMatchRead,
+    tier: structured.structuredTier,
+    score: structured.structuredScore,
+    scoreVisible: true,
+    confidence,
+    matched,
+    missing,
+    computedAt: args.now ?? Date.now(),
+    method: "llm",
+    fallback: "none",
+  };
+}
+
+type AvailableStructuredMatchDebug = Extract<
+  StructuredMatchReadDebug["structured"],
+  { status: "available" }
+>;
+
+function clampReviewScore(value: number | null | undefined): number {
+  return Math.max(0, Math.min(100, Math.round(Number(value ?? 0) || 0)));
+}
+
+function clampConfidence(value: number): number {
+  return Math.max(0, Math.min(1, Number(value) || 0));
+}
+
+function uniqueByRequirementValue(outcomes: StructuredOutcome[]): StructuredOutcome[] {
+  const result: StructuredOutcome[] = [];
+  const seen = new Set<string>();
+  for (const outcome of outcomes) {
+    const key = lowerCompact(outcome.requirement.value);
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(outcome);
+  }
+  return result;
+}
+
+function resolveJobMatchReviewVerdict(args: {
+  score: number;
+  structured: AvailableStructuredMatchDebug;
+}): JobMatchReviewVerdict {
+  if (args.score >= 75) return "strong_lead";
+  if (args.score >= 55) return "possible_lead";
+  if (args.score >= 35) return "weak_lead";
+  if (args.score > 0) return "probably_skip";
+
+  const hasAnyScorableRequirement = [
+    ...args.structured.matched,
+    ...args.structured.partial,
+    ...args.structured.missing,
+    ...args.structured.hardGateMissing,
+    ...args.structured.unknown,
+  ].some((outcome) => requirementWeight(outcome.requirement) > 0);
+
+  return hasAnyScorableRequirement ? "probably_skip" : "not_enough_signal";
+}
+
+function oneLinerForVerdict(verdict: JobMatchReviewVerdict): string {
+  switch (verdict) {
+    case "strong_lead":
+      return "Strong lead: the role aligns with concrete profile evidence.";
+    case "possible_lead":
+      return "Possible lead: there is meaningful overlap, with a few requirements to confirm.";
+    case "weak_lead":
+      return "Weak lead: some adjacent signal exists, but the fit is limited.";
+    case "probably_skip":
+      return "Probably skip: the current profile evidence does not map to the role.";
+    case "not_enough_signal":
+      return "Not enough signal: the job or profile data is not ready for a useful review.";
+  }
+}
+
+function severityForUnresolvedOutcome(
+  outcome: StructuredOutcome,
+): JobMatchReviewRequirementSeverity {
+  if (outcome.outcome === "hard_gate_missing") {
+    return "blocking";
+  }
+  if (
+    outcome.requirement.importance === "required" &&
+    isCredentialRequirement(outcome.requirement)
+  ) {
+    return "important";
+  }
+  if (outcome.requirement.importance === "required") {
+    return "unclear";
+  }
+  if (isCredentialRequirement(outcome.requirement)) {
+    return "unclear";
+  }
+  return "minor";
+}
+
+function reasonForUnresolvedOutcome(outcome: StructuredOutcome): string {
+  if (outcome.outcome === "hard_gate_missing") {
+    return outcome.reason;
+  }
+  if (isCredentialRequirement(outcome.requirement)) {
+    return outcome.requirement.importance === "required"
+      ? "The job asks for this credential, but the profile does not show it explicitly."
+      : "The job mentions this credential as preferred or unclear, and the profile does not show it explicitly.";
+  }
+  return outcome.reason;
+}
+
+function buildMissingOrUnclearRequirements(
+  structured: AvailableStructuredMatchDebug,
+): JobMatchReview["missing_or_unclear_requirements"] {
+  return uniqueByRequirementValue([
+    ...structured.hardGateMissing,
+    ...structured.missing,
+    ...structured.unknown.filter(
+      (outcome) => outcome.requirement.importance !== "supporting",
+    ),
+  ]).map((outcome) => ({
+    requirement: outcome.requirement.value,
+    severity: severityForUnresolvedOutcome(outcome),
+    reason: reasonForUnresolvedOutcome(outcome),
+  }));
+}
+
+function buildReviewEvidence(
+  structured: AvailableStructuredMatchDebug,
+): JobMatchReview["evidence"] {
+  return uniqueByRequirementValue([...structured.matched, ...structured.partial])
+    .filter((outcome) => outcome.evidence)
+    .map((outcome) => ({
+      job_signal: outcome.requirement.value,
+      profile_signal: outcome.evidence?.evidenceText ?? "",
+      explanation: outcome.reason,
+    }));
+}
+
+function buildWhyThisMayInterestYou(
+  evidence: JobMatchReview["evidence"],
+): string[] {
+  return evidence
+    .map((item) =>
+      compactWhitespace(
+        `${item.job_signal} maps to profile evidence: ${item.profile_signal}`,
+      ),
+    )
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function buildWatchOut(
+  missingOrUnclear: JobMatchReview["missing_or_unclear_requirements"],
+): string[] {
+  const priority: Record<JobMatchReviewRequirementSeverity, number> = {
+    blocking: 0,
+    important: 1,
+    unclear: 2,
+    minor: 3,
+  };
+  return [...missingOrUnclear]
+    .sort((left, right) => priority[left.severity] - priority[right.severity])
+    .map((item) => `${item.requirement}: ${item.reason}`)
+    .slice(0, 2);
+}
+
+function confidenceForJobMatchReview(args: {
+  verdict: JobMatchReviewVerdict;
+  structured: AvailableStructuredMatchDebug;
+  missingOrUnclear: JobMatchReview["missing_or_unclear_requirements"];
+}): number {
+  const evidenceCount = args.structured.matched.length + args.structured.partial.length;
+  const unresolvedCount =
+    args.structured.missing.length +
+    args.structured.hardGateMissing.length +
+    args.structured.unknown.length;
+  const total = evidenceCount + unresolvedCount;
+  const evidenceRatio = total > 0 ? evidenceCount / total : 0;
+  const hasBlocking = args.missingOrUnclear.some(
+    (item) => item.severity === "blocking",
+  );
+  const base =
+    args.verdict === "strong_lead"
+      ? 0.82
+      : args.verdict === "possible_lead"
+        ? 0.72
+        : args.verdict === "weak_lead"
+          ? 0.58
+          : args.verdict === "probably_skip"
+            ? 0.5
+            : 0.25;
+
+  return Number(
+    clampConfidence(
+      base + evidenceRatio * 0.12 - (hasBlocking ? 0.14 : 0),
+    ).toFixed(2),
+  );
+}
+
+function suggestedNextStepForReview(args: {
+  verdict: JobMatchReviewVerdict;
+  missingOrUnclear: JobMatchReview["missing_or_unclear_requirements"];
+}): JobMatchReviewSuggestedNextStep {
+  if (args.verdict === "probably_skip") return "skip";
+  if (args.verdict === "not_enough_signal") return "review_manually";
+
+  const hasBlocking = args.missingOrUnclear.some(
+    (item) => item.severity === "blocking",
+  );
+  if (hasBlocking) {
+    return "improve_profile_first";
+  }
+
+  const hasCredentialOrImportantUncertainty = args.missingOrUnclear.some(
+    (item) =>
+      item.severity === "important" ||
+      (item.severity === "unclear" &&
+        /\b(licen[cs]e|guard card|permit|certif|credential)\b/i.test(
+          item.requirement,
+        )),
+  );
+  if (hasCredentialOrImportantUncertainty) {
+    return "apply_if_requirement_true";
+  }
+
+  if (args.verdict === "weak_lead") return "review_manually";
+  return "apply";
+}
+
+function unavailableJobMatchReview(reason: string): JobMatchReview {
+  return {
+    verdict: "not_enough_signal",
+    score: 0,
+    confidence: 0,
+    one_liner: oneLinerForVerdict("not_enough_signal"),
+    why_this_may_interest_you: [],
+    watch_out: [`Structured review unavailable: ${reason}`],
+    suggested_next_step: "review_manually",
+    missing_or_unclear_requirements: [],
+    evidence: [],
+  };
+}
+
+export function buildJobMatchReviewFromStructuredDebug(
+  debug: StructuredMatchReadDebug,
+): JobMatchReview {
+  if (debug.structured.status !== "available") {
+    return unavailableJobMatchReview(debug.structured.reason);
+  }
+
+  const structured = debug.structured;
+  const score = clampReviewScore(structured.structuredScore);
+  const verdict = resolveJobMatchReviewVerdict({ score, structured });
+  const missingOrUnclear = buildMissingOrUnclearRequirements(structured);
+  const evidence = buildReviewEvidence(structured);
+  const watchOut = buildWatchOut(missingOrUnclear);
+
+  return {
+    verdict,
+    score,
+    confidence: confidenceForJobMatchReview({
+      verdict,
+      structured,
+      missingOrUnclear,
+    }),
+    one_liner: oneLinerForVerdict(verdict),
+    why_this_may_interest_you: buildWhyThisMayInterestYou(evidence),
+    watch_out: watchOut,
+    suggested_next_step: suggestedNextStepForReview({
+      verdict,
+      missingOrUnclear,
+    }),
+    missing_or_unclear_requirements: missingOrUnclear,
+    evidence,
+  };
+}
+
+export function buildStructuredPendingMatchRead(args: {
+  jobId: string;
+  profileId?: string | null;
+  now?: number;
+}): MatchRead {
+  return {
+    tier: "unknown",
+    score: null,
+    scoreVisible: false,
+    confidence: "low",
+    matched: [],
+    missing: [],
+    basedOn: {
+      profileId: String(args.profileId ?? ""),
+      profileLabel: "Your profile",
+      jobId: args.jobId,
+    },
+    computedAt: args.now ?? Date.now(),
+    method: "llm",
+    fallback: "structured_pending",
   };
 }
 

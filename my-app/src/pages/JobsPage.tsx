@@ -191,7 +191,37 @@ type JobsPageDetail = {
       | "profile_missing"
       | "profile_insufficient"
       | "parse_failed"
-      | "requirements_missing";
+      | "requirements_missing"
+      | "structured_pending";
+  } | null;
+  matchReview?: {
+    verdict:
+      | "strong_lead"
+      | "possible_lead"
+      | "weak_lead"
+      | "probably_skip"
+      | "not_enough_signal";
+    score?: number | null;
+    confidence: number;
+    one_liner: string;
+    why_this_may_interest_you: string[];
+    watch_out: string[];
+    suggested_next_step:
+      | "apply"
+      | "apply_if_requirement_true"
+      | "improve_profile_first"
+      | "skip"
+      | "review_manually";
+    missing_or_unclear_requirements: Array<{
+      requirement: string;
+      severity: "minor" | "important" | "blocking" | "unclear";
+      reason: string;
+    }>;
+    evidence: Array<{
+      job_signal: string;
+      profile_signal: string;
+      explanation: string;
+    }>;
   } | null;
   nextStepBlock: {
     headline: string;
@@ -682,7 +712,7 @@ function JobsStructuredPreviewAdvisoryPanel({
           <div className="dasti-brief-card__summary-label">Advisory beta</div>
           <div className="dasti-empty-state__title">Structured preview</div>
           <p className="dasti-empty-state__subtitle">
-            Experimental match read. Production score remains authoritative.
+            Structured score is used when available. Missing extraction stays pending instead of using keyword fallback.
           </p>
         </div>
       </div>
@@ -1265,6 +1295,10 @@ function JobsPageContent(): JSX.Element {
     ((api as any).jobsPublic?.setJobFavorite ??
       "jobsPublic.setJobFavorite") as any,
   );
+  const refreshStructuredMatch = useMutation(
+    ((api as any).jobsPublic?.refreshStructuredMatch ??
+      "jobsPublic.refreshStructuredMatch") as any,
+  );
   const jobs = useQuery(
     jobsListReference,
     isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
@@ -1602,6 +1636,19 @@ function JobsPageContent(): JSX.Element {
     },
     [navigate, recordJobDecision],
   );
+
+  const handleRefreshSelectedJobMatch = React.useCallback(async () => {
+    if (!selectedJob?.id) {
+      return;
+    }
+
+    try {
+      await refreshStructuredMatch({ jobId: selectedJob.id });
+      setSelectedJobRefreshKey((key) => key + 1);
+    } catch (error) {
+      showToast("Match refresh failed.", { variant: "error" });
+    }
+  }, [refreshStructuredMatch, selectedJob?.id, showToast]);
 
   const handleImportFirstJob = React.useCallback(() => {
     clearActiveLocalCvId();
@@ -2711,13 +2758,12 @@ function JobsPageContent(): JSX.Element {
                     {selectedJob.matchRead ? (
                       <MatchReadBlock
                         matchRead={selectedJob.matchRead}
+                        matchReview={selectedJob.matchReview}
                         visibleRequirements={selectedJob.visibleRequirements}
                         jobTitle={selectedJob.title}
                         jobCompany={selectedJob.company}
                         jobLocation={selectedJob.location}
-                        onRefreshMatch={() => {
-                          setSelectedJobRefreshKey((key) => key + 1);
-                        }}
+                        onRefreshMatch={handleRefreshSelectedJobMatch}
                       />
                     ) : null}
 

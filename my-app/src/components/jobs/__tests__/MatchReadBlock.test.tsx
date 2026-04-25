@@ -20,7 +20,7 @@ function buildMatchRead(overrides: Partial<MatchReadProps> = {}): MatchReadProps
       jobId: "job_1",
     },
     computedAt: 1234,
-    method: "keyword-overlap",
+    method: "llm",
     fallback: "none",
     ...overrides,
   };
@@ -91,15 +91,19 @@ describe("MatchReadBlock", () => {
     expect(screen.queryByText("No scoring profile data available")).toBeNull();
   });
 
-  it("shows weak overlap as a scored match, not as empty profile data", () => {
+  it("does not render legacy keyword-overlap zero as a real match", () => {
+    const onRefreshMatch = vi.fn();
+
     render(
       <MatchReadBlock
+        onRefreshMatch={onRefreshMatch}
         matchRead={buildMatchRead({
           tier: "weak",
           score: 0,
           scoreVisible: true,
           matched: [],
           missing: ["Airtable", "Program management"],
+          method: "keyword-overlap",
         })}
       />,
     );
@@ -107,11 +111,11 @@ describe("MatchReadBlock", () => {
     expect(screen.queryByText("No scoring profile data available")).toBeNull();
     expect(screen.queryByText("No resume signal")).toBeNull();
     expect(screen.queryByText("Resume too thin")).toBeNull();
-    expect(screen.getByText("Weak · 0%")).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Missing 2" }),
-    );
-    expect(screen.getByText("Program management")).toBeInTheDocument();
+    expect(screen.queryByText("Weak · 0%")).toBeNull();
+    expect(screen.getByText("Match pending")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Match" }));
+    expect(onRefreshMatch).toHaveBeenCalledTimes(1);
   });
 
   it("cleans visible missing requirements and hides junk tokens", () => {
