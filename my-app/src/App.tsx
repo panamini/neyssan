@@ -9,8 +9,7 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { Unauthenticated, useConvexAuth, useQuery } from "convex/react";
-import { SignInButton } from "@clerk/clerk-react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { ConvexStatusBanner } from "./components/ConvexStatusBanner";
 import { CvForge } from "./pages/CvForge";
 import { CvsLibrary } from "./pages/CvsLibrary";
@@ -19,6 +18,8 @@ import { JobsPage } from "./pages/JobsPage";
 import { ProposalsLibrary } from "./pages/ProposalsLibrary";
 import { StyleForge } from "./pages/StyleForge";
 import { SettingsPage } from "./pages/SettingsPage";
+import { SignInPage } from "./pages/SignInPage";
+import { SignOutPage } from "./pages/SignOutPage";
 import { ResumePrintPage } from "./pages/ResumePrintPage";
 import { ProposalPrintPage } from "./pages/ProposalPrintPage";
 import { ResumeFontParityHarnessPage } from "./pages/ResumeFontParityHarnessPage";
@@ -174,7 +175,7 @@ function useBrowserTitle(topbarDocumentTitle: string | null): void {
   }, [location.pathname, topbarDocumentTitle]);
 }
 
-const SHOW_TOPBAR = true;
+const SHOW_TOPBAR = false;
 
 function TopbarTitleSync(): null {
   const topbarDocumentTitle = useTopbarDocumentTitle();
@@ -253,17 +254,6 @@ function Topbar() {
             </span>
           </>
         ) : null}
-      </div>
-
-      {/* Right — auth only when logged out */}
-      <div style={{ display: "flex", alignItems: "center", gap: "var(--s2)" }}>
-        <Unauthenticated>
-          <SignInButton mode="modal">
-            <button className="dasti-button dasti-button--secondary dasti-button--sm">
-              Sign in
-            </button>
-          </SignInButton>
-        </Unauthenticated>
       </div>
     </header>
   );
@@ -363,6 +353,8 @@ function AppShell(): JSX.Element {
                 <Route path="/proposals" element={<ProposalsLibrary />} />
                 <Route path="/style" element={<StyleForge />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/sign-in/*" element={<SignInPage />} />
+                <Route path="/sign-out" element={<SignOutPage />} />
                 <Route path="/" element={<Navigate to="/cv" replace />} />
                 <Route path="*" element={<Navigate to="/cv" replace />} />
               </Routes>
@@ -384,6 +376,14 @@ export default function App(): JSX.Element {
 
 function AppRouter(): JSX.Element {
   const location = useLocation();
+
+  if (location.pathname.startsWith("/sign-in")) {
+    return <SignInPage />;
+  }
+
+  if (location.pathname === "/sign-out") {
+    return <SignOutPage />;
+  }
 
   if (location.pathname === "/print/resume") {
     return <ResumePrintPage />;
