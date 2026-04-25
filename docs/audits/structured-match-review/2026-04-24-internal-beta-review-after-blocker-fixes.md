@@ -1,0 +1,49 @@
+# Structured Match Internal Beta Readout
+
+Reviewed cases: 30
+Rollout gate: ready
+
+## Coverage
+- admin_office: 4
+- healthcare_regulated: 4
+- long_duplicated_scrape: 2
+- multilingual: 3
+- negative_control: 2
+- retail_service: 4
+- security_licensed: 4
+- short_noisy_scrape: 3
+- technical: 4
+
+## Label Counts
+- acceptable but conservative: 10
+- evidence missing: 1
+- good: 18
+- undermatched: 1
+
+## Rollout Gate Reasons
+- none
+
+## Recommended Next Actions
+- tune evidence matching
+- tune tier gates
+
+## Example Buckets
+### falseStrong
+- none
+
+### falseWeak
+- admin_office_alpha (admin_office, weak 29): undermatched
+
+### overconfidentPartial
+- none
+
+### extractionCorrectEvidenceFailed
+- technical_alpha (technical, partial 58): evidence missing
+
+### evidenceCorrectTierWrong
+- security_kith_robert_alpha (security_licensed, partial 38): acceptable but conservative
+- security_kith_robert_beta (security_licensed, partial 68): acceptable but conservative
+- retail_service_gamma (retail_service, partial 60): acceptable but conservative
+- admin_office_alpha (admin_office, weak 29): undermatched
+- admin_office_gamma (admin_office, partial 57): acceptable but conservative
+
