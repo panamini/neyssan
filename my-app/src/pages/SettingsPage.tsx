@@ -72,9 +72,9 @@ const EMPTY_PRESET: PresetSlot = {
 type ToneId = "signature" | "expert" | "engaging" | null;
 const TONE_OPTIONS: { id: ToneId; label: string; description: string; Icon: typeof Wand2 }[] = [
   { id: null, label: getVoicePresetDisplayLabel(null), description: "Adapts to the role.", Icon: Wand2 },
-  { id: "signature", label: getVoicePresetDisplayLabel("signature"), description: "Warm and approachable.", Icon: Feather },
-  { id: "expert", label: getVoicePresetDisplayLabel("expert"), description: "Natural and credible.", Icon: PenNib },
-  { id: "engaging", label: getVoicePresetDisplayLabel("engaging"), description: "Formal and composed.", Icon: Stamp },
+  { id: "signature", label: getVoicePresetDisplayLabel("signature"), description: "Conversational. Like you wrote it.", Icon: Feather },
+  { id: "expert", label: getVoicePresetDisplayLabel("expert"), description: "Composed. Measured pacing.", Icon: PenNib },
+  { id: "engaging", label: getVoicePresetDisplayLabel("engaging"), description: "Approachable. Personal touches.", Icon: Stamp },
 ];
 
 // ─── Style options ─────────────────────────────────────────────────────────────
@@ -88,10 +88,10 @@ type StyleOption = {
 
 const STYLE_OPTIONS: StyleOption[] = [
   { id: "auto",     label: "Auto",      description: "Matches the look to the role.",                   isAuto: true },
-  { id: "swiss", label: "Swiss", description: "Quiet Swiss grid with a calmer serif-led rhythm." },
-  { id: "editorial", label: "Editorial", description: "Editorial pacing with a richer reading voice." },
-  { id: "modernist", label: "Mono", description: "Tighter grid with a more technical contrast." },
-  { id: "workshop", label: "Workshop", description: "Workshop ATS family with the paired margin twin." },
+  { id: "swiss", label: "Swiss", description: "Quiet Swiss grid. Serif-led rhythm." },
+  { id: "editorial", label: "Editorial", description: "Editorial pacing. Rich reading voice." },
+  { id: "modernist", label: "Mono", description: "Tight grid. Technical contrast." },
+  { id: "workshop", label: "Workshop", description: "Workshop ATS. Paired margin twin." },
 ].filter(
   (option) =>
     option.id !== "workshop" ||
@@ -656,13 +656,13 @@ export function SettingsPage(): JSX.Element {
           <div>
             <h1 className="dasti-settings-page__title">Style profiles</h1>
             <p className="dasti-settings-page__subtitle">
-              Assemble up to 3 complete style presets. The active one is applied when you start a new proposal.
+              Assemble up to 3 style presets. The active one applies to new cover letters.
             </p>
           </div>
           {savedTick && (
             <span className="dasti-settings-page__saved" aria-live="polite">
               <Check size={12} strokeWidth={2.4} aria-hidden="true" />
-              Saved
+              Saved.
             </span>
           )}
         </div>
@@ -756,7 +756,7 @@ export function SettingsPage(): JSX.Element {
                     ].filter(Boolean).join(" ")}
                     aria-pressed={!currentPreset.paletteOverride && !currentPreset.accentHex}
                     onClick={() => updatePreset({ paletteOverride: null, accentHex: null })}
-                    title="Automatic — follows the selected style"
+                    title="Auto. Follows the style."
                     aria-label="Automatic palette"
                   >
                     <Wand2 size={14} strokeWidth={1.9} aria-hidden="true" />

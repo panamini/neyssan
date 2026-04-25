@@ -34,10 +34,10 @@ export default function ImportWarningBanner({
       <div className="dasti-import-warning-banner__body">
         <div className="dasti-import-warning-banner__eyebrow">Import check</div>
         <p className="dasti-import-warning-banner__title">
-          Imported CV needs review
+          Resume needs review.
         </p>
         <p className="dasti-import-warning-banner__summary">
-          {signalCount} {issueLabel} flagged. Review before proposals or export.
+          {signalCount} {issueLabel} flagged. Review before export.
         </p>
       </div>
       <div className="dasti-import-warning-banner__actions">

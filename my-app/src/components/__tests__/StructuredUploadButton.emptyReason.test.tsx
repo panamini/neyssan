@@ -92,12 +92,12 @@ describe("StructuredUploadButton empty preview", () => {
     await waitFor(() => {
       expect(mockAction).toHaveBeenCalledTimes(1);
       expect(showToast).toHaveBeenCalledWith(
-        "Parser returned empty result: paddle_empty_pdfplumber",
+        "Empty result. paddle_empty_pdfplumber",
         { variant: "warning" },
       );
     });
 
-    const banner = await screen.findByText(/Parser returned empty result:/i);
+    const banner = await screen.findByText(/Empty result./i);
     expect(banner.textContent).toContain("paddle_empty_pdfplumber");
 
     const previewPlaceholder = screen.queryByText(/Pdf Bytes=/i);
@@ -148,7 +148,7 @@ describe("StructuredUploadButton empty preview", () => {
 
     await user.click(normalizedButton);
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith("Copied normalized JSON", {
+      expect(showToast).toHaveBeenCalledWith("Copied.", {
         variant: "success",
       });
       expect(
@@ -158,7 +158,7 @@ describe("StructuredUploadButton empty preview", () => {
 
     await user.click(parserButton);
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith("Copied raw parser JSON", {
+      expect(showToast).toHaveBeenCalledWith("Copied.", {
         variant: "success",
       });
     });

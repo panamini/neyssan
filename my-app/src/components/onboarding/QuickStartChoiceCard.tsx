@@ -37,6 +37,7 @@ export function QuickStartChoiceCard({
         type="button"
         onClick={onClick}
         aria-pressed={expandedContent ? selected : undefined}
+        aria-busy={loading || undefined}
         disabled={disabled || loading}
         data-quick-start-primary-action={primaryAction ? "true" : undefined}
         data-testid={testId}

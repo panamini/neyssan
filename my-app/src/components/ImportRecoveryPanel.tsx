@@ -208,10 +208,10 @@ function getAcceptDecisionHelp(item: ImportRecoveryItem): string {
   );
 
   if (hasFragments) {
-    return `Accept imports the remaining unassigned text into ${targetLabel}. Added fragments stay included.`;
+    return `Sends remaining text to ${targetLabel}. Assigned fragments stay.`;
   }
 
-  return `Accept imports this block into ${targetLabel}. Ignore skips it from this import.`;
+  return `Sends this block to ${targetLabel}. Ignore skips it.`;
 }
 
 export function ImportRecoveryPanel({
@@ -605,27 +605,25 @@ export function ImportRecoveryPanel({
         <div className="dasti-import-recovery__header-copy">
           <div className="dasti-inline-review__eyebrow">Import recovery</div>
           <div className="dasti-import-recovery__title">
-            We imported your resume. Review {items.length} uncertain
-            {items.length === 1 ? " section" : " sections"} before continuing.
+            Resume imported. Review {items.length} uncertain
+            {items.length === 1 ? " section" : " sections"}.
           </div>
           <div className="dasti-import-recovery__progress">
             Reviewing {resolvedCount} / {items.length}
           </div>
           <p className="dasti-import-recovery__summary">
-            Select only the part you want to recover. Assigned text stays highlighted
-            until import is applied.
+            Select what to recover. Assigned text stays highlighted.
           </p>
           {overflowCount > 0 ? (
             <p className="dasti-import-recovery__summary">
-              Showing the first {reviewLimit}. The remaining {overflowCount} use their
-              suggested section unless you choose `Import as-is`.
+              Showing first {reviewLimit}. Other {overflowCount} keep the suggested
+              section.
             </p>
           ) : null}
           {uncertaintySummary.isBroad ? (
             <p className="dasti-import-recovery__summary">
-              Confidence is unusually low across much of this CV. Recover the most
-              important sections first, or choose `Import as-is` and tidy the draft in
-              the editor.
+              Low confidence across this resume. Recover key sections, or pick
+              'Import as-is'.
             </p>
           ) : null}
         </div>
@@ -695,7 +693,7 @@ export function ImportRecoveryPanel({
                           ? selectionFeedback.message
                           : drawerHasSelection
                             ? "Selection ready to assign"
-                            : "Select text in this block to assign it."}
+                            : "Select text to assign."}
                       </div>
                     </div>
                     <div className="dasti-import-recovery__drawer-actions">
@@ -747,10 +745,10 @@ export function ImportRecoveryPanel({
                   >
                     {drawerHasSelection
                       ? currentDrawerSelection?.text
-                      : "Highlight a word, line, or paragraph from the text below."}
+                      : "Highlight part of the text below."}
                   </div>
                   <div className="dasti-import-recovery__drawer-tip">
-                    Tip: Extract coherent phrases/sentences for best results.
+                    Pick whole phrases or sentences.
                   </div>
                   <div className="dasti-import-recovery__drawer-controls">
                     <select
@@ -1086,7 +1084,7 @@ export function ImportRecoveryPanel({
               </div>
               {activeFragmentAssignments.length > 0 ? (
                 <div className="dasti-import-recovery__ignore-note">
-                  Ignore affects only remaining unassigned text. Saved fragments remain included.
+                  Ignore affects unassigned text. Saved fragments stay.
                 </div>
               ) : null}
             </article>

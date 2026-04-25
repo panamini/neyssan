@@ -416,9 +416,9 @@ describe("ProposalInputForm provider-busy handling", () => {
       <ProposalInputForm onSubmit={onSubmit} onError={onError} />,
     );
 
-    const jobTitleInput = screen.getByPlaceholderText("Enter Job Title");
+    const jobTitleInput = screen.getByPlaceholderText("Job title");
     const jobDescriptionInput = screen.getByPlaceholderText(
-      "Paste or write the job offer here…",
+      "Paste job offer",
     );
     const submitButton = container.querySelector(
       'button[type="submit"]',
@@ -501,7 +501,7 @@ describe("ProposalInputForm provider-busy handling", () => {
 
     const option = await screen.findByRole("button", { name: /Ada Lovelace/i });
     fireEvent.click(option);
-    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use resume" }));
 
     expect(mockSetActiveLocalCvId).toHaveBeenCalledWith("cv-1");
     expect(mockLoadCv).not.toHaveBeenCalled();
@@ -559,22 +559,22 @@ describe("ProposalInputForm provider-busy handling", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByPlaceholderText("Enter Job Title"),
+        screen.getByPlaceholderText("Job title"),
       ).toHaveValue("Imported Operations Lead"),
     );
     expect(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
     ).toHaveValue(
       "Coordinate recurring operations, document handoffs, and keep teams aligned.",
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Clear handoff" }));
 
-    expect(screen.getByPlaceholderText("Enter Job Title")).toHaveValue(
+    expect(screen.getByPlaceholderText("Job title")).toHaveValue(
       "Imported Operations Lead",
     );
     expect(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
     ).toHaveValue(
       "Coordinate recurring operations, document handoffs, and keep teams aligned.",
     );
@@ -595,7 +595,7 @@ describe("ProposalInputForm provider-busy handling", () => {
       />,
     );
 
-    expect(await screen.findByText("Job Offer")).toBeInTheDocument();
+    expect(await screen.findByText("Job offer")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "View on LinkedIn" }),
     ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
@@ -638,7 +638,7 @@ describe("ProposalInputForm provider-busy handling", () => {
       />,
     );
 
-    expect(await screen.findByText("Job Offer")).toBeInTheDocument();
+    expect(await screen.findByText("Job offer")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "View on LinkedIn" }),
     ).toBeInTheDocument();
@@ -654,7 +654,7 @@ describe("ProposalInputForm provider-busy handling", () => {
       />,
     );
 
-    expect(await screen.findByText("Job Offer")).toBeInTheDocument();
+    expect(await screen.findByText("Job offer")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "View on LinkedIn" }),
     ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
@@ -676,7 +676,7 @@ describe("ProposalInputForm provider-busy handling", () => {
       />,
     );
 
-    expect(await screen.findByText("Job Offer")).toBeInTheDocument();
+    expect(await screen.findByText("Job offer")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "View on LinkedIn" }),
     ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
@@ -692,7 +692,7 @@ describe("ProposalInputForm provider-busy handling", () => {
       />,
     );
 
-    expect(await screen.findByText("Job Offer")).toBeInTheDocument();
+    expect(await screen.findByText("Job offer")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "View on LinkedIn" }),
     ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
@@ -733,11 +733,11 @@ describe("ProposalInputForm provider-busy handling", () => {
     const onSubmit = vi.fn();
     const { container } = render(<ProposalInputForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "UI / UX Artist For Game Development" },
     });
     fireEvent.change(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
       {
         target: {
           value: "Design tactile game interfaces, polish interactions, and support gameplay presentation.",
@@ -798,9 +798,9 @@ describe("ProposalInputForm provider-busy handling", () => {
       <ProposalInputForm onSubmit={onSubmit} onError={onError} />,
     );
 
-    const jobTitleInput = screen.getByPlaceholderText("Enter Job Title");
+    const jobTitleInput = screen.getByPlaceholderText("Job title");
     const jobDescriptionInput = screen.getByPlaceholderText(
-      "Paste or write the job offer here…",
+      "Paste job offer",
     );
     const submitButton = container.querySelector(
       'button[type="submit"]',
@@ -875,9 +875,9 @@ describe("ProposalInputForm provider-busy handling", () => {
       <ProposalInputForm onSubmit={onSubmit} onError={onError} />,
     );
 
-    const jobTitleInput = screen.getByPlaceholderText("Enter Job Title");
+    const jobTitleInput = screen.getByPlaceholderText("Job title");
     const jobDescriptionInput = screen.getByPlaceholderText(
-      "Paste or write the job offer here…",
+      "Paste job offer",
     );
     const submitButton = container.querySelector(
       'button[type="submit"]',
@@ -945,11 +945,11 @@ describe("ProposalInputForm provider-busy handling", () => {
       <ProposalInputForm onSubmit={onSubmit} onStop={onStop} />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
     fireEvent.change(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
       {
         target: {
           value:
@@ -1111,11 +1111,11 @@ describe("ProposalInputForm provider-busy handling", () => {
 
     const { container } = render(<ProposalInputForm onSubmit={vi.fn()} />);
 
-    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
     fireEvent.change(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
       {
         target: {
           value:
@@ -1161,11 +1161,11 @@ describe("ProposalInputForm provider-busy handling", () => {
       expect(screen.getByText("Formal")).toBeVisible();
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
     fireEvent.change(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
       {
         target: {
           value:
@@ -1204,11 +1204,11 @@ describe("ProposalInputForm provider-busy handling", () => {
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
     fireEvent.change(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
       {
         target: {
           value:
@@ -1252,11 +1252,11 @@ describe("ProposalInputForm provider-busy handling", () => {
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
     fireEvent.change(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
       {
         target: {
           value:
@@ -1326,11 +1326,11 @@ describe("ProposalInputForm provider-busy handling", () => {
 
     const { container } = render(<ProposalInputForm onSubmit={onSubmit} />);
 
-    fireEvent.change(screen.getByPlaceholderText("Enter Job Title"), {
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
     fireEvent.change(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
       {
         target: {
           value:
