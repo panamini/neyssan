@@ -83,6 +83,9 @@ vi.mock("../../components/ui/toast", () => ({
 
 vi.mock("../../lib/proposal-personalization", () => ({
   buildAppProposalPersonalizationPayload: () => ({}),
+  clearProposalAttachedCvId: () => {
+    mockActiveCvId = null;
+  },
   clearActiveLocalCvId: () => {
     mockActiveCvId = null;
   },
@@ -385,7 +388,7 @@ describe("ProposalForge attached CV sync", () => {
     });
     expect(captureRole).toHaveAttribute("aria-pressed", "true");
     expect(
-      screen.getByRole("link", { name: /Install TwoWeeks extension/i }),
+      screen.getByRole("link", { name: /Install extension/i }),
     ).toHaveAttribute("href", PROPOSAL_EXTENSION_INSTALL_LINK.href);
     expect(screen.getByRole("link", { name: /LinkedIn/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Paste job offer\b/i })).toBeInTheDocument();
@@ -534,7 +537,7 @@ describe("ProposalForge attached CV sync", () => {
       "https://www.hellowork.com/fr-fr/",
     );
     expect(
-      screen.getByRole("link", { name: /Install TwoWeeks extension/i }),
+      screen.getByRole("link", { name: /Install extension/i }),
     ).toHaveAttribute("href", PROPOSAL_EXTENSION_INSTALL_LINK.href);
   });
 
@@ -554,18 +557,18 @@ describe("ProposalForge attached CV sync", () => {
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-pressed", "true");
     expect(
-      screen.getByRole("link", { name: /Install TwoWeeks extension/i }),
+      screen.getByRole("link", { name: /Install extension/i }),
     ).toBeInTheDocument();
     expect(
       toggle.closest(".dasti-quick-start-choice"),
     ).toContainElement(
-      screen.getByRole("link", { name: /Install TwoWeeks extension/i }),
+      screen.getByRole("link", { name: /Install extension/i }),
     );
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-pressed", "false");
     expect(
-      screen.queryByRole("link", { name: /Install TwoWeeks extension/i }),
+      screen.queryByRole("link", { name: /Install extension/i }),
     ).not.toBeInTheDocument();
   });
 

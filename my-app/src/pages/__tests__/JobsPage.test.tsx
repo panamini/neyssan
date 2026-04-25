@@ -1997,7 +1997,7 @@ describe("JobsPage", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }));
 
     await waitFor(() => {
-      expect(showToastMock).toHaveBeenCalledWith("Archive failed", {
+      expect(showToastMock).toHaveBeenCalledWith("Archive failed.", {
         variant: "error",
         description: "Job not found",
       });
@@ -2271,6 +2271,30 @@ describe("JobsPage", () => {
     expect(seedSampleJobMock).toHaveBeenCalledWith({});
   });
 
+  it("shows compact first-run copy when sample seeding fails", async () => {
+    listResult = [];
+    selectedJobResult = null;
+    seedSampleJobMock.mockRejectedValue(new Error("Convex sample seed failed"));
+
+    render(
+      <MemoryRouter initialEntries={["/jobs"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByText("Start with one job."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try a sample" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Sample failed.",
+    );
+    expect(screen.queryByText("Convex sample seed failed")).toBeNull();
+  });
 
   it("renders recovery guidance when the jobs query is missing from the local Convex runtime", async () => {
     listError = new Error(

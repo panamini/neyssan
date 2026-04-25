@@ -17,7 +17,7 @@ type ProposalSourceLinkTemplate = Omit<ProposalExtensionSourceLink, "href"> & {
 };
 
 export const PROPOSAL_EXTENSION_INSTALL_LINK = {
-  label: "Install TwoWeeks extension",
+  label: "Install extension",
   // Temporary generic store entry until the production listing URL is finalized.
   href: "https://chromewebstore.google.com/",
 } as const;

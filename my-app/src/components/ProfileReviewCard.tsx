@@ -2403,7 +2403,7 @@ export function ProfileReviewCard({
     );
 
     if (nextSections.length === sections.length) {
-      pushToast("Section not found");
+      pushToast("Section not found.");
       return;
     }
 
@@ -2414,7 +2414,7 @@ export function ProfileReviewCard({
       removableAddedSections.find(
         (section) => section.sectionId === normalizedSectionId,
       )?.label ?? "Section";
-    pushToast(`${removedLabel} removed`);
+    pushToast(`${removedLabel} removed.`);
   }
 
   return (

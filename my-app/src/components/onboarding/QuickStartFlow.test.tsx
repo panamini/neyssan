@@ -367,6 +367,7 @@ describe("QuickStartFlow", () => {
     expect(
       screen.queryByRole("button", { name: /^Upload PDF or image\b/i }),
     ).not.toBeInTheDocument();
+    expect(loadingCard).toHaveAttribute("aria-busy", "true");
     expect(loadingCard).toBeDisabled();
     expect(screen.getByRole("button", { name: /^Start fresh\b/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();

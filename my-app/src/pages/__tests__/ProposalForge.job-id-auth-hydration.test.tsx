@@ -191,7 +191,7 @@ describe("ProposalForge jobId auth hydration", () => {
     const view = render(renderProposalForge());
 
     expect(screen.getByText("Loading saved job brief…")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText("Enter Job Title")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Job title")).not.toBeInTheDocument();
 
     const initialCanonicalCalls = queryCalls
       .filter((entry) => entry.query === generatedApiModule.api.jobsPublic.getById)
@@ -234,13 +234,13 @@ describe("ProposalForge jobId auth hydration", () => {
       view.rerender(renderProposalForge());
     });
 
-    const jobTitleInput = await screen.findByPlaceholderText("Enter Job Title");
+    const jobTitleInput = await screen.findByPlaceholderText("Job title");
     await waitFor(() =>
       expect(jobTitleInput).toHaveValue("Operations Associate"),
     );
 
     const jobDescriptionInput = await screen.findByPlaceholderText(
-      "Paste or write the job offer here…",
+      "Paste job offer",
     );
     expect(jobDescriptionInput).toHaveValue(
       "Coordinate recurring launches, keep handoffs clear, and maintain documentation.",
@@ -255,11 +255,11 @@ describe("ProposalForge jobId auth hydration", () => {
       view.rerender(renderProposalForge());
     });
 
-    expect(screen.getByPlaceholderText("Enter Job Title")).toHaveValue(
+    expect(screen.getByPlaceholderText("Job title")).toHaveValue(
       "Operations Associate",
     );
     expect(
-      screen.getByPlaceholderText("Paste or write the job offer here…"),
+      screen.getByPlaceholderText("Paste job offer"),
     ).toHaveValue(
       "Coordinate recurring launches, keep handoffs clear, and maintain documentation.",
     );

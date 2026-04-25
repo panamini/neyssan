@@ -443,12 +443,7 @@ export function CvForge(): JSX.Element {
         navigateToSelectedCv(currentCvId);
       } catch (error) {
         setEntryPickerTransitionCvId(null);
-        showToast(
-          error instanceof Error
-            ? error.message
-            : "Could not attach the selected CV.",
-          { variant: "error" },
-        );
+        showToast("Attach failed.", { variant: "error" });
       }
     })();
   }, [
@@ -960,12 +955,7 @@ export function CvForge(): JSX.Element {
         loadCv(cvId);
         navigateToSelectedCv(cvId);
       } catch (error) {
-        showToast(
-          error instanceof Error
-            ? error.message
-            : "Could not attach the selected CV.",
-          { variant: "error" },
-        );
+        showToast("Attach failed.", { variant: "error" });
       }
     },
     [
@@ -1016,8 +1006,8 @@ export function CvForge(): JSX.Element {
         if (!Array.isArray(outcome.sections) || outcome.sections.length === 0) {
           showToast(
             outcome.emptyReason
-              ? `Import failed: ${outcome.emptyReason}`
-              : "No importable sections were found.",
+              ? `Import failed. ${outcome.emptyReason}`
+              : "Nothing to import.",
             { variant: "error" },
           );
           return;
@@ -1058,10 +1048,7 @@ export function CvForge(): JSX.Element {
         navigateToSelectedCv(nextCvId);
       } catch (error) {
         setEntryPickerTransitionCvId(null);
-        showToast(
-          error instanceof Error ? error.message : "Resume import failed.",
-          { variant: "error" },
-        );
+        showToast("Import failed.", { variant: "error" });
       } finally {
         if (cvImportInputRef.current) {
           cvImportInputRef.current.value = "";
@@ -1096,10 +1083,7 @@ export function CvForge(): JSX.Element {
     } catch (error) {
       setEntryPickerTransitionCvId(null);
       setPendingFreshEntryBaseCvId(null);
-      showToast(
-        error instanceof Error ? error.message : "Could not create a new CV.",
-        { variant: "error" },
-      );
+      showToast("Create failed.", { variant: "error" });
     } finally {
       setIsCreatingEntryCv(false);
     }

@@ -34,6 +34,7 @@ import {
   type SaveStatus,
 } from "../components/ui/SaveIndicator";
 import { useToast } from "../components/ui/toast";
+import { AUTH_REQUIRED_TOAST } from "../lib/toast-copy";
 import type { FormValues } from "../components/ProposalInputForm.schemas";
 import {
   beginStructuredImportTimingTrace,
@@ -51,7 +52,10 @@ import {
   getLocalPersonalizationSourceByCvId,
   getLocalActiveCvSnapshotById,
   getLocalCvDocumentById,
+  getProposalAttachedCvId,
   listLocalCvPickerOptions,
+  setProposalAttachedCvId,
+  clearProposalAttachedCvId,
   type ProposalApplicantHeaderData,
 } from "../lib/proposal-personalization";
 import { type ProposalGenerationFallbackInfo } from "../lib/proposal-generation-ui";
@@ -728,6 +732,10 @@ export function ProposalForge(): JSX.Element {
     React.useState<StoredProposalOutputDraft | null>(() =>
       readStoredProposalOutputDraft(),
     );
+  const canonicalJobId = React.useMemo(
+    () => new URLSearchParams(search).get("jobId"),
+    [search],
+  );
   const writeStoredOutputDraft = React.useCallback(
     (nextDraft: StoredProposalOutputDraft | null) => {
       const storageSnapshots = readProposalStyleTraceStorageSnapshots();
@@ -767,11 +775,18 @@ export function ProposalForge(): JSX.Element {
     },
     [traceProposalStyle],
   );
+  const initialAttachedCvSelection = React.useMemo(
+    () =>
+      canonicalJobId
+        ? { id: null, title: null }
+        : resolveAttachedCvSelectionById(getProposalAttachedCvId()),
+    [canonicalJobId],
+  );
   const [attachedCvId, setAttachedCvId] = React.useState<string | null>(
-    null,
+    initialAttachedCvSelection.id,
   );
   const [attachedCvTitle, setAttachedCvTitle] = React.useState<string | null>(
-    null,
+    initialAttachedCvSelection.title,
   );
   const [pendingScopedCvSelection, setPendingScopedCvSelection] = React.useState<{
     id: string | null;
@@ -872,10 +887,6 @@ export function ProposalForge(): JSX.Element {
     () => new URLSearchParams(search).get("handoffToken"),
     [search],
   );
-  const canonicalJobId = React.useMemo(
-    () => new URLSearchParams(search).get("jobId"),
-    [search],
-  );
   const selectedProposalId = React.useMemo(
     () => new URLSearchParams(search).get("id"),
     [search],
@@ -953,6 +964,11 @@ export function ProposalForge(): JSX.Element {
 
       if (!canonicalJobId) {
         const nextSelection = resolveAttachedCvSelectionById(nextId);
+        if (nextSelection.id) {
+          setProposalAttachedCvId(nextSelection.id);
+        } else {
+          clearProposalAttachedCvId();
+        }
         setAttachedCvId(nextSelection.id);
         setAttachedCvTitle(nextSelection.title);
         setPendingScopedCvSelection(null);
@@ -1394,7 +1410,7 @@ export function ProposalForge(): JSX.Element {
 
   const showConvexAuthRequiredToast = React.useCallback(
     (actionLabel: string) => {
-      showToast("Sign in required", {
+      showToast(AUTH_REQUIRED_TOAST, {
         variant: "warning",
         description: `${actionLabel} is unavailable until the proposal workspace is authenticated.`,
       });
@@ -1434,8 +1450,9 @@ export function ProposalForge(): JSX.Element {
     setPendingScopedCvSelection(null);
 
     if (!canonicalJobId) {
-      setAttachedCvId(null);
-      setAttachedCvTitle(null);
+      const nextSelection = resolveAttachedCvSelectionById(getProposalAttachedCvId());
+      setAttachedCvId(nextSelection.id);
+      setAttachedCvTitle(nextSelection.title);
     }
   }, [canonicalJobId]);
 
@@ -1492,12 +1509,7 @@ export function ProposalForge(): JSX.Element {
       setPendingScopedCvSelection(null);
       setAttachedCvId(canonicalRecordCvSelection.id);
       setAttachedCvTitle(canonicalRecordCvSelection.title);
-      showToast(
-        error instanceof Error
-          ? error.message
-          : "Could not attach the selected resume to this job.",
-        { variant: "error" },
-      );
+      showToast("Attach failed.", { variant: "error" });
     });
   }, [
     canonicalJobId,
@@ -4716,14 +4728,14 @@ export function ProposalForge(): JSX.Element {
         // and stop retrying invalid mutations until a fresh generation happens.
         setGeneratedProposalId(null);
         generatedProposalIdRef.current = null;
-        showToast("Draft detached", {
+        showToast("Detached.", {
           variant: "error",
           description:
             "This proposal draft no longer exists on the server. Generate again to save new edits.",
         });
         return;
       }
-      showToast("Draft update failed", {
+      showToast("Save failed.", {
         variant: "error",
         description:
           "The proposal text changed locally but could not be saved.",
@@ -4759,13 +4771,13 @@ export function ProposalForge(): JSX.Element {
         content: trimmed,
         metadata: savedProposalRenderMetadata,
       });
-      showToast("Saved proposal updated", {
+      showToast("Saved.", {
         variant: "success",
         description: "Edits were applied to the saved proposal.",
       });
     } catch (error) {
       console.error("Failed to persist saved proposal edits:", error);
-      showToast("Saved proposal update failed", {
+      showToast("Save failed.", {
         variant: "error",
         description: "The saved proposal could not be updated.",
       });
@@ -5042,10 +5054,10 @@ export function ProposalForge(): JSX.Element {
           copyFeedbackTimeoutRef.current = null;
         }, 2000);
       }
-      showToast("Proposal copied", { variant: "success" });
+      showToast("Copied.", { variant: "success" });
     } catch (copyError) {
       console.warn("Failed to copy proposal:", copyError);
-      showToast("Copy failed", {
+      showToast("Copy failed.", {
         variant: "error",
         description: "Clipboard access was unavailable.",
       });
@@ -5186,7 +5198,7 @@ export function ProposalForge(): JSX.Element {
     setError(null);
     setStatusMessage(null);
     setErrorDetail(null);
-    showToast("Copied to live draft", {
+    showToast("Copied to draft.", {
       variant: "success",
       description: restoredSourceJobDescription
         ? "A detached draft copy is ready with the saved proposal and its source brief."
@@ -5235,13 +5247,13 @@ export function ProposalForge(): JSX.Element {
       await persistOpenedSavedProposal({
         metadata: nextMetadata,
       });
-      showToast("Reset to CV style", {
+      showToast("Reset to resume style.", {
         variant: "success",
         description: "The saved proposal will follow its source CV style again.",
       });
     } catch (error) {
       console.error("Failed to reset saved proposal style:", error);
-      showToast("Reset failed", {
+      showToast("Reset failed.", {
         variant: "error",
         description: "The saved proposal could not be reset to its CV style.",
       });
@@ -5307,10 +5319,10 @@ export function ProposalForge(): JSX.Element {
         composeAutosaveTimeoutRef.current = null;
       }
       setComposeSaveStatus("idle");
-      showToast("Proposal deleted", { variant: "success" });
+      showToast("Deleted.", { variant: "success" });
     } catch (deleteError) {
       console.error("Failed to delete proposal draft:", deleteError);
-      showToast("Delete failed", {
+      showToast("Delete failed.", {
         variant: "error",
         description: "The generated proposal could not be removed.",
       });
@@ -5395,14 +5407,14 @@ export function ProposalForge(): JSX.Element {
       params.set("id", String(persistedProposalId));
       const nextSearch = params.toString();
       void navigate(nextSearch ? `/proposal?${nextSearch}` : "/proposal");
-      showToast("Saved to library", {
+      showToast("Saved.", {
         variant: "success",
         description:
           "This proposal is now in Proposal Library. Open the saved copy there or duplicate it back into draft when you want a new variation.",
       });
     } catch (saveError) {
       console.error("Failed to save proposal draft to library:", saveError);
-      showToast("Save failed", {
+      showToast("Save failed.", {
         variant: "error",
         description: "The proposal could not be saved to the library.",
       });
@@ -5733,7 +5745,7 @@ export function ProposalForge(): JSX.Element {
           : source.content.trim().length > 0);
 
       if (!hasExportableContent) {
-        showToast("Proposal export unavailable", {
+        showToast("Export unavailable.", {
           variant: "warning",
           description: "Generate or open a proposal before exporting.",
         });
@@ -5829,10 +5841,10 @@ export function ProposalForge(): JSX.Element {
               : undefined,
         });
 
-        showToast(`Exported ${exported.filename}`, { variant: "success" });
+        showToast("Exported.", { variant: "success" });
       } catch (error) {
         console.error("[ProposalForge] export failed", error);
-        showToast("Proposal export failed", { variant: "error" });
+        showToast("Export failed.", { variant: "error" });
       } finally {
         setProposalExportingFormat(null);
       }
