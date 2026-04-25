@@ -5440,6 +5440,16 @@ export function ProposalForge(): JSX.Element {
     () => listLocalCvPickerOptions(attachedCvId).length > 0,
     [attachedCvId],
   );
+  const attachedCvDisplayTitle = React.useMemo(() => {
+    if (!attachedCvId) return null;
+    return (
+      listLocalCvPickerOptions(attachedCvId).find(
+        (option) => option.id === attachedCvId,
+      )?.title ??
+      attachedCvTitle ??
+      null
+    );
+  }, [attachedCvId, attachedCvTitle]);
   const proposalTwoPaneMinViewportWidth = 1440;
   const proposalWorkspaceOutputShellInlineSize =
     "calc(var(--document-sheet-inline-size) - (var(--s4) * 2))";
@@ -6321,7 +6331,7 @@ export function ProposalForge(): JSX.Element {
       onChange={handleToolbarVoicePresetChange}
       onToggleCvPicker={handleToolbarCvPickerToggle}
       onClearCv={() => handleAttachedCvChange(null)}
-      cvTitle={attachedCvTitle}
+      cvTitle={attachedCvDisplayTitle}
       isCvPickerOpen={isCvPickerOpen}
       disabled={loading || isLoadingHandoff}
       collapsed
@@ -6344,7 +6354,7 @@ export function ProposalForge(): JSX.Element {
       onChange={handleToolbarVoicePresetChange}
       onToggleCvPicker={handleToolbarCvPickerToggle}
       onClearCv={() => handleAttachedCvChange(null)}
-      cvTitle={attachedCvTitle}
+      cvTitle={attachedCvDisplayTitle}
       isCvPickerOpen={isCvPickerOpen}
       disabled={loading || isLoadingHandoff}
       compact={isCompactComposeLayout}
