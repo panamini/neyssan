@@ -194,7 +194,6 @@ const jobMatchReviewValidator = v.object({
   verdict: v.union(
     v.literal("strong_lead"),
     v.literal("possible_lead"),
-    v.literal("weak_lead"),
     v.literal("probably_skip"),
     v.literal("not_enough_signal"),
   ),

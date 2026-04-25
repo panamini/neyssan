@@ -90,7 +90,6 @@ type JobsPageMatchReview = {
   verdict:
     | "strong_lead"
     | "possible_lead"
-    | "weak_lead"
     | "probably_skip"
     | "not_enough_signal";
   score: number;
@@ -122,9 +121,8 @@ function buildMatchReview(
   return {
     verdict: "possible_lead",
     score: 68,
-    confidence: 0.72,
-    one_liner:
-      "Possible lead: some overlap is visible, with a few checks left.",
+    confidence: 0.65,
+    one_liner: "Partial match. A few checks left.",
     why_this_may_interest_you: ["Operations overlaps."],
     watch_out: [],
     suggested_next_step: "apply",
@@ -521,7 +519,7 @@ describe("JobsPage", () => {
     expect((await screen.findAllByText("Match")).length).toBeGreaterThan(0);
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
     expect(await screen.findByText("Weak")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Open Match" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open match" }));
     expect(
       (await screen.findAllByText("Cross-functional communication")).length,
     ).toBeGreaterThan(0);
@@ -1199,8 +1197,7 @@ describe("JobsPage", () => {
       matchReview: buildMatchReview({
         verdict: "possible_lead",
         score: 68,
-        one_liner:
-          "Possible lead: some overlap is visible, with a few checks left.",
+        one_liner: "Partial match. A few checks left.",
         why_this_may_interest_you: [
           "Operations overlaps.",
           "Coordination overlaps.",
@@ -1220,11 +1217,9 @@ describe("JobsPage", () => {
     );
 
     const matchRegion = await screen.findByLabelText("Match");
-    expect(within(matchRegion).getByText("Possible lead · 68%")).toBeInTheDocument();
+    expect(within(matchRegion).getByText("Partial · 68%")).toBeInTheDocument();
     expect(
-      within(matchRegion).getByText(
-        "Possible lead: some overlap is visible, with a few checks left.",
-      ),
+      within(matchRegion).getByText("Partial match. A few checks left."),
     ).toBeInTheDocument();
     expect(within(matchRegion).getByText("Apply")).toBeInTheDocument();
     expect(
@@ -1245,6 +1240,7 @@ describe("JobsPage", () => {
     expect(
       within(matchRegion).queryByText("This fourth reason should stay hidden."),
     ).toBeNull();
+    expect(within(matchRegion).queryByText("Possible lead · 68%")).toBeNull();
     expect(within(matchRegion).queryByText("Partial · 50%")).toBeNull();
   });
 
@@ -1279,7 +1275,7 @@ describe("JobsPage", () => {
     );
 
     const matchRegion = await screen.findByLabelText("Match");
-    expect(within(matchRegion).getByText("Possible lead · 62%")).toBeInTheDocument();
+    expect(within(matchRegion).getByText("Partial · 62%")).toBeInTheDocument();
     expect(within(matchRegion).getByText("Apply if true")).toBeInTheDocument();
     expect(
       within(matchRegion).getByText(
@@ -1313,7 +1309,7 @@ describe("JobsPage", () => {
     const matchRegion = await screen.findByLabelText("Match");
     expect(within(matchRegion).getByText("Partial · 50%")).toBeInTheDocument();
     expect(within(matchRegion).getByText("Matched")).toBeInTheDocument();
-    expect(within(matchRegion).queryByText("Possible lead · 68%")).toBeNull();
+    expect(within(matchRegion).queryByText("Partial · 68%")).toBeNull();
   });
 
   it("falls back to the existing matchRead block when matchReview has not enough signal", async () => {
@@ -1718,7 +1714,7 @@ describe("JobsPage", () => {
     );
 
     expect(await screen.findByText("Match pending")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Refresh Match" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh match" }));
 
     await waitFor(() => {
       expect(refreshStructuredMatchMock).toHaveBeenCalledWith({

@@ -1776,6 +1776,7 @@ describe("structured match-read shadow scorer", () => {
       "security guard license",
     );
     expect(review.suggested_next_step).toBe("apply_if_requirement_true");
+    expect(review.one_liner).toBe("Partial match. A few checks left.");
     expect(review.score).toBeLessThan(90);
   });
 
@@ -1818,7 +1819,8 @@ describe("structured match-read shadow scorer", () => {
     const review = buildJobMatchReviewFromStructuredDebug(debug);
 
     expect(review.verdict).toBe("probably_skip");
-    expect(review.suggested_next_step).toBe("skip");
+    expect(review.suggested_next_step).toBe("review_manually");
+    expect(review.one_liner).toBe("Weak match. Limited overlap.");
     expect(review.score).toBeLessThan(35);
   });
 
