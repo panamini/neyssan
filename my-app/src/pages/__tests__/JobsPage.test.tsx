@@ -18,6 +18,7 @@ const markOpenedMock = vi.fn().mockResolvedValue(null);
 const recordStructuredMatchReviewMock = vi.fn().mockResolvedValue({
   reviewId: "structured_review_1",
 });
+const refreshStructuredMatchMock = vi.fn().mockResolvedValue({ queued: true });
 const recordFirstRunPathMock = vi.fn().mockResolvedValue(null);
 const restoreArchivedJobMock = vi.fn().mockResolvedValue(null);
 const seedSampleJobMock = vi.fn().mockResolvedValue({ jobId: "job_sample" });
@@ -85,6 +86,62 @@ const archivedJobsList = [
   },
 ];
 
+type JobsPageMatchReview = {
+  verdict:
+    | "strong_lead"
+    | "possible_lead"
+    | "weak_lead"
+    | "probably_skip"
+    | "not_enough_signal";
+  score: number;
+  confidence: number;
+  one_liner: string;
+  why_this_may_interest_you: string[];
+  watch_out: string[];
+  suggested_next_step:
+    | "apply"
+    | "apply_if_requirement_true"
+    | "improve_profile_first"
+    | "skip"
+    | "review_manually";
+  missing_or_unclear_requirements: Array<{
+    requirement: string;
+    severity: "minor" | "important" | "blocking" | "unclear";
+    reason: string;
+  }>;
+  evidence: Array<{
+    job_signal: string;
+    profile_signal: string;
+    explanation: string;
+  }>;
+};
+
+function buildMatchReview(
+  overrides: Partial<JobsPageMatchReview> = {},
+): JobsPageMatchReview {
+  return {
+    verdict: "possible_lead",
+    score: 68,
+    confidence: 0.72,
+    one_liner:
+      "Possible lead: there is meaningful overlap, with a few requirements to confirm.",
+    why_this_may_interest_you: [
+      "Operations maps to profile evidence: recurring operations ownership.",
+    ],
+    watch_out: [],
+    suggested_next_step: "apply",
+    missing_or_unclear_requirements: [],
+    evidence: [
+      {
+        job_signal: "Operations",
+        profile_signal: "recurring operations ownership",
+        explanation: "The role needs recurring operations work.",
+      },
+    ],
+    ...overrides,
+  };
+}
+
 const selectedJob = {
   id: "job_alpha",
   title: "Operations Associate",
@@ -127,9 +184,10 @@ const selectedJob = {
       jobId: "job_alpha",
     },
     computedAt: 1711003000000,
-    method: "keyword-overlap",
+    method: "llm",
     fallback: "none",
   },
+  matchReview: null as JobsPageMatchReview | null,
   nextStepBlock: {
     headline: "Common next steps",
     usesCohortData: false,
@@ -234,6 +292,9 @@ vi.mock("convex/react", () => ({
     if (reference === "jobsPublic.recordStructuredMatchReview") {
       return recordStructuredMatchReviewMock;
     }
+    if (reference === "jobsPublic.refreshStructuredMatch") {
+      return refreshStructuredMatchMock;
+    }
     if (reference === "jobsPublic.setResumeForJob") {
       return setJobResumeMock;
     }
@@ -270,6 +331,7 @@ vi.mock("../../../convex/_generated/api", () => ({
       trackEvent: "jobsPublic.trackEvent",
       markOpened: "jobsPublic.markOpened",
       recordStructuredMatchReview: "jobsPublic.recordStructuredMatchReview",
+      refreshStructuredMatch: "jobsPublic.refreshStructuredMatch",
       setResumeForJob: "jobsPublic.setResumeForJob",
       setJobFavorite: "jobsPublic.setJobFavorite",
       updateField: "jobsPublic.updateField",
@@ -357,6 +419,7 @@ describe("JobsPage", () => {
     duplicateJobMock.mockClear();
     markOpenedMock.mockClear();
     recordStructuredMatchReviewMock.mockClear();
+    refreshStructuredMatchMock.mockClear();
     recordFirstRunPathMock.mockClear();
     restoreArchivedJobMock.mockClear();
     seedSampleJobMock.mockReset();
@@ -793,7 +856,7 @@ describe("JobsPage", () => {
     expect(within(panel).getByText("Current match")).toBeInTheDocument();
     expect(
       within(panel).getByText(
-        "Experimental match read. Production score remains authoritative.",
+        "Structured score is used when available. Missing extraction stays pending instead of using keyword fallback.",
       ),
     ).toBeInTheDocument();
     expect(within(panel).getByText(/score\s+50/)).toBeInTheDocument();
@@ -829,7 +892,7 @@ describe("JobsPage", () => {
 
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
     expect(screen.queryByTestId("jobs-structured-preview-advisory-panel")).toBeNull();
-    expect(screen.queryByText("Experimental match read. Production score remains authoritative.")).toBeNull();
+    expect(screen.queryByText("Structured score is used when available. Missing extraction stays pending instead of using keyword fallback.")).toBeNull();
   });
 
   it("hides advisory structured preview for non-beta users", async () => {
@@ -1130,6 +1193,161 @@ describe("JobsPage", () => {
     expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
     expect(screen.getAllByText("Match").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("AI extracted")).not.toBeInTheDocument();
+  });
+
+  it("renders the matchReview one-liner as the primary detail match explanation", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      matchReview: buildMatchReview({
+        verdict: "possible_lead",
+        score: 68,
+        one_liner:
+          "Possible lead: strong operations overlap, with one requirement to confirm.",
+        why_this_may_interest_you: [
+          "Operations maps to profile evidence: recurring operations ownership.",
+          "Coordination maps to profile evidence: cross-team planning.",
+          "Airtable maps to profile evidence: workflow tracking.",
+          "This fourth reason should stay hidden.",
+        ],
+        suggested_next_step: "apply",
+      }),
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const matchRegion = await screen.findByLabelText("Match");
+    expect(within(matchRegion).getByText("Possible lead · 68%")).toBeInTheDocument();
+    expect(
+      within(matchRegion).getByText(
+        "Possible lead: strong operations overlap, with one requirement to confirm.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(matchRegion).getByText("Apply")).toBeInTheDocument();
+    expect(
+      within(matchRegion).getByText(
+        "Operations maps to profile evidence: recurring operations ownership.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(matchRegion).getByText(
+        "Coordination maps to profile evidence: cross-team planning.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(matchRegion).getByText(
+        "Airtable maps to profile evidence: workflow tracking.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(matchRegion).queryByText("This fourth reason should stay hidden."),
+    ).toBeNull();
+    expect(within(matchRegion).queryByText("Partial · 50%")).toBeNull();
+  });
+
+  it("renders matchReview watch-out copy for an unclear credential", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      matchReview: buildMatchReview({
+        verdict: "possible_lead",
+        score: 62,
+        watch_out: [
+          "Guard card/license preferred: confirm you have this credential before applying.",
+          "Weekend availability: confirm the schedule works.",
+          "This third watch-out should stay hidden.",
+        ],
+        suggested_next_step: "apply_if_requirement_true",
+        missing_or_unclear_requirements: [
+          {
+            requirement: "Guard card/license preferred",
+            severity: "unclear",
+            reason: "The profile does not show it explicitly.",
+          },
+        ],
+      }),
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const matchRegion = await screen.findByLabelText("Match");
+    expect(within(matchRegion).getByText("Possible lead · 62%")).toBeInTheDocument();
+    expect(within(matchRegion).getByText("Apply if true")).toBeInTheDocument();
+    expect(
+      within(matchRegion).getByText(
+        "Guard card/license preferred: confirm you have this credential before applying.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(matchRegion).getByText(
+        "Weekend availability: confirm the schedule works.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(matchRegion).queryByText("This third watch-out should stay hidden."),
+    ).toBeNull();
+  });
+
+  it("falls back to the existing matchRead block when matchReview is null", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      matchReview: null,
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const matchRegion = await screen.findByLabelText("Match");
+    expect(within(matchRegion).getByText("Partial · 50%")).toBeInTheDocument();
+    expect(within(matchRegion).getByText("Matched")).toBeInTheDocument();
+    expect(within(matchRegion).queryByText("Possible lead · 68%")).toBeNull();
+  });
+
+  it("falls back to the existing matchRead block when matchReview has not enough signal", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      matchReview: buildMatchReview({
+        verdict: "not_enough_signal",
+        score: 0,
+        one_liner:
+          "Not enough signal: the job or profile data is not ready for a useful review.",
+        watch_out: ["Structured review unavailable: extraction pending."],
+        suggested_next_step: "review_manually",
+      }),
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const matchRegion = await screen.findByLabelText("Match");
+    expect(within(matchRegion).getByText("Partial · 50%")).toBeInTheDocument();
+    expect(within(matchRegion).getByText("Matched")).toBeInTheDocument();
+    expect(within(matchRegion).queryByText("Not enough signal · 0%")).toBeNull();
+    expect(
+      within(matchRegion).queryByText(
+        "Structured review unavailable: extraction pending.",
+      ),
+    ).toBeNull();
   });
 
   it("opens the paperclip picker from the job detail header", async () => {
@@ -1462,6 +1680,53 @@ describe("JobsPage", () => {
         (screen.getByLabelText("Match input debug output") as HTMLTextAreaElement)
           .value,
       ).toContain('"lastResumeId": null');
+    });
+  });
+
+  it("queues structured extraction before refetching match on refresh", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      matchRead: {
+        ...selectedJob.matchRead,
+        tier: "unknown",
+        score: null,
+        scoreVisible: false,
+        matched: [],
+        missing: [],
+        method: "llm",
+        fallback: "structured_pending",
+      },
+    };
+    selectedJobResultByRefreshKey[1] = {
+      ...selectedJob,
+      matchRead: {
+        ...selectedJob.matchRead,
+        tier: "partial",
+        score: 68,
+        confidence: "medium",
+        method: "llm",
+        matched: ["Security Guard", "security guard license"],
+        missing: [],
+        fallback: "none",
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Match pending")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Match" }));
+
+    await waitFor(() => {
+      expect(refreshStructuredMatchMock).toHaveBeenCalledWith({
+        jobId: "job_alpha",
+      });
+      expect(screen.getByText("Partial · 68%")).toBeInTheDocument();
     });
   });
 
