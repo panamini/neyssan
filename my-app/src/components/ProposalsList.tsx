@@ -3,6 +3,7 @@ import { useQuery, useMutation, useAction, useConvexAuth } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { useToast } from "./ui/toast";
+import { AUTH_REQUIRED_TOAST } from "../lib/toast-copy";
 import ProposalDisplay from "./ProposalDisplay";
 import { SavedProposalForgeToolbarPreview } from "./SavedProposalForgeToolbarPreview";
 import type { SaveStatus } from "./ui/SaveIndicator";
@@ -688,7 +689,7 @@ export default function ProposalsList({
   );
   const showConvexAuthRequiredToast = React.useCallback(
     (actionLabel: string) => {
-      showToast("Sign in required", {
+      showToast(AUTH_REQUIRED_TOAST, {
         variant: "warning",
         description: `${actionLabel} is unavailable until saved proposals are authenticated.`,
       });
@@ -1416,7 +1417,7 @@ export default function ProposalsList({
       const activeCvSource = getActiveLocalPersonalizationSource();
       const sourceJobDescription = getStoredRegenerateJobDescription(selected);
       if (!sourceJobDescription) {
-        showToast("Original job post is unavailable for this saved proposal.", {
+        showToast("Job post unavailable.", {
           variant: "warning",
         });
         return;
@@ -1445,7 +1446,7 @@ export default function ProposalsList({
       };
       const res = await generateProposalAction(payload);
       if (!res?.proposalContent) {
-        showToast("Refinement returned no content", { variant: "warning" });
+        showToast("Nothing refined.", { variant: "warning" });
         return;
       }
       const nextMetadata: NonNullable<SavedProposalRecord["metadata"]> = {
@@ -1498,13 +1499,13 @@ export default function ProposalsList({
       };
       upsertLocalProposal(regeneratedRecord);
       selectProposal(regeneratedRecord, true);
-      showToast("Proposal refined", {
+      showToast("Refined.", {
         variant: "success",
         description: "A refreshed saved version is now in Proposal Library.",
       });
     } catch (err) {
       console.error("Regenerate failed:", err);
-      showToast("Refinement failed", { variant: "error" });
+      showToast("Refine failed.", { variant: "error" });
     } finally {
       setIsRegenerating(null);
     }
@@ -1521,7 +1522,7 @@ export default function ProposalsList({
       removeLocalProposal(selected._id);
     } catch (err) {
       console.error("Failed to delete proposal:", err);
-      showToast("Failed to delete proposal", { variant: "error" });
+      showToast("Delete failed.", { variant: "error" });
     }
   }
 
@@ -1832,7 +1833,7 @@ export default function ProposalsList({
                         onClick={() => {
                           const text = getProposalDisplayText(proposal);
                           void navigator.clipboard.writeText(text).then(() => {
-                            showToast("Copied proposal", {
+                            showToast("Copied.", {
                               description:
                                 "Saved proposal text copied to clipboard.",
                             });

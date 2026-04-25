@@ -1621,12 +1621,8 @@ function JobsPageContent(): JSX.Element {
     try {
       const result = await seedSampleJob({});
       await navigate(buildJobsRoute(result.jobId));
-    } catch (error) {
-      setFirstRunError(
-        error instanceof Error
-          ? error.message
-          : "Sample job could not be created.",
-      );
+    } catch {
+      setFirstRunError("Sample failed.");
     } finally {
       setIsSeedingSample(false);
     }
@@ -1661,12 +1657,7 @@ function JobsPageContent(): JSX.Element {
         );
         setIsResumePickerOpen(false);
       } catch (error) {
-        showToast(
-          error instanceof Error
-            ? error.message
-            : "Could not attach the selected resume.",
-          { variant: "error" },
-        );
+        showToast("Attach failed.", { variant: "error" });
       }
     },
     [resumePickerOptions, selectedJob?.id, setJobResume, showToast],
@@ -1696,10 +1687,7 @@ function JobsPageContent(): JSX.Element {
       );
       setIsResumePickerOpen(false);
     } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : "Detach failed. Try again.",
-        { variant: "error" },
-      );
+      showToast("Detach failed.", { variant: "error" });
     }
   }, [selectedJob?.id, setJobResume, showToast]);
 
@@ -1739,10 +1727,7 @@ function JobsPageContent(): JSX.Element {
               }
             : current,
         );
-        showToast(
-          error instanceof Error ? error.message : "Favorite update failed.",
-          { variant: "error" },
-        );
+        showToast("Favorite failed.", { variant: "error" });
       }
     },
     [
@@ -1924,7 +1909,7 @@ function JobsPageContent(): JSX.Element {
           await navigate(buildJobsListRoute("active"));
         }
       } catch (error) {
-        showToast("Archive failed", {
+        showToast("Archive failed.", {
           variant: "error",
           description: formatJobsActionError(error, "Try again."),
         });
@@ -1941,7 +1926,7 @@ function JobsPageContent(): JSX.Element {
         setConfirmingPermanentDeleteJobId(null);
         await navigate(buildJobsListRoute("active"));
       } catch (error) {
-        showToast("Restore failed", {
+        showToast("Restore failed.", {
           variant: "error",
           description: formatJobsActionError(error, "Try again."),
         });
@@ -1957,7 +1942,7 @@ function JobsPageContent(): JSX.Element {
         setOpenRowMenuJobId(null);
         setConfirmingPermanentDeleteJobId(null);
       } catch (error) {
-        showToast("Delete failed", {
+        showToast("Delete failed.", {
           variant: "error",
           description: formatJobsActionError(error, "Try again."),
         });
@@ -1980,7 +1965,7 @@ function JobsPageContent(): JSX.Element {
         await navigate(buildJobsRoute(result.jobId));
       } catch (error) {
         setDuplicateTransition(null);
-        showToast("Duplicate failed", {
+        showToast("Duplicate failed.", {
           variant: "error",
           description: formatJobsActionError(error, "Try again."),
         });

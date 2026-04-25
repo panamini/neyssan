@@ -162,7 +162,7 @@ export function CoverLetterStartSurface({
                   label="Capture the role"
                   hint={
                     showExtensionHelper
-                      ? "Use the TwoWeeks extension on a supported site."
+                      ? "Use the Twoweeks extension on a supported site."
                       : "Pull it in from a supported site."
                   }
                   onClick={onUseChromeExtension}

@@ -19,6 +19,7 @@ import { ProposalBriefCard } from "../components/ProposalBriefCard";
 import { ProposalArtifactInspector } from "../components/ProposalArtifactInspector";
 import { ProposalComposeToolbar } from "../components/ProposalComposeToolbar";
 import { useToast } from "../components/ui/toast";
+import { AUTH_REQUIRED_TOAST } from "../lib/toast-copy";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import type { FormValues } from "../components/ProposalInputForm.schemas";
 import { api } from "../../convex/_generated/api";
@@ -1501,7 +1502,7 @@ export function ProposalForgeNext(): JSX.Element {
 
     if (!baseRequest) return;
     if (isSavedProposalRoute && !sourceJobDescription) {
-      showToast("Original job post is unavailable for this saved proposal.", {
+      showToast("Job post unavailable.", {
         variant: "warning",
       });
       return;
@@ -1584,7 +1585,7 @@ export function ProposalForgeNext(): JSX.Element {
           },
         );
       }
-      showToast("Proposal regenerated", { variant: "success" });
+      showToast("Regenerated.", { variant: "success" });
     } catch (regenerateError) {
       const message = getProposalGenerationUiErrorMessage({
         error: regenerateError,
@@ -1594,7 +1595,7 @@ export function ProposalForgeNext(): JSX.Element {
       const rawReason =
         regenerateError instanceof Error ? regenerateError.message : null;
       handleProposalError(message, requestWithVoice, rawReason);
-      showToast("Regeneration failed", {
+      showToast("Regen failed.", {
         variant: "error",
         description: message,
       });
@@ -1629,7 +1630,7 @@ export function ProposalForgeNext(): JSX.Element {
     }
 
     if (!canPersistProposalState) {
-      showToast("Sign in required", {
+      showToast(AUTH_REQUIRED_TOAST, {
         variant: "info",
         description: "Delete requires an account.",
       });
@@ -1642,13 +1643,13 @@ export function ProposalForgeNext(): JSX.Element {
       if (isSavedProposalRoute) {
         void navigate("/proposal", { replace: true });
       }
-      showToast("Proposal deleted", { variant: "success" });
+      showToast("Deleted.", { variant: "success" });
     } catch (deleteError) {
       console.error(
         "[ProposalForgeNext] Failed to delete proposal:",
         deleteError,
       );
-      showToast("Delete failed", {
+      showToast("Delete failed.", {
         variant: "error",
         description: "The generated proposal could not be removed.",
       });
@@ -1674,7 +1675,7 @@ export function ProposalForgeNext(): JSX.Element {
     }
 
     if (!canPersistProposalState) {
-      showToast("Sign in required", {
+      showToast(AUTH_REQUIRED_TOAST, {
         variant: "info",
         description: "Save requires an account.",
       });
@@ -1701,18 +1702,15 @@ export function ProposalForgeNext(): JSX.Element {
       });
       lastSavedProposalContentRef.current = trimmed;
       lastSavedProposalTitleRef.current = normalizedTitle;
-      showToast(
-        isSavedProposalRoute ? "Saved proposal updated" : "Saved to library",
-        {
-          variant: "success",
-        },
-      );
+      showToast("Saved.", {
+        variant: "success",
+      });
     } catch (saveError) {
       console.error(
         "[ProposalForgeNext] Failed to save to library:",
         saveError,
       );
-      showToast("Save failed", {
+      showToast("Save failed.", {
         variant: "error",
         description: "The proposal could not be saved.",
       });
