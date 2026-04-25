@@ -15,10 +15,18 @@ jobs:
         node-version: lts/*
     - name: Install dependencies
       run: npm ci
+    - name: Install app dependencies
+      run: npm ci --prefix my-app
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
+    - name: Start local app stack
+      run: OPEN_BROWSER=0 ./run.sh local-fast
+    - name: Check local app stack
+      run: ./run.sh status
     - name: Run Playwright tests
       run: npx playwright test
+      env:
+        PLAYWRIGHT_APP_URL: http://127.0.0.1:5173
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
