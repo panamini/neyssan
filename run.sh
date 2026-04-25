@@ -37,6 +37,7 @@ CONVEX_LOG="${LOG_DIR}/convex-dev.log"
 LOCAL_CONVEX_URL="${LOCAL_CONVEX_URL:-}"
 LOCAL_CONVEX_CLOUD_PORT="${LOCAL_CONVEX_CLOUD_PORT:-3210}"
 LOCAL_CONVEX_SITE_PORT="${LOCAL_CONVEX_SITE_PORT:-3211}"
+LOCAL_CONVEX_STARTUP_TIMEOUT="${LOCAL_CONVEX_STARTUP_TIMEOUT:-90}"
 CONVEX_TMPDIR="${CONVEX_TMPDIR:-${ROOT_DIR}/tmp/convex-tmp}"
 CACHE_DIR="${ROOT_DIR}/.buildx-cache"
 DOCKER_STATE_DIR="${ROOT_DIR}/.docker"
@@ -426,6 +427,25 @@ resolve_convex_project_binding() {
       fi
     fi
   done
+  local local_state_root="${HOME}/.convex/convex-backend-state"
+  local local_configs=()
+  if [[ -d "${local_state_root}" ]]; then
+    while IFS= read -r config_file; do
+      local_configs+=("${config_file}")
+    done < <(find "${local_state_root}" -mindepth 2 -maxdepth 2 -path "${local_state_root}/local-*/config.json" -print 2>/dev/null)
+  fi
+  if [[ "${#local_configs[@]}" -eq 1 ]]; then
+    local deployment_dir
+    local deployment_name
+    deployment_dir="$(dirname "${local_configs[0]}")"
+    deployment_name="$(basename "${deployment_dir}")"
+    if [[ "${deployment_name}" =~ ^local-([^-]+)-(.+)$ ]]; then
+      CONVEX_TEAM_RESULT="${BASH_REMATCH[1]}"
+      CONVEX_PROJECT_RESULT="${BASH_REMATCH[2]}"
+      CONVEX_DEPLOYMENT_NAME_RESULT="${deployment_name}"
+      return 0
+    fi
+  fi
   return 1
 }
 
@@ -588,6 +608,16 @@ sync_local_convex_env() {
     unset CONVEX_SELF_HOSTED_URL
     unset CONVEX_SELF_HOSTED_ADMIN_KEY
     export CONVEX_TMPDIR="${CONVEX_TMPDIR}"
+    local convex_env_url="${CONVEX_URL_RESULT:-}"
+    local convex_env_admin_key=""
+    if [[ -z "${convex_env_url}" ]]; then
+      convex_env_url="$(discover_local_convex_url)"
+    fi
+    if [[ -n "${LOCAL_CONVEX_STATE_CONFIG_RESULT:-}" && -f "${LOCAL_CONVEX_STATE_CONFIG_RESULT}" ]]; then
+      convex_env_admin_key="$(
+        node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).adminKey || "")' "${LOCAL_CONVEX_STATE_CONFIG_RESULT}"
+      )"
+    fi
     for name in "${env_names[@]}"; do
       if [[ "${name}" == "CONVEX_PARSER_URL" ]]; then
         value="http://127.0.0.1:8001"
@@ -595,7 +625,11 @@ sync_local_convex_env() {
         value="${!name:-}"
       fi
       [[ -n "${value}" ]] || continue
-      "${convex_bin}" env set "${name}" "${value}" >/dev/null
+      if [[ -n "${convex_env_url}" && -n "${convex_env_admin_key}" ]]; then
+        CONVEX_SELF_HOSTED_URL="${convex_env_url}" CONVEX_SELF_HOSTED_ADMIN_KEY="${convex_env_admin_key}" "${convex_bin}" env set "${name}" "${value}" >/dev/null
+      else
+        "${convex_bin}" env set "${name}" "${value}" >/dev/null
+      fi
     done
   ) >> "${CONVEX_LOG}" 2>&1
 }
@@ -750,7 +784,19 @@ clear_dev_state() {
 is_convex_ready() {
   local url="${1:-}"
   [[ -z "${url}" ]] && return 1
-  curl -fsS "${url}/instance_name" >/dev/null 2>&1
+  node -e '
+const http = require("node:http");
+const url = `${process.argv[1].replace(/\/$/, "")}/instance_name`;
+const req = http.get(url, (res) => {
+  res.resume();
+  res.on("end", () => process.exit(res.statusCode === 200 ? 0 : 1));
+});
+req.on("error", () => process.exit(1));
+req.setTimeout(1000, () => {
+  req.destroy();
+  process.exit(1);
+});
+' "${url}" >/dev/null 2>&1
 }
 
 discover_local_convex_url() {
@@ -838,13 +884,56 @@ start_convex() {
     export CONVEX_PARSER_URL="http://127.0.0.1:8001"
     export STRUCTURED_UPLOAD_PREFER_LOOPBACK=1
     export CONVEX_TMPDIR="${CONVEX_TMPDIR}"
-    local -a convex_cmd=("${convex_bin}" dev --verbose --tail-logs always --local-cloud-port "${convex_cloud_port}" --local-site-port "${convex_site_port}" --local-force-upgrade)
-    if [[ -n "${convex_deployment_name}" ]]; then
-      convex_cmd+=(--local)
-    else
-      convex_cmd+=(--configure existing --team "${convex_team}" --project "${convex_project}" --dev-deployment local)
+    local direct_backend_bin=""
+    local direct_backend_state_dir=""
+    if [[ -n "${LOCAL_CONVEX_STATE_CONFIG_RESULT:-}" && -n "${convex_deployment_name}" ]]; then
+      direct_backend_state_dir="$(dirname "${LOCAL_CONVEX_STATE_CONFIG_RESULT}")"
+      direct_backend_bin="$(
+        node -e '
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+process.stdout.write(path.join(os.homedir(), ".cache", "convex", "binaries", config.backendVersion, process.platform === "win32" ? "convex-local-backend.exe" : "convex-local-backend"));
+' "${LOCAL_CONVEX_STATE_CONFIG_RESULT}"
+      )"
     fi
-    node -e '
+    if [[ -n "${direct_backend_bin}" && -x "${direct_backend_bin}" ]]; then
+      node -e '
+const fs = require("node:fs");
+const { spawn } = require("node:child_process");
+const [pidFile, logFile, supervisor, ...args] = process.argv.slice(1);
+const logFd = fs.openSync(logFile, "a");
+const child = spawn(process.execPath, [supervisor, pidFile, logFile, ...args], {
+  cwd: process.cwd(),
+  env: process.env,
+  detached: true,
+  stdio: ["ignore", logFd, logFd],
+});
+fs.writeFileSync(pidFile, String(child.pid));
+child.unref();
+' \
+        "${convex_pid_file}" \
+        "${CONVEX_LOG}" \
+        "${ROOT_DIR}/scripts/local-convex-supervisor.cjs" \
+        "${direct_backend_bin}" \
+        "${actual_url}" \
+        "${convex_cloud_port}" \
+        "${convex_site_port}" \
+        "${convex_deployment_name}" \
+        "${direct_backend_state_dir}/convex_local_storage" \
+        "${direct_backend_state_dir}/convex_local_backend.sqlite3" \
+        "${convex_bin}" \
+        "${LOCAL_CONVEX_STATE_CONFIG_RESULT}" \
+        "${LOCAL_CONVEX_STARTUP_TIMEOUT}"
+    else
+      local -a convex_cmd=("${convex_bin}" dev --verbose --tail-logs always --local-cloud-port "${convex_cloud_port}" --local-site-port "${convex_site_port}" --local-force-upgrade)
+      if [[ -n "${convex_deployment_name}" ]]; then
+        convex_cmd+=(--local)
+      else
+        convex_cmd+=(--configure existing --team "${convex_team}" --project "${convex_project}" --dev-deployment local)
+      fi
+      node -e '
 const fs = require("node:fs");
 const { spawn } = require("node:child_process");
 const [pidFile, logFile, cmd, ...args] = process.argv.slice(1);
@@ -858,8 +947,13 @@ const child = spawn(cmd, args, {
 fs.writeFileSync(pidFile, String(child.pid));
 child.unref();
 ' "${convex_pid_file}" "${CONVEX_LOG}" "${convex_cmd[@]}"
+    fi
   )
   local cpid=""
+  for _ in $(seq 1 50); do
+    [[ -s "${convex_pid_file}" ]] && break
+    sleep 0.1
+  done
   cpid="$(cat "${convex_pid_file}" 2>/dev/null || true)"
   rm -f "${convex_pid_file}"
   if [[ -z "${cpid}" ]]; then
@@ -867,7 +961,14 @@ child.unref();
     exit 1
   fi
   printf "[run] waiting for local Convex" >&2
-  for i in $(seq 1 60); do
+  for i in $(seq 1 "${LOCAL_CONVEX_STARTUP_TIMEOUT}"); do
+    if grep -q '\[run\] Convex local backend is ready' "${CONVEX_LOG}" || grep -q 'Convex functions ready!' "${CONVEX_LOG}"; then
+      echo >&2
+      sync_local_convex_env
+      CONVEX_PID_RESULT="${cpid}"
+      CONVEX_URL_RESULT="${actual_url}"
+      return 0
+    fi
     if [[ -n "${actual_url}" ]] && is_convex_ready "${actual_url}"; then
       echo >&2
       sync_local_convex_env
