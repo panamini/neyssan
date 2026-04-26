@@ -20,6 +20,21 @@ jobs:
         working-directory: my-app
         run: npm ci
 
-      - name: Run tests
+      - name: Generate Convex client bindings
         working-directory: my-app
-        run: npm test --silent
+        run: |
+          if [ -z "${CONVEX_DEPLOYMENT:-}" ]; then
+            echo "::error::Set the repository variable CONVEX_DEPLOYMENT to the dev deployment used for JS tests."
+            exit 1
+          fi
+          npx convex codegen --typecheck disable
+        env:
+          CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
+
+      - name: Run Match Review guardrail tests
+        working-directory: my-app
+        run: |
+          ./node_modules/.bin/vitest --run \
+            convex/lib/jobs/__tests__/structuredMatchReview.test.ts \
+            convex/lib/jobs/__tests__/structuredMatchRead.test.ts \
+            convex/lib/jobs/__tests__/structuredMatchReadEvaluation.test.ts
