@@ -709,7 +709,8 @@ describe("ProfileReviewCard import", () => {
 
     render(<ProfileReviewCard onRequestExport={exportCvMock} />);
 
-    await user.click(screen.getByRole("button", { name: "Export ATS PDF" }));
+    await user.click(screen.getByRole("button", { name: "More export formats" }));
+    await user.click(screen.getByRole("menuitem", { name: /Export ATS PDF/i }));
 
     expect(exportCvMock).not.toHaveBeenCalled();
     expect(
@@ -1413,8 +1414,9 @@ describe("ProfileReviewCard import", () => {
 
     expect(actionGroup).not.toBeNull();
     expect(
-      actionGroup?.querySelector('[aria-label="Export ATS PDF"]'),
+      actionGroup?.querySelector('[aria-label="More export formats"]'),
     ).not.toBeNull();
+    expect(actionGroup?.querySelector('[aria-label="Export ATS PDF"]')).toBeNull();
     expect(
       actionGroup?.querySelector('[aria-label="Review import"]'),
     ).not.toBeNull();
@@ -1440,8 +1442,8 @@ describe("ProfileReviewCard import", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Export ATS PDF" }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: "Export ATS PDF" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Export Styled PDF" }),
     ).toBeDisabled();

@@ -13,6 +13,7 @@ import {
   X,
 } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
+import { LibraryFilterMenu } from "../components/LibraryFilterMenu";
 import { ProposalBriefCard } from "../components/ProposalBriefCard";
 import { FirstRunPanel } from "../components/jobs/FirstRunPanel";
 import { MatchReadBlock } from "../components/jobs/MatchReadBlock";
@@ -237,6 +238,17 @@ type JobsPageDetail = {
 type JobsSortOrder = "recent" | "oldest" | "title" | "company";
 type JobsMatchFilter = "all" | "strong" | "partial" | "weak" | "unknown";
 type JobsViewMode = "active" | "archived";
+
+const JOBS_SORT_OPTIONS = [
+  {
+    value: "recent",
+    label: "Recent activity",
+    description: "Latest job activity first.",
+  },
+  { value: "oldest", label: "Oldest first", description: "Oldest saved first." },
+  { value: "title", label: "Title", description: "Alphabetical by role." },
+  { value: "company", label: "Company", description: "Alphabetical by company." },
+] as const;
 
 const STRUCTURED_MATCH_REVIEW_LABELS = [
   "good",
@@ -1028,11 +1040,16 @@ function matchesListFilters(
 }
 
 function resolveMatchTierLabel(tier: JobsPageListItem["matchTier"]): string {
-  if (tier === "unknown") {
-    return "—";
+  switch (tier) {
+    case "strong":
+      return "Strong lead";
+    case "partial":
+      return "Possible lead";
+    case "weak":
+      return "Probably skip";
+    case "unknown":
+      return "Not enough signal";
   }
-
-  return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
 function resolveLocationModeLabel(value: string): string {
@@ -2120,33 +2137,28 @@ function JobsPageContent(): JSX.Element {
                       className="dasti-select dasti-select--sm"
                     />
                   </label>
-                  <label className="dasti-jobs-toolbar__select">
-                    <span className="sr-only">Sort jobs</span>
-                    <select
-                      value={sortOrder}
-                      onChange={(event) =>
-                        setSortOrder(event.target.value as JobsSortOrder)
-                      }
-                      aria-label="Sort jobs"
-                      className="dasti-select dasti-select--sm"
-                    >
-                      <option value="recent">Recent activity</option>
-                      <option value="oldest">Oldest first</option>
-                      <option value="title">Title</option>
-                      <option value="company">Company</option>
-                    </select>
-                  </label>
+                  <LibraryFilterMenu
+                    label="Sort jobs"
+                    value={sortOrder}
+                    options={JOBS_SORT_OPTIONS}
+                    onChange={setSortOrder}
+                  />
                   <span className="dasti-jobs-toolbar__count">
                     {filteredJobs.length === (displayedJobs?.length ?? 0)
                       ? `${displayedJobs?.length ?? 0} jobs`
                       : `${filteredJobs.length} of ${displayedJobs?.length ?? 0}`}
                   </span>
                 </div>
-                <div className="dasti-jobs-filter-chips" aria-label="Job views">
+                <div
+                  className="dasti-jobs-filter-chips dasti-jobs-view-toggle"
+                  aria-label="Job views"
+                  role="group"
+                >
                   <button
                     type="button"
                     className={[
                       "dasti-jobs-filter-chip",
+                      "dasti-jobs-view-toggle__button",
                       jobsView === "active"
                         ? "dasti-jobs-filter-chip--active"
                         : null,
@@ -2162,6 +2174,7 @@ function JobsPageContent(): JSX.Element {
                     type="button"
                     className={[
                       "dasti-jobs-filter-chip",
+                      "dasti-jobs-view-toggle__button",
                       jobsView === "archived"
                         ? "dasti-jobs-filter-chip--active"
                         : null,
@@ -2181,79 +2194,98 @@ function JobsPageContent(): JSX.Element {
                     className="dasti-jobs-filter-chips"
                     aria-label="Job filters"
                   >
-                    <button
-                      type="button"
-                      className={[
-                        "dasti-jobs-filter-chip",
-                        matchFilter === "all"
-                          ? "dasti-jobs-filter-chip--active"
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onClick={() => setMatchFilter("all")}
+                    <div
+                      className="dasti-jobs-filter-cluster dasti-jobs-filter-cluster--quality"
+                      aria-label="Match quality"
                     >
-                      All tiers
-                    </button>
-                    {(["strong", "partial", "weak", "unknown"] as const).map(
-                      (tier) => (
-                        <button
-                          key={tier}
-                          type="button"
-                          className={[
-                            "dasti-jobs-filter-chip",
-                            matchFilter === tier
-                              ? "dasti-jobs-filter-chip--active"
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                          onClick={() => setMatchFilter(tier)}
-                        >
-                          {tier === "unknown"
-                            ? "Match —"
-                            : `Match ${resolveMatchTierLabel(tier)}`}
-                        </button>
-                      ),
-                    )}
-                    <button
-                      type="button"
-                      className={[
-                        "dasti-jobs-filter-chip",
-                        hasDocsOnly ? "dasti-jobs-filter-chip--active" : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onClick={() => setHasDocsOnly((current) => !current)}
+                      <button
+                        type="button"
+                        className={[
+                          "dasti-jobs-filter-chip",
+                          matchFilter === "all"
+                            ? "dasti-jobs-filter-chip--active"
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => setMatchFilter("all")}
+                      >
+                        All matches
+                      </button>
+                      {(["strong", "partial", "weak", "unknown"] as const).map(
+                        (tier) => (
+                          <button
+                            key={tier}
+                            type="button"
+                            className={[
+                              "dasti-jobs-filter-chip",
+                              matchFilter === tier
+                                ? "dasti-jobs-filter-chip--active"
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            onClick={() => setMatchFilter(tier)}
+                          >
+                            {resolveMatchTierLabel(tier)}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                    <div
+                      className="dasti-jobs-filter-cluster dasti-jobs-filter-cluster--attention"
+                      aria-label="Review state"
                     >
-                      Has docs
-                    </button>
-                    <button
-                      type="button"
-                      className={[
-                        "dasti-jobs-filter-chip",
-                        needsReviewOnly
-                          ? "dasti-jobs-filter-chip--active"
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onClick={() => setNeedsReviewOnly((current) => !current)}
+                      <button
+                        type="button"
+                        className={[
+                          "dasti-jobs-filter-chip",
+                          needsReviewOnly
+                            ? "dasti-jobs-filter-chip--active"
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() =>
+                          setNeedsReviewOnly((current) => !current)
+                        }
+                      >
+                        Needs review
+                      </button>
+                    </div>
+                    <div
+                      className="dasti-jobs-filter-cluster dasti-jobs-filter-cluster--utility"
+                      aria-label="Job utilities"
                     >
-                      Needs review
-                    </button>
-                    <button
-                      type="button"
-                      className={[
-                        "dasti-jobs-filter-chip",
-                        favoritesOnly ? "dasti-jobs-filter-chip--active" : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onClick={() => setFavoritesOnly((current) => !current)}
-                    >
-                      Favorites
-                    </button>
+                      <button
+                        type="button"
+                        className={[
+                          "dasti-jobs-filter-chip",
+                          hasDocsOnly
+                            ? "dasti-jobs-filter-chip--active"
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => setHasDocsOnly((current) => !current)}
+                      >
+                        Has docs
+                      </button>
+                      <button
+                        type="button"
+                        className={[
+                          "dasti-jobs-filter-chip",
+                          favoritesOnly
+                            ? "dasti-jobs-filter-chip--active"
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => setFavoritesOnly((current) => !current)}
+                      >
+                        Favorites
+                      </button>
+                    </div>
                   </div>
                 ) : null}
 
@@ -2407,7 +2439,7 @@ function JobsPageContent(): JSX.Element {
                               </button>
                               {isRowMenuOpen ? (
                                 <div
-                                  className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-jobs-row__menu-surface"
+                                  className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-jobs-row__menu-surface"
                                   role="menu"
                                   aria-label={`Actions for ${title}`}
                                 >
@@ -2416,7 +2448,7 @@ function JobsPageContent(): JSX.Element {
                                       <button
                                         type="button"
                                         role="menuitem"
-                                        className="dasti-cv-style-presets__option"
+                                        className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
                                         disabled={!job.sourceUrl}
                                         onClick={(event) => {
                                           event.stopPropagation();
@@ -2433,7 +2465,7 @@ function JobsPageContent(): JSX.Element {
                                       <button
                                         type="button"
                                         role="menuitem"
-                                        className="dasti-cv-style-presets__option"
+                                        className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
                                         onClick={(event) => {
                                           event.stopPropagation();
                                           setOpenRowMenuJobId(null);
@@ -2449,7 +2481,7 @@ function JobsPageContent(): JSX.Element {
                                       <button
                                         type="button"
                                         role="menuitem"
-                                        className="dasti-cv-style-presets__option"
+                                        className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
                                         onClick={(event) => {
                                           event.stopPropagation();
                                           setOpenRowMenuJobId(null);
@@ -2468,7 +2500,7 @@ function JobsPageContent(): JSX.Element {
                                       <button
                                         type="button"
                                         role="menuitem"
-                                        className="dasti-cv-style-presets__option"
+                                        className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
                                         onClick={(event) => {
                                           event.stopPropagation();
                                           void handleRestoreArchivedJob(job.id);
@@ -2486,7 +2518,7 @@ function JobsPageContent(): JSX.Element {
                                           <button
                                             type="button"
                                             role="menuitem"
-                                            className="dasti-cv-style-presets__option"
+                                            className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
                                             onClick={(event) => {
                                               event.stopPropagation();
                                               void handleDeleteArchivedJob(
@@ -2503,7 +2535,7 @@ function JobsPageContent(): JSX.Element {
                                           <button
                                             type="button"
                                             role="menuitem"
-                                            className="dasti-cv-style-presets__option"
+                                            className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
                                             onClick={(event) => {
                                               event.stopPropagation();
                                               setConfirmingPermanentDeleteJobId(
@@ -2522,7 +2554,7 @@ function JobsPageContent(): JSX.Element {
                                         <button
                                           type="button"
                                           role="menuitem"
-                                          className="dasti-cv-style-presets__option"
+                                          className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
                                           onClick={(event) => {
                                             event.stopPropagation();
                                             setConfirmingPermanentDeleteJobId(
@@ -2740,7 +2772,7 @@ function JobsPageContent(): JSX.Element {
                             id={`job-resume-picker-${selectedJob.id}`}
                             role="dialog"
                             aria-label="Attach resume"
-                            className="dasti-jobs-detail__resume-popover dasti-toolbar-drawer-surface"
+                            className="dasti-jobs-detail__resume-popover dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
                           >
                             {resumePickerOptions.length === 0 ? (
                               <div className="dasti-jobs-detail__resume-empty">
@@ -2754,8 +2786,9 @@ function JobsPageContent(): JSX.Element {
                                     type="button"
                                     className={[
                                       "dasti-jobs-detail__resume-option",
+                                      "dasti-proposal-chrome-option",
                                       option.id === selectedJob.resumeId
-                                        ? "dasti-jobs-detail__resume-option--active"
+                                        ? "dasti-jobs-detail__resume-option--active dasti-proposal-chrome-option--active"
                                         : "",
                                     ]
                                       .filter(Boolean)

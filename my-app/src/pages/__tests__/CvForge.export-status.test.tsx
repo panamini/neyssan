@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -105,19 +105,6 @@ vi.mock("../../components/ProfileReviewCard", () => ({
           <div>
             <button
               type="button"
-              aria-label="Export ATS PDF"
-              disabled={exportingFormat !== null}
-              onClick={() =>
-                onRequestExport({
-                  format: "pdf",
-                  mode: "ats",
-                })
-              }
-            >
-              Export ATS PDF
-            </button>
-            <button
-              type="button"
               aria-label="Export Styled PDF"
               disabled={exportingFormat !== null}
               onClick={() =>
@@ -140,6 +127,19 @@ vi.mock("../../components/ProfileReviewCard", () => ({
             <span>{exportStatusLabel ?? "Standard Export"}</span>
             {isMenuOpen ? (
               <div role="menu" aria-label="Export resume formats">
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={exportingFormat !== null}
+                  onClick={() =>
+                    onRequestExport({
+                      format: "pdf",
+                      mode: "ats",
+                    })
+                  }
+                >
+                  Export ATS PDF
+                </button>
                 <button
                   type="button"
                   role="menuitem"
@@ -292,8 +292,8 @@ describe("CvForge export status", () => {
     expect(screen.getByText("ATS Ready")).toBeInTheDocument();
 
     expect(
-      screen.getByRole("button", { name: "Export ATS PDF" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Export ATS PDF" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Export Styled PDF" }),
     ).toBeInTheDocument();
@@ -303,13 +303,14 @@ describe("CvForge export status", () => {
 
     await user.click(screen.getByRole("button", { name: "More export formats" }));
     expect(screen.getAllByText("Trusted Mistral v3").length).toBeGreaterThan(0);
+    expect(screen.getByRole("menuitem", { name: /Export ATS PDF/i })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /Export DOCX/i })).toBeInTheDocument();
     expect(
       screen.getByRole("menuitem", { name: /Export Markdown/i }),
     ).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /Export JSON/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Export ATS PDF" }));
+    await user.click(screen.getByRole("menuitem", { name: /Export ATS PDF/i }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -518,8 +519,8 @@ describe("CvForge export status", () => {
     expect(screen.queryByText("ATS Ready")).toBeNull();
 
     expect(
-      screen.getByRole("button", { name: "Export ATS PDF" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Export ATS PDF" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Export Styled PDF" }),
     ).toBeInTheDocument();
@@ -529,6 +530,7 @@ describe("CvForge export status", () => {
 
     await user.click(screen.getByRole("button", { name: "More export formats" }));
     expect(screen.getAllByText("Not ATS-verified").length).toBeGreaterThan(0);
+    expect(screen.getByRole("menuitem", { name: /Export ATS PDF/i })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: /Export DOCX/i })).toBeInTheDocument();
     expect(
       screen.getByRole("menuitem", { name: /Export Markdown/i }),
@@ -607,7 +609,8 @@ describe("CvForge export status", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Export ATS PDF" }));
+    await user.click(screen.getByRole("button", { name: "More export formats" }));
+    await user.click(screen.getByRole("menuitem", { name: /Export ATS PDF/i }));
     await user.click(screen.getByRole("button", { name: "Export Styled PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenNthCalledWith(
@@ -738,11 +741,12 @@ describe("CvForge export status", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Export ATS PDF" }));
+    await user.click(screen.getByRole("button", { name: "More export formats" }));
+    await user.click(screen.getByRole("menuitem", { name: /Export ATS PDF/i }));
 
     expect(
-      screen.getByRole("button", { name: "Export ATS PDF" }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: "Export ATS PDF" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Export Styled PDF" }),
     ).toBeDisabled();
@@ -755,14 +759,16 @@ describe("CvForge export status", () => {
     resolveExport?.({ filename: "Resume - ATS.pdf" });
 
     expect(
-      await screen.findByRole("button", { name: "Export ATS PDF" }),
-    ).not.toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Export Styled PDF" }),
-    ).not.toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "More export formats" }),
-    ).not.toBeDisabled();
+      screen.queryByRole("button", { name: "Export ATS PDF" }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Export Styled PDF" }),
+      ).not.toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "More export formats" }),
+      ).not.toBeDisabled();
+    });
 
     await user.click(screen.getByRole("button", { name: "Open resume preview" }));
 
@@ -781,8 +787,8 @@ describe("CvForge export status", () => {
     await user.click(screen.getByRole("button", { name: "Export Styled PDF" }));
 
     expect(
-      screen.getByRole("button", { name: "Export ATS PDF" }),
-    ).toBeDisabled();
+      screen.queryByRole("button", { name: "Export ATS PDF" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Export Styled PDF" }),
     ).toBeDisabled();
@@ -795,14 +801,16 @@ describe("CvForge export status", () => {
     resolveExport?.({ filename: "Resume - Styled.pdf" });
 
     expect(
-      await screen.findByRole("button", { name: "Export ATS PDF" }),
-    ).not.toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Export Styled PDF" }),
-    ).not.toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "More export formats" }),
-    ).not.toBeDisabled();
+      screen.queryByRole("button", { name: "Export ATS PDF" }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Export Styled PDF" }),
+      ).not.toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "More export formats" }),
+      ).not.toBeDisabled();
+    });
   });
 
   it("routes workshop styled PDF export through the preview print-route path", async () => {
