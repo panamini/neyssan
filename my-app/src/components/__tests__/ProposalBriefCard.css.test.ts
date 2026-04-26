@@ -89,7 +89,7 @@ describe("ProposalBriefCard CSS contracts", () => {
     expect(productCss).not.toContain("border-inline-start: 3px solid");
   });
 
-  it("keeps local status pills aligned with the dasti preview catalog", () => {
+  it("keeps local status pills aligned with the dasti brand canon", () => {
     expect(primitivesCss).toContain(".dasti-pill {");
     expect(primitivesCss).toContain(
       "gap: calc((var(--space-1) + var(--space-2)) / 2);",
@@ -102,9 +102,9 @@ describe("ProposalBriefCard CSS contracts", () => {
     expect(primitivesCss).toContain("color: var(--color-success-ink);");
     expect(primitivesCss).toContain("background: var(--color-warning-soft);");
     expect(primitivesCss).toContain("color: var(--color-warning-ink);");
-    expect(foundationCss).toContain("--okb: hsl(150, 42%, 94%);");
-    expect(foundationCss).toContain("--wab: hsl(36, 80%, 94%);");
-    expect(foundationCss).toContain("--okb: hsl(150, 32%, 16%);");
-    expect(foundationCss).toContain("--wab: hsl(36, 44%, 16%);");
+    expect(foundationCss).toContain("--okb: hsl(152, 16%, 92%);");
+    expect(foundationCss).toContain("--wab: hsl(34, 30%, 92%);");
+    expect(foundationCss).toContain("--okb: hsl(152, 13%, 13%);");
+    expect(foundationCss).toContain("--wab: hsl(36, 13%, 13%);");
   });
 });
