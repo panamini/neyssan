@@ -1553,6 +1553,9 @@ function JobsPageContent(): JSX.Element {
     [jobs, selectedJobId],
   );
   const selectedJob = optimisticSelectedJob ?? selectedJobRecord ?? null;
+  const selectedJobIsFavorite = selectedJob
+    ? (optimisticFavoriteById[selectedJob.id] ?? selectedJob.isFavorite)
+    : false;
   const selectedJobIsLoading =
     Boolean(selectedJobId) &&
     selectedJobRecord === undefined &&
@@ -2588,12 +2591,40 @@ function JobsPageContent(): JSX.Element {
                       <div className="dasti-jobs-detail__identity">
                         <div className="dasti-jobs-detail__title">
                           <span>{selectedJob.title || "Untitled job"}</span>
+                          <button
+                            type="button"
+                            className="dasti-icon-button dasti-jobs-detail__favorite-action"
+                            aria-pressed={selectedJobIsFavorite}
+                            aria-label={
+                              selectedJobIsFavorite
+                                ? "Remove job from favorites"
+                                : "Mark job as favorite"
+                            }
+                            title={
+                              selectedJobIsFavorite
+                                ? "Remove from favorites"
+                                : "Mark favorite"
+                            }
+                            onClick={() => {
+                              void handleSetJobFavorite(
+                                selectedJob.id,
+                                !selectedJobIsFavorite,
+                              );
+                            }}
+                          >
+                            <Star
+                              size={16}
+                              strokeWidth={1.8}
+                              weight={selectedJobIsFavorite ? "fill" : "regular"}
+                              aria-hidden="true"
+                            />
+                          </button>
                           {selectedJob.isSample ? (
                             <span className="dasti-jobs-sample-badge">
                               Sample
                             </span>
                           ) : null}
-                          {selectedJob.isFavorite ? (
+                          {selectedJobIsFavorite ? (
                             <span className="dasti-jobs-sample-badge">
                               Favorite
                             </span>
@@ -2612,58 +2643,29 @@ function JobsPageContent(): JSX.Element {
                           {selectedSourceLabel ? (
                             <>
                               <span>·</span>
-                              <span>{selectedSourceLabel}</span>
+                              {selectedJob.sourceUrl ? (
+                                <button
+                                  type="button"
+                                  className="dasti-jobs-detail__source-action"
+                                  aria-label={`Open original job offer on ${selectedSourceLabel}`}
+                                  title={`Open original job offer on ${selectedSourceLabel}`}
+                                  onClick={() =>
+                                    handleOpenJobSource(selectedJob.sourceUrl)
+                                  }
+                                >
+                                  <span>{`From ${selectedSourceLabel}`}</span>
+                                  <ArrowSquareOut
+                                    size={13}
+                                    strokeWidth={1.8}
+                                    aria-hidden="true"
+                                  />
+                                </button>
+                              ) : (
+                                <span>{`From ${selectedSourceLabel}`}</span>
+                              )}
                             </>
                           ) : null}
                         </div>
-                      </div>
-                      <div className="dasti-jobs-detail__topline-actions">
-                        <button
-                          type="button"
-                          className="dasti-icon-button"
-                          aria-pressed={selectedJob.isFavorite}
-                          aria-label={
-                            selectedJob.isFavorite
-                              ? "Remove job from favorites"
-                              : "Mark job as favorite"
-                          }
-                          title={
-                            selectedJob.isFavorite
-                              ? "Remove from favorites"
-                              : "Mark favorite"
-                          }
-                          onClick={() => {
-                            void handleSetJobFavorite(
-                              selectedJob.id,
-                              !selectedJob.isFavorite,
-                            );
-                          }}
-                        >
-                          <Star
-                            size={17}
-                            strokeWidth={1.8}
-                            weight={selectedJob.isFavorite ? "fill" : "regular"}
-                            aria-hidden="true"
-                          />
-                        </button>
-                        {selectedSourceLabel && selectedJob.sourceUrl ? (
-                          <button
-                            type="button"
-                            className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost dasti-jobs-detail__source-action"
-                            aria-label={`Open original job offer on ${selectedSourceLabel}`}
-                            title={`Open original job offer on ${selectedSourceLabel}`}
-                            onClick={() =>
-                              handleOpenJobSource(selectedJob.sourceUrl)
-                            }
-                          >
-                            <span>{`From ${selectedSourceLabel}`}</span>
-                            <ArrowSquareOut
-                              size={13}
-                              strokeWidth={1.8}
-                              aria-hidden="true"
-                            />
-                          </button>
-                        ) : null}
                       </div>
                     </div>
 

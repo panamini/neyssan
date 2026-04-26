@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Trash, ArrowUp, ArrowDown, Plus } from "@/lib/icons";
+import { TrashSimple, ArrowUp, ArrowDown, Plus } from "@/lib/icons";
 import type { CvSection } from "../../schemas/cvDocument.schema";
 
 /**
@@ -142,7 +142,7 @@ export function SkillsBlock({
                 className="p-1 rounded hover:[background:var(--erb)]"
                 aria-label={`Remove ${s}`}
               >
-                <Trash size={14} />
+                <TrashSimple size={14} />
               </button>
             </div>
           </div>

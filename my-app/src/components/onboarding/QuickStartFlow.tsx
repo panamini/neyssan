@@ -378,7 +378,7 @@ export function QuickStartFlow({
                 }}
                 disabled={isBusy}
               >
-                <Rewind className="w-5 h-5" aria-hidden="true" />
+                <Rewind size={20} strokeWidth={1.7} aria-hidden="true" />
               </button>
             ) : (
               <div aria-hidden="true" style={{ width: "100%", height: "var(--hs)" }} />
@@ -397,7 +397,7 @@ export function QuickStartFlow({
               className="dasti-modal-close"
               disabled={isBusy}
             >
-              <Stop className="w-5 h-5" aria-hidden="true" />
+              <Stop size={20} strokeWidth={1.7} aria-hidden="true" />
             </button>
           </div>
         </header>
