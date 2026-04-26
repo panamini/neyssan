@@ -21,6 +21,10 @@ jobs:
       run: npx playwright install --with-deps
     - name: Generate Convex client bindings
       run: |
+        if [ -z "${CONVEX_DEPLOY_KEY:-}" ]; then
+          echo "::error::Set the repository secret CONVEX_DEPLOY_KEY to a deploy key for the dev Convex deployment."
+          exit 1
+        fi
         if [ -z "${CONVEX_DEPLOYMENT:-}" ]; then
           echo "::error::Set the repository variable CONVEX_DEPLOYMENT to the dev deployment used for Playwright CI."
           exit 1
@@ -29,6 +33,7 @@ jobs:
         npx convex codegen --typecheck disable
       env:
         CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
+        CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
     - name: Start local Vite app
       run: |
         if [ -z "${VITE_CONVEX_URL:-}" ]; then
