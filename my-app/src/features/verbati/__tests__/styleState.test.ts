@@ -19,6 +19,7 @@ describe("verbati visual style state", () => {
         palette: "encre",
       }),
     ).toEqual({
+      familyId: "modernist",
       layout: "modernist",
       typography: "mono-signal",
       palette: "encre",
@@ -143,6 +144,7 @@ describe("verbati visual style state", () => {
       }),
     ).toEqual({
       style: {
+        familyId: "modernist",
         layout: "modernist",
         typography: "mono-signal",
         palette: "encre",
@@ -173,6 +175,7 @@ describe("verbati visual style state", () => {
       }),
     ).toEqual({
       style: {
+        familyId: "swiss",
         layout: "swiss",
         typography: "soft-serif",
         palette: "bordeaux",
@@ -230,6 +233,7 @@ describe("verbati visual style state", () => {
       }),
     ).toEqual({
       style: {
+        familyId: "editorial",
         layout: "editorial",
         typography: "soft-serif",
         palette: "encre",

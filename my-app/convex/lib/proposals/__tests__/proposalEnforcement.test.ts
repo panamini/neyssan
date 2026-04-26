@@ -1079,15 +1079,15 @@ describe("proposal enforcement helpers", () => {
       /\b(?:reliability|communication|day-to-day work|consistency|organization)\b/i,
     );
     expect(replacement).not.toContain("ready to contribute");
-    expect(() =>
-      finalizeProposalForSave({
-        content: replacement ?? "",
-        format: "cover_letter",
-        outputLanguage: "English",
-        voicePreset: "signature",
-        noContextMode: true,
-      }),
-    ).toThrow(/substantive body content/i);
+    const finalized = finalizeProposalForSave({
+      content: replacement ?? "",
+      format: "cover_letter",
+      outputLanguage: "English",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+    expect(finalized).toContain(replacement);
+    expect(finalized).not.toMatch(/ready to contribute|hardware design|prototyping/i);
   });
 
   it("keeps no-context repair template-safe and fact-free", () => {
@@ -1110,15 +1110,17 @@ describe("proposal enforcement helpers", () => {
     expect(replacement).not.toMatch(
       /\b(?:background|experience with|skills in|my background includes|my experience includes|rust|python)\b/i,
     );
-    expect(() =>
-      finalizeProposalForSave({
-        content: replacement ?? "",
-        format: "cover_letter",
-        outputLanguage: "English",
-        voicePreset: "signature",
-        noContextMode: true,
-      }),
-    ).toThrow(/substantive body content/i);
+    const finalized = finalizeProposalForSave({
+      content: replacement ?? "",
+      format: "cover_letter",
+      outputLanguage: "English",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+    expect(finalized).toContain(replacement);
+    expect(finalized).not.toMatch(
+      /\b(?:background|experience with|skills in|rust|python|strong fit)\b/i,
+    );
   });
 
   it("removes qualification conclusions while preserving factual degree background", () => {
@@ -1288,15 +1290,15 @@ describe("proposal enforcement helpers", () => {
     expect(repairedBody).toMatch(
       /\b(?:reliability|communication|day-to-day work|consistency|organization)\b/i,
     );
-    expect(() =>
-      finalizeProposalForSave({
-        content: repairedBody,
-        format: "cover_letter",
-        outputLanguage: "English",
-        voicePreset: "signature",
-        noContextMode: true,
-      }),
-    ).toThrow(/substantive body content/i);
+    const finalized = finalizeProposalForSave({
+      content: repairedBody,
+      format: "cover_letter",
+      outputLanguage: "English",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+    expect(finalized).toContain(repairedBody);
+    expect(finalized).not.toMatch(/ready to contribute|hardware design|prototyping/i);
   });
 
   it("keeps one salutation and one closing after sentence-level repair", () => {
@@ -1334,15 +1336,15 @@ describe("proposal enforcement helpers", () => {
       /\b(?:reliability|communication|day-to-day work|consistency|organization)\b/i,
     );
     expect(replacement).not.toMatch(/\b(?:strong fit|qualified|equipped)\b/i);
-    expect(() =>
-      finalizeProposalForSave({
-        content: replacement ?? "",
-        format: "cover_letter",
-        outputLanguage: "English",
-        voicePreset: "signature",
-        noContextMode: true,
-      }),
-    ).toThrow(/substantive body content/i);
+    const finalized = finalizeProposalForSave({
+      content: replacement ?? "",
+      format: "cover_letter",
+      outputLanguage: "English",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+    expect(finalized).toContain(replacement);
+    expect(finalized).not.toMatch(/\b(?:strong fit|qualified|equipped|background)\b/i);
   });
 
   it("keeps distant-role repair wording non-projective", () => {
