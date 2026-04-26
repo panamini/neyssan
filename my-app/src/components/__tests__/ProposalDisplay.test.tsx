@@ -1,6 +1,12 @@
 import React from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import ProposalDisplay from "../ProposalDisplay";
 
 describe("ProposalDisplay", () => {
@@ -28,7 +34,9 @@ describe("ProposalDisplay", () => {
 
     render(
       <ProposalDisplay
-        proposalContent={"Hello hiring team,\n\nI would love to discuss the role."}
+        proposalContent={
+          "Hello hiring team,\n\nI would love to discuss the role."
+        }
         loading={false}
         error={null}
         proposalType="cover_letter"
@@ -78,7 +86,9 @@ describe("ProposalDisplay", () => {
 
     render(
       <ProposalDisplay
-        proposalContent={"Hello hiring team,\n\nI would love to discuss the role."}
+        proposalContent={
+          "Hello hiring team,\n\nI would love to discuss the role."
+        }
         loading={false}
         error={null}
         proposalType="cover_letter"
@@ -115,13 +125,15 @@ describe("ProposalDisplay", () => {
     expect(
       document.querySelector('[data-proposal-template="quire_margin"]'),
     ).toBeTruthy();
-    expect(screen.getAllByText("Alex Martin").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("alex martin").length).toBeGreaterThan(0);
   });
 
   it("applies the linked verbati style theme to the proposal document without recoloring the shell", () => {
     render(
       <ProposalDisplay
-        proposalContent={"Dear team,\n\nA calm editorial proposal body.\n\nSincerely,\nAlex Martin"}
+        proposalContent={
+          "Dear team,\n\nA calm editorial proposal body.\n\nSincerely,\nAlex Martin"
+        }
         loading={false}
         error={null}
         proposalType="cover_letter"
@@ -140,7 +152,9 @@ describe("ProposalDisplay", () => {
       (frame as HTMLElement).style.getPropertyValue("--font-heading-family"),
     ).toContain("Archivo");
     expect(
-      (frame as HTMLElement).style.getPropertyValue("--proposal-document-paper"),
+      (frame as HTMLElement).style.getPropertyValue(
+        "--proposal-document-paper",
+      ),
     ).not.toBe("");
     expect(
       (frame as HTMLElement).style.getPropertyValue("--color-canvas"),
@@ -191,7 +205,7 @@ describe("ProposalDisplay", () => {
     const frame = document.querySelector(".dasti-proposal-sheet-frame");
 
     expect(frame).toBeTruthy();
-    expect(screen.getByText("Generate a proposal to see the results here.")).toBeInTheDocument();
+    expect(screen.getByText("No draft yet. Generate one.")).toBeInTheDocument();
     expect(
       (frame as HTMLElement).style.getPropertyValue("--font-body-family"),
     ).toContain("Geist");
@@ -220,20 +234,22 @@ describe("ProposalDisplay", () => {
     expect(
       document.querySelector(".dasti-proposal-sheet__preview-page"),
     ).toBeTruthy();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open zoom controls" }),
-    );
-    expect(screen.getByRole("button", { name: "Fit page" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Zoom out" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open zoom controls" }));
+    expect(
+      screen.getByRole("button", { name: "Fit page" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Zoom out" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Zoom in" })).toBeInTheDocument();
     expect(
       document.querySelector(
         ".dasti-proposal-rail-cluster .dasti-doc-zoom-menu",
       ),
     ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Fit page" }),
-    ).toHaveClass("dasti-doc-zoom-fit--active");
+    expect(screen.getByRole("button", { name: "Fit page" })).toHaveClass(
+      "dasti-doc-zoom-fit--active",
+    );
   });
 
   it("keeps the uncontrolled zoom state after zooming in", async () => {
@@ -290,7 +306,7 @@ describe("ProposalDisplay", () => {
     fireEvent.click(screen.getByRole("button", { name: "Rewrite" }));
 
     expect(
-      screen.getByText(/Select a paragraph, then tap rewrite in the toolbar\./i),
+      screen.getByText(/Pick a paragraph, then tap rewrite\./i),
     ).toBeInTheDocument();
 
     act(() => {
@@ -298,7 +314,9 @@ describe("ProposalDisplay", () => {
     });
 
     expect(
-      screen.queryByText(/Select a paragraph, then tap rewrite in the toolbar\./i),
+      screen.queryByText(
+        /Select a paragraph, then tap rewrite in the toolbar\./i,
+      ),
     ).not.toBeInTheDocument();
 
     vi.useRealTimers();
@@ -357,7 +375,9 @@ describe("ProposalDisplay", () => {
 
     render(
       <ProposalDisplay
-        proposalContent={"Hello hiring team,\n\nI build calm, reliable proposal copy."}
+        proposalContent={
+          "Hello hiring team,\n\nI build calm, reliable proposal copy."
+        }
         loading={false}
         error={null}
         proposalType="cover_letter"
@@ -368,7 +388,7 @@ describe("ProposalDisplay", () => {
 
     const toggle = screen.getByRole("button", { name: "Switch to edit mode" });
     expect(toggle).toHaveAttribute("aria-pressed", "false");
-    expect(toggle).toHaveAttribute("data-toolbar-tooltip", "Switch to edit");
+    expect(toggle).toHaveAttribute("data-toolbar-tooltip", "Edit");
 
     fireEvent.click(toggle);
 
@@ -378,7 +398,9 @@ describe("ProposalDisplay", () => {
   it("places the actions-only document header inside the sheet under the toolbar rail", () => {
     render(
       <ProposalDisplay
-        proposalContent={"Hello hiring team,\n\nI build calm, reliable proposal copy."}
+        proposalContent={
+          "Hello hiring team,\n\nI build calm, reliable proposal copy."
+        }
         loading={false}
         error={null}
         proposalType="cover_letter"
@@ -402,15 +424,18 @@ describe("ProposalDisplay", () => {
     expect(inlineHeading).toBeTruthy();
     expect(externalHeading).toBeNull();
     expect(
-      (rail as HTMLElement).compareDocumentPosition(inlineHeading as HTMLElement) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      (rail as HTMLElement).compareDocumentPosition(
+        inlineHeading as HTMLElement,
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
   it("can detach the actions-only document header above the shell for saved proposals", () => {
     render(
       <ProposalDisplay
-        proposalContent={"Hello hiring team,\n\nI build calm, reliable proposal copy."}
+        proposalContent={
+          "Hello hiring team,\n\nI build calm, reliable proposal copy."
+        }
         loading={false}
         error={null}
         proposalType="cover_letter"
@@ -422,7 +447,9 @@ describe("ProposalDisplay", () => {
         onModeChange={vi.fn()}
         actions={<button type="button">Refine</button>}
         railStartAddon={<button type="button">Style inspector</button>}
-        detachedActionHeaderSupplement={<button type="button">Forge preview</button>}
+        detachedActionHeaderSupplement={
+          <button type="button">Forge preview</button>
+        }
       />,
     );
 
@@ -457,30 +484,40 @@ describe("ProposalDisplay", () => {
     expect(detachedAside).toBeTruthy();
     expect(inlineHeading).toBeNull();
     expect(screen.getByRole("button", { name: "Refine" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Style inspector" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Forge preview" })).toBeInTheDocument();
     expect(
-      (detachedHeader as HTMLElement).compareDocumentPosition(detachedRail as HTMLElement) &
-        Node.DOCUMENT_POSITION_CONTAINED_BY,
+      screen.getByRole("button", { name: "Style inspector" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Forge preview" }),
+    ).toBeInTheDocument();
+    expect(
+      (detachedHeader as HTMLElement).compareDocumentPosition(
+        detachedRail as HTMLElement,
+      ) & Node.DOCUMENT_POSITION_CONTAINED_BY,
     ).toBeTruthy();
     expect(
-      (detachedLayout as HTMLElement).compareDocumentPosition(detachedAside as HTMLElement) &
-        Node.DOCUMENT_POSITION_CONTAINED_BY,
+      (detachedLayout as HTMLElement).compareDocumentPosition(
+        detachedAside as HTMLElement,
+      ) & Node.DOCUMENT_POSITION_CONTAINED_BY,
     ).toBeTruthy();
     expect(
-      (detachedLayout as HTMLElement).compareDocumentPosition(detachedHeader as HTMLElement) &
-        Node.DOCUMENT_POSITION_CONTAINED_BY,
+      (detachedLayout as HTMLElement).compareDocumentPosition(
+        detachedHeader as HTMLElement,
+      ) & Node.DOCUMENT_POSITION_CONTAINED_BY,
     ).toBeTruthy();
     expect(
-      (detachedHeader as HTMLElement).compareDocumentPosition(shell as HTMLElement) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      (detachedHeader as HTMLElement).compareDocumentPosition(
+        shell as HTMLElement,
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
-  it("hides the character capsule once it overlaps the editable page", async () => {
+  it("keeps the edit-mode character capsule visible at the shell level", () => {
     const { container } = render(
       <ProposalDisplay
-        proposalContent={"Dear Hiring Manager,\n\nA precise product proposal body."}
+        proposalContent={
+          "Dear Hiring Manager,\n\nA precise product proposal body."
+        }
         loading={false}
         error={null}
         proposalType="cover_letter"
@@ -498,41 +535,8 @@ describe("ProposalDisplay", () => {
 
     expect(editablePage).toBeTruthy();
     expect(badgeWrap).toBeTruthy();
-
-    Object.defineProperty(editablePage as HTMLElement, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({
-        x: 48,
-        y: 84,
-        width: 520,
-        height: 700,
-        top: 84,
-        right: 568,
-        bottom: 784,
-        left: 48,
-        toJSON: () => ({}),
-      }),
-    });
-    Object.defineProperty(badgeWrap as HTMLElement, "getBoundingClientRect", {
-      configurable: true,
-      value: () => ({
-        x: 32,
-        y: 744,
-        width: 96,
-        height: 32,
-        top: 744,
-        right: 128,
-        bottom: 776,
-        left: 32,
-        toJSON: () => ({}),
-      }),
-    });
-
-    fireEvent(window, new Event("resize"));
-
-    await waitFor(() => {
-      expect(badgeWrap).toHaveAttribute("data-overlap-hidden", "true");
-    });
+    expect(badgeWrap).toHaveAttribute("data-overlap-hidden", "false");
+    expect(editablePage?.contains(badgeWrap)).toBe(false);
   });
 
   it("toggles the editable proposal header drawer in edit mode and forwards changes", () => {
@@ -543,10 +547,13 @@ describe("ProposalDisplay", () => {
     const handleRecipientDetailsChange = vi.fn();
     const handleSubjectChange = vi.fn();
     const handleSalutationChange = vi.fn();
+    const handleHeaderVisibilityChange = vi.fn();
 
     render(
       <ProposalDisplay
-        proposalContent={"Dear Hiring Manager,\n\nProposal body.\n\nBest,\nJane"}
+        proposalContent={
+          "Dear Hiring Manager,\n\nProposal body.\n\nBest,\nJane"
+        }
         loading={false}
         error={null}
         proposalType="cover_letter"
@@ -570,6 +577,14 @@ describe("ProposalDisplay", () => {
         onRecipientDetailsChange={handleRecipientDetailsChange}
         salutationEditable
         onSalutationChange={handleSalutationChange}
+        headerVisibility={{
+          showSender: true,
+          showRecipient: true,
+          showRecipientDetails: false,
+          showSubject: true,
+          showDate: true,
+        }}
+        onHeaderVisibilityChange={handleHeaderVisibilityChange}
         onContentChange={vi.fn()}
       />,
     );
@@ -580,6 +595,52 @@ describe("ProposalDisplay", () => {
       screen.getByRole("button", { name: "Show applicant details" }),
     );
 
+    expect(
+      document.querySelector(".dasti-proposal-character-badge-wrap"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Pick what appears on the letter." }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Your sender line." }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "Who the letter is addressed to.",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "Date, subject, and opening line.",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Applicant" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(
+      screen.getByRole("button", { name: "Recipient details" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByLabelText("Name")).toHaveValue("Jane Doe");
+    expect(screen.getByLabelText("Role")).toHaveValue(
+      "Human Resources Administrator",
+    );
+    expect(screen.getByLabelText("Contact")).toHaveValue(
+      "+33 6 00 00 00 00 · jane@example.com · janedoe.dev",
+    );
+    expect(screen.getByLabelText("Recipient block")).toHaveValue(
+      "Hiring Manager\nPeople Operations\nModine",
+    );
+    expect(screen.getByLabelText("Date / location")).toHaveValue(
+      "April 5, 2026",
+    );
+    expect(screen.getByLabelText("Salutation")).toHaveValue(
+      "Dear Hiring Manager,",
+    );
+    expect(screen.getByLabelText("Subject")).toHaveValue(
+      "Human Resources Administrator",
+    );
+
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: "Elena Marlowe" },
     });
@@ -588,8 +649,7 @@ describe("ProposalDisplay", () => {
     });
     fireEvent.change(screen.getByLabelText("Contact"), {
       target: {
-        value:
-          "+31 6 5555 2381, elena@sample.design, elenamarlowe.design",
+        value: "+31 6 5555 2381, elena@sample.design, elenamarlowe.design",
       },
     });
     fireEvent.change(screen.getByLabelText("Date / location"), {
@@ -638,5 +698,148 @@ describe("ProposalDisplay", () => {
       screen.getByRole("button", { name: "Close header details" }),
     );
     expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+  });
+
+  it("activates editable proposal header visibility pills with one click", () => {
+    function Harness({
+      initialHeaderVisibility = {
+        showSender: true,
+        showRecipient: true,
+        showRecipientDetails: false,
+        showSubject: true,
+        showDate: true,
+      },
+    }: {
+      initialHeaderVisibility?: {
+        showSender: boolean;
+        showRecipient: boolean;
+        showRecipientDetails: boolean;
+        showSubject: boolean;
+        showDate: boolean;
+      };
+    }): JSX.Element {
+      const [headerVisibility, setHeaderVisibility] = React.useState({
+        ...initialHeaderVisibility,
+      });
+
+      return (
+        <ProposalDisplay
+          proposalContent={
+            "Dear Hiring Manager,\n\nProposal body.\n\nBest,\nJane"
+          }
+          loading={false}
+          error={null}
+          proposalType="cover_letter"
+          mode="edit"
+          railTitle="Jane Doe"
+          railMeta="Human Resources Administrator"
+          recipientDetails={"Hiring Manager\nPeople Operations\nModine"}
+          documentTitle="Human Resources Administrator"
+          documentTitleEditable
+          onDocumentTitleChange={vi.fn()}
+          onRailTitleChange={vi.fn()}
+          onRailMetaChange={vi.fn()}
+          contactLineEditable
+          onContactLineChange={vi.fn()}
+          letterDateEditable
+          onLetterDateChange={vi.fn()}
+          recipientDetailsEditable
+          onRecipientDetailsChange={vi.fn()}
+          salutationEditable
+          onSalutationChange={vi.fn()}
+          headerVisibility={headerVisibility}
+          onHeaderVisibilityChange={(value) => {
+            setHeaderVisibility((current) => ({
+              ...current,
+              ...(typeof value === "function" ? value(current) : value),
+            }));
+          }}
+          onContentChange={vi.fn()}
+        />
+      );
+    }
+
+    render(<Harness />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show applicant details" }),
+    );
+
+    const recipientDetailsToggle = screen.getByRole("button", {
+      name: "Recipient details",
+    });
+
+    expect(recipientDetailsToggle).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(recipientDetailsToggle);
+
+    expect(recipientDetailsToggle).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("activates recipient details with one click even when recipient is hidden", () => {
+    function Harness(): JSX.Element {
+      const [headerVisibility, setHeaderVisibility] = React.useState({
+        showSender: true,
+        showRecipient: false,
+        showRecipientDetails: false,
+        showSubject: true,
+        showDate: true,
+      });
+
+      return (
+        <ProposalDisplay
+          proposalContent={
+            "Dear Hiring Manager,\n\nProposal body.\n\nBest,\nJane"
+          }
+          loading={false}
+          error={null}
+          proposalType="cover_letter"
+          mode="edit"
+          railTitle="Jane Doe"
+          railMeta="Human Resources Administrator"
+          recipientDetails={"Hiring Manager\nPeople Operations\nModine"}
+          documentTitle="Human Resources Administrator"
+          documentTitleEditable
+          onDocumentTitleChange={vi.fn()}
+          onRailTitleChange={vi.fn()}
+          onRailMetaChange={vi.fn()}
+          contactLineEditable
+          onContactLineChange={vi.fn()}
+          letterDateEditable
+          onLetterDateChange={vi.fn()}
+          recipientDetailsEditable
+          onRecipientDetailsChange={vi.fn()}
+          salutationEditable
+          onSalutationChange={vi.fn()}
+          headerVisibility={headerVisibility}
+          onHeaderVisibilityChange={(value) => {
+            setHeaderVisibility((current) => ({
+              ...current,
+              ...(typeof value === "function" ? value(current) : value),
+            }));
+          }}
+          onContentChange={vi.fn()}
+        />
+      );
+    }
+
+    render(<Harness />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show applicant details" }),
+    );
+
+    const recipientToggle = screen.getByRole("button", { name: "Recipient" });
+    const recipientDetailsToggle = screen.getByRole("button", {
+      name: "Recipient details",
+    });
+
+    expect(recipientToggle).toHaveAttribute("aria-pressed", "false");
+    expect(recipientDetailsToggle).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(recipientDetailsToggle);
+
+    expect(recipientToggle).toHaveAttribute("aria-pressed", "true");
+    expect(recipientDetailsToggle).toHaveAttribute("aria-pressed", "true");
   });
 });

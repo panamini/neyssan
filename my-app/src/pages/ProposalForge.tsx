@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { v4 as uuidv4 } from "uuid";
 import {
-  ArrowLeft,
   Check,
   ChevronDown,
   ClipboardText,
@@ -29,10 +28,7 @@ import ProposalDisplay, {
   getDisplayedProposalText,
 } from "../components/ProposalDisplay";
 import ProposalsList from "../components/ProposalsList";
-import {
-  SaveIndicator,
-  type SaveStatus,
-} from "../components/ui/SaveIndicator";
+import { type SaveStatus } from "../components/ui/SaveIndicator";
 import { useToast } from "../components/ui/toast";
 import { AUTH_REQUIRED_TOAST } from "../lib/toast-copy";
 import type { FormValues } from "../components/ProposalInputForm.schemas";
@@ -83,7 +79,6 @@ import {
   serializeVerbatiStyle,
   stylesEqual,
 } from "../features/verbati/style";
-import { resumeMock } from "../features/verbati/resume/resume.mock";
 import {
   PROPOSAL_CHARACTER_LIMIT_TOAST_THRESHOLDS,
   resolveProposalCharacterLimitSelection,
@@ -118,7 +113,7 @@ import {
   getProposalTemplateBundleDefinition,
   type ProposalTemplateBundleId,
 } from "../lib/proposal-template-bundles";
-import { readCssDurationMs } from "../lib/readCssDuration";
+import { readCssDurationMs, readCssPixelValue } from "../lib/readCssDuration";
 import { deriveCvTitleFromSections } from "../lib/normalize-cv";
 import {
   buildProposalHeaderVisibilityFromContent,
@@ -142,6 +137,7 @@ import {
   setStyledProposalExportContext,
 } from "../lib/document-export-debug";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
+import { ensureProposalSignatureName } from "../lib/proposal-closing";
 
 type CurrentProposalSettings = {
   voicePreset: string;
@@ -256,28 +252,15 @@ const COMPOSE_TOOLBAR_VISIBLE_VOICE_PRESETS = new Set<
   NonNullable<FormValues["voicePreset"]>
 >(["signature", "expert", "engaging"]);
 
-function getResumeContactValue(
-  label: string,
-  aliases: string[] = [],
-): string | null {
-  const normalizedTargets = [label, ...aliases].map((value) =>
-    value.trim().toLowerCase(),
-  );
-  const match = resumeMock.contact.find((entry) =>
-    normalizedTargets.includes(entry.label.trim().toLowerCase()),
-  );
-  return match?.value?.trim() || null;
-}
-
 const FALLBACK_PROPOSAL_APPLICANT_HEADER: ProposalApplicantHeaderData = {
-  name: resumeMock.name,
-  role: resumeMock.title,
-  email: getResumeContactValue("Email"),
-  phone: getResumeContactValue("Phone"),
-  linkedin: getResumeContactValue("LinkedIn"),
-  website: getResumeContactValue("Web", ["Website", "Portfolio"]),
-  location: getResumeContactValue("Location", ["Address", "City"]),
-  tag: resumeMock.metadata[1]?.value ?? null,
+  name: null,
+  role: null,
+  email: null,
+  phone: null,
+  linkedin: null,
+  website: null,
+  location: null,
+  tag: null,
 };
 
 function hasApplicantHeaderContent(
@@ -2260,28 +2243,6 @@ export function ProposalForge(): JSX.Element {
     attachedCvId,
     resolvedProposalRuntimeStyle.source,
   ]);
-  const isCurrentComposeStyleSyncedToCv = React.useMemo(
-    () =>
-      Boolean(
-        activeCvProposalStylePreset &&
-          stylesEqual(effectiveProposalStylePreset, activeCvProposalStylePreset),
-      ),
-    [activeCvProposalStylePreset, effectiveProposalStylePreset],
-  );
-  const handleResetToCvStyle = React.useCallback(() => {
-    if (!activeCvProposalStylePreset) {
-      return;
-    }
-
-    setProposalStyleLinkMode("inherit_cv");
-    setProposalStylePreset(activeCvProposalStylePreset);
-    setProposalTemplateId(getProposalTwinTemplateId(activeCvProposalStylePreset));
-    setProposalTemplateBundleId(null);
-    setProposalPaletteOverride(null);
-    setProposalCustomAccentHex(null);
-    setHasUserEditedStyle(false);
-    setProposalWorkspaceStyle(null);
-  }, [activeCvProposalStylePreset]);
   const proposalRenderMetadata = React.useMemo<
     ProposalDocumentMetadata | undefined
   >(() => {
@@ -3016,46 +2977,9 @@ export function ProposalForge(): JSX.Element {
     savedSelectionTraceWinner.winnerReason,
     savedSelectionTraceWinner.winnerSource,
   ]);
-  const savedProposalStyleStatus = React.useMemo(
-    () =>
-      resolveProposalStyleStatus({
-        sourceCvId: openedSavedProposalSourceCvId,
-        sourceCvLabel: openedSavedProposalSourceCvLabel,
-        styleSource: resolvedSavedProposalRuntimeStyle.source,
-        hasSourceCvStyle: Boolean(openedSavedProposalSourceCvStylePreset),
-      }),
-    [
-      openedSavedProposalSourceCvId,
-      openedSavedProposalSourceCvLabel,
-      openedSavedProposalSourceCvStylePreset,
-      resolvedSavedProposalRuntimeStyle.source,
-    ],
-  );
-  const savedProposalStyleStatusLabel = React.useMemo(() => {
-    switch (savedProposalStyleStatus.styleSource) {
-      case "cv":
-        return "CV";
-      case "custom":
-        return "Custom";
-      case "default":
-      default:
-        return "Default";
-    }
-  }, [savedProposalStyleStatus.styleSource]);
   const effectiveSavedProposalStylePreset = React.useMemo(
     () => resolvedSavedProposalRuntimeStyle.style,
     [resolvedSavedProposalRuntimeStyle.style],
-  );
-  const isSavedProposalStyleSyncedToCv = React.useMemo(
-    () =>
-      Boolean(
-        openedSavedProposalSourceCvStylePreset &&
-          stylesEqual(
-            effectiveSavedProposalStylePreset,
-            openedSavedProposalSourceCvStylePreset,
-          ),
-      ),
-    [effectiveSavedProposalStylePreset, openedSavedProposalSourceCvStylePreset],
   );
   const effectiveSavedProposalTemplateId = React.useMemo(
     () =>
@@ -4515,8 +4439,12 @@ export function ProposalForge(): JSX.Element {
       setComposePreviewValues(submittedComposeDraft);
       setOutputSourceComposeDraft(submittedComposeDraft);
       setComposeDraftInitialSeed(submittedComposeDraft);
+      const signedProposal = ensureProposalSignatureName(
+        proposal,
+        previewApplicantHeader.name,
+      );
       writeStoredOutputDraft({
-        proposalContent: proposal,
+        proposalContent: signedProposal,
         proposalType: values.proposalType,
         proposalVoicePreset: resolvedVoicePreset,
         proposalTemplateId:
@@ -4571,13 +4499,13 @@ export function ProposalForge(): JSX.Element {
       );
       setProposalDocumentTitle(nextDocumentTitle);
       setProposalDocumentMeta(nextDocumentMeta);
-      setProposalContent(proposal);
+      setProposalContent(signedProposal);
       setGeneratedProposalId(nextProposalId ?? null);
       generatedProposalIdRef.current = nextProposalId ?? null;
       setProposalOutputMode("preview");
       setIsComposePanelVisible(true);
       setIsBriefExpanded(false);
-      lastSavedProposalContentRef.current = proposal;
+      lastSavedProposalContentRef.current = signedProposal;
       lastSavedProposalTitleRef.current = nextDocumentTitle;
       // Generation can return a persisted proposal id before the full compose
       // artifact metadata has been patched onto that row. Leave the persisted
@@ -4587,7 +4515,7 @@ export function ProposalForge(): JSX.Element {
         ? null
         : JSON.stringify({
             title: nextDocumentTitle,
-            content: proposal.trim(),
+            content: signedProposal.trim(),
             metadata: proposalPersistenceMetadata ?? null,
           });
       composeAutosavePrimedRef.current = true;
@@ -4807,6 +4735,20 @@ export function ProposalForge(): JSX.Element {
       }
     };
   }, []);
+
+  React.useEffect(() => {
+    if (!proposalContent || loading) {
+      return;
+    }
+
+    const signedProposal = ensureProposalSignatureName(
+      proposalContent,
+      proposalApplicantName,
+    );
+    if (signedProposal !== proposalContent) {
+      setProposalContent(signedProposal);
+    }
+  }, [loading, proposalApplicantName, proposalContent]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -5192,6 +5134,7 @@ export function ProposalForge(): JSX.Element {
     setLastProposalRequest(null);
     setComposeFormInstanceKey((currentKey) => currentKey + 1);
     setIsCvPickerOpen(false);
+    setCvPickerRequestKey(0);
     setIsComposePanelVisible(true);
     setIsBriefExpanded(true);
     setFallbackInfo(null);
@@ -5221,52 +5164,6 @@ export function ProposalForge(): JSX.Element {
     showToast,
     updateProposalRoute,
   ]);
-  const handleResetSavedProposalToCvStyle = React.useCallback(async () => {
-    if (
-      !openedSavedProposal ||
-      !openedSavedProposalSourceCvStylePreset ||
-      !openedSavedProposalSourceCvId
-    ) {
-      return;
-    }
-
-    try {
-      const nextMetadata: ProposalDocumentMetadata = {
-        ...(savedProposalRenderMetadata ?? openedSavedProposal.metadata ?? {}),
-        sourceCvId: openedSavedProposalSourceCvId,
-        templateId: getProposalTwinTemplateId(openedSavedProposalSourceCvStylePreset),
-        verbatiStyle: serializeProposalMetadataVerbatiStyle(
-          openedSavedProposalSourceCvStylePreset,
-        ),
-        styleLinkMode: "inherit_cv",
-      };
-
-      setSavedProposalStyleLinkMode("inherit_cv");
-      setSavedProposalStylePreset(openedSavedProposalSourceCvStylePreset);
-      setSavedProposalTemplateId(nextMetadata.templateId ?? null);
-      await persistOpenedSavedProposal({
-        metadata: nextMetadata,
-      });
-      showToast("Reset to resume style.", {
-        variant: "success",
-        description: "The saved proposal will follow its source CV style again.",
-      });
-    } catch (error) {
-      console.error("Failed to reset saved proposal style:", error);
-      showToast("Reset failed.", {
-        variant: "error",
-        description: "The saved proposal could not be reset to its CV style.",
-      });
-    }
-  }, [
-    openedSavedProposal,
-    openedSavedProposalSourceCvId,
-    openedSavedProposalSourceCvStylePreset,
-    persistOpenedSavedProposal,
-    savedProposalRenderMetadata,
-    showToast,
-  ]);
-
   const handleDeleteOutput = React.useCallback(async () => {
     if (!generatedProposalId) return;
     if (!canPersistProposalState) {
@@ -5450,9 +5347,12 @@ export function ProposalForge(): JSX.Element {
       null
     );
   }, [attachedCvId, attachedCvTitle]);
-  const proposalTwoPaneMinViewportWidth = 1440;
+  const proposalTwoPaneMinViewportWidth = readCssPixelValue(
+    "--container-xl",
+    1280,
+  );
   const proposalWorkspaceOutputShellInlineSize =
-    "calc(var(--document-sheet-inline-size) - (var(--s4) * 2))";
+    "calc(var(--document-sheet-inline-size) + (var(--s2) * 2) + 2px)";
   const proposalWorkbenchColumnInlineSize =
     "var(--proposal-workspace-output-shell-inline-size)";
   const proposalDesktopComposeWidth = proposalWorkbenchColumnInlineSize;
@@ -6213,11 +6113,6 @@ export function ProposalForge(): JSX.Element {
     setIsComposePanelVisible(true);
     triggerToolbarEnterTransition();
   }, [triggerToolbarEnterTransition]);
-  const handleReturnToDraft = React.useCallback(() => {
-    setIsComposePanelVisible(true);
-    setIsBriefExpanded(true);
-    updateProposalRoute("compose");
-  }, [updateProposalRoute]);
   const handleComposeGenerateControlChange = React.useCallback(
     (control: ProposalGenerateControl | null) => {
       if (!control) {
@@ -6343,9 +6238,6 @@ export function ProposalForge(): JSX.Element {
       generateState={composeGenerateControl.state}
       styleStatusLabel={proposalStyleStatusLabel}
       saveStatus={composeSaveStatus}
-      canResetToCvStyle={proposalStyleStatus.canResetToCv}
-      resetToCvStyleDisabled={isCurrentComposeStyleSyncedToCv}
-      onResetToCvStyle={handleResetToCvStyle}
     />
   ) : showComposePanel ? (
     <ProposalComposeToolbar
@@ -6362,29 +6254,6 @@ export function ProposalForge(): JSX.Element {
       onCollapseCompose={canCollapseComposePanel ? handleCollapseCompose : undefined}
       styleStatusLabel={proposalStyleStatusLabel}
       saveStatus={composeSaveStatus}
-      rightActions={
-        proposalContent && !loading && !error ? (
-          <ProposalExportActions
-            disabled={proposalExportingFormat !== null}
-            onExportPdf={(mode) => {
-              void handleExportProposalFile({
-                target: "compose",
-                format: "pdf",
-                mode,
-              });
-            }}
-            onExportDocx={() => {
-              void handleExportProposalFile({
-                target: "compose",
-                format: "docx",
-              });
-            }}
-          />
-        ) : null
-      }
-      canResetToCvStyle={proposalStyleStatus.canResetToCv}
-      resetToCvStyleDisabled={isCurrentComposeStyleSyncedToCv}
-      onResetToCvStyle={handleResetToCvStyle}
     />
   ) : null;
 
@@ -6409,9 +6278,24 @@ export function ProposalForge(): JSX.Element {
             "--page-shell-gap": isSavedView
               ? "var(--layout-panel-stack)"
               : "var(--space-2)",
-            "--page-shell-pad-top": "var(--space-2)",
-            "--page-shell-pad-inline": "var(--space-4)",
-            "--page-shell-pad-inline-mobile": "var(--space-4)",
+            "--page-shell-pad-top": shouldRenderColdStartInlineOnly
+              ? "0px"
+              : "var(--space-2)",
+            "--page-shell-pad-bottom": shouldRenderColdStartInlineOnly
+              ? "0px"
+              : undefined,
+            "--page-shell-pad-top-mobile": shouldRenderColdStartInlineOnly
+              ? "0px"
+              : undefined,
+            "--page-shell-pad-bottom-mobile": shouldRenderColdStartInlineOnly
+              ? "0px"
+              : undefined,
+            "--page-shell-pad-inline": shouldRenderColdStartInlineOnly
+              ? "0px"
+              : "var(--space-4)",
+            "--page-shell-pad-inline-mobile": shouldRenderColdStartInlineOnly
+              ? "0px"
+              : "var(--space-4)",
           } as React.CSSProperties
         }
       >
@@ -6428,25 +6312,6 @@ export function ProposalForge(): JSX.Element {
                   role="group"
                   aria-label="Saved proposal actions"
                 >
-                  <div
-                    className="dasti-proposal-saved-view-toolbar__status"
-                    role="group"
-                    aria-label="Saved proposal status"
-                  >
-                    <SaveIndicator
-                      label={savedProposalStyleStatusLabel}
-                      tone="neutral"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="dasti-icon-button"
-                    data-toolbar-tooltip="Back to draft"
-                    onClick={handleReturnToDraft}
-                    aria-label="Back to draft"
-                  >
-                    <ArrowLeft size={16} strokeWidth={1.7} />
-                  </button>
                   <button
                     type="button"
                     className="dasti-icon-button"
@@ -6454,32 +6319,18 @@ export function ProposalForge(): JSX.Element {
                     onClick={handleCopySavedProposalToDraft}
                     disabled={!openedSavedProposal || !savedProposalContent}
                     aria-label="Duplicate to draft"
-                    >
-                      <ClipboardText size={16} strokeWidth={1.6} />
-                    </button>
+                  >
+                    <ClipboardText size={16} strokeWidth={1.6} />
+                  </button>
                   <span
                     className="dasti-proposal-saved-view-toolbar__spacer"
                     aria-hidden="true"
                   />
-                  {savedProposalStyleStatus.canResetToCv ? (
-                    <button
-                      type="button"
-                      className="dasti-icon-button"
-                      data-toolbar-tooltip="Reset to CV style"
-                      onClick={() => {
-                        void handleResetSavedProposalToCvStyle();
-                      }}
-                      disabled={isSavedProposalStyleSyncedToCv}
-                      aria-label="Reset to CV style"
-                    >
-                      <RotateCcw size={16} strokeWidth={1.6} />
-                    </button>
-                  ) : null}
-                    <ProposalExportActions
-                      disabled={
-                        !openedSavedProposal ||
-                        !savedProposalContent ||
-                        proposalExportingFormat !== null
+                  <ProposalExportActions
+                    disabled={
+                      !openedSavedProposal ||
+                      !savedProposalContent ||
+                      proposalExportingFormat !== null
                     }
                     onExportPdf={(mode) => {
                       void handleExportProposalFile({
@@ -6667,7 +6518,6 @@ export function ProposalForge(): JSX.Element {
                             cvPickerOpen={isCvPickerOpen}
                             onCvPickerOpenChange={setIsCvPickerOpen}
                             cvPickerRequestKey={cvPickerRequestKey}
-                            suppressToneControls
                             suppressCvPicker
                             externalVoicePreset={composeToolbarVoicePreset}
                             headerLabel={null}
@@ -6680,7 +6530,7 @@ export function ProposalForge(): JSX.Element {
                               hasBriefContent ? (
                                 <button
                                   type="button"
-                                  className="dasti-proposal-compose-shell__toggle"
+                                  className="dasti-icon-button dasti-proposal-compose-shell__toggle"
                                   onClick={handleToggleComposeBrief}
                                   aria-label={
                                     isBriefExpanded ? "Collapse" : "Expand"
@@ -6850,9 +6700,13 @@ export function ProposalForge(): JSX.Element {
                           />
                         ) : null
                       }
-                      onCopy={() => {
-                        void handleCopyOutput();
-                      }}
+                      onCopy={
+                        proposalOutputMode === "edit"
+                          ? () => {
+                              void handleCopyOutput();
+                            }
+                          : undefined
+                      }
                       copyFeedback={copyFeedback}
                       onContentChange={handleProposalContentChange}
                       onContentCommit={() => {
@@ -6861,58 +6715,83 @@ export function ProposalForge(): JSX.Element {
                       actions={
                         proposalContent && !loading && !error ? (
                           <span className="dasti-icon-cluster dasti-icon-cluster--tight">
-                            <button
-                              type="button"
-                              className="dasti-icon-button"
-                              aria-label="Save proposal to library"
-                              data-toolbar-tooltip={
-                                isSavingOutputToLibrary ? "Saving" : "Save"
-                              }
-                              onClick={() => {
-                                handleOpenSaveDialog();
-                              }}
-                              disabled={isSavingOutputToLibrary}
-                              style={{
-                                opacity: isSavingOutputToLibrary ? 0.55 : 1,
-                              }}
-                            >
-                              <FloppyDisk size={16} strokeWidth={1.7} />
-                            </button>
-                            <div className="dasti-icon-cluster__divider" />
-                            {isConfirmingGeneratedDelete ? (
-                              <button
-                                type="button"
-                                className="dasti-icon-button dasti-icon-button--confirm"
-                                data-toolbar-tooltip="Confirm delete"
-                                onClick={() => {
-                                  void handleDeleteOutput();
-                                }}
-                              >
-                                <Check size={14} strokeWidth={2.5} />
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                className="dasti-icon-button"
-                                data-toolbar-tooltip="Delete"
-                                onClick={() =>
-                                  setIsConfirmingGeneratedDelete(true)
-                                }
-                              >
-                                <TrashSimple size={16} strokeWidth={1.5} />
-                              </button>
-                            )}
-                            {isConfirmingGeneratedDelete ? (
-                              <button
-                                type="button"
-                                className="dasti-icon-button"
-                                data-toolbar-tooltip="Cancel"
-                                onClick={() =>
-                                  setIsConfirmingGeneratedDelete(false)
-                                }
-                              >
-                                <X size={16} strokeWidth={1.8} />
-                              </button>
+                            {proposalOutputMode === "edit" ? (
+                              <>
+                                <ProposalExportActions
+                                  disabled={proposalExportingFormat !== null}
+                                  onExportPdf={(mode) => {
+                                    void handleExportProposalFile({
+                                      target: "compose",
+                                      format: "pdf",
+                                      mode,
+                                    });
+                                  }}
+                                  onExportDocx={() => {
+                                    void handleExportProposalFile({
+                                      target: "compose",
+                                      format: "docx",
+                                    });
+                                  }}
+                                />
+                                <div className="dasti-icon-cluster__divider" />
+                              </>
+                            ) : null}
+                            {proposalOutputMode === "edit" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="dasti-icon-button"
+                                  aria-label="Save proposal to library"
+                                  data-toolbar-tooltip={
+                                    isSavingOutputToLibrary ? "Saving" : "Save"
+                                  }
+                                  onClick={() => {
+                                    handleOpenSaveDialog();
+                                  }}
+                                  disabled={isSavingOutputToLibrary}
+                                  style={{
+                                    opacity: isSavingOutputToLibrary ? 0.55 : 1,
+                                  }}
+                                >
+                                  <FloppyDisk size={16} strokeWidth={1.7} />
+                                </button>
+                                <div className="dasti-icon-cluster__divider" />
+                                {isConfirmingGeneratedDelete ? (
+                                  <button
+                                    type="button"
+                                    className="dasti-icon-button dasti-icon-button--confirm"
+                                    data-toolbar-tooltip="Confirm delete"
+                                    onClick={() => {
+                                      void handleDeleteOutput();
+                                    }}
+                                  >
+                                    <Check size={14} strokeWidth={2.5} />
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="dasti-icon-button"
+                                    data-toolbar-tooltip="Delete"
+                                    onClick={() =>
+                                      setIsConfirmingGeneratedDelete(true)
+                                    }
+                                  >
+                                    <TrashSimple size={16} strokeWidth={1.5} />
+                                  </button>
+                                )}
+                                {isConfirmingGeneratedDelete ? (
+                                  <button
+                                    type="button"
+                                    className="dasti-icon-button"
+                                    data-toolbar-tooltip="Cancel"
+                                    onClick={() =>
+                                      setIsConfirmingGeneratedDelete(false)
+                                    }
+                                  >
+                                    <X size={16} strokeWidth={1.8} />
+                                  </button>
+                                ) : null}
+                              </>
                             ) : null}
                           </span>
                         ) : undefined

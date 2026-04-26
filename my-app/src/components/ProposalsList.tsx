@@ -30,6 +30,7 @@ import {
 import {
   type ProposalTemplateId,
 } from "../../convex/lib/proposals/renderTemplates";
+import { FileUser } from "../lib/icons";
 import { formatUiDate } from "../lib/ui-date";
 import {
   readStoredProposalOutputDraft,
@@ -1528,19 +1529,24 @@ export default function ProposalsList({
 
   const selectedHeaderTitle =
     editTitle.trim() || (selected?.title || "").trim();
+  const selectedHeaderMetadataLine = React.useMemo(() => {
+    if (!selected) {
+      return "";
+    }
+
+    return buildProposalMeta(selected, { includeTone: false }) || "Saved proposal";
+  }, [selected]);
   const selectedHeaderMeta = React.useMemo(() => {
     if (!selected) {
       return "";
     }
 
-    const metadataLine =
-      buildProposalMeta(selected, { includeTone: false }) || "Saved proposal";
     const sourceLine = selectedSourceCvTitle
-      ? `Based on CV: ${selectedSourceCvTitle}`
+      ? `Source CV: ${selectedSourceCvTitle}`
       : null;
 
-    return [metadataLine, sourceLine].filter(Boolean).join("\n");
-  }, [selected, selectedSourceCvTitle]);
+    return [selectedHeaderMetadataLine, sourceLine].filter(Boolean).join(" · ");
+  }, [selected, selectedHeaderMetadataLine, selectedSourceCvTitle]);
   const selectedTonePendingRefresh = selected
     ? selectedRefineVoicePreset !== getStoredRequestedVoicePreset(selected)
     : false;
@@ -1564,7 +1570,7 @@ export default function ProposalsList({
     selectedBaseStylePreset?.typography ??
     "quiet-editorial";
 
-  const selectedSidebarHeading = selected ? (
+  const selectedHeaderCard = selected ? (
     <div className="dasti-proposal-library-info-card dasti-proposal-library-sidebar__heading">
       <div className="dasti-proposal-library-info-card__stack">
         <div className="dasti-proposal-library-sidebar__eyebrow-row">
@@ -1593,11 +1599,11 @@ export default function ProposalsList({
               }
             }}
             placeholder="Saved proposal"
-            className="dasti-proposal-sheet__title-input"
+            className="dasti-proposal-sheet__title-input dasti-proposal-library-info-card__title-input"
             aria-label="Proposal title"
           />
         ) : selectedHeaderTitle ? (
-          <h3 className="dasti-proposal-sheet__title">
+          <h3 className="dasti-proposal-sheet__title dasti-proposal-library-info-card__title">
             {selectedHeaderTitle}
           </h3>
         ) : null}
@@ -1606,14 +1612,30 @@ export default function ProposalsList({
             <span className="dasti-proposal-tone-badge">{selectedToneLabel}</span>
           </div>
         ) : null}
-        {selectedHeaderMeta ? (
-          <p className="dasti-proposal-sheet__meta dasti-proposal-library-info-card__details">
-            {selectedHeaderMeta}
-          </p>
+        {selectedHeaderMetadataLine || selectedSourceCvTitle ? (
+          <div className="dasti-proposal-sheet__meta dasti-proposal-library-info-card__details">
+            {selectedHeaderMetadataLine ? (
+              <span className="dasti-proposal-library-info-card__details-line">
+                {selectedHeaderMetadataLine}
+              </span>
+            ) : null}
+            {selectedSourceCvTitle ? (
+              <span
+                className="dasti-proposal-library-info-card__source-cv"
+                aria-label={`Source CV ${selectedSourceCvTitle}`}
+              >
+                <FileUser size={14} strokeWidth={1.7} aria-hidden="true" />
+                <span>{selectedSourceCvTitle}</span>
+              </span>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>
   ) : null;
+  const shouldRenderSelectedSidebar = Boolean(
+    selectedHeaderCard || savedViewActions,
+  );
   const selectedForgeCloneToolbar = selected ? (
     <SavedProposalForgeToolbarPreview
       mode={selectedOutputMode}
@@ -1827,21 +1849,6 @@ export default function ProposalsList({
                       >
                         Open
                       </button>
-                      <button
-                        type="button"
-                        className="dasti-doc-card__quick-action"
-                        onClick={() => {
-                          const text = getProposalDisplayText(proposal);
-                          void navigator.clipboard.writeText(text).then(() => {
-                            showToast("Copied.", {
-                              description:
-                                "Saved proposal text copied to clipboard.",
-                            });
-                          });
-                        }}
-                      >
-                        Copy
-                      </button>
                     </div>
                   </article>
                 );
@@ -1849,15 +1856,26 @@ export default function ProposalsList({
             </div>
           ) : (
             <>
-              <div className="dasti-proposal-library-selected-shell">
-                <aside className="dasti-proposal-library-selected-sidebar">
-                  {savedViewActions ? (
-                    <div className="dasti-proposal-library-sidebar__actions">
-                      {savedViewActions}
-                    </div>
-                  ) : null}
-                  {selectedSidebarHeading}
-                </aside>
+              <div
+                className={[
+                  "dasti-proposal-library-selected-shell",
+                  shouldRenderSelectedSidebar
+                    ? "dasti-proposal-library-selected-shell--with-sidebar"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                {shouldRenderSelectedSidebar ? (
+                  <aside className="dasti-proposal-library-selected-sidebar">
+                    {selectedHeaderCard}
+                    {savedViewActions ? (
+                      <div className="dasti-proposal-library-sidebar__actions">
+                        {savedViewActions}
+                      </div>
+                    ) : null}
+                  </aside>
+                ) : null}
                 <div
                   ref={selectedCardRef}
                   tabIndex={-1}
@@ -1980,6 +1998,7 @@ export default function ProposalsList({
                           mode="preview"
                           showModeToggle={false}
                           hideDocumentHeader
+                          showPreviewParagraphActions={false}
                           previewAnchor="body"
                           onPreviewInteract={() =>
                             handleSelectProposal(proposal, true)
