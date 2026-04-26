@@ -103,7 +103,7 @@ describe("ProposalForge preview applicant fallback", () => {
     window.sessionStorage.clear();
   });
 
-  it("uses the Elena Marlowe mock header when no CV is attached", () => {
+  it("does not use the sample resume header when no CV is attached", () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <ProposalForge />
@@ -113,12 +113,12 @@ describe("ProposalForge preview applicant fallback", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
 
     expect(screen.getByTestId("proposal-display-props")).toHaveTextContent(
-      "Elena Marlowe | Senior Product Designer",
+      "| |",
     );
-    expect(screen.getByTestId("proposal-display-props")).toHaveTextContent(
-      "+31 6 5555 2381",
+    expect(screen.getByTestId("proposal-display-props")).not.toHaveTextContent(
+      "Elena Marlowe",
     );
-    expect(screen.getByTestId("proposal-display-props")).toHaveTextContent(
+    expect(screen.getByTestId("proposal-display-props")).not.toHaveTextContent(
       "elena@sample.design",
     );
   });

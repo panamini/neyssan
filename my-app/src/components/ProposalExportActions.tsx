@@ -73,7 +73,7 @@ export function ProposalExportActions({
       </div>
       {isMenuOpen ? (
         <div
-          className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-cv-style-presets__menu"
+          className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-cv-style-presets__menu dasti-proposal-chrome-drawer--stack"
           role="menu"
           aria-label="Export proposal formats"
         >

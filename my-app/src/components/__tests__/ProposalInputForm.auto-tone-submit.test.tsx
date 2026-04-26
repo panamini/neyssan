@@ -173,9 +173,19 @@ describe("ProposalInputForm auto tone submit", () => {
   });
 
   it("uses the controlled job-scoped CV when building the generation request", async () => {
+    const handleSubmit = vi.fn();
+    mockGenerateProposalAction.mockResolvedValue({
+      proposalId: "proposal_auto",
+      proposalContent:
+        "Dear Hiring Manager,\n\nI would love to contribute.\n\nKind regards,",
+      requestedModelType: "chatgpt",
+      actualModelType: "chatgpt",
+      fallbackTriggerCode: null,
+    });
+
     render(
       <ProposalInputForm
-        onSubmit={vi.fn()}
+        onSubmit={handleSubmit}
         canonicalJobId="job_alpha"
         activeCvId="cv_job_alpha"
       />,
@@ -206,5 +216,25 @@ describe("ProposalInputForm auto tone submit", () => {
         }),
       );
     });
+    expect(handleSubmit).toHaveBeenCalledWith(
+      expect.anything(),
+      "Dear Hiring Manager,\n\nI would love to contribute.\n\nKind regards,\n\nalex martin",
+      expect.anything(),
+      "proposal_auto",
+    );
+    expect(mockUpdateGeneratedProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "proposal_auto",
+        content:
+          "Dear Hiring Manager,\n\nI would love to contribute.\n\nKind regards,\n\nalex martin",
+        sections: [
+          {
+            type: "text",
+            content:
+              "Dear Hiring Manager,\n\nI would love to contribute.\n\nKind regards,\n\nalex martin",
+          },
+        ],
+      }),
+    );
   });
 });

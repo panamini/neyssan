@@ -242,10 +242,11 @@ describe("ProposalForge artifact inspector integration", () => {
         proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
       expect(lastCall?.documentTitle).toContain("Application for the");
       expect(lastCall?.applicantHeader).toMatchObject({
-        name: "Elena Marlowe",
-        role: "Senior Product Designer",
-        email: "elena@sample.design",
+        name: null,
+        role: null,
+        email: null,
       });
+      expect(lastCall?.applicantHeader?.name).not.toBe("Elena Marlowe");
     });
   });
 });

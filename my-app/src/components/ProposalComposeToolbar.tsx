@@ -5,7 +5,6 @@ import {
   Paperclip,
   PanelLeftDashed,
   PenNib,
-  RotateCcw,
   Stamp,
   Wand2,
   X,
@@ -46,9 +45,6 @@ type ProposalComposeToolbarProps = {
   styleStatusLabel?: string | null;
   saveStatus?: SaveStatus;
   rightActions?: React.ReactNode;
-  canResetToCvStyle?: boolean;
-  resetToCvStyleDisabled?: boolean;
-  onResetToCvStyle?: () => void;
 };
 
 type ToneOption = {
@@ -135,9 +131,6 @@ export function ProposalComposeToolbar({
   styleStatusLabel = null,
   saveStatus = "idle",
   rightActions = null,
-  canResetToCvStyle = false,
-  resetToCvStyleDisabled = false,
-  onResetToCvStyle,
 }: ProposalComposeToolbarProps): JSX.Element {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [isToneMenuOpen, setIsToneMenuOpen] = React.useState(false);
@@ -146,6 +139,7 @@ export function ProposalComposeToolbar({
     TONE_OPTIONS.find((option) =>
       option.id === null ? value === null : option.id === value,
     ) ?? TONE_OPTIONS[0];
+  const hasSaveIndicator = Boolean(styleStatusLabel || saveStatus !== "idle");
 
   React.useEffect(() => {
     if (!collapsed || !isToneMenuOpen) return;
@@ -202,6 +196,12 @@ export function ProposalComposeToolbar({
   const hasCollapseControl = Boolean(onCollapseCompose);
   const collapsedGenerateClass =
     getProposalGenerateButtonVisualClass(generateState);
+  const cvSourceLabel = cvTitle ? "Attached CV" : "Source CV";
+  const cvControlLabel = isCvPickerOpen
+    ? "Close CV picker"
+    : cvTitle
+      ? `Switch CV. Attached CV: ${cvTitle}`
+      : "Attach CV";
 
   return (
     <section
@@ -304,8 +304,9 @@ export function ProposalComposeToolbar({
               <button
                 type="button"
                 className={[
+                  "dasti-icon-button",
+                  "dasti-compose-toolbar__icon-button",
                   "dasti-proposal-submit",
-                  "dasti-proposal-submit-token",
                   "dasti-compose-toolbar__generate-button",
                   collapsedGenerateClass,
                 ]
@@ -350,7 +351,7 @@ export function ProposalComposeToolbar({
           <div
             className="dasti-compose-toolbar__group dasti-compose-toolbar__group--cv"
             role="group"
-            aria-label="Attached CV"
+            aria-label="Source CV"
           >
             <div
               className={[
@@ -392,13 +393,7 @@ export function ProposalComposeToolbar({
                 onClick={onToggleCvPicker}
                 aria-expanded={isCvPickerOpen}
                 aria-haspopup="dialog"
-                aria-label={
-                  isCvPickerOpen
-                    ? "Close CV picker"
-                    : cvTitle
-                      ? `Attached CV ${cvTitle}`
-                      : "Attach CV"
-                }
+                aria-label={cvControlLabel}
                 data-toolbar-tooltip={
                   isCvPickerOpen
                     ? "Close CV picker"
@@ -416,85 +411,34 @@ export function ProposalComposeToolbar({
                   )}
                 </span>
                 <span className="dasti-compose-toolbar__cv-copy">
-                  {cvTitle ?? "Attach CV"}
+                  <span className="dasti-compose-toolbar__cv-kicker">
+                    {cvSourceLabel}
+                  </span>
+                  <span className="dasti-compose-toolbar__cv-title">
+                    {cvTitle ?? "Attach CV"}
+                  </span>
                 </span>
               </button>
             </div>
           </div>
 
-          {styleStatusLabel || saveStatus !== "idle" || canResetToCvStyle ? (
-            <>
-              <span
-                className="dasti-compose-toolbar__group-divider"
-                aria-hidden="true"
-              />
-              <div
-                className="dasti-compose-toolbar__group dasti-compose-toolbar__group--context"
-                role="group"
-                aria-label="Proposal context"
-              >
-                <div className="dasti-compose-toolbar__context-slot">
-                  <SaveIndicator
-                    status={saveStatus}
-                    label={styleStatusLabel}
-                    tone="neutral"
-                  />
-                  {canResetToCvStyle ? (
-                    <button
-                      type="button"
-                      className="dasti-compose-toolbar__icon-button"
-                      aria-label="Reset to CV style"
-                      data-toolbar-tooltip="Reset to CV style"
-                      onClick={onResetToCvStyle}
-                      disabled={
-                        disabled ||
-                        resetToCvStyleDisabled ||
-                        !onResetToCvStyle
-                      }
-                    >
-                      <RotateCcw size={13} strokeWidth={1.7} aria-hidden="true" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </>
-          ) : null}
-
           <div
             className="dasti-compose-toolbar__group dasti-compose-toolbar__group--tone"
             role="group"
-            aria-label="Tone of voice"
+            aria-label="Selected tone"
           >
-            <div className="dasti-compose-toolbar__tone-block">
-              <div className="dasti-compose-toolbar__tone-row">
-                {TONE_OPTIONS.map((option) => {
-                  const active =
-                    option.id === null ? value === null : option.id === value;
-                  return (
-                    <button
-                      key={option.id ?? "auto"}
-                      type="button"
-                      className={[
-                        "dasti-compose-toolbar__tone-option",
-                        active ? "dasti-compose-toolbar__tone-option--active" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onClick={() => handleToneSelect(option.id)}
-                      aria-pressed={active}
-                      aria-label={option.label}
-                      data-toolbar-tooltip={option.label}
-                      disabled={disabled}
-                    >
-                      <option.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="dasti-compose-toolbar__tone-block dasti-compose-toolbar__tone-block--status">
+              <span
+                className="dasti-compose-toolbar__tone-status-icon"
+                aria-hidden="true"
+              >
+                <activeOption.Icon size={15} strokeWidth={1.7} />
+              </span>
               <div className="dasti-compose-toolbar__tone-meta">
                 <span
-                  className="dasti-compose-toolbar__tone-chip dasti-compose-toolbar__tone-chip--described"
+                  className="dasti-compose-toolbar__tone-chip dasti-compose-toolbar__tone-chip--described dasti-compose-toolbar__tone-chip--status"
                   data-toolbar-tooltip={activeOption.label}
+                  aria-label={`Selected tone ${activeOption.label}`}
                 >
                   {activeOption.label}
                 </span>
@@ -502,7 +446,7 @@ export function ProposalComposeToolbar({
             </div>
           </div>
 
-          {rightActions ? (
+          {rightActions || hasSaveIndicator ? (
             <>
               <span
                 className="dasti-compose-toolbar__group-divider dasti-compose-toolbar__group-divider--trailing"
@@ -514,6 +458,15 @@ export function ProposalComposeToolbar({
                 aria-label="Proposal actions"
               >
                 {rightActions}
+                {hasSaveIndicator ? (
+                  <div className="dasti-compose-toolbar__context-slot dasti-compose-toolbar__context-slot--save">
+                    <SaveIndicator
+                      status={saveStatus}
+                      label={styleStatusLabel}
+                      tone="neutral"
+                    />
+                  </div>
+                ) : null}
               </div>
             </>
           ) : null}
