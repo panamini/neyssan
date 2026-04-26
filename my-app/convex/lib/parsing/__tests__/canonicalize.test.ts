@@ -207,6 +207,60 @@ describe("canonicalizeParserResult", () => {
     expect(canonical.diagnostics?.experience_fallback_count).toBe(2);
   });
 
+  it("keeps responsibility bullets attached across raw experience header variants", () => {
+    const parserResult = {
+      raw_sections: [
+        {
+          label: "EXPERIENCE",
+          content: [
+            "Support Specialist",
+            "Bright Helpdesk",
+            "Jan 2020 – Apr 2021",
+            "- Resolved customer tickets",
+            "- Improved response time",
+            "Driving license B",
+            "",
+            "Operations Analyst May 2021 – Present",
+            "Northwind Ops, Denver, CO",
+            "- Led reporting modernization",
+            "- Automated shift handoffs",
+            "Automated shift handoffs",
+          ].join("\n"),
+        },
+      ],
+    };
+
+    const canonical = canonicalizeParserResult(parserResult, context);
+    const experience = canonical.normalized?.experience ?? [];
+
+    expect(experience).toHaveLength(2);
+    expect(experience[0]?.company).toBe("Bright Helpdesk");
+    expect(experience[0]?.position).toBe("Support Specialist");
+    expect(experience[0]?.responsibilityBullets).toEqual([
+      "Resolved customer tickets",
+      "Improved response time",
+    ]);
+    expect(experience[0]?.company).not.toMatch(/driv/i);
+    expect(experience[0]?.location).not.toMatch(/driv/i);
+    expect((experience[0]?.responsibilityBullets ?? []).join(" ")).not.toMatch(/driv/i);
+
+    expect(experience[1]?.company).toBe("Northwind Ops");
+    expect(experience[1]?.position).toBe("Operations Analyst");
+    expect(experience[1]?.location).toBe("Denver, CO");
+    expect(experience[1]?.isCurrent).toBe(true);
+    expect(experience[1]?.responsibilityBullets).toEqual([
+      "Led reporting modernization",
+      "Automated shift handoffs",
+    ]);
+    expect(experience[1]?.achievements).toEqual([
+      "Led reporting modernization",
+      "Automated shift handoffs",
+    ]);
+    expect(experience[0]?.responsibilityBullets).not.toContain(
+      "Led reporting modernization",
+    );
+  });
+
   it("preserves coherent normalized experience even when raw sections are noisier and more numerous", () => {
     const parserResult = {
       normalized: {
