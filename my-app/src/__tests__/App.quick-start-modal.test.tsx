@@ -185,6 +185,33 @@ describe("App Quick Start pane", () => {
     expect(screen.queryByTestId("quick-start-pane")).not.toBeInTheDocument();
   });
 
+  it("clears cover-letter start intent when closing the quick start pane", async () => {
+    window.history.replaceState(
+      {
+        usr: createQuickStartLocationState({
+          proposalEntryIntent: "cover-letter-start",
+          jobImportFocus: "supported-sites",
+          proposalWorkspaceResetToken: "reset-1",
+        }),
+        key: "quick-start-cover-letter-test",
+        idx: 0,
+      },
+      "",
+      "/proposal",
+    );
+
+    render(<App />);
+
+    await userEvent.click(screen.getByLabelText("Close"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Proposal forge")).toBeInTheDocument();
+    });
+    expect(window.history.state.usr).toEqual({
+      proposalWorkspaceResetToken: "reset-1",
+    });
+  });
+
   it("keeps the pane active while a resume import is busy", async () => {
     importFileMock.mockImplementation(
       () =>
