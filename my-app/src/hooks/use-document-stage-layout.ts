@@ -10,6 +10,7 @@ type UseDocumentStageLayoutOptions = {
   zoomLevel?: number;
   fitMode?: "width" | "contain";
   fillAvailableOnZoom?: boolean;
+  includeParentMeasurement?: boolean;
   pageWidthPx?: number;
   pageHeightPx?: number;
   initialAvailableWidthPx?: number;
@@ -63,6 +64,7 @@ export function useDocumentStageLayout({
   zoomLevel = 1,
   fitMode = "width",
   fillAvailableOnZoom = false,
+  includeParentMeasurement = true,
   pageWidthPx = A4_PAGE_WIDTH_PX,
   pageHeightPx = A4_PAGE_HEIGHT_PX,
   initialAvailableWidthPx = 560,
@@ -88,11 +90,15 @@ export function useDocumentStageLayout({
     const measure = () => {
       const availableWidth = Math.max(
         measureAvailableSize(node, "width"),
-        node.parentElement ? measureAvailableSize(node.parentElement, "width") : 0,
+        includeParentMeasurement && node.parentElement
+          ? measureAvailableSize(node.parentElement, "width")
+          : 0,
       );
       const availableHeight = Math.max(
         measureAvailableSize(node, "height"),
-        node.parentElement ? measureAvailableSize(node.parentElement, "height") : 0,
+        includeParentMeasurement && node.parentElement
+          ? measureAvailableSize(node.parentElement, "height")
+          : 0,
       );
 
       if (availableWidth <= 0 || availableHeight <= 0) {
@@ -135,7 +141,7 @@ export function useDocumentStageLayout({
       }
       resizeObserver.disconnect();
     };
-  }, [enabled, measurementRef]);
+  }, [enabled, includeParentMeasurement, measurementRef]);
 
   const widthFitScale = measurement.availableWidth / pageWidthPx;
   const heightFitScale = measurement.availableHeight / pageHeightPx;

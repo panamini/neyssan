@@ -25,7 +25,7 @@ import type {
   ResumeLayoutVariantId,
 } from "../features/verbati/resume/resume.types";
 import { normalizeExportLocale } from "./export-locale";
-import { parseProposalClosingBlock } from "./proposal-closing";
+import { extractProposalClosingBlockFromParagraphs } from "./proposal-closing";
 import { getProposalDocumentTypography } from "./proposal-document-typography";
 import { resolveProposalOutputLanguage } from "../../convex/lib/proposals/proposalOutput";
 import {
@@ -554,21 +554,6 @@ function splitProposalParagraphs(content: string): string[] {
     .filter(Boolean);
 }
 
-function extractClosingBlock(
-  paragraph: string,
-): ProposalPrintBlock | null {
-  const closingBlock = parseProposalClosingBlock(paragraph);
-  if (!closingBlock) {
-    return null;
-  }
-
-  return {
-    type: "closing",
-    signOff: closingBlock.signOff ?? "",
-    signatureName: closingBlock.signatureName ?? "",
-  };
-}
-
 export function buildProposalBodyBlocks(
   content: string | null | undefined,
   recipientDetails?: string | null,
@@ -593,12 +578,20 @@ export function buildProposalBodyBlocks(
     startIndex = 1;
   }
 
-  const tailParagraph = paragraphs.at(-1);
-  const closingBlock =
-    tailParagraph && startIndex < paragraphs.length
-      ? extractClosingBlock(tailParagraph)
+  const extractedClosingBlock =
+    startIndex < paragraphs.length
+      ? extractProposalClosingBlockFromParagraphs(paragraphs)
       : null;
-  const endIndex = closingBlock ? paragraphs.length - 1 : paragraphs.length;
+  const closingBlock: ProposalPrintBlock | null = extractedClosingBlock
+    ? {
+        type: "closing",
+        signOff: extractedClosingBlock.block.signOff ?? "",
+        signatureName: extractedClosingBlock.block.signatureName ?? "",
+      }
+    : null;
+  const endIndex = extractedClosingBlock
+    ? extractedClosingBlock.startIndex
+    : paragraphs.length;
 
   for (let index = startIndex; index < endIndex; index += 1) {
     blocks.push({

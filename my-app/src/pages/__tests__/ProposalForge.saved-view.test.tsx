@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
+import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
 import {
   readStoredProposalOutputDraft,
@@ -169,9 +169,21 @@ vi.mock("../../lib/proposal-personalization", () => ({
     title: mockAttachedCvId === "cv_alpha" ? "Alex Martin Resume" : null,
     personalizationContext: null,
   }),
+  getLocalPersonalizationSourceByCvId: (id: string | null | undefined) => ({
+    title: id === "cv_alpha" ? "Alex Martin Resume" : null,
+    personalizationContext: null,
+  }),
   getLocalActiveCvSnapshotById: (id: string) =>
     id === "cv_alpha" ? { title: "Alex Martin Resume" } : null,
   getLocalCvDocumentById: (id: string) => (id === "cv_alpha" ? mockSourceCv : null),
+  listLocalCvPickerOptions: () => [
+    {
+      id: "cv_alpha",
+      title: "Alex Martin Resume",
+      subtitle: "Operations Associate",
+      isActive: mockAttachedCvId === "cv_alpha",
+    },
+  ],
   getProposalApplicantHeaderData: () => ({
     name: "Alex Martin",
     role: "Operations Associate",
@@ -203,7 +215,11 @@ vi.mock("../../lib/proposal-personalization", () => ({
 }));
 
 vi.mock("../../components/ProposalInputForm", () => ({
-  default: (props: { onValuesChange?: (values: any) => void }) => {
+  default: (props: {
+    cvPickerOpen?: boolean;
+    cvPickerRequestKey?: number;
+    onValuesChange?: (values: any) => void;
+  }) => {
     const storedDraft = JSON.parse(
       window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
     ) as {
@@ -245,6 +261,12 @@ vi.mock("../../components/ProposalInputForm", () => ({
         </div>
         <div data-testid="compose-job-description">
           {storedDraft.jobDescription ?? "empty-description"}
+        </div>
+        <div data-testid="compose-cv-picker-state">
+          {props.cvPickerOpen ? "open" : "closed"}
+        </div>
+        <div data-testid="compose-cv-picker-request-key">
+          {props.cvPickerRequestKey ?? 0}
         </div>
       </div>
     );
@@ -290,26 +312,6 @@ vi.mock("../../components/ProposalsList", () => ({
   ),
 }));
 
-function ProposalRouteControls(): JSX.Element {
-  const navigate = useNavigate();
-
-  return (
-    <button type="button" onClick={() => navigate("/cv")}>
-      Open resume workspace
-    </button>
-  );
-}
-
-function ResumeRoundTripControls(): JSX.Element {
-  const navigate = useNavigate();
-
-  return (
-    <button type="button" onClick={() => navigate("/proposal")}>
-      Back to proposal workspace
-    </button>
-  );
-}
-
 describe("ProposalForge saved view", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -323,7 +325,7 @@ describe("ProposalForge saved view", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("button", { name: "Back to draft" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Back to draft" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Duplicate to draft" })).toBeInTheDocument();
     expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
       "proposal_beta",
@@ -345,17 +347,15 @@ describe("ProposalForge saved view", () => {
       .getAllByRole("button")
       .map((button) => button.getAttribute("aria-label"));
     expect(actionButtons).toEqual([
-      "Back to draft",
       "Duplicate to draft",
-      "Reset to CV style",
       "Export proposal",
     ]);
     expect(toolbar).not.toHaveTextContent("Based on CV: Alex Martin Resume");
     expect(
-      within(toolbar as HTMLElement).getByRole("group", {
+      within(toolbar as HTMLElement).queryByRole("group", {
         name: "Saved proposal status",
       }),
-    ).toHaveTextContent("CV");
+    ).not.toBeInTheDocument();
   });
 
   it("treats bare proposal id links as saved view for backward compatibility", () => {
@@ -365,65 +365,10 @@ describe("ProposalForge saved view", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("button", { name: "Back to draft" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Back to draft" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Duplicate to draft" })).toBeInTheDocument();
     expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
       "proposal_beta",
-    );
-  });
-
-  it("returns to the live editable draft without clearing it", () => {
-    window.localStorage.setItem(ATTACHED_CV_STORAGE_KEY, "cv_alpha");
-    window.localStorage.setItem(
-      PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-      JSON.stringify({
-        jobTitle: "Operations Associate",
-        jobDescription:
-          "Support recurring processes and coordinate communication.",
-        proposalType: "cover_letter",
-        voicePreset: "signature",
-      }),
-    );
-    writeStoredProposalOutputDraft({
-      proposalContent: "Live editable proposal body.",
-      proposalType: "cover_letter",
-      proposalVoicePreset: "signature",
-      proposalTemplateId: null,
-      proposalVerbatiStyle: null,
-      proposalStyleLinkMode: "inherit_cv",
-      proposalStyleChoice: "auto",
-      proposalApplicantName: "Alex Martin",
-      proposalApplicantRole: "Operations Associate",
-      proposalDocumentTitle: "Live editable proposal",
-      proposalDocumentMeta: "Compose output",
-      generatedProposalId: "proposal_live",
-      proposalOutputMode: "edit",
-      paletteOverride: null,
-      customAccentHex: null,
-      templateBundleId: null,
-      typographyOverride: null,
-      layoutOverride: null,
-      proposalDocumentTitleManual: false,
-      characterLimitMode: null,
-      characterLimitValue: null,
-    });
-
-    render(
-      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Back to draft" }));
-
-    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "Live editable proposal|Dear Hiring Manager, Live editable proposal body.|edit",
-    );
-    expect(readStoredProposalOutputDraft()?.proposalContent).toBe(
-      "Dear Hiring Manager,\n\nLive editable proposal body.",
-    );
-    expect(window.localStorage.getItem(ATTACHED_CV_STORAGE_KEY)).toBe(
-      "cv_alpha",
     );
   });
 
@@ -459,6 +404,12 @@ describe("ProposalForge saved view", () => {
       sourceUrl: "https://www.linkedin.com/jobs/view/123456",
       platform: "linkedin",
     });
+    expect(screen.getByTestId("compose-cv-picker-state")).toHaveTextContent(
+      "closed",
+    );
+    expect(screen.getByTestId("compose-cv-picker-request-key")).toHaveTextContent(
+      "0",
+    );
     expect(window.localStorage.getItem(ATTACHED_CV_STORAGE_KEY)).toBe(
       "cv_alpha",
     );
@@ -474,10 +425,10 @@ describe("ProposalForge saved view", () => {
     const toolbar = screen.getByRole("group", { name: "Saved proposal actions" });
     expect(toolbar).not.toHaveTextContent("Based on CV: Alex Martin Resume");
     expect(
-      within(toolbar as HTMLElement).getByRole("group", {
+      within(toolbar as HTMLElement).queryByRole("group", {
         name: "Saved proposal status",
       }),
-    ).toHaveTextContent("CV");
+    ).not.toBeInTheDocument();
   });
 
   it("duplicates the persisted inherited-style row instead of a stale local draft when reopening the same proposal id", async () => {
@@ -647,74 +598,4 @@ describe("ProposalForge saved view", () => {
     });
   });
 
-  it("keeps the restored live draft after a resume detour", () => {
-    window.localStorage.setItem(
-      PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-      JSON.stringify({
-        jobTitle: "Operations Associate",
-        jobDescription:
-          "Support recurring processes and coordinate communication.",
-        proposalType: "cover_letter",
-        voicePreset: "signature",
-      }),
-    );
-    writeStoredProposalOutputDraft({
-      proposalContent: "Live editable proposal body.",
-      proposalType: "cover_letter",
-      proposalVoicePreset: "signature",
-      proposalTemplateId: null,
-      proposalVerbatiStyle: null,
-      proposalStyleLinkMode: "inherit_cv",
-      proposalStyleChoice: "auto",
-      proposalApplicantName: "Alex Martin",
-      proposalApplicantRole: "Operations Associate",
-      proposalDocumentTitle: "Live editable proposal",
-      proposalDocumentMeta: "Compose output",
-      generatedProposalId: "proposal_live",
-      proposalOutputMode: "edit",
-      paletteOverride: null,
-      customAccentHex: null,
-      templateBundleId: null,
-      typographyOverride: null,
-      layoutOverride: null,
-      proposalDocumentTitleManual: false,
-      characterLimitMode: null,
-      characterLimitValue: null,
-    });
-
-    render(
-      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
-        <Routes>
-          <Route
-            path="/proposal"
-            element={
-              <>
-                <ProposalRouteControls />
-                <ProposalForge />
-              </>
-            }
-          />
-          <Route path="/cv" element={<ResumeRoundTripControls />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Back to draft" }));
-    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "Live editable proposal|Dear Hiring Manager, Live editable proposal body.|edit",
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Open resume workspace" }));
-    expect(
-      screen.getByRole("button", { name: "Back to proposal workspace" }),
-    ).toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Back to proposal workspace" }),
-    );
-
-    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "Live editable proposal|Dear Hiring Manager, Live editable proposal body.|edit",
-    );
-  });
 });

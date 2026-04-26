@@ -23,6 +23,9 @@ describe("ProposalDisplay footer CSS contracts", () => {
       /\.dasti-proposal-output-shell--workspace\s+\.dasti-doc-viewer-shell__surface\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;/,
     );
     expect(productCss).toMatch(
+      /\.dasti-proposal-output-shell--workspace\s+\.dasti-proposal-sheet__preview-stage\s*\{[\s\S]*display:\s*grid;[\s\S]*justify-content:\s*center;[\s\S]*align-content:\s*start;/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-proposal-output-shell--workspace\s+\.dasti-proposal-sheet-frame\s*\{[\s\S]*display:\s*flex;[\s\S]*flex:\s*1 1 auto;[\s\S]*min-height:\s*0;/,
     );
   });

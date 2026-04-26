@@ -10,8 +10,9 @@ import {
   Gear,
   Menu,
   Moon,
+  Play,
   Sun,
-  Trash,
+  TrashSimple,
   User,
   X,
 } from "@/lib/icons";
@@ -91,7 +92,7 @@ const clerkAppearance = {
     },
   },
   variables: {
-    colorPrimary: "hsl(155,22%,30%)",
+    colorPrimary: "var(--color-accent)",
     borderRadius: "var(--radius-control)",
   },
 } as const;
@@ -296,7 +297,7 @@ function SidebarDocumentSection({
                               setConfirmingDeleteKey(item.key);
                             }}
                           >
-                            <Trash size={12} strokeWidth={1.8} aria-hidden="true" />
+                            <TrashSimple size={12} strokeWidth={1.8} aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -1026,7 +1027,7 @@ export const Sidebar: React.FC = () => {
         <nav className="sb__nav sb__nav--rail" aria-label="Primary sidebar">
           <SidebarRailButton
             label="Start"
-            icon={<Check size={16} strokeWidth={1.5} aria-hidden="true" />}
+            icon={<Play size={16} strokeWidth={1.5} aria-hidden="true" />}
             active={false}
             onClick={handleOpenQuickStart}
           />
@@ -1084,28 +1085,14 @@ export const Sidebar: React.FC = () => {
         </nav>
       ) : (
         <nav className="sb__nav sb__nav--stack" aria-label="Primary sidebar">
-          <div
-            className="sb-section"
-            aria-label="Start"
-            style={{ paddingBottom: "var(--space-2)" }}
-          >
+          <div className="sb-section sb-section--primary-nav" aria-label="Start">
             <button
               type="button"
               onClick={handleOpenQuickStart}
               className="sb-section__action"
-              style={{
-                width: "100%",
-                border: "none",
-                background: "none",
-                cursor: "pointer",
-                textAlign: "left",
-              }}
             >
               Start
             </button>
-          </div>
-
-          <section className="sb-section" aria-label="Jobs">
             <Link
               to="/jobs"
               className={clsx(
@@ -1115,7 +1102,7 @@ export const Sidebar: React.FC = () => {
             >
               Jobs
             </Link>
-          </section>
+          </div>
 
           <SidebarDocumentSection
             sectionLabel="Resumes"

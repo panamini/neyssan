@@ -86,9 +86,16 @@ vi.mock("../../components/ProposalDisplay", () => ({
 vi.mock("../../components/ProposalsList", () => ({
   default: ({
     selectedProposalId,
+    savedViewActions,
   }: {
     selectedProposalId?: string | null;
-  }) => <div data-testid="saved-proposals-list">{selectedProposalId}</div>,
+    savedViewActions?: React.ReactNode;
+  }) => (
+    <div data-testid="saved-proposals-list">
+      {savedViewActions}
+      {selectedProposalId}
+    </div>
+  ),
 }));
 
 describe("ProposalForge saved view guest fixture fallback", () => {
@@ -110,8 +117,8 @@ describe("ProposalForge saved view guest fixture fallback", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Back to draft" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Back to draft" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Duplicate to draft" }),
     ).toBeInTheDocument();

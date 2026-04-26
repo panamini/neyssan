@@ -6,7 +6,12 @@ import {
   buildProposalExportSource,
   type ProposalPrintBlock,
 } from "../document-export-models";
-import { parseProposalClosingBlock } from "../proposal-closing";
+import {
+  ensureProposalSignatureName,
+  extractProposalClosingBlockFromParagraphs,
+  formatProposalSignatureName,
+  parseProposalClosingBlock,
+} from "../proposal-closing";
 
 function buildProposalSource(content: string) {
   return buildProposalExportSource({
@@ -54,6 +59,58 @@ describe("proposal closing parser", () => {
       signOff: "Sincerely,",
       signatureName: "Alex Mercer",
     });
+  });
+
+  it("restores a missing candidate signature after an existing sign-off", () => {
+    expect(
+      ensureProposalSignatureName(
+        "Dear Hiring Manager,\n\nI would welcome the conversation.\n\nKind regards,",
+        "Alex Mercer",
+      ),
+    ).toBe(
+      "Dear Hiring Manager,\n\nI would welcome the conversation.\n\nKind regards,\n\nalex mercer",
+    );
+  });
+
+  it("normalizes an existing compact signature into a lowercase separated signature", () => {
+    expect(
+      ensureProposalSignatureName(
+        "Dear Hiring Manager,\n\nI would welcome the conversation.\n\nKind regards,\nAlex Mercer",
+        "Alex Mercer",
+      ),
+    ).toBe(
+      "Dear Hiring Manager,\n\nI would welcome the conversation.\n\nKind regards,\n\nalex mercer",
+    );
+  });
+
+  it("parses a closing when the signature sits after a blank line", () => {
+    expect(
+      extractProposalClosingBlockFromParagraphs([
+        "Dear Hiring Manager,",
+        "I would welcome the conversation.",
+        "Kind regards,",
+        "alex mercer",
+      ]),
+    ).toEqual({
+      block: {
+        signOff: "Kind regards,",
+        signatureName: "alex mercer",
+      },
+      startIndex: 2,
+    });
+  });
+
+  it("formats applicant signatures as lowercase", () => {
+    expect(formatProposalSignatureName("Alex Mercer")).toBe("alex mercer");
+  });
+
+  it("does not invent a signature block when the content has no closing sign-off", () => {
+    expect(
+      ensureProposalSignatureName(
+        "Dear Hiring Manager,\n\nI would welcome the conversation.",
+        "Alex Mercer",
+      ),
+    ).toBe("Dear Hiring Manager,\n\nI would welcome the conversation.");
   });
 
   it("rejects a non-signoff tail paragraph", () => {

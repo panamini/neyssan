@@ -331,7 +331,7 @@ export function CvForge(): JSX.Element {
     ? `/jobs/${encodeURIComponent(requestedJobId)}`
     : null;
   const cvPickerOptions = React.useMemo(
-    () => cvs.map((cv) => buildCvForgePickerOption(cv)),
+    () => (cvs ?? []).map((cv) => buildCvForgePickerOption(cv)),
     [cvs],
   );
   const activeWorkspaceCvId =
@@ -563,9 +563,9 @@ export function CvForge(): JSX.Element {
     [authoritativeResume],
   );
   const hasTrustedExport = authoritativeExportModel !== null;
-  const exportStatusLabel = hasTrustedExport ? "ATS Ready" : "Standard export";
+  const exportStatusLabel = hasTrustedExport ? "ATS Ready" : "Standard Export";
   const exportStatusDescription = hasTrustedExport
-    ? "Mistral v3"
+    ? "Trusted Mistral v3"
     : "Not ATS-verified";
 
   const handleResumeExport = React.useCallback(
@@ -774,7 +774,7 @@ export function CvForge(): JSX.Element {
         </button>
         {isStylePresetMenuOpen ? (
           <div
-            className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-cv-style-presets__menu"
+            className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-cv-style-presets__menu dasti-proposal-chrome-drawer--stack"
             role="menu"
             aria-label="Saved resume styles"
           >
@@ -784,7 +784,12 @@ export function CvForge(): JSX.Element {
                   key={slot}
                   type="button"
                   role="menuitemradio"
-                  className="dasti-cv-style-presets__option"
+                  className={[
+                    "dasti-cv-style-presets__option",
+                    isActive ? "dasti-proposal-chrome-option--active" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   disabled={!preset || !nextStyle}
                   aria-checked={isActive}
                   onClick={() => {
@@ -896,7 +901,7 @@ export function CvForge(): JSX.Element {
       className="dasti-icon-button"
       aria-label="Open resume preview"
       onClick={() => setWorkspaceMode("preview")}
-      data-toolbar-tooltip="Preview"
+      data-toolbar-tooltip="Switch to preview"
       data-no-pan="true"
     >
       <Eye size={15} strokeWidth={1.7} aria-hidden="true" />
@@ -915,9 +920,9 @@ export function CvForge(): JSX.Element {
     <button
       type="button"
       className="dasti-cv-workbench-toggle__button"
-      aria-label="Open resume edit"
+      aria-label="Back to resume editing"
       onClick={() => setWorkspaceMode("edit")}
-      data-toolbar-tooltip="Edit"
+      data-toolbar-tooltip="Back to edit"
       data-no-pan="true"
     >
       <PenLine size={15} strokeWidth={1.9} aria-hidden="true" />

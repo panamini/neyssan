@@ -7,7 +7,7 @@ import {
   ChevronUp,
   FloppyDisk,
   RotateCcw,
-  Trash,
+  TrashSimple,
   X,
 } from "@/lib/icons";
 import ProposalInputForm from "../components/ProposalInputForm";
@@ -2105,7 +2105,7 @@ export function ProposalForgeNext(): JSX.Element {
                             className="dasti-icon-button"
                             onClick={() => setIsConfirmingGeneratedDelete(true)}
                           >
-                            <Trash size={15} strokeWidth={1.7} />
+                            <TrashSimple size={15} strokeWidth={1.7} />
                           </button>
                         )}
                       </span>
