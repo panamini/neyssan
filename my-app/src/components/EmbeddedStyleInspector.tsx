@@ -307,9 +307,10 @@ export function EmbeddedStyleInspector({
                         key={option.id}
                         type="button"
                         className={[
+                          "dasti-proposal-chrome-option",
                           "dasti-resume-style-inspector__layout-option",
                           active
-                            ? "dasti-resume-style-inspector__layout-option--active"
+                            ? "dasti-resume-style-inspector__layout-option--active dasti-proposal-chrome-option--active"
                             : "",
                         ]
                           .filter(Boolean)
@@ -389,9 +390,10 @@ export function EmbeddedStyleInspector({
                         key={option.id}
                         type="button"
                         className={[
+                          "dasti-proposal-chrome-option",
                           "dasti-resume-style-inspector__layout-option",
                           active
-                            ? "dasti-resume-style-inspector__layout-option--active"
+                            ? "dasti-resume-style-inspector__layout-option--active dasti-proposal-chrome-option--active"
                             : "",
                         ]
                           .filter(Boolean)

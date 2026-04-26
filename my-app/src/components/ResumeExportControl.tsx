@@ -24,13 +24,19 @@ type ResumeExportControlProps = {
   styledPdfDisabledReason?: string;
 };
 
-const SECONDARY_EXPORT_MENU_ITEMS: ReadonlyArray<{
-  format: Exclude<ResumeExportFormat, "pdf">;
+const EXPORT_MENU_ITEMS: ReadonlyArray<{
+  key: string;
   label: string;
+  request: ResumeExportRequest;
 }> = [
-  { format: "docx", label: "Export DOCX" },
-  { format: "markdown", label: "Export Markdown" },
-  { format: "json", label: "Export JSON" },
+  {
+    key: "pdf-ats",
+    label: "Export ATS PDF",
+    request: { format: "pdf", mode: "ats" },
+  },
+  { key: "docx", label: "Export DOCX", request: { format: "docx" } },
+  { key: "markdown", label: "Export Markdown", request: { format: "markdown" } },
+  { key: "json", label: "Export JSON", request: { format: "json" } },
 ];
 
 export function ResumeExportControl({
@@ -83,25 +89,6 @@ export function ResumeExportControl({
         <button
           type="button"
           className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm dasti-resume-export-control__primary"
-          aria-label="Export ATS PDF"
-          data-toolbar-tooltip="Export ATS PDF"
-          onClick={() => {
-            if (exportingFormat) {
-              return;
-            }
-            void onExport({
-              format: "pdf",
-              mode: "ats",
-            });
-          }}
-          disabled={exportingFormat !== null}
-        >
-          <FilePdf size={14} strokeWidth={1.6} aria-hidden="true" />
-          Export ATS PDF
-        </button>
-        <button
-          type="button"
-          className="dasti-button dasti-button--secondary dasti-button--pill dasti-button--sm dasti-resume-export-control__primary"
           aria-label="Export Styled PDF"
           data-toolbar-tooltip={
             styledPdfDisabled ? styledPdfDisabledReason : "Export Styled PDF"
@@ -121,24 +108,56 @@ export function ResumeExportControl({
           <FilePdf size={14} strokeWidth={1.6} aria-hidden="true" />
           Export Styled PDF
         </button>
-        <button
-          type="button"
-          className="dasti-icon-button"
-          aria-label={menuLabel}
-          aria-expanded={isMenuOpen}
-          aria-haspopup="menu"
-          data-toolbar-tooltip={menuLabel}
-          data-no-pan="true"
-          onClick={() => {
-            if (exportingFormat) {
-              return;
-            }
-            setIsMenuOpen((current) => !current);
-          }}
-          disabled={exportingFormat !== null}
-        >
-          <DotsThree size={16} strokeWidth={1.7} aria-hidden="true" />
-        </button>
+        <div className="dasti-resume-export-control__menu-cell">
+          <button
+            type="button"
+            className="dasti-icon-button"
+            aria-label={menuLabel}
+            aria-expanded={isMenuOpen}
+            aria-haspopup="menu"
+            data-toolbar-tooltip={menuLabel}
+            data-no-pan="true"
+            onClick={() => {
+              if (exportingFormat) {
+                return;
+              }
+              setIsMenuOpen((current) => !current);
+            }}
+            disabled={exportingFormat !== null}
+          >
+            <DotsThree size={16} strokeWidth={1.7} aria-hidden="true" />
+          </button>
+          {isMenuOpen ? (
+            <div
+              className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-cv-style-presets__menu dasti-proposal-chrome-drawer--stack dasti-resume-export-control__menu"
+              role="menu"
+              aria-label="Export resume formats"
+            >
+              {EXPORT_MENU_ITEMS.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  role="menuitem"
+                  className="dasti-cv-style-presets__option"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    void onExport(item.request);
+                  }}
+                  disabled={exportingFormat !== null}
+                >
+                  <span className="dasti-cv-style-presets__option-copy">
+                    <span className="dasti-cv-style-presets__option-title">
+                      {item.label}
+                    </span>
+                    <span className="dasti-cv-style-presets__option-description">
+                      {statusDescription}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
         <span
           className={
             statusTone === "trusted"
@@ -149,38 +168,6 @@ export function ResumeExportControl({
           {statusLabel}
         </span>
       </div>
-      {isMenuOpen ? (
-        <div
-          className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-cv-style-presets__menu"
-          role="menu"
-          aria-label="Export resume formats"
-        >
-          {SECONDARY_EXPORT_MENU_ITEMS.map((item) => (
-            <button
-              key={item.format}
-              type="button"
-              role="menuitem"
-              className="dasti-cv-style-presets__option"
-              onClick={() => {
-                setIsMenuOpen(false);
-                void onExport({
-                  format: item.format,
-                });
-              }}
-              disabled={exportingFormat !== null}
-            >
-              <span className="dasti-cv-style-presets__option-copy">
-                <span className="dasti-cv-style-presets__option-title">
-                  {item.label}
-                </span>
-                <span className="dasti-cv-style-presets__option-description">
-                  {statusDescription}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
