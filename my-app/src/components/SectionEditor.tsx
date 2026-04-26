@@ -46,7 +46,6 @@ import AchievementsBlock from "./structured-blocks/AchievementsBlock";
 import { useSectionFlushSubscription } from "../hooks/use-flush-subscription";
 import {
   Pencil,
-  Trash,
   X,
   Pin,
   PinOff,

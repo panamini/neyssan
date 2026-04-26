@@ -28,7 +28,7 @@ import type { RemirrorJSON } from "remirror";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
 import { api } from "../../../convex/_generated/api";
 import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
-import { Loader2, Trash, Wand2, X } from "@/lib/icons";
+import { Loader2, TrashSimple, Wand2, X } from "@/lib/icons";
 import { Button } from "../ui/button";
 import { useToast } from "../ui/toast";
 import { CvModalShell } from "./CvModalShell";
@@ -1143,7 +1143,7 @@ export function ExperienceModal({
                   className="dasti-icon-button"
                   aria-label="Remove entry"
                 >
-                  <Trash className="h-4 w-4" />
+                  <TrashSimple className="h-4 w-4" />
                 </button>
               </div>
               {(recoveryNotesByItemId[String(row.id ?? "")] ?? []).length > 0 ? (
@@ -1737,7 +1737,7 @@ export function EducationModal({
                   className="dasti-icon-button"
                   aria-label="Remove entry"
                 >
-                  <Trash className="h-4 w-4" />
+                  <TrashSimple className="h-4 w-4" />
                 </button>
               </div>
               {(recoveryNotesByItemId[String(row.id ?? "")] ?? []).length > 0 ? (
