@@ -8,19 +8,19 @@
 /* Sauge — défaut (reproduit les valeurs :root pour cohérence) */
 .pal-sauge {
   --ac: hsl(155, 22%, 30%);
-  --am: hsl(155, 18%, 40%);
-  --ap: hsl(155, 20%, 88%);
-  --as: hsla(155, 22%, 30%, 0.09);
-  --fr: hsla(155, 22%, 30%, 0.2);
-  --color-on-accent: hsl(155, 18%, 95%);
+  --am: hsl(155, 24%, 44%);
+  --ap: hsl(155, 22%, 92%);
+  --as: hsl(155, 18%, 88%);
+  --fr: hsl(155, 22%, 56%);
+  --color-on-accent: hsl(40, 20%, 99%);
   --op: var(--color-on-accent);
 }
 .dark.pal-sauge {
   --ac: hsl(155, 28%, 62%);
-  --am: hsl(155, 24%, 72%);
-  --ap: hsl(155, 22%, 20%);
-  --as: hsla(155, 28%, 62%, 0.12);
-  --fr: hsla(155, 28%, 62%, 0.24);
+  --am: hsl(155, 28%, 72%);
+  --ap: hsl(155, 20%, 18%);
+  --as: hsl(155, 18%, 22%);
+  --fr: hsl(155, 28%, 78%);
   --color-on-accent: hsl(80, 5%, 7%);
   --op: var(--color-on-accent);
 }
