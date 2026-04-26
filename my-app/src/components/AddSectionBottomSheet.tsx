@@ -172,8 +172,12 @@ export function AddSectionBottomSheet({
       >
         {/* Backdrop */}
         <div
-          className="absolute inset-0 backdrop-blur-[4px]"
-          style={{ background: "hsla(30,12%,11%,.32)" }}
+          className="absolute inset-0"
+          style={{
+            background: "var(--dialog-backdrop-bg)",
+            backdropFilter: "blur(var(--dialog-backdrop-blur-soft))",
+            WebkitBackdropFilter: "blur(var(--dialog-backdrop-blur-soft))",
+          }}
           onClick={onClose}
           aria-hidden
         />

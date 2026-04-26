@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { FileText, Plus, X, Check } from "@/lib/icons";
+import { LibraryFilterMenu } from "../components/LibraryFilterMenu";
 import { formatUiDate } from "../lib/ui-date";
 import {
   createProposalWorkspaceResetState,
@@ -12,6 +13,31 @@ import {
 } from "../lib/proposal-workspace-state";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import { clearActiveLocalCvId } from "../lib/proposal-personalization";
+
+const PROPOSAL_TONE_FILTER_OPTIONS = [
+  { value: "all", label: "All tones", description: "Show every saved tone." },
+  {
+    value: "engaging",
+    label: "Warm",
+    description: "Approachable and personal.",
+  },
+  {
+    value: "signature",
+    label: "Natural",
+    description: "Conversational and credible.",
+  },
+  { value: "expert", label: "Formal", description: "Composed and measured." },
+] as const;
+
+const PROPOSAL_SORT_OPTIONS = [
+  {
+    value: "newest",
+    label: "Newest first",
+    description: "Recently saved first.",
+  },
+  { value: "oldest", label: "Oldest first", description: "Oldest saved first." },
+  { value: "title", label: "Title", description: "Alphabetical by title." },
+] as const;
 
 function typeLabel(type?: string): string {
   if (type === "cover_letter") return "Letter";
@@ -213,35 +239,18 @@ export function ProposalsLibrary(): JSX.Element {
                   className="dasti-proposal-library-utility-row__input"
                 />
               </label>
-              <label className="dasti-proposal-library-utility-row__select-shell">
-                <span className="sr-only">Filter all cover letters by tone</span>
-                <select
-                  value={toneFilter}
-                  onChange={(event) => setToneFilter(event.target.value)}
-                  aria-label="Filter all cover letters by tone"
-                  className="dasti-select dasti-select--sm"
-                >
-                  <option value="all">All tones</option>
-                  <option value="signature">Natural</option>
-                  <option value="expert">Formal</option>
-                  <option value="engaging">Warm</option>
-                </select>
-              </label>
-              <label className="dasti-proposal-library-utility-row__select-shell">
-                <span className="sr-only">Sort all cover letters</span>
-                <select
-                  value={sortOrder}
-                  onChange={(event) =>
-                    setSortOrder(event.target.value as "newest" | "oldest" | "title")
-                  }
-                  aria-label="Sort all cover letters"
-                  className="dasti-select dasti-select--sm"
-                >
-                  <option value="newest">Newest first</option>
-                  <option value="oldest">Oldest first</option>
-                  <option value="title">Title</option>
-                </select>
-              </label>
+              <LibraryFilterMenu
+                label="Filter all cover letters by tone"
+                value={toneFilter}
+                options={PROPOSAL_TONE_FILTER_OPTIONS}
+                onChange={setToneFilter}
+              />
+              <LibraryFilterMenu
+                label="Sort all cover letters"
+                value={sortOrder}
+                options={PROPOSAL_SORT_OPTIONS}
+                onChange={setSortOrder}
+              />
               <span className="dasti-proposal-library-utility-row__count">
                 {sorted.length === savedProposalCount
                   ? `${savedProposalCount} saved`

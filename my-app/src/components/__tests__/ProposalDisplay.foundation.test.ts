@@ -36,7 +36,7 @@ describe("ProposalDisplay foundation tokens", () => {
     );
   });
 
-  it("defines workspace motion, compact submit, and output editor tokens in foundation", () => {
+  it("defines workspace motion and output editor tokens in foundation", () => {
     expect(foundationCss).toContain(
       "--proposal-motion-toolbar-enter-duration: 320ms;",
     );
@@ -46,12 +46,8 @@ describe("ProposalDisplay foundation tokens", () => {
     expect(foundationCss).toContain(
       "--proposal-motion-compose-enter-shift: 12px;",
     );
-    expect(foundationCss).toContain("--proposal-submit-size-sm: 30px;");
-    expect(foundationCss).toContain("--proposal-submit-radius-sm: 11px;");
-    expect(foundationCss).toContain("--proposal-submit-stroke-width-md: 2.4;");
-    expect(foundationCss).toContain(
-      "--proposal-submit-stroke-width-sm: 1.4;",
-    );
+    expect(foundationCss).not.toContain("--proposal-submit-size-sm");
+    expect(foundationCss).not.toContain("--proposal-submit-stroke-width");
     expect(foundationCss).toContain(
       "--proposal-output-editor-inline-padding: clamp(24px, 4vw, 40px);",
     );

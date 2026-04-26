@@ -36,6 +36,7 @@ import {
   MagnifyingGlass as PhMagnifyingGlass,
   MagnifyingGlassMinus as PhMagnifyingGlassMinus,
   MagnifyingGlassPlus as PhMagnifyingGlassPlus,
+  PaperPlaneRight as PhPaperPlaneRight,
   PaperPlaneTilt as PhPaperPlaneTilt,
   Paperclip as PhPaperclip,
   Palette as PhPalette,
@@ -44,6 +45,7 @@ import {
   PencilSimple as PhPencilSimple,
   PencilSimpleLine as PhPencilSimpleLine,
   Plug as PhPlug,
+  Play as PhPlay,
   Minus as PhMinus,
   Plus as PhPlus,
   PuzzlePiece as PhPuzzlePiece,
@@ -67,7 +69,7 @@ import {
   TextB as PhTextB,
   TextItalic as PhTextItalic,
   TextUnderline as PhTextUnderline,
-  Trash as PhTrash,
+  TrashSimple as PhTrashSimple,
   TreeView as PhTreeView,
   Upload as PhUpload,
   User as PhUser,
@@ -166,6 +168,7 @@ export const Menu = withCompat(PhRows);
 export const Minus = withCompat(PhMinus);
 export const Moon = withCompat(PhMoon);
 export const Paperclip = withCompat(PhPaperclip);
+export const PaperPlaneRight = withCompat(PhPaperPlaneRight);
 export const Palette = withCompat(PhPalette);
 export const PanelLeftDashed = withCompat(PhSidebarSimple);
 export const Pen = withCompat(PhPen);
@@ -174,6 +177,7 @@ export const PenLine = withCompat(PhPencilSimpleLine);
 export const Pencil = withCompat(PhPencilSimple);
 export const Pin = withCompat(PhPushPin);
 export const PinOff = withCompat(PhPushPinSlash);
+export const Play = withCompat(PhPlay);
 export const Plus = withCompat(PhPlus);
 export const Plug = withCompat(PhPlug);
 export const PuzzlePiece = withCompat(PhPuzzlePiece);
@@ -193,7 +197,7 @@ export const Sun = withCompat(PhSun);
 export const SunMedium = withCompat(PhSun);
 export const Sunglasses = withCompat(PhSunglasses);
 export const Stamp = withCompat(PhStamp);
-export const Trash = withCompat(PhTrash);
+export const TrashSimple = withCompat(PhTrashSimple);
 export const Underline = withCompat(PhTextUnderline);
 export const Upload = withCompat(PhUpload);
 export const User = withCompat(PhUser);
