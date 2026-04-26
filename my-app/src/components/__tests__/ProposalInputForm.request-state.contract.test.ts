@@ -27,10 +27,15 @@ describe("ProposalInputForm request-state contract", () => {
     );
   });
 
-  it("uses the animated scribble-to-stop glyph for generate and stop states", () => {
+  it("uses the canonical primary button with a static proposal glyph for generate and stop states", () => {
     expect(proposalInputFormSource).toContain("ProposalGenerateButtonGlyph");
+    expect(proposalInputFormSource).toContain('"dasti-button--primary"');
+    expect(proposalInputFormSource).toContain('"dasti-button--pill"');
+    expect(proposalInputFormSource).toContain('"dasti-button--sm"');
     expect(proposalInputFormSource).toContain('"loading-stop"');
     expect(proposalInputFormSource).toContain("canStopGeneration");
+    expect(proposalInputFormSource).not.toContain("dasti-proposal-submit-token");
+    expect(proposalInputFormSource).not.toContain("dasti-proposal-submit--pop");
   });
 
   it("navigates back to Resume through the router instead of raw history pushState", () => {

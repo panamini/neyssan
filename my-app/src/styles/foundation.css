@@ -7,20 +7,20 @@
    Surcharger via classe body.pal-* pour les autres palettes  */
 :root {
   color-scheme: light;
-  --ac: hsl(155, 30%, 42%); /* accent solid */
-  --am: hsl(155, 30%, 36%); /* accent mid */
-  --ap: hsl(155, 30%, 94%); /* accent pale */
-  --as: hsl(155, 22%, 72%); /* accent soft */
-  --fr: hsl(155, 30%, 42%); /* focus ring */
+  --ac: hsl(155, 22%, 30%); /* accent solid */
+  --am: hsl(155, 24%, 44%); /* accent mid */
+  --ap: hsl(155, 22%, 92%); /* accent pale */
+  --as: hsl(155, 18%, 88%); /* accent soft */
+  --fr: hsl(155, 22%, 56%); /* focus ring */
   --color-on-accent: hsl(40, 20%, 99%); /* readable ink on accent */
   --op: var(--color-on-accent); /* legacy alias */
 }
 .dark {
   --ac: hsl(155, 28%, 62%);
-  --am: hsl(155, 30%, 72%);
-  --ap: hsl(155, 24%, 18%);
-  --as: hsl(155, 18%, 34%);
-  --fr: hsl(155, 28%, 62%);
+  --am: hsl(155, 28%, 72%);
+  --ap: hsl(155, 20%, 18%);
+  --as: hsl(155, 18%, 22%);
+  --fr: hsl(155, 28%, 78%);
   --color-on-accent: hsl(80, 5%, 7%);
   --op: var(--color-on-accent);
   --selection-highlight-bg: color-mix(in oklch, var(--ac) 34%, transparent);
@@ -113,8 +113,8 @@
   --font-heading-family: var(--font-body-family);
   --font-serif-display: "Fraunces", "Iowan Old Style", "Palatino", Georgia,
     serif;
-  --font-mono-family: "IBM Plex Mono", source-code-pro, Menlo, Monaco, Consolas,
-    monospace;
+  --font-mono-family: "SF Mono", "SFMono-Regular", "Geist Mono", "GeistMono",
+    ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --font-heading-weight: 600;
   --font-body-weight: 400;
   --font-label-weight: 600;
@@ -212,27 +212,6 @@
   --proposal-motion-brief-exit-saturate: 0.95;
   --proposal-motion-compose-enter-saturate: 0.96;
   --proposal-motion-compose-exit-saturate: 0.96;
-  --proposal-submit-surface-duration: 380ms;
-  --proposal-submit-surface-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --proposal-submit-state-duration: 220ms;
-  --proposal-submit-size-md: 52px;
-  --proposal-submit-radius-md: 16px;
-  --proposal-submit-icon-size-md: 28px;
-  --proposal-submit-stroke-width-md: 2.4;
-  --proposal-submit-size-sm: 30px;
-  --proposal-submit-radius-sm: 11px;
-  --proposal-submit-icon-size-sm: 16px;
-  --proposal-submit-stroke-width-sm: 1.4;
-  --proposal-submit-phase-gap: 140ms;
-  --proposal-submit-spinner-duration: 1450ms;
-  --proposal-submit-draw-duration: 1080ms;
-  --proposal-submit-loading-hide-duration: 0ms;
-  --proposal-submit-stop-reveal-delay: 1800ms;
-  --proposal-submit-stop-reveal-duration: 1080ms;
-  --proposal-submit-stop-hold-duration: 220ms;
-  --proposal-submit-stop-undraw-duration: 880ms;
-  --proposal-submit-stop-redraw-duration: 1080ms;
-
   /* Layering + containers */
   --z-base: 0;
   --z-sticky: 100;
@@ -484,27 +463,27 @@
 */
 :root {
   --bg: #F7F7F9;   /* app canvas / shell background */
-  --sf1: #FFFFFF;  /* sidebar, panel surfaces — --color-surface */
-  --sf2: #EFEFF2;  /* secondary surfaces + resume stage — --color-surface-muted */
+  --sf1: #F3F1EC;  /* sidebar, panel surfaces — --color-surface */
+  --sf2: #EDE9E1;  /* secondary surfaces + resume stage — --color-surface-muted */
   --sfr: #FFFFFF;  /* raised: toolbars, cards, popovers — --color-surface-raised */
-  --ti: #0E0E10;
-  --tm2: #5B5B63;
+  --ti: #1F1F1C;
+  --tm2: #4B4B4B;
   --tg2: #6B6B72;
   --border-soft: rgba(14, 14, 16, 0.08);
   --border-field: rgba(14, 14, 16, 0.06);
   --border-strong: rgba(14, 14, 16, 0.12);
   --border-selected: color-mix(in srgb, var(--ac) 45%, transparent);
 
-  /* §6 Sémantiques light — aligned with the dasti preview catalog */
-  --ok: hsl(150, 42%, 38%);
-  --okb: hsl(150, 42%, 94%);
-  --okt: hsl(150, 46%, 22%);
-  --er: hsl(4, 72%, 50%);
-  --erb: hsl(4, 72%, 95%);
-  --ert: hsl(4, 68%, 32%);
-  --wa: hsl(36, 80%, 46%);
-  --wab: hsl(36, 80%, 94%);
-  --wat: hsl(36, 72%, 30%);
+  /* §6 Sémantiques light — aligned with the warm dasti brand canon */
+  --ok: hsl(152, 20%, 28%);
+  --okb: hsl(152, 16%, 92%);
+  --okt: hsl(152, 20%, 22%);
+  --er: hsl(4, 26%, 34%);
+  --erb: hsl(4, 22%, 92%);
+  --ert: hsl(4, 26%, 28%);
+  --wa: hsl(34, 36%, 32%);
+  --wab: hsl(34, 30%, 92%);
+  --wat: hsl(34, 36%, 26%);
 
   /* §9 Ombres light — dasti preview catalog */
   --sha: 0 1px 2px hsla(30, 15%, 10%, 0.04),
@@ -524,11 +503,15 @@
   --gradient-stage: var(--sf2);
 
   /* Frost */
-  --frost-bg: hsla(0, 0%, 100%, 0.72);
-  --frost-surface: hsla(0, 0%, 100%, 0.72);
+  --frost-bg: hsla(38, 22%, 96%, 0.88);
+  --frost-surface: hsla(38, 22%, 96%, 0.74);
   --frost-border: var(--border-soft);
   --frost-blur: 18px;
   --frost-saturate: 140%;
+  --dialog-backdrop-bg: rgba(14, 14, 16, 0.32);
+  --dialog-backdrop-bg-strong: rgba(14, 14, 16, 0.45);
+  --dialog-backdrop-blur: 8px;
+  --dialog-backdrop-blur-soft: 4px;
   --sidebar-hover-bg: var(--sf2);
   --sidebar-active-bg: var(--sf2);
   --sidebar-hover-ink: var(--ti);
@@ -557,24 +540,24 @@
   --sf1: #111111;
   --sf2: #161616;
   --sfr: #1E1E1E;
-  --ti: #F5F5F7;
-  --tm2: #A0A0A6;
-  --tg2: #6C6C72;
+  --ti: #F5F3EF;
+  --tm2: #C9C5BE;
+  --tg2: #9B978F;
   --border-soft: rgba(255, 255, 255, 0.06);
   --border-field: rgba(255, 255, 255, 0.04);
   --border-strong: rgba(255, 255, 255, 0.12);
   --border-selected: color-mix(in srgb, var(--ac) 65%, transparent);
 
-  /* §6 Sémantiques dark — aligned with the dasti preview catalog */
-  --ok: hsl(150, 42%, 62%);
-  --okb: hsl(150, 32%, 16%);
-  --okt: hsl(150, 46%, 78%);
-  --er: hsl(4, 72%, 66%);
-  --erb: hsl(4, 48%, 18%);
-  --ert: hsl(4, 80%, 82%);
-  --wa: hsl(36, 80%, 62%);
-  --wab: hsl(36, 44%, 16%);
-  --wat: hsl(36, 80%, 80%);
+  /* §6 Sémantiques dark — aligned with the warm dasti brand canon */
+  --ok: hsl(152, 22%, 56%);
+  --okb: hsl(152, 13%, 13%);
+  --okt: hsl(152, 22%, 70%);
+  --er: hsl(4, 24%, 56%);
+  --erb: hsl(4, 15%, 13%);
+  --ert: hsl(4, 24%, 70%);
+  --wa: hsl(36, 26%, 58%);
+  --wab: hsl(36, 13%, 13%);
+  --wat: hsl(36, 26%, 72%);
 
   /* §9 Ombres dark */
   --sha: 0 1px 2px rgba(0, 0, 0, 0.50),
@@ -613,11 +596,13 @@
   --gradient-stage: var(--sf2);
 
   /* Frost */
-  --frost-bg: hsla(0, 0%, 0%, 0.66);
+  --frost-bg: hsla(0, 0%, 12%, 0.82);
   --frost-surface: hsla(0, 0%, 12%, 0.7);
   --frost-border: hsla(0, 0%, 100%, 0.10);
   --frost-blur: 18px;
   --frost-saturate: 130%;
+  --dialog-backdrop-bg: rgba(0, 0, 0, 0.56);
+  --dialog-backdrop-bg-strong: rgba(0, 0, 0, 0.64);
   --sidebar-hover-bg: var(--sf2);
   --sidebar-active-bg: var(--sf2);
   --sidebar-hover-ink: var(--ti);

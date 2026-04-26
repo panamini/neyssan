@@ -147,12 +147,16 @@ describe("jobsPublic.listForUser", () => {
                       return this;
                     },
                   };
-                  buildIndex(scope);
-                  return {
-                    collect: async () => [],
-                  };
-                },
-              };
+                buildIndex(scope);
+                return {
+                  order() {
+                    return this;
+                  },
+                  take: async () => [],
+                  collect: async () => [],
+                };
+              },
+            };
             }
 
             throw new Error(`Unexpected table: ${table}`);
@@ -334,6 +338,10 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    order() {
+                      return this;
+                    },
+                    take: async () => [],
                     collect: async () => [],
                   };
                 },
@@ -366,11 +374,15 @@ describe("jobsPublic.getById", () => {
   function buildGetByIdProjectionCtx({
     job,
     shadowRows = [],
+    linkedProposalRows = [],
     identity = { subject: "clerk_123" },
+    failUnboundedDetailReads = false,
   }: {
     job: any;
     shadowRows?: any[];
+    linkedProposalRows?: any[];
     identity?: { subject: string; email?: string };
+    failUnboundedDetailReads?: boolean;
   }) {
     const linkedProfiles = [
       {
@@ -427,7 +439,17 @@ describe("jobsPublic.getById", () => {
                 };
                 buildIndex(scope);
                 return {
-                  collect: async () => [],
+                  order() {
+                    return this;
+                  },
+                  take: async (limit: number) =>
+                    linkedProposalRows.slice(0, limit),
+                  collect: async () => {
+                    if (failUnboundedDetailReads) {
+                      throw new Error("unbounded proposals collect");
+                    }
+                    return linkedProposalRows;
+                  },
                 };
               },
             };
@@ -446,7 +468,16 @@ describe("jobsPublic.getById", () => {
                 };
                 buildIndex(scope);
                 return {
-                  collect: async () => shadowRows,
+                  order() {
+                    return this;
+                  },
+                  take: async (limit: number) => shadowRows.slice(0, limit),
+                  collect: async () => {
+                    if (failUnboundedDetailReads) {
+                      throw new Error("unbounded shadow collect");
+                    }
+                    return shadowRows;
+                  },
                 };
               },
             };
@@ -650,6 +681,37 @@ describe("jobsPublic.getById", () => {
         }),
       ],
     });
+  });
+
+  it("bounds detail-only linked proposal and shadow reads for one job", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const job = buildProjectionJob();
+    const linkedProposalRows = Array.from({ length: 64 }, (_, index) => ({
+      _id: `proposal_${index}`,
+      title: `Proposal ${index}`,
+      status: "saved",
+      updatedAt: 1000 - index,
+    }));
+    const shadowRows = Array.from({ length: 64 }, (_, index) =>
+      buildVisibleShadowRow({
+        _id: `shadow_${index}`,
+        created_at: 1000 - index,
+      }),
+    );
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        linkedProposalRows,
+        shadowRows,
+        failUnboundedDetailReads: true,
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result?.linkedProposalCount).toBeGreaterThan(0);
+    expect(result?.linkedProposals.length).toBeLessThan(linkedProposalRows.length);
+    expect(result?.visibleExtractionSource).toBe("llm");
   });
 
   it("falls back to heuristic visible fields when the flag is off or rows are unsafe", async () => {
@@ -1064,6 +1126,10 @@ describe("jobsPublic.getById", () => {
                   };
                   buildIndex(scope);
                   return {
+                    order() {
+                      return this;
+                    },
+                    take: async () => [],
                     collect: async () => [],
                   };
                 },
@@ -1080,6 +1146,10 @@ describe("jobsPublic.getById", () => {
                   };
                   buildIndex(scope);
                   return {
+                    order() {
+                      return this;
+                    },
+                    take: async () => [],
                     collect: async () => [],
                   };
                 },
@@ -1096,6 +1166,10 @@ describe("jobsPublic.getById", () => {
                   };
                   buildIndex(scope);
                   return {
+                    order() {
+                      return this;
+                    },
+                    take: async () => [],
                     collect: async () => [],
                   };
                 },

@@ -194,7 +194,11 @@ describe("ProposalsList autosave", () => {
     expect(screen.getByTestId("saved-render-style")).not.toHaveTextContent(
       "pierre",
     );
-    expect(screen.getByText(/Based on CV:\s*Alex Martin Resume/)).toBeInTheDocument();
+    expect(screen.getByText("Alex Martin Resume")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Source CV Alex Martin Resume"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Source CV:\s*Alex Martin Resume/)).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Switch saved edit mode" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Proposal title" }), {

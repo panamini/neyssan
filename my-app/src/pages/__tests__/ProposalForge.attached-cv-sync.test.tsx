@@ -216,12 +216,15 @@ vi.mock("../../components/ProposalInputForm", () => ({
 vi.mock("../../components/ProposalDisplay", () => ({
   default: ({
     railStartAddon,
+    actions,
   }: {
     railStartAddon?: React.ReactNode;
+    actions?: React.ReactNode;
   }) => (
     <div>
       <div>Proposal output</div>
       {railStartAddon}
+      {actions}
     </div>
   ),
   fallbackCopyText: () => "",
@@ -248,14 +251,10 @@ vi.mock("../../components/ProposalComposeToolbar", () => ({
     onClearCv,
     cvTitle,
     styleStatusLabel,
-    canResetToCvStyle,
-    onResetToCvStyle,
   }: {
     onClearCv?: () => void;
     cvTitle?: string | null;
     styleStatusLabel?: string | null;
-    canResetToCvStyle?: boolean;
-    onResetToCvStyle?: () => void;
   }) => (
     <div>
       <button type="button" aria-label={cvTitle ? `CV: ${cvTitle}` : "Pick CV"}>
@@ -264,11 +263,6 @@ vi.mock("../../components/ProposalComposeToolbar", () => ({
       <div data-testid="proposal-style-status">
         {styleStatusLabel ?? "Default"}
       </div>
-      {canResetToCvStyle ? (
-        <button type="button" onClick={() => onResetToCvStyle?.()}>
-          Reset to CV style
-        </button>
-      ) : null}
       <button type="button" onClick={() => onClearCv?.()}>
         Remove CV from toolbar
       </button>
@@ -336,6 +330,22 @@ describe("ProposalForge attached CV sync", () => {
     expect(screen.getByTestId("cover-letter-start-surface")).toHaveClass(
       "dasti-quick-start-pane",
     );
+    const pageShell = container.querySelector(".dasti-page-shell") as HTMLElement;
+    expect(pageShell?.style.getPropertyValue("--page-shell-pad-top")).toBe(
+      "0px",
+    );
+    expect(
+      pageShell?.style.getPropertyValue("--page-shell-pad-top-mobile"),
+    ).toBe("0px");
+    expect(
+      pageShell?.style.getPropertyValue("--page-shell-pad-bottom-mobile"),
+    ).toBe("0px");
+    expect(pageShell?.style.getPropertyValue("--page-shell-pad-inline")).toBe(
+      "0px",
+    );
+    expect(
+      pageShell?.style.getPropertyValue("--page-shell-pad-inline-mobile"),
+    ).toBe("0px");
     expect(
       screen.getByRole("heading", { name: "Start your cover letter." }),
     ).toBeInTheDocument();
@@ -353,7 +363,7 @@ describe("ProposalForge attached CV sync", () => {
       screen.queryByRole("button", { name: /^Paste job offer\b/i }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /^Use a resume\b/i }),
+      screen.queryByRole("button", { name: /^Pick a resume\b/i }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^Import a resume\b/i }),
@@ -417,7 +427,7 @@ describe("ProposalForge attached CV sync", () => {
     expect(screen.getByRole("button", { name: /^Capture the role\b/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Paste job offer\b/i })).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /^Use a resume\b/i }),
+      screen.queryByRole("button", { name: /^Pick a resume\b/i }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^Import a resume\b/i }),
@@ -436,7 +446,7 @@ describe("ProposalForge attached CV sync", () => {
       screen.getByRole("heading", { name: "Bring in your resume." }),
     ).toBeInTheDocument();
     expect(backSlot).toHaveAttribute("data-has-action", "true");
-    expect(screen.getByRole("button", { name: /^Use a resume\b/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Pick a resume\b/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Import a resume\b/i })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^Capture the role\b/i }),
@@ -460,7 +470,7 @@ describe("ProposalForge attached CV sync", () => {
     );
 
     expect(screen.getByTestId("cover-letter-start-surface")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Use a resume\b/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Pick a resume\b/i })).not.toBeInTheDocument();
   });
 
   it("opens the existing CV picker when the start surface uses a resume", async () => {
@@ -475,7 +485,7 @@ describe("ProposalForge attached CV sync", () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /^Use a resume\b/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^Pick a resume\b/i }));
     });
 
     expect(screen.queryByTestId("cover-letter-start-surface")).not.toBeInTheDocument();
@@ -801,7 +811,7 @@ describe("ProposalForge attached CV sync", () => {
     );
   });
 
-  it("resets a detached proposal back to cv style and persists inherit_cv on save", async () => {
+  it("keeps detached proposal styling and does not expose reset in forge", async () => {
     writeStoredProposalOutputDraft({
       proposalContent:
         "Dear Hiring Manager,\n\nGenerated proposal body.\n\nKind regards,\nAlex Martin",
@@ -823,7 +833,7 @@ describe("ProposalForge attached CV sync", () => {
       proposalDocumentTitle: "Generated proposal",
       proposalDocumentMeta: "Compose output",
       generatedProposalId: "proposal_live",
-      proposalOutputMode: "preview",
+      proposalOutputMode: "edit",
       paletteOverride: null,
       customAccentHex: null,
       templateBundleId: null,
@@ -841,33 +851,22 @@ describe("ProposalForge attached CV sync", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
     await waitFor(() => {
-    expect(screen.getByTestId("proposal-style-status")).toHaveTextContent(
-      "Custom",
-    );
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "Reset to CV style" }));
-
-    await waitFor(() => {
       expect(screen.getByTestId("proposal-style-status")).toHaveTextContent(
-        "CV",
+        "Custom",
       );
     });
 
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 1100));
-    });
-
-    await waitFor(() => {
-      expect(mockUpdateProposal).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: "proposal_live",
-          metadata: expect.objectContaining({
-            sourceCvId: "cv_alpha",
-            styleLinkMode: "inherit_cv",
-          }),
+    expect(
+      screen.queryByRole("button", { name: "Reset to CV style" }),
+    ).not.toBeInTheDocument();
+    expect(mockUpdateProposal).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "proposal_live",
+        metadata: expect.objectContaining({
+          sourceCvId: "cv_alpha",
+          styleLinkMode: "inherit_cv",
         }),
-      );
-    });
+      }),
+    );
   });
 });

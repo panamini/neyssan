@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Trash } from "@/lib/icons";
+import { TrashSimple } from "@/lib/icons";
 import { Button } from "./ui/button";
 import LoadingSpinner from "./LoadingSpinner";
 import { Input } from "./ui/input";
@@ -199,7 +199,7 @@ export function RefinementField({
             onClick={onClear}
             className="p-1 rounded [color:var(--tm2)] hover:[background:var(--sf2)]"
           >
-            <Trash className="w-4 h-4" aria-hidden="true" />
+            <TrashSimple className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
       </div>

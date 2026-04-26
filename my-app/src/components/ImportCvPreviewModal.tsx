@@ -96,8 +96,9 @@ export function ImportCvPreviewModal(props: Props): JSX.Element | null {
         className="fixed inset-0"
         onClick={onClose}
         style={{
-          background: "hsla(30,12%,11%,.32)",
-          backdropFilter: "blur(8px)",
+          background: "var(--dialog-backdrop-bg)",
+          backdropFilter: "blur(var(--dialog-backdrop-blur))",
+          WebkitBackdropFilter: "blur(var(--dialog-backdrop-blur))",
         }}
       />
       <div

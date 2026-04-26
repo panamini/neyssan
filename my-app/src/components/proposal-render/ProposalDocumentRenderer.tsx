@@ -15,7 +15,8 @@ import {
   type ProposalHeaderVisibility,
 } from "../../lib/proposal-header";
 import {
-  parseProposalClosingBlock,
+  extractProposalClosingBlockFromParagraphs,
+  formatProposalSignatureName,
   stripInlineProposalMarkdown,
 } from "../../lib/proposal-closing";
 import { normalizeProposalPreviewTokens } from "../../lib/layout/documentTokenNormalizer";
@@ -373,10 +374,12 @@ function parseProposalDocumentContent(
     .join("\n")
     .split(/\n\s*\n/)
     .filter(Boolean);
-  const closingBlock = parseProposalClosingBlock(paragraphs.at(-1) ?? null);
+  const extractedClosingBlock =
+    extractProposalClosingBlockFromParagraphs(paragraphs);
+  const closingBlock = extractedClosingBlock?.block ?? null;
 
-  if (closingBlock) {
-    paragraphs.pop();
+  if (extractedClosingBlock) {
+    paragraphs.splice(extractedClosingBlock.startIndex);
   }
 
   const body = paragraphs.join("\n\n");
@@ -752,7 +755,7 @@ export function ProposalDocumentRenderer({
               ) : null}
               {block.signatureName ? (
                 <p className="dasti-proposal-document__signature">
-                  {block.signatureName}
+                  {formatProposalSignatureName(block.signatureName)}
                 </p>
               ) : null}
             </div>
@@ -879,7 +882,10 @@ export function ProposalDocumentRenderer({
         }
 
         if (index === volkFallbackParagraphs.length - 1) {
-          const [signOff, signatureName] = paragraph.split("\n");
+          const [signOff, signatureName] = paragraph
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean);
           return (
             <div
               key={`volk-fallback-${index}`}
@@ -888,7 +894,7 @@ export function ProposalDocumentRenderer({
             >
               <p className="dasti-proposal-document__signoff">{signOff}</p>
               <p className="dasti-proposal-document__signature">
-                {signatureName}
+                {formatProposalSignatureName(signatureName ?? "")}
               </p>
             </div>
           );

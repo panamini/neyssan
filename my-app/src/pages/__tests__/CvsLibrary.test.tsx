@@ -89,7 +89,7 @@ describe("CvsLibrary", () => {
     expect(
       screen.getByRole("searchbox", { name: "Search all resumes" }),
     ).toHaveValue("zzz");
-    expect(screen.getByRole("combobox", { name: "Sort all resumes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sort all resumes" })).toBeInTheDocument();
     expect(screen.getByText("No resumes match this search")).toBeInTheDocument();
   });
 

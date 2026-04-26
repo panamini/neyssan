@@ -65,8 +65,13 @@ export function Dialog({
         data-state={surfaceState}
       >
         <div
-          className="dasti-dialog-overlay fixed inset-0 backdrop-blur-[6px] saturate-120"
-          style={{ background: "hsla(30,12%,11%,.45)" }}
+          className="dasti-dialog-overlay fixed inset-0"
+          style={{
+            background: "var(--dialog-backdrop-bg-strong)",
+            backdropFilter: "blur(var(--dialog-backdrop-blur)) saturate(1.2)",
+            WebkitBackdropFilter:
+              "blur(var(--dialog-backdrop-blur)) saturate(1.2)",
+          }}
           onClick={onClose}
           aria-hidden="true"
         />

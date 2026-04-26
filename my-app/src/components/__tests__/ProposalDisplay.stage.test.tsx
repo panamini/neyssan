@@ -111,10 +111,13 @@ describe("ProposalDisplay stage behavior", () => {
     ).toBeTruthy();
     const lastCall =
       stageLayoutSpy.mock.calls[stageLayoutSpy.mock.calls.length - 1]?.[0];
-    expect(lastCall).toMatchObject({ fitMode: "contain" });
+    expect(lastCall).toMatchObject({
+      fitMode: "contain",
+      fillAvailableOnZoom: true,
+    });
   });
 
-  it("uses fit-to-container stage sizing in edit mode for document proposals", () => {
+  it("uses width-fit stage sizing in edit mode for document proposals", () => {
     render(
       <ProposalDisplay
         proposalContent={"Dear team,\n\nSingle-page proposal.\n\nAlex"}
@@ -128,7 +131,11 @@ describe("ProposalDisplay stage behavior", () => {
 
     const lastCall =
       stageLayoutSpy.mock.calls[stageLayoutSpy.mock.calls.length - 1]?.[0];
-    expect(lastCall).toMatchObject({ fitMode: "contain" });
+    expect(lastCall).toMatchObject({
+      fitMode: "width",
+      fillAvailableOnZoom: false,
+      includeParentMeasurement: false,
+    });
   });
 
   it("switches multipage previews to stacked inner A4 pages without re-skinning the outer shell", () => {
@@ -175,6 +182,9 @@ describe("ProposalDisplay stage behavior", () => {
     ).toBeTruthy();
     const lastCall =
       stageLayoutSpy.mock.calls[stageLayoutSpy.mock.calls.length - 1]?.[0];
-    expect(lastCall).toMatchObject({ fitMode: "contain" });
+    expect(lastCall).toMatchObject({
+      fitMode: "contain",
+      fillAvailableOnZoom: true,
+    });
   });
 });

@@ -11,7 +11,7 @@ const { mockGenerateProposalAction, mockProposalInputValues } = vi.hoisted(() =>
       proposalType: "cover_letter",
       jobTitle: "Product Designer",
       jobDescription: "Design systems and user flows for complex products.",
-      voicePreset: "signature" as "signature" | undefined,
+      voicePreset: "signature" as "signature" | "expert" | undefined,
       formalityLevel: "neutral",
       creativity: "medium",
       toneTuning: null,
@@ -57,6 +57,16 @@ vi.mock("../../lib/proposal-personalization", () => ({
     name: "Alex Martin",
     role: "Product Designer",
   }),
+  getProposalApplicantHeaderData: () => ({
+    name: "Alex Martin",
+    role: "Product Designer",
+    email: null,
+    phone: null,
+    linkedin: null,
+    website: null,
+    location: null,
+    tag: null,
+  }),
   getProposalAttachedCvId: () => mockAttachedCvState.current?.id ?? null,
   getProposalAttachedCvLocalDocument: () =>
     mockAttachedCvState.current
@@ -70,6 +80,16 @@ vi.mock("../../lib/proposal-personalization", () => ({
     personalizationContext: mockAttachedCvState.current
       ? { name: "Alex Martin", desiredPosition: "Product Designer" }
       : null,
+  }),
+  getLocalPersonalizationSourceByCvId: (id: string | null | undefined) => ({
+    title:
+      id && mockAttachedCvState.current?.id === id
+        ? mockAttachedCvState.current.title
+        : null,
+    personalizationContext:
+      id && mockAttachedCvState.current?.id === id
+        ? { name: "Alex Martin", desiredPosition: "Product Designer" }
+        : null,
   }),
   getLocalActiveCvSnapshotById: () => null,
   listLocalCvPickerOptions: () =>
@@ -86,27 +106,43 @@ vi.mock("../../lib/proposal-personalization", () => ({
 }));
 
 vi.mock("../../components/ProposalInputForm", () => ({
-  default: ({ onStart, onSubmit }: any) => {
+  default: ({ onStart, onSubmit, onValuesChange }: any) => {
     const values = mockProposalInputValues.current;
 
     return (
-      <button
-        type="button"
-        onClick={() => {
-          onStart?.(values);
-          onSubmit?.(
-            values,
-            "Dear Hiring Manager,\n\nI design with care and precision.\n\nBest,",
-            {
-              requestedModelType: "mistral-small-latest",
-              actualModelType: "mistral-small-latest",
-              fallbackTriggerCode: null,
-            },
-          );
-        }}
-      >
-        Trigger generation
-      </button>
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            mockProposalInputValues.current = {
+              ...mockProposalInputValues.current,
+              voicePreset: "expert",
+              formalityLevel: "formal",
+              creativity: "low",
+            };
+            onValuesChange?.(mockProposalInputValues.current);
+          }}
+        >
+          Formal
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onStart?.(values);
+            onSubmit?.(
+              values,
+              "Dear Hiring Manager,\n\nI design with care and precision.\n\nBest,",
+              {
+                requestedModelType: "mistral-small-latest",
+                actualModelType: "mistral-small-latest",
+                fallbackTriggerCode: null,
+              },
+            );
+          }}
+        >
+          Trigger generation
+        </button>
+      </>
     );
   },
 }));

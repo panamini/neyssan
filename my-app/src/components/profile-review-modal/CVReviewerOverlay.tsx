@@ -39,7 +39,14 @@ export function CVReviewerOverlay({
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center p-4 z-60" style={{ background: 'hsla(30,12%,11%,.32)', backdropFilter: 'blur(8px)' }}>
+    <div
+      className="fixed inset-0 flex items-center justify-center p-4 z-60"
+      style={{
+        background: "var(--dialog-backdrop-bg)",
+        backdropFilter: "blur(var(--dialog-backdrop-blur))",
+        WebkitBackdropFilter: "blur(var(--dialog-backdrop-blur))",
+      }}
+    >
       <div className="w-full max-w-5xl [background:var(--sfr)] [border-radius:var(--radius-surface)] [box-shadow:var(--shc)] p-4 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-lg font-semibold">Review parsed CV</h3>

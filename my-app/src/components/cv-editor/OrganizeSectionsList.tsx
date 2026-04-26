@@ -20,7 +20,7 @@ import {
   Eye,
   EyeSlash,
   GripHorizontal,
-  Trash,
+  TrashSimple,
 } from "@/lib/icons";
 import type { CvSection } from "../../types/cvDocument";
 import {
@@ -355,7 +355,7 @@ function SectionCard(props: {
             title={deleteLabel}
             onClick={onDelete}
           >
-            <Trash size={16} strokeWidth={1.7} aria-hidden="true" />
+            <TrashSimple size={16} strokeWidth={1.7} aria-hidden="true" />
           </button>
         ) : null}
         {!rowState.isHidden && rowState.controlPolicy.showVisibilityToggle ? (

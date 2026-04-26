@@ -85,6 +85,26 @@ vi.mock("../../components/ProposalInputForm", () => ({
         >
           Generate sample proposal
         </button>
+        <button
+          type="button"
+          onClick={() =>
+            props.onValuesChange?.({
+              jobTitle: "Game UI Artist",
+              jobDescription:
+                "Detailed role description for the proposal brief capsule tests.",
+              proposalType: "cover_letter",
+              voicePreset: "expert",
+              formalityLevel: "formal",
+              creativity: "low",
+              toneTuning: null,
+              characterLimitMode: "none",
+              characterLimitValue: 1500,
+              modelType: "chatgpt",
+            })
+          }
+        >
+          Set bottom tone
+        </button>
       </div>
     );
   },
@@ -102,12 +122,6 @@ vi.mock("../../components/ProposalComposeToolbar", () => ({
         <div data-testid="proposal-toolbar-actions">
           {props.rightActions as React.ReactNode}
         </div>
-        <button
-          type="button"
-          onClick={() => props.onChange?.("expert")}
-        >
-          Set toolbar tone
-        </button>
         <button
           type="button"
           onClick={() => props.onToggleCvPicker?.()}
@@ -198,13 +212,13 @@ describe("ProposalForge workbench layout", () => {
     let lastInputCall =
       proposalInputFormSpy.mock.calls[proposalInputFormSpy.mock.calls.length - 1]?.[0];
     expect(lastInputCall).toMatchObject({
-      suppressToneControls: true,
       suppressCvPicker: true,
       cvPickerOpen: false,
       externalVoicePreset: null,
     });
+    expect(lastInputCall?.suppressToneControls).toBeFalsy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Set toolbar tone" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set bottom tone" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Toggle toolbar CV picker" }),
     );
@@ -248,7 +262,7 @@ describe("ProposalForge workbench layout", () => {
       workbenchFrame?.style.getPropertyValue(
         "--proposal-workspace-output-shell-inline-size",
       ),
-    ).toBe("calc(var(--document-sheet-inline-size) - (var(--s4) * 2))");
+    ).toBe("calc(var(--document-sheet-inline-size) + (var(--s2) * 2) + 2px)");
     expect(
       gridSplit?.style.getPropertyValue("--grid-columns"),
     ).toBe(
@@ -262,7 +276,7 @@ describe("ProposalForge workbench layout", () => {
       toolbarRow?.style.getPropertyValue(
         "--proposal-workspace-output-shell-inline-size",
       ),
-    ).toBe("calc(var(--document-sheet-inline-size) - (var(--s4) * 2))");
+    ).toBe("calc(var(--document-sheet-inline-size) + (var(--s2) * 2) + 2px)");
     expect(outputShell?.style.width).toBe("100%");
     expect(
       outputShell?.style.getPropertyValue("--document-viewer-shell-inline-size"),
@@ -274,7 +288,7 @@ describe("ProposalForge workbench layout", () => {
   it("stacks the live workbench before the expanded sidebar forces the compose shell to shrink", () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
-      value: 1366,
+      value: 1279,
       writable: true,
     });
     window.dispatchEvent(new Event("resize"));
@@ -433,7 +447,7 @@ describe("ProposalForge workbench layout", () => {
     ).toBeTruthy();
   });
 
-  it("replaces the desktop floating brief card with a compact capsule under the detached toolbar", () => {
+  it("replaces the desktop floating brief card with a compact focus strip under the detached toolbar", () => {
     vi.useFakeTimers();
     const { container } = render(
       <MemoryRouter initialEntries={["/proposal"]}>
@@ -444,7 +458,7 @@ describe("ProposalForge workbench layout", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate sample proposal" }));
 
     const briefCapsule = container.querySelector(
-      ".dasti-brief-card--compact",
+      ".dasti-brief-focus-strip",
     ) as HTMLElement | null;
     const toolbarSlot = container.querySelector(
       '[data-testid="proposal-workbench-toolbar-slot"]',
@@ -502,19 +516,19 @@ describe("ProposalForge workbench layout", () => {
       ".dasti-proposal-compose-panel-stage",
     ) as HTMLElement | null;
     expect(composeStage?.style.display).toBe("none");
-    expect(container.querySelector(".dasti-brief-card--compact")).toBeTruthy();
+    expect(container.querySelector(".dasti-brief-focus-strip")).toBeTruthy();
     act(() => {
       vi.advanceTimersByTime(200);
     });
 
     expect(
-      container.querySelector(".dasti-brief-card--compact"),
+      container.querySelector(".dasti-brief-focus-strip"),
     ).toBeNull();
     expect(screen.getByTestId("proposal-input-form")).toBeInTheDocument();
     vi.useRealTimers();
   });
 
-  it("keeps the compact brief card inside the compose column on compact widths", () => {
+  it("keeps the compact brief focus strip inside the compose column on compact widths", () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 1000,
@@ -530,13 +544,14 @@ describe("ProposalForge workbench layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Generate sample proposal" }));
 
-    expect(container.querySelector(".dasti-brief-card--compact")).toBeNull();
     expect(
-      container.querySelector(".dasti-proposal-compose-column .dasti-brief-card"),
+      container.querySelector(
+        ".dasti-proposal-compose-column .dasti-brief-focus-strip",
+      ),
     ).toBeTruthy();
   });
 
-  it("collapses the compose shell to the brief card from the inline X control before generation", () => {
+  it("collapses the compose shell to the brief focus strip from the inline X control before generation", () => {
     vi.useFakeTimers();
     useQueryMock.mockImplementation((query: string) => {
       if (query === "proposalHandoffs.get") {
@@ -570,7 +585,7 @@ describe("ProposalForge workbench layout", () => {
     });
 
     expect(composeStage?.style.display).toBe("none");
-    expect(container.querySelector(".dasti-brief-card")).toBeTruthy();
+    expect(container.querySelector(".dasti-brief-focus-strip")).toBeTruthy();
     expect(
       screen.getByRole("link", { name: "Open original job offer on LinkedIn" }),
     ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
@@ -623,7 +638,7 @@ describe("ProposalForge workbench layout", () => {
     );
   });
 
-  it("orders compose output actions as save, delete, then copy", () => {
+  it("keeps preview compose output actions empty", () => {
     window.localStorage.setItem(
       "dasti:proposal-output-draft:v1",
       JSON.stringify({
@@ -665,11 +680,54 @@ describe("ProposalForge workbench layout", () => {
           proposalComposeToolbarSpy.mock.calls.length - 1
         ]?.[0]?.rightActions as React.ReactNode}
         {lastCall.actions as React.ReactNode}
-        <button type="button" aria-label="Copy">
-          Copy
-        </button>
       </div>,
     );
+
+    const buttonLabels = within(container).queryAllByRole("button").map(
+      (button) =>
+        button.getAttribute("aria-label") ??
+        button.getAttribute("data-toolbar-tooltip"),
+    );
+    expect(buttonLabels).toEqual([]);
+  });
+
+  it("moves edit-only reset and export controls into the proposal display toolbar", () => {
+    window.localStorage.setItem(
+      "dasti:proposal-output-draft:v1",
+      JSON.stringify({
+        proposalContent: "Generated proposal body.",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: null,
+        proposalVerbatiStyle: null,
+        proposalStyleLinkMode: "custom",
+        proposalStyleChoice: "custom",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "Generated proposal",
+        proposalDocumentMeta: "Compose output",
+        generatedProposalId: "proposal_live",
+        proposalOutputMode: "edit",
+        paletteOverride: "bordeaux",
+        customAccentHex: null,
+        templateBundleId: null,
+        typographyOverride: null,
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const lastCall =
+      proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
+    const { container } = render(<div>{lastCall.actions as React.ReactNode}</div>);
 
     const buttonLabels = within(container).getAllByRole("button").map(
       (button) =>
@@ -680,7 +738,6 @@ describe("ProposalForge workbench layout", () => {
       "Export proposal",
       "Save proposal to library",
       "Delete",
-      "Copy",
     ]);
   });
 

@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Plus, X, Check } from "@/lib/icons";
+import { LibraryFilterMenu } from "../components/LibraryFilterMenu";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   buildActiveCvSnapshotFromCvDocument,
@@ -15,6 +16,11 @@ import type {
 } from "../types/cvDocument";
 
 const CV_LIBRARY_PAGE_SIZE = 12;
+const CV_SORT_OPTIONS = [
+  { value: "newest", label: "Newest", description: "Recently updated first." },
+  { value: "oldest", label: "Oldest", description: "Oldest saved first." },
+  { value: "title", label: "Title", description: "Alphabetical by title." },
+] as const;
 
 function readFirstJobTitles(
   cv: CvDocument,
@@ -245,23 +251,12 @@ export function CvsLibrary(): JSX.Element {
                   className="dasti-proposal-library-utility-row__input"
                 />
               </label>
-              <label className="dasti-proposal-library-utility-row__select-shell">
-                <span className="sr-only">Sort all resumes</span>
-                <select
-                  value={sortOrder}
-                  onChange={(event) =>
-                    setSortOrder(
-                      event.target.value as "newest" | "oldest" | "title",
-                    )
-                  }
-                  aria-label="Sort all resumes"
-                  className="dasti-select dasti-select--sm"
-                >
-                  <option value="newest">Newest</option>
-                  <option value="oldest">Oldest</option>
-                  <option value="title">Title</option>
-                </select>
-              </label>
+              <LibraryFilterMenu
+                label="Sort all resumes"
+                value={sortOrder}
+                options={CV_SORT_OPTIONS}
+                onChange={setSortOrder}
+              />
               <span className="dasti-proposal-library-utility-row__count">
                 {sorted.length} resume{sorted.length === 1 ? "" : "s"}
               </span>

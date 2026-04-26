@@ -315,7 +315,10 @@ export default function ProfileEditor() {
 
       {/* Settings modal */}
       {showSettings && (
-        <div className="fixed inset-0 flex items-center justify-center" style={{ background: 'hsla(30,12%,11%,.20)' }}>
+        <div
+          className="fixed inset-0 flex items-center justify-center"
+          style={{ background: "var(--dialog-backdrop-bg)" }}
+        >
           <div className="w-full max-w-md p-6 rounded bg-surface">
             <h3 className="mb-4 text-lg font-medium">Preferences</h3>
             <div className="space-y-3">
