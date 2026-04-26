@@ -118,7 +118,7 @@ describe("proposal renderer", () => {
     });
   });
 
-  it("renders application messages as one paragraph with the follow-up inline", () => {
+  it("renders application messages as one paragraph without appending a deterministic follow-up", () => {
     const rendered = applyDeterministicProposalBoundaries({
       body: [
         "I handled daily chat support for SaaS customers.",
@@ -133,7 +133,7 @@ describe("proposal renderer", () => {
     });
 
     expect(rendered).toBe(
-      "I handled daily chat support for SaaS customers. I also documented recurring issues into internal help content. If useful, I can share a bit more detail.",
+      "I handled daily chat support for SaaS customers. I also documented recurring issues into internal help content.",
     );
   });
 
