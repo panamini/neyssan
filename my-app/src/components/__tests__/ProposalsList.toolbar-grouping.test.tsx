@@ -101,7 +101,7 @@ describe("ProposalsList toolbar grouping", () => {
     window.localStorage.clear();
   });
 
-  it("keeps the saved-proposal chrome detached above the shell with a separate tone drawer and refine action", async () => {
+  it("keeps the saved-proposal chrome detached above the shell with preview-only read controls", async () => {
     const { container } = render(
       <ProposalsList
         savedViewActions={<div data-testid="saved-view-actions">Saved actions</div>}
@@ -127,6 +127,16 @@ describe("ProposalsList toolbar grouping", () => {
       container.querySelector(".dasti-proposal-library-selected-sidebar"),
     ).toBeTruthy();
     expect(container.querySelector(".dasti-proposal-library-card")).toBeTruthy();
+    expect(
+      container.querySelector(
+        ".dasti-proposal-library-card > .dasti-proposal-library-info-card",
+      ),
+    ).toBeNull();
+    expect(
+      container.querySelector(
+        ".dasti-proposal-library-selected-sidebar .dasti-proposal-library-info-card",
+      ),
+    ).toBeTruthy();
     expect(screen.getByText("Saved proposals")).toBeInTheDocument();
     expect(
       screen.getByLabelText("2 saved proposals"),
@@ -145,38 +155,20 @@ describe("ProposalsList toolbar grouping", () => {
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("Natural").length).toBeGreaterThan(0);
 
-    expect(screen.getByRole("button", { name: /tone of voice/i })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Refine saved proposal" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /tone of voice/i }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Refine saved proposal" }),
-    ).not.toHaveClass("dasti-toolbar-tooltip-trigger--above");
+      screen.queryByRole("button", { name: "Refine saved proposal" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open text styles" }),
     ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /tone of voice/i }));
-
-    expect(screen.getByRole("dialog", { name: "Tone of voice" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Auto" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Formal" })).toHaveAttribute(
-      "data-toolbar-tooltip-placement",
-      "inline-end",
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Auto" }));
     expect(
-      screen.getByRole("button", { name: "Apply tone change" }),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Apply tone change" }));
-
-    await waitFor(() => {
-      expect(generateProposalActionMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          voicePreset: null,
-        }),
-      );
-    });
+      screen.queryByRole("dialog", { name: "Tone of voice" }),
+    ).not.toBeInTheDocument();
+    expect(generateProposalActionMock).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Open text styles" }));
     expect(
