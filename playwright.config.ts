@@ -65,6 +65,8 @@ function resolveLocalChromiumExecutable(): string | undefined {
 }
 
 const localChromiumExecutable = resolveLocalChromiumExecutable();
+const appUrl = process.env.PLAYWRIGHT_APP_URL ?? 'http://127.0.0.1:5173';
+process.env.PLAYWRIGHT_APP_URL = appUrl;
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -85,7 +87,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('')`. */
-    // baseURL: 'http://localhost:3000',
+    baseURL: appUrl,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -141,7 +143,7 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
+  /* The app stack is started before Playwright by run.sh. */
   // webServer: {
   //   command: 'npm run start',
   //   url: 'http://localhost:3000',

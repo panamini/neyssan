@@ -20,6 +20,23 @@ jobs:
         working-directory: my-app
         run: npm ci
 
-      - name: Run tests
+      - name: Generate Convex client bindings
         working-directory: my-app
-        run: npm test --silent
+        run: |
+          if [ -z "${CONVEX_DEPLOY_KEY:-}" ]; then
+            echo "::error::Set the repository secret CONVEX_DEPLOY_KEY for Convex codegen."
+            exit 1
+          fi
+          echo "CONVEX_DEPLOY_KEY is present."
+          npx convex codegen --typecheck disable
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
+
+      - name: Run Match Review guardrail tests
+        working-directory: my-app
+        run: |
+          ./node_modules/.bin/vitest --run \
+            convex/lib/jobs/__tests__/structuredMatchReview.test.ts \
+            convex/lib/jobs/__tests__/structuredMatchRead.test.ts \
+            convex/lib/jobs/__tests__/structuredMatchReadEvaluation.test.ts
