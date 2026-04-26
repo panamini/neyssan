@@ -20,11 +20,11 @@ export const PROPOSAL_PALETTE_OPTIONS: Array<{
   label: string;
   color: string;
 }> = [
-  { id: "sauge", label: "Sage", color: "hsl(155 18% 50%)" },
-  { id: "ocre", label: "Ochre", color: "hsl(38 62% 52%)" },
-  { id: "pierre", label: "Stone", color: "hsl(220 8% 52%)" },
-  { id: "bordeaux", label: "Bordeaux", color: "hsl(348 42% 42%)" },
-  { id: "encre", label: "Ink", color: "hsl(228 24% 30%)" },
+  { id: "sauge", label: "Sage", color: "hsl(155 22% 30%)" },
+  { id: "ocre", label: "Ochre", color: "hsl(34 38% 32%)" },
+  { id: "pierre", label: "Stone", color: "hsl(220 14% 30%)" },
+  { id: "bordeaux", label: "Bordeaux", color: "hsl(348 22% 30%)" },
+  { id: "encre", label: "Ink", color: "hsl(200 18% 24%)" },
 ];
 
 export const PROPOSAL_STYLE_PREVIEW_DEFINITIONS: Record<

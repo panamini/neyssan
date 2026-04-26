@@ -221,7 +221,11 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
     return (
       <div
         className="fixed inset-0 z-50 flex items-center justify-center"
-        style={{ background: "hsla(30,12%,11%,.32)", backdropFilter: "blur(8px)" }}
+        style={{
+          background: "var(--dialog-backdrop-bg)",
+          backdropFilter: "blur(var(--dialog-backdrop-blur))",
+          WebkitBackdropFilter: "blur(var(--dialog-backdrop-blur))",
+        }}
       >
         <LoadingSpinner />
       </div>
@@ -229,7 +233,18 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onClose(); }} style={{ background: 'hsla(30,12%,11%,.32)', backdropFilter: 'blur(8px)' }}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (e.target === e.currentTarget) onClose();
+      }}
+      style={{
+        background: "var(--dialog-backdrop-bg)",
+        backdropFilter: "blur(var(--dialog-backdrop-blur))",
+        WebkitBackdropFilter: "blur(var(--dialog-backdrop-blur))",
+      }}
+    >
       <div className="[background:var(--sfr)] w-full max-w-4xl mx-auto [border-radius:var(--radius-surface)] [box-shadow:var(--shc)] p-4 md:p-6 overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
         <ProfileReviewHeader onClose={onClose} />
         <div className="flex-grow pr-4 -mr-4 overflow-y-auto custom-scrollbar">

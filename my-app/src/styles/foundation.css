@@ -529,6 +529,10 @@
   --frost-border: var(--border-soft);
   --frost-blur: 18px;
   --frost-saturate: 140%;
+  --dialog-backdrop-bg: rgba(14, 14, 16, 0.32);
+  --dialog-backdrop-bg-strong: rgba(14, 14, 16, 0.45);
+  --dialog-backdrop-blur: 8px;
+  --dialog-backdrop-blur-soft: 4px;
   --sidebar-hover-bg: var(--sf2);
   --sidebar-active-bg: var(--sf2);
   --sidebar-hover-ink: var(--ti);
@@ -618,6 +622,8 @@
   --frost-border: hsla(0, 0%, 100%, 0.10);
   --frost-blur: 18px;
   --frost-saturate: 130%;
+  --dialog-backdrop-bg: rgba(0, 0, 0, 0.56);
+  --dialog-backdrop-bg-strong: rgba(0, 0, 0, 0.64);
   --sidebar-hover-bg: var(--sf2);
   --sidebar-active-bg: var(--sf2);
   --sidebar-hover-ink: var(--ti);
