@@ -19,19 +19,48 @@ jobs:
       run: npm ci --prefix my-app
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
-    - name: Check Playwright app URL
+    - name: Generate Convex client bindings
       run: |
-        if [ -z "${PLAYWRIGHT_APP_URL:-}" ]; then
-          echo "::error::Set the repository variable PLAYWRIGHT_APP_URL to the app URL Playwright should test."
+        if [ -z "${CONVEX_DEPLOYMENT:-}" ]; then
+          echo "::error::Set the repository variable CONVEX_DEPLOYMENT to the dev deployment used for Playwright CI."
           exit 1
         fi
-        curl --fail --show-error --silent --head "${PLAYWRIGHT_APP_URL}"
+        cd my-app
+        npx convex codegen --typecheck disable
       env:
-        PLAYWRIGHT_APP_URL: ${{ vars.PLAYWRIGHT_APP_URL }}
+        CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
+    - name: Start local Vite app
+      run: |
+        if [ -z "${VITE_CONVEX_URL:-}" ]; then
+          echo "::error::Set the repository variable VITE_CONVEX_URL to the dev Convex URL used by the frontend."
+          exit 1
+        fi
+        if [ -z "${VITE_CLERK_PUBLISHABLE_KEY:-}" ]; then
+          echo "::error::Set the repository variable VITE_CLERK_PUBLISHABLE_KEY for the frontend boot."
+          exit 1
+        fi
+        mkdir -p tmp
+        npm --prefix my-app run dev:frontend:raw -- --host 127.0.0.1 --port 5173 --strictPort --clearScreen false > tmp/playwright-vite.log 2>&1 &
+        for attempt in $(seq 1 90); do
+          if curl --fail --show-error --silent --head http://127.0.0.1:5173 >/dev/null; then
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "::error::Vite did not become ready on http://127.0.0.1:5173"
+        tail -n 200 tmp/playwright-vite.log
+        exit 1
+      env:
+        VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+        NEXT_PUBLIC_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+        VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
     - name: Run Playwright tests
       run: npx playwright test
       env:
-        PLAYWRIGHT_APP_URL: ${{ vars.PLAYWRIGHT_APP_URL }}
+        PLAYWRIGHT_APP_URL: http://127.0.0.1:5173
+        VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+        NEXT_PUBLIC_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
+        VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
