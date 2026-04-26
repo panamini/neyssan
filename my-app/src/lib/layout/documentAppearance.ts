@@ -366,7 +366,7 @@ function buildProposalExportDecor(
     signoffFontStyle: "normal",
     signatureColor: "var(--ink)",
     signatureFontWeight: "700",
-    signatureTextTransform: "none",
+    signatureTextTransform: "lowercase",
     signatureLetterSpacing: "normal",
     signatureFontVariantCaps: "normal",
     sectionTitleFontWeight: "700",

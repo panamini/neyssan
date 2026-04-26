@@ -334,7 +334,7 @@ describe("export-renderers", () => {
     expect(
       atsDocument.querySelector('[data-block="closing"] .proposal-signature')
         ?.textContent,
-    ).toBe("Alex Mercer");
+    ).toBe("alex mercer");
 
     expect(railStyledDocument.body.className).toContain(
       "proposal-template--two-column-rail",
@@ -388,7 +388,7 @@ describe("export-renderers", () => {
     expect(
       styledDocument.querySelector('[data-block="closing"] .proposal-signature')
         ?.textContent,
-    ).toBe("Alex Mercer");
+    ).toBe("alex mercer");
     expect(getInlineStyles(styledDocument)).toContain(
       "--decor-signature-color: var(--ink);",
     );
@@ -432,7 +432,7 @@ describe("export-renderers", () => {
     expect(proposalDocumentXml).toContain("Objet");
     expect(proposalDocumentXml).toContain("Bonjour");
     expect(proposalDocumentXml).toContain("Cordialement");
-    expect(proposalDocumentXml).toContain("Alex Mercer");
+    expect(proposalDocumentXml).toContain("alex mercer");
     expect(proposalDocumentXml).not.toContain("ALEX MERCER");
     expect(proposalDocumentXml).not.toContain("w:cols");
     expect(proposalDocumentXml).toContain("Fraunces");
@@ -538,7 +538,7 @@ describe("export-renderers", () => {
       expect(
         styledProposalDocument.querySelector('[data-block="closing"] .proposal-signature')
           ?.textContent,
-      ).toBe("Alex Mercer");
+      ).toBe("alex mercer");
       expect(resumeCss).toContain("fit-content(var(--flow-entry-meta-width))");
       expect(proposalCss).toContain(
         "fit-content(var(--flow-proposal-meta-width))",

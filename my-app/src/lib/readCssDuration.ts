@@ -35,3 +35,22 @@ export function readCssDurationMs(
   const rawValue = window.getComputedStyle(source).getPropertyValue(variableName);
   return parseCssDurationMs(rawValue, fallbackMs);
 }
+
+export function readCssPixelValue(
+  variableName: string,
+  fallbackPx: number,
+  target?: Element | null,
+): number {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return fallbackPx;
+  }
+
+  const source = target ?? document.documentElement;
+  if (!source) {
+    return fallbackPx;
+  }
+
+  const rawValue = window.getComputedStyle(source).getPropertyValue(variableName);
+  const parsed = Number.parseFloat(rawValue.trim().replace(/px$/u, ""));
+  return Number.isFinite(parsed) ? parsed : fallbackPx;
+}

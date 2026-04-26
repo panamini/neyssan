@@ -139,6 +139,7 @@ export function SavedProposalForgeToolbarPreview({
   const activeLayoutOption =
     VERBATI_LAYOUT_OPTIONS.find((option) => option.id === layoutValue) ??
     VERBATI_LAYOUT_OPTIONS[0];
+  const showEditOnlyActions = mode === "edit";
   const hasOpenDrawer = openDrawer !== null || isColorPickerOpen;
 
   React.useEffect(() => {
@@ -175,6 +176,9 @@ export function SavedProposalForgeToolbarPreview({
 
   React.useEffect(() => {
     if (mode === "edit" && openDrawer === "zoom") {
+      setOpenDrawer(null);
+    }
+    if (mode !== "edit" && openDrawer === "tone") {
       setOpenDrawer(null);
     }
   }, [mode, openDrawer]);
@@ -573,151 +577,161 @@ export function SavedProposalForgeToolbarPreview({
       <div className="dasti-document-rail__section dasti-document-rail__section--center"></div>
 
       <div className="dasti-document-rail__section dasti-document-rail__section--end">
-        {saveStatus !== "idle" ? (
+        {mode === "edit" && saveStatus !== "idle" ? (
           <>
             <SaveIndicator status={saveStatus} />
             <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
           </>
         ) : null}
-        <span className="dasti-compose-toolbar__tone-anchor dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--tone">
-          <button
-            type="button"
-            className={[
-              "dasti-icon-button",
-              "dasti-proposal-saved-tone-button",
-              "dasti-compose-toolbar__tone-option--active",
-              openDrawer === "tone" ? "dasti-proposal-saved-tone-button--popover-open" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            aria-label={`Tone of voice ${activeToneOption.label}`}
-            data-toolbar-tooltip={openDrawer === "tone" ? undefined : activeToneOption.label}
-            onClick={() => handleToggleDrawer("tone")}
-            aria-expanded={openDrawer === "tone"}
-            aria-haspopup="dialog"
-            disabled={isRegenerating}
-          >
-            <activeToneOption.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
-          </button>
+        {showEditOnlyActions ? (
+          <>
+            <span className="dasti-compose-toolbar__tone-anchor dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--tone">
+              <button
+                type="button"
+                className={[
+                  "dasti-icon-button",
+                  "dasti-proposal-saved-tone-button",
+                  "dasti-compose-toolbar__tone-option--active",
+                  openDrawer === "tone" ? "dasti-proposal-saved-tone-button--popover-open" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                aria-label={`Tone of voice ${activeToneOption.label}`}
+                data-toolbar-tooltip={openDrawer === "tone" ? undefined : activeToneOption.label}
+                onClick={() => handleToggleDrawer("tone")}
+                aria-expanded={openDrawer === "tone"}
+                aria-haspopup="dialog"
+                disabled={isRegenerating}
+              >
+                <activeToneOption.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
+              </button>
 
-          {openDrawer === "tone" ? (
-            <div
-              className="dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-compose-toolbar__tone-popover dasti-compose-toolbar__tone-popover--collapsed dasti-saved-proposal-forge-toolbar-preview__drawer dasti-saved-proposal-forge-toolbar-preview__drawer--center dasti-saved-proposal-forge-toolbar-preview__drawer--tone"
-              role="dialog"
-              aria-label="Tone of voice"
-            >
-              <div className="dasti-compose-toolbar__tone-list">
-                {TONE_OPTIONS.map((option) => {
-                  const active = option.id === toneValue;
-                  return (
-                    <button
-                      key={option.id ?? "auto"}
-                      type="button"
-                      className={[
-                        "dasti-compose-toolbar__tone-option",
-                        "dasti-compose-toolbar__tone-option--drawer",
-                        active ? "dasti-compose-toolbar__tone-option--active" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      aria-label={option.label}
-                      data-toolbar-tooltip={option.label}
-                      data-toolbar-tooltip-placement="inline-end"
-                      onClick={() => {
-                        onToneChange(option.id);
-                        setOpenDrawer(null);
-                      }}
-                      disabled={isRegenerating}
-                    >
-                      <option.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-        </span>
+              {openDrawer === "tone" ? (
+                <div
+                  className="dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-compose-toolbar__tone-popover dasti-compose-toolbar__tone-popover--collapsed dasti-saved-proposal-forge-toolbar-preview__drawer dasti-saved-proposal-forge-toolbar-preview__drawer--center dasti-saved-proposal-forge-toolbar-preview__drawer--tone"
+                  role="dialog"
+                  aria-label="Tone of voice"
+                >
+                  <div className="dasti-compose-toolbar__tone-list">
+                    {TONE_OPTIONS.map((option) => {
+                      const active = option.id === toneValue;
+                      return (
+                        <button
+                          key={option.id ?? "auto"}
+                          type="button"
+                          className={[
+                            "dasti-compose-toolbar__tone-option",
+                            "dasti-compose-toolbar__tone-option--drawer",
+                            active ? "dasti-compose-toolbar__tone-option--active" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          aria-label={option.label}
+                          data-toolbar-tooltip={option.label}
+                          data-toolbar-tooltip-placement="inline-end"
+                          onClick={() => {
+                            onToneChange(option.id);
+                            setOpenDrawer(null);
+                          }}
+                          disabled={isRegenerating}
+                        >
+                          <option.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </span>
 
-        <button
-          type="button"
-          className={[
-            "dasti-icon-button",
-            tonePendingRefresh ? "dasti-icon-button--pending" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          aria-label={tonePendingRefresh ? "Apply tone change" : "Refine saved proposal"}
-          data-toolbar-tooltip={
-            isRegenerating
-              ? "Refining"
-              : tonePendingRefresh
-                ? "Apply tone change"
-                : "Refine"
-          }
-          style={{ opacity: isRegenerating ? 0.5 : 1 }}
-          onClick={() => {
-            setOpenDrawer(null);
-            onRefine();
-          }}
-          disabled={isRegenerating}
-        >
-          <RotateCcw size={16} strokeWidth={1.5} />
-        </button>
-
-        <div className="dasti-icon-cluster__divider" />
-
-        {!isDeleteConfirming ? (
-          <button
-            type="button"
-            className="dasti-icon-button"
-            data-toolbar-tooltip="Delete"
-            onClick={() => setIsDeleteConfirming(true)}
-          >
-            <TrashSimple size={16} strokeWidth={1.5} />
-          </button>
-        ) : (
-          <span className="dasti-icon-cluster dasti-icon-cluster--tight">
             <button
               type="button"
-              className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--confirm"
-              data-toolbar-tooltip="Confirm delete"
-              style={{
-                background: "var(--erb)",
-                color: "var(--ert)",
+              className={[
+                "dasti-icon-button",
+                tonePendingRefresh ? "dasti-icon-button--pending" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-label={tonePendingRefresh ? "Apply tone change" : "Refine saved proposal"}
+              data-toolbar-tooltip={
+                isRegenerating
+                  ? "Refining"
+                  : tonePendingRefresh
+                    ? "Apply tone change"
+                    : "Refine"
+              }
+              style={{ opacity: isRegenerating ? 0.5 : 1 }}
+              onClick={() => {
+                setOpenDrawer(null);
+                onRefine();
               }}
-              onClick={handleDeleteConfirm}
+              disabled={isRegenerating}
             >
-              <Check size={12} strokeWidth={2.5} />
+              <RotateCcw size={16} strokeWidth={1.5} />
             </button>
+          </>
+        ) : null}
+
+        {mode === "edit" ? (
+          <>
+            <div className="dasti-icon-cluster__divider" />
+
+            {!isDeleteConfirming ? (
+              <button
+                type="button"
+                className="dasti-icon-button"
+                data-toolbar-tooltip="Delete"
+                onClick={() => setIsDeleteConfirming(true)}
+              >
+                <TrashSimple size={16} strokeWidth={1.5} />
+              </button>
+            ) : (
+              <span className="dasti-icon-cluster dasti-icon-cluster--tight">
+                <button
+                  type="button"
+                  className="dasti-icon-button dasti-icon-button--compact dasti-icon-button--confirm"
+                  data-toolbar-tooltip="Confirm delete"
+                  style={{
+                    background: "var(--erb)",
+                    color: "var(--ert)",
+                  }}
+                  onClick={handleDeleteConfirm}
+                >
+                  <Check size={12} strokeWidth={2.5} />
+                </button>
+                <button
+                  type="button"
+                  className="dasti-icon-button dasti-icon-button--compact"
+                  data-toolbar-tooltip="Cancel"
+                  onClick={() => setIsDeleteConfirming(false)}
+                >
+                  <X size={12} strokeWidth={2} />
+                </button>
+              </span>
+            )}
+          </>
+        ) : null}
+
+        {showEditOnlyActions ? (
+          <span className="dasti-proposal-sheet__action-slot">
             <button
               type="button"
-              className="dasti-icon-button dasti-icon-button--compact"
-              data-toolbar-tooltip="Cancel"
-              onClick={() => setIsDeleteConfirming(false)}
+              onClick={onCopy}
+              aria-label={copyFeedback === "copied" ? "Copied" : "Copy"}
+              className="dasti-icon-button"
+              data-toolbar-tooltip={copyFeedback === "copied" ? "Copied" : "Copy"}
+              style={{
+                color: copyFeedback === "copied" ? "var(--ok)" : undefined,
+              }}
             >
-              <X size={12} strokeWidth={2} />
+              {copyFeedback === "copied" ? (
+                <Check size={16} strokeWidth={2} aria-hidden="true" />
+              ) : (
+                <Copy size={16} strokeWidth={1.5} aria-hidden="true" />
+              )}
             </button>
           </span>
-        )}
-
-        <span className="dasti-proposal-sheet__action-slot">
-          <button
-            type="button"
-            onClick={onCopy}
-            aria-label={copyFeedback === "copied" ? "Copied" : "Copy"}
-            className="dasti-icon-button"
-            data-toolbar-tooltip={copyFeedback === "copied" ? "Copied" : "Copy"}
-            style={{
-              color: copyFeedback === "copied" ? "var(--ok)" : undefined,
-            }}
-          >
-            {copyFeedback === "copied" ? (
-              <Check size={16} strokeWidth={2} aria-hidden="true" />
-            ) : (
-              <Copy size={16} strokeWidth={1.5} aria-hidden="true" />
-            )}
-          </button>
-        </span>
+        ) : null}
       </div>
 
       <ProposalColorPickerPopover

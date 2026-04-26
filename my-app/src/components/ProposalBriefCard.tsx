@@ -321,7 +321,7 @@ export function ProposalBriefCard({
                 {onToggleBrief ? (
                   <button
                     type="button"
-                    className="dasti-brief-card__dismiss"
+                    className="dasti-icon-button dasti-brief-card__dismiss"
                     onClick={onToggleBrief}
                     aria-label="Expand"
                   >
