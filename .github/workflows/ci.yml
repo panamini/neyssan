@@ -23,12 +23,13 @@ jobs:
       - name: Generate Convex client bindings
         working-directory: my-app
         run: |
-          if [ -z "${CONVEX_DEPLOYMENT:-}" ]; then
-            echo "::error::Set the repository variable CONVEX_DEPLOYMENT to the dev deployment used for JS tests."
+          if [ -z "${CONVEX_DEPLOY_KEY:-}" ]; then
+            echo "::error::Set the repository secret CONVEX_DEPLOY_KEY for Convex codegen."
             exit 1
           fi
           npx convex codegen --typecheck disable
         env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
           CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
 
       - name: Run Match Review guardrail tests
