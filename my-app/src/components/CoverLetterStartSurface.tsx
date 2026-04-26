@@ -253,7 +253,7 @@ export function CoverLetterStartSurface({
                 role="alert"
                 style={{
                   margin: 0,
-                  color: "var(--color-danger, #b42318)",
+                  color: "var(--color-danger)",
                   fontSize: "var(--ts)",
                 }}
               >
