@@ -62,12 +62,20 @@ RUN --mount=type=cache,target=/var/cache/apt \
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir "paddlepaddle==3.2.0"
 
-# 2) App deps — prefer service-scoped requirements for determinism
+# 2) App deps — prefer the lockfile when present for determinism
+COPY cv_parser_service/requirements.lock /tmp/service-requirements.lock
 COPY cv_parser_service/requirements.txt /tmp/service-requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install --no-cache-dir -r /tmp/service-requirements.txt && \
-    python -m pip check && \
-    python -c "import fastapi, uvicorn"
+    bash -lc 'set -euo pipefail; \
+      if [[ -s /tmp/service-requirements.lock ]]; then \
+        echo ">>> Installing from requirements.lock"; \
+        python -m pip install --no-cache-dir -r /tmp/service-requirements.lock; \
+      else \
+        echo ">>> Installing from requirements.txt"; \
+        python -m pip install --no-cache-dir -r /tmp/service-requirements.txt; \
+      fi; \
+      python -m pip check; \
+      python -c "import fastapi, uvicorn"'
 
 # 3) Create isolated docTR venv and install backend per-architecture.
 #    On arm64/aarch64 install TF+docTR into /opt/doctr-venv.
