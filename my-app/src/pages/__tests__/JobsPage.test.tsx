@@ -518,7 +518,9 @@ describe("JobsPage", () => {
     ).toBeInTheDocument();
     expect((await screen.findAllByText("Match")).length).toBeGreaterThan(0);
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
-    expect(await screen.findByText("Weak")).toBeInTheDocument();
+    expect((await screen.findAllByText("Probably skip")).length).toBeGreaterThan(
+      0,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Open match" }));
     expect(
       (await screen.findAllByText("Cross-functional communication")).length,
@@ -940,7 +942,7 @@ describe("JobsPage", () => {
     expect(await screen.findByTestId("jobs-structured-preview-advisory-panel")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Draft Proposal" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Match Strong" }));
+    fireEvent.click(screen.getByRole("button", { name: "Strong lead" }));
 
     expect(screen.getByText("0 of 2")).toBeInTheDocument();
     expect(
@@ -2003,7 +2005,7 @@ describe("JobsPage", () => {
       }),
     ).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole("button", { name: "Match Weak" }));
+    fireEvent.click(screen.getByRole("button", { name: "Probably skip" }));
 
     await waitFor(() => {
       expect(
@@ -2020,8 +2022,8 @@ describe("JobsPage", () => {
       await screen.findByText("No jobs match this search"),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Match Weak" }));
-    fireEvent.click(screen.getByRole("button", { name: "All tiers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Probably skip" }));
+    fireEvent.click(screen.getByRole("button", { name: "All matches" }));
     fireEvent.click(screen.getByRole("button", { name: "Has docs" }));
     fireEvent.click(screen.getByRole("button", { name: "Needs review" }));
 
@@ -2135,6 +2137,14 @@ describe("JobsPage", () => {
     expect(
       await screen.findByRole("button", { name: "Archived" }),
     ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Archived" })).toHaveClass(
+      "dasti-jobs-view-toggle__button",
+      "dasti-jobs-filter-chip--active",
+    );
+    expect(screen.getByRole("button", { name: "Active" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
     expect(screen.getByText("Operations Associate")).toBeInTheDocument();
     expect(screen.queryByText("Support Specialist")).not.toBeInTheDocument();
   });

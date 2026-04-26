@@ -68,10 +68,10 @@ describe("ProposalsLibrary empty search results", () => {
       screen.getByRole("searchbox", { name: "Search all cover letters" }),
     ).toHaveValue("zzz");
     expect(
-      screen.getByRole("combobox", { name: "Filter all cover letters by tone" }),
+      screen.getByRole("button", { name: "Filter all cover letters by tone" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("combobox", { name: "Sort all cover letters" }),
+      screen.getByRole("button", { name: "Sort all cover letters" }),
     ).toBeInTheDocument();
     expect(screen.getByText("No cover letters match this search")).toBeInTheDocument();
   });

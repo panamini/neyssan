@@ -13,6 +13,24 @@ describe("ProposalComposeToolbar CSS contracts", () => {
     expect(productCss).toContain("margin-inline-start: auto;");
   });
 
+  it("keeps save status in the trailing action group with tokenized spacing", () => {
+    expect(productCss).toMatch(
+      /\.dasti-compose-toolbar__group--actions\s*\{[\s\S]*margin-inline-start:\s*auto;[\s\S]*gap:\s*var\(--proposal-chrome-tight-gap\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-compose-toolbar__context-slot--save\s*\{[\s\S]*flex:\s*0 0 auto;/,
+    );
+  });
+
+  it("keeps selected tone icons in a neutral pressed state across proposal toolbars", () => {
+    expect(productCss).toMatch(
+      /\.dasti-compose-toolbar__tone-option--active,\s*[\s\S]*\.dasti-saved-proposal-forge-toolbar-preview\s+\.dasti-compose-toolbar__tone-option--active\s*\{[\s\S]*background:\s*var\(--proposal-chrome-control-hover-bg\);[\s\S]*box-shadow:\s*inset 0 1px 2px/,
+    );
+    expect(productCss).not.toMatch(
+      /\.dasti-compose-toolbar__tone-option--active\s*\{[\s\S]*background:\s*var\(--ac\)/,
+    );
+  });
+
   it("constrains the toolbar slot and bar to the compose shell width", () => {
     expect(productCss).toContain(".dasti-forge-compose-toolbar-slot");
     expect(productCss).toContain("width: 100%;");
@@ -31,7 +49,7 @@ describe("ProposalComposeToolbar CSS contracts", () => {
       "min-block-size: var(--dasti-compose-toolbar-shell-min-block-size);",
     );
     expect(productCss).toContain(
-      "--dasti-compose-toolbar-control-block-size: 30px;",
+      "--dasti-compose-toolbar-control-block-size: var(--control-sm);",
     );
   });
 
@@ -48,14 +66,14 @@ describe("ProposalComposeToolbar CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-compose-toolbar__tone-popover--collapsed\s*\{[\s\S]*inset-inline-start:\s*50%;[\s\S]*inset-inline-end:\s*auto;[\s\S]*transform:\s*translateX\(-50%\);[\s\S]*transform-origin:\s*center top;/,
     );
-    expect(productCss).toContain(
+    expect(productCss).not.toContain(
       "--dasti-proposal-submit-stroke-width: var(--proposal-submit-stroke-width-sm);",
     );
   });
 
   it("keeps the proposal workspace toolbar stack above the compose shell without blocking output controls", () => {
     expect(productCss).toMatch(
-      /\.dasti-workbench-top-left-slot--proposal\s*\{[\s\S]*position:\s*relative;[\s\S]*pointer-events:\s*none;[\s\S]*z-index:\s*26;/,
+      /\.dasti-workbench-top-left-slot--proposal\s*\{[\s\S]*position:\s*sticky;[\s\S]*inset-block-start:\s*var\(--space-2\);[\s\S]*pointer-events:\s*none;[\s\S]*z-index:\s*26;/,
     );
     expect(productCss).toMatch(
       /\.dasti-workbench-top-left-slot--proposal\s*>\s*\*\s*\{[\s\S]*pointer-events:\s*auto;/,

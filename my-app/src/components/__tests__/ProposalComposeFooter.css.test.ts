@@ -14,7 +14,8 @@ describe("Proposal compose footer CSS contracts", () => {
       /\.dasti-proposal-sheet--composer\s+\.dasti-proposal-toolbar--inside\s*\{[\s\S]*margin-inline:\s*calc\(-1 \* var\(--document-shell-padding-inline\)\);[\s\S]*border-bottom-left-radius:\s*calc\(var\(--document-viewer-radius\)\s*-\s*1px\);[\s\S]*border-bottom-right-radius:\s*calc\(var\(--document-viewer-radius\)\s*-\s*1px\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-submit--composer\s*\{[\s\S]*--dasti-proposal-submit-radius:\s*999px;/,
+      /\.dasti-proposal-submit--composer\s*\{[\s\S]*margin-left:\s*auto;/,
     );
+    expect(productCss).not.toContain(".dasti-proposal-submit--pop");
   });
 });

@@ -5,8 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ProposalComposeToolbar } from "../ProposalComposeToolbar";
 
 describe("ProposalComposeToolbar", () => {
-  it("keeps the tone group trailing and updates the selected tone chip when controlled", async () => {
-    const user = userEvent.setup();
+  it("keeps the top toolbar tone as a selected status badge", () => {
     const handleChange = vi.fn();
 
     const { rerender, container } = render(
@@ -21,8 +20,8 @@ describe("ProposalComposeToolbar", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Formal" }));
-    expect(handleChange).toHaveBeenCalledWith("expert");
+    expect(screen.queryByRole("button", { name: "Formal" })).toBeNull();
+    expect(handleChange).not.toHaveBeenCalled();
 
     rerender(
       <ProposalComposeToolbar
@@ -39,6 +38,9 @@ describe("ProposalComposeToolbar", () => {
     expect(
       container.querySelector(".dasti-compose-toolbar__tone-chip")?.textContent,
     ).toContain("Formal");
+    expect(
+      container.querySelector(".dasti-compose-toolbar__tone-chip"),
+    ).toHaveAttribute("aria-label", "Selected tone Formal");
     expect(
       container.querySelectorAll(".dasti-compose-toolbar__group-divider"),
     ).toHaveLength(1);
@@ -85,7 +87,9 @@ describe("ProposalComposeToolbar", () => {
       screen.getByRole("button", { name: "Remove CV" }),
     ).not.toHaveAttribute("title");
     expect(
-      screen.getByRole("button", { name: "Attached CV Mohamed Ismail J." }),
+      screen.getByRole("button", {
+        name: "Switch CV. Attached CV: Mohamed Ismail J.",
+      }),
     ).not.toHaveAttribute("title");
     expect(
       container.querySelector(".dasti-compose-toolbar__bar"),
@@ -96,10 +100,7 @@ describe("ProposalComposeToolbar", () => {
       ),
     ).toBeTruthy();
 
-    expect(screen.getByRole("button", { name: "Formal" })).toHaveAttribute(
-      "data-toolbar-tooltip",
-      "Formal",
-    );
+    expect(screen.queryByRole("button", { name: "Formal" })).toBeNull();
     expect(
       container.querySelector(".dasti-compose-toolbar__tone-chip"),
     ).toHaveAttribute("data-toolbar-tooltip", "Formal");
@@ -161,7 +162,7 @@ describe("ProposalComposeToolbar", () => {
     ).toBeTruthy();
   });
 
-  it("renders the collapsed brief generate action with the shared scribble glyph", async () => {
+  it("renders the collapsed brief generate action as an icon-only toolbar control", async () => {
     const user = userEvent.setup();
     const handleGenerateFromBrief = vi.fn();
     const { container } = render(
@@ -187,6 +188,17 @@ describe("ProposalComposeToolbar", () => {
     expect(
       container.querySelector(".dasti-compose-toolbar__generate-button .dasti-proposal-submit__glyph"),
     ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-compose-toolbar__generate-button .dasti-proposal-submit__label"),
+    ).toBeNull();
+    expect(
+      container.querySelector(
+        ".dasti-compose-toolbar__generate-button.dasti-icon-button.dasti-compose-toolbar__icon-button",
+      ),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-compose-toolbar__generate-button.dasti-button"),
+    ).toBeNull();
     const collapsedActions = container.querySelector(
       ".dasti-compose-toolbar__collapsed-actions",
     );
@@ -222,7 +234,7 @@ describe("ProposalComposeToolbar", () => {
     ).toBeNull();
   });
 
-  it("renders the compact contextual style capsule when the workspace exposes one", () => {
+  it("renders the compact save capsule as the final proposal action", () => {
     const { container } = render(
       <ProposalComposeToolbar
         value="signature"
@@ -232,42 +244,25 @@ describe("ProposalComposeToolbar", () => {
         isCvPickerOpen={false}
         onCollapseCompose={vi.fn()}
         styleStatusLabel="CV"
+        rightActions={<button type="button">Export proposal</button>}
       />,
     );
 
     expect(screen.getByRole("status")).toHaveTextContent("CV");
     expect(
       container.querySelector(".dasti-compose-toolbar__group--context"),
-    ).toBeTruthy();
-  });
-
-  it("renders a reset action when a source cv exists and delegates the click", async () => {
-    const user = userEvent.setup();
-    const handleReset = vi.fn();
-
-    render(
-      <ProposalComposeToolbar
-        value="signature"
-        onChange={vi.fn()}
-        onToggleCvPicker={vi.fn()}
-        cvTitle="Mohamed Ismail J."
-        isCvPickerOpen={false}
-        onCollapseCompose={vi.fn()}
-        styleStatusLabel="Custom"
-        canResetToCvStyle
-        onResetToCvStyle={handleReset}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "Reset to CV style" }));
-    expect(handleReset).toHaveBeenCalledTimes(1);
+    ).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Attached CV Mohamed Ismail J." }),
-    ).toBeInTheDocument();
+      container.querySelector(".dasti-compose-toolbar__group--actions"),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-compose-toolbar__group--actions")
+        ?.lastElementChild,
+    ).toHaveClass("dasti-compose-toolbar__context-slot--save");
   });
 
-  it("keeps the source cv button visible while saving owns the contextual slot", () => {
-    render(
+  it("keeps the source cv button visible while saving owns the far-right save slot", () => {
+    const { container } = render(
       <ProposalComposeToolbar
         value="signature"
         onChange={vi.fn()}
@@ -277,16 +272,20 @@ describe("ProposalComposeToolbar", () => {
         onCollapseCompose={vi.fn()}
         styleStatusLabel="CV"
         saveStatus="saving"
-        canResetToCvStyle
-        onResetToCvStyle={vi.fn()}
       />,
     );
 
     expect(
-      screen.getByRole("button", { name: "Attached CV Mohamed Ismail J." }),
+      screen.getByRole("button", {
+        name: "Switch CV. Attached CV: Mohamed Ismail J.",
+      }),
     ).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Saving…");
     expect(screen.queryByText("CV")).toBeNull();
+    expect(
+      container.querySelector(".dasti-compose-toolbar__group--actions")
+        ?.lastElementChild,
+    ).toHaveClass("dasti-compose-toolbar__context-slot--save");
   });
 
   it("prioritizes transient save status before returning to the resting contextual capsule", () => {

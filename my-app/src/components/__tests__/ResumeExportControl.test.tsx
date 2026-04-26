@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ResumeExportControl } from "../ResumeExportControl";
 
 describe("ResumeExportControl", () => {
-  it("renders explicit ATS and styled PDF actions plus overflow formats", async () => {
+  it("keeps styled PDF in the toolbar and moves ATS PDF into the export drawer", async () => {
     const user = userEvent.setup();
     const onExport = vi.fn();
 
@@ -21,8 +21,8 @@ describe("ResumeExportControl", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Export ATS PDF" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Export ATS PDF" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Export Styled PDF" }),
     ).toBeInTheDocument();
@@ -31,7 +31,23 @@ describe("ResumeExportControl", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("ATS Ready")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Export ATS PDF" }));
+    await user.click(screen.getByRole("button", { name: "More export formats" }));
+
+    expect(
+      screen.getByRole("menuitem", { name: /Export ATS PDF/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: /Export DOCX/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: /Export Markdown/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: /Export JSON/i }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Trusted Mistral v3").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("menuitem", { name: /Export ATS PDF/i }));
     expect(onExport).toHaveBeenCalledWith({
       format: "pdf",
       mode: "ats",
@@ -45,24 +61,14 @@ describe("ResumeExportControl", () => {
 
     await user.click(screen.getByRole("button", { name: "More export formats" }));
 
-    expect(
-      screen.getByRole("menuitem", { name: /Export DOCX/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("menuitem", { name: /Export Markdown/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("menuitem", { name: /Export JSON/i }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText("Trusted Mistral v3").length).toBeGreaterThan(0);
-
     await user.click(screen.getByRole("menuitem", { name: /Export JSON/i }));
     expect(onExport).toHaveBeenCalledWith({
       format: "json",
     });
   });
 
-  it("disables styled PDF when the active baseline layout is not available", () => {
+  it("disables styled PDF when the active baseline layout is not available", async () => {
+    const user = userEvent.setup();
     const onExport = vi.fn();
 
     render(
@@ -77,7 +83,11 @@ describe("ResumeExportControl", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Export ATS PDF" }),
+      screen.queryByRole("button", { name: "Export ATS PDF" }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "More export formats" }));
+    expect(
+      screen.getByRole("menuitem", { name: /Export ATS PDF/i }),
     ).toBeEnabled();
     expect(
       screen.getByRole("button", { name: "Export Styled PDF" }),

@@ -269,6 +269,15 @@ describe("Sidebar proposal navigation", () => {
       "href",
       "/jobs",
     );
+    expect(screen.getByRole("button", { name: "Start" })).toHaveClass(
+      "sb-section__action",
+    );
+    expect(
+      screen.getByRole("button", { name: "Start" }).closest(".sb-section"),
+    ).toBe(screen.getByRole("link", { name: "Jobs" }).closest(".sb-section"));
+    expect(
+      screen.getByRole("button", { name: "Start" }).closest(".sb-section"),
+    ).toHaveClass("sb-section--primary-nav");
   });
 
   it("fully removes the sidebar from layout on very narrow mobile widths", () => {
