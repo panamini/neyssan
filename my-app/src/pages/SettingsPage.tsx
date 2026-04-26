@@ -70,11 +70,36 @@ const EMPTY_PRESET: PresetSlot = {
 // ─── Tone options ──────────────────────────────────────────────────────────────
 
 type ToneId = "signature" | "expert" | "engaging" | null;
-const TONE_OPTIONS: { id: ToneId; label: string; description: string; Icon: typeof Wand2 }[] = [
-  { id: null, label: getVoicePresetDisplayLabel(null), description: "Adapts to the role.", Icon: Wand2 },
-  { id: "signature", label: getVoicePresetDisplayLabel("signature"), description: "Conversational. Like you wrote it.", Icon: Feather },
-  { id: "expert", label: getVoicePresetDisplayLabel("expert"), description: "Composed. Measured pacing.", Icon: PenNib },
-  { id: "engaging", label: getVoicePresetDisplayLabel("engaging"), description: "Approachable. Personal touches.", Icon: Stamp },
+const TONE_OPTIONS: Array<{
+  id: ToneId;
+  label: string;
+  description: string;
+  Icon: typeof Wand2;
+}> = [
+  {
+    id: null,
+    label: getVoicePresetDisplayLabel(null),
+    description: "Adapts to the role.",
+    Icon: Wand2,
+  },
+  {
+    id: "engaging",
+    label: getVoicePresetDisplayLabel("engaging"),
+    description: "Approachable. Personal touches.",
+    Icon: Feather,
+  },
+  {
+    id: "signature",
+    label: getVoicePresetDisplayLabel("signature"),
+    description: "Conversational. Like you wrote it.",
+    Icon: PenNib,
+  },
+  {
+    id: "expert",
+    label: getVoicePresetDisplayLabel("expert"),
+    description: "Composed. Measured pacing.",
+    Icon: Stamp,
+  },
 ];
 
 // ─── Style options ─────────────────────────────────────────────────────────────

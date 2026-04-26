@@ -11,7 +11,7 @@ import {
   Menu,
   Moon,
   Sun,
-  Trash,
+  TrashSimple,
   User,
   X,
 } from "@/lib/icons";
@@ -296,7 +296,7 @@ function SidebarDocumentSection({
                               setConfirmingDeleteKey(item.key);
                             }}
                           >
-                            <Trash size={12} strokeWidth={1.8} aria-hidden="true" />
+                            <TrashSimple size={12} strokeWidth={1.8} aria-hidden="true" />
                           </button>
                         )}
                       </div>

@@ -14,7 +14,7 @@ import {
   PenNib,
   RotateCcw,
   Stamp,
-  Trash,
+  TrashSimple,
   Wand2,
   X,
 } from "@/lib/icons";
@@ -78,18 +78,18 @@ const TONE_OPTIONS: Array<{
     Icon: Wand2,
   },
   {
+    id: "engaging",
+    label: getVoicePresetDisplayLabel("engaging"),
+    Icon: Feather,
+  },
+  {
     id: "signature",
     label: getVoicePresetDisplayLabel("signature"),
-    Icon: Feather,
+    Icon: PenNib,
   },
   {
     id: "expert",
     label: getVoicePresetDisplayLabel("expert"),
-    Icon: PenNib,
-  },
-  {
-    id: "engaging",
-    label: getVoicePresetDisplayLabel("engaging"),
     Icon: Stamp,
   },
 ];
@@ -673,7 +673,7 @@ export function SavedProposalForgeToolbarPreview({
             data-toolbar-tooltip="Delete"
             onClick={() => setIsDeleteConfirming(true)}
           >
-            <Trash size={16} strokeWidth={1.5} />
+            <TrashSimple size={16} strokeWidth={1.5} />
           </button>
         ) : (
           <span className="dasti-icon-cluster dasti-icon-cluster--tight">

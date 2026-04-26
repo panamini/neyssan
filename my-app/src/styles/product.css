@@ -267,7 +267,7 @@
   width: 2px;
   height: 16px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-accent) 84%, white 16%);
+  background: var(--color-accent);
   opacity: 0;
   transform: translateY(-50%) scaleY(0.7);
   transition:
@@ -1012,7 +1012,7 @@
 }
 
 .dasti-doc-card--selected .dasti-doc-card__title {
-  color: color-mix(in srgb, var(--ti) 88%, black 12%);
+  color: var(--ti);
 }
 
 .dasti-doc-card--library {
@@ -1546,15 +1546,13 @@
   min-block-size: var(--dasti-toolbar-shell-block-size);
   padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  border: 1px solid var(--color-border);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface) 88%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
 }
 
 .dasti-proposal-sheet__controls .dasti-icon-cluster--tight {
@@ -1617,8 +1615,8 @@
 }
 
 .dasti-proposal-mode-toggle--active {
-  background: var(--color-surface);
-  border-color: var(--color-border-contrast);
+  background: var(--proposal-chrome-control-active-bg);
+  border-color: var(--proposal-chrome-control-active-border);
   color: var(--color-text);
 }
 
@@ -1640,15 +1638,13 @@
   max-width: 100%;
   flex: 0 0 auto;
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  border: 1px solid var(--color-border);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface) 88%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
   overflow: visible;
 }
 
@@ -1878,8 +1874,15 @@
 }
 
 .dasti-proposal-library-utility-row__search,
-.dasti-proposal-library-utility-row__select-shell {
+.dasti-proposal-library-utility-row__select-shell,
+.dasti-proposal-library-filter-menu {
   min-width: 0;
+}
+
+.dasti-proposal-library-utility-row__select-shell,
+.dasti-proposal-library-filter-menu {
+  position: relative;
+  display: block;
 }
 
 .dasti-proposal-library-utility-row__input {
@@ -1887,17 +1890,149 @@
   min-height: var(--control-sm);
   padding: 0 12px;
   border-radius: var(--radius-control);
-  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
-  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  border: 2px solid transparent;
+  background: var(--color-surface-muted);
   color: var(--ti);
   font: inherit;
   font-size: var(--ts);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-proposal-library-utility-row__input::placeholder {
+  color: var(--color-text-subtle);
+  opacity: 1;
+}
+
+.dasti-proposal-library-utility-row__input:hover {
+  border-color: color-mix(in srgb, var(--ti) 16%, transparent);
+  background: var(--color-surface-muted);
+}
+
+.dasti-proposal-library-utility-row__input:focus-visible {
+  border-color: var(--ti);
+  background: var(--color-surface-muted);
+  box-shadow: none;
+  outline: none;
+}
+
+.dasti-proposal-library-utility-row__select-shell .dasti-select {
+  appearance: none;
+  padding-inline-end: var(--space-6);
+  border: 2px solid transparent;
+  background: var(--color-surface-muted);
+  color: var(--ti);
+  box-shadow: none;
+}
+
+.dasti-proposal-library-utility-row__select-shell .dasti-select:hover {
+  border-color: color-mix(in srgb, var(--ti) 16%, transparent);
+}
+
+.dasti-proposal-library-utility-row__select-shell .dasti-select:focus {
+  border-color: var(--ti);
+  box-shadow: none;
+}
+
+.dasti-proposal-library-filter-menu__trigger {
+  min-width: max-content;
+  min-height: var(--control-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-6) 0 var(--space-2);
+  border-radius: var(--radius-control);
+  border: 2px solid transparent;
+  background: var(--color-surface-muted);
+  color: var(--ti);
+  font: inherit;
+  font-size: var(--text-caption-size);
+  line-height: var(--text-body-sm-line);
+  position: relative;
+  box-shadow: none;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-proposal-library-filter-menu__trigger:hover,
+.dasti-proposal-library-filter-menu__trigger:focus-visible,
+.dasti-proposal-library-filter-menu__trigger[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--ti) 16%, transparent);
+  background: var(--color-surface-muted);
+  color: var(--ti);
+  outline: none;
+}
+
+.dasti-proposal-library-filter-menu__trigger[aria-expanded="true"] {
+  border-color: var(--ti);
+}
+
+.dasti-proposal-library-filter-menu__trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dasti-proposal-library-filter-menu__chevron {
+  position: absolute;
+  inset-inline-end: var(--space-2);
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-subtle);
+  pointer-events: none;
+}
+
+.dasti-proposal-library-filter-menu__drawer {
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+  min-width: max(100%, min(220px, calc(100vw - 32px)));
+  transform: none;
+}
+
+.dasti-proposal-library-filter-menu__option {
+  grid-template-columns: 20px minmax(0, 1fr);
+}
+
+.dasti-proposal-library-utility-row__chevron {
+  position: absolute;
+  inset-inline-end: var(--space-2);
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-subtle);
+  pointer-events: none;
 }
 
 .dasti-proposal-library-utility-row__count {
   justify-self: end;
   font-size: var(--tx);
   color: var(--tm2);
+}
+
+@media (max-width: 720px) {
+  .dasti-proposal-library-utility-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dasti-proposal-library-filter-menu__trigger {
+    width: 100%;
+  }
+
+  .dasti-proposal-library-filter-menu__drawer {
+    inset-inline-start: 0;
+    inset-inline-end: auto;
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .dasti-proposal-library-utility-row__count {
+    justify-self: start;
+  }
 }
 
 .dasti-proposal-library-card {
@@ -2034,16 +2169,25 @@
   justify-content: center;
   gap: var(--proposal-chrome-tight-gap, var(--space-1));
   padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--color-border);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface) 88%,
-    transparent
+  border-radius: var(--radius-toolbar-shell, var(--radius-card));
+  border: 1px solid
+    var(
+      --proposal-chrome-toolbar-border,
+      color-mix(in srgb, var(--color-border) 82%, transparent)
+    );
+  background: var(
+    --proposal-chrome-toolbar-bg,
+    color-mix(
+      in srgb,
+      var(--document-viewer-frame-surface) 88%,
+      transparent
+    )
   );
   box-shadow: var(--shadow-frost, var(--shadow-sm));
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
   flex-shrink: 0;
 }
 
@@ -2114,13 +2258,9 @@
   z-index: 19;
   gap: var(--proposal-chrome-tight-gap, var(--space-1));
   padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border: 1px solid var(--proposal-chrome-toolbar-border);
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  background: color-mix(
-    in srgb,
-    var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
-    transparent
-  );
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
   backdrop-filter: saturate(var(--frost-saturate, 1))
     blur(var(--frost-blur, 14px));
@@ -2216,11 +2356,13 @@
     --proposal-chrome-shell-padding,
     calc(var(--space-2) - 2px)
   );
-  background: var(--color-surface-raised);
-  border-color: var(--color-border);
+  background: var(--proposal-chrome-toolbar-bg);
+  border-color: var(--proposal-chrome-toolbar-border);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
 }
 
 .dasti-document-rail--resume-workspace .dasti-proposal-rail-cluster > * {
@@ -2629,12 +2771,19 @@
   align-items: center;
   justify-content: center;
   padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
+  border: 1px solid
+    var(
+      --proposal-chrome-control-border,
+      color-mix(in srgb, var(--color-border) 82%, transparent)
+    );
   border-radius: var(--radius-toolbar-control, var(--radius-control));
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface, var(--sf2)) 92%,
-    transparent
+  background: var(
+    --proposal-chrome-control-bg,
+    color-mix(
+      in srgb,
+      var(--document-viewer-frame-surface, var(--sf2)) 92%,
+      transparent
+    )
   );
   color: var(--tm2);
   cursor: pointer;
@@ -2646,24 +2795,25 @@
 }
 
 .dasti-doc-zoom-fit:hover {
-  background: color-mix(in srgb, var(--sfr) 96%, transparent);
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-contrast) 74%,
-    transparent
+  background: var(
+    --proposal-chrome-control-hover-bg,
+    color-mix(in srgb, var(--sfr) 96%, transparent)
+  );
+  border-color: var(
+    --proposal-chrome-control-active-border,
+    color-mix(in srgb, var(--color-border-contrast) 74%, transparent)
   );
   color: var(--ti);
 }
 
 .dasti-doc-zoom-fit--active {
-  background: var(--color-surface);
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-contrast) 78%,
-    transparent
+  background: var(--proposal-chrome-control-active-bg, var(--color-surface));
+  border-color: var(
+    --proposal-chrome-control-active-border,
+    color-mix(in srgb, var(--color-border-contrast) 78%, transparent)
   );
   color: var(--ti);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .dasti-doc-zoom-status,
@@ -2675,11 +2825,18 @@
   height: var(--hs);
   padding: 0 10px;
   border-radius: var(--radius-toolbar-control, var(--radius-control));
-  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface, var(--sf2)) 76%,
-    transparent
+  border: 1px solid
+    var(
+      --proposal-chrome-control-border,
+      color-mix(in srgb, var(--color-border) 72%, transparent)
+    );
+  background: var(
+    --proposal-chrome-control-bg,
+    color-mix(
+      in srgb,
+      var(--document-viewer-frame-surface, var(--sf2)) 76%,
+      transparent
+    )
   );
   color: var(--tm2);
   font-size: var(--tx);
@@ -2723,15 +2880,9 @@
   gap: calc(var(--space-1) / 2);
   padding: calc(var(--space-1) / 2);
   border-radius: calc(var(--radius-pill) - 2px);
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--frost-bg, var(--color-surface-raised)) 95%,
-    transparent
-  );
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 44%, transparent),
-    var(--shadow-frost, var(--shadow-sm));
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
+  box-shadow: var(--shadow-frost, var(--shadow-sm));
   backdrop-filter: saturate(var(--frost-saturate, 1))
     blur(var(--frost-blur, 14px));
   -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
@@ -3070,8 +3221,8 @@
 .dasti-inline-ai-toolbar__action:focus-visible,
 .dasti-inline-ai-toolbar__apply:hover,
 .dasti-inline-ai-toolbar__apply:focus-visible {
-  background: color-mix(in srgb, var(--color-surface) 68%, transparent);
-  border-color: color-mix(in srgb, var(--color-border) 72%, transparent);
+  background: var(--proposal-chrome-control-hover-bg);
+  border-color: var(--proposal-chrome-control-active-border);
   outline: none;
 }
 
@@ -3084,14 +3235,14 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: color-mix(in srgb, var(--color-text) 92%, var(--color-accent) 8%);
+  background: var(--ac);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--op) 14%, transparent),
     0 1px 2px color-mix(in srgb, var(--shadow-color) 24%, transparent);
 }
 
 .dasti-inline-ai-toolbar__action[aria-pressed="true"] {
-  color: var(--color-on-accent);
+  color: var(--op);
 }
 
 .dasti-inline-ai-toolbar__action-label {
@@ -3122,7 +3273,7 @@
 }
 
 .dasti-inline-ai-toolbar__action--pending {
-  color: var(--color-on-accent);
+  color: var(--op);
 }
 
 .dasti-inline-ai-toolbar__action-spinner {
@@ -3140,8 +3291,8 @@
   min-height: calc(var(--control-md) - var(--space-1));
   padding-inline: var(--space-2);
   border-radius: var(--radius-pill);
-  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
-  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  border: 1px solid var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
 }
 
 .dasti-inline-ai-toolbar__prompt-icon {
@@ -3175,9 +3326,9 @@
 .dasti-inline-ai-toolbar__apply {
   min-width: calc(var(--control-md) - var(--space-1));
   padding-inline: var(--space-2);
-  border-color: color-mix(in srgb, var(--color-border-contrast) 62%, transparent);
-  background: color-mix(in srgb, var(--color-text) 92%, var(--color-accent) 8%);
-  color: var(--color-on-accent);
+  border-color: color-mix(in srgb, var(--ac) 54%, transparent);
+  background: var(--ac);
+  color: var(--op);
   justify-content: center;
 }
 
@@ -3367,6 +3518,31 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.dasti-quick-start-pane .dasti-modal-close {
+  border-color: var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  color: var(--tm2);
+  box-shadow: none;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-quick-start-pane .dasti-modal-close:hover,
+.dasti-quick-start-pane .dasti-modal-close:focus-visible {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.dasti-quick-start-pane .dasti-modal-close:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .dasti-quick-start-pane__frame {
@@ -3642,15 +3818,13 @@
   min-block-size: var(--document-viewer-toolbar-block-size);
   padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface) 92%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
 }
 
 .dasti-proposal-output-shell .dasti-document-rail__section {
@@ -3769,12 +3943,8 @@
   min-block-size: var(--document-viewer-toolbar-block-size);
   padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
   backdrop-filter: saturate(var(--frost-saturate, 1))
     blur(var(--frost-blur, 14px));
@@ -5735,8 +5905,12 @@
     --proposal-compose-workspace-inline-inset,
     var(--proposal-sheet-margin-inline-outer)
   );
-  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
-  border-top: 1px solid var(--color-border);
+  background: var(--proposal-chrome-toolbar-bg);
+  border-top: 1px solid var(--proposal-chrome-toolbar-border);
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
   overflow: visible;
 }
 
@@ -6154,17 +6328,13 @@ html:not(.dark) .dasti-proposal-submit {
 .styleforge-choice-card--active {
   background: color-mix(
     in srgb,
-    var(--color-surface-muted) 88%,
-    var(--color-text) 12%
+    var(--color-accent-pale) 46%,
+    var(--color-surface-raised) 54%
   ) !important;
-  border-color: color-mix(
-    in srgb,
-    var(--color-text) 18%,
-    var(--color-border-strong) 82%
-  ) !important;
+  border-color: var(--color-border-selected) !important;
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, black 10%, transparent) !important;
+    inset 0 1px 0 color-mix(in srgb, var(--color-surface-raised) 42%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-border-selected) 38%, transparent) !important;
 }
 
 .styleforge-active-cv-control--loaded,
@@ -6172,17 +6342,13 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-proposal-cv-switch--active {
   background: color-mix(
     in srgb,
-    var(--color-surface-muted) 88%,
-    var(--color-text) 12%
+    var(--color-accent-pale) 46%,
+    var(--color-surface-raised) 54%
   );
-  border-color: color-mix(
-    in srgb,
-    var(--color-text) 18%,
-    var(--color-border-strong) 82%
-  );
+  border-color: var(--color-border-selected);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, black 10%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--color-surface-raised) 42%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-border-selected) 38%, transparent);
 }
 
 .dasti-resume-preview-panel--workspace {
@@ -6258,10 +6424,10 @@ html:not(.dark) .dasti-proposal-submit {
   inline-size: 116px;
   min-inline-size: 0;
   max-inline-size: 116px;
-  border-color: var(--color-border);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  box-shadow: var(--shadow-sm);
+  border-color: var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  color: var(--tm2);
+  box-shadow: none;
 }
 
 .dasti-document-rail--resume-workspace .styleforge-active-cv-control__body,
@@ -6282,20 +6448,32 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-document-rail--resume-workspace .styleforge-active-cv-control__icon-button:hover,
 .dasti-document-rail--resume-workspace .styleforge-active-cv-control__body:focus-visible,
 .dasti-document-rail--resume-workspace .styleforge-active-cv-control__icon-button:focus-visible {
-  background: var(--color-surface);
-  color: var(--color-text);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
 }
 
 .styleforge-active-cv-control--loaded {
-  color: color-mix(in srgb, var(--ti) 92%, black 8%);
+  color: var(--ti);
 }
 
 .dark .styleforge-active-cv-control--loaded {
-  background: color-mix(in srgb, var(--sf2) 72%, black 28%);
-  border-color: color-mix(in srgb, var(--color-border-contrast) 82%, black 18%);
+  background: color-mix(
+    in srgb,
+    var(--color-accent-pale) 42%,
+    var(--color-surface-raised) 58%
+  );
+  border-color: var(--color-border-selected);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, black 18%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--color-surface-raised) 24%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-border-selected) 36%, transparent);
+}
+
+.dark
+  .dasti-document-rail--resume-workspace
+  .styleforge-active-cv-control--loaded {
+  border-color: var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  box-shadow: none;
 }
 
 .styleforge-active-cv-control--ghost {
@@ -6345,7 +6523,7 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dark .styleforge-active-cv-control__body:hover,
 .dark .styleforge-active-cv-control__icon-button:hover {
-  background: color-mix(in srgb, var(--color-surface-raised) 72%, black 28%);
+  background: color-mix(in srgb, var(--color-surface-raised) 76%, transparent);
 }
 
 .styleforge-active-cv-control__icon {
@@ -6395,12 +6573,8 @@ html:not(.dark) .dasti-proposal-submit {
   width: fit-content;
   max-width: 100%;
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
   backdrop-filter: saturate(var(--frost-saturate, 1))
     blur(var(--frost-blur, 14px));
@@ -6417,15 +6591,11 @@ html:not(.dark) .dasti-proposal-submit {
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
+  border: 1px solid var(--proposal-chrome-control-border);
   border-radius: var(--radius-toolbar-control, var(--radius-control));
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface, var(--sf2)) 94%,
-    transparent
-  );
+  background: var(--proposal-chrome-control-bg);
   color: var(--tm2);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-standard),
@@ -6435,23 +6605,15 @@ html:not(.dark) .dasti-proposal-submit {
 
 .styleforge-preview-toolbar__button:hover,
 .styleforge-preview-toolbar__button:focus-visible {
-  background: color-mix(in srgb, var(--sfr) 96%, transparent);
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-contrast) 76%,
-    transparent
-  );
+  background: var(--proposal-chrome-control-hover-bg);
+  border-color: var(--proposal-chrome-control-active-border);
   color: var(--ti);
   outline: none;
 }
 
 .styleforge-preview-toolbar__button--active {
-  background: color-mix(in srgb, var(--sfr) 98%, transparent);
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-contrast) 86%,
-    transparent
-  );
+  background: var(--proposal-chrome-control-active-bg);
+  border-color: var(--proposal-chrome-control-active-border);
   color: var(--ti);
 }
 
@@ -6623,6 +6785,87 @@ html:not(.dark) .dasti-proposal-submit {
   white-space: nowrap;
 }
 
+.dasti-cv-workbench-bar--cv-workspace .dasti-resume-export-control__primary,
+.styleforge-preview-toolbar .dasti-resume-export-control__primary {
+  border-color: var(--proposal-chrome-control-border);
+  border-radius: var(--radius-toolbar-chip, var(--radius-pill));
+  background: var(--proposal-chrome-control-bg);
+  color: var(--tm2);
+  box-shadow: none;
+}
+
+.dasti-cv-workbench-bar--cv-workspace
+  .dasti-resume-export-control__primary:hover:not(:disabled),
+.dasti-cv-workbench-bar--cv-workspace
+  .dasti-resume-export-control__primary:focus-visible,
+.styleforge-preview-toolbar
+  .dasti-resume-export-control__primary:hover:not(:disabled),
+.styleforge-preview-toolbar .dasti-resume-export-control__primary:focus-visible {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+  outline: none;
+}
+
+.dasti-cv-edit-toolbar .dasti-button--secondary,
+.dasti-cv-edit-toolbar .dasti-select,
+.dasti-cv-edit-toolbar .dasti-import-button,
+.dasti-cv-edit-toolbar .dasti-resume-export-control__primary {
+  border-color: var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  color: var(--tm2);
+  box-shadow: none;
+}
+
+.dasti-cv-edit-toolbar .dasti-button--secondary:hover:not(:disabled),
+.dasti-cv-edit-toolbar .dasti-button--secondary:focus-visible,
+.dasti-cv-edit-toolbar .dasti-select:hover:not(:disabled),
+.dasti-cv-edit-toolbar .dasti-select:focus-visible,
+.dasti-cv-edit-toolbar .dasti-import-button:hover:not(:disabled),
+.dasti-cv-edit-toolbar .dasti-import-button:focus-visible,
+.dasti-cv-edit-toolbar .dasti-resume-export-control__primary:hover:not(:disabled),
+.dasti-cv-edit-toolbar .dasti-resume-export-control__primary:focus-visible {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+  outline: none;
+}
+
+.dasti-cv-edit-toolbar .dasti-button--secondary,
+.dasti-cv-edit-toolbar .dasti-import-button,
+.dasti-cv-edit-toolbar .dasti-resume-export-control__primary {
+  border-radius: var(--radius-toolbar-chip, var(--radius-pill));
+}
+
+.dasti-cv-edit-toolbar .dasti-add-section-trigger__label {
+  color: inherit;
+}
+
+.dasti-cv-edit-toolbar .dasti-import-button--drop {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-active-bg);
+  color: var(--ti);
+}
+
+.dasti-cv-edit-toolbar .dasti-pill,
+.dasti-resume-export-control .dasti-pill {
+  border-color: var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  color: var(--tm2);
+  box-shadow: none;
+}
+
+.dasti-cv-edit-toolbar .dasti-pill--success,
+.dasti-resume-export-control .dasti-pill--success {
+  border-color: color-mix(in srgb, var(--color-success) 34%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-success-soft) 54%,
+    var(--proposal-chrome-control-bg) 46%
+  );
+  color: var(--color-success-ink);
+}
+
 .dasti-import-review-trigger {
   display: inline-flex;
   align-items: center;
@@ -6745,15 +6988,13 @@ html:not(.dark) .dasti-proposal-submit {
   width: fit-content;
   max-width: 100%;
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  border: 1px solid var(--color-border);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface) 88%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
   overflow: visible;
 }
 
@@ -6767,13 +7008,9 @@ html:not(.dark) .dasti-proposal-submit {
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  border-radius: 10px;
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface, var(--sf2)) 94%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-control-border);
+  border-radius: var(--radius-toolbar-control, var(--radius-control));
+  background: var(--proposal-chrome-control-bg);
   color: var(--tm2);
   box-shadow: none;
   cursor: pointer;
@@ -6785,23 +7022,15 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-cv-workbench-toggle__button:hover,
 .dasti-cv-workbench-toggle__button:focus-visible {
-  background: color-mix(in srgb, var(--sfr) 96%, transparent);
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-contrast) 76%,
-    transparent
-  );
+  background: var(--proposal-chrome-control-hover-bg);
+  border-color: var(--proposal-chrome-control-active-border);
   color: var(--ti);
   outline: none;
 }
 
 .dasti-cv-workbench-toggle__button--active {
-  background: color-mix(in srgb, var(--sfr) 98%, transparent);
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-contrast) 84%,
-    transparent
-  );
+  background: var(--proposal-chrome-control-active-bg);
+  border-color: var(--proposal-chrome-control-active-border);
   color: var(--ti);
 }
 
@@ -6816,7 +7045,7 @@ html:not(.dark) .dasti-proposal-submit {
   border: 1px solid var(--color-border);
   background: linear-gradient(
     145deg,
-    color-mix(in srgb, var(--sfr) 92%, white 8%) 0%,
+    color-mix(in srgb, var(--sfr) 92%, var(--sf1) 8%) 0%,
     color-mix(in srgb, var(--sf1) 88%, transparent 12%) 100%
   );
 }
@@ -6851,7 +7080,8 @@ html:not(.dark) .dasti-proposal-submit {
   height: 52px;
   min-width: 52px;
   border-radius: 999px;
-  border: 3px solid color-mix(in srgb, var(--sfr) 90%, white 10%);
+  border: 3px solid var(--color-surface-raised);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border) 72%, transparent);
 }
 
 .styleforge-stage-card {
@@ -6897,6 +7127,10 @@ html:not(.dark) .dasti-proposal-submit {
 
 .styleforge-palette-swatch--active {
   transform: translateY(-1px);
+  border-color: var(--color-border-selected);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--color-accent-pale) 72%, var(--color-surface-raised) 28%),
+    0 0 0 4px var(--color-border-selected);
 }
 
 .dasti-proposal-chip:hover {
@@ -6913,7 +7147,7 @@ html:not(.dark) .dasti-proposal-submit {
   border-color: var(--color-border);
   background: color-mix(in srgb, var(--color-surface) 96%, transparent);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 4%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-surface-raised) 22%, transparent),
     var(--shadow-sm);
 }
 
@@ -6934,7 +7168,7 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-proposal-chip--active {
-  color: color-mix(in srgb, var(--ti) 90%, black 10%);
+  color: var(--ti);
 }
 
 .dasti-proposal-chip__label {
@@ -6977,7 +7211,7 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-proposal-cv-switch--active {
-  color: color-mix(in srgb, var(--ti) 92%, black 8%);
+  color: var(--ti);
 }
 
 .dasti-proposal-cv-switch__main {
@@ -7193,17 +7427,13 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-doc-card--chooser.dasti-doc-card--selected {
   background: color-mix(
     in srgb,
-    var(--color-surface-muted) 88%,
-    var(--color-text) 12%
+    var(--color-accent-pale) 46%,
+    var(--color-surface-raised) 54%
   );
-  border-color: color-mix(
-    in srgb,
-    var(--color-text) 18%,
-    var(--color-border-strong) 82%
-  );
+  border-color: var(--color-border-selected);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 12%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, black 10%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--color-surface-raised) 42%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-border-selected) 38%, transparent);
 }
 
 .dasti-doc-card__footer--chooser {
@@ -7344,13 +7574,28 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .cv-contact-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--sf1) 64%, transparent);
   font-size: var(--ts);
   line-height: var(--ls);
   color: var(--tm2);
+  text-decoration: none;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
 }
 
 .cv-contact-link:hover {
-  text-decoration: underline;
+  border-color: var(--section-hover-border);
+  background: var(--section-hover-surface);
+  color: var(--ti);
+  text-decoration: none;
 }
 
 .cv-entry-summary {
@@ -7778,7 +8023,25 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .cv-organize-section-row__handle .dasti-icon-button {
+  border-color: var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  color: var(--tm2);
+  box-shadow: none;
   cursor: grab;
+}
+
+.cv-organize-section-row .dasti-icon-button {
+  border-color: var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  color: var(--tm2);
+  box-shadow: none;
+}
+
+.cv-organize-section-row .dasti-icon-button:hover,
+.cv-organize-section-row .dasti-icon-button:focus-visible {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
 }
 
 .cv-organize-section-row[data-section-dragging="true"]
@@ -7963,7 +8226,7 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dark .dasti-section-dismiss-pill {
-  color: color-mix(in srgb, var(--section-dismiss-ink) 92%, white 8%);
+  color: var(--section-dismiss-ink);
 }
 
 @media (hover: hover) {
@@ -8379,9 +8642,21 @@ html:not(.dark) .dasti-proposal-submit {
   width: 28px;
   height: 28px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  border: 1px solid var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
   color: var(--tg2);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-inline-review__close:hover,
+.dasti-inline-review__close:focus-visible {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+  outline: none;
 }
 
 .dasti-inline-review__item {
@@ -8525,7 +8800,8 @@ html:not(.dark) .dasti-proposal-submit {
   border-radius: calc(var(--radius-card) - 4px);
   border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
   background: color-mix(in srgb, var(--color-accent) 4%, var(--sfr) 96%);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 55%, transparent);
+  box-shadow: inset 0 1px 0
+    color-mix(in srgb, var(--color-surface-raised) 42%, transparent);
 }
 
 .dasti-import-recovery__drawer-header {
@@ -8567,8 +8843,8 @@ html:not(.dark) .dasti-proposal-submit {
   width: 28px;
   height: 28px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  background: color-mix(in srgb, var(--sfr) 92%, transparent);
+  border: 1px solid var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
   color: var(--tg2);
 }
 
@@ -8579,17 +8855,20 @@ html:not(.dark) .dasti-proposal-submit {
   width: 28px;
   height: 28px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  background: color-mix(in srgb, var(--sfr) 92%, transparent);
+  border: 1px solid var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
   color: var(--tg2);
 }
 
+.dasti-import-recovery__drawer-close:hover,
+.dasti-import-recovery__drawer-close:focus-visible,
 .dasti-import-recovery__drawer-help:hover,
 .dasti-import-recovery__drawer-help:focus-visible,
 .dasti-import-recovery__drawer-help[aria-expanded="true"] {
-  border-color: color-mix(in srgb, var(--color-border-contrast) 64%, transparent);
-  background: color-mix(in srgb, var(--color-surface-raised) 94%, white 6%);
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
   color: var(--ti);
+  outline: none;
 }
 
 .dasti-import-recovery__drawer-shortcuts {
@@ -8629,7 +8908,7 @@ html:not(.dark) .dasti-proposal-submit {
   min-height: 44px;
   padding: 0.75rem 0.85rem;
   border-radius: var(--radius-inline);
-  background: color-mix(in srgb, var(--sfr) 88%, white 12%);
+  background: var(--color-surface-muted);
   color: var(--ti);
   font-size: var(--ts);
   line-height: 1.5;
@@ -8677,15 +8956,15 @@ html:not(.dark) .dasti-proposal-submit {
   gap: 0.4rem;
   padding: 0.3rem 0.55rem;
   border-radius: 999px;
-  background: rgba(186, 126, 44, 0.14);
-  color: var(--ti);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-ink);
   font-size: var(--ts);
 }
 
 .dasti-import-recovery__text {
   padding: var(--s3);
   border-radius: var(--radius-inline);
-  background: color-mix(in srgb, white 72%, var(--color-surface) 28%);
+  background: var(--color-surface-muted);
   color: var(--ti);
   white-space: pre-wrap;
   line-height: 1.55;
@@ -8946,11 +9225,18 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-toolbar-drawer-surface {
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
-    transparent
+  border: 1px solid
+    var(
+      --proposal-chrome-toolbar-border,
+      color-mix(in srgb, var(--color-border) 76%, transparent)
+    );
+  background: var(
+    --proposal-chrome-toolbar-bg,
+    color-mix(
+      in srgb,
+      var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
+      transparent
+    )
   );
   box-shadow: var(--shadow-frost, var(--shadow-sm));
   backdrop-filter: saturate(var(--frost-saturate, 1))
@@ -9029,7 +9315,11 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .cv-photo-upload-trigger {
-  background: color-mix(in srgb, var(--color-surface-muted) 88%, white 12%);
+  background: color-mix(
+    in srgb,
+    var(--color-surface-muted) 88%,
+    var(--color-surface-raised) 12%
+  );
   border-color: var(--color-border);
   color: var(--color-text);
   transition:
@@ -9043,7 +9333,11 @@ html:not(.dark) .dasti-proposal-submit {
 .cv-photo-upload-trigger:hover,
 .cv-photo-upload-trigger:focus-visible {
   border-color: var(--color-border-contrast);
-  background: color-mix(in srgb, var(--color-surface-muted) 80%, white 20%);
+  background: color-mix(
+    in srgb,
+    var(--color-surface-muted) 80%,
+    var(--color-surface-raised) 20%
+  );
   box-shadow: var(--shadow-sm);
 }
 
@@ -9058,7 +9352,11 @@ html:not(.dark) .dasti-proposal-submit {
 
 .cv-photo-upload-trigger--drag {
   background: var(--frost-surface);
-  border-color: color-mix(in srgb, var(--color-accent) 56%, white 44%);
+  border-color: color-mix(
+    in srgb,
+    var(--color-accent) 56%,
+    var(--color-surface-raised) 44%
+  );
   box-shadow: var(--shadow-frost);
   backdrop-filter: saturate(var(--frost-saturate)) blur(var(--frost-blur));
   -webkit-backdrop-filter: saturate(var(--frost-saturate))
@@ -9100,8 +9398,12 @@ html:not(.dark) .dasti-proposal-submit {
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
   border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--color-surface-muted) 88%, white 12%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  background: color-mix(
+    in srgb,
+    var(--color-surface-muted) 88%,
+    var(--color-surface-raised) 12%
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-surface-raised) 12%, transparent);
   cursor: pointer;
   transition:
     border-color var(--duration-fast) var(--ease-standard),
@@ -9112,7 +9414,11 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-profile-modal__avatar:hover,
 .dasti-profile-modal__avatar:focus-visible {
   border-color: var(--color-border-contrast);
-  background: color-mix(in srgb, var(--color-surface-muted) 78%, white 22%);
+  background: color-mix(
+    in srgb,
+    var(--color-surface-muted) 78%,
+    var(--color-surface-raised) 22%
+  );
   box-shadow: var(--shadow-sm);
   outline: none;
 }
@@ -9254,13 +9560,69 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-doc-viewer-shell,
 .dasti-proposal-output-shell,
 .dasti-proposal-output-shell--next,
-.dasti-compose-toolbar {
+.dasti-compose-toolbar,
+.dasti-cv-workbench-bar--cv-workspace,
+.dasti-cv-edit-toolbar,
+.dasti-cv-workbench-toggle,
+.dasti-document-rail--resume-workspace,
+.dasti-inline-ai-toolbar,
+.dasti-inline-review,
+.dasti-import-recovery,
+.dasti-jobs-detail__favorite-action,
+.dasti-jobs-detail__source-action,
+.dasti-proposal-toolbar,
+.dasti-proposal-sheet__controls,
+.dasti-proposal-rail-cluster,
+.dasti-quick-start-pane,
+.dasti-proposal-chrome-drawer,
+.dasti-artifact-inspector,
+.dasti-doc-zoom-bar--popover,
+.dasti-proposal-saved-view-toolbar,
+.dasti-saved-proposal-forge-toolbar-preview,
+.styleforge-active-cv-control,
+.styleforge-preview-toolbar,
+.cv-organize-section-row {
   --radius-toolbar-shell: var(--radius-card);
   --radius-toolbar-control: var(--radius-control);
   --radius-toolbar-chip: var(--radius-pill);
   --proposal-chrome-shell-padding: calc(var(--space-2) - 2px);
   --proposal-chrome-group-gap: var(--space-2);
   --proposal-chrome-tight-gap: var(--space-1);
+  --proposal-chrome-toolbar-bg: color-mix(
+    in srgb,
+    var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
+    transparent
+  );
+  --proposal-chrome-toolbar-border: color-mix(
+    in srgb,
+    var(--frost-border, var(--color-border)) 82%,
+    transparent
+  );
+  --proposal-chrome-control-bg: color-mix(
+    in srgb,
+    var(--frost-surface, var(--document-viewer-frame-surface, var(--sf2))) 86%,
+    transparent
+  );
+  --proposal-chrome-control-hover-bg: color-mix(
+    in srgb,
+    var(--sfr) 96%,
+    transparent
+  );
+  --proposal-chrome-control-active-bg: color-mix(
+    in srgb,
+    var(--frost-surface, var(--document-viewer-frame-surface, var(--sf2))) 94%,
+    transparent
+  );
+  --proposal-chrome-control-border: color-mix(
+    in srgb,
+    var(--color-border) 80%,
+    transparent
+  );
+  --proposal-chrome-control-active-border: color-mix(
+    in srgb,
+    var(--color-border-contrast) 82%,
+    transparent
+  );
   --dasti-toolbar-tooltip-min-inline-size: 0px;
   --dasti-toolbar-tooltip-max-inline-size: min(180px, calc(100vw - 24px));
   --dasti-toolbar-tooltip-padding: 6px 8px;
@@ -9280,7 +9642,9 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-artifact-inspector,
 .dasti-compose-toolbar__bar,
 .dasti-compose-toolbar__collapsed-shell,
+.dasti-cv-edit-toolbar,
 .dasti-cv-workbench-toggle,
+.dasti-document-rail--resume-workspace,
 .dasti-color-popover,
 .dasti-doc-zoom-bar--popover,
 .dasti-proposal-rail-cluster,
@@ -9342,12 +9706,8 @@ html:not(.dark) .dasti-proposal-submit {
   min-width: min(220px, calc(100vw - 32px));
   padding: var(--proposal-chrome-shell-padding);
   border-radius: var(--radius-toolbar-shell);
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
   backdrop-filter: saturate(var(--frost-saturate, 1))
     blur(var(--frost-blur, 14px));
@@ -9370,27 +9730,28 @@ html:not(.dark) .dasti-proposal-submit {
   align-items: center;
   gap: var(--space-2);
   padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
+  border: 1px solid var(--proposal-chrome-control-border);
   border-radius: calc(var(--radius-card) - 2px);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface, var(--sf2)) 92%,
-    transparent
-  );
+  background: var(--proposal-chrome-control-bg);
   color: var(--ti);
   text-align: left;
 }
 
 .dasti-proposal-chrome-option:hover,
 .dasti-proposal-chrome-option:focus-visible {
-  background: color-mix(in srgb, var(--sfr) 96%, transparent);
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-contrast) 74%,
-    transparent
-  );
+  background: var(--proposal-chrome-control-hover-bg);
+  border-color: var(--proposal-chrome-control-active-border);
   color: var(--ti);
   outline: none;
+}
+
+.dasti-proposal-chrome-option--active {
+  background: var(--proposal-chrome-control-active-bg);
+  border-color: var(--proposal-chrome-control-active-border);
+  color: var(--ti);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-surface-raised) 42%, transparent),
+    var(--shadow-sm);
 }
 
 .dasti-proposal-chrome-option__icon {
@@ -9451,12 +9812,13 @@ html:not(.dark) .dasti-proposal-submit {
   gap: var(--proposal-chrome-shell-padding);
   padding: var(--proposal-chrome-shell-padding);
   border-radius: var(--radius-toolbar-shell);
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
-  background: color-mix(in srgb, var(--frost-bg) 88%, transparent);
-  box-shadow: var(--shadow-frost);
-  backdrop-filter: saturate(var(--frost-saturate)) blur(var(--frost-blur));
-  -webkit-backdrop-filter: saturate(var(--frost-saturate))
-    blur(var(--frost-blur));
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
+  box-shadow: var(--shadow-frost, var(--shadow-sm));
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
 }
 
 .dasti-artifact-inspector--header {
@@ -9547,18 +9909,14 @@ html:not(.dark) .dasti-proposal-submit {
   align-items: center;
   gap: 0;
   padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--color-border) 56%, transparent);
+  border: 1px solid var(--proposal-chrome-control-border);
   border-radius: var(--radius-toolbar-control, var(--radius-control));
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface, var(--sf2)) 94%,
-    transparent
-  );
+  background: var(--proposal-chrome-control-bg);
   color: var(--tm2);
   text-align: left;
   font: inherit;
   font-size: var(--ts);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-standard),
@@ -9576,9 +9934,9 @@ html:not(.dark) .dasti-proposal-submit {
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid transparent;
+  border: 1px solid var(--proposal-chrome-control-border);
   border-radius: var(--radius-toolbar-control, var(--radius-control));
-  background: transparent;
+  background: var(--proposal-chrome-control-bg);
   color: var(--tm2);
   cursor: pointer;
   transition:
@@ -9589,33 +9947,25 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-artifact-inspector__mini-action:hover,
 .dasti-artifact-inspector__mini-action:focus-visible {
-  background: color-mix(in srgb, var(--sfr) 90%, transparent);
+  background: var(--proposal-chrome-control-hover-bg);
   color: var(--ti);
-  border-color: color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-color: var(--proposal-chrome-control-active-border);
   outline: none;
 }
 
 .dasti-artifact-inspector__action:hover,
 .dasti-artifact-inspector__action:focus-visible {
-  background: color-mix(in srgb, var(--sfr) 96%, transparent);
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-contrast) 64%,
-    transparent
-  );
+  background: var(--proposal-chrome-control-hover-bg);
+  border-color: var(--proposal-chrome-control-active-border);
   color: var(--ti);
   outline: none;
 }
 
 .dasti-artifact-inspector__action--active {
-  background: color-mix(in srgb, var(--sfr) 98%, transparent);
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-contrast) 80%,
-    transparent
-  );
+  background: var(--proposal-chrome-control-active-bg);
+  border-color: var(--proposal-chrome-control-active-border);
   color: var(--ti);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .dasti-artifact-inspector__action--style-trigger {
@@ -9796,9 +10146,9 @@ html:not(.dark) .dasti-proposal-submit {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--sfr) 96%, transparent);
+  background: var(--proposal-chrome-control-active-bg);
   color: var(--ti);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border) 80%, transparent);
+  box-shadow: 0 0 0 1px var(--proposal-chrome-control-border);
 }
 
 /* Label — collapsed by default (icon-first), expands on hover/focus/active */
@@ -9989,10 +10339,10 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-artifact-inspector__swatch--active {
-  border-color: var(--ti);
+  border-color: var(--color-border-selected);
   box-shadow:
-    0 0 0 1.5px var(--color-surface),
-    0 0 0 2.5px var(--ti);
+    0 0 0 1.5px color-mix(in srgb, var(--color-accent-pale) 72%, var(--color-surface-raised) 28%),
+    0 0 0 2.5px var(--color-border-selected);
 }
 
 /* Auto swatch — icon-only button, no fill */
@@ -10472,7 +10822,30 @@ html:not(.dark) .dasti-proposal-submit {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  min-height: 26px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  color: var(--tm2);
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-jobs-detail__source-action:hover,
+.dasti-jobs-detail__source-action:focus-visible {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+  outline: none;
 }
 
 .dasti-jobs-detail__title {
@@ -10484,6 +10857,28 @@ html:not(.dark) .dasti-proposal-submit {
   font-size: var(--tl);
   font-weight: 600;
   line-height: 1.2;
+}
+
+.dasti-jobs-detail__favorite-action {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border-color: var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  color: var(--tm2);
+}
+
+.dasti-jobs-detail__favorite-action:hover,
+.dasti-jobs-detail__favorite-action:focus-visible {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+}
+
+.dasti-jobs-detail__favorite-action[aria-pressed="true"] {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-active-bg);
+  color: var(--ac);
 }
 
 .dasti-jobs-detail__meta {
@@ -11712,9 +12107,13 @@ html:not(.dark) .dasti-proposal-submit {
   max-width: 100%;
   padding: var(--proposal-chrome-shell-padding);
   border-radius: var(--radius-toolbar-shell);
-  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
-  background: color-mix(in srgb, var(--sf1) 94%, transparent);
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
   overflow: visible;
 }
 
@@ -11758,6 +12157,40 @@ html:not(.dark) .dasti-proposal-submit {
   min-width: 0;
 }
 
+.dasti-compose-toolbar__context-slot .dasti-pill,
+.dasti-proposal-saved-view-toolbar .dasti-pill,
+.dasti-saved-proposal-forge-toolbar-preview .dasti-pill {
+  min-height: var(--pill-height-sm);
+  border-color: var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  color: var(--tm2);
+  box-shadow: none;
+}
+
+.dasti-compose-toolbar__context-slot .dasti-pill--success,
+.dasti-proposal-saved-view-toolbar .dasti-pill--success,
+.dasti-saved-proposal-forge-toolbar-preview .dasti-pill--success {
+  border-color: color-mix(in srgb, var(--color-success) 34%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-success-soft) 54%,
+    var(--proposal-chrome-control-bg) 46%
+  );
+  color: var(--color-success-ink);
+}
+
+.dasti-compose-toolbar__context-slot .dasti-pill--danger,
+.dasti-proposal-saved-view-toolbar .dasti-pill--danger,
+.dasti-saved-proposal-forge-toolbar-preview .dasti-pill--danger {
+  border-color: color-mix(in srgb, var(--color-danger) 34%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-danger-soft) 54%,
+    var(--proposal-chrome-control-bg) 46%
+  );
+  color: var(--color-danger-ink);
+}
+
 .dasti-compose-toolbar--no-collapse-anchor .dasti-compose-toolbar__group--actions {
   margin-inline-start: auto;
 }
@@ -11781,13 +12214,9 @@ html:not(.dark) .dasti-proposal-submit {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface, var(--sf2)) 94%,
-    transparent
-  );
-  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  box-shadow: none;
   color: var(--tm2);
   cursor: pointer;
   transition:
@@ -11804,12 +12233,8 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-compose-toolbar__tone-chip:focus-visible,
 .dasti-compose-toolbar__icon-button:hover,
 .dasti-compose-toolbar__icon-button:focus-visible {
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-contrast) 76%,
-    transparent
-  );
-  background: color-mix(in srgb, var(--sfr) 96%, transparent);
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
   color: var(--ti);
   outline: none;
 }
@@ -11825,14 +12250,10 @@ html:not(.dark) .dasti-proposal-submit {
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border: 1px solid var(--proposal-chrome-control-border);
   border-radius: var(--radius-toolbar-chip);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface, var(--sf2)) 94%,
-    transparent
-  );
-  box-shadow: var(--shadow-sm);
+  background: var(--proposal-chrome-control-bg);
+  box-shadow: none;
   overflow: hidden;
   transition:
     border-color var(--duration-fast) var(--ease-standard),
@@ -11875,7 +12296,7 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-compose-toolbar__cv-chip:hover,
 .dasti-compose-toolbar__cv-chip:focus-visible {
-  background: var(--sidebar-hover-bg);
+  background: var(--proposal-chrome-control-hover-bg);
   box-shadow: none;
   color: var(--ti);
   outline: none;
@@ -11908,7 +12329,7 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dasti-compose-toolbar__cv-remove:hover,
 .dasti-compose-toolbar__cv-remove:focus-visible {
-  background: color-mix(in srgb, var(--sfr) 96%, transparent);
+  background: var(--proposal-chrome-control-hover-bg);
   color: var(--ti);
   outline: none;
 }
@@ -11924,17 +12345,13 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-compose-toolbar__cv-shell--active,
 .dasti-compose-toolbar__cv-shell--open,
 .dasti-compose-toolbar__cv-chip--open {
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-contrast) 84%,
-    transparent
-  );
+  border-color: var(--proposal-chrome-control-active-border);
 }
 
 .dasti-compose-toolbar__cv-chip--active,
 .dasti-compose-toolbar__cv-chip--open {
-  background: var(--sidebar-active-bg);
-  color: var(--sidebar-active-ink);
+  background: var(--proposal-chrome-control-active-bg);
+  color: var(--ti);
 }
 
 .dasti-compose-toolbar__cv-shell--active .dasti-compose-toolbar__cv-chip {
@@ -11998,12 +12415,8 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-compose-toolbar__tone-option--active {
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-contrast) 86%,
-    transparent
-  );
-  background: color-mix(in srgb, var(--sfr) 98%, transparent);
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-active-bg);
   color: var(--ti);
 }
 
@@ -12051,12 +12464,8 @@ html:not(.dark) .dasti-proposal-submit {
   min-block-size: var(--dasti-toolbar-shell-block-size);
   padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
   backdrop-filter: saturate(var(--frost-saturate, 1))
     blur(var(--frost-blur, 14px));
@@ -12095,12 +12504,8 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-proposal-saved-view-toolbar .dasti-proposal-chrome-drawer,
 .dasti-proposal-saved-view-toolbar .dasti-doc-zoom-bar--popover {
   border-radius: var(--radius-toolbar-shell);
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
   backdrop-filter: saturate(var(--frost-saturate, 1))
     blur(var(--frost-blur, 14px));
@@ -12196,15 +12601,13 @@ html:not(.dark) .dasti-proposal-submit {
   min-block-size: var(--document-viewer-toolbar-block-size);
   padding: var(--proposal-chrome-shell-padding);
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface) 92%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
   --radius-toolbar-shell: var(--radius-card);
   --radius-toolbar-control: var(--radius-control);
   --radius-toolbar-chip: var(--radius-pill);
@@ -12246,6 +12649,29 @@ html:not(.dark) .dasti-proposal-submit {
   box-shadow: none;
 }
 
+.dasti-proposal-sheet__controls .dasti-icon-button,
+.dasti-proposal-rail-cluster .dasti-icon-button,
+.dasti-proposal-saved-view-toolbar .dasti-icon-button,
+.dasti-saved-proposal-forge-toolbar-preview .dasti-icon-button {
+  border-color: var(--proposal-chrome-control-border);
+  background: var(--proposal-chrome-control-bg);
+  color: var(--tm2);
+  box-shadow: none;
+}
+
+.dasti-proposal-sheet__controls .dasti-icon-button:hover,
+.dasti-proposal-sheet__controls .dasti-icon-button:focus-visible,
+.dasti-proposal-rail-cluster .dasti-icon-button:hover,
+.dasti-proposal-rail-cluster .dasti-icon-button:focus-visible,
+.dasti-proposal-saved-view-toolbar .dasti-icon-button:hover,
+.dasti-proposal-saved-view-toolbar .dasti-icon-button:focus-visible,
+.dasti-saved-proposal-forge-toolbar-preview .dasti-icon-button:hover,
+.dasti-saved-proposal-forge-toolbar-preview .dasti-icon-button:focus-visible {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+}
+
 .dasti-saved-proposal-forge-toolbar-preview__anchor {
   position: relative;
   display: inline-flex;
@@ -12282,12 +12708,8 @@ html:not(.dark) .dasti-proposal-submit {
   pointer-events: auto;
   transform: none;
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--frost-bg, var(--document-viewer-frame-surface)) 90%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
   backdrop-filter: saturate(var(--frost-saturate, 1))
     blur(var(--frost-blur, 14px));
@@ -12376,12 +12798,8 @@ html:not(.dark) .dasti-proposal-submit {
   max-inline-size: var(--dasti-toolbar-tooltip-max-inline-size);
   padding: var(--dasti-toolbar-tooltip-padding);
   border-radius: var(--dasti-toolbar-tooltip-radius);
-  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface, var(--sf2)) 96%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-sm);
   opacity: 0;
   pointer-events: none;
@@ -12466,15 +12884,13 @@ html:not(.dark) .dasti-proposal-submit {
   min-block-size: var(--dasti-compose-toolbar-shell-min-block-size);
   padding: var(--proposal-chrome-shell-padding);
   border-radius: var(--radius-toolbar-shell);
-  border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--document-viewer-frame-surface, var(--sf2)) 94%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
+  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
+    blur(var(--frost-blur, 14px));
   overflow: visible;
 }
 
@@ -12629,12 +13045,8 @@ html:not(.dark) .dasti-proposal-submit {
   max-inline-size: var(--dasti-toolbar-tooltip-max-inline-size);
   padding: var(--dasti-toolbar-tooltip-padding, 8px 10px);
   border-radius: var(--dasti-toolbar-tooltip-radius, var(--radius-card));
-  border: 1px solid color-mix(in srgb, var(--color-border) 74%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--frost-bg, var(--document-viewer-frame-surface)) 92%,
-    transparent
-  );
+  border: 1px solid var(--proposal-chrome-toolbar-border);
+  background: var(--proposal-chrome-toolbar-bg);
   box-shadow: var(--shadow-frost, var(--shadow-sm));
   backdrop-filter: saturate(var(--frost-saturate, 1))
     blur(calc(var(--frost-blur, 14px) - 2px));
@@ -13511,7 +13923,7 @@ html:not(.dark) .dasti-proposal-submit {
 /* Pressed state — no scale, tilt only resets */
 .dasti-style-scene:active .dasti-settings-style-card {
   transform: rotateX(0deg) rotateY(0deg) scale(1);
-  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.08);
+  box-shadow: inset 0 2px 10px color-mix(in srgb, var(--shadow-color) 12%, transparent);
   transition-duration: 0.12s;
 }
 
@@ -13522,9 +13934,15 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-style-card--active {
-  background: color-mix(in srgb, var(--sfr) 96%, transparent);
-  border-color: var(--color-border-contrast);
-  box-shadow: var(--shadow-sm);
+  background: color-mix(
+    in srgb,
+    var(--color-accent-pale) 36%,
+    var(--color-surface-raised) 64%
+  );
+  border-color: var(--color-border-selected);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--color-accent-pale) 36%, transparent),
+    var(--shadow-sm);
 }
 
 .dark .dasti-settings-style-card {
@@ -13533,21 +13951,21 @@ html:not(.dark) .dasti-proposal-submit {
   box-shadow:
     var(--shadow-x, 0px) calc(10px + var(--shadow-y, 0px)) 24px
       color-mix(in srgb, var(--shadow-color) 64%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--color-surface-raised) 8%, transparent);
 }
 
 .dark .dasti-settings-style-card:hover,
 .dark .dasti-settings-style-card:focus-visible {
-  border-color: var(--color-border-strong);
+  border-color: var(--color-border-contrast);
 }
 
 .dark .dasti-settings-style-card--active {
   background: color-mix(
     in srgb,
-    var(--color-surface-muted) 82%,
-    var(--color-surface) 18%
+    var(--color-accent-pale) 34%,
+    var(--color-surface-raised) 66%
   );
-  border-color: var(--color-border-strong);
+  border-color: var(--color-border-selected);
   box-shadow: var(--shadow-sm);
 }
 
@@ -13578,7 +13996,7 @@ html:not(.dark) .dasti-proposal-submit {
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
   background: color-mix(in srgb, var(--color-accent) 15%, transparent);
-  color: color-mix(in srgb, var(--color-accent) 92%, white 8%);
+  color: var(--color-accent-hover);
   flex: 0 0 auto;
 }
 
@@ -13803,10 +14221,10 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-swatch--active {
-  border-color: var(--ti);
+  border-color: var(--color-border-selected);
   box-shadow:
-    0 0 0 2px var(--color-surface),
-    0 0 0 4px var(--ti);
+    0 0 0 2px color-mix(in srgb, var(--color-accent-pale) 72%, var(--color-surface-raised) 28%),
+    0 0 0 4px var(--color-border-selected);
 }
 
 .dasti-settings-swatch--auto {
@@ -13822,8 +14240,8 @@ html:not(.dark) .dasti-proposal-submit {
   border-style: solid;
   color: var(--ti);
   box-shadow:
-    0 0 0 2px var(--color-surface),
-    0 0 0 4px var(--ti);
+    0 0 0 2px color-mix(in srgb, var(--color-accent-pale) 72%, var(--color-surface-raised) 28%),
+    0 0 0 4px var(--color-border-selected);
 }
 
 .dasti-settings-swatch--custom {
@@ -14357,7 +14775,7 @@ html:not(.dark) .dasti-proposal-submit {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: color-mix(in srgb, var(--color-accent) 90%, white 10%);
+  color: var(--color-accent-hover);
   background: color-mix(in srgb, var(--color-accent) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--color-accent) 28%, transparent);
 }
@@ -14395,7 +14813,7 @@ html:not(.dark) .dasti-proposal-submit {
     var(--dasti-settings-card-pad-block)
     var(--dasti-settings-card-pad-inline);
   border-radius: var(--radius-card);
-  border: 1.5px solid rgba(0, 0, 0, 0.1);
+  border: 1.5px solid var(--color-border);
   background: var(--sfr);
   box-shadow: var(--sha);
   cursor: pointer;
@@ -14407,7 +14825,7 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-slot-card:hover {
-  border-color: rgba(0, 0, 0, 0.2);
+  border-color: var(--color-border-contrast);
   box-shadow: var(--shb);
 }
 
@@ -14418,8 +14836,10 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-slot-card--editing {
-  border-color: rgba(0, 0, 0, 0.28);
-  box-shadow: var(--shb), 0 0 0 3px rgba(0, 0, 0, 0.06);
+  border-color: var(--color-border-selected);
+  box-shadow:
+    var(--shb),
+    0 0 0 3px color-mix(in srgb, var(--color-border-selected) 24%, transparent);
   background: var(--sfr);
 }
 
@@ -14466,7 +14886,7 @@ html:not(.dark) .dasti-proposal-submit {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: color-mix(in srgb, var(--color-accent) 90%, white 10%);
+  color: var(--color-accent-hover);
   background: color-mix(in srgb, var(--color-accent) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
@@ -14534,7 +14954,7 @@ html:not(.dark) .dasti-proposal-submit {
     var(--dasti-settings-card-pad-block)
     var(--dasti-settings-card-pad-inline);
   border-radius: var(--radius-card);
-  border: 1.5px solid rgba(0, 0, 0, 0.13);
+  border: 1.5px solid var(--color-border);
   background: var(--sfr);
   cursor: pointer;
   text-align: left;
@@ -14545,8 +14965,8 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-font-pair-card:hover {
-  border-color: rgba(0, 0, 0, 0.2);
-  background: color-mix(in srgb, var(--sfr) 96%, white 4%);
+  border-color: var(--color-border-contrast);
+  background: color-mix(in srgb, var(--sfr) 96%, var(--sf1) 4%);
   box-shadow: var(--sha);
 }
 
@@ -14556,13 +14976,13 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-font-pair-card--active {
-  border-color: color-mix(in srgb, var(--color-accent) 72%, rgba(0,0,0,0.1));
+  border-color: var(--color-border-selected);
   background: color-mix(in srgb, var(--color-accent) 8%, var(--sfr));
   box-shadow: var(--sha);
 }
 
 .dasti-settings-font-pair-card--active:hover {
-  border-color: color-mix(in srgb, var(--color-accent) 88%, rgba(0,0,0,0.1));
+  border-color: var(--color-border-selected);
 }
 
 .dasti-settings-font-pair-card__heading {
@@ -14602,7 +15022,7 @@ html:not(.dark) .dasti-proposal-submit {
   height: 17px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-accent) 15%, transparent);
-  color: color-mix(in srgb, var(--color-accent) 92%, white 8%);
+  color: var(--color-accent-hover);
   border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 
@@ -14793,30 +15213,34 @@ html:not(.dark) .dasti-proposal-submit {
 /* ─── Dark mode slot card overrides ──────────────────────────────────────── */
 
 .dark .dasti-settings-slot-card {
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--color-border);
   background: var(--sf2);
 }
 
 .dark .dasti-settings-slot-card:hover {
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: var(--color-border-contrast);
 }
 
 .dark .dasti-settings-slot-card--editing {
-  border-color: rgba(255, 255, 255, 0.26);
-  background: color-mix(in srgb, var(--sf2) 94%, white 6%);
+  border-color: var(--color-border-selected);
+  background: color-mix(
+    in srgb,
+    var(--color-accent-pale) 28%,
+    var(--color-surface-muted) 72%
+  );
 }
 
 .dark .dasti-settings-font-pair-card {
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--color-border);
   background: var(--sf2);
 }
 
 .dark .dasti-settings-font-pair-card:hover {
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: var(--color-border-contrast);
 }
 
 .dark .dasti-settings-font-pair-card--active {
-  border-color: color-mix(in srgb, var(--color-accent) 60%, rgba(255,255,255,0.1));
+  border-color: var(--color-border-selected);
   background: color-mix(in srgb, var(--color-accent) 9%, var(--sf2));
 }
 
@@ -14838,7 +15262,7 @@ html:not(.dark) .dasti-proposal-submit {
 .dasti-settings-builder__left .dasti-settings-appearance-group {
   padding: var(--s4);
   background: var(--sfr);
-  border: 1.5px solid rgba(0, 0, 0, 0.09);
+  border: 1.5px solid var(--color-border);
   border-radius: var(--radius-card);
   box-shadow:
     inset 0 1px 0 hsl(0 0% 100% / 0.82),
@@ -14848,7 +15272,7 @@ html:not(.dark) .dasti-proposal-submit {
 
 .dark .dasti-settings-builder__left .dasti-settings-appearance-group {
   background: var(--sf2);
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: var(--color-border);
   box-shadow:
     inset 0 1px 0 hsl(0 0% 100% / 0.04),
     var(--sha);
@@ -14859,21 +15283,21 @@ html:not(.dark) .dasti-proposal-submit {
 /* Font pair cards — pressed-in feel when active */
 .dasti-settings-font-pair-card--active {
   box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.07),
-    inset 0 1px 2px rgba(0, 0, 0, 0.05);
+    inset 0 1px 0 color-mix(in srgb, var(--color-accent-pale) 28%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-border-selected) 26%, transparent);
   transform: scale(0.985);
 }
 
 .dasti-settings-font-pair-card--active:hover {
   transform: scale(0.985);
   box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.07),
-    inset 0 1px 2px rgba(0, 0, 0, 0.05);
+    inset 0 1px 0 color-mix(in srgb, var(--color-accent-pale) 28%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-border-selected) 26%, transparent);
 }
 
 .dasti-settings-font-pair-card:active {
   transform: scale(0.975);
-  box-shadow: inset 0 3px 7px rgba(0, 0, 0, 0.09);
+  box-shadow: inset 0 3px 7px color-mix(in srgb, var(--shadow-color) 14%, transparent);
   transition-duration: 0.06s;
 }
 
@@ -14888,21 +15312,23 @@ html:not(.dark) .dasti-proposal-submit {
 
 /* Layout style cards — active selected state */
 .dasti-settings-style-card--active {
-  background: color-mix(in srgb, var(--sfr) 96%, transparent);
-  border-color: var(--color-border-contrast);
+  background: color-mix(
+    in srgb,
+    var(--color-accent-pale) 36%,
+    var(--color-surface-raised) 64%
+  );
+  border-color: var(--color-border-selected);
   box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.06),
-    inset 0 1px 2px rgba(0, 0, 0, 0.04),
-    var(--shadow-x, 0px) calc(10px + var(--shadow-y, 0px)) 24px rgba(43, 33, 19, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    inset 0 1px 0 color-mix(in srgb, var(--color-accent-pale) 36%, transparent),
+    var(--shadow-x, 0px) calc(10px + var(--shadow-y, 0px)) 24px
+      color-mix(in srgb, var(--shadow-color) 12%, transparent);
 }
 
 /* Slot cards — pressed-in when editing */
 .dasti-settings-slot-card--editing {
   box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.06),
-    inset 0 1px 2px rgba(0, 0, 0, 0.04),
-    0 0 0 3px rgba(0, 0, 0, 0.06);
+    inset 0 1px 0 color-mix(in srgb, var(--color-surface-raised) 28%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--color-border-selected) 24%, transparent);
 }
 
 .dasti-settings-slot-card {
@@ -15076,7 +15502,7 @@ html:not(.dark) .dasti-proposal-submit {
 /* Counter-cancel the inset shadow we set above so scale takes precedence visually */
 .dasti-settings-slot-card--editing:not(.dasti-settings-slot-card--active) {
   box-shadow:
-    0 0 0 3px rgba(0, 0, 0, 0.06),
+    0 0 0 3px color-mix(in srgb, var(--color-border-selected) 18%, transparent),
     var(--shb);
 }
 

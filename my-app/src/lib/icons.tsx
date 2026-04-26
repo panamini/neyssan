@@ -67,7 +67,7 @@ import {
   TextB as PhTextB,
   TextItalic as PhTextItalic,
   TextUnderline as PhTextUnderline,
-  Trash as PhTrash,
+  TrashSimple as PhTrashSimple,
   TreeView as PhTreeView,
   Upload as PhUpload,
   User as PhUser,
@@ -193,7 +193,7 @@ export const Sun = withCompat(PhSun);
 export const SunMedium = withCompat(PhSun);
 export const Sunglasses = withCompat(PhSunglasses);
 export const Stamp = withCompat(PhStamp);
-export const Trash = withCompat(PhTrash);
+export const TrashSimple = withCompat(PhTrashSimple);
 export const Underline = withCompat(PhTextUnderline);
 export const Upload = withCompat(PhUpload);
 export const User = withCompat(PhUser);
