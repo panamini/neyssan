@@ -2853,7 +2853,7 @@ export function ProfileReviewCard({
                     </span>
                   </button>
                   {isManageSectionsMenuOpen ? (
-                    <div className="dasti-import-dropdown__menu dasti-add-section-menu dasti-add-section-menu--manage dasti-toolbar-drawer-surface">
+                    <div className="dasti-import-dropdown__menu dasti-add-section-menu dasti-add-section-menu--manage dasti-toolbar-drawer-surface dasti-proposal-chrome-drawer--stack">
                       {addableSectionOptions.length > 0 ? (
                         <>
                           <div className="dasti-add-section-menu__heading">

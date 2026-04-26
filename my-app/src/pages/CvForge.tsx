@@ -774,7 +774,7 @@ export function CvForge(): JSX.Element {
         </button>
         {isStylePresetMenuOpen ? (
           <div
-            className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-cv-style-presets__menu"
+            className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-toolbar-drawer-surface dasti-cv-style-presets__menu dasti-proposal-chrome-drawer--stack"
             role="menu"
             aria-label="Saved resume styles"
           >
@@ -784,7 +784,12 @@ export function CvForge(): JSX.Element {
                   key={slot}
                   type="button"
                   role="menuitemradio"
-                  className="dasti-cv-style-presets__option"
+                  className={[
+                    "dasti-cv-style-presets__option",
+                    isActive ? "dasti-proposal-chrome-option--active" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   disabled={!preset || !nextStyle}
                   aria-checked={isActive}
                   onClick={() => {
