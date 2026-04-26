@@ -42,6 +42,7 @@ import {
   resolveDocxSafeColorHex,
   resolvePrimaryFontFamily,
 } from "./layout/documentAppearance";
+import { formatProposalSignatureName } from "./proposal-closing";
 
 type ExportMode = "ats" | "styled";
 
@@ -2010,7 +2011,7 @@ function renderProposalBlocks(
           }
           ${
             block.signatureName
-              ? `<p class="proposal-signature">${escapeHtml(block.signatureName)}</p>`
+              ? `<p class="proposal-signature">${escapeHtml(formatProposalSignatureName(block.signatureName))}</p>`
               : ""
           }
         </div>`;
@@ -2737,7 +2738,7 @@ export async function buildProposalDocxBuffer(args: {
       }
       if (block.signatureName) {
         bodyParagraphs.push(
-          buildDocxParagraph(block.signatureName, docxDefaults, {
+          buildDocxParagraph(formatProposalSignatureName(block.signatureName), docxDefaults, {
             bold: true,
             font: bodyFont,
             line: docxTokens.compactLineTwip,

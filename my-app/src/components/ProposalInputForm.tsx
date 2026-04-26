@@ -43,6 +43,7 @@ import {
   buildProposalGenerationRequest,
   type ProposalGenerationRequestPayload,
 } from "../lib/proposal-generation-request";
+import { ensureProposalSignatureName } from "../lib/proposal-closing";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
@@ -386,6 +387,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const activeGenerateRunIdRef = React.useRef(0);
   const activeGenerationClientRunIdRef = React.useRef<string | null>(null);
   const stopRequestedRunIdRef = React.useRef<number | null>(null);
+  const lastCvPickerRequestKeyRef = React.useRef(cvPickerRequestKey);
   const shouldNotifySubmitAnimationCompleteRef = React.useRef(false);
   const shouldPlayGenerateButtonReverseRef = React.useRef(false);
   const canPersistProposalWorkspaceState =
@@ -921,9 +923,13 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         return;
       }
       if (result) {
+        const signedProposalContent = ensureProposalSignatureName(
+          result.proposalContent,
+          currentActiveCvSource.personalizationContext?.name,
+        );
         onSubmit(
           normalizedValues,
-          result.proposalContent,
+          signedProposalContent,
           {
             requestedModelType: result.requestedModelType,
             actualModelType: result.actualModelType,
@@ -938,8 +944,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         if (canPersistProposalWorkspaceState) {
           void updateGeneratedProposal({
             id: result.proposalId,
-            content: result.proposalContent,
-            sections: [{ type: "text", content: result.proposalContent }],
+            content: signedProposalContent,
+            sections: [{ type: "text", content: signedProposalContent }],
             status: "draft",
           }).catch((saveErr) => {
             console.warn("Failed to update generated proposal status:", saveErr);
@@ -1006,10 +1012,14 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   }
 
   React.useEffect(() => {
+    if (cvPickerRequestKey === lastCvPickerRequestKeyRef.current) {
+      return;
+    }
+    lastCvPickerRequestKeyRef.current = cvPickerRequestKey;
+
     if (cvPickerRequestKey <= 0) {
       return;
     }
-
     handleOpenCvPicker();
   }, [cvPickerRequestKey]);
 
@@ -1807,10 +1817,12 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                   <button
                     type={canSubmitGeneration ? "submit" : "button"}
                     className={clsx(
+                      "dasti-button",
+                      "dasti-button--primary",
+                      "dasti-button--pill",
+                      "dasti-button--sm",
                       "dasti-proposal-submit",
-                      "dasti-proposal-submit-token",
                       "dasti-proposal-submit--composer",
-                      "dasti-proposal-submit--pop",
                       "dasti-toolbar-tooltip-trigger--above",
                       generateButtonVisualClass,
                       isGenerating && "dasti-proposal-submit--busy",
@@ -1825,22 +1837,13 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     aria-label={generateButtonLabel}
                     data-toolbar-tooltip={generateButtonLabel}
                     onClick={handleGenerateButtonClick}
-                    style={{
-                      cursor:
-                        watchedJobDescription.length < 10 ||
-                        (isGenerating && !canStopGeneration)
-                          ? "not-allowed"
-                          : "pointer",
-                      opacity:
-                        watchedJobDescription.length < 10
-                          ? 0.4
-                          : isGenerating && !canStopGeneration
-                            ? 0.84
-                            : 1,
-                    }}
                   >
                     <ProposalGenerateButtonGlyph state={generateButtonState} />
-                    <span className="sr-only" aria-live="polite" role="status">
+                    <span
+                      className="dasti-proposal-submit__label"
+                      aria-live="polite"
+                      role="status"
+                    >
                       {generateButtonLabel}
                     </span>
                   </button>
@@ -1884,16 +1887,12 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       {openMenu !== null &&
         createPortal(
           <div
+            className="dasti-proposal-floating-menu dasti-proposal-chrome-drawer--stack"
             onClick={(e) => e.stopPropagation()}
             style={{
               position: "fixed",
               zIndex: 900,
               minWidth: 220,
-              background: "var(--sfr)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-card)",
-              boxShadow: "var(--shc)",
-              padding: "var(--s1)",
               left: menuPos.left,
               bottom: menuPos.bottom,
               top: "auto",

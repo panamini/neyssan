@@ -101,7 +101,9 @@ export function useScrollEdgeFades<T extends HTMLElement>() {
   }, [commitState, node]);
 
   const attach = useCallback((nextNode: T | null) => {
-    setNode(nextNode);
+    setNode((previousNode) =>
+      Object.is(previousNode, nextNode) ? previousNode : nextNode,
+    );
   }, []);
 
   useEffect(() => {

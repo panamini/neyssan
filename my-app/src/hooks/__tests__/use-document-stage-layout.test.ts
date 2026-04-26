@@ -62,6 +62,7 @@ describe("useDocumentStageLayout", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -187,6 +188,42 @@ describe("useDocumentStageLayout", () => {
 
     expect(result.current.stageWidth).toBeCloseTo(640, 2);
     expect(result.current.pageWidth).toBeCloseTo(640, 2);
+
+    parent.remove();
+  });
+
+  it("can ignore parent measurement when the stage padding owns the page width", async () => {
+    const paddedNode = createMeasurementNode({ width: 576, height: 820 });
+    const parent = attachMeasurementParent(paddedNode, {
+      width: 576,
+      height: 820,
+    });
+    vi.spyOn(window, "getComputedStyle").mockImplementation(
+      (element: Element) =>
+        ({
+          paddingLeft: element === paddedNode ? "8px" : "0px",
+          paddingRight: element === paddedNode ? "8px" : "0px",
+          paddingTop: "0px",
+          paddingBottom: "0px",
+        }) as CSSStyleDeclaration,
+    );
+    const measurementRef = {
+      current: paddedNode,
+    } as React.RefObject<HTMLDivElement>;
+
+    const { result } = renderHook(() =>
+      useDocumentStageLayout({
+        measurementRef,
+        fitMode: "width",
+        includeParentMeasurement: false,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.availableWidth).toBe(560);
+    });
+
+    expect(result.current.pageWidth).toBeCloseTo(560, 2);
 
     parent.remove();
   });
