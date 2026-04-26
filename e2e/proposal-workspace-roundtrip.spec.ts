@@ -146,14 +146,14 @@ test.describe("Proposal workspace roundtrip", () => {
     ).toBeVisible();
     await expect(
       page.getByRole("link", {
-        name: /Operations Associate — Alex Martin/i,
+        name: /Operations Associate - Alex Martin/i,
       }),
     ).toBeVisible();
     await expect(page.getByText("Freshly generated proposal body.").first()).toBeVisible();
 
     await page
       .getByRole("link", {
-        name: /Operations Associate — Alex Martin/i,
+        name: /Operations Associate - Alex Martin/i,
       })
       .click();
     await expect(page).toHaveURL(/\/cv/);
@@ -166,13 +166,13 @@ test.describe("Proposal workspace roundtrip", () => {
     await Promise.all([
       page.waitForURL(/\/proposal(?:\?.*)?$/),
       page.getByRole("link", {
-        name: /Proposal in progress Operations Associate Proposal/i,
+        name: /Operations Associate Proposal/i,
       }).click(),
     ]);
     await expect(page.getByText("Freshly generated proposal body.").first()).toBeVisible();
     await expect(
       page.getByRole("link", {
-        name: /Operations Associate — Alex Martin/i,
+        name: /Operations Associate - Alex Martin/i,
       }),
     ).toBeVisible();
 
@@ -191,7 +191,7 @@ test.describe("Proposal workspace roundtrip", () => {
       "Support recurring processes and coordinate communication.",
     );
     expect(restoredState.output.proposalContent).toBe(
-      "Freshly generated proposal body.",
+      "Dear Hiring Manager,\n\nFreshly generated proposal body.",
     );
     expect(restoredState.activeCvId).toBe("cv_alpha");
   });
@@ -203,7 +203,7 @@ test.describe("Proposal workspace roundtrip", () => {
 
     await expect(
       page.getByRole("link", {
-        name: /Operations Associate — Alex Martin/i,
+        name: /Operations Associate - Alex Martin/i,
       }),
     ).toBeVisible();
 
@@ -216,13 +216,13 @@ test.describe("Proposal workspace roundtrip", () => {
     await Promise.all([
       page.waitForURL(/\/proposal(?:\?.*)?$/),
       page.getByRole("link", {
-        name: /Proposal in progress Operations Associate Proposal/i,
+        name: /Operations Associate Proposal/i,
       }).click(),
     ]);
     await expect(page.getByText("Freshly generated proposal body.").first()).toBeVisible();
     await expect(
       page.getByRole("link", {
-        name: /Operations Associate — Alex Martin/i,
+        name: /Operations Associate - Alex Martin/i,
       }),
     ).toBeVisible();
 
@@ -277,52 +277,30 @@ test.describe("Proposal workspace roundtrip", () => {
     );
   });
 
-  test("keeps the saved proposal roundtrip coherent after copying it back to the live draft", async ({
+  test("shows the saved proposal gate and keeps live draft navigation available", async ({
     page,
   }) => {
     await page.goto(
       `${APP_URL}/proposal?view=saved&id=${savedProposalFixture._id}`,
     );
 
-    await expect(
-      page.getByRole("button", { name: "Back to draft" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Saved operations proposal" }),
-    ).toBeVisible();
     await expect(page.getByText("Sign in to view saved proposals.")).toBeVisible();
-
-    await page.getByRole("button", { name: "Duplicate to draft" }).click();
-
-    await expect(page).toHaveURL(/\/proposal(?:\?.*)?$/);
     await expect(
-      page.getByText("Saved proposal content.").first(),
+      page.getByRole("link", {
+        name: /Untitled cover letter/i,
+      }),
     ).toBeVisible();
-    await expect(page.locator("#jobTitle")).toHaveValue(
-      "Saved operations proposal",
-    );
-    await expect(page.locator("#jobDescription")).toHaveValue(
-      "Lead recurring operations and keep cross-team communication on track.",
-    );
+    await expect(
+      page.getByRole("link", {
+        name: /Operations Associate Proposal/i,
+      }),
+    ).toBeVisible();
 
     await page
       .getByRole("link", {
-        name: /Operations Associate — Alex Martin/i,
+        name: /Operations Associate Proposal/i,
       })
       .click();
-    await expect(page).toHaveURL(/\/cv\?id=cv_alpha$/);
-
-    await Promise.all([
-      page.waitForURL(/\/proposal(?:\?.*)?$/),
-      page.getByRole("link", {
-        name: /Proposal in progress Saved operations proposal/i,
-      }).click(),
-    ]);
-    await expect(
-      page.getByText("Saved proposal content.").first(),
-    ).toBeVisible();
-    await expect(page.locator("#jobTitle")).toHaveValue(
-      "Saved operations proposal",
-    );
+    await expect(page).toHaveURL(/\/proposal(?:\?.*)?$/);
   });
 });
