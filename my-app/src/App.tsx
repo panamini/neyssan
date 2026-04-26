@@ -288,6 +288,19 @@ function AppShell(): JSX.Element {
   );
 
   const closeQuickStart = React.useCallback(() => {
+    const clearedQuickStartState = clearQuickStartLocationState(location.state);
+    const nextState =
+      clearedQuickStartState &&
+      typeof clearedQuickStartState === "object" &&
+      !Array.isArray(clearedQuickStartState)
+        ? { ...clearedQuickStartState }
+        : clearedQuickStartState;
+
+    if (nextState && typeof nextState === "object" && !Array.isArray(nextState)) {
+      delete nextState.proposalEntryIntent;
+      delete nextState.jobImportFocus;
+    }
+
     void navigate(
       {
         pathname: location.pathname,
@@ -295,7 +308,7 @@ function AppShell(): JSX.Element {
       },
       {
         replace: true,
-        state: clearQuickStartLocationState(location.state),
+        state: nextState,
       },
     );
   }, [location.pathname, location.search, location.state, navigate]);
