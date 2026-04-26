@@ -3449,7 +3449,7 @@
   overflow: hidden;
   border-radius: var(--radius-surface, 12px);
   border: 1px solid var(--color-border);
-  background: var(--sfr, #fff);
+  background: var(--sfr);
 }
 
 .dasti-quick-start-choice[data-quick-start-selected="true"] {
@@ -10399,7 +10399,7 @@ html:not(.dark) .dasti-proposal-submit {
   inline-size: 10px;
   block-size: 10px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-accent) 72%, var(--color-warning, #eab308) 28%);
+  background: color-mix(in srgb, var(--color-accent) 72%, var(--color-warning) 28%);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border-selected) 52%, transparent);
   flex: 0 0 auto;
 }
@@ -11394,21 +11394,21 @@ html:not(.dark) .dasti-proposal-submit {
 /* ─── Regenerate button — pending state ───────────────────────────────────── */
 
 .dasti-icon-button--pending {
-  color: var(--color-accent, hsl(155 22% 42%));
+  color: var(--color-accent);
   border-color: color-mix(
     in srgb,
-    var(--color-accent, hsl(155 22% 42%)) 48%,
+    var(--color-accent) 48%,
     transparent
   ) !important;
   background: color-mix(
     in srgb,
-    var(--color-accent, hsl(155 22% 42%)) 8%,
+    var(--color-accent) 8%,
     transparent
   ) !important;
   box-shadow:
     0 0 0 0 color-mix(
       in srgb,
-      var(--color-accent, hsl(155 22% 42%)) 0%,
+      var(--color-accent) 0%,
       transparent
     ),
     var(--shadow-sm);
@@ -12993,7 +12993,7 @@ html:not(.dark) .dasti-proposal-submit {
   font-weight: 600;
   color: color-mix(
     in srgb,
-    var(--color-accent, hsl(155 22% 42%)) 90%,
+    var(--color-accent) 90%,
     var(--ti)
   );
   margin-top: var(--s1);
@@ -13477,7 +13477,7 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-style-card:focus-visible {
-  outline: 2px solid var(--color-accent, hsl(155 22% 42%));
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
@@ -13576,9 +13576,9 @@ html:not(.dark) .dasti-proposal-submit {
   width: 17px;
   height: 17px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 30%, transparent);
-  background: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 15%, transparent);
-  color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 92%, white 8%);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  color: color-mix(in srgb, var(--color-accent) 92%, white 8%);
   flex: 0 0 auto;
 }
 
@@ -13748,7 +13748,7 @@ html:not(.dark) .dasti-proposal-submit {
   flex: 0 0 auto;
   color: color-mix(
     in srgb,
-    var(--color-accent, hsl(155 22% 42%)) 90%,
+    var(--color-accent) 90%,
     var(--ti)
   );
 }
@@ -14357,9 +14357,9 @@ html:not(.dark) .dasti-proposal-submit {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 90%, white 10%);
-  background: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 28%, transparent);
+  color: color-mix(in srgb, var(--color-accent) 90%, white 10%);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 28%, transparent);
 }
 
 .dasti-settings-builder__set-default-btn {
@@ -14412,9 +14412,9 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-slot-card:focus-visible {
-  outline: 2px solid var(--color-accent, hsl(155 22% 42%));
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
-  border-color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 50%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
 }
 
 .dasti-settings-slot-card--editing {
@@ -14424,14 +14424,14 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-slot-card--active {
-  border-color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 52%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent) 52%, transparent);
 }
 
 .dasti-settings-slot-card--active.dasti-settings-slot-card--editing {
-  border-color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 68%, var(--ti) 32%);
+  border-color: color-mix(in srgb, var(--color-accent) 68%, var(--ti) 32%);
   box-shadow:
     var(--shb),
-    0 0 0 3px color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 14%, transparent);
+    0 0 0 3px color-mix(in srgb, var(--color-accent) 14%, transparent);
 }
 
 .dasti-settings-slot-card__top {
@@ -14466,9 +14466,9 @@ html:not(.dark) .dasti-proposal-submit {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 90%, white 10%);
-  background: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 30%, transparent);
+  color: color-mix(in srgb, var(--color-accent) 90%, white 10%);
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 
 .dasti-settings-slot-card__set-default {
@@ -14551,18 +14551,18 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-font-pair-card:focus-visible {
-  outline: 2px solid var(--color-accent, hsl(155 22% 42%));
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
 .dasti-settings-font-pair-card--active {
-  border-color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 72%, rgba(0,0,0,0.1));
-  background: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 8%, var(--sfr));
+  border-color: color-mix(in srgb, var(--color-accent) 72%, rgba(0,0,0,0.1));
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--sfr));
   box-shadow: var(--sha);
 }
 
 .dasti-settings-font-pair-card--active:hover {
-  border-color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 88%, rgba(0,0,0,0.1));
+  border-color: color-mix(in srgb, var(--color-accent) 88%, rgba(0,0,0,0.1));
 }
 
 .dasti-settings-font-pair-card__heading {
@@ -14601,9 +14601,9 @@ html:not(.dark) .dasti-proposal-submit {
   width: 17px;
   height: 17px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 15%, transparent);
-  color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 92%, white 8%);
-  border: 1px solid color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 30%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  color: color-mix(in srgb, var(--color-accent) 92%, white 8%);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 
 /* ─── Hero preview ────────────────────────────────────────────────────────── */
@@ -14625,17 +14625,17 @@ html:not(.dark) .dasti-proposal-submit {
   box-shadow:
     inset 0 1px 0 hsl(0 0% 100% / 0.78),
     var(--shb),
-    0 20px 44px -30px color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 38%, black 12%);
+    0 20px 44px -30px color-mix(in srgb, var(--hero-accent, var(--color-accent)) 38%, black 12%);
   overflow: hidden;
   background:
     radial-gradient(
       ellipse at top right,
-      color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 20%, white 80%) 0%,
+      color-mix(in srgb, var(--hero-accent, var(--color-accent)) 20%, white 80%) 0%,
       transparent 52%
     ),
     linear-gradient(
       168deg,
-      color-mix(in srgb, white 88%, var(--hero-accent, hsl(155 22% 42%)) 12%),
+      color-mix(in srgb, white 88%, var(--hero-accent, var(--color-accent)) 12%),
       color-mix(in srgb, var(--color-surface) 82%, var(--color-canvas) 18%)
     );
 }
@@ -14644,18 +14644,18 @@ html:not(.dark) .dasti-proposal-submit {
   background:
     radial-gradient(
       ellipse at top right,
-      color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 12%, transparent) 0%,
+      color-mix(in srgb, var(--hero-accent, var(--color-accent)) 12%, transparent) 0%,
       transparent 48%
     ),
     linear-gradient(
       168deg,
-      color-mix(in srgb, var(--color-surface) 86%, var(--hero-accent, hsl(155 22% 42%)) 14%),
-      color-mix(in srgb, var(--color-canvas) 90%, var(--hero-accent, hsl(155 22% 42%)) 10%)
+      color-mix(in srgb, var(--color-surface) 86%, var(--hero-accent, var(--color-accent)) 14%),
+      color-mix(in srgb, var(--color-canvas) 90%, var(--hero-accent, var(--color-accent)) 10%)
     );
   box-shadow:
     inset 0 1px 0 hsl(0 0% 100% / 0.04),
     var(--shb),
-    0 20px 44px -30px color-mix(in srgb, black 68%, var(--hero-accent, hsl(155 22% 42%)) 32%);
+    0 20px 44px -30px color-mix(in srgb, black 68%, var(--hero-accent, var(--color-accent)) 32%);
 }
 
 /* Style-choice background variants */
@@ -14663,8 +14663,8 @@ html:not(.dark) .dasti-proposal-submit {
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--color-canvas) 90%, var(--hero-accent, hsl(155 22% 42%)) 10%),
-      color-mix(in srgb, var(--color-surface) 84%, var(--hero-accent, hsl(155 22% 42%)) 16%)
+      color-mix(in srgb, var(--color-canvas) 90%, var(--hero-accent, var(--color-accent)) 10%),
+      color-mix(in srgb, var(--color-surface) 84%, var(--hero-accent, var(--color-accent)) 16%)
     );
 }
 
@@ -14672,13 +14672,13 @@ html:not(.dark) .dasti-proposal-submit {
   background:
     radial-gradient(
       ellipse at top right,
-      color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 26%, white 74%) 0%,
+      color-mix(in srgb, var(--hero-accent, var(--color-accent)) 26%, white 74%) 0%,
       transparent 44%
     ),
     linear-gradient(
       160deg,
-      color-mix(in srgb, white 84%, var(--hero-accent, hsl(155 22% 42%)) 16%),
-      color-mix(in srgb, var(--color-surface) 78%, var(--hero-accent, hsl(155 22% 42%)) 22%)
+      color-mix(in srgb, white 84%, var(--hero-accent, var(--color-accent)) 16%),
+      color-mix(in srgb, var(--color-surface) 78%, var(--hero-accent, var(--color-accent)) 22%)
     );
 }
 
@@ -14696,7 +14696,7 @@ html:not(.dark) .dasti-proposal-submit {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--tm2) 76%, var(--hero-accent, hsl(155 22% 42%)) 24%);
+  color: color-mix(in srgb, var(--tm2) 76%, var(--hero-accent, var(--color-accent)) 24%);
   line-height: 1;
 }
 
@@ -14721,7 +14721,7 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dasti-settings-hero-preview__divider {
-  background: color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 44%, var(--color-border) 56%);
+  background: color-mix(in srgb, var(--hero-accent, var(--color-accent)) 44%, var(--color-border) 56%);
   height: 1px;
   border-radius: 1px;
   align-self: stretch;
@@ -14761,7 +14761,7 @@ html:not(.dark) .dasti-proposal-submit {
   padding: 0 var(--s2);
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--color-border) 64%, transparent);
-  background: color-mix(in srgb, white 78%, var(--hero-accent, hsl(155 22% 42%)) 22%);
+  background: color-mix(in srgb, white 78%, var(--hero-accent, var(--color-accent)) 22%);
   color: var(--ti);
   font-size: 10px;
   font-weight: 600;
@@ -14771,9 +14771,9 @@ html:not(.dark) .dasti-proposal-submit {
   background: color-mix(
     in srgb,
     var(--color-surface-raised, var(--sfr)) 72%,
-    var(--hero-accent, hsl(155 22% 42%)) 28%
+    var(--hero-accent, var(--color-accent)) 28%
   );
-  border-color: color-mix(in srgb, white 14%, var(--hero-accent, hsl(155 22% 42%)) 20%);
+  border-color: color-mix(in srgb, white 14%, var(--hero-accent, var(--color-accent)) 20%);
   color: var(--color-text, var(--ti));
 }
 
@@ -14784,8 +14784,8 @@ html:not(.dark) .dasti-proposal-submit {
   padding: 0 var(--s2);
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--color-border) 64%, transparent);
-  background: color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 12%, transparent);
-  color: color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 88%, var(--ti) 12%);
+  background: color-mix(in srgb, var(--hero-accent, var(--color-accent)) 12%, transparent);
+  color: color-mix(in srgb, var(--hero-accent, var(--color-accent)) 88%, var(--ti) 12%);
   font-size: 10px;
   font-weight: 600;
 }
@@ -14816,8 +14816,8 @@ html:not(.dark) .dasti-proposal-submit {
 }
 
 .dark .dasti-settings-font-pair-card--active {
-  border-color: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 60%, rgba(255,255,255,0.1));
-  background: color-mix(in srgb, var(--color-accent, hsl(155 22% 42%)) 9%, var(--sf2));
+  border-color: color-mix(in srgb, var(--color-accent) 60%, rgba(255,255,255,0.1));
+  background: color-mix(in srgb, var(--color-accent) 9%, var(--sf2));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -14924,12 +14924,12 @@ html:not(.dark) .dasti-proposal-submit {
   background:
     radial-gradient(
       ellipse at top right,
-      color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 22%, white 78%) 0%,
+      color-mix(in srgb, var(--hero-accent, var(--color-accent)) 22%, white 78%) 0%,
       transparent 52%
     ),
     linear-gradient(
       168deg,
-      color-mix(in srgb, white 82%, var(--hero-accent, hsl(155 22% 42%)) 18%),
+      color-mix(in srgb, white 82%, var(--hero-accent, var(--color-accent)) 18%),
       color-mix(in srgb, var(--color-surface) 76%, var(--color-canvas) 24%)
     );
   /* Glass layer on top */
@@ -14976,12 +14976,12 @@ html:not(.dark) .dasti-proposal-submit {
   background:
     radial-gradient(
       ellipse at top right,
-      color-mix(in srgb, var(--hero-accent, hsl(155 22% 42%)) 14%, rgba(255,248,235,0.06) 86%) 0%,
+      color-mix(in srgb, var(--hero-accent, var(--color-accent)) 14%, rgba(255,248,235,0.06) 86%) 0%,
       transparent 52%
     ),
     linear-gradient(
       168deg,
-      color-mix(in srgb, rgba(255, 248, 235, 0.10) 60%, var(--hero-accent, hsl(155 22% 42%)) 40%),
+      color-mix(in srgb, rgba(255, 248, 235, 0.10) 60%, var(--hero-accent, var(--color-accent)) 40%),
       color-mix(in srgb, var(--color-surface) 85%, var(--color-canvas) 15%)
     );
   border-color: color-mix(in srgb, white 6%, transparent);
@@ -14992,7 +14992,7 @@ html:not(.dark) .dasti-proposal-submit {
     0 18px 40px -32px color-mix(
       in srgb,
       black 74%,
-      var(--hero-accent, hsl(155 22% 42%)) 26%
+      var(--hero-accent, var(--color-accent)) 26%
     );
 }
 

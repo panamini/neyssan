@@ -1149,8 +1149,9 @@ export function SelectedBlockInspector({
           className="absolute inset-0"
           onClick={handleCancel}
           style={{
-            background: "hsla(30,12%,11%,.32)",
-            backdropFilter: "blur(8px)",
+            background: "var(--dialog-backdrop-bg)",
+            backdropFilter: "blur(var(--dialog-backdrop-blur))",
+            WebkitBackdropFilter: "blur(var(--dialog-backdrop-blur))",
           }}
         />
         <div
@@ -1226,7 +1227,7 @@ export function SelectedBlockInspector({
       onPointerDownCapture={(e) => e.stopPropagation()}
     >
       <div
-        className="absolute inset-0 backdrop-blur-[8px]"
+        className="absolute inset-0"
         onClick={(e) => {
           if (isCommitting) {
             dbg("[DBG][Inspector] backdrop click ignored during commit");
@@ -1236,8 +1237,9 @@ export function SelectedBlockInspector({
           handleCancel();
         }}
         style={{
-          background: "hsla(30,12%,11%,.32)",
-          backdropFilter: "blur(8px)",
+          background: "var(--dialog-backdrop-bg)",
+          backdropFilter: "blur(var(--dialog-backdrop-blur))",
+          WebkitBackdropFilter: "blur(var(--dialog-backdrop-blur))",
         }}
       />
       <div
