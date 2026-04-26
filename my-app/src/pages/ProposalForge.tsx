@@ -9,7 +9,7 @@ import {
   ClipboardText,
   FloppyDisk,
   RotateCcw,
-  Trash,
+  TrashSimple,
   X,
 } from "@/lib/icons";
 import ProposalExportActions from "../components/ProposalExportActions";
@@ -6899,7 +6899,7 @@ export function ProposalForge(): JSX.Element {
                                   setIsConfirmingGeneratedDelete(true)
                                 }
                               >
-                                <Trash size={16} strokeWidth={1.5} />
+                                <TrashSimple size={16} strokeWidth={1.5} />
                               </button>
                             )}
                             {isConfirmingGeneratedDelete ? (

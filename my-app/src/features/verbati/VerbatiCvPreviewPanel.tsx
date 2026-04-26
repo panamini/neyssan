@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, ArrowRight, ReadCvLogo } from "@/lib/icons";
+import { ArrowLeft, ArrowRight, ReadCvLogo, X } from "@/lib/icons";
 import EmbeddedStyleInspector from "../../components/EmbeddedStyleInspector";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { resumeMock } from "./resume/resume.mock";
@@ -327,6 +327,14 @@ export function VerbatiCvPreviewPanel({
           >
             <ReadCvLogo size={15} strokeWidth={1.5} />
           </span>
+          {isActivePreview ? (
+            <span
+              className="styleforge-active-cv-control__icon styleforge-active-cv-control__icon--hover"
+              aria-hidden
+            >
+              <X size={15} strokeWidth={1.8} />
+            </span>
+          ) : null}
         </button>
         <button
           type="button"

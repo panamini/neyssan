@@ -149,18 +149,18 @@ const TONE_OPTIONS: Array<{
   description: string;
 }> = [
   {
+    id: "engaging",
+    uiLabel: getVoicePresetDisplayLabel("engaging"),
+    description: "Warm and approachable.",
+  },
+  {
     id: "signature",
     uiLabel: getVoicePresetDisplayLabel("signature"),
-    description: "Warm and approachable.",
+    description: "Natural and credible.",
   },
   {
     id: "expert",
     uiLabel: getVoicePresetDisplayLabel("expert"),
-    description: "Natural and credible.",
-  },
-  {
-    id: "engaging",
-    uiLabel: getVoicePresetDisplayLabel("engaging"),
     description: "Formal and composed.",
   },
 ];
