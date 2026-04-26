@@ -288,12 +288,7 @@ test.describe("CVForge preview linking", () => {
       ).toBeVisible();
       await page.getByRole("button", { name: "Close" }).click();
 
-      await page
-        .locator(
-          '[data-preview-section="selected_projects"][data-preview-item-id="project-1"]',
-        )
-        .first()
-        .click();
+      await page.locator('[data-preview-row-id="project-1"]').first().click();
       await expect(
         page.getByRole("dialog", { name: "Edit projects" }),
       ).toBeVisible();
@@ -310,7 +305,7 @@ test.describe("CVForge preview linking", () => {
 
       await page.getByRole("button", { name: "Open resume preview" }).click();
       await expect(
-        page.getByRole("button", { name: "Back to resume editing" }),
+        page.getByRole("button", { name: "Open resume edit" }),
       ).toBeVisible();
 
       await page
@@ -323,7 +318,7 @@ test.describe("CVForge preview linking", () => {
         page.getByRole("dialog", { name: "Edit experience" }),
       ).toBeVisible();
       await expect(
-        page.getByRole("button", { name: "Back to resume editing" }),
+        page.getByRole("button", { name: "Open resume edit" }),
       ).toBeVisible();
       await expect(
         page.locator('[data-entry-id="exp-2"] input').first(),
@@ -338,17 +333,18 @@ test.describe("CVForge preview linking", () => {
         page.getByRole("dialog", { name: "Edit Additional Information" }),
       ).toBeVisible();
       await expect(
-        page.getByRole("button", { name: "Back to resume editing" }),
+        page.getByRole("button", { name: "Open resume edit" }),
       ).toBeVisible();
       await page.getByRole("button", { name: "Close" }).click();
 
       await page.locator('[data-preview-section="custom"]').first().click();
       await expect(
-        page.getByRole("button", { name: "Open resume preview" }),
+        page.getByRole("button", { name: "Open resume edit" }),
       ).toBeVisible();
       await expect(
-        page.getByRole("button", { name: "Back to resume editing" }),
+        page.getByRole("button", { name: "Open resume preview" }),
       ).toHaveCount(0);
+      await page.getByRole("button", { name: "Close" }).click();
 
       await page.locator('[data-preview-section="affiliations"]').first().click();
       await expect(
