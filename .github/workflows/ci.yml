@@ -27,6 +27,7 @@ jobs:
             echo "::error::Set the repository secret CONVEX_DEPLOY_KEY for Convex codegen."
             exit 1
           fi
+          echo "CONVEX_DEPLOY_KEY is present."
           npx convex codegen --typecheck disable
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
