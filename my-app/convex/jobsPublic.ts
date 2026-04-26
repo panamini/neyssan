@@ -70,6 +70,8 @@ import { buildLiveMatchReviewRecord } from "./lib/jobs/liveMatchReviewExport";
 
 const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
+const JOB_DETAIL_LINKED_PROPOSALS_LIMIT = 12;
+const JOB_DETAIL_SHADOW_ROWS_LIMIT = 8;
 const jobExtractionShadowValidationStatus = v.union(
   v.literal("valid"),
   v.literal("invalid_json"),
@@ -1973,7 +1975,8 @@ export const getById = query({
     const linkedProposals = await ctx.db
       .query("proposals")
       .withIndex("by_job", (q) => q.eq("jobId", String(job._id)))
-      .collect();
+      .order("desc")
+      .take(JOB_DETAIL_LINKED_PROPOSALS_LIMIT);
 
     const projectedLinkedProposals = linkedProposals
       .map((proposal) => ({
@@ -2006,7 +2009,8 @@ export const getById = query({
     const shadowRows = await ctx.db
       .query("job_extraction_shadow")
       .withIndex("by_job_id", (q) => q.eq("job_id", job._id))
-      .collect();
+      .order("desc")
+      .take(JOB_DETAIL_SHADOW_ROWS_LIMIT);
     const structuredDebug = buildStructuredMatchReadDebug({
       old: pendingMatchRead,
       job: {
