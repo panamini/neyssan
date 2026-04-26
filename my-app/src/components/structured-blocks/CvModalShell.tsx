@@ -113,9 +113,11 @@ export function CvModalShell({
           onClick={backdropHandler}
           aria-hidden
           style={{
-            background: "hsla(30,12%,11%,.45)",
-            backdropFilter: "blur(6px) saturate(1.2)",
-            WebkitBackdropFilter: "blur(6px) saturate(1.2)",
+            background: "var(--dialog-backdrop-bg-strong)",
+            backdropFilter:
+              "blur(var(--dialog-backdrop-blur)) saturate(1.2)",
+            WebkitBackdropFilter:
+              "blur(var(--dialog-backdrop-blur)) saturate(1.2)",
           }}
         />
         <div className="dasti-dialog-panel-shell" data-no-pan="true">

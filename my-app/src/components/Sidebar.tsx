@@ -91,7 +91,7 @@ const clerkAppearance = {
     },
   },
   variables: {
-    colorPrimary: "hsl(155,22%,30%)",
+    colorPrimary: "var(--color-accent)",
     borderRadius: "var(--radius-control)",
   },
 } as const;

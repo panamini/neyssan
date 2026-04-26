@@ -201,8 +201,9 @@ export function SkillsDrawer({
           aria-hidden
           onClick={onClose}
           style={{
-            background: "hsla(30,12%,11%,.32)",
-            backdropFilter: "blur(8px)",
+            background: "var(--dialog-backdrop-bg)",
+            backdropFilter: "blur(var(--dialog-backdrop-blur))",
+            WebkitBackdropFilter: "blur(var(--dialog-backdrop-blur))",
           }}
         />
 
