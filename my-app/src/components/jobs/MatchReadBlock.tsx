@@ -53,6 +53,25 @@ type JobMatchReview = {
   }>;
 };
 
+function renderDetailItems(items: readonly string[], keyPrefix: string) {
+  if (items.length === 1) {
+    return <p className="dasti-jobs-detail-section__paragraph">{items[0]}</p>;
+  }
+
+  return (
+    <ul className="dasti-jobs-detail-section__list">
+      {items.map((item) => (
+        <li
+          key={`${keyPrefix}-${item}`}
+          className="dasti-jobs-detail-section__item"
+        >
+          {item}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function formatTierLabel(tier: MatchRead["tier"]): string {
   if (tier === "strong") {
     return "Strong";
@@ -98,7 +117,10 @@ function hasUsableMatchReview(
   if (matchReview.verdict === "not_enough_signal") {
     return false;
   }
-  if (matchReview.verdict === "probably_skip" && (matchReview.score ?? 0) <= 0) {
+  if (
+    matchReview.verdict === "probably_skip" &&
+    (matchReview.score ?? 0) <= 0
+  ) {
     return false;
   }
   return true;
@@ -167,7 +189,9 @@ export function MatchReadBlock({
               <span className="dasti-match-read__stat">
                 <span className="dasti-match-read__stat-label">Next</span>
                 <span className="dasti-match-read__stat-value">
-                  {formatSuggestedNextStepLabel(matchReview.suggested_next_step)}
+                  {formatSuggestedNextStepLabel(
+                    matchReview.suggested_next_step,
+                  )}
                 </span>
               </span>
             </div>
@@ -193,14 +217,7 @@ export function MatchReadBlock({
                   Why this may interest you
                 </div>
                 <div className="dasti-jobs-detail-section__stack">
-                  {whyItems.map((item) => (
-                    <div
-                      key={`match-review-why-${item}`}
-                      className="dasti-jobs-detail-section__item"
-                    >
-                      {item}
-                    </div>
-                  ))}
+                  {renderDetailItems(whyItems, "match-review-why")}
                 </div>
               </div>
             ) : null}
@@ -209,14 +226,7 @@ export function MatchReadBlock({
               <div className="dasti-brief-card__summary-block">
                 <div className="dasti-brief-card__summary-label">Watch out</div>
                 <div className="dasti-jobs-detail-section__stack">
-                  {watchOutItems.map((item) => (
-                    <div
-                      key={`match-review-watch-${item}`}
-                      className="dasti-jobs-detail-section__item"
-                    >
-                      {item}
-                    </div>
-                  ))}
+                  {renderDetailItems(watchOutItems, "match-review-watch")}
                 </div>
               </div>
             ) : null}
@@ -249,9 +259,7 @@ export function MatchReadBlock({
         <div className="dasti-proposal-sheet__header">
           <div className="dasti-stack">
             <div className="dasti-brief-card__summary-label">Match</div>
-            <div className="dasti-empty-state__title">
-              No resume signal
-            </div>
+            <div className="dasti-empty-state__title">No resume signal</div>
             <p className="dasti-empty-state__subtitle">
               {hasResolvedProfile
                 ? "Resume has no keywords yet."
@@ -269,9 +277,7 @@ export function MatchReadBlock({
         <div className="dasti-proposal-sheet__header">
           <div className="dasti-stack">
             <div className="dasti-brief-card__summary-label">Match</div>
-            <div className="dasti-empty-state__title">
-              Resume too thin
-            </div>
+            <div className="dasti-empty-state__title">Resume too thin</div>
             <p className="dasti-empty-state__subtitle">
               Add summary, skills, or experience.
             </p>
@@ -308,7 +314,8 @@ export function MatchReadBlock({
             <div className="dasti-brief-card__summary-label">Match</div>
             <div className="dasti-empty-state__title">Match pending</div>
             <p className="dasti-empty-state__subtitle">
-              Structured job extraction is not ready yet. Refresh match to queue it.
+              Structured job extraction is not ready yet. Refresh match to queue
+              it.
             </p>
           </div>
           <div className="dasti-match-read__actions">
@@ -340,9 +347,7 @@ export function MatchReadBlock({
           <div className="dasti-empty-state__title">{scoreLabel}</div>
           <div className="dasti-match-read__stats">
             <span className="dasti-match-read__stat">
-              <span className="dasti-match-read__stat-label">
-                Matched
-              </span>
+              <span className="dasti-match-read__stat-label">Matched</span>
               <span className="dasti-match-read__stat-value">
                 {matchRead.matched.length}
               </span>
@@ -353,9 +358,7 @@ export function MatchReadBlock({
                 className="dasti-match-read__stat dasti-match-read__stat--button dasti-match-read__stat--warning"
                 onClick={() => setIsExpanded(true)}
               >
-                <span className="dasti-match-read__stat-label">
-                  Missing
-                </span>
+                <span className="dasti-match-read__stat-label">Missing</span>
                 <span className="dasti-match-read__stat-value">
                   {visibleMissingRequirements.length}
                 </span>
@@ -384,40 +387,46 @@ export function MatchReadBlock({
       </div>
 
       {isExpanded ? (
-      <div className="dasti-brief-card__summary dasti-match-read__details">
-        {matchRead.matched.length > 0 ? (
-          <div className="dasti-brief-card__summary-block">
-            <div className="dasti-brief-card__summary-label">Matched</div>
-            <div className="dasti-jobs-detail-section__stack">
-              {matchRead.matched.map((item) => (
-                <div key={`matched-${item}`} className="dasti-jobs-detail-section__item">
-                  {item}
-                </div>
-              ))}
+        <div className="dasti-brief-card__summary dasti-match-read__details">
+          {matchRead.matched.length > 0 ? (
+            <div className="dasti-brief-card__summary-block">
+              <div className="dasti-brief-card__summary-label">Matched</div>
+              <div className="dasti-jobs-detail-section__stack">
+                {matchRead.matched.map((item) => (
+                  <div
+                    key={`matched-${item}`}
+                    className="dasti-jobs-detail-section__item"
+                  >
+                    {item}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        {visibleMissingRequirements.length > 0 ? (
-          <div className="dasti-brief-card__summary-block">
-            <div className="dasti-brief-card__summary-label">Missing</div>
-            <div className="dasti-jobs-detail-section__stack">
-              {visibleMissingRequirements.map((item) => (
-                <div key={`missing-${item}`} className="dasti-jobs-detail-section__item">
-                  {item}
-                </div>
-              ))}
+          {visibleMissingRequirements.length > 0 ? (
+            <div className="dasti-brief-card__summary-block">
+              <div className="dasti-brief-card__summary-label">Missing</div>
+              <div className="dasti-jobs-detail-section__stack">
+                {visibleMissingRequirements.map((item) => (
+                  <div
+                    key={`missing-${item}`}
+                    className="dasti-jobs-detail-section__item"
+                  >
+                    {item}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        <div className="dasti-brief-card__summary-block">
-          <div className="dasti-brief-card__summary-label">Based on</div>
-          <p className="dasti-brief-card__summary-copy">
-            {matchRead.basedOn.profileLabel} · Job requirements
-          </p>
+          <div className="dasti-brief-card__summary-block">
+            <div className="dasti-brief-card__summary-label">Based on</div>
+            <p className="dasti-brief-card__summary-copy">
+              {matchRead.basedOn.profileLabel} · Job requirements
+            </p>
+          </div>
         </div>
-      </div>
       ) : null}
     </section>
   );
