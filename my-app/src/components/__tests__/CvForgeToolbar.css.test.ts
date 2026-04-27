@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 
 const productCssPath = resolve(process.cwd(), "src/styles/product.css");
 const productCss = readFileSync(productCssPath, "utf8");
+const cvForgeSource = readFileSync(
+  resolve(process.cwd(), "src/pages/CvForge.tsx"),
+  "utf8",
+);
 
 describe("CvForge toolbar CSS contracts", () => {
   it("uses the shared proposal rail shell for the anchored CV edit toolbar", () => {
@@ -23,7 +27,7 @@ describe("CvForge toolbar CSS contracts", () => {
       /@media\s*\(max-width:\s*1280px\)\s*\{[\s\S]*\.dasti-cv-edit-toolbar\s+\.dasti-import-review-trigger\s*\{[\s\S]*display:\s*none;/,
     );
     expect(productCss).toMatch(
-      /@media\s*\(max-width:\s*1180px\)\s*\{[\s\S]*\.dasti-cv-edit-toolbar\s+\.dasti-resume-export-control\s+\.dasti-pill,[\s\S]*\.dasti-cv-workbench-bar--cv-workspace\s+\.dasti-resume-export-control\s+\.dasti-pill\s*\{[\s\S]*display:\s*none;/,
+      /@media\s*\(max-width:\s*1180px\)\s*\{[\s\S]*\.dasti-cv-edit-toolbar\s+\.dasti-resume-export-control\s+\.dasti-pill,[\s\S]*\.dasti-cv-workbench-bar--cv-workspace[\s\S]*\.dasti-resume-export-control[\s\S]*\.dasti-pill,[\s\S]*\.dasti-document-rail--resume-workspace[\s\S]*\.dasti-resume-export-control[\s\S]*\.dasti-pill\s*\{[\s\S]*display:\s*none;/,
     );
     expect(productCss).toMatch(
       /@container\s+dasti-cv-edit-workbench\s+\(max-width:\s*1180px\)\s*\{[\s\S]*\.dasti-cv-edit-toolbar\s+\.dasti-import-review-trigger\s*\{[\s\S]*display:\s*none;/,
@@ -51,6 +55,33 @@ describe("CvForge toolbar CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.dasti-resume-export-control__menu\s*\{[\s\S]*left:\s*auto;[\s\S]*right:\s*0;[\s\S]*inline-size:\s*var\(--dasti-resume-export-menu-inline-size\);[\s\S]*min-inline-size:\s*var\(--dasti-resume-export-menu-inline-size\);/,
+    );
+  });
+
+  it("makes the CV preview workspace toolbar follow the preview rail width", () => {
+    expect(cvForgeSource).toContain(
+      "calc(100dvh - var(--header-height) - var(--page-shell-pad-top, var(--space-2)) - var(--page-shell-pad-bottom, var(--space-1)))",
+    );
+    expect(productCss).toMatch(
+      /\.dasti-document-rail--resume-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-document-rail--resume-workspace\s+\.dasti-proposal-rail-cluster\s*\{[\s\S]*width:\s*100%;[\s\S]*min-width:\s*max-content;[\s\S]*max-width:\s*100%;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-document-rail--resume-workspace\s+\.dasti-document-rail__section--start\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/,
+    );
+  });
+
+  it("collapses resume workspace export chrome at the tablet toolbar breakpoint", () => {
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*1180px\)\s*\{[\s\S]*\.dasti-document-rail--resume-workspace[\s\S]*\.dasti-resume-export-control[\s\S]*\.dasti-pill\s*\{[\s\S]*display:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*1180px\)\s*\{[\s\S]*\.dasti-document-rail--resume-workspace[\s\S]*\.dasti-resume-export-control__primary\s*\{[\s\S]*inline-size:\s*var\(--control-sm\);[\s\S]*min-inline-size:\s*var\(--control-sm\);/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*1180px\)\s*\{[\s\S]*\.dasti-document-rail--resume-workspace[\s\S]*\.dasti-resume-export-control__primary-label\s*\{[\s\S]*display:\s*none;/,
     );
   });
 });
