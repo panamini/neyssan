@@ -125,7 +125,26 @@ describe("ProposalDisplay stage behavior", () => {
     expect(lastCall).toMatchObject({
       fitMode: "contain",
       fillAvailableOnZoom: true,
-      includeParentMeasurement: true,
+      includeParentMeasurement: false,
+    });
+  });
+
+  it("fits readonly previews from the stage content box instead of the padded parent", () => {
+    render(
+      <ProposalDisplay
+        proposalContent={"Dear team,\n\nSingle-page proposal.\n\nAlex"}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        showZoomControls
+      />,
+    );
+
+    const lastCall =
+      stageLayoutSpy.mock.calls[stageLayoutSpy.mock.calls.length - 1]?.[0];
+    expect(lastCall).toMatchObject({
+      fitMode: "contain",
+      includeParentMeasurement: false,
     });
   });
 
@@ -335,7 +354,7 @@ describe("ProposalDisplay stage behavior", () => {
     expect(lastCall).toMatchObject({
       fitMode: "contain",
       fillAvailableOnZoom: true,
-      includeParentMeasurement: true,
+      includeParentMeasurement: false,
     });
   });
 });
