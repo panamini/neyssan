@@ -4,11 +4,10 @@ import type { FunctionReference } from "convex/server";
 import type { Id } from "../../convex/_generated/dataModel";
 import {
   Check,
-  ClipboardText,
+  Briefcase,
   FileText,
   FileUser,
   Gear,
-  Menu,
   Moon,
   Play,
   Sun,
@@ -1009,6 +1008,7 @@ export const Sidebar: React.FC = () => {
           type="button"
           className={clsx(
             "sb-toggle",
+            !sidebarCollapsed && "sb-toggle--labeled",
             sidebarCollapsed ? "sb-toggle--expand" : "sb-toggle--collapse",
           )}
           onClick={() => {
@@ -1019,7 +1019,9 @@ export const Sidebar: React.FC = () => {
           title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          <Menu size={16} strokeWidth={1.5} aria-hidden="true" />
+          <span className="sb-toggle__label" aria-hidden="true">
+            {sidebarCollapsed ? "II" : "two weeks"}
+          </span>
         </button>
       </div>
 
@@ -1074,14 +1076,14 @@ export const Sidebar: React.FC = () => {
               onClick={handleOpenProposalWorkspace}
             />
           )}
-          <SidebarRailLink
-            label="Jobs"
-            icon={
-              <ClipboardText size={16} strokeWidth={1.5} aria-hidden="true" />
-            }
-            active={isJobsRoute}
-            href="/jobs"
-          />
+            <SidebarRailLink
+              label="Jobs"
+              icon={
+                <Briefcase size={16} strokeWidth={1.5} aria-hidden="true" />
+              }
+              active={isJobsRoute}
+              href="/jobs"
+            />
         </nav>
       ) : (
         <nav className="sb__nav sb__nav--stack" aria-label="Primary sidebar">
@@ -1158,14 +1160,17 @@ export const Sidebar: React.FC = () => {
           <div className="sb-footer__account">
             <div className="sb-footer__title">
               {isSignedIn
-                ? user?.firstName ?? user?.username ?? "You"
-                : "Sign In"}
+                ? (user?.username ??
+                    user?.firstName ??
+                    "you"
+                  ).toLowerCase()
+                : "sign in"}
             </div>
             <div className="sb-footer__subtitle">
               {isSignedIn && isConvexAuthLoading
                 ? "Loading"
                 : isSignedIn
-                  ? "Signed in"
+                  ? null
                   : "Save draft"}
             </div>
           </div>
