@@ -1,11 +1,12 @@
 import React from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { ProposalComposeToolbar } from "../ProposalComposeToolbar";
 
 describe("ProposalComposeToolbar", () => {
-  it("keeps the top toolbar tone as a selected status badge", () => {
+  it("keeps the top toolbar tone as a single selected capsule", () => {
     const handleChange = vi.fn();
 
     const { rerender, container } = render(
@@ -42,6 +43,15 @@ describe("ProposalComposeToolbar", () => {
       container.querySelector(".dasti-compose-toolbar__tone-chip"),
     ).toHaveAttribute("aria-label", "Selected tone Formal");
     expect(
+      container.querySelector(".dasti-compose-toolbar__tone-chip svg"),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-compose-toolbar__tone-status-icon"),
+    ).toBeNull();
+    expect(
+      container.querySelector(".dasti-compose-toolbar__tone-meta"),
+    ).toBeNull();
+    expect(
       container.querySelectorAll(".dasti-compose-toolbar__group-divider"),
     ).toHaveLength(1);
   });
@@ -60,11 +70,17 @@ describe("ProposalComposeToolbar", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Tone of voice Natural" }));
-    expect(screen.getByRole("dialog", { name: "Tone of voice" })).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Tone of voice Natural" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Tone of voice" }),
+    ).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Tone of voice" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Tone of voice" }),
+    ).not.toBeInTheDocument();
   });
 
   it("uses app tooltips without native title attributes on the compose and CV controls", () => {
@@ -88,12 +104,10 @@ describe("ProposalComposeToolbar", () => {
     ).not.toHaveAttribute("title");
     expect(
       screen.getByRole("button", {
-        name: "Switch CV. Attached CV: Mohamed Ismail J.",
+        name: "Switch CV: Mohamed Ismail J.",
       }),
     ).not.toHaveAttribute("title");
-    expect(
-      container.querySelector(".dasti-compose-toolbar__bar"),
-    ).toBeTruthy();
+    expect(container.querySelector(".dasti-compose-toolbar__bar")).toBeTruthy();
     expect(
       container.querySelector(
         ".dasti-compose-toolbar__bar.dasti-toolbar--surface-tooltips",
@@ -139,7 +153,9 @@ describe("ProposalComposeToolbar", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Remove CV" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Attach CV" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Attach CV" }),
+    ).toBeInTheDocument();
   });
 
   it("marks the collapsed floating shell as a surface-anchored tooltip host", () => {
@@ -186,10 +202,14 @@ describe("ProposalComposeToolbar", () => {
       container.querySelector(".dasti-compose-toolbar__generate-button"),
     ).toBeTruthy();
     expect(
-      container.querySelector(".dasti-compose-toolbar__generate-button .dasti-proposal-submit__glyph"),
+      container.querySelector(
+        ".dasti-compose-toolbar__generate-button .dasti-proposal-submit__glyph",
+      ),
     ).toBeTruthy();
     expect(
-      container.querySelector(".dasti-compose-toolbar__generate-button .dasti-proposal-submit__label"),
+      container.querySelector(
+        ".dasti-compose-toolbar__generate-button .dasti-proposal-submit__label",
+      ),
     ).toBeNull();
     expect(
       container.querySelector(
@@ -197,7 +217,9 @@ describe("ProposalComposeToolbar", () => {
       ),
     ).toBeTruthy();
     expect(
-      container.querySelector(".dasti-compose-toolbar__generate-button.dasti-button"),
+      container.querySelector(
+        ".dasti-compose-toolbar__generate-button.dasti-button",
+      ),
     ).toBeNull();
     const collapsedActions = container.querySelector(
       ".dasti-compose-toolbar__collapsed-actions",
@@ -207,8 +229,32 @@ describe("ProposalComposeToolbar", () => {
       collapsedActions?.querySelector(".dasti-compose-toolbar__tone-anchor"),
     ).toBeTruthy();
     expect(
-      collapsedActions?.querySelector(".dasti-compose-toolbar__generate-button"),
+      collapsedActions?.querySelector(
+        ".dasti-compose-toolbar__generate-button",
+      ),
     ).toBeTruthy();
+  });
+
+  it("keeps the source job link available in collapsed mode", () => {
+    render(
+      <MemoryRouter>
+        <ProposalComposeToolbar
+          value="signature"
+          onChange={vi.fn()}
+          onToggleCvPicker={vi.fn()}
+          cvTitle={null}
+          isCvPickerOpen={false}
+          collapsed
+          onRestoreCompose={vi.fn()}
+          jobHref="/jobs/job-123"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("link", { name: "Back to job" })).toHaveAttribute(
+      "href",
+      "/jobs/job-123",
+    );
   });
 
   it("marks compact no-collapse layouts with the stable left-anchor class", () => {
@@ -277,7 +323,7 @@ describe("ProposalComposeToolbar", () => {
 
     expect(
       screen.getByRole("button", {
-        name: "Switch CV. Attached CV: Mohamed Ismail J.",
+        name: "Switch CV: Mohamed Ismail J.",
       }),
     ).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Saving…");
