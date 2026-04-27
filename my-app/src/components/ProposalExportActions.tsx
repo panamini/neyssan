@@ -68,7 +68,7 @@ export function ProposalExportActions({
           }}
           disabled={disabled}
         >
-          <FilePdf size={16} strokeWidth={1.7} aria-hidden="true" />
+          <FilePdf size={16} strokeWidth={1.8} aria-hidden="true" />
         </button>
       </div>
       {isMenuOpen ? (

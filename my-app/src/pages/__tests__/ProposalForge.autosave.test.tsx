@@ -1,5 +1,11 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -85,7 +91,8 @@ vi.mock("../../lib/proposal-personalization", () => ({
   }),
   getLocalActiveCvSnapshotById: (id: string) =>
     id === "cv_alpha" ? { title: "Alex Martin Resume" } : null,
-  getLocalCvDocumentById: (id: string) => (id === "cv_alpha" ? mockSourceCv : null),
+  getLocalCvDocumentById: (id: string) =>
+    id === "cv_alpha" ? mockSourceCv : null,
   listLocalCvPickerOptions: () => [],
   getProposalApplicantHeaderData: () => ({
     name: "Alex Martin",
@@ -135,6 +142,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
     onContentChange,
     onDocumentTitleChange,
     railStartAddon,
+    railEndAddon,
     actions,
   }: {
     proposalContent: string | null;
@@ -142,22 +150,33 @@ vi.mock("../../components/ProposalDisplay", () => ({
     onContentChange?: (value: string) => void;
     onDocumentTitleChange?: (value: string) => void;
     railStartAddon?: React.ReactNode;
+    railEndAddon?: React.ReactNode;
     actions?: React.ReactNode;
   }) => (
     <div>
       <div data-testid="proposal-autosave-state">
         {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}
       </div>
-      <button type="button" onClick={() => onContentChange?.("First autosave draft.")}>
+      <button
+        type="button"
+        onClick={() => onContentChange?.("First autosave draft.")}
+      >
         Edit content once
       </button>
-      <button type="button" onClick={() => onContentChange?.("Second autosave draft.")}>
+      <button
+        type="button"
+        onClick={() => onContentChange?.("Second autosave draft.")}
+      >
         Edit content twice
       </button>
-      <button type="button" onClick={() => onDocumentTitleChange?.("Renamed autosave title")}>
+      <button
+        type="button"
+        onClick={() => onDocumentTitleChange?.("Renamed autosave title")}
+      >
         Edit title
       </button>
       {railStartAddon}
+      {railEndAddon}
       {actions}
     </div>
   ),
@@ -187,7 +206,9 @@ vi.mock("../../components/ProposalComposeToolbar", () => ({
   }) => (
     <div>
       <div data-testid="compose-save-status">{saveStatus ?? "idle"}</div>
-      <div data-testid="compose-style-status">{styleStatusLabel ?? "Default"}</div>
+      <div data-testid="compose-style-status">
+        {styleStatusLabel ?? "Default"}
+      </div>
     </div>
   ),
 }));
@@ -251,7 +272,9 @@ describe("ProposalForge autosave", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit content once" }));
     fireEvent.click(screen.getByRole("button", { name: "Edit content twice" }));
-    expect(screen.getByTestId("compose-save-status")).toHaveTextContent("saving");
+    expect(screen.getByTestId("compose-save-status")).toHaveTextContent(
+      "saving",
+    );
 
     await waitForAutosave();
 
@@ -265,7 +288,9 @@ describe("ProposalForge autosave", () => {
         }),
       );
       expect(mockUpdateProposal).not.toHaveBeenCalled();
-      expect(screen.getByTestId("compose-save-status")).toHaveTextContent("saved");
+      expect(screen.getByTestId("compose-save-status")).toHaveTextContent(
+        "saved",
+      );
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Edit title" }));
@@ -396,7 +421,9 @@ describe("ProposalForge autosave", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Attach CV from form" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Direct style edit" }));
 
     await waitForAutosave();

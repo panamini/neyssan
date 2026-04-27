@@ -86,7 +86,7 @@
   -webkit-appearance: none;
   background: transparent;
   color: var(--ti);
-  font-family: "Fraunces", serif;
+  font-family: var(--proposal-ui-heading-trial-font, var(--font-body-family));
   font-size: var(--tm);
   line-height: 1.16;
   font-weight: 600;

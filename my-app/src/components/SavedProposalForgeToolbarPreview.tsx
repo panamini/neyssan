@@ -5,26 +5,17 @@ import {
   Copy,
   CornersIn,
   Eye,
-  Feather,
   Layout,
   MagnifyingGlass,
   Minus,
   Pencil,
   Plus,
-  PenNib,
   RotateCcw,
-  Stamp,
   TrashSimple,
-  Wand2,
   X,
 } from "@/lib/icons";
-import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 import { ProposalColorPickerPopover } from "./ProposalColorPickerPopover";
-import {
-  SaveIndicator,
-  type SaveStatus,
-} from "./ui/SaveIndicator";
-import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
+import { SaveIndicator, type SaveStatus } from "./ui/SaveIndicator";
 import { DOCUMENT_ZOOM_STEPS } from "../lib/document-stage";
 import {
   PROPOSAL_PALETTE_OPTIONS,
@@ -45,8 +36,6 @@ type SavedProposalForgeToolbarPreviewProps = {
   showZoomControls: boolean;
   zoomIndex: number;
   onZoomIndexChange: (value: number) => void;
-  toneValue: ProposalVoicePreset | null;
-  onToneChange: (value: ProposalVoicePreset | null) => void;
   onRefine: () => void;
   tonePendingRefresh?: boolean;
   onDelete: () => void;
@@ -65,34 +54,7 @@ type SavedProposalForgeToolbarPreviewProps = {
   saveStatus?: SaveStatus;
 };
 
-type DrawerId = "zoom" | "layout" | "typography" | "color" | "tone" | null;
-
-const TONE_OPTIONS: Array<{
-  id: ProposalVoicePreset | null;
-  label: string;
-  Icon: typeof Wand2;
-}> = [
-  {
-    id: null,
-    label: getVoicePresetDisplayLabel(null),
-    Icon: Wand2,
-  },
-  {
-    id: "engaging",
-    label: getVoicePresetDisplayLabel("engaging"),
-    Icon: Feather,
-  },
-  {
-    id: "signature",
-    label: getVoicePresetDisplayLabel("signature"),
-    Icon: PenNib,
-  },
-  {
-    id: "expert",
-    label: getVoicePresetDisplayLabel("expert"),
-    Icon: Stamp,
-  },
-];
+type DrawerId = "zoom" | "layout" | "typography" | "color" | null;
 
 export function SavedProposalForgeToolbarPreview({
   mode,
@@ -100,8 +62,6 @@ export function SavedProposalForgeToolbarPreview({
   showZoomControls,
   zoomIndex,
   onZoomIndexChange,
-  toneValue,
-  onToneChange,
   onRefine,
   tonePendingRefresh = false,
   onDelete,
@@ -127,15 +87,18 @@ export function SavedProposalForgeToolbarPreview({
   const [isDeleteConfirming, setIsDeleteConfirming] = React.useState(false);
 
   const activeTypographyOption =
-    VERBATI_TYPOGRAPHY_OPTIONS.find((option) => option.id === typographyValue) ??
-    VERBATI_TYPOGRAPHY_OPTIONS[0];
-  const activePaletteId = customAccentHex ? null : paletteOverride ?? resolvedPaletteId;
+    VERBATI_TYPOGRAPHY_OPTIONS.find(
+      (option) => option.id === typographyValue,
+    ) ?? VERBATI_TYPOGRAPHY_OPTIONS[0];
+  const activePaletteId = customAccentHex
+    ? null
+    : paletteOverride ?? resolvedPaletteId;
   const activePaletteOption =
     customAccentHex === null
-      ? PROPOSAL_PALETTE_OPTIONS.find((option) => option.id === activePaletteId) ?? null
+      ? PROPOSAL_PALETTE_OPTIONS.find(
+          (option) => option.id === activePaletteId,
+        ) ?? null
       : null;
-  const activeToneOption =
-    TONE_OPTIONS.find((option) => option.id === toneValue) ?? TONE_OPTIONS[0];
   const activeLayoutOption =
     VERBATI_LAYOUT_OPTIONS.find((option) => option.id === layoutValue) ??
     VERBATI_LAYOUT_OPTIONS[0];
@@ -178,9 +141,6 @@ export function SavedProposalForgeToolbarPreview({
     if (mode === "edit" && openDrawer === "zoom") {
       setOpenDrawer(null);
     }
-    if (mode !== "edit" && openDrawer === "tone") {
-      setOpenDrawer(null);
-    }
   }, [mode, openDrawer]);
 
   React.useEffect(() => {
@@ -189,9 +149,12 @@ export function SavedProposalForgeToolbarPreview({
     }
   }, [openDrawer]);
 
-  const handleToggleDrawer = React.useCallback((drawer: Exclude<DrawerId, null>) => {
-    setOpenDrawer((current) => (current === drawer ? null : drawer));
-  }, []);
+  const handleToggleDrawer = React.useCallback(
+    (drawer: Exclude<DrawerId, null>) => {
+      setOpenDrawer((current) => (current === drawer ? null : drawer));
+    },
+    [],
+  );
 
   const handleDeleteConfirm = React.useCallback(() => {
     onDelete();
@@ -202,6 +165,7 @@ export function SavedProposalForgeToolbarPreview({
     <div
       ref={rootRef}
       className="dasti-document-rail dasti-document-rail--detached dasti-toolbar--surface-tooltips dasti-saved-proposal-forge-toolbar-preview"
+      data-mode={mode}
       data-no-pan="true"
       role="group"
       aria-label="Saved proposal forge toolbar preview"
@@ -217,7 +181,9 @@ export function SavedProposalForgeToolbarPreview({
           onClick={() => onModeChange(mode === "preview" ? "edit" : "preview")}
           aria-pressed={mode === "edit"}
           aria-label={
-            mode === "preview" ? "Switch to edit mode" : "Switch to preview mode"
+            mode === "preview"
+              ? "Switch to edit mode"
+              : "Switch to preview mode"
           }
           data-toolbar-tooltip={
             mode === "preview" ? "Switch to edit" : "Switch to preview"
@@ -253,11 +219,17 @@ export function SavedProposalForgeToolbarPreview({
                 }
                 onClick={() => handleToggleDrawer("zoom")}
                 aria-label="Open zoom controls"
-                data-toolbar-tooltip={openDrawer === "zoom" ? undefined : "Zoom"}
+                data-toolbar-tooltip={
+                  openDrawer === "zoom" ? undefined : "Zoom"
+                }
                 aria-expanded={openDrawer === "zoom"}
                 aria-haspopup="dialog"
               >
-                <MagnifyingGlass size={14} strokeWidth={1.8} aria-hidden="true" />
+                <MagnifyingGlass
+                  size={14}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
               </button>
 
               {openDrawer === "zoom" ? (
@@ -268,9 +240,11 @@ export function SavedProposalForgeToolbarPreview({
                 >
                   <button
                     type="button"
-                    className={zoomIndex === 1
-                      ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
-                      : "dasti-doc-zoom-fit"}
+                    className={
+                      zoomIndex === 1
+                        ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
+                        : "dasti-doc-zoom-fit"
+                    }
                     onClick={() => {
                       if (mode === "edit") return;
                       onZoomIndexChange(1);
@@ -284,7 +258,9 @@ export function SavedProposalForgeToolbarPreview({
                   <button
                     type="button"
                     className="dasti-icon-button"
-                    onClick={() => onZoomIndexChange(Math.max(0, zoomIndex - 1))}
+                    onClick={() =>
+                      onZoomIndexChange(Math.max(0, zoomIndex - 1))
+                    }
                     disabled={mode === "edit" || zoomIndex === 0}
                     aria-label="Zoom out"
                     data-toolbar-tooltip="Zoom out"
@@ -316,7 +292,7 @@ export function SavedProposalForgeToolbarPreview({
 
         {mode !== "edit" ? (
           <>
-            <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
+            <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider dasti-saved-proposal-forge-toolbar-preview__style-divider" />
 
             <span className="dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--layout">
               <button
@@ -363,14 +339,17 @@ export function SavedProposalForgeToolbarPreview({
                           setOpenDrawer(null);
                         }}
                       >
-                        <span className="dasti-proposal-chrome-option__icon" aria-hidden="true">
+                        <span
+                          className="dasti-proposal-chrome-option__icon"
+                          aria-hidden="true"
+                        >
                           <Layout size={14} strokeWidth={1.8} />
                         </span>
-                          <span className="dasti-proposal-chrome-option__copy">
-                              <span className="dasti-proposal-chrome-option__title">
+                        <span className="dasti-proposal-chrome-option__copy">
+                          <span className="dasti-proposal-chrome-option__title">
                             {option.name}
-                              </span>
-                              <span className="dasti-proposal-chrome-option__description">
+                          </span>
+                          <span className="dasti-proposal-chrome-option__description">
                             {option.description}
                           </span>
                         </span>
@@ -430,7 +409,9 @@ export function SavedProposalForgeToolbarPreview({
                         className={[
                           "dasti-artifact-inspector__action",
                           "dasti-artifact-inspector__action--drawer",
-                          active ? "dasti-artifact-inspector__action--active" : "",
+                          active
+                            ? "dasti-artifact-inspector__action--active"
+                            : "",
                         ]
                           .filter(Boolean)
                           .join(" ")}
@@ -479,23 +460,34 @@ export function SavedProposalForgeToolbarPreview({
                 onClick={() => handleToggleDrawer("color")}
                 aria-label="Color"
                 data-toolbar-tooltip={
-                  openDrawer === "color" || isColorPickerOpen ? undefined : "Colors"
+                  openDrawer === "color" || isColorPickerOpen
+                    ? undefined
+                    : "Colors"
                 }
               >
-                <span className="dasti-artifact-inspector__icon" aria-hidden="true">
+                <span
+                  className="dasti-artifact-inspector__icon"
+                  aria-hidden="true"
+                >
                   <span
                     className={[
                       "dasti-artifact-inspector__swatch",
                       "dasti-artifact-inspector__swatch--inline",
-                      customAccentHex ? "dasti-artifact-inspector__swatch--custom" : "",
+                      customAccentHex
+                        ? "dasti-artifact-inspector__swatch--custom"
+                        : "",
                     ]
                       .filter(Boolean)
                       .join(" ")}
                     style={
                       customAccentHex
-                        ? ({ "--swatch-color": customAccentHex } as React.CSSProperties)
+                        ? ({
+                            "--swatch-color": customAccentHex,
+                          } as React.CSSProperties)
                         : activePaletteOption
-                          ? ({ "--swatch-color": activePaletteOption.color } as React.CSSProperties)
+                          ? ({
+                              "--swatch-color": activePaletteOption.color,
+                            } as React.CSSProperties)
                           : undefined
                     }
                   />
@@ -527,11 +519,17 @@ export function SavedProposalForgeToolbarPreview({
                             setIsColorPickerOpen(false);
                             onCustomAccentHexChange(null);
                             onPaletteOverrideChange(
-                              active && paletteOverride === option.id ? null : option.id,
+                              active && paletteOverride === option.id
+                                ? null
+                                : option.id,
                             );
                             setOpenDrawer(null);
                           }}
-                          style={{ "--swatch-color": option.color } as React.CSSProperties}
+                          style={
+                            {
+                              "--swatch-color": option.color,
+                            } as React.CSSProperties
+                          }
                         />
                       );
                     })}
@@ -541,8 +539,12 @@ export function SavedProposalForgeToolbarPreview({
                       className={[
                         "dasti-artifact-inspector__swatch",
                         "dasti-artifact-inspector__swatch--custom",
-                        customAccentHex ? "" : "dasti-artifact-inspector__swatch--icon",
-                        customAccentHex ? "dasti-artifact-inspector__swatch--active" : "",
+                        customAccentHex
+                          ? ""
+                          : "dasti-artifact-inspector__swatch--icon",
+                        customAccentHex
+                          ? "dasti-artifact-inspector__swatch--active"
+                          : "",
                       ]
                         .filter(Boolean)
                         .join(" ")}
@@ -554,7 +556,9 @@ export function SavedProposalForgeToolbarPreview({
                       }}
                       style={
                         customAccentHex
-                          ? ({ "--swatch-color": customAccentHex } as React.CSSProperties)
+                          ? ({
+                              "--swatch-color": customAccentHex,
+                            } as React.CSSProperties)
                           : undefined
                       }
                     >
@@ -585,65 +589,6 @@ export function SavedProposalForgeToolbarPreview({
         ) : null}
         {showEditOnlyActions ? (
           <>
-            <span className="dasti-compose-toolbar__tone-anchor dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--tone">
-              <button
-                type="button"
-                className={[
-                  "dasti-icon-button",
-                  "dasti-proposal-saved-tone-button",
-                  "dasti-compose-toolbar__tone-option--active",
-                  openDrawer === "tone" ? "dasti-proposal-saved-tone-button--popover-open" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                aria-label={`Tone of voice ${activeToneOption.label}`}
-                data-toolbar-tooltip={openDrawer === "tone" ? undefined : activeToneOption.label}
-                onClick={() => handleToggleDrawer("tone")}
-                aria-expanded={openDrawer === "tone"}
-                aria-haspopup="dialog"
-                disabled={isRegenerating}
-              >
-                <activeToneOption.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
-              </button>
-
-              {openDrawer === "tone" ? (
-                <div
-                  className="dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-compose-toolbar__tone-popover dasti-compose-toolbar__tone-popover--collapsed dasti-saved-proposal-forge-toolbar-preview__drawer dasti-saved-proposal-forge-toolbar-preview__drawer--center dasti-saved-proposal-forge-toolbar-preview__drawer--tone"
-                  role="dialog"
-                  aria-label="Tone of voice"
-                >
-                  <div className="dasti-compose-toolbar__tone-list">
-                    {TONE_OPTIONS.map((option) => {
-                      const active = option.id === toneValue;
-                      return (
-                        <button
-                          key={option.id ?? "auto"}
-                          type="button"
-                          className={[
-                            "dasti-compose-toolbar__tone-option",
-                            "dasti-compose-toolbar__tone-option--drawer",
-                            active ? "dasti-compose-toolbar__tone-option--active" : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                          aria-label={option.label}
-                          data-toolbar-tooltip={option.label}
-                          data-toolbar-tooltip-placement="inline-end"
-                          onClick={() => {
-                            onToneChange(option.id);
-                            setOpenDrawer(null);
-                          }}
-                          disabled={isRegenerating}
-                        >
-                          <option.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-            </span>
-
             <button
               type="button"
               className={[
@@ -652,7 +597,11 @@ export function SavedProposalForgeToolbarPreview({
               ]
                 .filter(Boolean)
                 .join(" ")}
-              aria-label={tonePendingRefresh ? "Apply tone change" : "Refine saved proposal"}
+              aria-label={
+                tonePendingRefresh
+                  ? "Apply tone change"
+                  : "Refine saved proposal"
+              }
               data-toolbar-tooltip={
                 isRegenerating
                   ? "Refining"
@@ -719,7 +668,9 @@ export function SavedProposalForgeToolbarPreview({
               onClick={onCopy}
               aria-label={copyFeedback === "copied" ? "Copied" : "Copy"}
               className="dasti-icon-button"
-              data-toolbar-tooltip={copyFeedback === "copied" ? "Copied" : "Copy"}
+              data-toolbar-tooltip={
+                copyFeedback === "copied" ? "Copied" : "Copy"
+              }
               style={{
                 color: copyFeedback === "copied" ? "var(--ok)" : undefined,
               }}

@@ -154,7 +154,7 @@ describe("ProposalForge canonical job brief", () => {
     });
   });
 
-  it("renders a minimal collapsed focus strip with Open job and the source link", async () => {
+  it("renders a minimal collapsed focus strip with Back to job and the source link", async () => {
     const { container } = render(
       <MemoryRouter initialEntries={["/proposal?jobId=job_123"]}>
         <Routes>
@@ -177,17 +177,16 @@ describe("ProposalForge canonical job brief", () => {
     expect(
       await screen.findByTestId("proposal-brief-focus-strip"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Open job" }),
-    ).toHaveAttribute("href", "/jobs/job_123");
+    expect(screen.getByRole("link", { name: "Back to job" })).toHaveAttribute(
+      "href",
+      "/jobs/job_123",
+    );
     expect(
       screen.getByRole("link", {
         name: /Open original job offer on Example\.com/i,
       }),
     ).toHaveAttribute("href", "https://example.com/jobs/123");
-    expect(
-      screen.getByRole("button", { name: "Expand" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Expand" })).toBeInTheDocument();
     expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
     expect(screen.queryByText("Review state")).not.toBeInTheDocument();
     expect(screen.queryByText("Extracted summary")).not.toBeInTheDocument();
@@ -202,7 +201,7 @@ describe("ProposalForge canonical job brief", () => {
       container.querySelector(".dasti-brief-card__summary"),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("link", { name: "Open job" }));
+    fireEvent.click(screen.getByRole("link", { name: "Back to job" }));
     expect(screen.getByTestId("proposal-location")).toHaveTextContent(
       "/jobs/job_123",
     );

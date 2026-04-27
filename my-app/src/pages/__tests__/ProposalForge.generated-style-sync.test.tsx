@@ -77,9 +77,14 @@ vi.mock("../../lib/proposal-personalization", () => ({
     title: mockAttachedCvId === "cv_alpha" ? "Alex Martin Resume" : null,
     personalizationContext: null,
   }),
+  getLocalPersonalizationSourceByCvId: (id: string | null | undefined) => ({
+    title: id === "cv_alpha" ? "Alex Martin Resume" : null,
+    personalizationContext: null,
+  }),
   getLocalActiveCvSnapshotById: (id: string) =>
     id === "cv_alpha" ? { title: "Alex Martin Resume" } : null,
-  getLocalCvDocumentById: (id: string) => (id === "cv_alpha" ? mockSourceCv : null),
+  getLocalCvDocumentById: (id: string) =>
+    id === "cv_alpha" ? mockSourceCv : null,
   getProposalApplicantHeaderData: () => ({
     name: "Alex Martin",
     role: "Operations Associate",
@@ -142,7 +147,10 @@ vi.mock("../../components/ProposalDisplay", () => ({
     documentTitle,
     templateId,
     stylePreset,
+    mode,
+    onModeChange,
     railStartAddon,
+    railEndAddon,
     actions,
   }: {
     proposalContent: string | null;
@@ -153,7 +161,10 @@ vi.mock("../../components/ProposalDisplay", () => ({
       palette?: string | null;
       typography?: string | null;
     } | null;
+    mode?: "preview" | "edit";
+    onModeChange?: (mode: "preview" | "edit") => void;
     railStartAddon?: React.ReactNode;
+    railEndAddon?: React.ReactNode;
     actions?: React.ReactNode;
   }) => (
     <div>
@@ -162,7 +173,17 @@ vi.mock("../../components/ProposalDisplay", () => ({
         {templateId ?? "no-template"}|{stylePreset?.layout ?? "none"}|
         {stylePreset?.typography ?? "none"}|{stylePreset?.palette ?? "none"}
       </div>
+      <button
+        type="button"
+        aria-label="Toggle proposal mode"
+        onClick={() =>
+          onModeChange?.(mode === "preview" ? "edit" : "preview")
+        }
+      >
+        Toggle mode
+      </button>
       {railStartAddon}
+      {railEndAddon}
       {actions}
     </div>
   ),
@@ -192,8 +213,9 @@ vi.mock("../../components/ProposalsList", () => ({
 
 describe("ProposalForge generated proposal style sync", () => {
   function readDisplayedProposalState() {
-    const [title, content, templateId, layout, typography, palette] =
-      (screen.getByTestId("proposal-display-state").textContent ?? "").split("|");
+    const [title, content, templateId, layout, typography, palette] = (
+      screen.getByTestId("proposal-display-state").textContent ?? ""
+    ).split("|");
 
     return {
       title,
@@ -225,7 +247,9 @@ describe("ProposalForge generated proposal style sync", () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: "Generate proposal" }),
+      );
       await Promise.resolve();
     });
 
@@ -297,9 +321,22 @@ describe("ProposalForge generated proposal style sync", () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: "Generate proposal" }),
+      );
       await Promise.resolve();
     });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Toggle proposal mode" }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Choose signature" }),
+    ).toBeInTheDocument();
 
     const displayedState = readDisplayedProposalState();
     expect(displayedState.layout).toBe("swiss");

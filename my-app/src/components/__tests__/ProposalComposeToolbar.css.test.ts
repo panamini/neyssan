@@ -78,5 +78,8 @@ describe("ProposalComposeToolbar CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-workbench-top-left-slot--proposal\s*>\s*\*\s*\{[\s\S]*pointer-events:\s*auto;/,
     );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*1439px\)\s*\{[\s\S]*\.dasti-workbench-top-left-slot--proposal\s*\{[\s\S]*position:\s*static;[\s\S]*inset-block-start:\s*auto;[\s\S]*z-index:\s*1;/,
+    );
   });
 });

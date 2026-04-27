@@ -3,28 +3,42 @@
    Source de vérité : my-app/docs/specs/dasti-spec-v2.md § 1–11
    ============================================================ */
 
-/* --- Palette accent Sauge (défaut) -------------------------
+/* --- Palette accent Terre / Clay (défaut v5) ---------------
    Surcharger via classe body.pal-* pour les autres palettes  */
 :root {
   color-scheme: light;
-  --ac: hsl(155, 22%, 30%); /* accent solid */
-  --am: hsl(155, 24%, 44%); /* accent mid */
-  --ap: hsl(155, 22%, 92%); /* accent pale */
-  --as: hsl(155, 18%, 88%); /* accent soft */
-  --fr: hsl(155, 22%, 56%); /* focus ring */
-  --color-on-accent: hsl(40, 20%, 99%); /* readable ink on accent */
-  --op: var(--color-on-accent); /* legacy alias */
+  --ac: #A84E2E;                   /* terracotta primary */
+  --am: #D97757;                   /* clay action / CTA */
+  --ap: rgba(168, 78, 46, 0.10);   /* terracotta wash */
+  --as: rgba(168, 78, 46, 0.16);   /* terracotta soft tint */
+  --fr: #D97757;                   /* focus ring */
+  --color-on-accent: #FAF9F5;      /* ink on filled accent button */
+  --op: var(--color-on-accent);    /* legacy alias */
+  --btn-dark-bg: #191915;
+  --btn-dark-fg: #FAF9F5;
+  --ti-soft: #2F2D29;
+  --text-body: #484643;
+  --tg3: #7E7D79;
+  --tm3: var(--tg3);
+  --tg4: #A4A39F;
 }
 .dark {
-  --ac: hsl(155, 28%, 62%);
-  --am: hsl(155, 28%, 72%);
-  --ap: hsl(155, 20%, 18%);
-  --as: hsl(155, 18%, 22%);
-  --fr: hsl(155, 28%, 78%);
-  --color-on-accent: hsl(80, 5%, 7%);
+  --ac: #A15A42;                   /* deep terracotta on dark */
+  --am: #D47554;                   /* clay action on dark */
+  --ap: rgba(212, 117, 84, 0.14);
+  --as: rgba(212, 117, 84, 0.20);
+  --fr: #D47554;
+  --color-on-accent: #0E0E0E;
   --op: var(--color-on-accent);
+  --btn-dark-bg: #DAD9D3;
+  --btn-dark-fg: #0E0E0E;
   --selection-highlight-bg: color-mix(in oklch, var(--ac) 34%, transparent);
   --selection-highlight-fg: var(--ti);
+  --ti-soft: #B8B7AE;
+  --text-body: #B8B7AE;
+  --tg3: #6E6D69;
+  --tm3: var(--tg3);
+  --tg4: #504F4C;
 }
 
 /* --- Tokens universels (indépendants du thème) ------------- */
@@ -301,7 +315,7 @@
   --proposal-document-reading-measure-min: 40ch;
   --proposal-document-reading-measure-max: 64ch;
   --proposal-document-title-scale: 7.1;
-  --paper: #faf9f5;
+  --paper: #FAF9F5;  /* light mode document body — overridden to #E8E5DB in .dark */
   --proposal-document-paper: var(--paper);
   --proposal-document-ink: var(--color-text);
   --proposal-document-meta-ink: var(--color-text-muted);
@@ -462,28 +476,28 @@
             background were wrong — those now use `var(--paper)` directly.
 */
 :root {
-  --bg: #F7F7F9;   /* app canvas / shell background */
-  --sf1: #F3F1EC;  /* sidebar, panel surfaces — --color-surface */
-  --sf2: #EDE9E1;  /* secondary surfaces + resume stage — --color-surface-muted */
-  --sfr: #FFFFFF;  /* raised: toolbars, cards, popovers — --color-surface-raised */
-  --ti: #1F1F1C;
-  --tm2: #4B4B4B;
-  --tg2: #6B6B72;
-  --border-soft: rgba(14, 14, 16, 0.08);
-  --border-field: rgba(14, 14, 16, 0.06);
-  --border-strong: rgba(14, 14, 16, 0.12);
-  --border-selected: color-mix(in srgb, var(--ac) 45%, transparent);
+  --bg: #FAF9F5;   /* app content canvas — lighter/cleaner */
+  --sf1: #F8F7F3;  /* sidebar chrome — slightly deeper than content */
+  --sf2: #F0EEE6;  /* secondary surfaces + resume stage */
+  --sfr: #FFFFFF;  /* raised: toolbars, cards, popovers — white for clear elevation */
+  --ti: #0F0C08;
+  --tm2: rgba(15, 12, 8, 0.64);
+  --tg2: rgba(15, 12, 8, 0.60);
+  --border-soft: rgba(15, 12, 8, 0.08);
+  --border-field: rgba(15, 12, 8, 0.06);
+  --border-strong: rgba(15, 12, 8, 0.14);
+  --border-selected: color-mix(in srgb, var(--ac) 30%, transparent); /* toned down */
 
-  /* §6 Sémantiques light — aligned with the warm dasti brand canon */
-  --ok: hsl(152, 20%, 28%);
-  --okb: hsl(152, 16%, 92%);
-  --okt: hsl(152, 20%, 22%);
-  --er: hsl(4, 26%, 34%);
-  --erb: hsl(4, 22%, 92%);
-  --ert: hsl(4, 26%, 28%);
-  --wa: hsl(34, 36%, 32%);
-  --wab: hsl(34, 30%, 92%);
-  --wat: hsl(34, 36%, 26%);
+  /* §6 Sémantiques light — warm palette v5 */
+  --ok: hsl(150, 22%, 30%);
+  --okb: hsl(150, 16%, 92%);
+  --okt: hsl(150, 22%, 22%);
+  --er: hsl(10, 36%, 42%);    /* warm brick — not alarm red */
+  --erb: hsl(10, 28%, 93%);
+  --ert: hsl(10, 36%, 32%);
+  --wa: hsl(32, 40%, 34%);
+  --wab: hsl(32, 32%, 93%);
+  --wat: hsl(32, 40%, 26%);
 
   /* §9 Ombres light — dasti preview catalog */
   --sha: 0 1px 2px hsla(30, 15%, 10%, 0.04),
@@ -503,13 +517,13 @@
   --gradient-stage: var(--sf2);
 
   /* Frost */
-  --frost-bg: hsla(38, 22%, 96%, 0.88);
-  --frost-surface: hsla(38, 22%, 96%, 0.74);
+  --frost-bg: hsla(45, 20%, 96%, 0.88);
+  --frost-surface: hsla(45, 20%, 96%, 0.74);
   --frost-border: var(--border-soft);
   --frost-blur: 18px;
   --frost-saturate: 140%;
-  --dialog-backdrop-bg: rgba(14, 14, 16, 0.32);
-  --dialog-backdrop-bg-strong: rgba(14, 14, 16, 0.45);
+  --dialog-backdrop-bg: rgba(15, 12, 8, 0.32);
+  --dialog-backdrop-bg-strong: rgba(15, 12, 8, 0.45);
   --dialog-backdrop-blur: 8px;
   --dialog-backdrop-blur-soft: 4px;
   --sidebar-hover-bg: var(--sf2);
@@ -532,32 +546,32 @@
 /* --- §6 Mode Dark — dasti preview OLED -------------------- */
 .dark {
   color-scheme: dark;
-  --app-bg: #000000;
+  --app-bg: #0D0D0D;
   /* Resume preview canvas color is not defined in foundation tokens.
      Keep it on the workspace selector in product.css so the preview canvas
      can be changed without creating a parallel theme token. */
-  --bg: #000000;
-  --sf1: #111111;
-  --sf2: #161616;
-  --sfr: #1E1E1E;
-  --ti: #F5F3EF;
-  --tm2: #C9C5BE;
-  --tg2: #9B978F;
-  --border-soft: rgba(255, 255, 255, 0.06);
-  --border-field: rgba(255, 255, 255, 0.04);
-  --border-strong: rgba(255, 255, 255, 0.12);
+  --bg: #0D0D0D;         /* INKWELL — page canvas */
+  --sf1: #0E0E0E;        /* sidebar chrome — fractionally above canvas */
+  --sf2: #1A1918;        /* card rest, panels, secondary surfaces — subtle step up */
+  --sfr: #222120;        /* raised: toolbars, cards, popovers, modals */
+  --paper: #E8E5DB;      /* document body — warm cream dimmed for dark */
+  --ti: #DAD9D3;
+  --tm2: #95948D;
+  --tg2: #6E6D69;
+  --border-soft: rgba(218, 217, 211, 0.08);
+  --border-field: rgba(218, 217, 211, 0.06);
+  --border-strong: #504F4C;
   --border-selected: color-mix(in srgb, var(--ac) 65%, transparent);
-
-  /* §6 Sémantiques dark — aligned with the warm dasti brand canon */
-  --ok: hsl(152, 22%, 56%);
-  --okb: hsl(152, 13%, 13%);
-  --okt: hsl(152, 22%, 70%);
-  --er: hsl(4, 24%, 56%);
-  --erb: hsl(4, 15%, 13%);
-  --ert: hsl(4, 24%, 70%);
-  --wa: hsl(36, 26%, 58%);
-  --wab: hsl(36, 13%, 13%);
-  --wat: hsl(36, 26%, 72%);
+  /* §6 Sémantiques dark — warm palette v5 */
+  --ok: hsl(150, 22%, 56%);
+  --okb: hsl(150, 14%, 14%);
+  --okt: hsl(150, 22%, 70%);
+  --er: hsl(10, 34%, 58%);   /* warm brick — not alarm red */
+  --erb: hsl(10, 20%, 16%);
+  --ert: hsl(10, 34%, 72%);
+  --wa: hsl(34, 30%, 62%);
+  --wab: hsl(34, 14%, 14%);
+  --wat: hsl(34, 30%, 74%);
 
   /* §9 Ombres dark */
   --sha: 0 1px 2px rgba(0, 0, 0, 0.50),
@@ -596,9 +610,9 @@
   --gradient-stage: var(--sf2);
 
   /* Frost */
-  --frost-bg: hsla(0, 0%, 12%, 0.82);
-  --frost-surface: hsla(0, 0%, 12%, 0.7);
-  --frost-border: hsla(0, 0%, 100%, 0.10);
+  --frost-bg: hsla(30, 5%, 10%, 0.84);
+  --frost-surface: hsla(30, 5%, 10%, 0.72);
+  --frost-border: rgba(218, 217, 211, 0.10);
   --frost-blur: 18px;
   --frost-saturate: 130%;
   --dialog-backdrop-bg: rgba(0, 0, 0, 0.56);
@@ -623,12 +637,12 @@
   --section-hover-shadow: 0 16px 28px -26px hsla(0, 0%, 0%, 0.68),
     inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
   --section-hover-lift: -1px;
-  --document-viewer-frame-surface: var(--sf1);
+  --document-viewer-frame-surface: var(--sf2);  /* document stage — clearly above bg */
   --document-viewer-frame-border: var(--border-field);
   --document-viewer-frame-shadow: inset 0 1px 0
       hsla(0, 0%, 100%, 0.10),
     0 14px 26px -24px hsla(0, 0%, 0%, 0.8);
-  --paper: #E8E7E2;
+  --paper: #E8E5DB;      /* warm cream — unified with sf1 at line 543 */
   --proposal-document-paper: var(--paper);
   --proposal-document-ink: var(--color-text);
   --proposal-document-meta-ink: var(--color-text-muted);
