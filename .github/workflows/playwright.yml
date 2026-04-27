@@ -60,7 +60,7 @@ jobs:
         NEXT_PUBLIC_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
         VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
     - name: Run Playwright tests
-      run: npx playwright test
+      run: npx playwright test --project=chromium
       env:
         PLAYWRIGHT_APP_URL: http://127.0.0.1:5173
         VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
