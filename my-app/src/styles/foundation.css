@@ -111,8 +111,8 @@
   --font-body-family: "Geist Variable", "Geist", -apple-system,
     BlinkMacSystemFont, "Inter", "Helvetica Neue", sans-serif;
   --font-heading-family: var(--font-body-family);
-  --font-serif-display: "Fraunces", "Iowan Old Style", "Palatino", Georgia,
-    serif;
+  --font-serif-display: "Baskervville", "Iowan Old Style", "Palatino",
+    Georgia, serif;
   --font-mono-family: "SF Mono", "SFMono-Regular", "Geist Mono", "GeistMono",
     ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --font-heading-weight: 600;
