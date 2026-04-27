@@ -91,8 +91,17 @@ describe("ProposalsList toolbar grouping", () => {
   function getMainProposalDisplayCall() {
     return [...proposalDisplaySpy.mock.calls]
       .reverse()
-      .find(([props]) => props.documentHeaderMode === "actions-only")
-      ?.[0] as Record<string, unknown> | undefined;
+      .find(([props]) => props.documentHeaderMode === "actions-only")?.[0] as
+      | Record<string, unknown>
+      | undefined;
+  }
+
+  function getSecondaryProposalDisplayCall() {
+    return [...proposalDisplaySpy.mock.calls]
+      .reverse()
+      .find(([props]) => props.hideDocumentHeader === true)?.[0] as
+      | Record<string, unknown>
+      | undefined;
   }
 
   beforeEach(() => {
@@ -104,7 +113,9 @@ describe("ProposalsList toolbar grouping", () => {
   it("keeps the saved-proposal chrome detached above the shell with preview-only read controls", async () => {
     const { container } = render(
       <ProposalsList
-        savedViewActions={<div data-testid="saved-view-actions">Saved actions</div>}
+        savedViewActions={
+          <div data-testid="saved-view-actions">Saved actions</div>
+        }
       />,
     );
 
@@ -115,18 +126,38 @@ describe("ProposalsList toolbar grouping", () => {
       expect(mainCall?.documentHeaderMode).toBe("actions-only");
       expect(mainCall?.detachedActionHeader).toBe(true);
       expect(mainCall?.showDocumentCaption).toBe(false);
+      expect(mainCall?.previewAnchor).toBe("body");
+      expect(mainCall?.previewScaleMultiplier).toBeUndefined();
+      expect(mainCall?.previewFitMode).toBeUndefined();
+      expect(mainCall?.showPreviewParagraphActions).toBe(false);
+      expect(mainCall?.showPageCountBadge).not.toBe(false);
       expect(mainCall?.showModeToggle).toBeFalsy();
       expect(mainCall?.onCopy).toBeUndefined();
       expect(mainCall?.railStartAddon).toBeUndefined();
       expect(mainCall?.actions).toBeUndefined();
       expect(mainCall?.detachedActionHeaderSupplement).toBeTruthy();
+
+      const secondaryCall = getSecondaryProposalDisplayCall();
+      expect(secondaryCall).toBeTruthy();
+      expect(secondaryCall?.showPreviewParagraphActions).toBe(false);
+      expect(secondaryCall?.showPageCountBadge).toBe(false);
     });
 
     expect(screen.getByTestId("saved-view-actions")).toBeInTheDocument();
-    expect(
-      container.querySelector(".dasti-proposal-library-selected-sidebar"),
-    ).toBeTruthy();
-    expect(container.querySelector(".dasti-proposal-library-card")).toBeTruthy();
+    const selectedSidebar = container.querySelector(
+      ".dasti-proposal-library-selected-sidebar",
+    );
+    expect(selectedSidebar).toBeTruthy();
+    expect(selectedSidebar?.firstElementChild).toHaveClass(
+      "dasti-proposal-library-sidebar__actions",
+    );
+    const selectedCard = container.querySelector(
+      ".dasti-proposal-library-card",
+    );
+    expect(selectedCard).toBeTruthy();
+    expect(selectedCard).toHaveClass("dasti-proposal-library-card--selected");
+    expect(selectedCard).not.toHaveClass("dasti-proposal-output-shell");
+    expect(selectedCard).not.toHaveClass("dasti-proposal-output-shell--saved");
     expect(
       container.querySelector(
         ".dasti-proposal-library-card > .dasti-proposal-library-info-card",
@@ -138,17 +169,29 @@ describe("ProposalsList toolbar grouping", () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText("Saved proposals")).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("2 saved proposals"),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("2 saved proposals")).toBeInTheDocument();
     expect(
       container.querySelector(".dasti-proposal-library-info-card"),
     ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Rename saved proposal" }));
+    const titleInput = screen.getByRole("textbox", {
+      name: "Proposal title",
+    }) as HTMLInputElement;
+    expect(titleInput).toHaveValue("Saved proposal alpha");
+    fireEvent.change(titleInput, {
+      target: { value: "Renamed proposal alpha" },
+    });
+    fireEvent.blur(titleInput);
+    await waitFor(() => {
+      expect(screen.getByText("Renamed proposal alpha")).toBeInTheDocument();
+    });
     expect(
       screen.queryByRole("searchbox", { name: "Search saved proposals" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("combobox", { name: "Filter saved proposals by tone" }),
+      screen.queryByRole("combobox", {
+        name: "Filter saved proposals by tone",
+      }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("combobox", { name: "Sort saved proposals" }),
@@ -161,7 +204,9 @@ describe("ProposalsList toolbar grouping", () => {
     expect(
       screen.queryByRole("button", { name: "Refine saved proposal" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Copy" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open text styles" }),
     ).toBeInTheDocument();
@@ -184,7 +229,9 @@ describe("ProposalsList toolbar grouping", () => {
       );
     });
 
-    expect(screen.getByRole("button", { name: /layout swiss/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /layout swiss/i }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /layout swiss/i }));
     expect(
       screen.getByRole("dialog", { name: "Layout options" }),
@@ -226,5 +273,4 @@ describe("ProposalsList toolbar grouping", () => {
       screen.queryByRole("button", { name: /open proposal library overview/i }),
     ).not.toBeInTheDocument();
   });
-
 });
