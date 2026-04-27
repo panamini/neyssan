@@ -37,7 +37,9 @@ CONVEX_LOG="${LOG_DIR}/convex-dev.log"
 LOCAL_CONVEX_URL="${LOCAL_CONVEX_URL:-}"
 LOCAL_CONVEX_CLOUD_PORT="${LOCAL_CONVEX_CLOUD_PORT:-3210}"
 LOCAL_CONVEX_SITE_PORT="${LOCAL_CONVEX_SITE_PORT:-3211}"
-LOCAL_CONVEX_STARTUP_TIMEOUT="${LOCAL_CONVEX_STARTUP_TIMEOUT:-90}"
+# Convex can spend well over 90s on a cold local start while bootstrapping
+# indexes and bundling functions, so give local-fast a wider default window.
+LOCAL_CONVEX_STARTUP_TIMEOUT="${LOCAL_CONVEX_STARTUP_TIMEOUT:-180}"
 CONVEX_TMPDIR="${CONVEX_TMPDIR:-${ROOT_DIR}/tmp/convex-tmp}"
 CACHE_DIR="${ROOT_DIR}/.buildx-cache"
 DOCKER_STATE_DIR="${ROOT_DIR}/.docker"
