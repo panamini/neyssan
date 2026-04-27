@@ -320,7 +320,7 @@ describe("ResumePrintPage", () => {
       document
         .querySelector(".dasti-resume-print-route")
         ?.getAttribute("data-style-typography"),
-    ).toBe("quiet-editorial");
+    ).toBe("geist-baskervville");
 
     await waitFor(() => {
       expect(window.__DASTI_RESUME_PRINT_STATUS__?.status).toBe("ready");
@@ -330,14 +330,14 @@ describe("ResumePrintPage", () => {
     expect(window.__DASTI_RESUME_PRINT_STATUS__?.snapshot).toEqual(
       expect.objectContaining({
         layout: "two-column",
-        typography: "quiet-editorial",
+        typography: "geist-baskervville",
         rendererVariantId: "robial",
-        headingFontFamily: expect.stringContaining("Fraunces"),
-        bodyFontFamily: expect.stringContaining("Syne"),
+        headingFontFamily: expect.stringContaining("Geist"),
+        bodyFontFamily: expect.stringContaining("Baskervville"),
         inheritedBodyFontFamilyComputed: expect.any(String),
         surfaceFontFamilyComputed: expect.any(String),
-        fontHeadingCssVar: expect.stringContaining("Fraunces"),
-        fontBodyCssVar: expect.stringContaining("Syne"),
+        fontHeadingCssVar: expect.stringContaining("Geist"),
+        fontBodyCssVar: expect.stringContaining("Baskervville"),
       }),
     );
   });
@@ -504,7 +504,7 @@ describe("ResumePrintPage", () => {
       expect(window.__DASTI_RESUME_PRINT_STATUS__?.status).toBe("ready");
     });
 
-    const quietSnapshot = window.__DASTI_RESUME_PRINT_STATUS__?.snapshot;
+    const defaultSnapshot = window.__DASTI_RESUME_PRINT_STATUS__?.snapshot;
 
     quietView.unmount();
     delete window.__DASTI_RESUME_PRINT_STATUS__;
@@ -526,14 +526,14 @@ describe("ResumePrintPage", () => {
 
     const monoSnapshot = window.__DASTI_RESUME_PRINT_STATUS__?.snapshot;
 
-    expect(quietSnapshot?.fontHeadingCssVar).toContain("Fraunces");
-    expect(quietSnapshot?.fontBodyCssVar).toContain("Syne");
+    expect(defaultSnapshot?.fontHeadingCssVar).toContain("Geist");
+    expect(defaultSnapshot?.fontBodyCssVar).toContain("Baskervville");
     expect(monoSnapshot?.fontHeadingCssVar).toContain("Archivo");
     expect(monoSnapshot?.fontBodyCssVar).toContain("Archivo");
-    expect(quietSnapshot?.fontHeadingCssVar).not.toBe(
+    expect(defaultSnapshot?.fontHeadingCssVar).not.toBe(
       monoSnapshot?.fontHeadingCssVar,
     );
-    expect(quietSnapshot?.fontBodyCssVar).not.toBe(
+    expect(defaultSnapshot?.fontBodyCssVar).not.toBe(
       monoSnapshot?.fontBodyCssVar,
     );
   });

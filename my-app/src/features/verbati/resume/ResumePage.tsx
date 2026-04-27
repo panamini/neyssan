@@ -963,7 +963,7 @@ function getComparisonCardCopy(variant: ResumeVariant): ComparisonCardCopy {
     case "quire":
       return {
         typography:
-          "Fraunces italic roles, monospace dates, and prose skills — typographic hierarchy without decorative noise.",
+          "Fraunces italic roles, monospace dates, and prose skills - typographic hierarchy without decorative noise.",
         color:
           "Warm paper surface with accent reduced to section marks and title label only.",
       };
