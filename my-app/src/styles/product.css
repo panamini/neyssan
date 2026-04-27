@@ -74,6 +74,16 @@
   gap: var(--space-2);
 }
 
+.sb--collapsed .sb__nav--stack .sb-section__title,
+.sb--collapsed .sb__nav--stack .sb-section__action,
+.sb--collapsed .sb__nav--stack .sb-section__document,
+.sb--collapsed .sb__nav--stack .sb-section__all-link,
+.sb--collapsed .sb__nav--stack .sb-item-actions {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 72ms var(--ease-standard);
+}
+
 .sb-section {
   display: grid;
   gap: var(--space-3);
@@ -466,20 +476,25 @@
 
 /* Sidebar hamburger toggle */
 .sb-toggle {
-  width: var(--hs);
-  height: var(--hs);
-  min-width: var(--hs);
+  width: auto;
+  height: auto;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: 0.07em 0.28em;
   border: none;
-  border-radius: var(--radius-control);
-  background: var(--sf1);
-  color: var(--sidebar-active-ink);
+  border-radius: 3px;
+  background: #a84e2e;
+  color: #faf9f5;
   cursor: pointer;
   flex-shrink: 0;
-  transition: color 0.12s var(--ez);
+  box-shadow:
+    inset 0 1px 0 rgba(250, 249, 245, 0.14),
+    0 1px 2px color-mix(in srgb, var(--shadow-color) 18%, transparent);
+  transition:
+    background 0.12s var(--ez),
+    color 0.12s var(--ez);
 }
 .sb-toggle--collapse {
   cursor: w-resize;
@@ -490,14 +505,14 @@
 .sb-toggle--labeled {
   width: auto;
   min-width: 0;
-  min-height: 30px;
-  padding: 0 var(--space-2);
+  min-height: 0;
+  padding: 0.07em 0.28em;
   justify-content: flex-start;
   align-items: center;
 }
 .sb-toggle:hover {
-  background: var(--sidebar-hover-bg);
-  color: var(--sidebar-hover-ink);
+  background: #a84e2e;
+  color: #faf9f5;
 }
 
 .sb-toggle__label {
@@ -1888,6 +1903,7 @@
   display: grid;
   gap: var(--layout-card-grid);
   min-width: 0;
+  transition: gap var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-proposal-library-stack--gesture-enabled {
@@ -2339,9 +2355,12 @@
   --document-viewer-frame-surface: var(--color-surface-muted);
   --proposal-output-toolbar-lift: 0px;
   --proposal-output-shell-max-block: calc(
-    100dvh - var(--header-height) - var(--space-2) -
-      var(--document-viewer-toolbar-block-size) - var(--layout-panel-stack) -
-      var(--space-7)
+    100dvh - var(--header-height) - (var(--space-4) * 2) -
+      var(--document-viewer-toolbar-block-size) - var(--space-2)
+  );
+  --proposal-workspace-shell-block-size: min(
+    var(--document-viewer-shell-max-block),
+    var(--proposal-output-shell-max-block)
   );
   --document-viewer-shell-min-block: calc(
     var(--document-sheet-min-block) + (var(--document-viewer-bleed-block) * 2) +
@@ -2365,9 +2384,32 @@
 
 .dasti-proposal-library-card--secondary {
   --document-viewer-shell-inline-size: calc(
-    var(--document-sheet-inline-size) - (var(--s4) * 2)
+    var(--document-sheet-inline-size) + (var(--s2) * 2) + 2px
   );
   cursor: pointer;
+  max-height: min(720px, var(--document-viewer-shell-max-block));
+  opacity: 1;
+  overflow: hidden;
+  transform: translate3d(0, 0, 0) scale(1);
+  transition:
+    max-height var(--duration-normal) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-normal) var(--ease-standard);
+  will-change: max-height, opacity, transform;
+}
+
+.dasti-proposal-library-card--secondary-collapsed {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, -12px, 0) scale(0.985);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dasti-proposal-library-stack,
+  .dasti-proposal-library-card--secondary {
+    transition: none;
+  }
 }
 
 .dasti-proposal-library-card--secondary .dasti-document-shell {
@@ -2555,6 +2597,7 @@
 .dasti-document-rail--resume-workspace {
   position: relative;
   inset: auto;
+  grid-template-columns: minmax(0, 1fr);
   width: 100%;
   max-width: 100%;
   z-index: 24;
@@ -2564,8 +2607,10 @@
 .dasti-document-rail--resume-workspace .dasti-proposal-rail-cluster {
   flex-wrap: nowrap;
   align-items: center;
-  width: max-content;
-  max-width: none;
+  width: 100%;
+  min-width: max-content;
+  max-width: 100%;
+  border-radius: var(--radius-toolbar-control, var(--radius-control));
   overflow: visible;
   scrollbar-width: auto;
   padding-inline-start: var(
@@ -2595,8 +2640,14 @@
 }
 
 .dasti-document-rail--resume-workspace .dasti-document-rail__section--start {
-  max-width: none;
+  width: 100%;
+  max-width: 100%;
   overflow: visible;
+}
+
+.dasti-document-rail--resume-workspace .dasti-document-rail__section--center,
+.dasti-document-rail--resume-workspace .dasti-document-rail__section--end {
+  display: none;
 }
 
 .dasti-cv-workbench-bar--resume-workspace {
@@ -2815,6 +2866,7 @@
 }
 
 .dasti-proposal-output-shell .dasti-doc-viewer-shell__surface,
+.dasti-proposal-library-card--selected .dasti-doc-viewer-shell__surface,
 .dasti-proposal-library-card--secondary .dasti-doc-viewer-shell__surface {
   --proposal-document-frame-inline-size: calc(
     var(--document-stage-width, var(--document-viewer-shell-inline-size)) +
@@ -3145,6 +3197,20 @@
 
 .dasti-doc-zoom-status {
   min-width: 62px;
+}
+
+.dasti-doc-page-count--resume-workspace {
+  position: absolute;
+  inset-inline-start: var(--space-2);
+  inset-block-end: var(--space-2);
+  z-index: 25;
+  min-width: 0;
+  height: var(--pill-height-sm);
+  padding: 0 var(--space-2);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  font-weight: var(--font-label-weight);
+  pointer-events: none;
 }
 
 .dasti-inline-ai-toolbar {
@@ -4238,25 +4304,15 @@
 
 .dasti-proposal-library-card--selected .dasti-doc-viewer-shell,
 .dasti-proposal-library-card--selected .dasti-doc-viewer-shell__surface {
-  height: min(
-    var(--document-viewer-shell-max-block),
-    var(--proposal-output-shell-max-block)
-  );
-  min-height: min(
-    var(--document-viewer-shell-min-block),
-    var(--proposal-output-shell-max-block)
-  );
+  height: var(--proposal-workspace-shell-block-size);
+  min-height: var(--proposal-workspace-shell-block-size);
+  max-height: var(--proposal-workspace-shell-block-size);
 }
 
 .dasti-proposal-library-card--selected .dasti-doc-viewer-shell__surface {
-  --proposal-document-badge-reserved-block: calc(
-    var(--pill-height-sm) + var(--space-2)
-  );
-  --proposal-document-badge-block-inset: calc(var(--space-1) + 1px);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding-block-end: var(--proposal-document-badge-reserved-block);
 }
 
 .dasti-proposal-library-card--selected .dasti-proposal-sheet-frame {
@@ -4265,8 +4321,8 @@
   min-height: 0;
   height: 100%;
   max-height: 100%;
-  width: min(100%, var(--document-viewer-shell-inline-size));
-  max-width: min(100%, var(--document-viewer-shell-inline-size));
+  width: min(100%, var(--proposal-document-frame-inline-size));
+  max-width: min(100%, var(--proposal-document-frame-inline-size));
 }
 
 .dasti-proposal-library-card--selected
@@ -4287,7 +4343,7 @@
 
 .dasti-page-shell--proposal-saved {
   --proposal-workspace-output-shell-inline-size: calc(
-    var(--document-sheet-inline-size) - (var(--s4) * 2)
+    var(--document-sheet-inline-size) + (var(--s2) * 2) + 2px
   );
 }
 
@@ -7208,12 +7264,16 @@
   .dasti-cv-edit-toolbar .dasti-resume-export-control .dasti-pill,
   .dasti-cv-workbench-bar--cv-workspace
     .dasti-resume-export-control
+    .dasti-pill,
+  .dasti-document-rail--resume-workspace
+    .dasti-resume-export-control
     .dasti-pill {
     display: none;
   }
 
   .dasti-cv-edit-toolbar .dasti-resume-export-control__primary,
-  .dasti-cv-workbench-bar--cv-workspace .dasti-resume-export-control__primary {
+  .dasti-cv-workbench-bar--cv-workspace .dasti-resume-export-control__primary,
+  .dasti-document-rail--resume-workspace .dasti-resume-export-control__primary {
     inline-size: var(--control-sm);
     min-inline-size: var(--control-sm);
     padding-inline: 0;
@@ -7222,6 +7282,8 @@
 
   .dasti-cv-edit-toolbar .dasti-resume-export-control__primary-label,
   .dasti-cv-workbench-bar--cv-workspace
+    .dasti-resume-export-control__primary-label,
+  .dasti-document-rail--resume-workspace
     .dasti-resume-export-control__primary-label {
     display: none;
   }
