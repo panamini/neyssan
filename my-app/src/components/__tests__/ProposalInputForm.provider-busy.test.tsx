@@ -417,9 +417,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     );
 
     const jobTitleInput = screen.getByPlaceholderText("Job title");
-    const jobDescriptionInput = screen.getByPlaceholderText(
-      "Paste job offer",
-    );
+    const jobDescriptionInput = screen.getByPlaceholderText("Paste job offer");
     const submitButton = container.querySelector(
       'button[type="submit"]',
     ) as HTMLButtonElement | null;
@@ -558,13 +556,11 @@ describe("ProposalInputForm provider-busy handling", () => {
     render(<HandoffPrefillHarness />);
 
     await waitFor(() =>
-      expect(
-        screen.getByPlaceholderText("Job title"),
-      ).toHaveValue("Imported Operations Lead"),
+      expect(screen.getByPlaceholderText("Job title")).toHaveValue(
+        "Imported Operations Lead",
+      ),
     );
-    expect(
-      screen.getByPlaceholderText("Paste job offer"),
-    ).toHaveValue(
+    expect(screen.getByPlaceholderText("Paste job offer")).toHaveValue(
       "Coordinate recurring operations, document handoffs, and keep teams aligned.",
     );
 
@@ -573,9 +569,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     expect(screen.getByPlaceholderText("Job title")).toHaveValue(
       "Imported Operations Lead",
     );
-    expect(
-      screen.getByPlaceholderText("Paste job offer"),
-    ).toHaveValue(
+    expect(screen.getByPlaceholderText("Paste job offer")).toHaveValue(
       "Coordinate recurring operations, document handoffs, and keep teams aligned.",
     );
   });
@@ -599,10 +593,10 @@ describe("ProposalInputForm provider-busy handling", () => {
     expect(
       screen.getByRole("link", { name: "View on LinkedIn" }),
     ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
-    expect(screen.getByText("linkedin.com")).toBeInTheDocument();
+    expect(screen.queryByText("linkedin.com")).not.toBeInTheDocument();
   });
 
-  it("keeps the imported source host visible even when the restored url is missing a scheme", async () => {
+  it("omits a redundant imported source host even when the restored url is missing a scheme", async () => {
     window.localStorage.setItem(
       "dasti:proposal-compose-draft:v1",
       JSON.stringify({
@@ -617,7 +611,8 @@ describe("ProposalInputForm provider-busy handling", () => {
 
     render(<ProposalInputForm onSubmit={vi.fn()} />);
 
-    expect(await screen.findByText("linkedin.com")).toBeInTheDocument();
+    expect(await screen.findByText("Job offer")).toBeInTheDocument();
+    expect(screen.queryByText("linkedin.com")).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "View on LinkedIn" }),
     ).toHaveAttribute("href", "www.linkedin.com/jobs/view/123456");
@@ -642,10 +637,10 @@ describe("ProposalInputForm provider-busy handling", () => {
     expect(
       screen.getByRole("link", { name: "View on LinkedIn" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("linkedin.com")).toBeInTheDocument();
+    expect(screen.queryByText("linkedin.com")).not.toBeInTheDocument();
   });
 
-  it("renders the imported source card from live source props even when storage is empty", async () => {
+  it("hides a live imported source card until job offer text exists", () => {
     render(
       <ProposalInputForm
         onSubmit={vi.fn()}
@@ -654,11 +649,11 @@ describe("ProposalInputForm provider-busy handling", () => {
       />,
     );
 
-    expect(await screen.findByText("Job offer")).toBeInTheDocument();
+    expect(screen.queryByText("Job offer")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "View on LinkedIn" }),
-    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
-    expect(screen.getByText("linkedin.com")).toBeInTheDocument();
+      screen.queryByRole("link", { name: "View on LinkedIn" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("linkedin.com")).not.toBeInTheDocument();
   });
 
   it("keeps the imported source card from the initial compose draft seed when live storage is stale", async () => {
@@ -680,10 +675,10 @@ describe("ProposalInputForm provider-busy handling", () => {
     expect(
       screen.getByRole("link", { name: "View on LinkedIn" }),
     ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
-    expect(screen.getByText("linkedin.com")).toBeInTheDocument();
+    expect(screen.queryByText("linkedin.com")).not.toBeInTheDocument();
   });
 
-  it("keeps the imported source card visible if live source props clear after mount", async () => {
+  it("does not keep a stale live source card visible after live props clear without job offer text", () => {
     const { rerender } = render(
       <ProposalInputForm
         onSubmit={vi.fn()}
@@ -692,17 +687,18 @@ describe("ProposalInputForm provider-busy handling", () => {
       />,
     );
 
-    expect(await screen.findByText("Job offer")).toBeInTheDocument();
+    expect(screen.queryByText("Job offer")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "View on LinkedIn" }),
-    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
+      screen.queryByRole("link", { name: "View on LinkedIn" }),
+    ).not.toBeInTheDocument();
 
     rerender(<ProposalInputForm onSubmit={vi.fn()} />);
 
+    expect(screen.queryByText("Job offer")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "View on LinkedIn" }),
-    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
-    expect(screen.getByText("linkedin.com")).toBeInTheDocument();
+      screen.queryByRole("link", { name: "View on LinkedIn" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("linkedin.com")).not.toBeInTheDocument();
   });
 
   it("does not clear the active CV id just because Proposal Forge cannot resolve it immediately", () => {
@@ -726,9 +722,7 @@ describe("ProposalInputForm provider-busy handling", () => {
       actualModelType: "chatgpt",
       fallbackTriggerCode: null,
     });
-    mockMutation.mockImplementation(
-      () => new Promise(() => {}),
-    );
+    mockMutation.mockImplementation(() => new Promise(() => {}));
 
     const onSubmit = vi.fn();
     const { container } = render(<ProposalInputForm onSubmit={onSubmit} />);
@@ -736,14 +730,12 @@ describe("ProposalInputForm provider-busy handling", () => {
     fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "UI / UX Artist For Game Development" },
     });
-    fireEvent.change(
-      screen.getByPlaceholderText("Paste job offer"),
-      {
-        target: {
-          value: "Design tactile game interfaces, polish interactions, and support gameplay presentation.",
-        },
+    fireEvent.change(screen.getByPlaceholderText("Paste job offer"), {
+      target: {
+        value:
+          "Design tactile game interfaces, polish interactions, and support gameplay presentation.",
       },
-    );
+    });
 
     fireEvent.click(
       container.querySelector('button[type="submit"]') as HTMLButtonElement,
@@ -799,9 +791,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     );
 
     const jobTitleInput = screen.getByPlaceholderText("Job title");
-    const jobDescriptionInput = screen.getByPlaceholderText(
-      "Paste job offer",
-    );
+    const jobDescriptionInput = screen.getByPlaceholderText("Paste job offer");
     const submitButton = container.querySelector(
       'button[type="submit"]',
     ) as HTMLButtonElement | null;
@@ -876,9 +866,7 @@ describe("ProposalInputForm provider-busy handling", () => {
     );
 
     const jobTitleInput = screen.getByPlaceholderText("Job title");
-    const jobDescriptionInput = screen.getByPlaceholderText(
-      "Paste job offer",
-    );
+    const jobDescriptionInput = screen.getByPlaceholderText("Paste job offer");
     const submitButton = container.querySelector(
       'button[type="submit"]',
     ) as HTMLButtonElement | null;
@@ -948,15 +936,12 @@ describe("ProposalInputForm provider-busy handling", () => {
     fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
-    fireEvent.change(
-      screen.getByPlaceholderText("Paste job offer"),
-      {
-        target: {
-          value:
-            "Support recurring processes, update internal records, and coordinate communication across teams.",
-        },
+    fireEvent.change(screen.getByPlaceholderText("Paste job offer"), {
+      target: {
+        value:
+          "Support recurring processes, update internal records, and coordinate communication across teams.",
       },
-    );
+    });
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
 
@@ -1114,15 +1099,12 @@ describe("ProposalInputForm provider-busy handling", () => {
     fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
-    fireEvent.change(
-      screen.getByPlaceholderText("Paste job offer"),
-      {
-        target: {
-          value:
-            "Support recurring processes, update internal records, and coordinate communication across teams.",
-        },
+    fireEvent.change(screen.getByPlaceholderText("Paste job offer"), {
+      target: {
+        value:
+          "Support recurring processes, update internal records, and coordinate communication across teams.",
       },
-    );
+    });
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
 
@@ -1164,15 +1146,12 @@ describe("ProposalInputForm provider-busy handling", () => {
     fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
-    fireEvent.change(
-      screen.getByPlaceholderText("Paste job offer"),
-      {
-        target: {
-          value:
-            "Support recurring processes, update internal records, and coordinate communication across teams.",
-        },
+    fireEvent.change(screen.getByPlaceholderText("Paste job offer"), {
+      target: {
+        value:
+          "Support recurring processes, update internal records, and coordinate communication across teams.",
       },
-    );
+    });
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
 
@@ -1207,15 +1186,12 @@ describe("ProposalInputForm provider-busy handling", () => {
     fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
-    fireEvent.change(
-      screen.getByPlaceholderText("Paste job offer"),
-      {
-        target: {
-          value:
-            "Support recurring processes, update internal records, and coordinate communication across teams.",
-        },
+    fireEvent.change(screen.getByPlaceholderText("Paste job offer"), {
+      target: {
+        value:
+          "Support recurring processes, update internal records, and coordinate communication across teams.",
       },
-    );
+    });
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
 
@@ -1255,15 +1231,12 @@ describe("ProposalInputForm provider-busy handling", () => {
     fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
-    fireEvent.change(
-      screen.getByPlaceholderText("Paste job offer"),
-      {
-        target: {
-          value:
-            "Support recurring processes, update internal records, and coordinate communication across teams.",
-        },
+    fireEvent.change(screen.getByPlaceholderText("Paste job offer"), {
+      target: {
+        value:
+          "Support recurring processes, update internal records, and coordinate communication across teams.",
       },
-    );
+    });
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
 
@@ -1329,15 +1302,12 @@ describe("ProposalInputForm provider-busy handling", () => {
     fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
     });
-    fireEvent.change(
-      screen.getByPlaceholderText("Paste job offer"),
-      {
-        target: {
-          value:
-            "Support recurring processes, update internal records, and coordinate communication across teams.",
-        },
+    fireEvent.change(screen.getByPlaceholderText("Paste job offer"), {
+      target: {
+        value:
+          "Support recurring processes, update internal records, and coordinate communication across teams.",
       },
-    );
+    });
 
     fireEvent.click(container.querySelector('button[type="submit"]')!);
 

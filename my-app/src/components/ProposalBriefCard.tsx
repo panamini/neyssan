@@ -62,7 +62,10 @@ const EMPTY_LINKED_PROPOSALS: ProposalBriefLinkedProposal[] = [];
 
 function formatReviewValue(value: unknown): string {
   if (Array.isArray(value)) {
-    return value.map((item) => String(item).trim()).filter(Boolean).join("\n");
+    return value
+      .map((item) => String(item).trim())
+      .filter(Boolean)
+      .join("\n");
   }
 
   return String(value ?? "").trim();
@@ -80,7 +83,9 @@ function formatReviewValueList(value: unknown): string[] {
 }
 
 function normalizeComparableText(value: unknown): string {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function resolveTrustLabel(args: {
@@ -213,17 +218,15 @@ export function ProposalBriefCard({
     : reviewItems.map((item) => ({
         ...item,
         reviewStatus: resolvedItems[item.id]?.reviewStatus ?? item.reviewStatus,
-        approvedValue: resolvedItems[item.id]?.approvedValue ?? item.approvedValue,
+        approvedValue:
+          resolvedItems[item.id]?.approvedValue ?? item.approvedValue,
       }));
-  const shouldRenderRawSourceDock =
-    !hideRawSource && Boolean(jobDescription);
+  const shouldRenderRawSourceDock = !hideRawSource && Boolean(jobDescription);
   const resolvedCardTitle = resolveProposalBriefCardTitle({
     sourceJobTitle,
     outputDocumentTitle,
   });
-  const {
-    summaryText: resolvedSummaryText,
-  } = extractionUnavailable
+  const { summaryText: resolvedSummaryText } = extractionUnavailable
     ? {
         summaryText: null,
       }
@@ -259,10 +262,10 @@ export function ProposalBriefCard({
         {jobId ? (
           <Link
             to={resolveJobHref(jobId)}
-            className="dasti-brief-focus-strip__action"
-            aria-label="Open job"
+            className="dasti-brief-focus-strip__action dasti-brief-focus-strip__action--job"
+            aria-label="Back to job"
           >
-            Open job
+            Back to job
           </Link>
         ) : null}
         {sourceLabel && sourceUrl ? (
@@ -270,10 +273,12 @@ export function ProposalBriefCard({
             href={sourceUrl}
             target="_blank"
             rel="noreferrer"
-            className="dasti-brief-focus-strip__action"
+            className="dasti-brief-focus-strip__action dasti-brief-focus-strip__action--source"
             aria-label={`Open original job offer on ${sourceLabel}`}
           >
-            <span className="dasti-brief-focus-strip__label">{sourceLabel}</span>
+            <span className="dasti-brief-focus-strip__label">
+              {sourceLabel}
+            </span>
             <ArrowSquareOut size={12} strokeWidth={1.8} aria-hidden="true" />
           </a>
         ) : null}
@@ -513,7 +518,8 @@ export function ProposalBriefCard({
                                     [item.id]: {
                                       reviewStatus: "approved",
                                       approvedValue:
-                                        item.approvedValue ?? item.suggestedValue,
+                                        item.approvedValue ??
+                                        item.suggestedValue,
                                     },
                                   }));
                                   void onApproveReviewItem?.(item);
@@ -565,9 +571,9 @@ export function ProposalBriefCard({
                                   item.suggestedValue,
                                 )
                                   ? draftValue
-                                    .split("\n")
-                                    .map((entry) => entry.trim())
-                                    .filter(Boolean)
+                                      .split("\n")
+                                      .map((entry) => entry.trim())
+                                      .filter(Boolean)
                                   : draftValue.trim();
                                 setResolvedItems((current) => ({
                                   ...current,
@@ -584,7 +590,8 @@ export function ProposalBriefCard({
                             </button>
                           </div>
                         ) : null}
-                        {fieldKey === "mustHaves" || fieldKey === "requirements" ? (
+                        {fieldKey === "mustHaves" ||
+                        fieldKey === "requirements" ? (
                           <ul className="dasti-brief-card__review-bullets">
                             {currentListValue.map((entry) => (
                               <li key={entry}>{entry}</li>

@@ -51,6 +51,18 @@ const proposalSourceModeValidator = v.union(
   v.literal("proposal_local"),
 );
 
+const proposalSignatureFontValidator = v.union(
+  v.literal("chaumont"),
+  v.literal("fd-garamond"),
+  v.literal("parisienne"),
+);
+
+const proposalSignatureSettingsValidator = v.object({
+  mode: v.union(v.literal("auto"), v.literal("font"), v.literal("image")),
+  fontId: v.union(proposalSignatureFontValidator, v.null()),
+  imageDataUrl: v.union(v.string(), v.null()),
+});
+
 const proposalPresetVerbatiStyleValidator = v.object({
   familyId: v.optional(v.string()),
   layout: v.string(),
@@ -58,6 +70,51 @@ const proposalPresetVerbatiStyleValidator = v.object({
   palette: v.string(),
   accentHex: v.optional(v.union(v.string(), v.null())),
 });
+
+type ProposalSignatureSettingsData = {
+  mode: "auto" | "font" | "image";
+  fontId: "chaumont" | "fd-garamond" | "parisienne" | null;
+  imageDataUrl: string | null;
+};
+
+const DEFAULT_PROPOSAL_SIGNATURE_SETTINGS: ProposalSignatureSettingsData = {
+  mode: "auto",
+  fontId: null,
+  imageDataUrl: null,
+};
+
+const SIGNATURE_IMAGE_DATA_URL_PATTERN =
+  /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=]+$/i;
+
+function cleanProposalSignatureSettings(
+  value: ProposalSignatureSettingsData | null | undefined,
+): ProposalSignatureSettingsData {
+  if (!value || typeof value !== "object") {
+    return DEFAULT_PROPOSAL_SIGNATURE_SETTINGS;
+  }
+
+  if (
+    value.mode === "image" &&
+    typeof value.imageDataUrl === "string" &&
+    SIGNATURE_IMAGE_DATA_URL_PATTERN.test(value.imageDataUrl.trim())
+  ) {
+    return {
+      mode: "image",
+      fontId: null,
+      imageDataUrl: value.imageDataUrl.trim(),
+    };
+  }
+
+  if (value.mode === "font" && value.fontId) {
+    return {
+      mode: "font",
+      fontId: value.fontId,
+      imageDataUrl: null,
+    };
+  }
+
+  return DEFAULT_PROPOSAL_SIGNATURE_SETTINGS;
+}
 
 export const getCurrent = query({
   args: {},
@@ -71,6 +128,7 @@ export const getCurrent = query({
     fontPairId: v.optional(proposalFontPairIdValidator),
     verbatiStyle: v.optional(proposalPresetVerbatiStyleValidator),
     sourceMode: v.optional(proposalSourceModeValidator),
+    signatureSettings: proposalSignatureSettingsValidator,
   }),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -79,6 +137,7 @@ export const getCurrent = query({
         voicePreset: DEFAULT_PROPOSAL_VOICE_PRESET,
         savedVoicePreset: null,
         templateId: DEFAULT_PROPOSAL_TEMPLATE_ID,
+        signatureSettings: DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
       };
     }
 
@@ -101,6 +160,12 @@ export const getCurrent = query({
           ? (user.proposalVerbatiStyle as PresetSlotData["verbatiStyle"])
           : undefined,
       sourceMode: user?.proposalSourceMode,
+      signatureSettings: cleanProposalSignatureSettings(
+        user?.proposalSignatureSettings as
+          | ProposalSignatureSettingsData
+          | null
+          | undefined,
+      ),
     };
   },
 });
@@ -114,6 +179,7 @@ const presetSlotValidator = v.object({
   accentHex: proposalAccentHexValidator,
   verbatiStyle: v.optional(proposalPresetVerbatiStyleValidator),
   voicePreset: v.union(proposalVoicePresetChoice, v.null()),
+  signatureSettings: v.optional(proposalSignatureSettingsValidator),
   name: v.optional(v.string()),
 });
 
@@ -130,8 +196,53 @@ type PresetSlotData = {
     accentHex?: string | null;
   };
   voicePreset: "signature" | "expert" | "direct" | "engaging" | "storyteller" | null;
+  signatureSettings?: ProposalSignatureSettingsData;
   name?: string;
 };
+
+function applyPresetToCurrentProposalFields(
+  nextReplacement: Record<string, unknown>,
+  preset: PresetSlotData,
+) {
+  if (preset.voicePreset) {
+    nextReplacement.proposalVoicePreset = preset.voicePreset;
+  } else {
+    delete nextReplacement.proposalVoicePreset;
+  }
+
+  if (preset.styleChoice && preset.styleChoice !== "auto") {
+    nextReplacement.proposalStyleChoice = preset.styleChoice;
+  } else {
+    delete nextReplacement.proposalStyleChoice;
+  }
+
+  nextReplacement.proposalPaletteOverride = preset.paletteOverride;
+  const nextAccentHex =
+    typeof preset.accentHex === "string" &&
+    /^#[0-9a-fA-F]{6}$/.test(preset.accentHex)
+      ? preset.accentHex.toUpperCase()
+      : null;
+  nextReplacement.proposalAccentHex = nextAccentHex;
+  nextReplacement.proposalFontPairId = preset.fontPairId;
+  nextReplacement.proposalSignatureSettings =
+    cleanProposalSignatureSettings(preset.signatureSettings);
+
+  if (preset.verbatiStyle) {
+    const nextVerbatiAccentHex =
+      typeof preset.verbatiStyle.accentHex === "string" &&
+      /^#[0-9a-fA-F]{6}$/.test(preset.verbatiStyle.accentHex)
+        ? preset.verbatiStyle.accentHex.toUpperCase()
+        : preset.verbatiStyle.accentHex === null
+          ? null
+          : undefined;
+    nextReplacement.proposalVerbatiStyle = {
+      ...preset.verbatiStyle,
+      accentHex: nextVerbatiAccentHex,
+    };
+  } else {
+    delete nextReplacement.proposalVerbatiStyle;
+  }
+}
 
 export const getPresets = query({
   args: {},
@@ -186,17 +297,32 @@ export const savePreset = mutation({
       /^#[0-9a-fA-F]{6}$/.test(args.preset.accentHex)
         ? args.preset.accentHex.toUpperCase()
         : null;
-    const cleanPreset: PresetSlotData = { ...args.preset, accentHex: nextAccentHex };
+    const cleanPreset: PresetSlotData = {
+      ...args.preset,
+      accentHex: nextAccentHex,
+      signatureSettings: cleanProposalSignatureSettings(
+        args.preset.signatureSettings as
+          | ProposalSignatureSettingsData
+          | null
+          | undefined,
+      ),
+    };
+    const activeSlot = (user.proposalActivePresetSlot as 1 | 2 | 3 | undefined) ?? 1;
 
     await Promise.all(
       profiles.map((profile) => {
         const { _creationTime, _id, ...rest } = profile;
-        return ctx.db.replace(_id, {
+        const nextReplacement: Record<string, unknown> = {
           ...rest,
           [fieldKey]: cleanPreset,
           updatedAt: Date.now(),
           version: (profile.version ?? 1) + 1,
-        });
+        };
+        if (activeSlot === args.slot) {
+          applyPresetToCurrentProposalFields(nextReplacement, cleanPreset);
+        }
+
+        return ctx.db.replace(_id, nextReplacement);
       }),
     );
     return null;
@@ -241,38 +367,7 @@ export const setActivePreset = mutation({
 
         // Mirror active preset into legacy single-default fields so ProposalForge continues to work
         if (preset) {
-          if (preset.voicePreset) {
-            nextReplacement.proposalVoicePreset = preset.voicePreset;
-          } else {
-            delete nextReplacement.proposalVoicePreset;
-          }
-          if (preset.styleChoice && preset.styleChoice !== "auto") {
-            nextReplacement.proposalStyleChoice = preset.styleChoice;
-          } else {
-            delete nextReplacement.proposalStyleChoice;
-          }
-          nextReplacement.proposalPaletteOverride = preset.paletteOverride;
-          const nextAccentHex =
-            typeof preset.accentHex === "string" && /^#[0-9a-fA-F]{6}$/.test(preset.accentHex)
-              ? preset.accentHex.toUpperCase()
-              : null;
-          nextReplacement.proposalAccentHex = nextAccentHex;
-          nextReplacement.proposalFontPairId = preset.fontPairId;
-          if (preset.verbatiStyle) {
-            const nextVerbatiAccentHex =
-              typeof preset.verbatiStyle.accentHex === "string" &&
-              /^#[0-9a-fA-F]{6}$/.test(preset.verbatiStyle.accentHex)
-                ? preset.verbatiStyle.accentHex.toUpperCase()
-                : preset.verbatiStyle.accentHex === null
-                  ? null
-                  : undefined;
-            nextReplacement.proposalVerbatiStyle = {
-              ...preset.verbatiStyle,
-              accentHex: nextVerbatiAccentHex,
-            };
-          } else {
-            delete nextReplacement.proposalVerbatiStyle;
-          }
+          applyPresetToCurrentProposalFields(nextReplacement, preset);
         }
 
         return ctx.db.replace(_id, nextReplacement);

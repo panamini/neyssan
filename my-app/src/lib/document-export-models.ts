@@ -40,6 +40,10 @@ import {
   planWorkshopResumePages,
   type WorkshopResumeCommittedPage,
 } from "./resume/resumePagination";
+import {
+  sanitizeProposalSignatureSettings,
+  type ProposalSignatureSettings,
+} from "./proposal-signature-settings";
 
 export type ExportDocumentKind = "resume" | "proposal";
 export type ExportDocumentFormat = "pdf" | "docx";
@@ -171,6 +175,10 @@ export type ProposalPrintApplicantHeader = {
   tag: string;
 };
 
+type ProposalPrintApplicantHeaderInput = Partial<{
+  [Key in keyof ProposalPrintApplicantHeader]: string | null | undefined;
+}>;
+
 export type ProposalPrintSource = {
   schemaVersion: 1;
   kind: "proposal";
@@ -185,6 +193,7 @@ export type ProposalPrintSource = {
   applicantHeader: ProposalPrintApplicantHeader;
   headerVisibility: ProposalHeaderVisibility;
   templateId: ProposalTemplateId | null;
+  signatureSettings?: ProposalSignatureSettings | null;
   body: ProposalPrintBlock[];
 };
 
@@ -207,6 +216,7 @@ export type ProposalPreviewPrintSource = {
   headerVisibility: ProposalHeaderVisibility;
   templateId: ProposalTemplateId;
   stylePreset: VerbatiStylePreset;
+  signatureSettings?: ProposalSignatureSettings | null;
 };
 
 export type ProposalPrintRoutePayload = {
@@ -227,6 +237,7 @@ export type ProposalPrintRoutePayload = {
   headerVisibility: ProposalHeaderVisibility;
   templateId: ProposalTemplateId;
   stylePreset: VerbatiStylePreset;
+  signatureSettings?: ProposalSignatureSettings | null;
 };
 
 export type ProposalPrintDebugSnapshot = {
@@ -455,10 +466,11 @@ export function buildProposalPreviewPrintSource(args: {
   recipientDetails: string | null | undefined;
   documentTitle: string | null | undefined;
   documentMeta: string | null | undefined;
-  applicantHeader: Partial<ProposalPrintApplicantHeader> | null | undefined;
+  applicantHeader: ProposalPrintApplicantHeaderInput | null | undefined;
   headerVisibility?: Partial<ProposalHeaderVisibility> | null;
   templateId?: ProposalTemplateId | null;
   stylePreset?: VerbatiStylePreset | null;
+  signatureSettings?: ProposalSignatureSettings | null;
 }): ProposalPreviewPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
   const normalizedContent = cleanString(args.content);
@@ -496,6 +508,9 @@ export function buildProposalPreviewPrintSource(args: {
     headerVisibility: resolveProposalHeaderVisibility(args.headerVisibility),
     templateId: resolveProposalTemplateId(args.templateId),
     stylePreset,
+    signatureSettings: sanitizeProposalSignatureSettings(
+      args.signatureSettings,
+    ),
   };
 }
 
@@ -520,6 +535,9 @@ export function buildProposalPrintRoutePayload(args: {
     headerVisibility: args.data.headerVisibility,
     templateId: args.data.templateId,
     stylePreset: args.data.stylePreset,
+    signatureSettings: sanitizeProposalSignatureSettings(
+      args.data.signatureSettings,
+    ),
   };
 }
 
@@ -615,9 +633,10 @@ export function buildProposalExportSource(args: {
   contactLine: string | null | undefined;
   letterDate: string | null | undefined;
   recipientDetails: string | null | undefined;
-  applicantHeader: Partial<ProposalPrintApplicantHeader> | null | undefined;
+  applicantHeader: ProposalPrintApplicantHeaderInput | null | undefined;
   headerVisibility?: Partial<ProposalHeaderVisibility> | null;
   templateId?: ProposalTemplateId | null;
+  signatureSettings?: ProposalSignatureSettings | null;
 }): ProposalPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
   const inferredLocale =
@@ -650,6 +669,9 @@ export function buildProposalExportSource(args: {
     },
     headerVisibility: resolveProposalHeaderVisibility(args.headerVisibility),
     templateId: args.templateId ?? null,
+    signatureSettings: sanitizeProposalSignatureSettings(
+      args.signatureSettings,
+    ),
     body: buildProposalBodyBlocks(args.content, args.recipientDetails),
   };
 }

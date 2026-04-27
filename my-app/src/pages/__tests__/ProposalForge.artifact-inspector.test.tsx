@@ -81,7 +81,8 @@ vi.mock("../../components/ProposalDisplay", () => ({
     return (
       <div>
         <div data-testid="proposal-display-state">
-          {props.templateId ?? "no-template"}|{props.stylePreset?.layout ?? "no-layout"}|
+          {props.templateId ?? "no-template"}|
+          {props.stylePreset?.layout ?? "no-layout"}|
           {props.stylePreset?.palette ?? "no-palette"}|
           {props.stylePreset?.accentHex ?? "no-accent"}
         </div>
@@ -94,7 +95,10 @@ vi.mock("../../components/ProposalDisplay", () => ({
         >
           Toggle mode
         </button>
-        <div data-testid="proposal-display-addon">{props.railStartAddon}</div>
+        <div data-testid="proposal-display-addon">
+          {props.railStartAddon}
+          {props.railEndAddon}
+        </div>
       </div>
     );
   },
@@ -103,10 +107,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
 }));
 
 vi.mock("../../components/EmbeddedStyleInspector", () => ({
-  default: ({
-    onSelectLayout,
-    onSelectPalette,
-  }: Record<string, any>) => (
+  default: ({ onSelectLayout, onSelectPalette }: Record<string, any>) => (
     <div>
       <button
         type="button"
@@ -153,7 +154,9 @@ describe("ProposalForge artifact inspector integration", () => {
       screen.getByRole("button", { name: "Open palette controls" }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open layout controls" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open layout controls" }),
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
@@ -168,7 +171,9 @@ describe("ProposalForge artifact inspector integration", () => {
       });
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Open palette controls" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open palette controls" }),
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
@@ -193,7 +198,9 @@ describe("ProposalForge artifact inspector integration", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
-    fireEvent.click(screen.getByRole("button", { name: "Open layout controls" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open layout controls" }),
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
@@ -209,8 +216,12 @@ describe("ProposalForge artifact inspector integration", () => {
       });
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Toggle proposal mode" }));
-    fireEvent.click(screen.getByRole("button", { name: "Toggle proposal mode" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Toggle proposal mode" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Toggle proposal mode" }),
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
@@ -239,7 +250,9 @@ describe("ProposalForge artifact inspector integration", () => {
 
     await waitFor(() => {
       const lastCall =
-        proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
+        proposalDisplaySpy.mock.calls[
+          proposalDisplaySpy.mock.calls.length - 1
+        ]?.[0];
       expect(lastCall?.documentTitle).toContain("Application for the");
       expect(lastCall?.applicantHeader).toMatchObject({
         name: null,

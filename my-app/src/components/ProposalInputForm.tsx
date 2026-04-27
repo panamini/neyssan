@@ -286,14 +286,36 @@ function formatImportedSourceHost(
   }
 
   try {
-    return normalizedSourceUrl
-      .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
-      .replace(/^www\./i, "")
-      .split("/")[0]
-      .trim() || null;
+    return (
+      normalizedSourceUrl
+        .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+        .replace(/^www\./i, "")
+        .split("/")[0]
+        .trim() || null
+    );
   } catch {
     return null;
   }
+}
+
+function normalizeSourceDescriptor(value: string | null | undefined): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\.[a-z]{2,}$/, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function shouldShowImportedSourceHost(
+  label: string | null,
+  host: string | null,
+): boolean {
+  if (!host) return false;
+  const normalizedHost = normalizeSourceDescriptor(host);
+  const normalizedLabel = normalizeSourceDescriptor(label);
+  return !normalizedLabel || normalizedHost !== normalizedLabel;
 }
 
 const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
@@ -414,7 +436,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         : getActiveLocalPersonalizationSource(),
     );
     setCvOptions(
-      listLocalCvPickerOptions(hasControlledActiveCvId ? activeCvId : undefined),
+      listLocalCvPickerOptions(
+        hasControlledActiveCvId ? activeCvId : undefined,
+      ),
     );
   }, [activeCvId, hasControlledActiveCvId]);
 
@@ -464,7 +488,10 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         "--proposal-submit-stop-reveal-duration",
         1080,
       ),
-      stopHoldMs: readCssDurationMs("--proposal-submit-stop-hold-duration", 220),
+      stopHoldMs: readCssDurationMs(
+        "--proposal-submit-stop-hold-duration",
+        220,
+      ),
       stopUndrawMs: readCssDurationMs(
         "--proposal-submit-stop-undraw-duration",
         880,
@@ -482,10 +509,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     clearGenerateButtonTimers();
     shouldPlayGenerateButtonReverseRef.current = false;
     setGenerateButtonState("loading-hiding");
-    scheduleGenerateButtonState(
-      "loading-spinning",
-      timings.loadingHideMs,
-    );
+    scheduleGenerateButtonState("loading-spinning", timings.loadingHideMs);
     scheduleGenerateButtonState(
       "loading-revealing-stop",
       timings.loadingHideMs + timings.stopRevealDelayMs,
@@ -505,10 +529,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     clearGenerateButtonTimers();
     shouldPlayGenerateButtonReverseRef.current = false;
     setGenerateButtonState("loading-stop");
-    scheduleGenerateButtonState(
-      "stop-undrawing",
-      timings.stopHoldMs,
-    );
+    scheduleGenerateButtonState("stop-undrawing", timings.stopHoldMs);
     scheduleGenerateButtonState(
       "stop-revealing",
       timings.stopHoldMs + timings.stopUndrawMs,
@@ -568,10 +589,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     if (activeCvSource.title !== null) {
       lastSharedSnapshotSyncStateRef.current = activeCvSource.title;
     }
-  }, [
-    activeCvSource.title,
-    canPersistProposalWorkspaceState,
-  ]);
+  }, [activeCvSource.title, canPersistProposalWorkspaceState]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -948,7 +966,10 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
             sections: [{ type: "text", content: signedProposalContent }],
             status: "draft",
           }).catch((saveErr) => {
-            console.warn("Failed to update generated proposal status:", saveErr);
+            console.warn(
+              "Failed to update generated proposal status:",
+              saveErr,
+            );
           });
         }
       } else {
@@ -1004,9 +1025,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     );
     setCvOptions(nextOptions);
     setPendingCvId(
-      activeCvId ??
-        nextOptions.find((option) => option.isActive)?.id ??
-        null,
+      activeCvId ?? nextOptions.find((option) => option.isActive)?.id ?? null,
     );
     setCvPickerOpen(true);
   }
@@ -1072,9 +1091,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     setPendingCvId(null);
     setActiveCvSource({ title: null, personalizationContext: null });
     setCvOptions(
-      listLocalCvPickerOptions(
-        hasControlledActiveCvId ? null : undefined,
-      ),
+      listLocalCvPickerOptions(hasControlledActiveCvId ? null : undefined),
     );
     lastSharedSnapshotSyncStateRef.current = "none";
     if (!canPersistProposalWorkspaceState) {
@@ -1184,8 +1201,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         {
           label: "City",
           value:
-            sourceSummary.city &&
-            sourceSummary.city !== sourceSummary.location
+            sourceSummary.city && sourceSummary.city !== sourceSummary.location
               ? sourceSummary.city
               : null,
         },
@@ -1241,16 +1257,24 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       platform: draftPlatform ?? current.platform,
     }));
   }, [draftPlatform, draftSourceUrl]);
-  const resolvedDraftSourceUrl = draftSourceUrl ?? stickyImportedSource.sourceUrl;
-  const resolvedDraftPlatform =
-    draftPlatform ?? stickyImportedSource.platform;
+  const resolvedDraftSourceUrl =
+    draftSourceUrl ?? stickyImportedSource.sourceUrl;
+  const resolvedDraftPlatform = draftPlatform ?? stickyImportedSource.platform;
   const importedSourceLabel = React.useMemo(
-    () => formatImportedSourceLabel(resolvedDraftPlatform, resolvedDraftSourceUrl),
+    () =>
+      formatImportedSourceLabel(resolvedDraftPlatform, resolvedDraftSourceUrl),
     [resolvedDraftPlatform, resolvedDraftSourceUrl],
   );
   const importedSourceHost = React.useMemo(
     () => formatImportedSourceHost(resolvedDraftSourceUrl),
     [resolvedDraftSourceUrl],
+  );
+  const visibleImportedSourceHost = React.useMemo(
+    () =>
+      shouldShowImportedSourceHost(importedSourceLabel, importedSourceHost)
+        ? importedSourceHost
+        : null,
+    [importedSourceHost, importedSourceLabel],
   );
   React.useEffect(() => {
     updateComposeScrollEdges();
@@ -1281,6 +1305,19 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   );
   const { ref: jobDescriptionFieldRef, ...jobDescriptionFieldProps } =
     form.register("jobDescription");
+  const hasJobOfferText = watchedJobDescription.trim().length > 0;
+  const canToggleRawJobText = hasJobOfferText;
+  const shouldShowRawJobEditor = !canToggleRawJobText || isRawJobTextExpanded;
+  const shouldShowImportedSourceCard =
+    hasJobOfferText && Boolean(importedSourceLabel);
+  const shouldShowSourceSummaryStack =
+    shouldShowImportedSourceCard || hasStructuredSourceSummary;
+
+  React.useEffect(() => {
+    if (!canToggleRawJobText && !isRawJobTextExpanded) {
+      setIsRawJobTextExpanded(true);
+    }
+  }, [canToggleRawJobText, isRawJobTextExpanded]);
 
   const handleGenerateButtonClick = React.useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -1548,9 +1585,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     className="dasti-proposal-source-scroll-region"
                     ref={attachComposeScrollEdges}
                   >
-                    {importedSourceLabel || hasStructuredSourceSummary ? (
+                    {shouldShowSourceSummaryStack ? (
                       <div className="dasti-proposal-source-summary-stack">
-                        {importedSourceLabel ? (
+                        {shouldShowImportedSourceCard ? (
                           <div className="dasti-proposal-source-summary__job-offer-card">
                             <div className="dasti-proposal-source-summary__job-offer-row">
                               <div className="dasti-proposal-source-summary__job-offer-copy">
@@ -1576,9 +1613,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                                     {importedSourceLabel}
                                   </span>
                                 )}
-                                {importedSourceHost ? (
+                                {visibleImportedSourceHost ? (
                                   <span className="dasti-proposal-source-summary__origin-host">
-                                    {importedSourceHost}
+                                    {visibleImportedSourceHost}
                                   </span>
                                 ) : null}
                               </div>
@@ -1625,9 +1662,11 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                                   Key responsibilities
                                 </div>
                                 <ul className="dasti-proposal-source-summary__list">
-                                  {sourceSummary.responsibilities.map((item) => (
-                                    <li key={item}>{item}</li>
-                                  ))}
+                                  {sourceSummary.responsibilities.map(
+                                    (item) => (
+                                      <li key={item}>{item}</li>
+                                    ),
+                                  )}
                                 </ul>
                               </div>
                             ) : null}
@@ -1653,28 +1692,30 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                       </div>
                     ) : null}
                     <div className="dasti-proposal-source-raw">
-                      <button
-                        type="button"
-                        className="dasti-proposal-source-raw__toggle"
-                        onClick={() =>
-                          setIsRawJobTextExpanded((current) => !current)
-                        }
-                        aria-expanded={isRawJobTextExpanded}
-                        aria-controls="jobDescription"
-                      >
-                        <span className="dasti-proposal-source-raw__label">
-                          {isRawJobTextExpanded
-                            ? "Hide job offer"
-                            : "Show job offer"}
-                        </span>
-                        <span
-                          className="dasti-proposal-source-raw__toggle-icon"
-                          aria-hidden="true"
+                      {canToggleRawJobText ? (
+                        <button
+                          type="button"
+                          className="dasti-proposal-source-raw__toggle"
+                          onClick={() =>
+                            setIsRawJobTextExpanded((current) => !current)
+                          }
+                          aria-expanded={isRawJobTextExpanded}
+                          aria-controls="jobDescription"
                         >
-                          <ChevronDown size={14} strokeWidth={1.7} />
-                        </span>
-                      </button>
-                      {isRawJobTextExpanded ? (
+                          <span className="dasti-proposal-source-raw__label">
+                            {isRawJobTextExpanded
+                              ? "Hide job offer"
+                              : "Show job offer"}
+                          </span>
+                          <span
+                            className="dasti-proposal-source-raw__toggle-icon"
+                            aria-hidden="true"
+                          >
+                            <ChevronDown size={14} strokeWidth={1.7} />
+                          </span>
+                        </button>
+                      ) : null}
+                      {shouldShowRawJobEditor ? (
                         <div className="dasti-proposal-source-raw__editor">
                           <textarea
                             ref={(node) => {

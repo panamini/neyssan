@@ -26,6 +26,10 @@ import {
   serializeProposalRuntimeVars,
 } from "../../lib/layout/documentTokenSerializers";
 import type { VerbatiStylePreset } from "../../features/verbati/types";
+import {
+  resolveProposalSignatureRender,
+  type ProposalSignatureSettings,
+} from "../../lib/proposal-signature-settings";
 
 type ProposalDocumentRendererProps = {
   content: string;
@@ -46,6 +50,7 @@ type ProposalDocumentRendererProps = {
   pageWidth?: number;
   pageGapPx?: number;
   stylePreset?: VerbatiStylePreset | null;
+  signatureSettings?: ProposalSignatureSettings | null;
   onPageCountChange?: (count: number) => void;
 };
 
@@ -522,6 +527,7 @@ export function ProposalDocumentRenderer({
   pageWidth,
   pageGapPx = 0,
   stylePreset = null,
+  signatureSettings = null,
   onPageCountChange,
 }: ProposalDocumentRendererProps): JSX.Element {
   const resolvedTemplateId = resolveProposalTemplateId(templateId);
@@ -557,6 +563,46 @@ export function ProposalDocumentRenderer({
   const documentBlocks = React.useMemo(
     () => buildProposalDocumentBlocks(parsedDocument),
     [parsedDocument],
+  );
+  const signatureRender = React.useMemo(
+    () =>
+      resolveProposalSignatureRender({
+        settings: signatureSettings,
+        bodyFontFamily: documentTypography.fontFamily,
+      }),
+    [documentTypography.fontFamily, signatureSettings],
+  );
+  const renderSignature = React.useCallback(
+    (signatureName: string | null | undefined) => {
+      if (!signatureName) {
+        return null;
+      }
+
+      const formattedName = formatProposalSignatureName(signatureName);
+      if (signatureRender.kind === "image") {
+        return (
+          <img
+            className="dasti-proposal-document__signature-image"
+            src={signatureRender.imageDataUrl}
+            alt={formattedName}
+          />
+        );
+      }
+
+      return (
+        <p
+          className="dasti-proposal-document__signature"
+          style={
+            {
+              "--proposal-signature-font-family": signatureRender.fontFamily,
+            } as React.CSSProperties
+          }
+        >
+          {formattedName}
+        </p>
+      );
+    },
+    [signatureRender],
   );
 
   // --proposal-inline-mm / --proposal-block-mm are defined on :root as
@@ -709,7 +755,13 @@ export function ProposalDocumentRenderer({
       resizeObserver.disconnect();
       document.fonts?.removeEventListener?.("loadingdone", scheduleMeasure);
     };
-  }, [documentBlocks, onPageCountChange, pageWidth, resolvedTemplateId]);
+  }, [
+    documentBlocks,
+    onPageCountChange,
+    pageWidth,
+    resolvedTemplateId,
+    signatureRender,
+  ]);
 
   const renderDocumentBlock = React.useCallback(
     (block: ProposalDocumentBlock) => {
@@ -753,16 +805,12 @@ export function ProposalDocumentRenderer({
                   {block.signOff}
                 </p>
               ) : null}
-              {block.signatureName ? (
-                <p className="dasti-proposal-document__signature">
-                  {formatProposalSignatureName(block.signatureName)}
-                </p>
-              ) : null}
+              {renderSignature(block.signatureName)}
             </div>
           );
       }
     },
-    [],
+    [renderSignature],
   );
 
   const renderVisibleDocumentBlocks = React.useCallback(
@@ -893,9 +941,7 @@ export function ProposalDocumentRenderer({
               data-proposal-block={measurement ? true : undefined}
             >
               <p className="dasti-proposal-document__signoff">{signOff}</p>
-              <p className="dasti-proposal-document__signature">
-                {formatProposalSignatureName(signatureName ?? "")}
-              </p>
+              {renderSignature(signatureName)}
             </div>
           );
         }
@@ -911,7 +957,7 @@ export function ProposalDocumentRenderer({
         );
       });
     },
-    [renderVisibleDocumentBlocks, volkFallbackParagraphs],
+    [renderSignature, renderVisibleDocumentBlocks, volkFallbackParagraphs],
   );
   const renderGenericRail = React.useCallback(
     (_isContinuationPage: boolean) => (

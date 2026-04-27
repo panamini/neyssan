@@ -1,5 +1,11 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ProposalsList from "../ProposalsList";
 
@@ -95,7 +101,8 @@ vi.mock("../../lib/proposal-personalization", () => ({
     title: "Alex Martin Resume",
     personalizationContext: null,
   }),
-  getLocalCvDocumentById: (id: string) => (id === "cv_alpha" ? mockSourceCv : null),
+  getLocalCvDocumentById: (id: string) =>
+    id === "cv_alpha" ? mockSourceCv : null,
   getProposalAttachedCvId: () => "cv_alpha",
   getProposalApplicantHeaderData: () => ({
     name: "Alex Martin",
@@ -162,7 +169,10 @@ vi.mock("../SavedProposalForgeToolbarPreview", () => ({
       <button type="button" onClick={() => onModeChange?.("edit")}>
         Switch saved edit mode
       </button>
-      <button type="button" onClick={() => onPaletteOverrideChange?.("bordeaux")}>
+      <button
+        type="button"
+        onClick={() => onPaletteOverrideChange?.("bordeaux")}
+      >
         Change saved palette
       </button>
     </div>
@@ -194,13 +204,12 @@ describe("ProposalsList autosave", () => {
     expect(screen.getByTestId("saved-render-style")).not.toHaveTextContent(
       "pierre",
     );
-    expect(screen.getByText("Alex Martin Resume")).toBeInTheDocument();
-    expect(
-      screen.getByLabelText("Source CV Alex Martin Resume"),
-    ).toBeInTheDocument();
+    expect(screen.queryByText("Alex Martin Resume")).not.toBeInTheDocument();
     expect(screen.queryByText(/Source CV:\s*Alex Martin Resume/)).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Switch saved edit mode" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Switch saved edit mode" }),
+    );
     fireEvent.change(screen.getByRole("textbox", { name: "Proposal title" }), {
       target: { value: "Renamed saved proposal" },
     });
@@ -233,7 +242,9 @@ describe("ProposalsList autosave", () => {
       mockUpdateProposal.mock.calls.at(-1)?.[0]?.metadata?.verbatiStyle,
     ).not.toHaveProperty("familyId");
 
-    fireEvent.click(screen.getByRole("button", { name: "Change saved palette" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Change saved palette" }),
+    );
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);

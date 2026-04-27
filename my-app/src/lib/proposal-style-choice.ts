@@ -105,12 +105,12 @@ const PROPOSAL_STYLE_DEFINITIONS: Record<
     description: "Calm default with even hierarchy and broad readability.",
     stylePreset: resolveVerbatiStyle({
       layout: "swiss",
-      typography: "signature",
+      typography: "geist-baskervville",
       palette: "pierre",
     }),
     templateId: getProposalTwinTemplateId({
       layout: "swiss",
-      typography: "signature",
+      typography: "geist-baskervville",
       palette: "pierre",
     }),
   },
