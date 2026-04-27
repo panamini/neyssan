@@ -11,7 +11,22 @@ describe("ProfileReviewCard organize sections CSS contracts", () => {
       /\.section-container-header\s*\{[\s\S]*min-block-size:\s*var\(--section-header-block-size\);[\s\S]*padding:\s*var\(--space-4\);/,
     );
     expect(productCss).toMatch(
+      /\.section-container-header\s*\{[\s\S]*background-clip:\s*padding-box;[\s\S]*border-top-left-radius:\s*calc\(var\(--radius-card\) - 1px\);[\s\S]*border-top-right-radius:\s*calc\(var\(--radius-card\) - 1px\);/,
+    );
+    expect(productCss).toMatch(
       /\.cv-organize-section-row\s*\{[\s\S]*min-block-size:\s*var\(--section-header-block-size\);/,
+    );
+    expect(productCss).toMatch(
+      /\.cv-section-heading\s*\{[\s\S]*font-family:\s*var\(--proposal-ui-heading-trial-font,\s*var\(--font-body-family\)\);/,
+    );
+    expect(productCss).toMatch(
+      /\.cv-organize-section-row\s*\{[\s\S]*grid-template-columns:\s*auto minmax\(0,\s*1fr\) auto auto;/,
+    );
+    expect(productCss).toMatch(
+      /\.cv-organize-section-row__meta\s*\{[\s\S]*justify-self:\s*end;[\s\S]*margin-inline-start:\s*auto;/,
+    );
+    expect(productCss).toMatch(
+      /\.cv-organize-section-row\[data-section-has-actions="false"\]\s+\.cv-organize-section-row__rail\s*\{[\s\S]*display:\s*none;/,
     );
   });
 
@@ -31,8 +46,8 @@ describe("ProfileReviewCard organize sections CSS contracts", () => {
     expect(productCss).toMatch(
       /\.cv-organize-section-row\[data-section-hidden="true"\]\s*\{[\s\S]*opacity:\s*0\.72;/,
     );
-    expect(productCss).toMatch(
-      /\.cv-organize-section-row__pill--hidden\s*\{[\s\S]*color:\s*var\(--text-ghost\);/,
+    expect(productCss).not.toContain(
+      ".cv-organize-section-row__pill--hidden",
     );
   });
 });

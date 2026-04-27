@@ -5,8 +5,12 @@ import {
   Check,
   ColorWheel,
   Feather,
+  FileImage,
+  Pen,
   PenNib,
   Stamp,
+  TrashSimple,
+  Upload,
   Wand2,
 } from "@/lib/icons";
 import {
@@ -35,6 +39,13 @@ import type {
   StyleFamilyId,
   VerbatiStylePreset,
 } from "../features/verbati/types";
+import {
+  DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
+  PROPOSAL_SIGNATURE_FONT_OPTIONS,
+  resolveProposalSignatureRender,
+  sanitizeProposalSignatureSettings,
+  type ProposalSignatureSettings,
+} from "../lib/proposal-signature-settings";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,6 +61,7 @@ type PresetSlot = {
   accentHex: string | null;
   verbatiStyle?: StoredVerbatiStyle | null;
   voicePreset: "signature" | "expert" | "engaging" | null;
+  signatureSettings: ProposalSignatureSettings;
   name?: string;
 };
 
@@ -59,12 +71,19 @@ const DEFAULT_SLOT_NAMES: Record<SlotIndex, string> = {
   3: "Style 3",
 };
 
+const DEFAULT_FONT_PAIR_ID = "geist-baskervville" as const;
+const DEFAULT_FONT_PAIR_OPTION =
+  VERBATI_FONT_PAIR_OPTIONS.find(
+    (option) => option.id === DEFAULT_FONT_PAIR_ID,
+  ) ?? VERBATI_FONT_PAIR_OPTIONS[0];
+
 const EMPTY_PRESET: PresetSlot = {
-  fontPairId: VERBATI_FONT_PAIR_OPTIONS[0]?.id ?? null,
+  fontPairId: DEFAULT_FONT_PAIR_OPTION.id,
   styleChoice: "auto",
   paletteOverride: null,
   accentHex: null,
   voicePreset: null,
+  signatureSettings: DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
 };
 
 // ─── Tone options ──────────────────────────────────────────────────────────────
@@ -111,13 +130,13 @@ type StyleOption = {
   isAuto?: boolean;
 };
 
-const STYLE_OPTIONS: StyleOption[] = [
+const STYLE_OPTIONS = ([
   { id: "auto",     label: "Auto",      description: "Matches the look to the role.",                   isAuto: true },
   { id: "swiss", label: "Swiss", description: "Quiet Swiss grid. Serif-led rhythm." },
   { id: "editorial", label: "Editorial", description: "Editorial pacing. Rich reading voice." },
   { id: "modernist", label: "Mono", description: "Tight grid. Technical contrast." },
   { id: "workshop", label: "Workshop", description: "Workshop ATS. Paired margin twin." },
-].filter(
+] satisfies StyleOption[]).filter(
   (option) =>
     option.id !== "workshop" ||
     VERBATI_LAYOUT_OPTIONS.some((layout) => layout.id === "workshop"),
@@ -303,12 +322,16 @@ function StyleTiltCard({
 
 function HeroPreview({ preset, slotName }: { preset: PresetSlot; slotName: string }) {
   const fontPair = VERBATI_FONT_PAIR_OPTIONS.find((f) => f.id === preset.fontPairId)
-    ?? VERBATI_FONT_PAIR_OPTIONS[0];
+    ?? DEFAULT_FONT_PAIR_OPTION;
   const styleOption =
     STYLE_OPTIONS.find((s) => s.id === resolvePresetLayoutSelection(preset)) ??
     STYLE_OPTIONS[0];
   const paletteOption = PROPOSAL_PALETTE_OPTIONS.find((p) => p.id === preset.paletteOverride);
   const stylePreset = buildPresetSlotStylePreset(preset);
+  const signatureRender = resolveProposalSignatureRender({
+    settings: preset.signatureSettings,
+    bodyFontFamily: fontPair?.bodyFamily ?? "inherit",
+  });
 
   const accentColor =
     preset.accentHex ??
@@ -335,39 +358,40 @@ function HeroPreview({ preset, slotName }: { preset: PresetSlot; slotName: strin
   useEffect(() => {
     const card = cardRef.current;
     if (!card) return;
+    const previewCard: HTMLElement = card;
     const MAX = 5;
 
     function move(clientX: number, clientY: number) {
-      card.classList.remove("is-resetting");
+      previewCard.classList.remove("is-resetting");
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
-        const r = card.getBoundingClientRect();
+        const r = previewCard.getBoundingClientRect();
         const px = (clientX - r.left) / r.width;
         const py = (clientY - r.top) / r.height;
         const x = Math.min(Math.max(px, 0), 1);
         const y = Math.min(Math.max(py, 0), 1);
-        card.style.setProperty("--rx", `${((0.5 - y) * MAX * 2).toFixed(2)}deg`);
-        card.style.setProperty("--ry", `${((x - 0.5) * MAX * 2).toFixed(2)}deg`);
-        card.style.setProperty("--mx", `${(x * 100).toFixed(1)}%`);
-        card.style.setProperty("--my", `${(y * 100).toFixed(1)}%`);
+        previewCard.style.setProperty("--rx", `${((0.5 - y) * MAX * 2).toFixed(2)}deg`);
+        previewCard.style.setProperty("--ry", `${((x - 0.5) * MAX * 2).toFixed(2)}deg`);
+        previewCard.style.setProperty("--mx", `${(x * 100).toFixed(1)}%`);
+        previewCard.style.setProperty("--my", `${(y * 100).toFixed(1)}%`);
       });
     }
 
     function reset() {
       cancelAnimationFrame(rafRef.current);
-      card.classList.add("is-resetting");
-      card.style.setProperty("--rx", "0deg");
-      card.style.setProperty("--ry", "0deg");
-      card.style.setProperty("--mx", "50%");
-      card.style.setProperty("--my", "50%");
+      previewCard.classList.add("is-resetting");
+      previewCard.style.setProperty("--rx", "0deg");
+      previewCard.style.setProperty("--ry", "0deg");
+      previewCard.style.setProperty("--mx", "50%");
+      previewCard.style.setProperty("--my", "50%");
     }
 
     const onMove = (e: MouseEvent) => move(e.clientX, e.clientY);
-    card.addEventListener("mousemove", onMove);
-    card.addEventListener("mouseleave", reset);
+    previewCard.addEventListener("mousemove", onMove);
+    previewCard.addEventListener("mouseleave", reset);
     return () => {
-      card.removeEventListener("mousemove", onMove);
-      card.removeEventListener("mouseleave", reset);
+      previewCard.removeEventListener("mousemove", onMove);
+      previewCard.removeEventListener("mouseleave", reset);
       cancelAnimationFrame(rafRef.current);
     };
   }, []);
@@ -413,6 +437,15 @@ function HeroPreview({ preset, slotName }: { preset: PresetSlot; slotName: strin
             organisation, bringing relevant expertise and a strong record of achievement.
           </p>
         </div>
+        <div className="dasti-settings-hero-preview__signature" aria-hidden="true">
+          {signatureRender.kind === "image" ? (
+            <img src={signatureRender.imageDataUrl} alt="" />
+          ) : (
+            <span style={{ fontFamily: signatureRender.fontFamily }}>
+              {SIGNATURE_SAMPLE_NAME}
+            </span>
+          )}
+        </div>
         <div className="dasti-settings-hero-preview__footer" aria-hidden="true">
           <span className="dasti-settings-hero-preview__chip">
             {fontPair?.headingLabel} / {fontPair?.bodyLabel}
@@ -444,7 +477,7 @@ function SlotCard({
   onSetActive: (e: React.MouseEvent) => void;
 }) {
   const fontPair = VERBATI_FONT_PAIR_OPTIONS.find((f) => f.id === preset.fontPairId)
-    ?? VERBATI_FONT_PAIR_OPTIONS[0];
+    ?? DEFAULT_FONT_PAIR_OPTION;
   const paletteOption = PROPOSAL_PALETTE_OPTIONS.find((p) => p.id === preset.paletteOverride);
   const accentColor =
     preset.accentHex ??
@@ -552,6 +585,338 @@ function FontPairGrid({
   );
 }
 
+// ─── Signature selector ───────────────────────────────────────────────────────
+
+const SIGNATURE_SAMPLE_NAME = "robert cooper";
+const SIGNATURE_IMAGE_MAX_SIDE = 520;
+
+function getCanvasContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
+  if (
+    typeof navigator !== "undefined" &&
+    navigator.userAgent.toLowerCase().includes("jsdom")
+  ) {
+    return null;
+  }
+
+  try {
+    return canvas.getContext("2d");
+  } catch {
+    return null;
+  }
+}
+
+async function readSignatureImageFile(file: File): Promise<string> {
+  if (!/^image\/(?:png|jpe?g|webp)$/i.test(file.type)) {
+    throw new Error("Use a PNG, JPG, or WebP signature image.");
+  }
+
+  const sourceDataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read the image."));
+    reader.onload = () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("Could not read the image."));
+    reader.readAsDataURL(file);
+  });
+
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const nextImage = new Image();
+    nextImage.onerror = () => reject(new Error("Could not load the image."));
+    nextImage.onload = () => resolve(nextImage);
+    nextImage.src = sourceDataUrl;
+  });
+
+  const scale = Math.min(
+    1,
+    SIGNATURE_IMAGE_MAX_SIDE / Math.max(image.naturalWidth, image.naturalHeight, 1),
+  );
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = getCanvasContext(canvas);
+  if (!context) {
+    return sourceDataUrl;
+  }
+
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/png");
+}
+
+function SignatureDrawingPad({
+  onImageReady,
+}: {
+  onImageReady: (imageDataUrl: string) => void;
+}) {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const drawingRef = React.useRef(false);
+  const lastPointRef = React.useRef<{ x: number; y: number } | null>(null);
+
+  const syncCanvasScale = React.useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const ratio = Math.max(1, window.devicePixelRatio || 1);
+    const nextWidth = Math.max(1, Math.round(rect.width * ratio));
+    const nextHeight = Math.max(1, Math.round(rect.height * ratio));
+
+    if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+      canvas.width = nextWidth;
+      canvas.height = nextHeight;
+    }
+
+    const context = getCanvasContext(canvas);
+    if (!context) return;
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.lineWidth = 2.2;
+    context.strokeStyle = "#20160f";
+  }, []);
+
+  React.useEffect(() => {
+    syncCanvasScale();
+  }, [syncCanvasScale]);
+
+  const getPoint = React.useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
+  }, []);
+
+  const finishDrawing = React.useCallback(() => {
+    const canvas = canvasRef.current;
+    drawingRef.current = false;
+    lastPointRef.current = null;
+    if (!canvas) return;
+
+    try {
+      onImageReady(canvas.toDataURL("image/png"));
+    } catch {
+      // Some test environments do not implement canvas serialization.
+    }
+  }, [onImageReady]);
+
+  const clearDrawing = React.useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const context = getCanvasContext(canvas);
+    if (!context) return;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+  }, []);
+
+  return (
+    <div className="dasti-settings-signature-draw">
+      <canvas
+        ref={canvasRef}
+        className="dasti-settings-signature-canvas"
+        aria-label="Draw signature"
+        onPointerDown={(event) => {
+          const canvas = canvasRef.current;
+          const point = getPoint(event);
+          if (!canvas || !point) return;
+          canvas.setPointerCapture(event.pointerId);
+          syncCanvasScale();
+          drawingRef.current = true;
+          lastPointRef.current = point;
+        }}
+        onPointerMove={(event) => {
+          if (!drawingRef.current) return;
+          const canvas = canvasRef.current;
+          const point = getPoint(event);
+          const lastPoint = lastPointRef.current;
+          if (!canvas || !point || !lastPoint) return;
+          const context = getCanvasContext(canvas);
+          if (!context) return;
+          context.beginPath();
+          context.moveTo(lastPoint.x, lastPoint.y);
+          context.lineTo(point.x, point.y);
+          context.stroke();
+          lastPointRef.current = point;
+        }}
+        onPointerUp={finishDrawing}
+        onPointerCancel={finishDrawing}
+      />
+      <button
+        type="button"
+        className="dasti-settings-signature-clear"
+        onClick={clearDrawing}
+      >
+        <TrashSimple size={12} strokeWidth={1.8} aria-hidden="true" />
+        Clear drawing
+      </button>
+    </div>
+  );
+}
+
+function SignatureSelector({
+  settings,
+  bodyFontFamily,
+  onChange,
+}: {
+  settings: ProposalSignatureSettings;
+  bodyFontFamily: string;
+  onChange: (settings: ProposalSignatureSettings) => void;
+}) {
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const signatureRender = resolveProposalSignatureRender({
+    settings,
+    bodyFontFamily,
+  });
+
+  const chooseImageFile = React.useCallback(
+    async (file: File | null | undefined) => {
+      if (!file) return;
+
+      try {
+        const imageDataUrl = await readSignatureImageFile(file);
+        setError(null);
+        onChange({
+          mode: "image",
+          fontId: null,
+          imageDataUrl,
+        });
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : "Could not import this signature image.",
+        );
+      }
+    },
+    [onChange],
+  );
+
+  return (
+    <div className="dasti-settings-signature" role="group" aria-label="Signature">
+      <div className="dasti-settings-signature-grid">
+        <button
+          type="button"
+          className={[
+            "dasti-settings-signature-card",
+            settings.mode === "auto" ? "dasti-settings-signature-card--active" : "",
+          ].filter(Boolean).join(" ")}
+          aria-pressed={settings.mode === "auto"}
+          onClick={() => onChange(DEFAULT_PROPOSAL_SIGNATURE_SETTINGS)}
+        >
+          <span className="dasti-settings-signature-card__label">Auto</span>
+          <span
+            className="dasti-settings-signature-card__sample"
+            style={{ fontFamily: bodyFontFamily }}
+          >
+            {SIGNATURE_SAMPLE_NAME}
+          </span>
+        </button>
+
+        {PROPOSAL_SIGNATURE_FONT_OPTIONS.map((option) => {
+          const active = settings.mode === "font" && settings.fontId === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              className={[
+                "dasti-settings-signature-card",
+                active ? "dasti-settings-signature-card--active" : "",
+              ].filter(Boolean).join(" ")}
+              aria-label={`${option.label} signature`}
+              aria-pressed={active}
+              onClick={() =>
+                onChange({
+                  mode: "font",
+                  fontId: option.id,
+                  imageDataUrl: null,
+                })
+              }
+            >
+              <span className="dasti-settings-signature-card__label">
+                {option.label}
+              </span>
+              <span
+                className="dasti-settings-signature-card__sample"
+                style={{ fontFamily: option.fontFamily }}
+              >
+                {SIGNATURE_SAMPLE_NAME}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="dasti-settings-signature-tools">
+        <button
+          type="button"
+          className="dasti-settings-signature-tool"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Upload size={14} strokeWidth={1.8} aria-hidden="true" />
+          Import image
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={(event) => {
+            void chooseImageFile(event.currentTarget.files?.[0]);
+            event.currentTarget.value = "";
+          }}
+          hidden
+        />
+
+        <div className="dasti-settings-signature-tool dasti-settings-signature-tool--canvas">
+          <Pen size={14} strokeWidth={1.8} aria-hidden="true" />
+          Draw
+          <SignatureDrawingPad
+            onImageReady={(imageDataUrl) =>
+              onChange({
+                mode: "image",
+                fontId: null,
+                imageDataUrl,
+              })
+            }
+          />
+        </div>
+      </div>
+
+      <div className="dasti-settings-signature-current" aria-live="polite">
+        <span className="dasti-settings-signature-current__label">
+          Current signature
+        </span>
+        <span className="dasti-settings-signature-current__preview">
+          {signatureRender.kind === "image" ? (
+            <img src={signatureRender.imageDataUrl} alt="Selected signature" />
+          ) : (
+            <span style={{ fontFamily: signatureRender.fontFamily }}>
+              {SIGNATURE_SAMPLE_NAME}
+            </span>
+          )}
+        </span>
+        {settings.mode === "image" ? (
+          <button
+            type="button"
+            className="dasti-settings-signature-current__reset"
+            onClick={() => onChange(DEFAULT_PROPOSAL_SIGNATURE_SETTINGS)}
+          >
+            <FileImage size={12} strokeWidth={1.8} aria-hidden="true" />
+            Remove image
+          </button>
+        ) : null}
+      </div>
+
+      {error ? (
+        <p className="dasti-settings-signature-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export function SettingsPage(): JSX.Element {
@@ -579,17 +944,28 @@ export function SettingsPage(): JSX.Element {
     if (!presetsQuery || hydrated.current) return;
     hydrated.current = true;
 
-    const serverPreset = (raw: typeof presetsQuery.preset1): PresetSlot => ({
-      fontPairId: (raw?.fontPairId as VerbatiFontPairId | null) ?? VERBATI_FONT_PAIR_OPTIONS[0]?.id ?? null,
-      styleChoice: (raw?.styleChoice as ProposalStyleChoice) ?? "auto",
-      paletteOverride: (raw?.paletteOverride as ProposalPaletteId | null) ?? null,
-      accentHex: raw?.accentHex ?? null,
-      verbatiStyle: sanitizePersistedVerbatiStyle(
-        raw?.verbatiStyle as Partial<VerbatiStylePreset> | null | undefined,
-      ) as StoredVerbatiStyle | null,
-      voicePreset: (raw?.voicePreset as ToneId) ?? null,
-      name: raw?.name,
-    });
+    const serverPreset = (raw: typeof presetsQuery.preset1): PresetSlot => {
+      const rawRecord = raw as
+        | (typeof raw & { signatureSettings?: unknown })
+        | null
+        | undefined;
+
+      return {
+        fontPairId:
+          (raw?.fontPairId as VerbatiFontPairId | null) ?? DEFAULT_FONT_PAIR_ID,
+        styleChoice: (raw?.styleChoice as ProposalStyleChoice) ?? "auto",
+        paletteOverride: (raw?.paletteOverride as ProposalPaletteId | null) ?? null,
+        accentHex: raw?.accentHex ?? null,
+        verbatiStyle: sanitizePersistedVerbatiStyle(
+          raw?.verbatiStyle as Partial<VerbatiStylePreset> | null | undefined,
+        ) as StoredVerbatiStyle | null,
+        voicePreset: (raw?.voicePreset as ToneId) ?? null,
+        signatureSettings: sanitizeProposalSignatureSettings(
+          rawRecord?.signatureSettings,
+        ),
+        name: raw?.name,
+      };
+    };
 
     setLocalPresets({
       1: serverPreset(presetsQuery.preset1),
@@ -633,6 +1009,9 @@ export function SettingsPage(): JSX.Element {
               paletteOverride: nextSavedPreset.paletteOverride ?? null,
               accentHex: nextSavedPreset.accentHex ?? null,
               fontPairId: nextSavedPreset.fontPairId ?? null,
+              signatureSettings: sanitizeProposalSignatureSettings(
+                nextSavedPreset.signatureSettings,
+              ),
               verbatiStyle: nextSavedPreset.verbatiStyle
                 ? {
                     ...nextSavedPreset.verbatiStyle,
@@ -659,6 +1038,9 @@ export function SettingsPage(): JSX.Element {
   );
 
   const currentPreset = localPresets[editingSlot];
+  const currentFontPair =
+    VERBATI_FONT_PAIR_OPTIONS.find((fontPair) => fontPair.id === currentPreset.fontPairId) ??
+    DEFAULT_FONT_PAIR_OPTION;
 
   const selectedPaletteOption = currentPreset.paletteOverride
     ? PROPOSAL_PALETTE_OPTIONS.find((p) => p.id === currentPreset.paletteOverride) ?? null
@@ -726,6 +1108,22 @@ export function SettingsPage(): JSX.Element {
                 <FontPairGrid
                   selectedId={currentPreset.fontPairId as VerbatiFontPairId | null}
                   onChange={(id) => updatePreset({ fontPairId: id })}
+                />
+              </div>
+
+              {/* Signature */}
+              <div className="dasti-settings-appearance-group">
+                <div className="dasti-settings-appearance-label">Signature</div>
+                <SignatureSelector
+                  settings={currentPreset.signatureSettings}
+                  bodyFontFamily={currentFontPair?.bodyFamily ?? "inherit"}
+                  onChange={(signatureSettings) =>
+                    updatePreset({
+                      signatureSettings: sanitizeProposalSignatureSettings(
+                        signatureSettings,
+                      ),
+                    })
+                  }
                 />
               </div>
 

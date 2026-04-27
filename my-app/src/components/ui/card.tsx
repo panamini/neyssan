@@ -22,7 +22,7 @@ export interface CardHeaderProps {
   children?: React.ReactNode;
   className?: string;
   /**
-   * display=true : titre de section card (Fraunces tl/26px fw600 — .sct §11 dasti-spec-v1)
+   * display=true : titre de section card (Baskervville tl/26px fw600 - .sct §11 dasti-spec-v1)
    * display=false (défaut) : Source Sans semibold standard
    */
   display?: boolean;
