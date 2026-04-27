@@ -4018,6 +4018,37 @@
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
+  width: min(
+    100%,
+    calc(
+      var(--document-stage-width, var(--document-viewer-shell-inline-size)) +
+        (var(--proposal-output-stage-frame-padding) * 2) + 2px
+    )
+  );
+  max-width: min(
+    100%,
+    calc(
+      var(--document-stage-width, var(--document-viewer-shell-inline-size)) +
+        (var(--proposal-output-stage-frame-padding) * 2) + 2px
+    )
+  );
+}
+
+.dasti-proposal-output-shell--saved .dasti-proposal-sheet-frame {
+  width: min(
+    100%,
+    calc(
+      var(--document-stage-width, var(--document-viewer-shell-inline-size)) +
+        (var(--proposal-output-stage-frame-padding) * 2) + 2px
+    )
+  );
+  max-width: min(
+    100%,
+    calc(
+      var(--document-stage-width, var(--document-viewer-shell-inline-size)) +
+        (var(--proposal-output-stage-frame-padding) * 2) + 2px
+    )
+  );
 }
 
 .dasti-proposal-output-shell--workspace
