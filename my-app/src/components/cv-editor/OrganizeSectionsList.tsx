@@ -18,7 +18,7 @@ import {
   ArrowDown,
   ArrowUp,
   Eye,
-  EyeSlash,
+  EyeClosed,
   GripHorizontal,
   TrashSimple,
 } from "@/lib/icons";
@@ -163,21 +163,10 @@ function getRowState(
 }
 
 function buildSectionMetadata(rowState: ReturnType<typeof getRowState>) {
-  const metadata: Array<{
-    label: string;
-    tone?: "hidden";
-  }> = [];
-
-  if (rowState.reorderLocked) {
-    metadata.push({ label: "Fixed order" });
-  }
+  const metadata: Array<{ label: string }> = [];
 
   if (rowState.hideLocked) {
     metadata.push({ label: "Always shown" });
-  }
-
-  if (rowState.isHidden) {
-    metadata.push({ label: "Hidden", tone: "hidden" });
   }
 
   return metadata;
@@ -253,6 +242,13 @@ function SectionCard(props: {
     !rowState.reorderLocked;
   const showMoveControls =
     !rowState.isHidden && rowState.controlPolicy.showMoveControls;
+  const showVisibilityToggle = rowState.controlPolicy.showVisibilityToggle;
+  const showHiddenDeleteControl =
+    rowState.isHidden &&
+    rowState.controlPolicy.showDeleteControl &&
+    rowState.removable;
+  const hasActionControls =
+    showVisibilityToggle || showHiddenDeleteControl || showMoveControls;
 
   return (
     <article
@@ -261,6 +257,7 @@ function SectionCard(props: {
       data-section-id={sectionId}
       data-section-active={isActive ? "true" : "false"}
       data-section-hidden={rowState.isHidden ? "true" : "false"}
+      data-section-has-actions={hasActionControls ? "true" : "false"}
       data-section-drop-target={isDropTarget ? "true" : "false"}
       data-section-dragging={isDragging || isActiveDragSection ? "true" : "false"}
       aria-label={`Organize ${sectionTitle} section`}
@@ -317,15 +314,7 @@ function SectionCard(props: {
         data-testid={`organize-section-meta-${sectionId}`}
       >
         {metadata.map((item) => (
-          <span
-            key={item.label}
-            className={[
-              "dasti-pill",
-              item.tone === "hidden" ? "cv-organize-section-row__pill--hidden" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
+          <span key={item.label} className="dasti-pill">
             {item.label}
           </span>
         ))}
@@ -334,20 +323,7 @@ function SectionCard(props: {
         className="cv-organize-section-row__rail"
         data-testid={`organize-section-actions-${sectionId}`}
       >
-        {rowState.isHidden && rowState.controlPolicy.showVisibilityToggle ? (
-          <button
-            type="button"
-            className="dasti-icon-button"
-            aria-label={hideShowLabel}
-            title={hideShowLabel}
-            onClick={onShow}
-          >
-            <Eye size={16} strokeWidth={1.7} aria-hidden="true" />
-          </button>
-        ) : null}
-        {rowState.isHidden &&
-        rowState.controlPolicy.showDeleteControl &&
-        rowState.removable ? (
+        {showHiddenDeleteControl ? (
           <button
             type="button"
             className="dasti-icon-button cv-organize-section-row__action--delete"
@@ -356,18 +332,6 @@ function SectionCard(props: {
             onClick={onDelete}
           >
             <TrashSimple size={16} strokeWidth={1.7} aria-hidden="true" />
-          </button>
-        ) : null}
-        {!rowState.isHidden && rowState.controlPolicy.showVisibilityToggle ? (
-          <button
-            type="button"
-            className="dasti-icon-button"
-            aria-label={hideShowLabel}
-            title={hideShowLabel}
-            onClick={onHide}
-            disabled={rowState.hideLocked}
-          >
-            <EyeSlash size={16} strokeWidth={1.7} aria-hidden="true" />
           </button>
         ) : null}
         {showMoveControls ? (
@@ -392,6 +356,23 @@ function SectionCard(props: {
             disabled={!rowState.canMoveDown}
           >
             <ArrowDown size={16} strokeWidth={1.7} aria-hidden="true" />
+          </button>
+        ) : null}
+        {showVisibilityToggle ? (
+          <button
+            type="button"
+            className="dasti-icon-button"
+            aria-label={hideShowLabel}
+            title={hideShowLabel}
+            data-visibility-state={rowState.isHidden ? "hidden" : "shown"}
+            onClick={rowState.isHidden ? onShow : onHide}
+            disabled={!rowState.isHidden && rowState.hideLocked}
+          >
+            {rowState.isHidden ? (
+              <EyeClosed size={16} strokeWidth={1.7} aria-hidden="true" />
+            ) : (
+              <Eye size={16} strokeWidth={1.7} aria-hidden="true" />
+            )}
           </button>
         ) : null}
       </div>

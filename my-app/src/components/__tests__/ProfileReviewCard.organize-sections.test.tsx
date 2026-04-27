@@ -487,6 +487,11 @@ describe("ProfileReviewCard organize sections", () => {
     );
     expect(getActionLabels(summaryActions)).toEqual(["Hide Summary section"]);
     expect(
+      within(summaryActions).getByRole("button", {
+        name: "Hide Summary section",
+      }),
+    ).toHaveAttribute("data-visibility-state", "shown");
+    expect(
       within(summaryRow).queryByRole("button", {
         name: "Move Summary section up",
       }),
@@ -541,9 +546,9 @@ describe("ProfileReviewCard organize sections", () => {
       screen.getByTestId("organize-section-drag-handle-languages-section"),
     );
     expect(getActionLabels(languagesActions)).toEqual([
-      "Hide Languages section",
       "Move Languages section up",
       "Move Languages section down",
+      "Hide Languages section",
     ]);
 
     await user.click(
@@ -553,14 +558,16 @@ describe("ProfileReviewCard organize sections", () => {
     );
 
     expect(languagesRow).toHaveAttribute("data-section-hidden", "true");
-    expect(within(languagesRow).getByText("Hidden")).toBeInTheDocument();
-    expect(languagesMetaRow).toContainElement(
-      within(languagesRow).getByText("Hidden"),
-    );
+    expect(within(languagesRow).queryByText("Hidden")).not.toBeInTheDocument();
     expect(getActionLabels(languagesActions)).toEqual([
-      "Show Languages section",
       "Delete Languages section",
+      "Show Languages section",
     ]);
+    expect(
+      within(languagesActions).getByRole("button", {
+        name: "Show Languages section",
+      }),
+    ).toHaveAttribute("data-visibility-state", "hidden");
     expect(
       within(languagesRow).queryByRole("button", {
         name: "Drag Languages section",
@@ -578,7 +585,7 @@ describe("ProfileReviewCard organize sections", () => {
     ).toBeNull();
   });
 
-  it("keeps metadata deterministic and appends hidden state after existing metadata", async () => {
+  it("keeps metadata deterministic and does not add a hidden capsule", async () => {
     const user = userEvent.setup();
     render(<OrganizeSectionsHarness />);
 
@@ -591,7 +598,7 @@ describe("ProfileReviewCard organize sections", () => {
       Array.from(profileMetaRow.querySelectorAll(".dasti-pill"), (pill) =>
         pill.textContent?.trim(),
       ),
-    ).toEqual(["Fixed order", "Always shown"]);
+    ).toEqual(["Always shown"]);
 
     const summaryRow = screen.getByTestId("organize-section-row-summary-section");
     const summaryMetaRow = within(summaryRow).getByTestId(
@@ -608,12 +615,13 @@ describe("ProfileReviewCard organize sections", () => {
       Array.from(summaryMetaRow.querySelectorAll(".dasti-pill"), (pill) =>
         pill.textContent?.trim(),
       ),
-    ).toEqual(["Fixed order", "Hidden"]);
+    ).toEqual([]);
     expect(
       getActionLabels(
         within(summaryRow).getByTestId("organize-section-actions-summary-section"),
       ),
     ).toEqual(["Show Summary section"]);
+    expect(within(summaryRow).queryByText("Hidden")).not.toBeInTheDocument();
     expect(
       within(summaryRow).queryByRole("button", {
         name: "Delete Summary section",

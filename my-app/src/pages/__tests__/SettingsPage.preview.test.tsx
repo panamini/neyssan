@@ -14,6 +14,10 @@ const savePresetMock = vi.fn(() => Promise.resolve(null));
 const setActivePresetMock = vi.fn(() => Promise.resolve(null));
 const presetsQueryMock = vi.fn();
 
+function getLastSavePresetPayload(): unknown {
+  return (savePresetMock.mock.calls as unknown as Array<[unknown]>).at(-1)?.[0];
+}
+
 const { api } = vi.hoisted(() => ({
   api: {
     proposalSettings: {
@@ -51,7 +55,7 @@ describe("SettingsPage preview controls", () => {
     presetsQueryMock.mockReturnValue({
       activeSlot: 1,
       preset1: {
-        fontPairId: "quiet-editorial",
+        fontPairId: "geist-baskervville",
         styleChoice: "balanced",
         paletteOverride: null,
         accentHex: null,
@@ -59,7 +63,7 @@ describe("SettingsPage preview controls", () => {
         name: "Style 1",
       },
       preset2: {
-        fontPairId: "quiet-editorial",
+        fontPairId: "geist-baskervville",
         styleChoice: "balanced",
         paletteOverride: null,
         accentHex: null,
@@ -67,7 +71,7 @@ describe("SettingsPage preview controls", () => {
         name: "Style 2",
       },
       preset3: {
-        fontPairId: "quiet-editorial",
+        fontPairId: "geist-baskervville",
         styleChoice: "warm",
         paletteOverride: null,
         accentHex: null,
@@ -85,11 +89,11 @@ describe("SettingsPage preview controls", () => {
       ".dasti-settings-font-pair-card--active",
     );
 
-    expect(activePair).toHaveTextContent("Fraunces Bold");
-    expect(activePair).toHaveTextContent("Syne Regular");
+    expect(activePair).toHaveTextContent("Geist Bold");
+    expect(activePair).toHaveTextContent("Baskervville");
     expect(
       container.querySelector(".dasti-settings-hero-preview__chip"),
-    ).toHaveTextContent("Fraunces Bold / Syne Regular");
+    ).toHaveTextContent("Geist Bold / Baskervville");
 
     const fontCards = Array.from(
       container.querySelectorAll<HTMLButtonElement>(
@@ -97,23 +101,23 @@ describe("SettingsPage preview controls", () => {
       ),
     );
 
-    await user.click(fontCards[1]!);
+    await user.click(fontCards[0]!);
 
     await waitFor(() => {
       expect(savePresetMock).toHaveBeenCalled();
     });
 
-    const lastCall = savePresetMock.mock.calls.at(-1)?.[0];
+    const lastCall = getLastSavePresetPayload();
     expect(lastCall).toMatchObject({
       slot: 1,
       preset: expect.objectContaining({
         styleChoice: "balanced",
-        fontPairId: "geist-baskervville",
+        fontPairId: "quiet-editorial",
       }),
     });
     expect(
       container.querySelector(".dasti-settings-hero-preview__chip"),
-    ).toHaveTextContent("Geist Bold / Baskervville");
+    ).toHaveTextContent("Fraunces Bold / Syne Regular");
   });
 
   it("renders all curated font pairs in the typography grid", () => {
@@ -128,6 +132,34 @@ describe("SettingsPage preview controls", () => {
     expect(grid).toHaveTextContent("Doto Black");
     expect(grid).toHaveTextContent("FD Garamond");
     expect(container.querySelector(".dasti-settings-font-grid")).toBeTruthy();
+  });
+
+  it("saves an explicit signature font on the current preset", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPage />);
+
+    const signatureGroup = screen.getByRole("group", { name: "Signature" });
+    await user.click(
+      within(signatureGroup).getByRole("button", {
+        name: "FD Garamond signature",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(savePresetMock).toHaveBeenCalled();
+    });
+
+    const lastCall = getLastSavePresetPayload();
+    expect(lastCall).toMatchObject({
+      slot: 1,
+      preset: expect.objectContaining({
+        signatureSettings: {
+          mode: "font",
+          fontId: "fd-garamond",
+          imageDataUrl: null,
+        },
+      }),
+    });
   });
 
   it("switches style cards and refreshes the preview badge", async () => {
@@ -150,7 +182,7 @@ describe("SettingsPage preview controls", () => {
       expect(savePresetMock).toHaveBeenCalled();
     });
 
-    const lastCall = savePresetMock.mock.calls.at(-1)?.[0];
+    const lastCall = getLastSavePresetPayload();
     expect(lastCall).toMatchObject({
       slot: 1,
       preset: expect.objectContaining({
@@ -179,16 +211,16 @@ describe("SettingsPage preview controls", () => {
       expect(savePresetMock).toHaveBeenCalled();
     });
 
-    const lastCall = savePresetMock.mock.calls.at(-1)?.[0];
+    const lastCall = getLastSavePresetPayload();
     expect(lastCall).toMatchObject({
       slot: 1,
       preset: expect.objectContaining({
         styleChoice: "balanced",
-        fontPairId: "quiet-editorial",
+        fontPairId: "geist-baskervville",
         verbatiStyle: expect.objectContaining({
           familyId: "workshop",
           layout: "workshop",
-          typography: "quiet-editorial",
+          typography: "geist-baskervville",
         }),
       }),
     });
@@ -205,7 +237,9 @@ describe("SettingsPage preview controls", () => {
 
   it("updates the hero preview tilt when the pointer moves", async () => {
     const { container } = render(<SettingsPage />);
-    const previewCard = container.querySelector(".dasti-settings-hero-preview");
+    const previewCard = container.querySelector<HTMLElement>(
+      ".dasti-settings-hero-preview",
+    );
 
     expect(previewCard).toBeTruthy();
 

@@ -29,8 +29,9 @@ const Header: React.FC = () => {
             href="/"
             className="text-lg font-semibold"
             onClick={(e) => navigate(e, "/")}
+            aria-label="twoweeks.ai"
           >
-            Neyssan
+            twoweeks.ai
           </a>
           <div className="ml-2">
             <DarkModeToggle />
