@@ -24,13 +24,8 @@ import {
   type ProposalFormalityLevel,
   type ProposalVoicePreset,
 } from "../../convex/lib/proposals/voicePresets";
-import {
-  type ProposalCharacterLimitMode,
-} from "../../convex/lib/proposals/generationControls";
-import {
-  type ProposalTemplateId,
-} from "../../convex/lib/proposals/renderTemplates";
-import { FileUser } from "../lib/icons";
+import { type ProposalCharacterLimitMode } from "../../convex/lib/proposals/generationControls";
+import { type ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import { formatUiDate } from "../lib/ui-date";
 import {
   readStoredProposalOutputDraft,
@@ -61,6 +56,7 @@ import {
   buildProposalHeaderVisibilityFromContent,
   resolveProposalHeaderVisibility,
 } from "../lib/proposal-header";
+import type { ProposalSignatureSettings } from "../lib/proposal-signature-settings";
 
 type SavedProposalLayoutId = Extract<
   VerbatiLayoutPreset,
@@ -114,13 +110,14 @@ type SavedProposalRecord = {
   };
 };
 
-const PROPOSAL_SAVE_DEBOUNCE_MS = Number(
-  (typeof globalThis !== "undefined" &&
-    (globalThis as any).process?.env?.TEST_DEBOUNCE_MS) ??
-    (typeof process !== "undefined"
-      ? (process as any).env?.TEST_DEBOUNCE_MS
-      : undefined),
-) || 1000;
+const PROPOSAL_SAVE_DEBOUNCE_MS =
+  Number(
+    (typeof globalThis !== "undefined" &&
+      (globalThis as any).process?.env?.TEST_DEBOUNCE_MS) ??
+      (typeof process !== "undefined"
+        ? (process as any).env?.TEST_DEBOUNCE_MS
+        : undefined),
+  ) || 1000;
 
 type SavedProposalViewMode = "focused" | "stack" | "library";
 
@@ -227,11 +224,15 @@ function resolveSavedAppearanceState(proposal: SavedProposalRecord | null): {
   return {
     bundleId: explicitBundleId,
     paletteOverride:
-      customAccentHex || !storedPalette || storedPalette === bundleDefaultPalette
+      customAccentHex ||
+      !storedPalette ||
+      storedPalette === bundleDefaultPalette
         ? null
         : storedPalette,
     customAccentHex,
-    layoutOverride: normalizeSavedLayoutOverride(proposal.metadata?.layoutOverride),
+    layoutOverride: normalizeSavedLayoutOverride(
+      proposal.metadata?.layoutOverride,
+    ),
   };
 }
 
@@ -304,9 +305,7 @@ function shouldPreserveLeadBreak(line: string): boolean {
 function isGenericSalutation(line: string): boolean {
   const trimmed = line.trim();
   if (!trimmed) return false;
-  return /^(dear|hello|hi|greetings|bonjour|bonsoir)\b[\s,!:-]*/i.test(
-    trimmed,
-  );
+  return /^(dear|hello|hi|greetings|bonjour|bonsoir)\b[\s,!:-]*/i.test(trimmed);
 }
 
 function buildProposalSnippet(value: unknown): string {
@@ -409,7 +408,9 @@ function getStoredProposalRenderInput(proposal: SavedProposalRecord): {
 function hasSavedProposalArtifactSnapshot(
   proposal: SavedProposalRecord | null,
 ): boolean {
-  return Boolean(proposal?.metadata?.verbatiStyle || proposal?.metadata?.templateId);
+  return Boolean(
+    proposal?.metadata?.verbatiStyle || proposal?.metadata?.templateId,
+  );
 }
 
 function serializeSavedProposalMetadataVerbatiStyle(
@@ -525,6 +526,7 @@ function stepSavedProposalViewMode(
 interface ProposalsListProps {
   selectedProposalId?: string | null;
   onSelectedProposalIdChange?: (id: string | null) => void;
+  signatureSettings?: ProposalSignatureSettings | null;
   savedViewActions?: React.ReactNode;
 }
 
@@ -533,6 +535,7 @@ const SECONDARY_PROPOSAL_PAGE_SIZE = 2;
 export default function ProposalsList({
   selectedProposalId = null,
   onSelectedProposalIdChange,
+  signatureSettings = null,
   savedViewActions = null,
 }: ProposalsListProps) {
   const { isLoaded, isSignedIn } = useAuth();
@@ -556,79 +559,86 @@ export default function ProposalsList({
         : [],
     [isConvexAuthenticated, isLoaded, isSignedIn],
   );
-  const optimisticSavedProposal = React.useMemo<SavedProposalRecord | null>(() => {
-    if (!selectedProposalId) {
-      return null;
-    }
-
-    const outputDraft = readStoredProposalOutputDraft();
-    if (
-      !outputDraft?.generatedProposalId ||
-      String(outputDraft.generatedProposalId) !== String(selectedProposalId)
-    ) {
-      return null;
-    }
-
-    const trimmedContent = outputDraft.proposalContent?.trim() ?? "";
-    if (!trimmedContent) {
-      return null;
-    }
-
-    const composeDraft = readStoredProposalComposeDraft();
-    const optimisticTimestamp = Date.now();
-    return {
-      _id: selectedProposalId,
-      _creationTime: optimisticTimestamp,
-      title: outputDraft.proposalDocumentTitle?.trim() || "Saved proposal",
-      content: trimmedContent,
-      status: "saved",
-      updatedAt: optimisticTimestamp,
-      createdAt: optimisticTimestamp,
-      sections: [{ type: "text", content: trimmedContent }],
-      metadata: {
-        sourceJobDescription:
-          composeDraft?.jobDescription?.trim() || undefined,
-        sourceCvId: getProposalAttachedCvId() ?? undefined,
-        proposalType: outputDraft.proposalType ?? undefined,
-        voicePreset: outputDraft.proposalVoicePreset ?? undefined,
-        styleLinkMode: outputDraft.proposalStyleLinkMode ?? undefined,
-        verbatiStyle: outputDraft.proposalVerbatiStyle ?? undefined,
-        applicantName: normalizeSavedTextValue(outputDraft.proposalApplicantName) ?? undefined,
-        applicantRole: normalizeSavedTextValue(outputDraft.proposalApplicantRole) ?? undefined,
-        contactLine: normalizeSavedTextValue(outputDraft.proposalContactLine) ?? undefined,
-        letterDate: normalizeSavedTextValue(outputDraft.proposalLetterDate) ?? undefined,
-        recipientDetails:
-          normalizeSavedTextValue(outputDraft.proposalRecipientDetails) ?? undefined,
-        headerShowSender: outputDraft.proposalHeaderShowSender,
-        headerShowDate: outputDraft.proposalHeaderShowDate,
-        headerShowSubject: outputDraft.proposalHeaderShowSubject,
-        headerShowRecipient: outputDraft.proposalHeaderShowRecipient,
-        headerShowRecipientDetails:
-          outputDraft.proposalHeaderShowRecipientDetails,
-      },
-    };
-  }, [selectedProposalId]);
-  const savedProposals = React.useMemo(
-    () => {
-      const mergedProposals = new Map<string, SavedProposalRecord>();
-
-      for (const proposal of proposals ?? fallbackProposals) {
-        mergedProposals.set(String(proposal._id), proposal);
+  const optimisticSavedProposal =
+    React.useMemo<SavedProposalRecord | null>(() => {
+      if (!selectedProposalId) {
+        return null;
       }
 
-      if (optimisticSavedProposal) {
-        mergedProposals.set(
-          String(optimisticSavedProposal._id),
-          optimisticSavedProposal,
-        );
+      const outputDraft = readStoredProposalOutputDraft();
+      if (
+        !outputDraft?.generatedProposalId ||
+        String(outputDraft.generatedProposalId) !== String(selectedProposalId)
+      ) {
+        return null;
       }
 
-      return [...mergedProposals.values()].filter(
-        (proposal) => proposal.status === "saved",
+      const trimmedContent = outputDraft.proposalContent?.trim() ?? "";
+      if (!trimmedContent) {
+        return null;
+      }
+
+      const composeDraft = readStoredProposalComposeDraft();
+      const optimisticTimestamp = Date.now();
+      return {
+        _id: selectedProposalId,
+        _creationTime: optimisticTimestamp,
+        title: outputDraft.proposalDocumentTitle?.trim() || "Saved proposal",
+        content: trimmedContent,
+        status: "saved",
+        updatedAt: optimisticTimestamp,
+        createdAt: optimisticTimestamp,
+        sections: [{ type: "text", content: trimmedContent }],
+        metadata: {
+          sourceJobDescription:
+            composeDraft?.jobDescription?.trim() || undefined,
+          sourceCvId: getProposalAttachedCvId() ?? undefined,
+          proposalType: outputDraft.proposalType ?? undefined,
+          voicePreset: outputDraft.proposalVoicePreset ?? undefined,
+          styleLinkMode: outputDraft.proposalStyleLinkMode ?? undefined,
+          verbatiStyle: outputDraft.proposalVerbatiStyle ?? undefined,
+          applicantName:
+            normalizeSavedTextValue(outputDraft.proposalApplicantName) ??
+            undefined,
+          applicantRole:
+            normalizeSavedTextValue(outputDraft.proposalApplicantRole) ??
+            undefined,
+          contactLine:
+            normalizeSavedTextValue(outputDraft.proposalContactLine) ??
+            undefined,
+          letterDate:
+            normalizeSavedTextValue(outputDraft.proposalLetterDate) ??
+            undefined,
+          recipientDetails:
+            normalizeSavedTextValue(outputDraft.proposalRecipientDetails) ??
+            undefined,
+          headerShowSender: outputDraft.proposalHeaderShowSender,
+          headerShowDate: outputDraft.proposalHeaderShowDate,
+          headerShowSubject: outputDraft.proposalHeaderShowSubject,
+          headerShowRecipient: outputDraft.proposalHeaderShowRecipient,
+          headerShowRecipientDetails:
+            outputDraft.proposalHeaderShowRecipientDetails,
+        },
+      };
+    }, [selectedProposalId]);
+  const savedProposals = React.useMemo(() => {
+    const mergedProposals = new Map<string, SavedProposalRecord>();
+
+    for (const proposal of proposals ?? fallbackProposals) {
+      mergedProposals.set(String(proposal._id), proposal);
+    }
+
+    if (optimisticSavedProposal) {
+      mergedProposals.set(
+        String(optimisticSavedProposal._id),
+        optimisticSavedProposal,
       );
-    },
-    [fallbackProposals, optimisticSavedProposal, proposals],
-  );
+    }
+
+    return [...mergedProposals.values()].filter(
+      (proposal) => proposal.status === "saved",
+    );
+  }, [fallbackProposals, optimisticSavedProposal, proposals]);
   const deleteProposal = useMutation(
     (api as any).deleteProposalPublic?.default,
   );
@@ -654,6 +664,8 @@ export default function ProposalsList({
   const [selectedOutputMode, setSelectedOutputMode] = React.useState<
     "preview" | "edit"
   >("preview");
+  const [isEditingSelectedTitle, setIsEditingSelectedTitle] =
+    React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [savedViewMode, setSavedViewMode] =
     React.useState<SavedProposalViewMode>("stack");
@@ -668,8 +680,9 @@ export default function ProposalsList({
     React.useState<ProposalTemplateBundleId | null>(null);
   const [selectedPaletteOverride, setSelectedPaletteOverride] =
     React.useState<ProposalPaletteId | null>(null);
-  const [selectedCustomAccentHex, setSelectedCustomAccentHex] =
-    React.useState<string | null>(null);
+  const [selectedCustomAccentHex, setSelectedCustomAccentHex] = React.useState<
+    string | null
+  >(null);
   const [selectedLayoutOverride, setSelectedLayoutOverride] =
     React.useState<VerbatiLayoutPreset | null>(null);
   const [selectedTypographyOverride, setSelectedTypographyOverride] =
@@ -700,10 +713,14 @@ export default function ProposalsList({
   const loadMoreSentinelRef = React.useRef<HTMLDivElement | null>(null);
   const gestureSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const selectedCardRef = React.useRef<HTMLDivElement | null>(null);
+  const selectedTitleInputRef = React.useRef<HTMLTextAreaElement | null>(null);
   const shouldRevealSelectedCardRef = React.useRef(false);
-  const selectedSaveTimeoutRef =
-    React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingSelectedSavePromiseRef = React.useRef<Promise<void> | null>(null);
+  const selectedSaveTimeoutRef = React.useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const pendingSelectedSavePromiseRef = React.useRef<Promise<void> | null>(
+    null,
+  );
   const pendingSelectedSaveSnapshotRef = React.useRef<{
     id: string;
     title: string;
@@ -721,6 +738,7 @@ export default function ProposalsList({
       setEditTitle(proposal?.title ?? "");
       setEditContent(getProposalDisplayText(proposal));
       setSelectedOutputMode("preview");
+      setIsEditingSelectedTitle(false);
       setCopied(false);
       if (syncSelection) {
         onSelectedProposalIdChange?.(proposal?._id ?? null);
@@ -883,7 +901,8 @@ export default function ProposalsList({
       selectedStyleBundleId !== selectedStoredAppearance.bundleId;
 
     if (hasPendingBundleOverride) {
-      return getProposalTemplateBundleDefinition(selectedStyleBundleId).stylePreset;
+      return getProposalTemplateBundleDefinition(selectedStyleBundleId)
+        .stylePreset;
     }
     return selectedStoredRenderState?.stylePreset ?? null;
   }, [
@@ -964,9 +983,9 @@ export default function ProposalsList({
     selectedHasExplicitStyleEdit,
     selectedStoredRenderState,
   ]);
-  const selectedPersistMetadata = React.useMemo<
-    NonNullable<SavedProposalRecord["metadata"]> | null
-  >(() => {
+  const selectedPersistMetadata = React.useMemo<NonNullable<
+    SavedProposalRecord["metadata"]
+  > | null>(() => {
     if (!selected || !selectedRenderState) {
       return null;
     }
@@ -1107,7 +1126,10 @@ export default function ProposalsList({
         return;
       }
 
-      if (isSavingSelectedProposalRef.current && pendingSelectedSavePromiseRef.current) {
+      if (
+        isSavingSelectedProposalRef.current &&
+        pendingSelectedSavePromiseRef.current
+      ) {
         pendingSelectedSaveSnapshotRef.current = initialSnapshot;
         return pendingSelectedSavePromiseRef.current;
       }
@@ -1187,7 +1209,9 @@ export default function ProposalsList({
         if (!nextSnapshot) {
           return;
         }
-        void performSelectedProposalSave(nextSnapshot, { silent: true }).catch(() => {});
+        void performSelectedProposalSave(nextSnapshot, { silent: true }).catch(
+          () => {},
+        );
       }, PROPOSAL_SAVE_DEBOUNCE_MS);
     },
     [performSelectedProposalSave],
@@ -1199,7 +1223,8 @@ export default function ProposalsList({
     }
 
     const snapshot =
-      buildSelectedProposalSaveSnapshot() ?? pendingSelectedSaveSnapshotRef.current;
+      buildSelectedProposalSaveSnapshot() ??
+      pendingSelectedSaveSnapshotRef.current;
     if (!snapshot) {
       return;
     }
@@ -1226,7 +1251,8 @@ export default function ProposalsList({
     const nextSelectedId = selected?._id ?? null;
     if (selectedAutosavePrimedIdRef.current !== nextSelectedId) {
       selectedAutosavePrimedIdRef.current = nextSelectedId;
-      lastPersistedSelectedTokenRef.current = selectedSaveSnapshot?.token ?? null;
+      lastPersistedSelectedTokenRef.current =
+        selectedSaveSnapshot?.token ?? null;
       setSelectedSaveStatus("idle");
       return;
     }
@@ -1401,13 +1427,23 @@ export default function ProposalsList({
 
     try {
       await flushSelectedProposalSave();
-      setEditTitle((current) => current.trim() || selected.title || "Saved proposal");
+      setEditTitle(
+        (current) => current.trim() || selected.title || "Saved proposal",
+      );
     } catch (err) {
       console.error("Saved proposal save failed:", err);
     }
   }
 
-  async function handleRegenerate(nextVoicePreset?: ProposalVoicePreset | null) {
+  React.useEffect(() => {
+    if (!isEditingSelectedTitle) return;
+    selectedTitleInputRef.current?.focus();
+    selectedTitleInputRef.current?.select();
+  }, [isEditingSelectedTitle]);
+
+  async function handleRegenerate(
+    nextVoicePreset?: ProposalVoicePreset | null,
+  ) {
     if (!selected || !selectedRenderState || isRegenerating) return;
     if (!isConvexAuthenticated) {
       showConvexAuthRequiredToast("Refine");
@@ -1534,23 +1570,23 @@ export default function ProposalsList({
       return "";
     }
 
-    return buildProposalMeta(selected, { includeTone: false }) || "Saved proposal";
+    return (
+      buildProposalMeta(selected, { includeTone: false }) || "Saved proposal"
+    );
   }, [selected]);
   const selectedHeaderMeta = React.useMemo(() => {
     if (!selected) {
       return "";
     }
 
-    const sourceLine = selectedSourceCvTitle
-      ? `Source CV: ${selectedSourceCvTitle}`
-      : null;
-
-    return [selectedHeaderMetadataLine, sourceLine].filter(Boolean).join(" · ");
-  }, [selected, selectedHeaderMetadataLine, selectedSourceCvTitle]);
+    return selectedHeaderMetadataLine;
+  }, [selected, selectedHeaderMetadataLine]);
   const selectedTonePendingRefresh = selected
     ? selectedRefineVoicePreset !== getStoredRequestedVoicePreset(selected)
     : false;
-  const selectedToneLabel = selected ? toneLabel(getStoredVoicePreset(selected)) : "";
+  const selectedToneLabel = selected
+    ? toneLabel(getStoredVoicePreset(selected))
+    : "";
   const selectedApplicantHeader = React.useMemo(
     () => buildSavedApplicantHeader(selected, activeApplicantHeader),
     [activeApplicantHeader, selected],
@@ -1568,7 +1604,7 @@ export default function ProposalsList({
     selectedTypographyOverride ??
     selectedEffectiveStylePreset?.typography ??
     selectedBaseStylePreset?.typography ??
-    "quiet-editorial";
+    "geist-baskervville";
 
   const selectedHeaderCard = selected ? (
     <div className="dasti-proposal-library-info-card dasti-proposal-library-sidebar__heading">
@@ -1584,52 +1620,58 @@ export default function ProposalsList({
             {savedProposalCount}
           </span>
         </div>
-        {selectedOutputMode === "edit" ? (
-          <input
-            type="text"
-            value={selectedHeaderTitle || ""}
+        {selectedOutputMode === "edit" || isEditingSelectedTitle ? (
+          <textarea
+            ref={selectedTitleInputRef}
+            value={editTitle}
             onChange={(event) => setEditTitle(event.target.value)}
             onBlur={() => {
+              setIsEditingSelectedTitle(false);
               void handleSaveDocument();
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
-                (event.currentTarget as HTMLInputElement).blur();
+                (event.currentTarget as HTMLTextAreaElement).blur();
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                setEditTitle(selected?.title ?? "");
+                setIsEditingSelectedTitle(false);
               }
             }}
             placeholder="Saved proposal"
             className="dasti-proposal-sheet__title-input dasti-proposal-library-info-card__title-input"
             aria-label="Proposal title"
+            rows={2}
           />
         ) : selectedHeaderTitle ? (
-          <h3 className="dasti-proposal-sheet__title dasti-proposal-library-info-card__title">
-            {selectedHeaderTitle}
+          <h3 className="dasti-proposal-library-info-card__title-heading">
+            <button
+              type="button"
+              className="dasti-proposal-sheet__title dasti-proposal-library-info-card__title dasti-proposal-library-info-card__title-button"
+              onClick={() => setIsEditingSelectedTitle(true)}
+              aria-label="Rename saved proposal"
+            >
+              {selectedHeaderTitle}
+            </button>
           </h3>
         ) : null}
-        {selectedToneLabel ? (
-          <div className="dasti-proposal-library-sidebar__tone-row">
-            <span className="dasti-proposal-tone-badge">{selectedToneLabel}</span>
-          </div>
-        ) : null}
-        {selectedHeaderMetadataLine || selectedSourceCvTitle ? (
-          <div className="dasti-proposal-sheet__meta dasti-proposal-library-info-card__details">
-            {selectedHeaderMetadataLine ? (
+        <div className="dasti-proposal-library-info-card__footer">
+          {selectedHeaderMetadataLine ? (
+            <div className="dasti-proposal-sheet__meta dasti-proposal-library-info-card__details">
               <span className="dasti-proposal-library-info-card__details-line">
                 {selectedHeaderMetadataLine}
               </span>
-            ) : null}
-            {selectedSourceCvTitle ? (
-              <span
-                className="dasti-proposal-library-info-card__source-cv"
-                aria-label={`Source CV ${selectedSourceCvTitle}`}
-              >
-                <FileUser size={14} strokeWidth={1.7} aria-hidden="true" />
-                <span>{selectedSourceCvTitle}</span>
+            </div>
+          ) : null}
+          {selectedToneLabel ? (
+            <div className="dasti-proposal-library-sidebar__tone-row">
+              <span className="dasti-proposal-tone-badge">
+                {selectedToneLabel}
               </span>
-            ) : null}
-          </div>
-        ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   ) : null;
@@ -1649,8 +1691,6 @@ export default function ProposalsList({
       }
       zoomIndex={selectedZoomIndex}
       onZoomIndexChange={setSelectedZoomIndex}
-      toneValue={selectedRefineVoicePreset}
-      onToneChange={setSelectedRefineVoicePreset}
       onRefine={() => {
         void handleRegenerate(selectedRefineVoicePreset);
       }}
@@ -1783,7 +1823,9 @@ export default function ProposalsList({
               {visibleLibraryProposals.map((proposal) => {
                 const snippet = buildProposalSnippet(proposal.content);
                 const isSelectedCard = proposal._id === selected._id;
-                const proposalToneLabel = toneLabel(getStoredVoicePreset(proposal));
+                const proposalToneLabel = toneLabel(
+                  getStoredVoicePreset(proposal),
+                );
 
                 return (
                   <article
@@ -1809,7 +1851,8 @@ export default function ProposalsList({
                         <div className="dasti-doc-card__header">
                           <div className="dasti-doc-card__title-frame dasti-doc-card__title-frame--top">
                             <h3 className="dasti-doc-card__title">
-                              {(proposal.title || "").trim() || "Saved proposal"}
+                              {(proposal.title || "").trim() ||
+                                "Saved proposal"}
                             </h3>
                           </div>
                         </div>
@@ -1868,18 +1911,18 @@ export default function ProposalsList({
               >
                 {shouldRenderSelectedSidebar ? (
                   <aside className="dasti-proposal-library-selected-sidebar">
-                    {selectedHeaderCard}
                     {savedViewActions ? (
                       <div className="dasti-proposal-library-sidebar__actions">
                         {savedViewActions}
                       </div>
                     ) : null}
+                    {selectedHeaderCard}
                   </aside>
                 ) : null}
                 <div
                   ref={selectedCardRef}
                   tabIndex={-1}
-                  className="dasti-proposal-library-card"
+                  className="dasti-proposal-library-card dasti-proposal-library-card--selected"
                 >
                   <ProposalDisplay
                     proposalContent={editContent}
@@ -1889,29 +1932,40 @@ export default function ProposalsList({
                     voicePreset={getStoredVoicePreset(selected)}
                     templateId={selectedRenderState?.templateId ?? null}
                     stylePreset={selectedRenderState?.stylePreset ?? null}
+                    signatureSettings={signatureSettings}
                     railTitle={
-                      normalizeSavedTextValue(selected?.metadata?.applicantName) ??
+                      normalizeSavedTextValue(
+                        selected?.metadata?.applicantName,
+                      ) ??
                       selectedApplicantHeader?.name ??
                       null
                     }
                     railMeta={
-                      normalizeSavedTextValue(selected?.metadata?.applicantRole) ??
+                      normalizeSavedTextValue(
+                        selected?.metadata?.applicantRole,
+                      ) ??
                       selectedApplicantHeader?.role ??
                       null
                     }
                     contactLine={
-                      normalizeSavedTextValue(selected?.metadata?.contactLine) ?? null
+                      normalizeSavedTextValue(
+                        selected?.metadata?.contactLine,
+                      ) ?? null
                     }
                     letterDate={
-                      normalizeSavedTextValue(selected?.metadata?.letterDate) ?? null
+                      normalizeSavedTextValue(selected?.metadata?.letterDate) ??
+                      null
                     }
                     recipientDetails={
-                      normalizeSavedTextValue(selected?.metadata?.recipientDetails) ??
-                      null
+                      normalizeSavedTextValue(
+                        selected?.metadata?.recipientDetails,
+                      ) ?? null
                     }
                     applicantHeader={selectedApplicantHeader}
                     headerVisibility={selectedHeaderVisibility}
-                    characterLimit={selected?.metadata?.characterLimitValue ?? null}
+                    characterLimit={
+                      selected?.metadata?.characterLimitValue ?? null
+                    }
                     characterLimitAdvisory={false}
                     documentTitle={selectedHeaderTitle || "Saved proposal"}
                     documentMeta={selectedHeaderMeta}
@@ -1920,8 +1974,10 @@ export default function ProposalsList({
                     showModeToggle={false}
                     onModeChange={setSelectedOutputMode}
                     showZoomControls={false}
+                    showPreviewParagraphActions={false}
                     zoomIndex={selectedZoomIndex}
                     onZoomIndexChange={setSelectedZoomIndex}
+                    previewAnchor="body"
                     detachedActionHeader
                     documentHeaderMode="actions-only"
                     detachedActionHeaderSupplement={selectedForgeCloneToolbar}
@@ -1961,23 +2017,30 @@ export default function ProposalsList({
                           voicePreset={getStoredVoicePreset(proposal)}
                           templateId={proposalRenderState?.templateId ?? null}
                           stylePreset={proposalRenderState?.stylePreset ?? null}
+                          signatureSettings={signatureSettings}
                           railTitle={
-                            normalizeSavedTextValue(proposal.metadata?.applicantName) ??
+                            normalizeSavedTextValue(
+                              proposal.metadata?.applicantName,
+                            ) ??
                             activeApplicantHeader?.name ??
                             null
                           }
                           railMeta={
-                            normalizeSavedTextValue(proposal.metadata?.applicantRole) ??
+                            normalizeSavedTextValue(
+                              proposal.metadata?.applicantRole,
+                            ) ??
                             activeApplicantHeader?.role ??
                             null
                           }
                           contactLine={
-                            normalizeSavedTextValue(proposal.metadata?.contactLine) ??
-                            null
+                            normalizeSavedTextValue(
+                              proposal.metadata?.contactLine,
+                            ) ?? null
                           }
                           letterDate={
-                            normalizeSavedTextValue(proposal.metadata?.letterDate) ??
-                            null
+                            normalizeSavedTextValue(
+                              proposal.metadata?.letterDate,
+                            ) ?? null
                           }
                           recipientDetails={
                             normalizeSavedTextValue(
@@ -1988,7 +2051,9 @@ export default function ProposalsList({
                             proposal,
                             activeApplicantHeader,
                           )}
-                          headerVisibility={resolveSavedHeaderVisibility(proposal)}
+                          headerVisibility={resolveSavedHeaderVisibility(
+                            proposal,
+                          )}
                           documentTitle={
                             (proposal.title || "").trim() || "Saved proposal"
                           }
@@ -1999,6 +2064,7 @@ export default function ProposalsList({
                           showModeToggle={false}
                           hideDocumentHeader
                           showPreviewParagraphActions={false}
+                          showPageCountBadge={false}
                           previewAnchor="body"
                           onPreviewInteract={() =>
                             handleSelectProposal(proposal, true)
