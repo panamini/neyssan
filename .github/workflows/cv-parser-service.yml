@@ -27,13 +27,18 @@ jobs:
         run: |
           docker run -d --rm -p 8000:8000 --name cv-parser-service cv-parser-service
           # Wait for the service to start
-          for i in {1..30}; do
+          for i in {1..360}; do
             if curl -fsS http://localhost:8000/healthz > /dev/null; then
               echo "Service healthy";
               break;
             fi
             sleep 2
           done
+          if ! curl -fsS http://localhost:8000/healthz > /dev/null; then
+            echo "::error::cv-parser-service did not become healthy within the wait window"
+            docker logs cv-parser-service || true
+            exit 1
+          fi
           curl -fsS http://localhost:8000/healthz
         shell: bash
 
