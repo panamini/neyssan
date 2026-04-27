@@ -2,6 +2,7 @@ Drop local font files for Dasti here.
 
 Supported auto-detected families:
 
+- `Baskervville`
 - `Fraunces`
 - `Syne`
 - `Thestral Neue`
@@ -23,6 +24,8 @@ Supported auto-detected families:
 - `Ortica`
 - `Source Code Pro`
 - `Doto`
+- `FD Garamond`
+- `Chaumont Script`
 
 Accepted formats:
 

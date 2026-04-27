@@ -32,10 +32,10 @@ export const PROPOSAL_STYLE_PREVIEW_DEFINITIONS: Record<
   ProposalStylePreviewDefinition
 > = {
   balanced: {
-    headingFont: '"Fraunces", serif',
+    headingFont: '"Baskervville", serif',
     headingWeight: 600,
     fontStyle: "normal",
-    fontName: "Fraunces",
+    fontName: "Baskervville",
     templateName: "Swiss Margin",
   },
   formal: {
@@ -62,7 +62,7 @@ export const PROPOSAL_STYLE_PREVIEW_DEFINITIONS: Record<
 };
 
 export const PROPOSAL_AUTO_STYLE_PREVIEW: ProposalStylePreviewDefinition = {
-  headingFont: '"Fraunces", serif',
+  headingFont: '"Baskervville", serif',
   headingWeight: 300,
   fontStyle: "italic",
   fontName: "Adaptive",
