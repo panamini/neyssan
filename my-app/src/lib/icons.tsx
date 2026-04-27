@@ -11,6 +11,7 @@ import {
   CaretDown as PhCaretDown,
   CaretUp as PhCaretUp,
   Check as PhCheck,
+  Briefcase as PhBriefcase,
   ClipboardText as PhClipboardText,
   SealWarning as PhSealWarning,
   CornersIn as PhCornersIn,
@@ -31,6 +32,7 @@ import {
   Lightning as PhLightning,
   Link as PhLink,
   ListBullets as PhListBullets,
+  ListMagnifyingGlass as PhListMagnifyingGlass,
   MagicWand as PhMagicWand,
   Moon as PhMoon,
   MagnifyingGlass as PhMagnifyingGlass,
@@ -44,6 +46,7 @@ import {
   PenNib as PhPenNib,
   PencilSimple as PhPencilSimple,
   PencilSimpleLine as PhPencilSimpleLine,
+  Pause as PhPause,
   Plug as PhPlug,
   Play as PhPlay,
   Minus as PhMinus,
@@ -56,6 +59,7 @@ import {
   Rows as PhRows,
   Scan as PhScan,
   Scroll as PhScroll,
+  ShareFat as PhShareFat,
   SidebarSimple as PhSidebarSimple,
   SpinnerGap as PhSpinnerGap,
   Stop as PhStop,
@@ -136,6 +140,7 @@ export const Camera = withCompat(PhCamera);
 export const CaretDownIcon = withCompat(PhCaretDown);
 export const CaretUpIcon = withCompat(PhCaretUp);
 export const Check = withCompat(PhCheck);
+export const Briefcase = withCompat(PhBriefcase);
 export const ClipboardText = withCompat(PhClipboardText);
 export const ChevronDown = withCompat(PhCaretDown);
 export const ChevronUp = withCompat(PhCaretUp);
@@ -160,6 +165,7 @@ export const Layout = withCompat(PhLayout);
 export const Lightning = withCompat(PhLightning);
 export const Link = withCompat(PhLink);
 export const List = withCompat(PhListBullets);
+export const ListMagnifyingGlass = withCompat(PhListMagnifyingGlass);
 export const Loader2 = withCompat(PhSpinnerGap, "bold");
 export const MagnifyingGlass = withCompat(PhMagnifyingGlass);
 export const MagnifyingGlassMinus = withCompat(PhMagnifyingGlassMinus);
@@ -170,6 +176,7 @@ export const Moon = withCompat(PhMoon);
 export const Paperclip = withCompat(PhPaperclip);
 export const PaperPlaneRight = withCompat(PhPaperPlaneRight);
 export const Palette = withCompat(PhPalette);
+export const Pause = withCompat(PhPause);
 export const PanelLeftDashed = withCompat(PhSidebarSimple);
 export const Pen = withCompat(PhPen);
 export const PenNib = withCompat(PhPenNib);
@@ -188,6 +195,7 @@ export const ScanLine = withCompat(PhScan);
 export const ScrollText = withCompat(PhScroll);
 export const SealWarning = withCompat(PhSealWarning);
 export const SendHorizontal = withCompat(PhPaperPlaneTilt);
+export const ShareFat = withCompat(PhShareFat);
 export const Square = withCompat(PhSquare);
 export const ImagesSquare = withCompat(PhImagesSquare);
 export const SquaresFour = withCompat(PhSquaresFour);
