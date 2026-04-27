@@ -194,6 +194,12 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-output-shell--saved\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--document-viewer-shell-inline-size\)\);[\s\S]*--document-viewer-shell-min-block:\s*calc\([\s\S]*--document-sheet-min-block[\s\S]*\);[\s\S]*--document-viewer-shell-max-block:\s*calc\([\s\S]*--document-viewer-paper-max-block[\s\S]*\);/,
     );
     expect(productCss).toMatch(
+      /\.dasti-proposal-output-shell--workspace\s+\.dasti-proposal-sheet-frame\s*\{[\s\S]*width:\s*min\([\s\S]*var\(--document-stage-width,\s*var\(--document-viewer-shell-inline-size\)\)[\s\S]*var\(--proposal-output-stage-frame-padding\)[\s\S]*2px[\s\S]*max-width:\s*min\(/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-output-shell--saved\s+\.dasti-proposal-sheet-frame\s*\{[\s\S]*width:\s*min\([\s\S]*var\(--document-stage-width,\s*var\(--document-viewer-shell-inline-size\)\)[\s\S]*var\(--proposal-output-stage-frame-padding\)[\s\S]*2px[\s\S]*max-width:\s*min\(/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-proposal-output-shell--saved\s*\{[\s\S]*--proposal-output-shell-max-block:\s*calc\([\s\S]*var\(--document-viewer-toolbar-block-size\)[\s\S]*var\(--space-7\)[\s\S]*\);/,
     );
     expect(productCss).toContain(".dasti-page-shell--proposal-saved {");

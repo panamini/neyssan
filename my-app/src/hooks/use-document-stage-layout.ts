@@ -153,30 +153,29 @@ export function useDocumentStageLayout({
           : widthFitScale,
       )
     : 1;
-  const usesFilledViewportStage = enabled && fillAvailableOnZoom;
+  const usesFilledOverflowStage =
+    enabled && fillAvailableOnZoom && zoomLevel > 1 + 0.001;
   const stageWidth = roundPx(
-    usesFilledViewportStage
+    usesFilledOverflowStage
       ? measurement.availableWidth
       : pageWidthPx * fitScale,
   );
   const stageHeight = roundPx(
-    usesFilledViewportStage
+    usesFilledOverflowStage
       ? measurement.availableHeight
       : pageHeightPx * fitScale,
   );
   const overflowFitScale =
-    usesFilledViewportStage &&
-    fitMode === "contain" &&
-    zoomLevel > 1 + 0.001
+    usesFilledOverflowStage && fitMode === "contain"
       ? Math.min(1, widthFitScale)
       : fitScale;
   const fittedPageWidth = pageWidthPx * overflowFitScale;
   const fittedPageHeight = pageHeightPx * overflowFitScale;
   const pageWidth = roundPx(
-    (usesFilledViewportStage ? fittedPageWidth : stageWidth) * zoomLevel,
+    (usesFilledOverflowStage ? fittedPageWidth : stageWidth) * zoomLevel,
   );
   const pageHeight = roundPx(
-    (usesFilledViewportStage ? fittedPageHeight : stageHeight) * zoomLevel,
+    (usesFilledOverflowStage ? fittedPageHeight : stageHeight) * zoomLevel,
   );
   const overflowX = pageWidth > stageWidth + 1;
   const overflowY = pageHeight > stageHeight + 1;

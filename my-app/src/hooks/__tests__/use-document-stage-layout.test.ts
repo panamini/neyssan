@@ -124,7 +124,7 @@ describe("useDocumentStageLayout", () => {
     expect(result.current.overflowY).toBe(true);
   });
 
-  it("keeps the workspace viewport fixed in fit mode while scaling the page inside it", async () => {
+  it("keeps the fit-mode stage tight to the fitted page instead of filling the viewport", async () => {
     const measurementRef = {
       current: createMeasurementNode({ width: 600, height: 800 }),
     } as React.RefObject<HTMLDivElement>;
@@ -138,28 +138,22 @@ describe("useDocumentStageLayout", () => {
       }),
     );
 
-    await waitFor(() => {
-      expect(result.current.stageWidth).toBe(600);
-      expect(result.current.stageHeight).toBe(800);
-    });
-
     const expectedFitScale = Math.min(
       600 / A4_PAGE_WIDTH_PX,
       800 / A4_PAGE_HEIGHT_PX,
     );
+    const expectedPageWidth = A4_PAGE_WIDTH_PX * expectedFitScale;
+    const expectedPageHeight = A4_PAGE_HEIGHT_PX * expectedFitScale;
 
-    expect(result.current.pageWidth).toBeCloseTo(
-      A4_PAGE_WIDTH_PX * expectedFitScale,
-      2,
-    );
-    expect(result.current.pageHeight).toBeCloseTo(
-      A4_PAGE_HEIGHT_PX * expectedFitScale,
-      2,
-    );
-    expect(result.current.pageWidth).toBeLessThan(result.current.stageWidth);
-    expect(result.current.pageHeight).toBeLessThanOrEqual(
-      result.current.stageHeight,
-    );
+    await waitFor(() => {
+      expect(result.current.stageWidth).toBeCloseTo(expectedPageWidth, 2);
+      expect(result.current.stageHeight).toBeCloseTo(expectedPageHeight, 2);
+    });
+
+    expect(result.current.pageWidth).toBeCloseTo(expectedPageWidth, 2);
+    expect(result.current.pageHeight).toBeCloseTo(expectedPageHeight, 2);
+    expect(result.current.pageWidth).toBe(result.current.stageWidth);
+    expect(result.current.pageHeight).toBe(result.current.stageHeight);
     expect(result.current.overflowX).toBe(false);
     expect(result.current.overflowY).toBe(false);
   });

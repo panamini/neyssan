@@ -2300,7 +2300,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               ? "dasti-proposal-sheet-frame dasti-proposal-sheet-frame--focused"
               : "dasti-proposal-sheet-frame"
           }
-          style={proposalDocumentThemeVars}
+          style={{
+            ...proposalDocumentThemeVars,
+            ...stageLayoutVars,
+          }}
         >
           <div
             className={
