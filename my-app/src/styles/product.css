@@ -1070,7 +1070,7 @@
   margin: 0;
   flex: 1 1 auto;
   min-width: 0;
-  font-family: "Fraunces", serif;
+  font-family: "Baskervville", serif;
   font-size: var(--tb);
   line-height: 1.22;
   font-weight: 600;
@@ -1350,7 +1350,7 @@
 
 .dasti-empty-state__title {
   margin: 0;
-  font-family: "Fraunces", serif;
+  font-family: "Baskervville", serif;
   font-size: var(--tm);
   line-height: 1.2;
   font-weight: 600;
@@ -1698,7 +1698,7 @@
 
 .dasti-proposal-sheet__title {
   margin: 0;
-  font-family: "Fraunces", serif;
+  font-family: "Baskervville", serif;
   font-size: var(--tb);
   line-height: 1.22;
   font-weight: 600;
@@ -1715,7 +1715,7 @@
   -webkit-appearance: none;
   background: transparent;
   color: var(--ti);
-  font-family: "Fraunces", serif;
+  font-family: "Baskervville", serif;
   font-size: var(--tb);
   line-height: 1.22;
   font-weight: 600;

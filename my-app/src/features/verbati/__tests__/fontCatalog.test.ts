@@ -17,10 +17,12 @@ describe("verbati font catalog", () => {
     expect(VERBATI_FONT_PAIR_OPTIONS.map((option) => option.id)).toEqual(
       expect.arrayContaining([
         "quiet-editorial",
+        "geist-baskervville",
         "civic-correspondence",
         "ledger-sans",
         "mono-signal",
         "studio-grotesk",
+        "fd-garamond-geist",
         "bricolage-hepta",
         "nunito-ortica",
         "nunito-code",
@@ -38,6 +40,16 @@ describe("verbati font catalog", () => {
   it("falls back safely when a requested font pair is missing", () => {
     expect(getVerbatiFontPairOption("does-not-exist")).toMatchObject({
       id: "quiet-editorial",
+      headingLabel: "Fraunces Bold",
+      bodyLabel: "Syne Regular",
+    });
+  });
+
+  it("resolves the Geist Baskervville pair as its own style option", () => {
+    expect(getVerbatiFontPairOption("geist-baskervville")).toMatchObject({
+      id: "geist-baskervville",
+      headingLabel: "Geist Bold",
+      bodyLabel: "Baskervville",
     });
   });
 
@@ -49,13 +61,26 @@ describe("verbati font catalog", () => {
     });
   });
 
+  it("resolves the FD Garamond pair with Geist body text", () => {
+    expect(getVerbatiFontPairOption("fd-garamond-geist")).toMatchObject({
+      id: "fd-garamond-geist",
+      headingLabel: "FD Garamond",
+      bodyLabel: "Geist",
+    });
+  });
+
   it("injects local font-face rules when bundled font assets are present", () => {
     ensureLocalFontFacesLoaded();
     const styleTag = document.head.querySelector("#dasti-local-font-faces");
     expect(styleTag).not.toBeNull();
     expect(styleTag?.textContent).toContain("@font-face");
+    expect(styleTag?.textContent).toContain("font-family:Baskervville");
+    expect(styleTag?.textContent).toContain("font-family:Fraunces");
+    expect(styleTag?.textContent).toContain("font-family:Syne");
     expect(styleTag?.textContent).toContain("font-family:Archivo");
     expect(styleTag?.textContent).toContain('font-family:"Source Code Pro"');
+    expect(styleTag?.textContent).toContain("font-family:\"FD Garamond\"");
+    expect(styleTag?.textContent).toContain('font-family:"Chaumont Script"');
     expect(styleTag?.textContent).toContain("font-style:italic");
   });
 });

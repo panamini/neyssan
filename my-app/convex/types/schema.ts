@@ -151,12 +151,14 @@ export interface UserProfileDoc extends Doc<"userProfiles"> {
         | "slate-column";
       typography:
         | "quiet-editorial"
+        | "geist-baskervville"
         | "civic-correspondence"
         | "ledger-sans"
         | "mono-signal"
         | "studio-grotesk"
         | "soft-serif"
         | "special-correspondence"
+        | "fd-garamond-geist"
         | "poster-accent"
         | "high-contrast-editorial"
         | "bricolage-hepta"

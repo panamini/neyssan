@@ -27,12 +27,14 @@ export const USER_PROFILE_VERBATI_PALETTE_IDS = [
 
 export const USER_PROFILE_VERBATI_TYPOGRAPHY_IDS = [
   "quiet-editorial",
+  "geist-baskervville",
   "civic-correspondence",
   "ledger-sans",
   "mono-signal",
   "studio-grotesk",
   "soft-serif",
   "special-correspondence",
+  "fd-garamond-geist",
   "poster-accent",
   "high-contrast-editorial",
   "bricolage-hepta",

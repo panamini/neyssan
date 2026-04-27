@@ -108,23 +108,25 @@ describe("SettingsPage preview controls", () => {
       slot: 1,
       preset: expect.objectContaining({
         styleChoice: "balanced",
-        fontPairId: "civic-correspondence",
+        fontPairId: "geist-baskervville",
       }),
     });
     expect(
       container.querySelector(".dasti-settings-hero-preview__chip"),
-    ).toHaveTextContent("Thestral Neue / BioRhyme Light");
+    ).toHaveTextContent("Geist Bold / Baskervville");
   });
 
-  it("renders all thirteen curated font pairs in the typography grid", () => {
+  it("renders all curated font pairs in the typography grid", () => {
     const { container } = render(<SettingsPage />);
     const grid = screen.getByRole("group", { name: "Font pair" });
     const optionButtons = within(grid).getAllByRole("button");
 
-    expect(optionButtons).toHaveLength(13);
+    expect(optionButtons).toHaveLength(15);
+    expect(grid).toHaveTextContent("Geist Bold");
     expect(grid).toHaveTextContent("Grave Presse");
     expect(grid).toHaveTextContent("Nunito ExtraBold");
     expect(grid).toHaveTextContent("Doto Black");
+    expect(grid).toHaveTextContent("FD Garamond");
     expect(container.querySelector(".dasti-settings-font-grid")).toBeTruthy();
   });
 
