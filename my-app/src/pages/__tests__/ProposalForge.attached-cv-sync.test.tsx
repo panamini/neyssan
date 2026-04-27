@@ -103,7 +103,10 @@ vi.mock("../../lib/proposal-personalization", () => ({
   getProposalAttachedCvLocalDocument: () =>
     mockActiveCvId === "cv_alpha" ? mockAttachedCv : null,
   getActiveLocalPersonalizationSource: () => ({
-    title: mockActiveCvId === "cv_alpha" ? "Operations Associate — Alex Martin" : null,
+    title:
+      mockActiveCvId === "cv_alpha"
+        ? "Operations Associate — Alex Martin"
+        : null,
     personalizationContext:
       mockActiveCvId === "cv_alpha"
         ? {
@@ -164,7 +167,10 @@ vi.mock("../../components/useStructuredMistralImport", () => ({
     enableMistral: true,
     importFile: mockImportFile,
   }),
-  beginStructuredImportTimingTrace: (_source: string, fileName?: string | null) => ({
+  beginStructuredImportTimingTrace: (
+    _source: string,
+    fileName?: string | null,
+  ) => ({
     id: "trace-1",
     source: "proposal_inline",
     fileName: fileName ?? null,
@@ -185,7 +191,11 @@ vi.mock("../../components/ProposalInputForm", () => ({
   }) => (
     <div>
       <div>{cvPickerOpen ? "CV picker open" : "CV picker closed"}</div>
-      <input id="jobTitle" name="jobTitle" defaultValue="Operations Associate" />
+      <input
+        id="jobTitle"
+        name="jobTitle"
+        defaultValue="Operations Associate"
+      />
       <textarea
         id="jobDescription"
         name="jobDescription"
@@ -216,14 +226,17 @@ vi.mock("../../components/ProposalInputForm", () => ({
 vi.mock("../../components/ProposalDisplay", () => ({
   default: ({
     railStartAddon,
+    railEndAddon,
     actions,
   }: {
     railStartAddon?: React.ReactNode;
+    railEndAddon?: React.ReactNode;
     actions?: React.ReactNode;
   }) => (
     <div>
       <div>Proposal output</div>
       {railStartAddon}
+      {railEndAddon}
       {actions}
     </div>
   ),
@@ -237,10 +250,7 @@ vi.mock("../../components/EmbeddedStyleInspector", () => ({
   }: {
     onSelectPalette?: (palette: "bordeaux") => void;
   }) => (
-    <button
-      type="button"
-      onClick={() => onSelectPalette?.("bordeaux")}
-    >
+    <button type="button" onClick={() => onSelectPalette?.("bordeaux")}>
       Direct style edit
     </button>
   ),
@@ -276,7 +286,9 @@ vi.mock("../../components/ProposalsList", () => ({
 
 function LocationProbe(): JSX.Element {
   const location = useLocation();
-  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
+  return (
+    <div data-testid="location">{`${location.pathname}${location.search}`}</div>
+  );
 }
 
 function buildCoverLetterStartEntry(options?: {
@@ -326,11 +338,15 @@ describe("ProposalForge attached CV sync", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByTestId("cover-letter-start-surface")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("cover-letter-start-surface"),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("cover-letter-start-surface")).toHaveClass(
       "dasti-quick-start-pane",
     );
-    const pageShell = container.querySelector(".dasti-page-shell") as HTMLElement;
+    const pageShell = container.querySelector(
+      ".dasti-page-shell",
+    ) as HTMLElement;
     expect(pageShell?.style.getPropertyValue("--page-shell-pad-top")).toBe(
       "0px",
     );
@@ -369,9 +385,13 @@ describe("ProposalForge attached CV sync", () => {
       screen.queryByRole("button", { name: /^Import a resume\b/i }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Proposal output")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Pick CV" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Pick CV" }),
+    ).not.toBeInTheDocument();
     expect(container.querySelector(".dasti-proposal-output-shell")).toBeNull();
-    expect(container.querySelector(".dasti-workbench-top-left-slot--proposal")).toBeNull();
+    expect(
+      container.querySelector(".dasti-workbench-top-left-slot--proposal"),
+    ).toBeNull();
     expect(container.querySelector(".dasti-grid-split")).toBeNull();
   });
 
@@ -389,7 +409,9 @@ describe("ProposalForge attached CV sync", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByTestId("cover-letter-start-surface")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("cover-letter-start-surface"),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Bring in the job." }),
     ).toBeInTheDocument();
@@ -397,11 +419,21 @@ describe("ProposalForge attached CV sync", () => {
       name: /^Capture the role\b/i,
     });
     expect(captureRole).toHaveAttribute("aria-pressed", "true");
+    const captureRoleDialog = screen.getByRole("dialog", {
+      name: "Capture the role",
+    });
+    expect(
+      within(captureRoleDialog).getByRole("link", {
+        name: /Install extension/i,
+      }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /Install extension/i }),
     ).toHaveAttribute("href", PROPOSAL_EXTENSION_INSTALL_LINK.href);
     expect(screen.getByRole("link", { name: /LinkedIn/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Paste job offer\b/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Paste job offer\b/i }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^Bring in the job\b/i }),
     ).not.toBeInTheDocument();
@@ -419,13 +451,21 @@ describe("ProposalForge attached CV sync", () => {
     expect(backSlot).toHaveAttribute("data-has-action", "true");
     expect(screen.getByLabelText("Back")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^Bring in the job\b/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Bring in the job\b/i }),
+    );
 
-    expect(screen.getByRole("heading", { name: "Bring in the job." })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Bring in the job." }),
+    ).toBeInTheDocument();
     expect(backSlot).toHaveAttribute("data-has-action", "true");
     expect(screen.getByLabelText("Back")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Capture the role\b/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Paste job offer\b/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Capture the role\b/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Paste job offer\b/i }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^Pick a resume\b/i }),
     ).not.toBeInTheDocument();
@@ -435,7 +475,9 @@ describe("ProposalForge attached CV sync", () => {
 
     fireEvent.click(screen.getByLabelText("Back"));
 
-    expect(screen.getByRole("heading", { name: "Start your cover letter." })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Start your cover letter." }),
+    ).toBeInTheDocument();
     expect(backSlot).toHaveAttribute("data-has-action", "true");
 
     fireEvent.click(
@@ -446,8 +488,12 @@ describe("ProposalForge attached CV sync", () => {
       screen.getByRole("heading", { name: "Bring in your resume." }),
     ).toBeInTheDocument();
     expect(backSlot).toHaveAttribute("data-has-action", "true");
-    expect(screen.getByRole("button", { name: /^Pick a resume\b/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Import a resume\b/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Pick a resume\b/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Import a resume\b/i }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^Capture the role\b/i }),
     ).not.toBeInTheDocument();
@@ -469,8 +515,12 @@ describe("ProposalForge attached CV sync", () => {
       screen.getByRole("button", { name: /^Bring in your resume\b/i }),
     );
 
-    expect(screen.getByTestId("cover-letter-start-surface")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Pick a resume\b/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("cover-letter-start-surface"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Pick a resume\b/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens the existing CV picker when the start surface uses a resume", async () => {
@@ -485,10 +535,14 @@ describe("ProposalForge attached CV sync", () => {
     );
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /^Pick a resume\b/i }));
+      fireEvent.click(
+        screen.getByRole("button", { name: /^Pick a resume\b/i }),
+      );
     });
 
-    expect(screen.queryByTestId("cover-letter-start-surface")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("cover-letter-start-surface"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("CV picker open")).toBeInTheDocument();
   });
 
@@ -505,7 +559,9 @@ describe("ProposalForge attached CV sync", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /^Bring in your resume\b/i }),
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Import a resume\b/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Import a resume\b/i }),
+    );
 
     expect(fileInputClickSpy).toHaveBeenCalled();
     expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
@@ -520,12 +576,17 @@ describe("ProposalForge attached CV sync", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /^Bring in the job\b/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^Capture the role\b/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Bring in the job\b/i }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Capture the role\b/i }),
+    );
 
-    expect(
-      screen.getByRole("link", { name: /LinkedIn/i }),
-    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/");
+    expect(screen.getByRole("link", { name: /LinkedIn/i })).toHaveAttribute(
+      "href",
+      "https://www.linkedin.com/jobs/",
+    );
     expect(screen.getByRole("link", { name: /Indeed/i })).toHaveAttribute(
       "href",
       "https://www.indeed.com/jobs",
@@ -534,7 +595,9 @@ describe("ProposalForge attached CV sync", () => {
       "href",
       "https://www.upwork.com/nx/jobs/search/",
     );
-    expect(screen.queryByRole("link", { name: /Fiverr/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Fiverr/i }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("More supported sites"));
 
@@ -558,7 +621,9 @@ describe("ProposalForge attached CV sync", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /^Bring in the job\b/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Bring in the job\b/i }),
+    );
     const toggle = screen.getByRole("button", {
       name: /^Capture the role\b/i,
     });
@@ -569,11 +634,7 @@ describe("ProposalForge attached CV sync", () => {
     expect(
       screen.getByRole("link", { name: /Install extension/i }),
     ).toBeInTheDocument();
-    expect(
-      toggle.closest(".dasti-quick-start-choice"),
-    ).toContainElement(
-      screen.getByRole("link", { name: /Install extension/i }),
-    );
+    expect(toggle.closest(".dasti-quick-start-choice")?.querySelector("a")).toBeNull();
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-pressed", "false");
@@ -592,11 +653,15 @@ describe("ProposalForge attached CV sync", () => {
     fireEvent.click(screen.getByLabelText("Close"));
 
     await waitFor(() => {
-      expect(screen.queryByTestId("cover-letter-start-surface")).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("cover-letter-start-surface"),
+      ).not.toBeInTheDocument();
     });
     expect(screen.getByText("CV picker closed")).toBeInTheDocument();
     expect(screen.getByText("Proposal output")).toBeInTheDocument();
-    expect(container.querySelector(".dasti-proposal-output-shell")).not.toBeNull();
+    expect(
+      container.querySelector(".dasti-proposal-output-shell"),
+    ).not.toBeNull();
   });
 
   it("opens the editor and focuses the job-description field when pasting a job offer", async () => {
@@ -606,11 +671,17 @@ describe("ProposalForge attached CV sync", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /^Bring in the job\b/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^Paste job offer\b/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Bring in the job\b/i }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Paste job offer\b/i }),
+    );
 
     await waitFor(() => {
-      expect(screen.queryByTestId("cover-letter-start-surface")).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("cover-letter-start-surface"),
+      ).not.toBeInTheDocument();
       expect(document.getElementById("jobDescription")).toHaveFocus();
     });
   });
@@ -630,9 +701,11 @@ describe("ProposalForge attached CV sync", () => {
       ],
       emptyReason: null,
     });
-    mockImportCv.mockImplementation(async (nextCv: { id: string; title: string }) => {
-      mockCvSnapshots[nextCv.id] = nextCv.title;
-    });
+    mockImportCv.mockImplementation(
+      async (nextCv: { id: string; title: string }) => {
+        mockCvSnapshots[nextCv.id] = nextCv.title;
+      },
+    );
 
     const view = render(
       <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
@@ -644,7 +717,9 @@ describe("ProposalForge attached CV sync", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /^Bring in your resume\b/i }),
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Import a resume\b/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Import a resume\b/i }),
+    );
 
     const fileInput = document.querySelector(
       'input[type="file"]',
@@ -666,7 +741,9 @@ describe("ProposalForge attached CV sync", () => {
     );
 
     await waitFor(() => {
-      expect(screen.queryByTestId("cover-letter-start-surface")).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("cover-letter-start-surface"),
+      ).not.toBeInTheDocument();
       expect(document.getElementById("jobDescription")).toHaveFocus();
     });
     expect(
@@ -692,7 +769,9 @@ describe("ProposalForge attached CV sync", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /^Bring in your resume\b/i }),
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Import a resume\b/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Import a resume\b/i }),
+    );
 
     const fileInput = document.querySelector(
       'input[type="file"]',
@@ -708,7 +787,9 @@ describe("ProposalForge attached CV sync", () => {
         screen.getByText(/OCR import rejected \(fallback\/untrusted\)/i),
       ).toBeInTheDocument();
     });
-    expect(screen.getByTestId("cover-letter-start-surface")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("cover-letter-start-surface"),
+    ).toBeInTheDocument();
     expect(mockImportCv).not.toHaveBeenCalled();
     expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
   });
@@ -725,7 +806,9 @@ describe("ProposalForge attached CV sync", () => {
       "Default",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Attach CV from form" }),
+    );
 
     expect(
       screen.getByRole("button", {
@@ -739,7 +822,9 @@ describe("ProposalForge attached CV sync", () => {
     });
     expect(mockLoadCv).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove CV from form" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove CV from form" }),
+    );
 
     expect(screen.getByRole("button", { name: "Pick CV" })).toBeInTheDocument();
     expect(screen.getByTestId("proposal-style-status")).toHaveTextContent(
@@ -753,11 +838,17 @@ describe("ProposalForge attached CV sync", () => {
         <ProposalForge />
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Attach CV from form" }),
+    );
 
-    expect(screen.getByText("Operations Associate — Alex Martin")).toBeInTheDocument();
+    expect(
+      screen.getByText("Operations Associate — Alex Martin"),
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove CV from toolbar" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove CV from toolbar" }),
+    );
 
     expect(screen.getByRole("button", { name: "Pick CV" })).toBeInTheDocument();
   });
@@ -796,7 +887,9 @@ describe("ProposalForge attached CV sync", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Attach CV from form" }),
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-style-status")).toHaveTextContent(
@@ -849,7 +942,9 @@ describe("ProposalForge attached CV sync", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Attach CV from form" }),
+    );
     await waitFor(() => {
       expect(screen.getByTestId("proposal-style-status")).toHaveTextContent(
         "Custom",

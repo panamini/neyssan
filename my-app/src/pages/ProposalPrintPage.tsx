@@ -12,6 +12,8 @@ import {
   type ProposalFontDebugSnapshot,
 } from "../lib/proposal-font-debug";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
+import type { FormValues } from "../components/ProposalInputForm.schemas";
+import { resolveProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 
 type ProposalPrintStatus =
   | "booting"
@@ -98,7 +100,10 @@ export function ProposalPrintPage(): JSX.Element {
   const documentTypography = React.useMemo(
     () =>
       payload
-        ? getProposalDocumentTypography(payload.voicePreset, payload.stylePreset)
+        ? getProposalDocumentTypography(
+            resolveProposalVoicePreset(payload.voicePreset),
+            payload.stylePreset,
+          )
         : null,
     [payload],
   );
@@ -205,7 +210,7 @@ export function ProposalPrintPage(): JSX.Element {
       <div style={stageLayoutVars}>
         <ProposalDocumentRenderer
           content={payload.content}
-          proposalType={payload.proposalType}
+          proposalType={payload.proposalType as FormValues["proposalType"] | null}
           templateId={payload.templateId}
           stylePreset={payload.stylePreset}
           railTitle={payload.railTitle}
@@ -218,6 +223,7 @@ export function ProposalPrintPage(): JSX.Element {
           applicantHeader={payload.applicantHeader}
           headerVisibility={payload.headerVisibility}
           documentTypography={documentTypography}
+          signatureSettings={payload.signatureSettings}
           pageWidth={A4_PAGE_WIDTH_PX}
           pageGapPx={0}
           onPageCountChange={setPageCount}

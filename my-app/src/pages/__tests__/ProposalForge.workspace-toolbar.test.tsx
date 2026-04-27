@@ -688,7 +688,7 @@ describe("ProposalForge workbench layout", () => {
         button.getAttribute("aria-label") ??
         button.getAttribute("data-toolbar-tooltip"),
     );
-    expect(buttonLabels).toEqual([]);
+    expect(buttonLabels).toEqual(["Choose signature"]);
   });
 
   it("moves edit-only reset and export controls into the proposal display toolbar", () => {
@@ -735,6 +735,7 @@ describe("ProposalForge workbench layout", () => {
         button.getAttribute("data-toolbar-tooltip"),
     );
     expect(buttonLabels).toEqual([
+      "Choose signature",
       "Export proposal",
       "Save proposal to library",
       "Delete",
