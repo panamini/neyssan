@@ -59,9 +59,7 @@ import {
 } from "../lib/document-export-debug";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
 import type { CvDocument } from "../types/cvDocument";
-import {
-  formatCvDisplayTitle,
-} from "../lib/proposal-personalization";
+import { formatCvDisplayTitle } from "../lib/proposal-personalization";
 import { deriveCvTitleFromSections } from "../lib/normalize-cv";
 import {
   CvPickerCard,
@@ -159,7 +157,7 @@ function buildStylePresetFromSettingsSlot(
         }
       : preset.paletteOverride
         ? { palette: preset.paletteOverride }
-      : null),
+        : null),
   });
 }
 
@@ -184,9 +182,7 @@ function readCvPickerString(value: unknown): string | undefined {
     : undefined;
 }
 
-function buildCvForgePickerOption(
-  cv: CvDocument,
-): CvPickerCardOption {
+function buildCvForgePickerOption(cv: CvDocument): CvPickerCardOption {
   const profilePreview = readCvPickerProfilePreview(cv);
   const profileName = readCvPickerString(profilePreview?.name);
   const desiredPosition =
@@ -206,9 +202,13 @@ function buildCvForgePickerOption(
       location: readCvPickerString(profilePreview?.location),
     }),
     updatedAt:
-      typeof cv.metadata?.updatedAt === "string" ? cv.metadata.updatedAt : undefined,
+      typeof cv.metadata?.updatedAt === "string"
+        ? cv.metadata.updatedAt
+        : undefined,
     createdAt:
-      typeof cv.metadata?.createdAt === "string" ? cv.metadata.createdAt : undefined,
+      typeof cv.metadata?.createdAt === "string"
+        ? cv.metadata.createdAt
+        : undefined,
     profileName,
     desiredPosition,
     email: readCvPickerString(profilePreview?.email),
@@ -223,15 +223,13 @@ function buildCvForgePickerOption(
  *
  * CvLibraryProvider et Sidebar sont montés au niveau App.tsx.
  * Cette page rend uniquement le contenu scrollable.
- * Intro panel .ip : eyebrow + h2 Fraunces + description (§13 dasti-spec-v1).
+ * Intro panel .ip : eyebrow + h2 Baskervville + description (§13 dasti-spec-v1).
  */
 export function CvForge(): JSX.Element {
   const location = useLocation();
   const { search } = location;
   const navigate = useNavigate();
-  const {
-    isAuthenticated: isConvexAuthenticated,
-  } = useConvexAuth();
+  const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
   const setJobResume = useMutation(
     ((api as any).jobsPublic?.setResumeForJob ??
       "jobsPublic.setResumeForJob") as any,
@@ -475,9 +473,7 @@ export function CvForge(): JSX.Element {
   }, [currentCv?.id]);
 
   React.useEffect(() => {
-    if (
-      sanitizedHiddenSectionIds.join("|") === hiddenSectionIds.join("|")
-    ) {
+    if (sanitizedHiddenSectionIds.join("|") === hiddenSectionIds.join("|")) {
       return;
     }
 
@@ -492,7 +488,9 @@ export function CvForge(): JSX.Element {
   }, [currentCv?.id, hiddenSectionIds]);
   const requestedJobRecord = useQuery(
     ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
-    requestedJobId && isConvexAuthenticated ? { jobId: requestedJobId } : "skip",
+    requestedJobId && isConvexAuthenticated
+      ? { jobId: requestedJobId }
+      : "skip",
   ) as CvForgeCanonicalJob | undefined;
   const selectedJobRecord = requestedJobRecord ?? null;
   const isSplitCanvas = viewportWidth >= 1240;
@@ -503,7 +501,7 @@ export function CvForge(): JSX.Element {
         ? "1240px"
         : "var(--cv-editor-shell-max-width)";
   const cvPreviewShellBlockSize =
-    "min(var(--document-viewer-shell-max-block), calc(100dvh - var(--header-height) - (var(--space-2) * 2)))";
+    "calc(100dvh - var(--header-height) - var(--page-shell-pad-top, var(--space-2)) - var(--page-shell-pad-bottom, var(--space-1)))";
 
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -593,99 +591,95 @@ export function CvForge(): JSX.Element {
         request.format === "pdf" ? `pdf:${request.mode}` : request.format;
       setExportingFormat(exportKey);
       try {
-        await (
-          request.format === "pdf" || request.format === "docx"
-            ? (async () => {
-                const source =
-                  request.format === "pdf" && request.mode === "styled"
-                    ? buildStyledResumePrintSource({
-                        currentCv: exportCurrentCv,
-                        stylePreset,
-                      })
-                    : buildResumeExportSource({
-                        currentCv: exportCurrentCv,
-                        authoritativeResume,
-                        stylePreset,
-                      });
+        await (request.format === "pdf" || request.format === "docx"
+          ? (async () => {
+              const source =
+                request.format === "pdf" && request.mode === "styled"
+                  ? buildStyledResumePrintSource({
+                      currentCv: exportCurrentCv,
+                      stylePreset,
+                    })
+                  : buildResumeExportSource({
+                      currentCv: exportCurrentCv,
+                      authoritativeResume,
+                      stylePreset,
+                    });
 
-                if (!source) {
-                  throw new Error("Resume export source is unavailable.");
-                }
+              if (!source) {
+                throw new Error("Resume export source is unavailable.");
+              }
 
-                if (
-                  request.format === "pdf" &&
-                  request.mode === "styled" &&
-                  "renderSource" in source
-                ) {
-                  const previewCapture = readResumePreviewDebugCapture();
-                  const exportContext = {
-                    cvId: currentCv?.id ? String(currentCv.id) : null,
-                    cvUrl:
-                      typeof window !== "undefined"
-                        ? window.location.href
-                        : null,
-                    rendererVariantId: source.rendererVariantId,
+              if (
+                request.format === "pdf" &&
+                request.mode === "styled" &&
+                "renderSource" in source
+              ) {
+                const previewCapture = readResumePreviewDebugCapture();
+                const exportContext = {
+                  cvId: currentCv?.id ? String(currentCv.id) : null,
+                  cvUrl:
+                    typeof window !== "undefined" ? window.location.href : null,
+                  rendererVariantId: source.rendererVariantId,
+                  stylePreset: source.stylePreset,
+                  previewCapture,
+                  timestamp: Date.now(),
+                } as const;
+                setStyledResumeExportContext(exportContext);
+
+                dbg(
+                  "[CvForge] styled resume export snapshot",
+                  buildResumePrintDebugSnapshot({
                     stylePreset: source.stylePreset,
-                    previewCapture,
-                    timestamp: Date.now(),
-                  } as const;
-                  setStyledResumeExportContext(exportContext);
+                    rendererVariantId: source.rendererVariantId,
+                  }),
+                );
+              }
 
-                  dbg(
-                    "[CvForge] styled resume export snapshot",
-                    buildResumePrintDebugSnapshot({
-                      stylePreset: source.stylePreset,
-                      rendererVariantId: source.rendererVariantId,
-                    }),
-                  );
-                }
-
-                return exportDocumentFile({
-                  kind: "resume",
-                  format: request.format,
-                  mode: request.format === "pdf" ? request.mode : undefined,
-                  data: source,
-                  stylePreset: stylePreset,
-                  fileNameBase:
-                    request.format === "docx"
-                      ? "Resume - Editable"
-                      : request.mode === "ats"
-                        ? "Resume - ATS"
-                        : "Resume - Styled",
-                  metadata:
-                    request.format === "pdf" && request.mode === "styled"
-                      ? {
-                          resumeTypographyAudit:
-                            buildResumeTypographyAuditMetadata(
-                              currentCv
-                                ? {
-                                    cvId: String(currentCv.id),
-                                    cvUrl:
-                                      typeof window !== "undefined"
-                                        ? window.location.href
-                                        : null,
-                                    rendererVariantId: source.rendererVariantId,
-                                    stylePreset: source.stylePreset,
-                                    previewCapture:
-                                      readResumePreviewDebugCapture(),
-                                    timestamp: Date.now(),
-                                  }
-                                : null,
-                            ),
-                        }
-                      : undefined,
-                });
-              })()
-            : hasTrustedExport && authoritativeResume
-              ? downloadAuthoritativeResumeExport({
-                  authoritativeResume,
-                  format: request.format,
-                })
-              : downloadStandardResumeExport({
-                  document: exportCurrentCv,
-                  format: request.format,
-                })
-        );
+              return exportDocumentFile({
+                kind: "resume",
+                format: request.format,
+                mode: request.format === "pdf" ? request.mode : undefined,
+                data: source,
+                stylePreset: stylePreset,
+                fileNameBase:
+                  request.format === "docx"
+                    ? "Resume - Editable"
+                    : request.mode === "ats"
+                      ? "Resume - ATS"
+                      : "Resume - Styled",
+                metadata:
+                  request.format === "pdf" && request.mode === "styled"
+                    ? {
+                        resumeTypographyAudit:
+                          buildResumeTypographyAuditMetadata(
+                            currentCv
+                              ? {
+                                  cvId: String(currentCv.id),
+                                  cvUrl:
+                                    typeof window !== "undefined"
+                                      ? window.location.href
+                                      : null,
+                                  rendererVariantId: source.rendererVariantId,
+                                  stylePreset: source.stylePreset,
+                                  previewCapture:
+                                    readResumePreviewDebugCapture(),
+                                  timestamp: Date.now(),
+                                }
+                              : null,
+                          ),
+                      }
+                    : undefined,
+              });
+            })()
+          : hasTrustedExport && authoritativeResume
+            ? downloadAuthoritativeResumeExport({
+                authoritativeResume,
+                format: request.format,
+              })
+            : downloadStandardResumeExport({
+                document: exportCurrentCv,
+                format: request.format,
+              }));
         showToast("Exported.", { variant: "success" });
       } catch (error) {
         console.error("[CvForge] export failed", error);
@@ -935,7 +929,6 @@ export function CvForge(): JSX.Element {
     </div>
   );
 
-
   const handleOpenCvById = React.useCallback(
     async (cvId: string) => {
       const selectedOption =
@@ -1109,15 +1102,13 @@ export function CvForge(): JSX.Element {
             "--page-shell-gap": "var(--space-2)",
             "--page-shell-pad-top":
               workspaceMode === "preview" ? "var(--space-2)" : "var(--space-2)",
-            "--page-shell-pad-inline":
-              "var(--space-4)",
+            "--page-shell-pad-inline": "var(--space-4)",
             "--page-shell-pad-bottom": "var(--space-1)",
             "--cv-preview-toolbar-inset":
               workspaceMode === "preview" ? "0px" : undefined,
             "--page-shell-pad-top-mobile":
               workspaceMode === "preview" ? "var(--space-2)" : "var(--space-2)",
-            "--page-shell-pad-inline-mobile":
-              "var(--space-4)",
+            "--page-shell-pad-inline-mobile": "var(--space-4)",
             "--page-shell-pad-bottom-mobile": "var(--space-1)",
           } as React.CSSProperties
         }
@@ -1224,7 +1215,9 @@ export function CvForge(): JSX.Element {
                     onClick={handleImportEntryCv}
                     disabled={isEntryPickerBusy}
                   >
-                    <span>{isImportingEntryCv ? "Importing..." : "Import new"}</span>
+                    <span>
+                      {isImportingEntryCv ? "Importing..." : "Import new"}
+                    </span>
                   </button>
                   <button
                     type="button"
