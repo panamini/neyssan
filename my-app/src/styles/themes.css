@@ -1,11 +1,32 @@
 /* ============================================================
-   PALETTES ACCENT INTERCHANGEABLES — §6 dasti-spec-v1
+   PALETTES ACCENT INTERCHANGEABLES — §6 dasti-spec-v5
    Surcharger via classe body.pal-* (jamais via style inline)
-   Layout pyramide : 3 dots ligne 1 (Sauge, Ocre, Pierre)
+   Layout pyramide : 3 dots ligne 1 (Terre, Ocre, Pierre)
                      2 dots ligne 2 (Bordeaux, Encre)
+   Défaut: Terre (clay/terracotta) — défini dans foundation.css :root
    ============================================================ */
 
-/* Sauge — défaut (reproduit les valeurs :root pour cohérence) */
+/* Terre — clay/terracotta (reproduit le défaut :root) */
+.pal-terre {
+  --ac: #A84E2E;
+  --am: #D97757;
+  --ap: rgba(168, 78, 46, 0.10);
+  --as: rgba(168, 78, 46, 0.16);
+  --fr: #D97757;
+  --color-on-accent: #FAF9F5;
+  --op: var(--color-on-accent);
+}
+.dark.pal-terre {
+  --ac: #A15A42;
+  --am: #D47554;
+  --ap: rgba(212, 117, 84, 0.14);
+  --as: rgba(212, 117, 84, 0.20);
+  --fr: #D47554;
+  --color-on-accent: #0E0E0E;
+  --op: var(--color-on-accent);
+}
+
+/* Sauge — kept as alternate option */
 .pal-sauge {
   --ac: hsl(155, 22%, 30%);
   --am: hsl(155, 24%, 44%);

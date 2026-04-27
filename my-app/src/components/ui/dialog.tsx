@@ -91,7 +91,13 @@ export function Dialog({
               }}
             >
               <div className="min-w-0">
-                <h2 className="font-['Fraunces'] text-[var(--tm)] font-semibold leading-[var(--ll)] text-foreground">
+                <h2
+                  className="text-[var(--tm)] font-semibold leading-[var(--ll)] text-foreground"
+                  style={{
+                    fontFamily:
+                      "var(--proposal-ui-heading-trial-font, var(--font-body-family))",
+                  }}
+                >
                   {title}
                 </h2>
               </div>

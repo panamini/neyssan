@@ -1118,7 +1118,7 @@
 
 .dasti-modal-title {
   margin: 0;
-  font-family: "Fraunces", serif;
+  font-family: var(--proposal-ui-heading-trial-font, var(--font-body-family));
   font-size: var(--tx2);
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -1208,7 +1208,7 @@
 
 .dasti-zone-title {
   margin: 0 0 calc(-1 * var(--s2));
-  font-family: "Fraunces", serif;
+  font-family: var(--proposal-ui-heading-trial-font, var(--font-body-family));
   font-size: var(--tm);
   font-weight: 600;
   letter-spacing: -0.01em;
