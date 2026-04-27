@@ -517,18 +517,18 @@
   font-family: var(--font-body-family);
   display: inline-flex;
   align-items: center;
-  font-size: 16px;
-  font-style: italic;
-  font-weight: 700;
+  font-size: var(--text-title-size);
+  font-style: normal;
+  font-weight: var(--font-heading-weight);
   line-height: 1;
-  letter-spacing: 0;
+  letter-spacing: -0.035em;
   white-space: nowrap;
   color: inherit;
 }
 
 .sb-toggle__period {
-  color: #a84e2e;
-  font-weight: 800;
+  color: var(--color-accent);
+  font-weight: var(--font-strong-weight);
 }
 
 .sb-nav-item {

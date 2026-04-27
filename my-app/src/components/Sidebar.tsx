@@ -38,6 +38,7 @@ import {
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
 
 const MAX_RECENT_ITEMS = 3;
+const SIDEBAR_CONTENT_SWAP_DELAY_MS = 320;
 
 function useDarkMode(): [boolean, () => void] {
   const [isDark, setIsDark] = React.useState(() => {
@@ -586,11 +587,32 @@ export const Sidebar: React.FC = () => {
   const forcedCollapsed = viewportWidth < 768;
   const hideSidebar = viewportWidth < 480;
   const sidebarCollapsed = collapsed || forcedCollapsed;
+  const [renderCollapsedContent, setRenderCollapsedContent] = React.useState(
+    () => sidebarCollapsed,
+  );
   const isResumeRoute = matchesRoute("/cv");
   const isResumeLibraryRoute = matchesRoute("/cvs");
   const isJobsRoute = matchesRoute("/jobs");
   const isProposalRoute = matchesRoute("/proposal");
   const isProposalLibraryRoute = matchesRoute("/proposals");
+
+  React.useEffect(() => {
+    if (!sidebarCollapsed) {
+      setRenderCollapsedContent(false);
+      return undefined;
+    }
+
+    if (forcedCollapsed || typeof window === "undefined") {
+      setRenderCollapsedContent(true);
+      return undefined;
+    }
+
+    const swapTimer = window.setTimeout(() => {
+      setRenderCollapsedContent(true);
+    }, SIDEBAR_CONTENT_SWAP_DELAY_MS);
+
+    return () => window.clearTimeout(swapTimer);
+  }, [forcedCollapsed, sidebarCollapsed]);
 
   const handleCreateProposal = React.useCallback(() => {
     clearActiveLocalCvId();
@@ -1020,12 +1042,22 @@ export const Sidebar: React.FC = () => {
           aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           <span className="sb-toggle__label" aria-hidden="true">
-            {sidebarCollapsed ? "II" : "two weeks"}
+            {sidebarCollapsed ? (
+              <>
+                tw
+                <span className="sb-toggle__period">.</span>
+              </>
+            ) : (
+              <>
+                two weeks
+                <span className="sb-toggle__period">.</span>
+              </>
+            )}
           </span>
         </button>
       </div>
 
-      {sidebarCollapsed ? (
+      {renderCollapsedContent ? (
         <nav className="sb__nav sb__nav--rail" aria-label="Primary sidebar">
           <SidebarRailButton
             label="Start"
