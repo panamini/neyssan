@@ -165,22 +165,17 @@ function buildResumeDataSignature(data: ResumeData) {
       .join("||"),
     data.projects
       .map((item) =>
-        joinSignatureParts([
-          item.id,
-          item.name,
-          item.meta,
-          item.description,
-        ]),
+        joinSignatureParts([item.id, item.name, item.meta, item.description]),
       )
       .join("||"),
     data.education
       .map((item) =>
-        joinSignatureParts([item.id, item.degree, item.school, item.period])
+        joinSignatureParts([item.id, item.degree, item.school, item.period]),
       )
       .join("||"),
-    (data.achievements ?? []).map((item) => normalizeSignatureValue(item)).join(
-      "||",
-    ),
+    (data.achievements ?? [])
+      .map((item) => normalizeSignatureValue(item))
+      .join("||"),
     data.achievementItems
       .map((item) => joinSignatureParts([item.id, item.text]))
       .join("||"),
@@ -189,7 +184,9 @@ function buildResumeDataSignature(data: ResumeData) {
       .map((item) => joinSignatureParts([item.id, item.name]))
       .join("||"),
     data.certifications
-      .map((item) => joinSignatureParts([item.id, item.name, item.issuer, item.meta]))
+      .map((item) =>
+        joinSignatureParts([item.id, item.name, item.issuer, item.meta]),
+      )
       .join("||"),
     data.affiliations
       .map((item) =>
@@ -199,7 +196,7 @@ function buildResumeDataSignature(data: ResumeData) {
           item.roleOrMembershipType,
           item.dateRange,
           item.notes,
-        ])
+        ]),
       )
       .join("||"),
     data.textSections
@@ -209,7 +206,7 @@ function buildResumeDataSignature(data: ResumeData) {
           item.sectionId,
           item.sectionTitle,
           item.text,
-        ])
+        ]),
       )
       .join("||"),
   ].join("::");
@@ -241,8 +238,12 @@ export function VerbatiResumePreview({
   const resumeViewportRef = React.useRef<HTMLDivElement | null>(null);
   const [resumeViewportNode, setResumeViewportNode] =
     React.useState<HTMLDivElement | null>(null);
-  const [stableWorkshopPageCount, setStableWorkshopPageCount] = React.useState(1);
-  const dataSignature = React.useMemo(() => buildResumeDataSignature(data), [data]);
+  const [stableWorkshopPageCount, setStableWorkshopPageCount] =
+    React.useState(1);
+  const dataSignature = React.useMemo(
+    () => buildResumeDataSignature(data),
+    [data],
+  );
   const themeVars = React.useMemo(
     () => buildVerbatiThemeVars(stylePreset),
     [stylePreset],
@@ -359,8 +360,7 @@ export function VerbatiResumePreview({
       layoutKey: `${userZoom}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${stageLayout.pageWidth}:${canvasHeightPx}:${effectivePageCount}:${stylePreset.layout}:${rendererVariantId}:${dataSignature}`,
       recenterKey: fitRequestCount,
       defaultCenterX: isWorkspaceMode ? 0.5 : 0.5,
-      defaultCenterY:
-        isWorkspaceMode || effectivePageCount > 1 ? 0 : 0.5,
+      defaultCenterY: isWorkspaceMode || effectivePageCount > 1 ? 0 : 0.5,
     },
   );
   const attachResumeViewport = React.useCallback(
@@ -473,7 +473,13 @@ export function VerbatiResumePreview({
     return () => {
       cancelled = true;
     };
-  }, [compareLayouts, dataSignature, rendererVariantId, stylePreset, themeVars]);
+  }, [
+    compareLayouts,
+    dataSignature,
+    rendererVariantId,
+    stylePreset,
+    themeVars,
+  ]);
 
   if (compareLayouts) {
     const comparisonVariantIds = comparisonLayouts.map(
@@ -568,9 +574,6 @@ export function VerbatiResumePreview({
       >
         <MagnifyingGlassPlus size={14} strokeWidth={1.7} aria-hidden="true" />
       </button>
-      <span className="dasti-doc-page-count" aria-label="Page count">
-        {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
-      </span>
     </div>
   ) : null;
 
@@ -692,7 +695,9 @@ export function VerbatiResumePreview({
           );
         }
 
-        return previousTop !== node.scrollTop || previousLeft !== node.scrollLeft;
+        return (
+          previousTop !== node.scrollTop || previousLeft !== node.scrollLeft
+        );
       };
 
       const viewportCanScroll =
@@ -700,9 +705,7 @@ export function VerbatiResumePreview({
         viewport.scrollWidth > viewport.clientWidth + 1;
 
       const shouldDeferToNativeViewportScroll =
-        isWorkspaceMode &&
-        workspaceViewMode === "manual" &&
-        viewportCanScroll;
+        isWorkspaceMode && workspaceViewMode === "manual" && viewportCanScroll;
 
       if (shouldDeferToNativeViewportScroll) {
         return;
@@ -868,6 +871,12 @@ export function VerbatiResumePreview({
           </div>
         </div>
       </div>
+      <span
+        className="dasti-doc-page-count dasti-doc-page-count--resume-workspace"
+        aria-label="Page count"
+      >
+        {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
+      </span>
     </div>
   );
 }
