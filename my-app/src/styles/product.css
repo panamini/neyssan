@@ -11993,7 +11993,7 @@
 }
 
 .dasti-match-read__details {
-  border-top: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-top: none;
 }
 
 .dasti-jobs-detail-grid {
