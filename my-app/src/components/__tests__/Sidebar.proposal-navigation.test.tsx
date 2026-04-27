@@ -249,8 +249,47 @@ describe("Sidebar proposal navigation", () => {
     expect(screen.getByTestId("sidebar-location")).toHaveTextContent(
       "/sign-in::null",
     );
-    expect(screen.getByText("Sign In")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Sign In" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Save draft")).toBeInTheDocument();
+  });
+
+  it("shows the sidebar toggle label only in expanded mode", () => {
+    const { unmount } = render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/cv" element={<CvRoute />} />
+          <Route path="/proposal" element={<ProposalRouteProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
+    expect(toggle).toHaveClass("sb-toggle--labeled");
+    expect(toggle.querySelector("svg")).toBeNull();
+    expect(toggle).toHaveTextContent("two weeks");
+    expect(screen.getByText("two weeks")).toHaveClass("sb-toggle__label");
+
+    unmount();
+    setViewportWidth(640);
+    render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/cv" element={<CvRoute />} />
+          <Route path="/proposal" element={<ProposalRouteProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const collapsedToggle = screen.getByRole("button", {
+      name: "Expand sidebar",
+    });
+    expect(collapsedToggle).toHaveTextContent("II");
+    expect(collapsedToggle.querySelector("svg")).toBeNull();
+    expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
   });
 
   it("renders a top-level Jobs navigation entry", () => {
