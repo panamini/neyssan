@@ -503,7 +503,7 @@ export function VerbatiProposalWorkspace({
           </div>
           <div
             style={{
-              fontFamily: '"Fraunces", serif',
+              fontFamily: '"Baskervville", serif',
               fontSize: "var(--tl)",
               lineHeight: 1.08,
               color: "var(--ti)",
@@ -730,7 +730,7 @@ export function VerbatiProposalWorkspace({
             </div>
             <div
               style={{
-                fontFamily: '"Fraunces", serif',
+                fontFamily: '"Baskervville", serif',
                 fontSize: "var(--tx2)",
                 lineHeight: 1.04,
                 color: "var(--ti)",

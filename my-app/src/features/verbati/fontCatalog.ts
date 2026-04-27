@@ -4,12 +4,14 @@ export const LOCAL_FONT_DIRECTORY_HINT = "src/assets/fonts";
 
 export const FONT_PAIR_IDS = [
   "quiet-editorial",
+  "geist-baskervville",
   "civic-correspondence",
   "ledger-sans",
   "mono-signal",
   "studio-grotesk",
   "soft-serif",
   "special-correspondence",
+  "fd-garamond-geist",
   "poster-accent",
   "high-contrast-editorial",
   "bricolage-hepta",
@@ -49,6 +51,19 @@ export type VerbatiFontPairOption = {
 };
 
 const LOCAL_FONT_FACES: LocalFontFace[] = [
+  {
+    family: "Baskervville",
+    matchTokens: ["baskervville", "wght"],
+    excludeTokens: ["italic"],
+    fontStyle: "normal",
+    fontWeight: "400 700",
+  },
+  {
+    family: "Baskervville",
+    matchTokens: ["baskervville", "italic", "wght"],
+    fontStyle: "italic",
+    fontWeight: "400 700",
+  },
   {
     family: "Fraunces",
     matchTokens: ["fraunces", "variablefont", "soft", "wonk"],
@@ -155,6 +170,24 @@ const LOCAL_FONT_FACES: LocalFontFace[] = [
     matchTokens: ["geist", "variablefont", "wght"],
     fontStyle: "normal",
     fontWeight: "100 900",
+  },
+  {
+    family: "FD Garamond",
+    matchTokens: ["garamondt", "regular"],
+    fontStyle: "normal",
+    fontWeight: 400,
+  },
+  {
+    family: "FD Garamond",
+    matchTokens: ["garamondt", "italic"],
+    fontStyle: "italic",
+    fontWeight: 400,
+  },
+  {
+    family: "Chaumont Script",
+    matchTokens: ["chaumontscript", "regular"],
+    fontStyle: "normal",
+    fontWeight: 400,
   },
   {
     family: "Grave Presse",
@@ -391,6 +424,22 @@ export const VERBATI_FONT_PAIR_OPTIONS: VerbatiFontPairOption[] = [
     bodyLabel: "Syne Regular",
   },
   {
+    id: "geist-baskervville",
+    name: "Geist / Baskervville",
+    description:
+      "Geist Bold headings with Baskervville body text for a direct sans-to-serif contrast.",
+    headingFamily: buildFamilyStack(
+      "Geist",
+      '"Avenir Next", system-ui, sans-serif',
+    ),
+    bodyFamily: buildFamilyStack(
+      "Baskervville",
+      'Georgia, "Times New Roman", serif',
+    ),
+    headingLabel: "Geist Bold",
+    bodyLabel: "Baskervville",
+  },
+  {
     id: "civic-correspondence",
     name: "Civic Correspondence",
     description:
@@ -444,6 +493,19 @@ export const VERBATI_FONT_PAIR_OPTIONS: VerbatiFontPairOption[] = [
     bodyFamily: buildFamilyStack("Borel", '"Brush Script MT", cursive'),
     headingLabel: "Grave Presse",
     bodyLabel: "Borel",
+  },
+  {
+    id: "fd-garamond-geist",
+    name: "FD Garamond / Geist",
+    description:
+      "FD Garamond titles with Geist body text for a classic editorial contrast.",
+    headingFamily: buildFamilyStack(
+      "FD Garamond",
+      'Georgia, "Times New Roman", serif',
+    ),
+    bodyFamily: buildFamilyStack("Geist", "system-ui, sans-serif"),
+    headingLabel: "FD Garamond",
+    bodyLabel: "Geist",
   },
   {
     id: "poster-accent",
