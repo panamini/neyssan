@@ -53,6 +53,7 @@ import {
   type ProposalHeaderVisibility,
 } from "../lib/proposal-header";
 import { collectProposalFontDebugSnapshot } from "../lib/proposal-font-debug";
+import type { ProposalSignatureSettings } from "../lib/proposal-signature-settings";
 
 interface ProposalDisplayProps {
   proposalContent: string | null;
@@ -68,6 +69,7 @@ interface ProposalDisplayProps {
   voicePreset?: ProposalVoicePreset | null;
   templateId?: ProposalTemplateId | null;
   stylePreset?: Partial<VerbatiStylePreset> | VerbatiStylePreset | null;
+  signatureSettings?: ProposalSignatureSettings | null;
   railTitle?: string | null;
   railMeta?: string | null;
   contactLine?: string | null;
@@ -85,9 +87,11 @@ interface ProposalDisplayProps {
   onContentCommit?: () => void;
   actions?: React.ReactNode;
   railStartAddon?: React.ReactNode;
+  railEndAddon?: React.ReactNode;
   showModeToggle?: boolean;
   size?: "default" | "focused";
   previewAnchor?: "top" | "body";
+  previewFitMode?: "contain" | "width";
   hideDocumentHeader?: boolean;
   documentHeaderMode?: "full" | "actions-only" | "hidden";
   showZoomControls?: boolean;
@@ -123,6 +127,7 @@ interface ProposalDisplayProps {
   characterLimit?: number | null;
   characterLimitAdvisory?: boolean;
   showPreviewParagraphActions?: boolean;
+  showPageCountBadge?: boolean;
 }
 
 const PREVIEW_PARAGRAPH_ACTIONS: Array<{
@@ -255,6 +260,18 @@ function formatCharacterCountLabel(args: {
   return `${args.count.toLocaleString()} / ${args.advisory ? "~" : ""}${args.limit.toLocaleString()}`;
 }
 
+function formatPageCountLabel(count: number): string {
+  const wordLabels: Record<number, string> = {
+    2: "two",
+    3: "three",
+    4: "four",
+    5: "five",
+    6: "six",
+  };
+  const label = wordLabels[count] ?? count.toLocaleString();
+  return `${label} pages`;
+}
+
 const SEMANTIC_IDEAL_MIN = 800;
 const SEMANTIC_IDEAL_MAX = 1200;
 const SEMANTIC_SCALE_MAX = 2000;
@@ -357,6 +374,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   voicePreset = null,
   templateId = null,
   stylePreset = null,
+  signatureSettings = null,
   railTitle = null,
   railMeta = null,
   contactLine = null,
@@ -374,9 +392,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   onContentCommit,
   actions,
   railStartAddon,
+  railEndAddon,
   showModeToggle: allowModeToggle = true,
   size = "default",
   previewAnchor = "top",
+  previewFitMode = "contain",
   hideDocumentHeader = false,
   documentHeaderMode = "full",
   showZoomControls = false,
@@ -406,6 +426,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   characterLimit,
   characterLimitAdvisory = false,
   showPreviewParagraphActions = true,
+  showPageCountBadge = true,
 }) => {
   const resolvedRenderState = React.useMemo(
     () =>
@@ -697,8 +718,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     enabled: usesDocumentRenderer && Boolean(proposalContent),
     measurementRef: stageMeasureRef,
     zoomLevel: effectiveZoomLevel,
-    fitMode: usesDocumentRenderer && !isEditable ? "contain" : "width",
-    fillAvailableOnZoom: usesDocumentRenderer && !isEditable,
+    fitMode: usesDocumentRenderer && !isEditable ? previewFitMode : "width",
+    fillAvailableOnZoom:
+      usesDocumentRenderer && !isEditable && previewFitMode === "contain",
     includeParentMeasurement: !isEditable,
     pageWidthPx: A4_PAGE_WIDTH_PX,
     pageHeightPx: A4_PAGE_HEIGHT_PX,
@@ -784,6 +806,16 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
   const shouldShowCharacterCountBadge = Boolean(
     proposalContent && !loading && !error && isEditable,
+  );
+  const shouldShowPageCountBadge = Boolean(
+    proposalContent &&
+      !loading &&
+      !error &&
+      usesDocumentRenderer &&
+      !isEditable &&
+      !showPreviewParagraphActions &&
+      showPageCountBadge &&
+      documentPageCount > 1,
   );
 
   React.useEffect(() => {
@@ -961,6 +993,31 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     }
   }, [isEditable]);
 
+  React.useLayoutEffect(() => {
+    if (!isEditable || !usesDocumentRenderer || typeof window === "undefined") {
+      return undefined;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      editablePageRef.current?.scrollIntoView({
+        block: "start",
+        inline: "nearest",
+      });
+      if (editableTextareaRef.current) {
+        editableTextareaRef.current.scrollTop = 0;
+        editableTextareaRef.current.scrollLeft = 0;
+      }
+      updateEditableScrollEdges();
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [
+    isEditable,
+    proposalContent,
+    updateEditableScrollEdges,
+    usesDocumentRenderer,
+  ]);
+
   React.useEffect(() => {
     if (!proposalContent || isEditable || !usesDocumentRenderer) {
       setDocumentPageCount(1);
@@ -1120,7 +1177,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const { attachViewport: attachAnchorViewport } = useDocumentViewportCentering(
     {
       enabled: enablesDocumentZoom,
-      layoutKey: `${effectiveZoomLevel}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${resolvedTemplateId}:${proposalContent?.length ?? 0}:${mode}:${previewAnchor}`,
+      layoutKey: `${effectiveZoomLevel}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${resolvedTemplateId}:${proposalContent?.length ?? 0}:${mode}:${previewAnchor}:${previewFitMode}`,
       recenterKey: fitRequestCount,
       defaultCenterX: previewAnchor === "body" ? 0.5 : 0,
       defaultCenterY: previewAnchor === "body" ? 0.46 : 0,
@@ -1171,9 +1228,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             return "dasti-pill dasti-proposal-character-badge dasti-proposal-character-badge--advisory";
           }
           if (characterCountTone === "danger")
-            return "dasti-pill dasti-pill--danger";
+            return "dasti-pill dasti-proposal-character-badge dasti-pill--danger";
           if (characterCountTone === "warning")
-            return "dasti-pill dasti-pill--warning";
+            return "dasti-pill dasti-proposal-character-badge dasti-pill--warning";
           return "dasti-pill dasti-proposal-character-badge";
         })()}
         title={
@@ -1190,8 +1247,17 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       </span>
     )
   ) : null;
-  const shouldRenderCharacterCountBadge = Boolean(
-    characterCountBadge && !(isDocumentEditor && isApplicantDrawerOpen),
+  const pageCountBadge = shouldShowPageCountBadge ? (
+    <span
+      className="dasti-pill dasti-proposal-character-badge dasti-proposal-page-count-badge"
+      title="Rendered proposal page count."
+    >
+      {formatPageCountLabel(documentPageCount)}
+    </span>
+  ) : null;
+  const documentChromeBadge = isEditable ? characterCountBadge : pageCountBadge;
+  const shouldRenderDocumentChromeBadge = Boolean(
+    documentChromeBadge && !(isDocumentEditor && isApplicantDrawerOpen),
   );
 
   const shouldShowCopyButton = Boolean(
@@ -1391,7 +1457,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       </div>
     ) : null;
   const floatingRail =
-    railStartControls || actionControls ? (
+    railStartControls || railEndAddon || actionControls ? (
       <div
         className={
           shouldDetachActionHeader
@@ -1406,6 +1472,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         <div className="dasti-document-rail__section dasti-document-rail__section--center"></div>
         <div className="dasti-document-rail__section dasti-document-rail__section--end">
           {actionControls}
+          {railEndAddon}
         </div>
       </div>
     ) : null;
@@ -1473,7 +1540,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       style={
         !isEditable && previewAnchor === "top"
           ? {
-              justifyContent: "flex-start",
+              justifyContent: "center",
               alignItems: "flex-start",
             }
           : undefined
@@ -2027,6 +2094,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   applicantHeader={applicantHeader}
                   headerVisibility={resolvedHeaderVisibility}
                   documentTypography={documentTypography}
+                  signatureSettings={signatureSettings}
                   pageWidth={A4_PAGE_WIDTH_PX}
                   pageGapPx={unscaledDocumentPageGapPx}
                   onPageCountChange={setDocumentPageCount}
@@ -2293,7 +2361,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           onRunAction={handleRunInlineAiAction}
         />
       ) : null}
-      <div ref={viewerSurfaceRef} className="dasti-doc-viewer-shell__surface">
+      <div
+        ref={viewerSurfaceRef}
+        className="dasti-doc-viewer-shell__surface"
+        style={stageLayoutVars}
+      >
         <div
           className={
             size === "focused"
@@ -2321,17 +2393,17 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           </div>
         </div>
         {previewParagraphActionsFooter}
-        {shouldRenderCharacterCountBadge ? (
+        {shouldRenderDocumentChromeBadge ? (
           <div
             ref={characterBadgeWrapRef}
             className="dasti-proposal-character-badge-wrap"
             data-overlap-hidden={
-              isDocumentEditor || !isCharacterBadgeOverlappingPage
-                ? "false"
-                : "true"
+              isEditable && !isDocumentEditor && isCharacterBadgeOverlappingPage
+                ? "true"
+                : "false"
             }
           >
-            {characterCountBadge}
+            {documentChromeBadge}
           </div>
         ) : null}
       </div>
