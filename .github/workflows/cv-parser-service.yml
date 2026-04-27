@@ -3,8 +3,12 @@ name: CV Parser Service CI
 on:
   push:
     branches: ["main"]
+    paths:
+      - "cv_parser_service/**"
   pull_request:
     branches: ["main"]
+    paths:
+      - "cv_parser_service/**"
 
 jobs:
   build-and-test:
