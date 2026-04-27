@@ -48,23 +48,25 @@ describe("resume-font-debug", () => {
       root,
       stylePreset: {
         ...DEFAULT_VERBATI_STYLE,
-        layout: "two-column",
+        layout: "swiss",
       },
       rendererVariantId: "robial",
     });
 
     expect(snapshot).toEqual(
       expect.objectContaining({
-        layout: "two-column",
-        typography: "quiet-editorial",
+        layout: "swiss",
+        typography: "geist-baskervville",
         rendererVariantId: "robial",
+        headingFontFamily: expect.stringContaining("Geist"),
+        bodyFontFamily: expect.stringContaining("Baskervville"),
         headingFontFamilyComputed: expect.stringContaining("Fraunces"),
         bodyFontFamilyComputed: expect.stringContaining("Syne"),
         inheritedBodyFontFamilyComputed: "var(--font-body-family)",
         surfaceFontFamilyComputed: "var(--font-body-family)",
         fontHeadingCssVar: expect.stringContaining("Fraunces"),
         fontBodyCssVar: expect.stringContaining("Syne"),
-        fontEditorialCssVar: expect.stringContaining("Fraunces"),
+        fontEditorialCssVar: expect.stringContaining("Geist"),
         documentFontsStatus: "loaded",
         headingFontCheck: true,
         bodyFontCheck: true,

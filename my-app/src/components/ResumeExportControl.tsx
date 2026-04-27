@@ -35,7 +35,11 @@ const EXPORT_MENU_ITEMS: ReadonlyArray<{
     request: { format: "pdf", mode: "ats" },
   },
   { key: "docx", label: "Export DOCX", request: { format: "docx" } },
-  { key: "markdown", label: "Export Markdown", request: { format: "markdown" } },
+  {
+    key: "markdown",
+    label: "Export Markdown",
+    request: { format: "markdown" },
+  },
   { key: "json", label: "Export JSON", request: { format: "json" } },
 ];
 
@@ -106,7 +110,9 @@ export function ResumeExportControl({
           disabled={exportingFormat !== null || styledPdfDisabled}
         >
           <FilePdf size={14} strokeWidth={1.6} aria-hidden="true" />
-          Export Styled PDF
+          <span className="dasti-resume-export-control__primary-label">
+            Export Styled PDF
+          </span>
         </button>
         <div className="dasti-resume-export-control__menu-cell">
           <button
