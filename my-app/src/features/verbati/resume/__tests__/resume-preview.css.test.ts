@@ -153,4 +153,16 @@ describe("resume preview workspace anchoring", () => {
       '.bullet-list li,\n.project-copy {\n  font-family: var(--font-body-family);',
     );
   });
+
+  it("uses Baskervville as the resume preview fallback display family", () => {
+    expect(resumePreviewCss).toContain(
+      '--font-heading-family: "Baskervville"',
+    );
+    expect(resumePreviewCss).toContain(
+      '--font-editorial-family: "Baskervville"',
+    );
+    expect(resumePreviewCss).toContain(
+      '--font-body-family: "Source Sans 3"',
+    );
+  });
 });

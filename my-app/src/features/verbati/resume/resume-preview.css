@@ -1,10 +1,12 @@
 :root {
-  --font-heading-family: "Fraunces", "Iowan Old Style", "Palatino Linotype",
-    "Book Antiqua", Baskerville, "Times New Roman", serif;
+  --font-heading-family: "Baskervville", "Iowan Old Style",
+    "Palatino Linotype", "Book Antiqua", Baskerville, "Times New Roman",
+    serif;
   --font-body-family: "Source Sans 3", "Avenir Next", "Segoe UI",
     "Helvetica Neue", Helvetica, sans-serif;
-  --font-editorial-family: "Fraunces", "Iowan Old Style", "Palatino Linotype",
-    "Book Antiqua", Baskerville, "Times New Roman", serif;
+  --font-editorial-family: "Baskervville", "Iowan Old Style",
+    "Palatino Linotype", "Book Antiqua", Baskerville, "Times New Roman",
+    serif;
   --font-heading-weight: 600;
   --font-body-weight: 400;
   --text-caption-size: 2.25mm;
@@ -1362,7 +1364,7 @@
   padding-top: 0.6mm;
 }
 
-/* Role title: Fraunces italic — the key signature of this template */
+/* Role title: Fraunces italic - the key signature of this template */
 .resume-page--quire .entry-title {
   font-style: italic;
   font-weight: 500;

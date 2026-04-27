@@ -47,7 +47,7 @@ type TypographyOption = VerbatiFontPairOption;
 export const DEFAULT_VERBATI_STYLE: VerbatiStylePreset = {
   familyId: "swiss",
   layout: "swiss",
-  typography: "quiet-editorial",
+  typography: "geist-baskervville",
   palette: "sauge",
 };
 
