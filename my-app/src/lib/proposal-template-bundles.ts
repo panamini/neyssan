@@ -42,7 +42,7 @@ const TEMPLATE_BUNDLE_BASES: readonly BundleBase[] = [
     settingsStyleChoice: "balanced",
     stylePreset: {
       layout: "swiss",
-      typography: "signature",
+      typography: "geist-baskervville",
       palette: "pierre",
     },
   },

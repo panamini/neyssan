@@ -1,5 +1,11 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -83,11 +89,14 @@ const SAVED_PROPOSALS = [
     _id: "proposal_gamma",
     _creationTime: 1710000001000,
     title: "Saved proposal gamma",
-    content: "Dear reader,\n\nSaved proposal without brief metadata.\n\nRegards,",
+    content:
+      "Dear reader,\n\nSaved proposal without brief metadata.\n\nRegards,",
     status: "saved",
     updatedAt: 1710000001000,
     createdAt: 1710000001000,
-    sections: [{ type: "text", content: "Saved proposal without brief metadata." }],
+    sections: [
+      { type: "text", content: "Saved proposal without brief metadata." },
+    ],
     metadata: {
       proposalType: "cover_letter",
       voicePreset: "signature",
@@ -175,7 +184,8 @@ vi.mock("../../lib/proposal-personalization", () => ({
   }),
   getLocalActiveCvSnapshotById: (id: string) =>
     id === "cv_alpha" ? { title: "Alex Martin Resume" } : null,
-  getLocalCvDocumentById: (id: string) => (id === "cv_alpha" ? mockSourceCv : null),
+  getLocalCvDocumentById: (id: string) =>
+    id === "cv_alpha" ? mockSourceCv : null,
   listLocalCvPickerOptions: () => [
     {
       id: "cv_alpha",
@@ -203,7 +213,8 @@ vi.mock("../../lib/proposal-personalization", () => ({
     window.localStorage.getItem("dasti:proposal-attached-cv-id:v1"),
   getProposalAttachedCvLocalDocument: () =>
     (mockAttachedCvId ??
-      window.localStorage.getItem("dasti:proposal-attached-cv-id:v1")) === "cv_alpha"
+      window.localStorage.getItem("dasti:proposal-attached-cv-id:v1")) ===
+    "cv_alpha"
       ? mockSourceCv
       : null,
   PROPOSAL_ATTACHED_CV_STORAGE_KEY: "dasti:proposal-attached-cv-id:v1",
@@ -238,7 +249,9 @@ vi.mock("../../components/ProposalInputForm", () => ({
         jobDescription: storedDraft.jobDescription ?? "",
         proposalType: storedDraft.proposalType ?? "cover_letter",
         voicePreset:
-          storedDraft.voicePreset === undefined ? undefined : storedDraft.voicePreset,
+          storedDraft.voicePreset === undefined
+            ? undefined
+            : storedDraft.voicePreset,
         toneTuning: storedDraft.toneTuning ?? null,
         characterLimitMode: storedDraft.characterLimitMode ?? "none",
         characterLimitValue: storedDraft.characterLimitValue ?? null,
@@ -289,8 +302,9 @@ vi.mock("../../components/ProposalDisplay", () => ({
     } | null;
   }) => (
     <div data-testid="proposal-display-state">
-      {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}|{mode ?? "preview"}|
-      {stylePreset?.layout ?? "none"}|{stylePreset?.palette ?? "none"}
+      {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}|
+      {mode ?? "preview"}|{stylePreset?.layout ?? "none"}|
+      {stylePreset?.palette ?? "none"}
     </div>
   ),
   fallbackCopyText: () => "",
@@ -325,8 +339,12 @@ describe("ProposalForge saved view", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.queryByRole("button", { name: "Back to draft" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Duplicate to draft" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Back to draft" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Duplicate to draft" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
       "proposal_beta",
     );
@@ -338,7 +356,9 @@ describe("ProposalForge saved view", () => {
     ) as HTMLElement | null;
     expect(toolbar).toBeTruthy();
     expect(toolbar).toHaveClass("dasti-toolbar--surface-tooltips");
-    expect(toolbar?.closest('[data-testid="saved-proposals-list"]')).toBeTruthy();
+    expect(
+      toolbar?.closest('[data-testid="saved-proposals-list"]'),
+    ).toBeTruthy();
     expect(pageShell).toHaveClass("dasti-page-shell--proposal-saved");
     expect(pageShell?.style.getPropertyValue("--page-shell-max-width")).toBe(
       "100%",
@@ -349,6 +369,7 @@ describe("ProposalForge saved view", () => {
     expect(actionButtons).toEqual([
       "Duplicate to draft",
       "Export proposal",
+      "Share proposal",
     ]);
     expect(toolbar).not.toHaveTextContent("Based on CV: Alex Martin Resume");
     expect(
@@ -365,8 +386,12 @@ describe("ProposalForge saved view", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.queryByRole("button", { name: "Back to draft" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Duplicate to draft" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Back to draft" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Duplicate to draft" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
       "proposal_beta",
     );
@@ -407,9 +432,9 @@ describe("ProposalForge saved view", () => {
     expect(screen.getByTestId("compose-cv-picker-state")).toHaveTextContent(
       "closed",
     );
-    expect(screen.getByTestId("compose-cv-picker-request-key")).toHaveTextContent(
-      "0",
-    );
+    expect(
+      screen.getByTestId("compose-cv-picker-request-key"),
+    ).toHaveTextContent("0");
     expect(window.localStorage.getItem(ATTACHED_CV_STORAGE_KEY)).toBe(
       "cv_alpha",
     );
@@ -422,7 +447,9 @@ describe("ProposalForge saved view", () => {
       </MemoryRouter>,
     );
 
-    const toolbar = screen.getByRole("group", { name: "Saved proposal actions" });
+    const toolbar = screen.getByRole("group", {
+      name: "Saved proposal actions",
+    });
     expect(toolbar).not.toHaveTextContent("Based on CV: Alex Martin Resume");
     expect(
       within(toolbar as HTMLElement).queryByRole("group", {
@@ -597,5 +624,4 @@ describe("ProposalForge saved view", () => {
       );
     });
   });
-
 });

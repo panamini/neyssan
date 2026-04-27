@@ -43,6 +43,7 @@ import {
   resolvePrimaryFontFamily,
 } from "./layout/documentAppearance";
 import { formatProposalSignatureName } from "./proposal-closing";
+import { resolveProposalSignatureRender } from "./proposal-signature-settings";
 
 type ExportMode = "ats" | "styled";
 
@@ -749,6 +750,7 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     body.proposal-export.proposal--styled .proposal-signature {
+      font-family: var(--proposal-signature-font-family, var(--body-font));
       color: var(--decor-signature-color, var(--ink));
       text-transform: var(--decor-signature-text-transform, none);
       font-variant-caps: var(--decor-signature-font-variant-caps, normal);
@@ -1232,10 +1234,21 @@ ${buildCssVarBlock(layoutProfileVars)}
 
     .proposal-signature {
       margin-top: var(--flow-closing-name-gap);
+      font-family: var(--proposal-signature-font-family, var(--body-font));
       font-weight: var(--decor-signature-font-weight, 700);
       text-transform: var(--decor-signature-text-transform, none);
       font-variant-caps: var(--decor-signature-font-variant-caps, normal);
       letter-spacing: var(--decor-signature-letter-spacing, normal);
+    }
+
+    .proposal-signature-image {
+      display: block;
+      max-width: min(42mm, 56%);
+      max-height: 16mm;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      margin-top: var(--flow-closing-name-gap);
     }
 
     .resume-shell--onecol .export-page,
@@ -1999,21 +2012,28 @@ function renderResumeHtml(args: {
 function renderProposalBlocks(
   blocks: ProposalPrintBlock[],
   locale?: string | null,
+  signatureRender?: ReturnType<typeof resolveProposalSignatureRender>,
 ): string {
   return blocks
     .map((block) => {
       if (block.type === "closing") {
+        const signatureName = block.signatureName
+          ? formatProposalSignatureName(block.signatureName)
+          : "";
+        const signatureMarkup =
+          signatureName && signatureRender?.kind === "image"
+            ? `<img class="proposal-signature-image" src="${escapeHtml(signatureRender.imageDataUrl)}" alt="${escapeHtml(signatureName)}" />`
+            : signatureName
+              ? `<p class="proposal-signature" style="${escapeHtml(`--proposal-signature-font-family: ${signatureRender?.fontFamily ?? "var(--body-font)"};`)}">${escapeHtml(signatureName)}</p>`
+              : "";
+
         return `<div class="proposal-block proposal-block--closing" data-block="closing">
           ${
             block.signOff
               ? `<p class="proposal-signoff">${escapeHtml(block.signOff)}</p>`
               : ""
           }
-          ${
-            block.signatureName
-              ? `<p class="proposal-signature">${escapeHtml(formatProposalSignatureName(block.signatureName))}</p>`
-              : ""
-          }
+          ${signatureMarkup}
         </div>`;
       }
 
@@ -2035,6 +2055,10 @@ function renderProposalHtml(args: {
     mode: args.mode,
     proposalTemplateId: args.data.templateId,
     stylePreset: args.stylePreset,
+  });
+  const signatureRender = resolveProposalSignatureRender({
+    settings: args.data.signatureSettings,
+    bodyFontFamily: profile.canonical.appearance.font.body.family,
   });
   const recipientLines = args.data.recipientDetails
     ? normalizeLocaleTypography(args.data.recipientDetails, locale)
@@ -2153,7 +2177,7 @@ function renderProposalHtml(args: {
       </section>
       <section class="section" data-block="body">
         <div class="proposal-main-stack">
-          ${renderProposalBlocks(args.data.body, locale)}
+          ${renderProposalBlocks(args.data.body, locale, signatureRender)}
         </div>
       </section>
     </main>`
@@ -2174,7 +2198,7 @@ function renderProposalHtml(args: {
           ${subjectSection}
           <section class="section" data-block="body">
             <div class="proposal-main-stack">
-              ${renderProposalBlocks(args.data.body, locale)}
+              ${renderProposalBlocks(args.data.body, locale, signatureRender)}
             </div>
           </section>
         </section>
@@ -2607,6 +2631,14 @@ export async function buildProposalDocxBuffer(args: {
     profile.canonical.appearance.font.body.family,
     "Helvetica Neue",
   );
+  const signatureRender = resolveProposalSignatureRender({
+    settings: args.data.signatureSettings,
+    bodyFontFamily: profile.canonical.appearance.font.body.family,
+  });
+  const signatureFont =
+    signatureRender.kind === "text"
+      ? resolvePrimaryFontFamily(signatureRender.fontFamily, bodyFont)
+      : bodyFont;
   const docxInk = resolveDocxSafeColorHex(
     profile.canonical.appearance.theme.ink,
   );
@@ -2739,8 +2771,8 @@ export async function buildProposalDocxBuffer(args: {
       if (block.signatureName) {
         bodyParagraphs.push(
           buildDocxParagraph(formatProposalSignatureName(block.signatureName), docxDefaults, {
-            bold: true,
-            font: bodyFont,
+            bold: false,
+            font: signatureFont,
             line: docxTokens.compactLineTwip,
             spacingAfter: docxTokens.sectionGapTwip,
           }),
