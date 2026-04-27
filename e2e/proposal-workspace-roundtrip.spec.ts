@@ -246,12 +246,12 @@ test.describe("Proposal workspace roundtrip", () => {
 
     await page
       .getByRole("button", {
-        name: /Switch CV: Operations Associate — Alex Martin/i,
+        name: /Switch CV\. Attached CV: Operations Associate — Alex Martin/i,
       })
       .click();
     await page
       .getByRole("button", {
-        name: /Operations Associate — Alex Martin.*Draft resume/i,
+        name: /^Operations Associate — Alex Martin/i,
       })
       .click();
     await page.getByRole("button", { name: "Edit" }).click();
