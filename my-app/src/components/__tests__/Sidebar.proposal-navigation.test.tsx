@@ -269,7 +269,7 @@ describe("Sidebar proposal navigation", () => {
     const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
     expect(toggle).toHaveClass("sb-toggle--labeled");
     expect(toggle.querySelector("svg")).toBeNull();
-    expect(toggle).toHaveTextContent("two weeks");
+    expect(toggle).toHaveTextContent("two weeks.");
     expect(screen.getByText("two weeks")).toHaveClass("sb-toggle__label");
 
     unmount();
@@ -287,9 +287,43 @@ describe("Sidebar proposal navigation", () => {
     const collapsedToggle = screen.getByRole("button", {
       name: "Expand sidebar",
     });
-    expect(collapsedToggle).toHaveTextContent("II");
+    expect(collapsedToggle).toHaveTextContent("tw.");
     expect(collapsedToggle.querySelector("svg")).toBeNull();
     expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
+  });
+
+  it("keeps expanded sidebar content mounted until the collapse width animation completes", () => {
+    vi.useFakeTimers();
+
+    try {
+      const { container } = render(
+        <MemoryRouter initialEntries={["/cv"]}>
+          <Sidebar />
+          <Routes>
+            <Route path="/cv" element={<CvRoute />} />
+            <Route path="/proposal" element={<ProposalRouteProbe />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+
+      expect(container.querySelector(".sb__nav--stack")).not.toBeNull();
+      expect(container.querySelector(".sb__nav--rail")).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+
+      expect(container.querySelector(".sb--collapsed")).not.toBeNull();
+      expect(container.querySelector(".sb__nav--stack")).not.toBeNull();
+      expect(container.querySelector(".sb__nav--rail")).toBeNull();
+
+      act(() => {
+        vi.advanceTimersByTime(320);
+      });
+
+      expect(container.querySelector(".sb__nav--stack")).toBeNull();
+      expect(container.querySelector(".sb__nav--rail")).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("renders a top-level Jobs navigation entry", () => {
