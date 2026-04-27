@@ -518,9 +518,9 @@ describe("JobsPage", () => {
     ).toBeInTheDocument();
     expect((await screen.findAllByText("Match")).length).toBeGreaterThan(0);
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
-    expect((await screen.findAllByText("Probably skip")).length).toBeGreaterThan(
-      0,
-    );
+    expect(
+      (await screen.findAllByText("Probably skip")).length,
+    ).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Open match" }));
     expect(
       (await screen.findAllByText("Cross-functional communication")).length,
@@ -634,23 +634,37 @@ describe("JobsPage", () => {
       await screen.findByText("LLM visible summary for the selected job."),
     ).toBeInTheDocument();
     expect(screen.queryByText("Extracted summary")).not.toBeInTheDocument();
-    expect(screen.getAllByText("LLM visible requirement").length).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getAllByText("LLM visible requirement").length,
+    ).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("llm keyword").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Check").length).toBeGreaterThanOrEqual(3);
     expect(screen.getAllByRole("button", { name: "Keep" })).toHaveLength(3);
     expect(screen.getAllByText("Summary").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Requirements").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Requirements").length).toBeGreaterThanOrEqual(
+      1,
+    );
     expect(screen.getAllByText("Keywords").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByRole("button", { name: "Edit Summary" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit Requirements" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Summary" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Requirements" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Keywords" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Responsibilities")).not.toBeInTheDocument();
     expect(screen.queryByText("EXTRACTION. PAUSED.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Run recurring workflows")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Run recurring workflows"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
     expect(screen.getAllByText("Match").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("AI extracted")).not.toBeInTheDocument();
-    expect(screen.queryByText("visibleExtractionSource")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("visibleExtractionSource"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Extraction dashboard")).not.toBeInTheDocument();
   });
 
@@ -682,7 +696,9 @@ describe("JobsPage", () => {
           fieldKey: "responsibilities",
           label: "Responsibilities",
           reviewStatus: "pending",
-          suggestedValue: ["At Texas Roadhouse, we are a people-first company."],
+          suggestedValue: [
+            "At Texas Roadhouse, we are a people-first company.",
+          ],
           approvedValue: undefined,
           sourceText: "At Texas Roadhouse, we are a people-first company.",
           confidence: 0.52,
@@ -707,13 +723,21 @@ describe("JobsPage", () => {
       screen.queryByText("Raw source remains visible for this job."),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open Posting" }));
-    expect(screen.getByText("Raw source remains visible for this job.")).toBeInTheDocument();
-    expect(screen.queryByText("Heuristic summary should stay hidden.")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Raw source remains visible for this job."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Heuristic summary should stay hidden."),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("Heuristic visible requirement should stay hidden"),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText("location, status, compensation")).not.toBeInTheDocument();
-    expect(screen.queryByText("location status compensation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("location, status, compensation"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("location status compensation"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Responsibilities")).not.toBeInTheDocument();
     expect(
       screen.queryByText("At Texas Roadhouse, we are a people-first company."),
@@ -761,7 +785,9 @@ describe("JobsPage", () => {
     );
 
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
-    expect(screen.queryByTestId("jobs-structured-shadow-internal-panel")).toBeNull();
+    expect(
+      screen.queryByTestId("jobs-structured-shadow-internal-panel"),
+    ).toBeNull();
     expect(screen.queryByText("Structured shadow")).toBeNull();
   });
 
@@ -784,7 +810,9 @@ describe("JobsPage", () => {
     );
 
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
-    expect(screen.queryByTestId("jobs-structured-shadow-internal-panel")).toBeNull();
+    expect(
+      screen.queryByTestId("jobs-structured-shadow-internal-panel"),
+    ).toBeNull();
     expect(screen.queryByText("Structured shadow")).toBeNull();
   });
 
@@ -802,11 +830,15 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const panel = await screen.findByTestId("jobs-structured-shadow-internal-panel");
+    const panel = await screen.findByTestId(
+      "jobs-structured-shadow-internal-panel",
+    );
     expect(within(panel).getByText("Current match")).toBeInTheDocument();
     expect(within(panel).getByText("Structured shadow")).toBeInTheDocument();
     expect(
-      within(panel).getByText("Production score remains the current match score."),
+      within(panel).getByText(
+        "Production score remains the current match score.",
+      ),
     ).toBeInTheDocument();
     expect(
       within(panel).getByText("Structured shadow is internal review only."),
@@ -818,7 +850,9 @@ describe("JobsPage", () => {
     expect(within(panel).getByText(/matched\s+3/)).toBeInTheDocument();
     expect(within(panel).getByText(/partial\s+1/)).toBeInTheDocument();
     expect(within(panel).getByText(/unknown\s+2/)).toBeInTheDocument();
-    expect(within(panel).getByText(/hard-gate missing\s+0/)).toBeInTheDocument();
+    expect(
+      within(panel).getByText(/hard-gate missing\s+0/),
+    ).toBeInTheDocument();
     expect(within(panel).getByText(/metadata leaks\s+0/)).toBeInTheDocument();
     expect(within(panel).getByText("language preserved")).toBeInTheDocument();
     expect(within(panel).getByText("provenance complete")).toBeInTheDocument();
@@ -848,9 +882,15 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const panel = await screen.findByTestId("jobs-structured-preview-advisory-panel");
-    expect(screen.queryByTestId("jobs-structured-shadow-internal-panel")).toBeNull();
-    expect(within(panel).getAllByText("Structured preview").length).toBeGreaterThan(0);
+    const panel = await screen.findByTestId(
+      "jobs-structured-preview-advisory-panel",
+    );
+    expect(
+      screen.queryByTestId("jobs-structured-shadow-internal-panel"),
+    ).toBeNull();
+    expect(
+      within(panel).getAllByText("Structured preview").length,
+    ).toBeGreaterThan(0);
     expect(within(panel).getByText("Current match")).toBeInTheDocument();
     expect(
       within(panel).getByText(
@@ -862,7 +902,9 @@ describe("JobsPage", () => {
     expect(within(panel).getByText(/score\s+78/)).toBeInTheDocument();
     expect(within(panel).getByText(/tier\s+strong/)).toBeInTheDocument();
     expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Draft Proposal" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Draft Proposal" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/AI score/i)).toBeNull();
     expect(screen.queryByText(/New score/i)).toBeNull();
     expect(screen.queryByText(/Better score/i)).toBeNull();
@@ -889,8 +931,14 @@ describe("JobsPage", () => {
     );
 
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
-    expect(screen.queryByTestId("jobs-structured-preview-advisory-panel")).toBeNull();
-    expect(screen.queryByText("Structured score is used when available. Missing extraction stays pending instead of using keyword fallback.")).toBeNull();
+    expect(
+      screen.queryByTestId("jobs-structured-preview-advisory-panel"),
+    ).toBeNull();
+    expect(
+      screen.queryByText(
+        "Structured score is used when available. Missing extraction stays pending instead of using keyword fallback.",
+      ),
+    ).toBeNull();
   });
 
   it("hides advisory structured preview for non-beta users", async () => {
@@ -913,7 +961,9 @@ describe("JobsPage", () => {
     );
 
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
-    expect(screen.queryByTestId("jobs-structured-preview-advisory-panel")).toBeNull();
+    expect(
+      screen.queryByTestId("jobs-structured-preview-advisory-panel"),
+    ).toBeNull();
     expect(screen.queryByText("Structured preview")).toBeNull();
   });
 
@@ -939,15 +989,18 @@ describe("JobsPage", () => {
     );
 
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
-    expect(await screen.findByTestId("jobs-structured-preview-advisory-panel")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Draft Proposal" })).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("jobs-structured-preview-advisory-panel"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Draft Proposal" }),
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Strong lead" }));
+    fireEvent.click(screen.getByRole("button", { name: "Match quality" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Strong" }));
 
     expect(screen.getByText("0 of 2")).toBeInTheDocument();
-    expect(
-      screen.getByText(/No jobs match this search/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/No jobs match this search/i)).toBeInTheDocument();
   });
 
   it("logs an internal review label and extraction verdicts without affecting the production score or tier", async () => {
@@ -964,7 +1017,9 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    const panel = await screen.findByTestId("jobs-structured-shadow-internal-panel");
+    const panel = await screen.findByTestId(
+      "jobs-structured-shadow-internal-panel",
+    );
     fireEvent.change(within(panel).getByLabelText("Reviewer label"), {
       target: { value: "false weak" },
     });
@@ -1013,7 +1068,9 @@ describe("JobsPage", () => {
     );
 
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
-    expect(screen.queryByTestId("jobs-structured-shadow-internal-panel")).toBeNull();
+    expect(
+      screen.queryByTestId("jobs-structured-shadow-internal-panel"),
+    ).toBeNull();
   });
 
   it("hides the advisory structured preview when rollback disables advisory beta", async () => {
@@ -1036,7 +1093,9 @@ describe("JobsPage", () => {
     );
 
     expect(await screen.findByText("Partial · 50%")).toBeInTheDocument();
-    expect(screen.queryByTestId("jobs-structured-preview-advisory-panel")).toBeNull();
+    expect(
+      screen.queryByTestId("jobs-structured-preview-advisory-panel"),
+    ).toBeNull();
   });
 
   it("shows debug-only unavailable reasons without structured result values", async () => {
@@ -1082,8 +1141,12 @@ describe("JobsPage", () => {
     });
     const block = await screen.findByTestId("jobs-structured-shadow-debug");
     expect(screen.getByText("Internal debug only")).toBeInTheDocument();
-    expect(screen.getByText("Production score remains current match score")).toBeInTheDocument();
-    expect(within(block).getByText("internal_viewer_required")).toBeInTheDocument();
+    expect(
+      screen.getByText("Production score remains current match score"),
+    ).toBeInTheDocument();
+    expect(
+      within(block).getByText("internal_viewer_required"),
+    ).toBeInTheDocument();
     expect(within(block).queryByText("Structured shadow")).toBeNull();
   });
 
@@ -1135,7 +1198,9 @@ describe("JobsPage", () => {
     expect(within(block).getByText(/metadata leaks\s+0/)).toBeInTheDocument();
     expect(within(block).getByText("provenance complete")).toBeInTheDocument();
     expect(within(block).getByText("operations")).toBeInTheDocument();
-    expect(within(block).getByText("Cross-functional communication")).toBeInTheDocument();
+    expect(
+      within(block).getByText("Cross-functional communication"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
     expect(screen.queryByText(/AI score/i)).toBeNull();
     expect(screen.queryByText(/new score/i)).toBeNull();
@@ -1173,20 +1238,14 @@ describe("JobsPage", () => {
         name: "Missing 1",
       }),
     );
-    expect(within(matchRegion).getByText("Customer-facing experience")).toBeInTheDocument();
     expect(
-      within(matchRegion).queryByText("Paris"),
-    ).toBeNull();
+      within(matchRegion).getByText("Customer-facing experience"),
+    ).toBeInTheDocument();
+    expect(within(matchRegion).queryByText("Paris")).toBeNull();
+    expect(within(matchRegion).queryByText("Compensation")).toBeNull();
+    expect(within(matchRegion).queryByText("Acme")).toBeNull();
     expect(
-      within(matchRegion).queryByText("Compensation"),
-    ).toBeNull();
-    expect(
-      within(matchRegion).queryByText("Acme"),
-    ).toBeNull();
-    expect(
-      within(matchRegion).queryByText(
-        "Equal opportunity employer",
-      ),
+      within(matchRegion).queryByText("Equal opportunity employer"),
     ).toBeNull();
     expect(screen.getByText("Partial · 50%")).toBeInTheDocument();
     expect(screen.getAllByText("Match").length).toBeGreaterThanOrEqual(1);
@@ -1225,19 +1284,13 @@ describe("JobsPage", () => {
     ).toBeInTheDocument();
     expect(within(matchRegion).getByText("Apply")).toBeInTheDocument();
     expect(
-      within(matchRegion).getByText(
-        "Operations overlaps.",
-      ),
+      within(matchRegion).getByText("Operations overlaps."),
     ).toBeInTheDocument();
     expect(
-      within(matchRegion).getByText(
-        "Coordination overlaps.",
-      ),
+      within(matchRegion).getByText("Coordination overlaps."),
     ).toBeInTheDocument();
     expect(
-      within(matchRegion).getByText(
-        "Airtable overlaps.",
-      ),
+      within(matchRegion).getByText("Airtable overlaps."),
     ).toBeInTheDocument();
     expect(
       within(matchRegion).queryByText("This fourth reason should stay hidden."),
@@ -1280,17 +1333,15 @@ describe("JobsPage", () => {
     expect(within(matchRegion).getByText("Partial · 62%")).toBeInTheDocument();
     expect(within(matchRegion).getByText("Apply if true")).toBeInTheDocument();
     expect(
-      within(matchRegion).getByText(
-        "Guard card/license unclear.",
-      ),
+      within(matchRegion).getByText("Guard card/license unclear."),
     ).toBeInTheDocument();
     expect(
-      within(matchRegion).getByText(
-        "Weekend availability is a check.",
-      ),
+      within(matchRegion).getByText("Weekend availability is a check."),
     ).toBeInTheDocument();
     expect(
-      within(matchRegion).queryByText("This third watch-out should stay hidden."),
+      within(matchRegion).queryByText(
+        "This third watch-out should stay hidden.",
+      ),
     ).toBeNull();
   });
 
@@ -1338,7 +1389,9 @@ describe("JobsPage", () => {
     const matchRegion = await screen.findByLabelText("Match");
     expect(within(matchRegion).getByText("Partial · 50%")).toBeInTheDocument();
     expect(within(matchRegion).getByText("Matched")).toBeInTheDocument();
-    expect(within(matchRegion).queryByText("Not enough signal · 0%")).toBeNull();
+    expect(
+      within(matchRegion).queryByText("Not enough signal · 0%"),
+    ).toBeNull();
     expect(
       within(matchRegion).queryByText(
         "Structured review unavailable: extraction pending.",
@@ -1501,8 +1554,11 @@ describe("JobsPage", () => {
       ).toBeInTheDocument();
       expect(screen.getByText("Strong · 100%")).toBeInTheDocument();
       expect(
-        (screen.getByLabelText("Match input debug output") as HTMLTextAreaElement)
-          .value,
+        (
+          screen.getByLabelText(
+            "Match input debug output",
+          ) as HTMLTextAreaElement
+        ).value,
       ).toContain('"lastResumeId": "cv_alpha"');
     });
   });
@@ -1670,8 +1726,11 @@ describe("JobsPage", () => {
         }),
       ).toBeInTheDocument();
       expect(
-        (screen.getByLabelText("Match input debug output") as HTMLTextAreaElement)
-          .value,
+        (
+          screen.getByLabelText(
+            "Match input debug output",
+          ) as HTMLTextAreaElement
+        ).value,
       ).toContain('"lastResumeId": "cv_beta"');
     });
 
@@ -1690,15 +1749,16 @@ describe("JobsPage", () => {
         resumeId: null,
         resumeName: null,
       });
-      expect(
-        screen.getByText("Resume did not load."),
-      ).toBeInTheDocument();
+      expect(screen.getByText("Resume did not load.")).toBeInTheDocument();
       expect(
         screen.getAllByRole("button", { name: "Attach resume" }).length,
       ).toBeGreaterThan(0);
       expect(
-        (screen.getByLabelText("Match input debug output") as HTMLTextAreaElement)
-          .value,
+        (
+          screen.getByLabelText(
+            "Match input debug output",
+          ) as HTMLTextAreaElement
+        ).value,
       ).toContain('"lastResumeId": null');
     });
   });
@@ -1816,7 +1876,11 @@ describe("JobsPage", () => {
         isFavorite: true,
       });
     });
-    expect(screen.getAllByText("Favorite").length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", {
+        name: "Remove Operations Associate from favorites",
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
   it("toggles favorite off from the jobs list row", async () => {
@@ -1865,9 +1929,13 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByRole("button", { name: "Remove job from favorites" }),
+      await screen.findByRole("button", {
+        name: "Remove Operations Associate from favorites",
+      }),
     ).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getAllByText("Favorite").length).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("button", { name: "Remove job from favorites" }),
+    ).not.toBeInTheDocument();
   });
 
   it("filters favorites to favorited jobs only", async () => {
@@ -1994,8 +2062,8 @@ describe("JobsPage", () => {
 
     const jobsListElement = await screen.findByRole("list");
     expect(
-      within(jobsListElement).getByText("Operations Associate"),
-    ).toBeInTheDocument();
+      within(jobsListElement).getAllByText("Operations Associate").length,
+    ).toBeGreaterThan(0);
     expect(
       within(jobsListElement).getByText("Support Specialist"),
     ).toBeInTheDocument();
@@ -2005,7 +2073,8 @@ describe("JobsPage", () => {
       }),
     ).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole("button", { name: "Probably skip" }));
+    fireEvent.click(screen.getByRole("button", { name: "Match quality" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Weak" }));
 
     await waitFor(() => {
       expect(
@@ -2022,15 +2091,17 @@ describe("JobsPage", () => {
       await screen.findByText("No jobs match this search"),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Probably skip" }));
-    fireEvent.click(screen.getByRole("button", { name: "All matches" }));
+    fireEvent.click(screen.getByRole("button", { name: "Match quality" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Weak" }));
+    fireEvent.click(screen.getByRole("button", { name: "Match quality" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "All matches" }));
     fireEvent.click(screen.getByRole("button", { name: "Has docs" }));
     fireEvent.click(screen.getByRole("button", { name: "Needs review" }));
 
     await waitFor(() => {
       expect(
-        within(jobsListElement).getByText("Operations Associate"),
-      ).toBeInTheDocument();
+        within(jobsListElement).getAllByText("Operations Associate").length,
+      ).toBeGreaterThan(0);
       expect(
         within(jobsListElement).queryByText("Support Specialist"),
       ).not.toBeInTheDocument();
@@ -2228,9 +2299,7 @@ describe("JobsPage", () => {
         name: "More actions for Operations Associate",
       }),
     );
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: "Delete forever" }),
-    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete forever" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Confirm" }));
 
     await waitFor(() => {
@@ -2454,13 +2523,9 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(
-      await screen.findByText("Start with one job."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Start with one job.")).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Import job" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Import job" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("jobs-location")).toHaveTextContent(
@@ -2495,9 +2560,7 @@ describe("JobsPage", () => {
     );
 
     expect(screen.getByText("Loading jobs")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Start with one job."),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Start with one job.")).not.toBeInTheDocument();
   });
 
   it("seeds a sample job, refreshes the list, and marks the sample visibly", async () => {
@@ -2554,9 +2617,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(
-      await screen.findByText("Start with one job."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Start with one job.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Try a sample" }));
 
@@ -2577,9 +2638,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(
-      await screen.findByText("Start with one job."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Start with one job.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Try a sample" }));
 

@@ -9,7 +9,9 @@ type MatchReviewProps = NonNullable<
   React.ComponentProps<typeof MatchReadBlock>["matchReview"]
 >;
 
-function buildMatchRead(overrides: Partial<MatchReadProps> = {}): MatchReadProps {
+function buildMatchRead(
+  overrides: Partial<MatchReadProps> = {},
+): MatchReadProps {
   return {
     tier: "partial",
     score: 50,
@@ -92,9 +94,7 @@ describe("MatchReadBlock", () => {
 
     expect(screen.getByText("No resume signal")).toBeInTheDocument();
     expect(screen.getByText("Resume has no keywords yet.")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Complete your profile to see match"),
-    ).toBeNull();
+    expect(screen.queryByText("Complete your profile to see match")).toBeNull();
   });
 
   it("shows a separate insufficient-profile state for placeholder resume input", () => {
@@ -166,13 +166,9 @@ describe("MatchReadBlock", () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Missing 1" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Missing 1" }));
     expect(screen.getAllByText("Missing").length).toBeGreaterThanOrEqual(1);
-    expect(
-      screen.getByText("Customer-facing experience"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Customer-facing experience")).toBeInTheDocument();
     expect(screen.queryByText("Miami")).toBeNull();
     expect(screen.queryByText("Compensation")).toBeNull();
     expect(screen.queryByText("Acme")).toBeNull();
@@ -189,16 +185,37 @@ describe("MatchReadBlock", () => {
     );
 
     expect(screen.getByText("Partial · 68%")).toBeInTheDocument();
-    expect(screen.getByText("Partial match. A few checks left.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Partial match. A few checks left."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Operations overlaps.")).toBeInTheDocument();
     expect(
       screen.getByText("Customer-facing work is relevant."),
     ).toBeInTheDocument();
     expect(screen.getByText("Report writing overlaps.")).toBeInTheDocument();
     expect(screen.getByText("Guard card/license unclear.")).toBeInTheDocument();
-    expect(screen.getByText("Weekend availability is a check.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Weekend availability is a check."),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(5);
     expect(screen.queryByText("Possible lead · 68%")).toBeNull();
     expect(screen.queryByText("Partial · 50%")).toBeNull();
+  });
+
+  it("renders single match review notes as paragraphs instead of lists", () => {
+    render(
+      <MatchReadBlock
+        matchRead={buildMatchRead()}
+        matchReview={buildMatchReview({
+          why_this_may_interest_you: ["Operations overlap."],
+          watch_out: ["License unclear."],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Operations overlap.").tagName).toBe("P");
+    expect(screen.getByText("License unclear.").tagName).toBe("P");
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
   });
 
   it("falls back to matchRead when a review is probably skip with no score", () => {
