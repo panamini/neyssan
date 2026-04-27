@@ -354,7 +354,7 @@ describe("export-renderers", () => {
     expect(quireStyledDocument.querySelector(".robial-sidebar")).toBeNull();
     expect(quireCss).toContain("--flow-reading-measure:");
     expect(quireCss).toContain(
-      ".proposal-signature {\n      margin-top: var(--flow-closing-name-gap);\n      font-weight: var(--decor-signature-font-weight, 700);\n      text-transform: var(--decor-signature-text-transform, none);\n      font-variant-caps: var(--decor-signature-font-variant-caps, normal);\n      letter-spacing: var(--decor-signature-letter-spacing, normal);",
+      ".proposal-signature {\n      margin-top: var(--flow-closing-name-gap);\n      font-family: var(--proposal-signature-font-family, var(--body-font));\n      font-weight: var(--decor-signature-font-weight, 700);\n      text-transform: var(--decor-signature-text-transform, none);\n      font-variant-caps: var(--decor-signature-font-variant-caps, normal);\n      letter-spacing: var(--decor-signature-letter-spacing, normal);",
     );
     expect(quireCss).toContain("--decor-proposal-title-font-style: italic;");
     expect(quireCss).toContain("--decor-proposal-title-letter-spacing: -0.015em;");
@@ -392,6 +392,59 @@ describe("export-renderers", () => {
     expect(getInlineStyles(styledDocument)).toContain(
       "--decor-signature-color: var(--ink);",
     );
+  });
+
+  it("renders configured proposal signature fonts and image signatures", () => {
+    const fontDocument = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          signatureSettings: {
+            mode: "font",
+            fontId: "fd-garamond",
+            imageDataUrl: null,
+          },
+        },
+        stylePreset: {
+          layout: "editorial",
+          typography: "fd-garamond-geist",
+          palette: "pierre",
+        },
+      }),
+    );
+    const imageDataUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mP8z8AARQAHAQGByp7K7wAAAABJRU5ErkJggg==";
+    const imageDocument = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          signatureSettings: {
+            mode: "image",
+            fontId: null,
+            imageDataUrl,
+          },
+        },
+        stylePreset: {
+          layout: "editorial",
+          typography: "fd-garamond-geist",
+          palette: "pierre",
+        },
+      }),
+    );
+
+    expect(
+      fontDocument
+        .querySelector('[data-block="closing"] .proposal-signature')
+        ?.getAttribute("style"),
+    ).toContain("FD Garamond");
+    expect(
+      imageDocument
+        .querySelector('[data-block="closing"] .proposal-signature-image')
+        ?.getAttribute("src"),
+    ).toBe(imageDataUrl);
+    expect(
+      imageDocument.querySelector('[data-block="closing"] .proposal-signature'),
+    ).toBeNull();
   });
 
   it("builds resume and proposal DOCX exports as editable one-column documents with selected fonts", async () => {
@@ -463,6 +516,11 @@ describe("export-renderers", () => {
         typography: "quiet-editorial" as const,
         headingFont: "Fraunces",
         bodyFont: "Syne",
+      },
+      {
+        typography: "geist-baskervville" as const,
+        headingFont: "Geist",
+        bodyFont: "Baskervville",
       },
       {
         typography: "civic-correspondence" as const,
