@@ -1,5 +1,7 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import {
+  ArrowSquareOut,
   Feather,
   FileUser,
   Paperclip,
@@ -14,10 +16,7 @@ import {
   ProposalGenerateButtonGlyph,
   type ProposalGenerateButtonVisualState,
 } from "./ProposalGenerateGlyph";
-import {
-  SaveIndicator,
-  type SaveStatus,
-} from "./ui/SaveIndicator";
+import { SaveIndicator, type SaveStatus } from "./ui/SaveIndicator";
 import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 import type { FormValues } from "./ProposalInputForm.schemas";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
@@ -45,6 +44,7 @@ type ProposalComposeToolbarProps = {
   styleStatusLabel?: string | null;
   saveStatus?: SaveStatus;
   rightActions?: React.ReactNode;
+  jobHref?: string | null;
 };
 
 type ToneOption = {
@@ -92,17 +92,16 @@ function ToneTooltip({
 }): JSX.Element {
   return (
     <span
-      className={[
-        "dasti-compose-toolbar__tooltip",
-        className ?? "",
-      ]
+      className={["dasti-compose-toolbar__tooltip", className ?? ""]
         .filter(Boolean)
         .join(" ")}
       aria-hidden="true"
     >
       <strong>{title}</strong>
       {description ? (
-        <span className="dasti-compose-toolbar__tooltip-body">{description}</span>
+        <span className="dasti-compose-toolbar__tooltip-body">
+          {description}
+        </span>
       ) : null}
     </span>
   );
@@ -131,6 +130,7 @@ export function ProposalComposeToolbar({
   styleStatusLabel = null,
   saveStatus = "idle",
   rightActions = null,
+  jobHref = null,
 }: ProposalComposeToolbarProps): JSX.Element {
   const rootRef = React.useRef<HTMLDivElement>(null);
   const [isToneMenuOpen, setIsToneMenuOpen] = React.useState(false);
@@ -196,11 +196,10 @@ export function ProposalComposeToolbar({
   const hasCollapseControl = Boolean(onCollapseCompose);
   const collapsedGenerateClass =
     getProposalGenerateButtonVisualClass(generateState);
-  const cvSourceLabel = cvTitle ? "Attached CV" : "Source CV";
   const cvControlLabel = isCvPickerOpen
     ? "Close CV picker"
     : cvTitle
-      ? `Switch CV. Attached CV: ${cvTitle}`
+      ? `Switch CV: ${cvTitle}`
       : "Attach CV";
 
   return (
@@ -237,6 +236,23 @@ export function ProposalComposeToolbar({
             <PanelLeftDashed size={15} strokeWidth={1.8} aria-hidden="true" />
           </button>
           <div className="dasti-compose-toolbar__collapsed-actions">
+            {jobHref ? (
+              <Link
+                to={jobHref}
+                className="dasti-compose-toolbar__icon-button dasti-compose-toolbar__icon-button--link dasti-compose-toolbar__job-link"
+                aria-label="Back to job"
+                data-toolbar-tooltip="Back to job"
+              >
+                <ArrowSquareOut
+                  size={15}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
+                <span className="dasti-compose-toolbar__job-link-label">
+                  Back to job
+                </span>
+              </Link>
+            ) : null}
             <span className="dasti-compose-toolbar__tone-anchor">
               <button
                 type="button"
@@ -259,7 +275,11 @@ export function ProposalComposeToolbar({
                 }
                 disabled={disabled}
               >
-                <activeOption.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
+                <activeOption.Icon
+                  size={15}
+                  strokeWidth={1.7}
+                  aria-hidden="true"
+                />
               </button>
 
               {isToneMenuOpen ? (
@@ -271,7 +291,9 @@ export function ProposalComposeToolbar({
                   <div className="dasti-compose-toolbar__tone-list">
                     {TONE_OPTIONS.map((option) => {
                       const active =
-                        option.id === null ? value === null : option.id === value;
+                        option.id === null
+                          ? value === null
+                          : option.id === value;
                       return (
                         <button
                           key={option.id ?? "auto"}
@@ -279,7 +301,9 @@ export function ProposalComposeToolbar({
                           className={[
                             "dasti-compose-toolbar__tone-option",
                             "dasti-compose-toolbar__tone-option--drawer",
-                            active ? "dasti-compose-toolbar__tone-option--active" : "",
+                            active
+                              ? "dasti-compose-toolbar__tone-option--active"
+                              : "",
                           ]
                             .filter(Boolean)
                             .join(" ")}
@@ -288,7 +312,11 @@ export function ProposalComposeToolbar({
                           aria-label={option.label}
                           disabled={disabled}
                         >
-                          <option.Icon size={15} strokeWidth={1.7} aria-hidden="true" />
+                          <option.Icon
+                            size={15}
+                            strokeWidth={1.7}
+                            aria-hidden="true"
+                          />
                           <ToneTooltip
                             className="dasti-compose-toolbar__tooltip--drawer"
                             title={option.label}
@@ -338,7 +366,11 @@ export function ProposalComposeToolbar({
                   aria-label="Hide compose panel"
                   data-toolbar-tooltip="Hide"
                 >
-                  <PanelLeftDashed size={15} strokeWidth={1.8} aria-hidden="true" />
+                  <PanelLeftDashed
+                    size={15}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
                 </button>
               </div>
               <span
@@ -351,7 +383,7 @@ export function ProposalComposeToolbar({
           <div
             className="dasti-compose-toolbar__group dasti-compose-toolbar__group--cv"
             role="group"
-            aria-label="Source CV"
+            aria-label="CV"
           >
             <div
               className={[
@@ -403,7 +435,10 @@ export function ProposalComposeToolbar({
                 }
                 disabled={disabled}
               >
-                <span className="dasti-compose-toolbar__cv-icon" aria-hidden="true">
+                <span
+                  className="dasti-compose-toolbar__cv-icon"
+                  aria-hidden="true"
+                >
                   {cvTitle ? (
                     <FileUser size={15} strokeWidth={1.7} />
                   ) : (
@@ -411,9 +446,6 @@ export function ProposalComposeToolbar({
                   )}
                 </span>
                 <span className="dasti-compose-toolbar__cv-copy">
-                  <span className="dasti-compose-toolbar__cv-kicker">
-                    {cvSourceLabel}
-                  </span>
                   <span className="dasti-compose-toolbar__cv-title">
                     {cvTitle ?? "Attach CV"}
                   </span>
@@ -429,20 +461,20 @@ export function ProposalComposeToolbar({
           >
             <div className="dasti-compose-toolbar__tone-block dasti-compose-toolbar__tone-block--status">
               <span
-                className="dasti-compose-toolbar__tone-status-icon"
-                aria-hidden="true"
+                className="dasti-compose-toolbar__tone-chip dasti-compose-toolbar__tone-chip--described dasti-compose-toolbar__tone-chip--status"
+                data-toolbar-tooltip={activeOption.label}
+                aria-label={`Selected tone ${activeOption.label}`}
               >
-                <activeOption.Icon size={15} strokeWidth={1.7} />
-              </span>
-              <div className="dasti-compose-toolbar__tone-meta">
                 <span
-                  className="dasti-compose-toolbar__tone-chip dasti-compose-toolbar__tone-chip--described dasti-compose-toolbar__tone-chip--status"
-                  data-toolbar-tooltip={activeOption.label}
-                  aria-label={`Selected tone ${activeOption.label}`}
+                  className="dasti-compose-toolbar__tone-chip-icon"
+                  aria-hidden="true"
                 >
+                  <activeOption.Icon size={15} strokeWidth={1.7} />
+                </span>
+                <span className="dasti-compose-toolbar__tone-chip-label">
                   {activeOption.label}
                 </span>
-              </div>
+              </span>
             </div>
           </div>
 
