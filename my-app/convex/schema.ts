@@ -161,6 +161,29 @@ const proposalPresetVerbatiStyleChoice = v.object({
   accentHex: v.optional(v.union(v.string(), v.null())),
 });
 
+const proposalSignatureFontChoice = v.union(
+  v.literal("chaumont"),
+  v.literal("fd-garamond"),
+  v.literal("parisienne"),
+);
+
+const proposalSignatureSettingsChoice = v.object({
+  mode: v.union(v.literal("auto"), v.literal("font"), v.literal("image")),
+  fontId: v.union(proposalSignatureFontChoice, v.null()),
+  imageDataUrl: v.union(v.string(), v.null()),
+});
+
+const proposalPresetSlotChoice = v.object({
+  fontPairId: v.union(v.string(), v.null()),
+  styleChoice: proposalStyleChoiceChoice,
+  paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
+  accentHex: v.union(v.string(), v.null()),
+  verbatiStyle: v.optional(proposalPresetVerbatiStyleChoice),
+  voicePreset: v.union(proposalVoicePresetChoice, v.null()),
+  signatureSettings: v.optional(proposalSignatureSettingsChoice),
+  name: v.optional(v.string()),
+});
+
 export default defineSchema({
   users: defineTable({
     clerkId: v.string(),
@@ -452,34 +475,11 @@ export default defineSchema({
     proposalFontPairId: v.optional(v.union(v.string(), v.null())),
     proposalVerbatiStyle: v.optional(proposalPresetVerbatiStyleChoice),
     proposalSourceMode: v.optional(proposalStyleLinkModeChoice),
+    proposalSignatureSettings: v.optional(proposalSignatureSettingsChoice),
     // Style preset slots (3-slot builder)
-    proposalPreset1: v.optional(v.union(v.object({
-      fontPairId: v.union(v.string(), v.null()),
-      styleChoice: proposalStyleChoiceChoice,
-      paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
-      accentHex: v.union(v.string(), v.null()),
-      verbatiStyle: v.optional(proposalPresetVerbatiStyleChoice),
-      voicePreset: v.union(proposalVoicePresetChoice, v.null()),
-      name: v.optional(v.string()),
-    }), v.null())),
-    proposalPreset2: v.optional(v.union(v.object({
-      fontPairId: v.union(v.string(), v.null()),
-      styleChoice: proposalStyleChoiceChoice,
-      paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
-      accentHex: v.union(v.string(), v.null()),
-      verbatiStyle: v.optional(proposalPresetVerbatiStyleChoice),
-      voicePreset: v.union(proposalVoicePresetChoice, v.null()),
-      name: v.optional(v.string()),
-    }), v.null())),
-    proposalPreset3: v.optional(v.union(v.object({
-      fontPairId: v.union(v.string(), v.null()),
-      styleChoice: proposalStyleChoiceChoice,
-      paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
-      accentHex: v.union(v.string(), v.null()),
-      verbatiStyle: v.optional(proposalPresetVerbatiStyleChoice),
-      voicePreset: v.union(proposalVoicePresetChoice, v.null()),
-      name: v.optional(v.string()),
-    }), v.null())),
+    proposalPreset1: v.optional(v.union(proposalPresetSlotChoice, v.null())),
+    proposalPreset2: v.optional(v.union(proposalPresetSlotChoice, v.null())),
+    proposalPreset3: v.optional(v.union(proposalPresetSlotChoice, v.null())),
     proposalActivePresetSlot: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
     defaultResumeId: v.optional(v.union(v.string(), v.null())),
     defaultResumeName: v.optional(v.union(v.string(), v.null())),
