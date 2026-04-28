@@ -1,6 +1,21 @@
 import { llmConfig } from "../../config/llmConfig";
+import {
+  requireEditorAiActionDefinition,
+  type AiActionId,
+  type AiApplyMode,
+  type AiOutputMode,
+} from "./editorAiRulebook";
 
 type HelperKind = "editor" | "styleRouting";
+
+export type EditorAiResult = {
+  kind: "text";
+  actionId: AiActionId;
+  text: string;
+  applyMode: AiApplyMode;
+  outputMode: AiOutputMode;
+  variants: [];
+};
 
 function compactWhitespace(value: string | null | undefined): string {
   if (typeof value !== "string") return "";
@@ -218,6 +233,42 @@ export async function runEditorAiTextPrompt(args: {
     prompt: args.prompt,
     maxOutputTokens: args.maxOutputTokens,
   });
+}
+
+export async function runEditorSelectionTransform(args: {
+  mode: string;
+  instruction: string;
+  selectedText: string;
+  runTextPrompt?: typeof runEditorAiTextPrompt;
+}): Promise<EditorAiResult> {
+  const actionDefinition = requireEditorAiActionDefinition(args.mode);
+  const instruction = args.instruction.trim() || actionDefinition.instruction;
+  const prompt = [
+    `Transformation action: ${actionDefinition.id}`,
+    `Instruction: ${instruction}`,
+    "Rewrite the selected text only.",
+    "Preserve the original language unless the instruction explicitly changes it.",
+    "Return only the replacement text with no quotes, no markdown, and no commentary.",
+    "",
+    "Selected text:",
+    args.selectedText,
+  ].join("\n");
+  const runTextPrompt = args.runTextPrompt ?? runEditorAiTextPrompt;
+  const text = await runTextPrompt({
+    system:
+      "You are editing a user's text selection in place. Return only the replacement text. Do not add explanations, code fences, or surrounding quotes.",
+    prompt,
+    maxOutputTokens: 500,
+  });
+
+  return {
+    kind: "text",
+    actionId: actionDefinition.id,
+    text: text.trim(),
+    applyMode: actionDefinition.applyMode,
+    outputMode: actionDefinition.outputMode,
+    variants: [],
+  };
 }
 
 export async function runStyleRoutingAiTextPrompt(args: {
