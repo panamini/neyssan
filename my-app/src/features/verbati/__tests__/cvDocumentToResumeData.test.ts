@@ -636,6 +636,65 @@ describe("mapCvDocumentToResumeData", () => {
     ]);
   });
 
+  it("normalizes JSON-stringified responsibility arrays into bullets without raw artifacts", () => {
+    const doc: CvDocument = {
+      id: "cv-json-responsibilities",
+      title: "Operations Lead",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "experience",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "exp-json",
+              company: "Northline",
+              position: "Operations Lead",
+              responsibilities: JSON.stringify([
+                "Reduced incident volume.",
+                "Standardized handoffs.",
+              ]),
+            },
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.experience[0]).not.toHaveProperty("description");
+    expect(mapped.experience[0]).toEqual(
+      expect.objectContaining({
+        bullets: ["Reduced incident volume.", "Standardized handoffs."],
+        responsibilitiesRich: {
+          blocks: [
+            {
+              kind: "bullet_list",
+              items: [
+                {
+                  runs: [{ text: "Reduced incident volume." }],
+                },
+                {
+                  runs: [{ text: "Standardized handoffs." }],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    expect(mapped.experience[0]?.description).toBeUndefined();
+    expect(JSON.stringify(mapped.experience[0])).not.toContain(
+      '\\"Reduced incident volume.\\"',
+    );
+  });
+
   it("falls back to block-backed certifications and affiliations when structured content is absent", () => {
     const doc: CvDocument = {
       id: "cv-fallbacks",
