@@ -2,23 +2,23 @@ import React from "react";
 import { motion } from "framer-motion";
 import { BodyPortal } from "@/components/ui/body-portal";
 import {
-  Briefcase,
-  Check,
-  Loader2,
-  Minus,
-  Pen,
-  SendHorizontal,
-  Wand2,
-} from "@/lib/icons";
-import {
   VISIBLE_TOOLBAR_AI_ACTIONS,
-  getVisibleToolbarAiActions,
   type AiActionDefinition,
   type AiActionId,
 } from "@/lib/ai/interactionRulebook";
 import type { EditorSelectionAnchor } from "@/lib/editor-ai-selection";
 
-export const INLINE_AI_ACTIONS = VISIBLE_TOOLBAR_AI_ACTIONS;
+const DS4_VISIBLE_ACTION_IDS = [
+  "rewrite",
+  "shorten",
+  "fix_grammar",
+  "custom",
+] as const satisfies readonly AiActionId[];
+
+export const INLINE_AI_ACTIONS = DS4_VISIBLE_ACTION_IDS.flatMap((actionId) => {
+  const action = VISIBLE_TOOLBAR_AI_ACTIONS.find(({ id }) => id === actionId);
+  return action ? [action] : [];
+});
 
 const DEFAULT_ACTION_ID = "rewrite";
 const MOTION_EASE = [0.22, 1, 0.36, 1] as const;
@@ -27,24 +27,6 @@ const TOOLBAR_FADE_TRANSITION = {
   ease: MOTION_EASE,
 } as const;
 const COLLAPSED_SHELL_WIDTH = 36;
-
-const TOOLBAR_ICONS: Partial<
-  Record<
-    AiActionId,
-    React.ComponentType<{
-      size?: number;
-      strokeWidth?: number;
-      className?: string;
-      "aria-hidden"?: boolean | "true";
-    }>
-  >
-> = {
-  rewrite: Wand2,
-  shorten: Minus,
-  fix_grammar: Check,
-  tailor_to_job: Briefcase,
-  custom: Pen,
-};
 
 const ASK_SUGGESTIONS = [
   "Make this more persuasive…",
@@ -76,6 +58,8 @@ type ToolbarMetrics = {
   actionHeight: number;
   promptWidth: number;
   promptHeight: number;
+  panelWidth: number;
+  panelHeight: number;
 };
 
 const EMPTY_METRICS: ToolbarMetrics = {
@@ -83,6 +67,8 @@ const EMPTY_METRICS: ToolbarMetrics = {
   actionHeight: 0,
   promptWidth: 0,
   promptHeight: 0,
+  panelWidth: 0,
+  panelHeight: 0,
 };
 
 function resolveCssLength(
@@ -178,49 +164,6 @@ function isSameMetrics(current: ToolbarMetrics, next: ToolbarMetrics): boolean {
   );
 }
 
-function getButtonGlowBoxShadow(active: boolean): string {
-  if (active) {
-    return [
-      "inset 0 1px 0 color-mix(in srgb, var(--op) 12%, transparent)",
-      "0 1px 2px color-mix(in srgb, var(--shadow-color) 24%, transparent)",
-      "0 0 18px color-mix(in srgb, var(--ac) 10%, transparent)",
-    ].join(", ");
-  }
-
-  return [
-    "0 0 0 1px var(--proposal-chrome-control-border)",
-    "0 0 16px color-mix(in srgb, var(--ac) 10%, transparent)",
-    "inset 0 1px 0 color-mix(in srgb, var(--color-surface-raised) 22%, transparent)",
-  ].join(", ");
-}
-
-function getButtonBaseStyle(
-  isPressed: boolean,
-): React.CSSProperties | undefined {
-  if (!isPressed) {
-    return undefined;
-  }
-
-  return {
-    background: "var(--ac)",
-    borderColor: "color-mix(in srgb, var(--ac) 54%, transparent)",
-    color: "var(--op)",
-    boxShadow: getButtonGlowBoxShadow(true),
-  };
-}
-
-function getButtonHoverStyle(isPressed: boolean): React.CSSProperties {
-  return isPressed
-    ? {
-        boxShadow: getButtonGlowBoxShadow(true),
-      }
-    : {
-        background: "var(--proposal-chrome-control-hover-bg)",
-        borderColor: "var(--proposal-chrome-control-active-border)",
-        boxShadow: getButtonGlowBoxShadow(false),
-      };
-}
-
 export function FloatingAiToolbar({
   anchor,
   open,
@@ -254,10 +197,7 @@ export function FloatingAiToolbar({
 
   const isAskOpen = activeActionId === "custom";
   const isPromptLoading = isLoading && pendingActionId === "custom";
-  const toolbarActions = React.useMemo(
-    () => getVisibleToolbarAiActions({ includeJobContextActions }),
-    [includeJobContextActions],
-  );
+  const toolbarActions = React.useMemo(() => INLINE_AI_ACTIONS, []);
 
   const updatePosition = React.useCallback(() => {
     if (!anchor || !panelRef.current || typeof window === "undefined") {
@@ -265,15 +205,28 @@ export function FloatingAiToolbar({
     }
 
     const panel = panelRef.current;
+    const compactGap = resolveCssLength(panel, "--s1", 4);
+    const baseGap = resolveCssLength(panel, "--s2", compactGap * 2);
+    const margin = resolveCssLength(panel, "--s3", 12);
+    const controlSize = resolveCssLength(panel, "--control-md", 36);
     const actionSize = getMeasuredSize(actionShellRef.current);
     const promptSize = isAskOpen
       ? getMeasuredSize(promptShellRef.current)
       : { width: 0, height: 0 };
+    const panelSize = getMeasuredSize(panel);
+    const askInlineGap = isAskOpen && promptSize.width > 0 ? compactGap : 0;
+    const contentWidth = actionSize.width + askInlineGap + promptSize.width;
     const nextMetrics: ToolbarMetrics = {
       actionWidth: actionSize.width,
       actionHeight: actionSize.height,
       promptWidth: promptSize.width,
       promptHeight: promptSize.height,
+      panelWidth: Math.max(panelSize.width, contentWidth),
+      panelHeight: Math.max(
+        panelSize.height,
+        actionSize.height,
+        promptSize.height,
+      ),
     };
 
     setMetrics((current) =>
@@ -284,15 +237,8 @@ export function FloatingAiToolbar({
       return;
     }
 
-    const compactGap = resolveCssLength(panel, "--space-1", 4);
-    const baseGap = resolveCssLength(panel, "--space-2", compactGap * 2);
-    const margin = resolveCssLength(panel, "--space-3", 12);
-    const controlSize = resolveCssLength(panel, "--control-md", 36);
-    const stackedGap = compactGap / 2;
-    const width = Math.max(actionSize.width, promptSize.width, 1);
-    const height =
-      actionSize.height +
-      (isAskOpen && promptSize.height > 0 ? stackedGap + promptSize.height : 0);
+    const width = Math.max(nextMetrics.panelWidth, COLLAPSED_SHELL_WIDTH);
+    const height = Math.max(nextMetrics.panelHeight, controlSize);
     const viewportLeft = window.scrollX + margin;
     const viewportTop = window.scrollY + margin;
     const viewportRight = window.scrollX + window.innerWidth - margin;
@@ -320,6 +266,17 @@ export function FloatingAiToolbar({
 
     const maxLeft = horizontalMax - width;
     const maxTop = verticalMax - height;
+    const selectionLeftBound = anchor.leftEdge;
+    const selectionRightBound = anchor.rightEdge;
+    const hasSelectionHorizontalBounds =
+      typeof selectionLeftBound === "number" &&
+      typeof selectionRightBound === "number";
+    const focusCenter = anchor.focusCenter;
+    const focusMatchesSelection =
+      !hasSelectionHorizontalBounds ||
+      typeof focusCenter !== "number" ||
+      (focusCenter >= selectionLeftBound - compactGap &&
+        focusCenter <= selectionRightBound + compactGap);
     const focusTop =
       anchor.focusTop ??
       (anchor.belowLineHeight
@@ -340,20 +297,18 @@ export function FloatingAiToolbar({
     const isBlockSelection =
       (anchor.lineCount ?? 1) > 1 ||
       (anchor.height ?? 0) > focusLineHeight * 1.5;
-    const aboveLineHeight = Math.max(
-      compactGap,
-      anchor.aboveLineHeight ?? focusLineHeight,
-    );
-    const belowLineHeight = Math.max(
-      compactGap,
-      anchor.belowLineHeight ?? focusLineHeight,
-    );
-    const aboveGap = baseGap + Math.min(controlSize, aboveLineHeight);
-    const belowGap = baseGap + Math.min(controlSize, belowLineHeight);
-    const anchorTop = isBlockSelection ? anchor.top : focusTop;
+    const aboveGap = baseGap;
+    const belowGap = baseGap;
+    const anchorTop = isBlockSelection
+      ? anchor.top
+      : focusMatchesSelection
+        ? focusTop
+        : anchor.top;
     const anchorBottom = isBlockSelection
       ? anchor.bottom ?? focusBottom
-      : focusBottom;
+      : focusMatchesSelection
+        ? focusBottom
+        : anchor.bottom ?? focusBottom;
     const preferredAboveTop = anchorTop - height - aboveGap;
     const preferredBelowTop = anchorBottom + belowGap;
     const hasRoomAbove = preferredAboveTop >= verticalMin;
@@ -379,29 +334,29 @@ export function FloatingAiToolbar({
       top = preferredAboveTop;
     }
 
-    const preferredLeftEdge = isBlockSelection
-      ? anchor.focusLeft ?? anchor.leftEdge ?? anchor.aboveLeft ?? anchor.left
-      : anchor.focusLeft ??
-        (placement === "above"
-          ? anchor.aboveLeft ?? anchor.leftEdge ?? anchor.left
-          : anchor.belowLeft ?? anchor.leftEdge ?? anchor.left);
-    const preferredRightEdge = isBlockSelection
-      ? anchor.focusRight ??
-        anchor.rightEdge ??
-        anchor.belowRight ??
-        anchor.right ??
-        anchor.left
-      : anchor.focusRight ??
-        (placement === "above"
-          ? anchor.aboveRight ?? anchor.rightEdge ?? anchor.left
-          : anchor.belowRight ?? anchor.rightEdge ?? anchor.left);
-    const preferredCenter = isBlockSelection
+    const useFocusHorizontalAnchor = isBlockSelection || focusMatchesSelection;
+    const lineLeft =
+      placement === "above"
+        ? anchor.aboveLeft ?? anchor.leftEdge ?? anchor.left
+        : anchor.belowLeft ?? anchor.leftEdge ?? anchor.left;
+    const lineRight =
+      placement === "above"
+        ? anchor.aboveRight ?? anchor.rightEdge ?? anchor.left
+        : anchor.belowRight ?? anchor.rightEdge ?? anchor.left;
+    const lineCenter =
+      placement === "above"
+        ? anchor.aboveCenter ?? anchor.left
+        : anchor.belowCenter ?? anchor.left;
+    const preferredLeftEdge = useFocusHorizontalAnchor
+      ? anchor.focusLeft ?? lineLeft
+      : lineLeft;
+    const preferredRightEdge = useFocusHorizontalAnchor
+      ? anchor.focusRight ?? anchor.rightEdge ?? lineRight
+      : lineRight;
+    const preferredCenter = useFocusHorizontalAnchor
       ? anchor.focusCenter ??
         preferredLeftEdge + (preferredRightEdge - preferredLeftEdge) / 2
-      : anchor.focusCenter ??
-        (placement === "above"
-          ? anchor.aboveCenter ?? anchor.left
-          : anchor.belowCenter ?? anchor.left);
+      : lineCenter;
     const activeSpanWidth = Math.max(
       compactGap,
       preferredRightEdge - preferredLeftEdge,
@@ -550,20 +505,16 @@ export function FloatingAiToolbar({
   const renderAnchor = open && anchor ? anchor : lastAnchorRef.current;
   const shouldRenderToolbar = isToolbarMounted && renderAnchor !== null;
   const isPositionReady =
-    open && anchor !== null && position !== null && metrics.actionWidth > 0;
-  const panelWidth = Math.max(
-    metrics.actionWidth,
-    isAskOpen ? metrics.promptWidth : 0,
-    COLLAPSED_SHELL_WIDTH,
-  );
+    open && anchor !== null && position !== null && metrics.panelWidth > 0;
 
   return (
     <BodyPortal>
       {shouldRenderToolbar && renderAnchor ? (
         <motion.div
           ref={panelRef}
-          className="dasti-inline-ai-toolbar"
+          className="ds-ai-toolbar"
           data-inline-ai-toolbar="true"
+          data-state={isPositionReady ? "open" : "closing"}
           data-placement={position?.placement ?? "above"}
           role="toolbar"
           aria-label="Selected text actions"
@@ -571,10 +522,6 @@ export function FloatingAiToolbar({
             position: "absolute",
             left: position?.left ?? renderAnchor.left,
             top: position?.top ?? renderAnchor.top,
-            width: `${panelWidth}px`,
-            ["--dasti-inline-ai-toolbar-pointer-offset" as string]: position
-              ? `${position.pointerOffset}px`
-              : "50%",
             zIndex: 11000,
             visibility: isPositionReady ? "visible" : "hidden",
             pointerEvents: isPositionReady ? "auto" : "none",
@@ -595,64 +542,35 @@ export function FloatingAiToolbar({
             event.preventDefault();
           }}
         >
-          <div className="dasti-inline-ai-toolbar__shadow" aria-hidden="true" />
-
-          <motion.div
+          <div
             ref={actionShellRef}
-            className="dasti-inline-ai-toolbar__ribbon dasti-inline-ai-toolbar__ribbon--actions"
+            className="ds-ai-toolbar__actions"
             data-inline-ai-toolbar="true"
-            style={{ overflow: "hidden", justifySelf: "center" }}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "var(--s1)",
+            }}
           >
-            <motion.div
-              className="dasti-inline-ai-toolbar__actions"
-              initial={false}
-              animate={{ opacity: 1 }}
-              transition={TOOLBAR_FADE_TRANSITION}
-            >
-              {toolbarActions.map((action) => {
-                const Icon = TOOLBAR_ICONS[action.id] ?? Wand2;
-                const isAskAction = action.id === "custom";
-                const isPrimary = action.id === "rewrite";
-                const isActionLoading =
-                  isLoading && pendingActionId === action.id;
-                const isActive = activeActionId === action.id;
-                const isPressed = isActive || isActionLoading;
+            {toolbarActions.map((action) => {
+              const isAskAction = action.id === "custom";
+              const isActionLoading =
+                isLoading && pendingActionId === action.id;
+              const isActive = activeActionId === action.id;
 
-                return (
-                  <React.Fragment key={action.id}>
-                    {isAskAction ? (
-                      <motion.span
-                        className="dasti-inline-ai-toolbar__action-divider"
-                        aria-hidden="true"
-                        initial={false}
-                        animate={{ opacity: 1 }}
-                        transition={TOOLBAR_FADE_TRANSITION}
-                      />
-                    ) : null}
+              return (
+                <React.Fragment key={action.id}>
+                  {isAskAction ? (
+                    <span
+                      className="ds-ai-toolbar__divider"
+                      aria-hidden="true"
+                    />
+                  ) : null}
 
-                    <motion.button
+                  {isAskOpen && isAskAction ? null : (
+                    <button
                       type="button"
-                      className={[
-                        "dasti-inline-ai-toolbar__action",
-                        isActionLoading
-                          ? "dasti-inline-ai-toolbar__action--pending"
-                          : "",
-                        isPrimary
-                          ? "dasti-inline-ai-toolbar__action--primary"
-                          : "",
-                        isAskAction
-                          ? "dasti-inline-ai-toolbar__action--ghost"
-                          : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      initial={false}
-                      animate={{ opacity: 1 }}
-                      transition={TOOLBAR_FADE_TRANSITION}
-                      whileHover={
-                        isLoading ? undefined : getButtonHoverStyle(isPressed)
-                      }
-                      style={getButtonBaseStyle(isPressed)}
+                      className="ds-ai-toolbar__btn"
                       onClick={() => handlePresetAction(action)}
                       onMouseDown={(event) => {
                         event.preventDefault();
@@ -661,44 +579,27 @@ export function FloatingAiToolbar({
                       aria-busy={isActionLoading || undefined}
                       aria-pressed={isActive}
                     >
-                      <Icon size={14} strokeWidth={1.2} aria-hidden="true" />
-                      <span className="dasti-inline-ai-toolbar__action-label">
-                        {action.label}
-                      </span>
+                      {action.label}
                       {isActionLoading ? (
-                        <Loader2
-                          size={12}
-                          strokeWidth={1.2}
-                          aria-hidden="true"
-                          className="dasti-inline-ai-toolbar__action-spinner animate-spin"
-                        />
+                        <span className="ds-btn__period" aria-hidden="true">
+                          .
+                        </span>
                       ) : null}
-                    </motion.button>
-                  </React.Fragment>
-                );
-              })}
-            </motion.div>
-          </motion.div>
+                    </button>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
 
           {isAskOpen ? (
-            <motion.div
+            <div
               ref={promptShellRef}
-              className="dasti-inline-ai-toolbar__ribbon dasti-inline-ai-toolbar__ribbon--prompt"
+              className="ds-ask-ai"
+              data-loading={isPromptLoading || undefined}
               data-inline-ai-toolbar="true"
-              style={{ overflow: "hidden", justifySelf: "center" }}
             >
-              <motion.label
-                className="dasti-inline-ai-toolbar__prompt-shell"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={TOOLBAR_FADE_TRANSITION}
-              >
-                <span
-                  className="dasti-inline-ai-toolbar__prompt-icon"
-                  aria-hidden="true"
-                >
-                  <Wand2 size={15} strokeWidth={1.2} />
-                </span>
+              <label style={{ display: "contents" }}>
                 <span className="sr-only">Ask AI</span>
                 <input
                   type="text"
@@ -710,53 +611,20 @@ export function FloatingAiToolbar({
                     if (event.key === "Enter" && customInstruction.trim()) {
                       event.preventDefault();
                       onRunAction("custom", customInstruction.trim());
+                    } else if (event.key === "Enter") {
+                      event.preventDefault();
+                    } else if (event.key === "Escape") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setActiveActionId(DEFAULT_ACTION_ID);
                     }
                   }}
-                  placeholder={askPlaceholder}
-                  className="dasti-inline-ai-toolbar__prompt-field"
+                  placeholder={isPromptLoading ? "Asking." : askPlaceholder}
+                  className="ds-ask-ai__input"
                   disabled={isLoading}
                 />
-              </motion.label>
-
-              <motion.button
-                type="button"
-                className="dasti-inline-ai-toolbar__apply dasti-inline-ai-toolbar__apply--icon"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={TOOLBAR_FADE_TRANSITION}
-                whileHover={
-                  isLoading || !customInstruction.trim()
-                    ? undefined
-                    : {
-                        boxShadow: getButtonGlowBoxShadow(false),
-                      }
-                }
-                onClick={() => onRunAction("custom", customInstruction.trim())}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                }}
-                disabled={isLoading || !customInstruction.trim()}
-                aria-busy={isPromptLoading || undefined}
-                aria-label={
-                  isPromptLoading ? "Sending request" : "Send request"
-                }
-              >
-                {isPromptLoading ? (
-                  <Loader2
-                    size={15}
-                    strokeWidth={1.2}
-                    aria-hidden="true"
-                    className="animate-spin"
-                  />
-                ) : (
-                  <SendHorizontal
-                    size={15}
-                    strokeWidth={1.2}
-                    aria-hidden="true"
-                  />
-                )}
-              </motion.button>
-            </motion.div>
+              </label>
+            </div>
           ) : null}
         </motion.div>
       ) : null}
