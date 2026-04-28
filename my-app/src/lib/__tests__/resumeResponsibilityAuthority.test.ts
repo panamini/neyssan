@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { projectResponsibilitiesForWorkshop } from "../resumeResponsibilityAuthority";
+import {
+  deriveResponsibilityBullets,
+  projectResponsibilitiesForWorkshop,
+  responsibilityValueToPlainText,
+} from "../resumeResponsibilityAuthority";
 
 describe("projectResponsibilitiesForWorkshop", () => {
   it("preserves paragraph text in paragraph-only remirror responsibilities", () => {
@@ -214,6 +218,47 @@ describe("projectResponsibilitiesForWorkshop", () => {
     });
   });
 
+  it("keeps Shorten and Rewrite text results as paragraph/list/mixed structure", () => {
+    const rewritten = projectResponsibilitiesForWorkshop(
+      "Led operating cadence redesign.\n\n- Reduced incident volume.\n- Standardized handoffs.",
+    );
+    const shortened = projectResponsibilitiesForWorkshop(
+      "Led operating cadence redesign.\n- Reduced incidents.",
+    );
+
+    expect(rewritten.rich.blocks).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "Led operating cadence redesign." }],
+      },
+      {
+        kind: "bullet_list",
+        items: [
+          {
+            runs: [{ text: "Reduced incident volume." }],
+          },
+          {
+            runs: [{ text: "Standardized handoffs." }],
+          },
+        ],
+      },
+    ]);
+    expect(shortened.rich.blocks).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "Led operating cadence redesign." }],
+      },
+      {
+        kind: "bullet_list",
+        items: [
+          {
+            runs: [{ text: "Reduced incidents." }],
+          },
+        ],
+      },
+    ]);
+  });
+
   it("projects string array responsibilities into a bullet list block", () => {
     const projection = projectResponsibilitiesForWorkshop([
       "Reduced incident volume.",
@@ -239,5 +284,107 @@ describe("projectResponsibilitiesForWorkshop", () => {
         ],
       },
     });
+  });
+
+  it("projects JSON-stringified responsibility arrays as clean bullet lists", () => {
+    const projection = projectResponsibilitiesForWorkshop(
+      JSON.stringify(["Reduced incident volume.", "Standardized handoffs."]),
+    );
+
+    expect(projection).toEqual({
+      prose: "",
+      bullets: ["Reduced incident volume.", "Standardized handoffs."],
+      rich: {
+        blocks: [
+          {
+            kind: "bullet_list",
+            items: [
+              {
+                runs: [{ text: "Reduced incident volume." }],
+              },
+              {
+                runs: [{ text: "Standardized handoffs." }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(
+      responsibilityValueToPlainText(
+        JSON.stringify(["Reduced incident volume.", "Standardized handoffs."]),
+      ),
+    ).toBe("Reduced incident volume.\nStandardized handoffs.");
+    expect(
+      deriveResponsibilityBullets({
+        responsibilities: JSON.stringify([
+          "Reduced incident volume.",
+          "Standardized handoffs.",
+        ]),
+        hasResponsibilitiesField: true,
+      }),
+    ).toEqual(["Reduced incident volume.", "Standardized handoffs."]);
+  });
+
+  it("projects snake-case editor list nodes as responsibility bullets", () => {
+    const projection = projectResponsibilitiesForWorkshop({
+      type: "doc",
+      content: [
+        {
+          type: "bullet_list",
+          content: [
+            {
+              type: "list_item",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Reduced incident volume." }],
+                },
+              ],
+            },
+            {
+              type: "list_item",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: "Standardized handoffs." }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(projection.bullets).toEqual([
+      "Reduced incident volume.",
+      "Standardized handoffs.",
+    ]);
+    expect(
+      deriveResponsibilityBullets({
+        responsibilities: {
+          type: "doc",
+          content: [
+            {
+              type: "bullet_list",
+              content: [
+                {
+                  type: "list_item",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [
+                        { type: "text", text: "Reduced incident volume." },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        hasResponsibilitiesField: true,
+      }),
+    ).toEqual(["Reduced incident volume."]);
   });
 });
