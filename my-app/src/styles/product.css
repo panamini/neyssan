@@ -204,7 +204,7 @@
 .sb-section__all-link {
   width: 100%;
   text-align: left;
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-inline);
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-standard),
@@ -212,6 +212,7 @@
 }
 
 .sb-section__action {
+  position: relative;
   display: flex;
   align-items: center;
   padding: 0 var(--space-2);
@@ -222,14 +223,33 @@
   line-height: 1.32;
 }
 
+.sb-section__action::before {
+  content: "";
+  position: absolute;
+  inset-block: 6px;
+  inset-inline-start: 0;
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--ac);
+  opacity: 0;
+  transform: scaleY(0.7);
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
 .sb-section__action:hover {
   background: var(--sidebar-hover-bg);
 }
 
 .sb-section__action--active {
   background: linear-gradient(90deg, var(--ap), transparent);
-  box-shadow: inset 2px 0 0 var(--ac);
   color: var(--sidebar-active-ink);
+}
+
+.sb-section__action--active::before {
+  opacity: 1;
+  transform: scaleY(1);
 }
 
 .sb-section__list {
@@ -276,14 +296,14 @@
 .sb-section__document::before {
   content: "";
   position: absolute;
-  left: var(--space-2);
-  top: 50%;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
   width: 2px;
-  height: 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-accent);
   opacity: 0;
-  transform: translateY(-50%) scaleY(0.7);
+  transform: scaleY(0.7);
   transition:
     opacity var(--duration-fast) var(--ease-standard),
     transform var(--duration-fast) var(--ease-standard);
@@ -296,18 +316,17 @@
 
 .sb-section__document--active {
   background: linear-gradient(90deg, var(--ap), transparent);
-  box-shadow: inset 2px 0 0 var(--ac);
   color: var(--ti);
 }
 
 .sb-section__document--active::before {
   opacity: 1;
-  transform: translateY(-50%) scaleY(1);
+  transform: scaleY(1);
 }
 
 .sb-section__document--muted-marker::before {
   opacity: 0.72;
-  transform: translateY(-50%) scaleY(0.82);
+  transform: scaleY(0.82);
   background: color-mix(
     in srgb,
     var(--color-accent) 36%,
@@ -357,8 +376,7 @@
 }
 
 .sb-section__document-row:hover .sb-item-actions,
-.sb-section__document-row:focus-within .sb-item-actions,
-.sb-section__document--active + .sb-item-actions {
+.sb-section__document-row:focus-within .sb-item-actions {
   opacity: 1;
   pointer-events: auto;
   transform: translate3d(0, -50%, 0);
@@ -849,7 +867,7 @@
   position: relative;
   padding: var(--space-2) var(--app-sidebar-inline-pad) var(--space-2)
     var(--app-sidebar-doc-indent);
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-inline);
   cursor: pointer;
   --sb-doc-mask-bg: color-mix(in srgb, var(--sf2) 76%, var(--sf1) 24%);
   background: transparent;
@@ -857,6 +875,21 @@
     background var(--duration-fast) var(--ease-standard),
     color var(--duration-fast) var(--ease-standard),
     box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.sb-doc::before {
+  content: "";
+  position: absolute;
+  inset-block: 6px;
+  inset-inline-start: 0;
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--ac);
+  opacity: 0;
+  transform: scaleY(0.7);
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
 }
 
 .sb-doc--dense {
@@ -878,9 +911,14 @@
 
 .sb-doc--active {
   --sb-doc-mask-bg: color-mix(in srgb, var(--sf2) 52%, var(--sfr) 48%);
-  background: var(--sfr);
+  background: linear-gradient(90deg, var(--ap), transparent);
   color: var(--sidebar-active-ink);
   box-shadow: none;
+}
+
+.sb-doc--active::before {
+  opacity: 1;
+  transform: scaleY(1);
 }
 
 .sb-doc:hover .sb-doc__title {
