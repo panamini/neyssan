@@ -5,6 +5,7 @@ import {
   VISIBLE_TOOLBAR_AI_ACTIONS,
   VISIBLE_TOOLBAR_AI_ACTION_IDS,
   getAiActionDefinition,
+  getVisibleToolbarAiActions,
   isAiActionSupported,
 } from "../interactionRulebook";
 
@@ -17,6 +18,7 @@ describe("AI interaction rulebook", () => {
       "clarify",
       "strengthen",
       "expand",
+      "tailor_to_job",
       "custom",
     ]);
   });
@@ -31,6 +33,25 @@ describe("AI interaction rulebook", () => {
     expect(VISIBLE_TOOLBAR_AI_ACTIONS.map((action) => action.id)).toEqual(
       VISIBLE_TOOLBAR_AI_ACTION_IDS,
     );
+    expect(getVisibleToolbarAiActions().map((action) => action.id)).toEqual(
+      VISIBLE_TOOLBAR_AI_ACTION_IDS,
+    );
+  });
+
+  it("defines tailor to job as a high-risk contextual action", () => {
+    expect(getAiActionDefinition("tailor_to_job")).toMatchObject({
+      risk: "high",
+      applyMode: "preview_required",
+      outputMode: "single_text",
+      requiresJobContext: true,
+      visibleInToolbar: false,
+    });
+    expect(VISIBLE_TOOLBAR_AI_ACTION_IDS).not.toContain("tailor_to_job");
+    expect(
+      getVisibleToolbarAiActions({ includeJobContextActions: true }).map(
+        (action) => action.id,
+      ),
+    ).toEqual(["rewrite", "shorten", "fix_grammar", "tailor_to_job", "custom"]);
   });
 
   it("requires preview for custom and medium-risk actions", () => {

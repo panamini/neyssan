@@ -12,6 +12,7 @@ import {
   setAiInteractionTelemetrySink,
   type AiInteractionTelemetryEvent,
 } from "../../lib/ai/aiInteractionTelemetry";
+import type { EditorAiJobContext } from "../../lib/ai/editorAiJobContext";
 
 const { mockTransformEditorSelection } = vi.hoisted(() => ({
   mockTransformEditorSelection: vi.fn(),
@@ -21,7 +22,19 @@ vi.mock("convex/react", () => ({
   useAction: () => mockTransformEditorSelection,
 }));
 
-function renderEditableProposal(initialContent = "This is rough proposal copy.") {
+const TEST_JOB_CONTEXT: EditorAiJobContext = {
+  jobId: "job_123",
+  title: "Operations Associate",
+  company: "Acme",
+  visibleSummary: "Customer operations role.",
+  visibleRequirements: ["Customer support", "Scheduling"],
+  visibleKeywords: ["operations", "customers"],
+};
+
+function renderEditableProposal(
+  initialContent = "This is rough proposal copy.",
+  options: { editorAiJobContext?: EditorAiJobContext | null } = {},
+) {
   function Harness() {
     const [content, setContent] = React.useState(initialContent);
 
@@ -32,6 +45,7 @@ function renderEditableProposal(initialContent = "This is rough proposal copy.")
         error={null}
         mode="edit"
         onContentChange={setContent}
+        editorAiJobContext={options.editorAiJobContext}
       />
     );
   }
@@ -202,6 +216,114 @@ describe("ProposalDisplay", () => {
         actionId: "custom",
         applyMode: "preview_required",
       }),
+    ]);
+  });
+
+  it("hides tailor to job without job context", async () => {
+    const textarea = renderEditableProposal("This is rough proposal copy.");
+
+    await selectTextareaText(textarea, "rough proposal copy");
+
+    expect(screen.queryByText("Tailor")).not.toBeInTheDocument();
+  });
+
+  it("previews tailor to job suggestions with job context without auto-applying", async () => {
+    const telemetryEvents = captureAiTelemetryEvents();
+    mockTransformEditorSelection.mockResolvedValue({
+      kind: "text",
+      actionId: "tailor_to_job",
+      text: "tailored proposal copy",
+      applyMode: "preview_required",
+      outputMode: "single_text",
+      variants: [],
+    });
+    const textarea = renderEditableProposal("This is rough proposal copy.", {
+      editorAiJobContext: TEST_JOB_CONTEXT,
+    });
+
+    await selectTextareaText(textarea, "rough proposal copy");
+    fireEvent.click(getToolbarButton("Tailor"));
+
+    await screen.findByRole("region", { name: "Tailor suggestion" });
+    expect(textarea).toHaveValue("This is rough proposal copy.");
+    expect(mockTransformEditorSelection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "tailor_to_job",
+        selectedText: "rough proposal copy",
+        jobContext: expect.objectContaining(TEST_JOB_CONTEXT),
+      }),
+    );
+    expect(telemetryEvents).toEqual([
+      expect.objectContaining({
+        name: "ai_started",
+        surface: "proposal_editor",
+        actionId: "tailor_to_job",
+        applyMode: "preview_required",
+      }),
+      expect.objectContaining({
+        name: "ai_completed",
+        surface: "proposal_editor",
+        actionId: "tailor_to_job",
+        applyMode: "preview_required",
+      }),
+    ]);
+    expect(JSON.stringify(telemetryEvents)).not.toContain(
+      "rough proposal copy",
+    );
+    expect(JSON.stringify(telemetryEvents)).not.toContain(
+      "tailored proposal copy",
+    );
+    expect(JSON.stringify(telemetryEvents)).not.toContain(
+      "Customer operations role",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("This is tailored proposal copy.");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("This is rough proposal copy.");
+    });
+    expect(telemetryEvents.map((event) => event.name)).toEqual([
+      "ai_started",
+      "ai_completed",
+      "ai_accepted",
+      "ai_undone",
+    ]);
+  });
+
+  it("discards tailor to job suggestions without applying", async () => {
+    const telemetryEvents = captureAiTelemetryEvents();
+    mockTransformEditorSelection.mockResolvedValue({
+      kind: "text",
+      actionId: "tailor_to_job",
+      text: "discarded tailored copy",
+      applyMode: "preview_required",
+      outputMode: "single_text",
+      variants: [],
+    });
+    const textarea = renderEditableProposal("This is rough proposal copy.", {
+      editorAiJobContext: TEST_JOB_CONTEXT,
+    });
+
+    await selectTextareaText(textarea, "rough proposal copy");
+    fireEvent.click(getToolbarButton("Tailor"));
+
+    await screen.findByRole("region", { name: "Tailor suggestion" });
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+    expect(textarea).toHaveValue("This is rough proposal copy.");
+    expect(
+      screen.queryByRole("region", { name: "Tailor suggestion" }),
+    ).not.toBeInTheDocument();
+    expect(telemetryEvents.map((event) => event.name)).toEqual([
+      "ai_started",
+      "ai_completed",
+      "ai_discarded",
     ]);
   });
 

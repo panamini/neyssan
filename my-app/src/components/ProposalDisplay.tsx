@@ -67,6 +67,11 @@ import {
   recordAiInteractionEvent,
 } from "../lib/ai/aiInteractionTelemetry";
 import type { AiApplyMode, AiOutputMode } from "../lib/ai/interactionRulebook";
+import {
+  isEditorAiJobContextReady,
+  normalizeEditorAiJobContext,
+  type EditorAiJobContext,
+} from "../lib/ai/editorAiJobContext";
 
 interface ProposalDisplayProps {
   proposalContent: string | null;
@@ -98,6 +103,7 @@ interface ProposalDisplayProps {
   onPreviewInteract?: () => void;
   onContentChange?: (value: string) => void;
   onContentCommit?: () => void;
+  editorAiJobContext?: EditorAiJobContext | null;
   actions?: React.ReactNode;
   railStartAddon?: React.ReactNode;
   railEndAddon?: React.ReactNode;
@@ -416,6 +422,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   onPreviewInteract,
   onContentChange,
   onContentCommit,
+  editorAiJobContext = null,
   actions,
   railStartAddon,
   railEndAddon,
@@ -502,6 +509,13 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     [resolvedStylePreset],
   );
   const isEditable = mode === "edit" && Boolean(onContentChange);
+  const normalizedEditorAiJobContext = React.useMemo(
+    () => normalizeEditorAiJobContext(editorAiJobContext),
+    [editorAiJobContext],
+  );
+  const hasEditorAiJobContext = isEditorAiJobContextReady(
+    normalizedEditorAiJobContext,
+  );
 
   const [internalZoomIndex, setInternalZoomIndex] = React.useState(() =>
     readProposalZoomIndex(zoomStorageKey),
@@ -1150,6 +1164,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           mode: actionId,
           instruction,
           selectedText: textareaSelectionState.text,
+          ...(actionId === "tailor_to_job" && normalizedEditorAiJobContext
+            ? { jobContext: normalizedEditorAiJobContext }
+            : {}),
         });
         const normalizedResult = normalizeEditorAiTextResult(result, actionId);
         if (!normalizedResult) {
@@ -1241,6 +1258,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     [
       onContentChange,
       proposalContent,
+      normalizedEditorAiJobContext,
       textareaSelectionState,
       transformEditorSelectionAction,
     ],
@@ -2544,6 +2562,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           anchor={textareaSelectionState.anchor}
           isLoading={isApplyingInlineAi}
           pendingActionId={pendingInlineAiActionId}
+          includeJobContextActions={hasEditorAiJobContext}
           onClose={() => setTextareaSelectionState(null)}
           onRunAction={handleRunInlineAiAction}
         />

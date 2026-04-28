@@ -17,6 +17,7 @@ describe("editor AI rulebook", () => {
       "clarify",
       "strengthen",
       "expand",
+      "tailor_to_job",
       "custom",
     ]);
     expect(EDITOR_AI_ACTION_IDS).toEqual(AI_ACTION_IDS);
@@ -27,6 +28,7 @@ describe("editor AI rulebook", () => {
     expect(normalizeEditorAiActionId("make_persuasive")).toBe("strengthen");
     expect(normalizeEditorAiActionId("lengthen")).toBe("expand");
     expect(normalizeEditorAiActionId("fix")).toBe("fix_grammar");
+    expect(normalizeEditorAiActionId("make_human")).toBe("rewrite");
     expect(normalizeEditorAiActionId("ask")).toBe("custom");
     expect(normalizeEditorAiActionId("rewrite")).toBe("rewrite");
     expect(normalizeEditorAiActionId("tone")).toBeNull();
@@ -38,6 +40,15 @@ describe("editor AI rulebook", () => {
     expect(() => requireEditorAiActionDefinition("unknown")).toThrow(
       /Unsupported editor AI action/,
     );
+  });
+
+  it("defines tailor to job as a high-risk job-context action", () => {
+    expect(getEditorAiActionDefinition("tailor_to_job")).toMatchObject({
+      risk: "high",
+      applyMode: "preview_required",
+      outputMode: "single_text",
+      requiresJobContext: true,
+    });
   });
 
   it("requires preview for custom and medium-risk actions", () => {
