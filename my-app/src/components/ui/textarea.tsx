@@ -3,57 +3,51 @@
 import React from "react";
 import clsx from "clsx";
 
-export interface InputProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> {
+export interface TextareaProps
+  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
   hint?: string;
   error?: string;
-  size?: "sm" | "md" | "lg";
-  variant?: "default" | "ghost" | "error";
 }
 
-export function Input({
+export function Textarea({
   id,
   label,
   hint,
   error,
-  size,
-  variant = "default",
   className,
   ...props
-}: InputProps) {
+}: TextareaProps) {
   const generatedId = React.useId();
-  const inputId = id ?? generatedId;
-  const messageId = `${inputId}-message`;
+  const textareaId = id ?? generatedId;
+  const messageId = `${textareaId}-message`;
   const hasMessage = Boolean(error || hint);
-  const input = (
-    <input
+  const textarea = (
+    <textarea
       {...props}
-      id={inputId}
+      id={textareaId}
       aria-invalid={Boolean(error) || undefined}
       aria-describedby={hasMessage ? messageId : props["aria-describedby"]}
       className={clsx(
-        "ds-field",
-        size && `ds-field--${size}`,
-        (error || variant === "error") && "ds-field--error",
-        variant === "ghost" && "ds-field--ghost",
+        "ds-field ds-field--textarea",
+        error && "ds-field--error",
         className,
       )}
     />
   );
 
   if (!label && !hint && !error) {
-    return input;
+    return textarea;
   }
 
   return (
     <div className="ds-field-group">
       {label ? (
-        <label className="ds-field-label" htmlFor={inputId}>
+        <label className="ds-field-label" htmlFor={textareaId}>
           {label}
         </label>
       ) : null}
-      {input}
+      {textarea}
       {error ? (
         <span id={messageId} className="ds-field-error">
           {error}

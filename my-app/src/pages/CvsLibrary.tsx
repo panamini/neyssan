@@ -2,6 +2,7 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Plus, X, Check } from "@/lib/icons";
 import { LibraryFilterMenu } from "../components/LibraryFilterMenu";
+import { Input } from "../components/ui";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   buildActiveCvSnapshotFromCvDocument,
@@ -242,7 +243,7 @@ export function CvsLibrary(): JSX.Element {
             <div className="dasti-proposal-library-utility-row">
               <label className="dasti-proposal-library-utility-row__search">
                 <span className="sr-only">Search all resumes</span>
-                <input
+                <Input
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}

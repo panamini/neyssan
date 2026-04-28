@@ -47,7 +47,7 @@ describe("FloatingAiToolbar", () => {
       />,
     );
 
-    expect(screen.queryByPlaceholderText("Tell AI what to change")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Ask AI" })).toBeNull();
   });
 
   it("runs a preset action from the floating toolbar", async () => {
@@ -80,7 +80,9 @@ describe("FloatingAiToolbar", () => {
       />,
     );
 
-    expect(await screen.findByRole("button", { name: "Rewrite" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Rewrite" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Shorten" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Fix" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ask" })).toBeInTheDocument();
@@ -90,7 +92,7 @@ describe("FloatingAiToolbar", () => {
     expect(screen.queryByRole("button", { name: "Tailor" })).toBeNull();
   });
 
-  it("adds the contextual tailor action only when job context actions are enabled", async () => {
+  it("does not add contextual job actions when job context actions are enabled", async () => {
     const onRunAction = vi.fn();
 
     render(
@@ -103,12 +105,15 @@ describe("FloatingAiToolbar", () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Tailor" }));
-
-    expect(onRunAction).toHaveBeenCalledWith(
-      "tailor_to_job",
-      expect.stringContaining("Tailor this selection"),
-    );
+    expect(
+      await screen.findByRole("button", { name: "Rewrite" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Shorten" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fix" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tailor" })).toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(4);
+    expect(onRunAction).not.toHaveBeenCalled();
   });
 
   it("sends the canonical fix action id", async () => {
@@ -148,12 +153,31 @@ describe("FloatingAiToolbar", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Ask AI" }), {
       target: { value: "Make this sound calmer." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Send request" }));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Ask AI" }), {
+      key: "Enter",
+    });
 
     expect(onRunAction).toHaveBeenCalledWith(
       "custom",
       "Make this sound calmer.",
     );
+  });
+
+  it("replaces the Ask button with the inline prompt while expanded", async () => {
+    render(
+      <FloatingAiToolbar
+        anchor={{ left: 120, top: 80 }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Ask" }))[0]);
+
+    expect(screen.getByRole("textbox", { name: "Ask AI" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ask" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send request" })).toBeNull();
   });
 
   it("shows the targeted custom loading state without relabeling preset actions", async () => {
@@ -176,11 +200,15 @@ describe("FloatingAiToolbar", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Sending request" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Ask AI" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Ask AI" })).toHaveAttribute(
+      "placeholder",
+      "Asking.",
+    );
     expect(screen.getByRole("button", { name: "Shorten" })).toBeDisabled();
   });
 
-  it("shows a spinner on the targeted preset action while AI is running", () => {
+  it("shows the targeted preset action busy state while AI is running", () => {
     render(
       <FloatingAiToolbar
         anchor={{ left: 120, top: 80 }}
@@ -195,9 +223,7 @@ describe("FloatingAiToolbar", () => {
     const action = screen.getByRole("button", { name: "Fix" });
     expect(action).toBeDisabled();
     expect(action).toHaveAttribute("aria-busy", "true");
-    expect(
-      action.querySelector(".dasti-inline-ai-toolbar__action-spinner"),
-    ).not.toBeNull();
+    expect(action.querySelector(".ds-btn__period")).not.toBeNull();
   });
 
   it("dismisses on Escape", async () => {
@@ -283,7 +309,7 @@ describe("FloatingAiToolbar", () => {
     const toolbar = screen.getByRole("toolbar", { name: "Selected text actions" });
     await waitFor(() => {
       expect(toolbar).toHaveAttribute("data-placement", "above");
-      expect(toolbar).toHaveStyle({ top: "124px" });
+      expect(toolbar).toHaveStyle({ top: "144px" });
     });
   });
 
@@ -312,7 +338,7 @@ describe("FloatingAiToolbar", () => {
     const toolbar = screen.getByRole("toolbar", { name: "Selected text actions" });
     await waitFor(() => {
       expect(toolbar).toHaveAttribute("data-placement", "below");
-      expect(toolbar).toHaveStyle({ top: "80px" });
+      expect(toolbar).toHaveStyle({ top: "60px" });
     });
   });
 
@@ -344,9 +370,44 @@ describe("FloatingAiToolbar", () => {
     const toolbar = screen.getByRole("toolbar", { name: "Selected text actions" });
     await waitFor(() => {
       expect(toolbar).toHaveStyle({ left: "166px" });
-      expect(
-        toolbar.style.getPropertyValue("--dasti-inline-ai-toolbar-pointer-offset"),
-      ).toBe("14px");
+    });
+  });
+
+  it("uses selected bounds when a left-edge character selection reports a distant focus rect", async () => {
+    render(
+      <FloatingAiToolbar
+        anchor={{
+          left: 104,
+          top: 200,
+          bottom: 216,
+          leftEdge: 100,
+          rightEdge: 108,
+          width: 8,
+          aboveCenter: 104,
+          aboveLeft: 100,
+          aboveRight: 108,
+          aboveLineHeight: 20,
+          focusCenter: 620,
+          focusLeft: 616,
+          focusRight: 624,
+          focusTop: 176,
+          focusBottom: 192,
+          focusLineHeight: 20,
+          containerLeft: 96,
+          containerRight: 760,
+          containerTop: 0,
+          containerBottom: 500,
+        }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    const toolbar = screen.getByRole("toolbar", { name: "Selected text actions" });
+    await waitFor(() => {
+      expect(toolbar).toHaveStyle({ top: "144px" });
+      expect(toolbar).toHaveStyle({ left: "100px" });
     });
   });
 
@@ -382,11 +443,8 @@ describe("FloatingAiToolbar", () => {
     const toolbar = screen.getByRole("toolbar", { name: "Selected text actions" });
     await waitFor(() => {
       expect(toolbar).toHaveAttribute("data-placement", "above");
-      expect(toolbar).toHaveStyle({ top: "142px" });
+      expect(toolbar).toHaveStyle({ top: "164px" });
       expect(toolbar).toHaveStyle({ left: "376px" });
-      expect(
-        toolbar.style.getPropertyValue("--dasti-inline-ai-toolbar-pointer-offset"),
-      ).toBe("110px");
     });
   });
 });
