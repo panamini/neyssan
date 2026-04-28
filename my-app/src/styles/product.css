@@ -143,7 +143,8 @@
 }
 
 .sb-workspace-card--primary {
-  background: var(--sidebar-active-bg);
+  background: linear-gradient(90deg, var(--ap), transparent);
+  box-shadow: inset 2px 0 0 var(--ac);
 }
 
 .sb-workspace-card--secondary {
@@ -226,7 +227,8 @@
 }
 
 .sb-section__action--active {
-  background: var(--sidebar-active-bg);
+  background: linear-gradient(90deg, var(--ap), transparent);
+  box-shadow: inset 2px 0 0 var(--ac);
   color: var(--sidebar-active-ink);
 }
 
@@ -293,7 +295,8 @@
 }
 
 .sb-section__document--active {
-  background: transparent;
+  background: linear-gradient(90deg, var(--ap), transparent);
+  box-shadow: inset 2px 0 0 var(--ac);
   color: var(--ti);
 }
 
@@ -419,7 +422,8 @@
 }
 
 .sb-rail-button--active {
-  background: var(--sidebar-active-bg);
+  background: linear-gradient(90deg, var(--ap), transparent);
+  box-shadow: inset 2px 0 0 var(--ac);
   color: var(--ti);
 }
 
@@ -14500,7 +14504,8 @@
 }
 
 .sb-footer__tool-btn--active {
-  background: color-mix(in srgb, var(--sfr) 96%, transparent);
+  background: linear-gradient(90deg, var(--ap), transparent);
+  box-shadow: inset 2px 0 0 var(--ac);
   color: var(--ti);
 }
 

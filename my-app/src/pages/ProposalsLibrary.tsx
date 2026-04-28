@@ -6,6 +6,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { FileText, Plus, X, Check } from "@/lib/icons";
 import { LibraryFilterMenu } from "../components/LibraryFilterMenu";
+import { Input, ToneBadge, type ToneBadgeTone } from "../components/ui";
 import { formatUiDate } from "../lib/ui-date";
 import {
   createProposalWorkspaceResetState,
@@ -56,6 +57,16 @@ function toneLabel(voicePreset?: string): string {
       ? voicePreset
       : undefined,
   );
+}
+
+function toneBadgeTone(voicePreset?: string): ToneBadgeTone {
+  if (voicePreset === "engaging" || voicePreset === "storyteller") {
+    return "warm";
+  }
+  if (voicePreset === "expert") {
+    return "formal";
+  }
+  return "natural";
 }
 
 function shouldPreserveLeadBreak(line: string): boolean {
@@ -230,7 +241,7 @@ export function ProposalsLibrary(): JSX.Element {
             <div className="dasti-proposal-library-utility-row">
               <label className="dasti-proposal-library-utility-row__search">
                 <span className="sr-only">Search all cover letters</span>
-                <input
+                <Input
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
@@ -320,7 +331,9 @@ export function ProposalsLibrary(): JSX.Element {
                         <div className="dasti-doc-card__footer-meta">
                           <span>{label}</span>
                           <span>·</span>
-                          <span>{tone}</span>
+                          <ToneBadge tone={toneBadgeTone(p.metadata?.voicePreset)}>
+                            {tone}
+                          </ToneBadge>
                           <span>·</span>
                           <span className="dasti-doc-card__stamp">{date}</span>
                         </div>

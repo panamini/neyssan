@@ -1,0 +1,82 @@
+{
+  "extends": ["stylelint-config-standard"],
+  "plugins": ["stylelint-declaration-strict-value"],
+  "rules": {
+    "scale-unlimited/declaration-strict-value": [
+      [
+        "/color$/",
+        "background-color",
+        "background",
+        "border-color",
+        "fill",
+        "stroke",
+        "box-shadow",
+        "border-radius",
+        "padding",
+        "padding-top",
+        "padding-right",
+        "padding-bottom",
+        "padding-left",
+        "margin",
+        "margin-top",
+        "margin-right",
+        "margin-bottom",
+        "margin-left",
+        "gap",
+        "row-gap",
+        "column-gap",
+        "font-size",
+        "line-height",
+        "font-family",
+        "transition-duration",
+        "animation-duration",
+        "transition-timing-function",
+        "animation-timing-function",
+        "z-index"
+      ],
+      {
+        "ignoreValues": [
+          "0",
+          "0px",
+          "auto",
+          "inherit",
+          "initial",
+          "unset",
+          "currentColor",
+          "transparent",
+          "none",
+          "/^var\\(--/",
+          "/^calc\\(/",
+          "/^color-mix\\(/"
+        ],
+        "disableFix": true,
+        "severity": "error"
+      }
+    ],
+    "color-no-hex": [
+      true,
+      {
+        "ignoreFiles": [
+          "**/foundation.css",
+          "**/themes.css",
+          "**/colors_and_type.css"
+        ]
+      }
+    ],
+    "selector-class-pattern": null,
+    "no-descending-specificity": null
+  },
+  "ignoreFiles": [
+    "**/dist/**",
+    "**/build/**",
+    "**/node_modules/**",
+    "**/*.bak",
+    "**/*.bak.css",
+    "src/styles/product.css",
+    "src/styles/primitives.css",
+    "src/styles/utilities.css",
+    "src/styles/base.css",
+    "src/styles/tailwind.css",
+    "src/styles/themes.css"
+  ]
+}

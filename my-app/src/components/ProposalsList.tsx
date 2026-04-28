@@ -3,6 +3,7 @@ import { useQuery, useMutation, useAction, useConvexAuth } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { useToast } from "./ui/toast";
+import { ToneBadge, type ToneBadgeTone } from "./ui";
 import { AUTH_REQUIRED_TOAST } from "../lib/toast-copy";
 import ProposalDisplay from "./ProposalDisplay";
 import { SavedProposalForgeToolbarPreview } from "./SavedProposalForgeToolbarPreview";
@@ -480,6 +481,16 @@ const PINCH_DETAIL_THRESHOLD = 1.12;
 
 function toneLabel(preset: ProposalVoicePreset | null): string {
   return getVoicePresetDisplayLabel(preset);
+}
+
+function toneBadgeTone(preset: ProposalVoicePreset | null): ToneBadgeTone {
+  if (preset === "engaging" || preset === "storyteller") {
+    return "warm";
+  }
+  if (preset === "expert") {
+    return "formal";
+  }
+  return "natural";
 }
 
 function buildProposalMeta(
@@ -1666,9 +1677,12 @@ export default function ProposalsList({
           ) : null}
           {selectedToneLabel ? (
             <div className="dasti-proposal-library-sidebar__tone-row">
-              <span className="dasti-proposal-tone-badge">
+              <ToneBadge
+                tone={toneBadgeTone(selected ? getStoredVoicePreset(selected) : null)}
+                className="dasti-proposal-tone-badge"
+              >
                 {selectedToneLabel}
-              </span>
+              </ToneBadge>
             </div>
           ) : null}
         </div>
@@ -1869,9 +1883,12 @@ export default function ProposalsList({
                         </div>
                         <div className="dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
                           <div className="dasti-doc-card__footer-meta">
-                            <span className="dasti-proposal-tone-badge dasti-proposal-tone-badge--compact">
+                            <ToneBadge
+                              tone={toneBadgeTone(getStoredVoicePreset(proposal))}
+                              className="dasti-proposal-tone-badge dasti-proposal-tone-badge--compact"
+                            >
                               {proposalToneLabel}
-                            </span>
+                            </ToneBadge>
                             <span>
                               {buildProposalMeta(proposal, {
                                 includeTone: false,
