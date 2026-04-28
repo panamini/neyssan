@@ -237,6 +237,14 @@ export const runCvSectionAiAction = action({
     existingItems: v.optional(v.array(v.string())),
     excludeItems: v.optional(v.array(v.string())),
     maxItems: v.optional(v.number()),
+    outputShape: v.optional(
+      v.union(
+        v.literal("paragraph"),
+        v.literal("list"),
+        v.literal("mixed"),
+        v.literal("empty"),
+      ),
+    ),
     summary: v.optional(v.string()),
     skills: v.optional(v.array(v.string())),
     experiences: v.optional(v.array(editorExperienceValidator)),
@@ -309,7 +317,8 @@ export const runCvSectionAiAction = action({
       action === "generate_skills_suggestions" ||
       action === "generate_skills_from_experience" ||
       action === "generate_language_suggestions" ||
-      action === "improve_experience_responsibilities" ||
+      (action === "improve_experience_responsibilities" &&
+        (args.outputShape ?? "list") === "list") ||
       action === "improve_experience_bullets";
 
     const actionPrompt = (() => {
@@ -371,9 +380,33 @@ export const runCvSectionAiAction = action({
             compactEducations ? `Education evidence:\n${compactEducations}` : "Education evidence: none.",
           ].join("\n\n");
         case "improve_experience_responsibilities":
+          if (args.outputShape === "paragraph") {
+            return [
+              "Task: improve the responsibility paragraph for one CV role.",
+              "Return only one replacement paragraph.",
+              "Do not return JSON, markdown, bullets, numbering, quotes, or commentary.",
+              "Preserve factual scope. Improve clarity, specificity, and impact without inventing metrics or responsibilities.",
+              `Existing role text:\n${args.existingText ?? ""}`,
+            ].join("\n\n");
+          }
+          if (args.outputShape === "mixed") {
+            return [
+              "Task: improve the responsibilities for one CV role while preserving the existing paragraph and bullet-list structure.",
+              "Return plain text only. Keep paragraphs as paragraphs and bullet items as separate lines prefixed with '- '.",
+              "Do not return JSON, code fences, quotes, or commentary.",
+              "Preserve factual scope. Improve clarity, specificity, and impact without inventing metrics or responsibilities.",
+              `Existing role text:\n${args.existingText ?? ""}`,
+            ].join("\n\n");
+          }
+          return [
+            "Task: improve the responsibility bullet list for one CV role.",
+            "Return JSON only: an array of concise bullet strings.",
+            "Preserve factual scope. Improve clarity, specificity, and impact without inventing metrics or responsibilities.",
+            `Existing role text:\n${args.existingText ?? ""}`,
+          ].join("\n\n");
         case "improve_experience_bullets":
           return [
-            "Task: improve the responsibilities for one CV role.",
+            "Task: improve the responsibility bullet list for one CV role.",
             "Return JSON only: an array of concise bullet strings.",
             "Preserve factual scope. Improve clarity, specificity, and impact without inventing metrics or responsibilities.",
             `Existing role text:\n${args.existingText ?? ""}`,

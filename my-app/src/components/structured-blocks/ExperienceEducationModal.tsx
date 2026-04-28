@@ -47,7 +47,11 @@ import {
   recordAiInteractionEvent,
 } from "../../lib/ai/aiInteractionTelemetry";
 import type { AiApplyMode, AiOutputMode } from "../../lib/ai/interactionRulebook";
-import { deriveResponsibilityBullets } from "../../lib/resumeResponsibilityAuthority";
+import {
+  deriveResponsibilityBullets,
+  projectResponsibilitiesForWorkshop,
+  responsibilityValueToDisplayLines,
+} from "../../lib/resumeResponsibilityAuthority";
 import {
   getDomSelectionState,
   isInlineAiToolbarActiveElement,
@@ -184,8 +188,275 @@ function achievementsToBulletDoc(
   } as RemirrorJSON;
 }
 
+function textToParagraphDoc(text: string): RemirrorJSON {
+  const clean = text.replace(/\s+/g, " ").trim();
+  return clean
+    ? ({
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: clean }],
+          },
+        ],
+      } as RemirrorJSON)
+    : ensureRemirrorDoc(undefined as any);
+}
+
+function textToMixedDoc(text: string): RemirrorJSON {
+  const blocks: RemirrorJSON[] = [];
+  let paragraphLines: string[] = [];
+  let bulletLines: string[] = [];
+
+  const flushParagraph = () => {
+    const clean = paragraphLines.join(" ").replace(/\s+/g, " ").trim();
+    paragraphLines = [];
+    if (!clean) return;
+    blocks.push({
+      type: "paragraph",
+      content: [{ type: "text", text: clean }],
+    } as RemirrorJSON);
+  };
+
+  const flushBullets = () => {
+    const clean = bulletLines.map((line) => line.trim()).filter(Boolean);
+    bulletLines = [];
+    if (clean.length === 0) return;
+    blocks.push((achievementsToBulletDoc(clean).content ?? [])[0] as RemirrorJSON);
+  };
+
+  text
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .forEach((rawLine) => {
+      const line = rawLine.trim();
+      if (!line) {
+        flushParagraph();
+        flushBullets();
+        return;
+      }
+
+      const bullet = line.replace(/^[•\u2022\-\u2013\u2014*+]\s*/, "").trim();
+      if (bullet && bullet !== line) {
+        flushParagraph();
+        bulletLines.push(bullet);
+        return;
+      }
+
+      flushBullets();
+      paragraphLines.push(line);
+    });
+
+  flushParagraph();
+  flushBullets();
+
+  return blocks.length > 0
+    ? ({ type: "doc", content: blocks } as RemirrorJSON)
+    : ensureRemirrorDoc(undefined as any);
+}
+
+type ResponsibilityAiSourceShape = "empty" | "paragraph" | "list" | "mixed";
+
+function getResponsibilitySourceShape(source: unknown): ResponsibilityAiSourceShape {
+  const blocks = projectResponsibilitiesForWorkshop(source).rich.blocks;
+  const hasParagraph = blocks.some((block) => block.kind === "paragraph");
+  const hasList = blocks.some((block) => block.kind === "bullet_list");
+
+  if (hasParagraph && hasList) return "mixed";
+  if (hasList) return "list";
+  if (hasParagraph) return "paragraph";
+  return "empty";
+}
+
+function parseJsonStringArray(value: string): string[] | null {
+  try {
+    const parsed = JSON.parse(value.trim());
+    if (!Array.isArray(parsed)) return null;
+    const items = parsed
+      .map((item) => String(item ?? "").trim())
+      .filter(Boolean);
+    return items.length > 0 ? items : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasRawJsonArraySyntax(value: string): boolean {
+  return /^\s*\[/.test(value) || /\]\s*$/.test(value);
+}
+
+function looksIncompleteAiOutput(
+  value: string,
+  context?: { shape?: ResponsibilityAiSourceShape; requestedActionId?: string },
+): boolean {
+  const clean = value.trim();
+  if (!clean) return true;
+  if (/[,;:([{\-–—]\s*$/.test(clean)) return true;
+  if (/\b(?:for|to|with|and|or|of|in|on|at|by|from|as|the|a|an)\s*$/i.test(clean)) {
+    return true;
+  }
+  if (/\b(?:for|to|with|and|or|of|in|on|at|by|from|as)\s+[A-Z]$/i.test(clean)) {
+    return true;
+  }
+  if (
+    context?.shape === "paragraph" &&
+    context.requestedActionId !== "custom" &&
+    !/[.!?)]$/.test(clean) &&
+    /\b(?:adapted|tailored|modified|differentiated|supported)\s+(?:the\s+)?(?:general|special|targeted|individualized|differentiated)\s+(?:education|curriculum|support|supports)?$/i.test(clean)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeResponsibilityResultItems(args: {
+  rawText?: string;
+  rawItems?: string[];
+}): { items: string[] | null; text: string } {
+  const rawText = String(args.rawText ?? "").trim();
+  const rawItems = Array.isArray(args.rawItems)
+    ? args.rawItems.map((item) => String(item ?? "").trim()).filter(Boolean)
+    : [];
+
+  if (rawItems.length > 0) {
+    const joinedItems = rawItems.join("\n").trim();
+    const jsonItems = parseJsonStringArray(joinedItems);
+    if (jsonItems) {
+      return { items: jsonItems, text: jsonItems.join("\n") };
+    }
+
+    return { items: rawItems, text: rawItems.join("\n") };
+  }
+
+  const jsonItems = rawText ? parseJsonStringArray(rawText) : null;
+  if (jsonItems) {
+    return { items: jsonItems, text: jsonItems.join("\n") };
+  }
+
+  return { items: null, text: rawText };
+}
+
+type NormalizedResponsibilityAiResult =
+  | {
+      ok: true;
+      displayText: string;
+      doc: RemirrorJSON;
+      shape: ResponsibilityAiSourceShape;
+      autoApply: boolean;
+      responsibilityBullets?: string[];
+    }
+  | {
+      ok: false;
+      displayText: string;
+      reason: "empty_output" | "json_shape_mismatch" | "incomplete_output";
+      shape: ResponsibilityAiSourceShape;
+      autoApply: false;
+    };
+
+export function normalizeResponsibilityAiResultForSource(args: {
+  source: unknown;
+  rawText?: string;
+  rawItems?: string[];
+  requestedActionId: string;
+}): NormalizedResponsibilityAiResult {
+  const shape = getResponsibilitySourceShape(args.source);
+  const normalized = normalizeResponsibilityResultItems({
+    rawText: args.rawText,
+    rawItems: args.rawItems,
+  });
+  const cleanText = normalized.text.trim();
+
+  if (!cleanText) {
+    return {
+      ok: false,
+      displayText: "",
+      reason: "empty_output",
+      shape,
+      autoApply: false,
+    };
+  }
+
+  if (
+    looksIncompleteAiOutput(cleanText, {
+      shape,
+      requestedActionId: args.requestedActionId,
+    })
+  ) {
+    return {
+      ok: false,
+      displayText: cleanText,
+      reason: "incomplete_output",
+      shape,
+      autoApply: false,
+    };
+  }
+
+  if (shape === "paragraph" || shape === "empty") {
+    const paragraphText = (normalized.items ?? [cleanText])
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return {
+      ok: true,
+      displayText: paragraphText,
+      doc: textToParagraphDoc(paragraphText),
+      shape: shape === "empty" ? "paragraph" : shape,
+      autoApply: false,
+    };
+  }
+
+  if (shape === "list") {
+    const items = normalized.items ?? splitPlainTextIntoLines(cleanText);
+    if (items.length === 0 || (normalized.items === null && hasRawJsonArraySyntax(cleanText))) {
+      return {
+        ok: false,
+        displayText: cleanText,
+        reason: "json_shape_mismatch",
+        shape,
+        autoApply: false,
+      };
+    }
+
+    return {
+      ok: true,
+      displayText: items.map((item) => `• ${item}`).join("\n"),
+      doc: achievementsToBulletDoc(items),
+      shape,
+      autoApply: false,
+      responsibilityBullets: items,
+    };
+  }
+
+  const doc = textToMixedDoc(cleanText);
+  const nextShape = getResponsibilitySourceShape(doc);
+  if (nextShape !== "mixed") {
+    return {
+      ok: false,
+      displayText: cleanText,
+      reason: "json_shape_mismatch",
+      shape,
+      autoApply: false,
+    };
+  }
+
+  return {
+    ok: true,
+    displayText: responsibilityValueToDisplayLines(doc).join("\n"),
+    doc,
+    shape,
+    autoApply: false,
+    responsibilityBullets: deriveResponsibilityBullets({
+      responsibilities: doc,
+      hasResponsibilitiesField: true,
+    }),
+  };
+}
+
 // Lightweight embedded Remirror editor used inside the Experience modal per entry
-type RichEditorHandle = { flush: () => void };
+type RichEditorHandle = {
+  flush: () => void;
+  dismissAiSuggestion: () => void;
+};
 
 function hasNonEmptyDocText(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
@@ -199,6 +470,39 @@ function hasNonEmptyDocText(value: unknown): boolean {
     if (Array.isArray(rec.items)) queue.push(...rec.items);
   }
   return false;
+}
+
+function isJsonStringArray(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    return Array.isArray(JSON.parse(value));
+  } catch {
+    return false;
+  }
+}
+
+function resolveResponsibilitiesEditorDoc(item: IExperienceItem): RemirrorJSON {
+  if (
+    typeof item.responsibilities !== "undefined" &&
+    item.responsibilities !== null
+  ) {
+    if (isJsonStringArray(item.responsibilities)) {
+      return achievementsToBulletDoc(
+        responsibilityValueToDisplayLines(item.responsibilities),
+      );
+    }
+    return ensureRemirrorDoc(item.responsibilities as any);
+  }
+
+  return achievementsToBulletDoc(
+    deriveResponsibilityBullets({
+      responsibilities: undefined,
+      hasResponsibilitiesField: false,
+      responsibilityBullets: item.responsibilityBullets,
+      achievements: item.achievements,
+      fallbackToAchievements: true,
+    }),
+  );
 }
 
 function plainTextFromValue(value: unknown): string {
@@ -261,6 +565,29 @@ function ModalAiDiffCard({
   );
 }
 
+function CompactAppliedAiStatus({
+  onUndo,
+}: {
+  onUndo: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      aria-label="Applied. Undo"
+      className="dasti-ai-applied-status"
+    >
+      <span>Applied.</span>
+      <button
+        type="button"
+        className="dasti-button dasti-button--ghost dasti-button--sm"
+        onClick={onUndo}
+      >
+        Undo
+      </button>
+    </div>
+  );
+}
+
 type InlineAiSuggestionState = {
   actionId: InlineAiActionId;
   actionLabel: string;
@@ -273,15 +600,51 @@ type InlineAiSuggestionState = {
   to: number;
   status: "preview" | "accepted";
   undoSnapshot?: AiUndoSnapshot<RemirrorJSON>;
+  afterDoc?: RemirrorJSON;
+  replaceWholeDoc?: boolean;
 };
+
+type ExperienceAiDiffState = {
+  before: string[];
+  after: string[];
+  doc: RemirrorJSON;
+  responsibilityBullets?: string[];
+};
+
+type ExperienceAppliedUndoState = {
+  item: IExperienceItem;
+  doc: RemirrorJSON;
+};
+
+function normalizeForWholeDocumentMatch(value: string): string {
+  return value.replace(/\r/g, "\n").replace(/\s+/g, " ").trim();
+}
+
+function updateEditorDocument(args: {
+  manager: unknown;
+  view: any;
+  doc: RemirrorJSON;
+}) {
+  const nextState =
+    (args.manager as any)?.createState?.({ content: args.doc as any }) ??
+    undefined;
+
+  if (nextState && typeof args.view?.updateState === "function") {
+    args.view.updateState(nextState);
+    return true;
+  }
+
+  return false;
+}
 
 const RichEditor = forwardRef<
   RichEditorHandle,
   {
     initialContent: RemirrorJSON;
     onChangeDoc: (doc: RemirrorJSON) => void;
+    onAiActionStarted?: () => void;
   }
->(({ initialContent, onChangeDoc }, ref) => {
+>(({ initialContent, onChangeDoc, onAiActionStarted }, ref) => {
   const transformEditorSelectionAction = useAction(
     (api.functions as any).transformEditorSelection,
   );
@@ -320,8 +683,12 @@ const RichEditor = forwardRef<
   const [inlineAiSuggestion, setInlineAiSuggestion] =
     useState<InlineAiSuggestionState | null>(null);
   const selectionDebounceRef = useRef<number | null>(null);
+  const editorChangedRef = useRef(false);
 
   const flush = useCallback(() => {
+    if (!editorChangedRef.current) {
+      return;
+    }
     try {
       const view = (manager as any)?.view;
       const doc: RemirrorJSON =
@@ -333,11 +700,20 @@ const RichEditor = forwardRef<
     }
   }, [manager, onChangeDoc]);
 
-  useImperativeHandle(ref, () => ({ flush }), [flush]);
+  const dismissAiSuggestion = useCallback(() => {
+    setInlineAiSuggestion(null);
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({ flush, dismissAiSuggestion }),
+    [dismissAiSuggestion, flush],
+  );
 
   const handleChange = useCallback(
     (param: any) => {
       try {
+        editorChangedRef.current = true;
         onChange(param);
         const view = (manager as any)?.view;
         const doc: RemirrorJSON =
@@ -457,6 +833,8 @@ const RichEditor = forwardRef<
         surface: "experience_education_modal",
         actionId,
       });
+      onAiActionStarted?.();
+      setInlineAiSuggestion(null);
 
       try {
         setPendingInlineAiActionId(actionId);
@@ -495,34 +873,69 @@ const RichEditor = forwardRef<
           applyMode: normalizedResult.applyMode,
           outputMode: normalizedResult.outputMode,
           beforeText: inlineSelectionState.text,
-          afterText: normalizedResult.text,
           from: inlineSelectionState.from,
           to: inlineSelectionState.to,
         };
+        const beforeDoc = view.state.doc.toJSON() as RemirrorJSON;
+        const shapeResult = normalizeResponsibilityAiResultForSource({
+          source: beforeDoc,
+          rawText: normalizedResult.text,
+          requestedActionId: normalizedResult.actionId,
+        });
+        const wholeDocSelected =
+          normalizeForWholeDocumentMatch(inlineSelectionState.text) ===
+          normalizeForWholeDocumentMatch(
+            responsibilityValueToDisplayLines(beforeDoc).join("\n"),
+          );
+        const afterText = shapeResult.displayText || normalizedResult.text;
+        const shouldReplaceWholeDoc =
+          shapeResult.ok &&
+          (wholeDocSelected ||
+            shapeResult.shape === "list" ||
+            shapeResult.shape === "mixed");
 
-        if (normalizedResult.applyMode === "preview_required") {
+        if (
+          normalizedResult.applyMode === "preview_required" ||
+          !shapeResult.ok ||
+          !shapeResult.autoApply
+        ) {
           setInlineAiSuggestion({
             ...suggestionBase,
+            afterText,
             status: "preview",
+            afterDoc: shouldReplaceWholeDoc ? shapeResult.doc : undefined,
+            replaceWholeDoc: shouldReplaceWholeDoc,
           });
           setInlineSelectionState(null);
           return;
         }
 
-        const beforeDoc = view.state.doc.toJSON() as RemirrorJSON;
-        const tr = view.state.tr.insertText(
-          normalizedResult.text,
-          inlineSelectionState.from,
-          inlineSelectionState.to,
-        );
-        view.dispatch(tr);
+        if (shouldReplaceWholeDoc && updateEditorDocument({
+          manager,
+          view,
+          doc: shapeResult.doc,
+        })) {
+          // Document replaced through editor state.
+        } else {
+          const tr = view.state.tr.insertText(
+            afterText,
+            inlineSelectionState.from,
+            inlineSelectionState.to,
+          );
+          view.dispatch(tr);
+        }
         view.focus();
         setInlineSelectionState(null);
-        const afterDoc = ensureRemirrorDoc(view.state.doc.toJSON() as any);
+        const afterDoc = shouldReplaceWholeDoc
+          ? shapeResult.doc
+          : ensureRemirrorDoc(view.state.doc.toJSON() as any);
         setInlineAiSuggestion({
           ...suggestionBase,
+          afterText,
           status: "accepted",
           undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
+          afterDoc,
+          replaceWholeDoc: shouldReplaceWholeDoc,
         });
         onChangeDoc(afterDoc);
         recordAiInteractionEvent({
@@ -550,6 +963,7 @@ const RichEditor = forwardRef<
     [
       inlineSelectionState,
       manager,
+      onAiActionStarted,
       onChangeDoc,
       transformEditorSelectionAction,
     ],
@@ -562,14 +976,29 @@ const RichEditor = forwardRef<
     if (!view) return;
 
     const beforeDoc = view.state.doc.toJSON() as RemirrorJSON;
-    const tr = view.state.tr.insertText(
-      inlineAiSuggestion.afterText,
-      inlineAiSuggestion.from,
-      inlineAiSuggestion.to,
-    );
-    view.dispatch(tr);
+    if (
+      inlineAiSuggestion.afterDoc &&
+      inlineAiSuggestion.replaceWholeDoc &&
+      updateEditorDocument({
+        manager,
+        view,
+        doc: inlineAiSuggestion.afterDoc,
+      })
+    ) {
+      // Document replaced through editor state.
+    } else {
+      const tr = view.state.tr.insertText(
+        inlineAiSuggestion.afterText,
+        inlineAiSuggestion.from,
+        inlineAiSuggestion.to,
+      );
+      view.dispatch(tr);
+    }
     view.focus();
-    const afterDoc = ensureRemirrorDoc(view.state.doc.toJSON() as any);
+    const afterDoc =
+      inlineAiSuggestion.afterDoc && inlineAiSuggestion.replaceWholeDoc
+        ? inlineAiSuggestion.afterDoc
+        : ensureRemirrorDoc(view.state.doc.toJSON() as any);
     setInlineAiSuggestion({
       ...inlineAiSuggestion,
       status: "accepted",
@@ -637,7 +1066,9 @@ const RichEditor = forwardRef<
           onRunAction={handleRunInlineAiAction}
         />
       ) : null}
-      {inlineAiSuggestion ? (
+      {inlineAiSuggestion?.status === "accepted" ? (
+        <CompactAppliedAiStatus onUndo={handleUndoInlineAiSuggestion} />
+      ) : inlineAiSuggestion ? (
         <AiSuggestionCard
           compact
           actionLabel={inlineAiSuggestion.actionLabel}
@@ -656,8 +1087,8 @@ const RichEditor = forwardRef<
       >
         <div
           className="rich-content"
-          onPointerUp={scheduleSelectionCheck}
-          onKeyUp={scheduleSelectionCheck}
+          onPointerUp={() => scheduleSelectionCheck()}
+          onKeyUp={() => scheduleSelectionCheck()}
         >
           <EditorToolbar position="top" />
           <EditorComponent />
@@ -788,7 +1219,10 @@ export function ExperienceModal({
     string | null
   >(null);
   const [experienceAiDiffs, setExperienceAiDiffs] = useState<
-    Record<string, { before: string[]; after: string[] }>
+    Record<string, ExperienceAiDiffState>
+  >({});
+  const [experienceAppliedUndo, setExperienceAppliedUndo] = useState<
+    Record<string, ExperienceAppliedUndoState>
   >({});
   const [editorRevisionMap, setEditorRevisionMap] = useState<
     Record<string, number>
@@ -808,6 +1242,7 @@ export function ExperienceModal({
         : [];
       setLocal(copied);
       setExperienceAiDiffs({});
+      setExperienceAppliedUndo({});
       setExperienceAiLoadingId(null);
       setEditorRevisionMap({});
       localRef.current = copied;
@@ -815,14 +1250,7 @@ export function ExperienceModal({
       responsibilitiesDocRef.current = Object.fromEntries(
         copied.map((it) => [
           String(it.id),
-          ensureRemirrorDoc(
-            typeof it.responsibilities !== "undefined" &&
-              it.responsibilities !== null
-              ? (it.responsibilities as any)
-              : achievementsToBulletDoc(
-                  Array.isArray(it.achievements) ? it.achievements : [],
-                ),
-          ),
+          resolveResponsibilitiesEditorDoc(it),
         ]),
       );
     }
@@ -1018,10 +1446,27 @@ export function ExperienceModal({
     });
   }
 
+  function getResponsibilityDisplayLines(
+    item: IExperienceItem,
+    doc: RemirrorJSON | undefined,
+  ): string[] {
+    const lines = responsibilityValueToDisplayLines(
+      doc ?? item.responsibilities,
+    );
+    if (lines.length > 0) {
+      return lines;
+    }
+    return getResponsibilityLines(item, doc);
+  }
+
   function buildExperienceAiSource(
     item: IExperienceItem,
     doc: RemirrorJSON | undefined,
   ): string {
+    const responsibilitySource = doc ?? item.responsibilities;
+    const responsibilityProjection =
+      projectResponsibilitiesForWorkshop(responsibilitySource);
+    const responsibilityBlocks = responsibilityProjection.rich.blocks;
     const lines = [
       item.position ? `Role: ${item.position}` : null,
       item.company ? `Company: ${item.company}` : null,
@@ -1030,9 +1475,27 @@ export function ExperienceModal({
         ? `Description: ${plainTextFromValue(item.description)}`
         : null,
     ].filter(Boolean) as string[];
-    const bullets = getResponsibilityLines(item, doc);
-    if (bullets.length > 0) {
-      lines.push(`Responsibilities:\n- ${bullets.join("\n- ")}`);
+
+    if (responsibilityBlocks.length > 0) {
+      const formattedBlocks = responsibilityBlocks
+        .map((block) => {
+          if (block.kind === "paragraph") {
+            return block.runs.map((run) => run.text).join("").trim();
+          }
+          const bullets = block.items
+            .map((entry) => entry.runs.map((run) => run.text).join("").trim())
+            .filter(Boolean);
+          return bullets.length > 0 ? `- ${bullets.join("\n- ")}` : "";
+        })
+        .filter(Boolean);
+      if (formattedBlocks.length > 0) {
+        lines.push(`Responsibilities:\n${formattedBlocks.join("\n\n")}`);
+      }
+    } else {
+      const responsibilityLines = getResponsibilityDisplayLines(item, doc);
+      if (responsibilityLines.length > 0) {
+        lines.push(`Responsibilities:\n- ${responsibilityLines.join("\n- ")}`);
+      }
     }
     return lines.join("\n");
   }
@@ -1052,31 +1515,71 @@ export function ExperienceModal({
 
     try {
       setExperienceAiLoadingId(rowId);
+      editorRefs.current[idx]?.dismissAiSuggestion();
+      setExperienceAiDiffs((current) => {
+        if (!current[rowId]) return current;
+        const next = { ...current };
+        delete next[rowId];
+        return next;
+      });
       const result = await runCvSectionAiAction({
         action: "improve_experience_responsibilities",
         existingText: buildExperienceAiSource(
           row,
           responsibilitiesDocRef.current[rowId],
         ),
+        outputShape: getResponsibilitySourceShape(
+          responsibilitiesDocRef.current[rowId] ??
+            resolveResponsibilitiesEditorDoc(row),
+        ),
       });
 
-      if (!result || result.kind !== "list" || !Array.isArray(result.items)) {
+      if (!result || (result.kind !== "list" && result.kind !== "text")) {
+        showToast("AI response needs review", {
+          variant: "warning",
+          description:
+            "No safe responsibility suggestion was returned. Try the action again or edit the responsibility directly.",
+        });
         return;
       }
 
-      const nextLines = result.items
-        .map((item: unknown) => String(item ?? "").trim())
-        .filter(Boolean);
-      if (nextLines.length === 0) return;
+      const sourceDoc =
+        responsibilitiesDocRef.current[rowId] ??
+        resolveResponsibilitiesEditorDoc(row);
+      const normalized = normalizeResponsibilityAiResultForSource({
+        source: sourceDoc,
+        rawItems: result.kind === "list" ? result.items : undefined,
+        rawText: result.kind === "text" ? result.text : undefined,
+        requestedActionId: "improve_experience_responsibilities",
+      });
+      if (!normalized.ok) {
+        showToast("AI response needs review", {
+          variant: "warning",
+          description:
+            "The responsibility suggestion was not applied because it could corrupt the current structure.",
+        });
+        return;
+      }
+      const nextLines = responsibilityValueToDisplayLines(normalized.doc);
+      if (nextLines.length === 0) {
+        showToast("AI response needs review", {
+          variant: "warning",
+          description:
+            "No safe responsibility suggestion was returned. Try the action again or edit the responsibility directly.",
+        });
+        return;
+      }
 
       setExperienceAiDiffs((current) => ({
         ...current,
         [rowId]: {
-          before: getResponsibilityLines(
+          before: getResponsibilityDisplayLines(
             row,
             responsibilitiesDocRef.current[rowId],
           ),
           after: nextLines,
+          doc: normalized.doc,
+          responsibilityBullets: normalized.responsibilityBullets,
         },
       }));
     } catch (error) {
@@ -1100,7 +1603,14 @@ export function ExperienceModal({
   function handleAcceptResponsibilitiesDiff(rowId: string) {
     const diff = experienceAiDiffs[rowId];
     if (!diff) return;
-    const nextDoc = achievementsToBulletDoc(diff.after);
+    const previousItem = localRef.current.find(
+      (item) => String(item.id ?? "") === rowId,
+    );
+    const previousDoc = previousItem
+      ? responsibilitiesDocRef.current[rowId] ??
+        resolveResponsibilitiesEditorDoc(previousItem)
+      : undefined;
+    const nextDoc = diff.doc;
     responsibilitiesDocRef.current[rowId] = nextDoc;
     setEditorRevisionMap((current) => ({
       ...current,
@@ -1112,7 +1622,11 @@ export function ExperienceModal({
           ? {
               ...item,
               responsibilities: nextDoc,
-              responsibilityBullets: diff.after,
+              responsibilityBullets:
+                diff.responsibilityBullets &&
+                diff.responsibilityBullets.length > 0
+                  ? diff.responsibilityBullets
+                  : undefined,
               achievements: [],
             }
           : item,
@@ -1120,7 +1634,39 @@ export function ExperienceModal({
       localRef.current = next;
       return next;
     });
+    if (previousItem) {
+      setExperienceAppliedUndo((current) => ({
+        ...current,
+        [rowId]: {
+          item: { ...previousItem },
+          doc: previousDoc ?? resolveResponsibilitiesEditorDoc(previousItem),
+        },
+      }));
+    }
     setExperienceAiDiffs((current) => {
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+  }
+
+  function handleUndoResponsibilitiesDiff(rowId: string) {
+    const undo = experienceAppliedUndo[rowId];
+    if (!undo) return;
+
+    responsibilitiesDocRef.current[rowId] = undo.doc;
+    setEditorRevisionMap((current) => ({
+      ...current,
+      [rowId]: (current[rowId] ?? 0) + 1,
+    }));
+    setLocal((prev) => {
+      const next = prev.map((item) =>
+        String(item.id ?? "") === rowId ? { ...undo.item } : item,
+      );
+      localRef.current = next;
+      return next;
+    });
+    setExperienceAppliedUndo((current) => {
       const next = { ...current };
       delete next[rowId];
       return next;
@@ -1168,14 +1714,7 @@ export function ExperienceModal({
       responsibilitiesDocRef.current = Object.fromEntries(
         mapped.map((it) => [
           String(it.id),
-          ensureRemirrorDoc(
-            typeof it.responsibilities !== "undefined" &&
-              it.responsibilities !== null
-              ? (it.responsibilities as any)
-              : achievementsToBulletDoc(
-                  Array.isArray(it.achievements) ? it.achievements : [],
-                ),
-          ),
+          resolveResponsibilitiesEditorDoc(it),
         ]),
       );
     } catch {
@@ -1512,6 +2051,16 @@ export function ExperienceModal({
                       setField(idx, "responsibilities", doc);
                       setField(idx, "achievements", []);
                     }}
+                    onAiActionStarted={() => {
+                      const rowId = String(row.id ?? "");
+                      if (!rowId) return;
+                      setExperienceAiDiffs((current) => {
+                        if (!current[rowId]) return current;
+                        const next = { ...current };
+                        delete next[rowId];
+                        return next;
+                      });
+                    }}
                   />
                   {experienceAiDiffs[String(row.id ?? "")] ? (
                     <ModalAiDiffCard
@@ -1527,6 +2076,13 @@ export function ExperienceModal({
                           delete next[String(row.id ?? "")];
                           return next;
                         })
+                      }
+                    />
+                  ) : null}
+                  {experienceAppliedUndo[String(row.id ?? "")] ? (
+                    <CompactAppliedAiStatus
+                      onUndo={() =>
+                        handleUndoResponsibilitiesDiff(String(row.id ?? ""))
                       }
                     />
                   ) : null}

@@ -22,6 +22,19 @@ function isRemirrorLike(value: unknown): value is RemirrorJSON {
   );
 }
 
+function isListNode(node: RemirrorJSON): boolean {
+  return (
+    node.type === "bulletList" ||
+    node.type === "orderedList" ||
+    node.type === "bullet_list" ||
+    node.type === "ordered_list"
+  );
+}
+
+function isListItemNode(node: RemirrorJSON): boolean {
+  return node.type === "listItem" || node.type === "list_item";
+}
+
 function normalizeLine(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -36,9 +49,19 @@ function normalizeMultilineText(value: string): string {
     .trim();
 }
 
-function parseRemirrorString(value: string): string | RemirrorJSON {
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map(normalizeLine).filter(Boolean)
+    : [];
+}
+
+function parseRemirrorString(value: string): string | RemirrorJSON | string[] {
   try {
     const parsed = JSON.parse(value);
+    const parsedArray = normalizeStringArray(parsed);
+    if (parsedArray.length > 0) {
+      return parsedArray;
+    }
     return isRemirrorLike(parsed) ? parsed : value;
   } catch {
     return value;
@@ -163,7 +186,7 @@ function collectInlineRuns(
 
   if (
     options?.excludeLists === true &&
-    (node.type === "bulletList" || node.type === "orderedList")
+    isListNode(node)
   ) {
     return;
   }
@@ -303,7 +326,7 @@ function bulletItemFromListItem(
   const runs: WorkshopResponsibilityTextRun[] = [];
 
   (node.content ?? []).forEach((child) => {
-    if (child.type === "bulletList" || child.type === "orderedList") {
+    if (isListNode(child)) {
       return;
     }
     collectInlineRuns(child, runs, { excludeLists: true });
@@ -319,20 +342,19 @@ function projectRemirrorResponsibilities(
   const blocks: WorkshopResponsibilityRichBlock[] = [];
 
   const visitNode = (node: RemirrorJSON) => {
-    if (node.type === "bulletList" || node.type === "orderedList") {
+    if (isListNode(node)) {
       const items: WorkshopResponsibilityBulletListBlock["items"] = [];
       const nestedLists: RemirrorJSON[] = [];
 
       (node.content ?? []).forEach((child) => {
-        if (child.type === "listItem") {
+        if (isListItemNode(child)) {
           const item = bulletItemFromListItem(child);
           if (item) {
             items.push(item);
           }
           (child.content ?? []).forEach((grandchild) => {
             if (
-              grandchild.type === "bulletList" ||
-              grandchild.type === "orderedList"
+              isListNode(grandchild)
             ) {
               nestedLists.push(grandchild);
             }
@@ -370,7 +392,7 @@ function projectRemirrorResponsibilities(
       return;
     }
 
-    if (node.type === "listItem") {
+    if (isListItemNode(node)) {
       const item = bulletItemFromListItem(node);
       if (item) {
         blocks.push({
@@ -420,16 +442,41 @@ export function projectResponsibilitiesForWorkshop(
 }
 
 export function responsibilityValueToPlainText(value: unknown): string {
+  const lines = responsibilityValueToDisplayLines(value);
+  if (lines.length > 0) {
+    return lines.join("\n");
+  }
+
   const source: string | RemirrorJSON | null | undefined =
     typeof value === "string" || value == null || isRemirrorLike(value)
       ? value
       : undefined;
-  const text = remirrorJsonToString(source);
-  return text
+  return remirrorJsonToString(source)
     .replace(/\r/g, "\n")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+export function responsibilityValueToDisplayLines(value: unknown): string[] {
+  const projection = projectResponsibilitiesForWorkshop(value);
+  const lines: string[] = [];
+
+  projection.rich.blocks.forEach((block) => {
+    if (block.kind === "paragraph") {
+      const text = normalizeMultilineText(runsToPlainText(block.runs));
+      if (text) {
+        pushUnique(lines, text);
+      }
+      return;
+    }
+
+    bulletListBlockToPlainBullets(block).forEach((bullet) => {
+      pushUnique(lines, bullet);
+    });
+  });
+
+  return lines;
 }
 
 export function splitResponsibilitiesIntoBullets(
@@ -485,11 +532,7 @@ export function splitResponsibilitiesIntoBullets(
   return bullets;
 }
 
-function normalizeCachedBullets(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.map(normalizeLine).filter(Boolean)
-    : [];
-}
+const normalizeCachedBullets = normalizeStringArray;
 
 function normalizeAchievementBullets(value: unknown): string[] {
   return Array.isArray(value)

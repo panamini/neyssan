@@ -594,7 +594,25 @@ describe("SectionEditor CV AI flows", () => {
           position: "Senior Designer",
           startDate: "2023-01-01",
           endDate: null,
-          responsibilities: ensureRemirrorDoc("Old bullet"),
+          responsibilities: {
+            type: "doc",
+            content: [
+              {
+                type: "bulletList",
+                content: [
+                  {
+                    type: "listItem",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "Old bullet" }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
           responsibilityBullets: ["Old bullet"],
           achievements: [],
         },
@@ -649,6 +667,223 @@ describe("SectionEditor CV AI flows", () => {
         }),
       ]),
     );
+  });
+
+  it("uses paragraph responsibilities for direct experience wand source and refreshes source after accept", async () => {
+    mockRunCvSectionAiAction
+      .mockResolvedValueOnce({
+        kind: "list",
+        items: ["Reduced incident response times."],
+      })
+      .mockResolvedValueOnce({
+        kind: "list",
+        items: ["Reduced incident response times further."],
+      });
+
+    const experienceSection: CvSection = {
+      id: "exp-sec-paragraph",
+      title: "Experience",
+      type: "experience",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "exp-paragraph",
+          company: "Acme",
+          position: "Security Officer",
+          startDate: "2023-01-01",
+          endDate: null,
+          responsibilities: ensureRemirrorDoc(
+            "Protected VIP visitors during overnight events.",
+          ),
+          responsibilityBullets: [],
+          achievements: [],
+        },
+      ],
+    };
+
+    const currentCv = buildCvDocument([experienceSection]);
+    renderSectionEditor(experienceSection, { currentCv });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Experience AI actions for Security Officer",
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Improve bullet points" }),
+    );
+
+    await screen.findByText("Security Officer suggestion");
+    expect(mockRunCvSectionAiAction).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        action: "improve_experience_responsibilities",
+        outputShape: "paragraph",
+        existingText: expect.stringContaining(
+          "Protected VIP visitors during overnight events.",
+        ),
+      }),
+    );
+    expect(mockRunCvSectionAiAction.mock.calls[0]?.[0]?.existingText).not.toContain(
+      "- Protected VIP visitors during overnight events.",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+
+    await waitFor(() => {
+      expect(mockReorderSections).toHaveBeenCalledTimes(1);
+    });
+    const firstUpdatedSection = mockReorderSections.mock.calls[0]?.[0]?.find(
+      (candidate: CvSection) => candidate.id === "exp-sec-paragraph",
+    ) as CvSection;
+    const firstUpdatedItem = firstUpdatedSection.structuredContent?.[0] as any;
+    expect(firstUpdatedItem.responsibilityBullets).toBeUndefined();
+    expect(firstUpdatedItem.responsibilities.content.map((node: any) => node.type)).toEqual([
+      "paragraph",
+    ]);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Experience AI actions for Security Officer",
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Improve bullet points" }),
+    );
+
+    await waitFor(() => {
+      expect(mockRunCvSectionAiAction).toHaveBeenCalledTimes(2);
+    });
+    expect(mockRunCvSectionAiAction).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        action: "improve_experience_responsibilities",
+        outputShape: "paragraph",
+        existingText: expect.stringContaining(
+          "Reduced incident response times.",
+        ),
+      }),
+    );
+  });
+
+  it("renders list-backed responsibilities as semantic list items in the main section", () => {
+    const experienceSection: CvSection = {
+      id: "exp-list-preview",
+      title: "Experience",
+      type: "experience",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "exp-list-preview-1",
+          company: "Acme",
+          position: "Security Officer",
+          startDate: "2023-01-01",
+          endDate: null,
+          responsibilities: {
+            type: "doc",
+            content: [
+              {
+                type: "bulletList",
+                content: [
+                  {
+                    type: "listItem",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "Patrolled entry points." }],
+                      },
+                    ],
+                  },
+                  {
+                    type: "listItem",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "Logged incidents separately." }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          responsibilityBullets: [],
+          achievements: [],
+        },
+      ],
+    };
+
+    renderSectionEditor(experienceSection);
+
+    const firstItem = screen.getByText("Patrolled entry points.");
+    const list = firstItem.closest("ul");
+    expect(list).not.toBeNull();
+    expect(list).toHaveClass("cv-entry-bullets");
+    expect(within(list as HTMLElement).getAllByRole("listitem")).toHaveLength(2);
+    expect(firstItem.closest("p")).toBeNull();
+  });
+
+  it("renders mixed paragraph and list responsibilities without flattening the preview", () => {
+    const experienceSection: CvSection = {
+      id: "exp-mixed-preview",
+      title: "Experience",
+      type: "experience",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "exp-mixed-preview-1",
+          company: "Acme",
+          position: "Operations Lead",
+          startDate: "2023-01-01",
+          endDate: null,
+          responsibilities: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "Led operations across the site." }],
+              },
+              {
+                type: "bulletList",
+                content: [
+                  {
+                    type: "listItem",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "Reduced incident volume." }],
+                      },
+                    ],
+                  },
+                  {
+                    type: "listItem",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "Standardized handoffs." }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          responsibilityBullets: [],
+          achievements: [],
+        },
+      ],
+    };
+
+    renderSectionEditor(experienceSection);
+
+    const paragraph = screen.getByText("Led operations across the site.");
+    expect(paragraph.tagName).toBe("P");
+    expect(paragraph).toHaveClass("cv-entry-responsibility-paragraph");
+
+    const firstBullet = screen.getByText("Reduced incident volume.");
+    const list = firstBullet.closest("ul");
+    expect(list).not.toBeNull();
+    expect(list).toHaveClass("cv-entry-bullets");
+    expect(within(list as HTMLElement).getAllByRole("listitem")).toHaveLength(2);
+    expect(firstBullet.closest("p")).toBeNull();
   });
 
   it("shows fresh-cv placeholder guidance for empty experience sections", () => {
