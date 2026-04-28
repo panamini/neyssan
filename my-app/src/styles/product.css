@@ -4742,9 +4742,10 @@
 }
 
 .dasti-proposal-sheet__body--editable::selection,
+.dasti-proposal-document ::selection,
 .ProseMirror ::selection {
   background: var(--selection-highlight-bg);
-  color: var(--selection-highlight-fg);
+  color: currentColor;
 }
 
 .dasti-proposal-sheet__body::before,
