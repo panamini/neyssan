@@ -5,6 +5,11 @@ import {
   type AiApplyMode,
   type AiOutputMode,
 } from "./editorAiRulebook";
+import {
+  formatEditorAiJobContextForPrompt,
+  requireSufficientEditorAiJobContext,
+  type EditorAiJobContext,
+} from "./editorAiJobContext";
 
 type HelperKind = "editor" | "styleRouting";
 
@@ -239,13 +244,28 @@ export async function runEditorSelectionTransform(args: {
   mode: string;
   instruction: string;
   selectedText: string;
+  jobContext?: EditorAiJobContext | null;
   runTextPrompt?: typeof runEditorAiTextPrompt;
 }): Promise<EditorAiResult> {
   const actionDefinition = requireEditorAiActionDefinition(args.mode);
   const instruction = args.instruction.trim() || actionDefinition.instruction;
+  const jobContext = actionDefinition.requiresJobContext
+    ? requireSufficientEditorAiJobContext(args.jobContext)
+    : null;
   const prompt = [
     `Transformation action: ${actionDefinition.id}`,
     `Instruction: ${instruction}`,
+    ...(jobContext
+      ? [
+          "",
+          "Compact job context:",
+          formatEditorAiJobContextForPrompt(jobContext),
+          "",
+          "Tailor tone, emphasis, and wording to this job context only.",
+          "Use the selected text as the only source of the user's factual evidence.",
+          "Do not invent licenses, certifications, employers, degrees, metrics, seniority, tools, or experience.",
+        ]
+      : []),
     "Rewrite the selected text only.",
     "Preserve the original language unless the instruction explicitly changes it.",
     "Return only the replacement text with no quotes, no markdown, and no commentary.",

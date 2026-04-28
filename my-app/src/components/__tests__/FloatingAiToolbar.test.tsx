@@ -87,6 +87,28 @@ describe("FloatingAiToolbar", () => {
     expect(screen.queryByRole("button", { name: "Clarify" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Strengthen" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Expand" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Tailor" })).toBeNull();
+  });
+
+  it("adds the contextual tailor action only when job context actions are enabled", async () => {
+    const onRunAction = vi.fn();
+
+    render(
+      <FloatingAiToolbar
+        anchor={{ left: 120, top: 80 }}
+        open
+        includeJobContextActions
+        onClose={vi.fn()}
+        onRunAction={onRunAction}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Tailor" }));
+
+    expect(onRunAction).toHaveBeenCalledWith(
+      "tailor_to_job",
+      expect.stringContaining("Tailor this selection"),
+    );
   });
 
   it("sends the canonical fix action id", async () => {
