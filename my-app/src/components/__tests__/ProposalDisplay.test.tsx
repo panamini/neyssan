@@ -9,8 +9,65 @@ import {
 } from "@testing-library/react";
 import ProposalDisplay from "../ProposalDisplay";
 
+const { mockTransformEditorSelection } = vi.hoisted(() => ({
+  mockTransformEditorSelection: vi.fn(),
+}));
+
+vi.mock("convex/react", () => ({
+  useAction: () => mockTransformEditorSelection,
+}));
+
+function renderEditableProposal(initialContent = "This is rough proposal copy.") {
+  function Harness() {
+    const [content, setContent] = React.useState(initialContent);
+
+    return (
+      <ProposalDisplay
+        proposalContent={content}
+        loading={false}
+        error={null}
+        mode="edit"
+        onContentChange={setContent}
+      />
+    );
+  }
+
+  render(<Harness />);
+  return screen.getByPlaceholderText("Content appears here") as HTMLTextAreaElement;
+}
+
+async function selectTextareaText(textarea: HTMLTextAreaElement, text: string) {
+  const start = textarea.value.indexOf(text);
+  expect(start).toBeGreaterThanOrEqual(0);
+  textarea.focus();
+  textarea.setSelectionRange(start, start + text.length);
+  fireEvent.select(textarea);
+
+  await waitFor(() => {
+    expect(
+      getToolbarButton("Rewrite"),
+    ).toBeInTheDocument();
+  });
+}
+
+function getToolbarButton(label: string): HTMLButtonElement {
+  const match = screen
+    .getAllByText(label)
+    .map((node) => node.closest("button"))
+    .find((button): button is HTMLButtonElement =>
+      Boolean(button?.classList.contains("dasti-inline-ai-toolbar__action")),
+    );
+
+  if (!match) {
+    throw new Error(`Missing toolbar button: ${label}`);
+  }
+
+  return match;
+}
+
 describe("ProposalDisplay", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
@@ -30,6 +87,141 @@ describe("ProposalDisplay", () => {
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
       configurable: true,
       value: vi.fn(),
+    });
+  });
+
+  it("previews rewrite suggestions without mutating the proposal before accept", async () => {
+    mockTransformEditorSelection.mockResolvedValue({
+      kind: "text",
+      actionId: "rewrite",
+      text: "polished proposal copy",
+      applyMode: "preview_required",
+      outputMode: "single_text",
+      variants: [],
+    });
+    const textarea = renderEditableProposal("This is rough proposal copy.");
+
+    await selectTextareaText(textarea, "rough proposal copy");
+    fireEvent.click(getToolbarButton("Rewrite"));
+
+    await screen.findByRole("region", { name: "Rewrite suggestion" });
+    expect(textarea).toHaveValue("This is rough proposal copy.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("This is polished proposal copy.");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("This is rough proposal copy.");
+    });
+  });
+
+  it("previews custom Ask AI suggestions without auto-applying", async () => {
+    mockTransformEditorSelection.mockResolvedValue({
+      kind: "text",
+      actionId: "custom",
+      text: "custom proposal copy",
+      applyMode: "preview_required",
+      outputMode: "single_text",
+      variants: [],
+    });
+    const textarea = renderEditableProposal("This is rough proposal copy.");
+
+    await selectTextareaText(textarea, "rough proposal copy");
+    fireEvent.click(getToolbarButton("Ask"));
+    fireEvent.change(screen.getByLabelText("Ask AI"), {
+      target: { value: "Make it warmer" },
+    });
+    const sendButton = document.querySelector(
+      'button[aria-label="Send request"]',
+    ) as HTMLButtonElement | null;
+    expect(sendButton).not.toBeNull();
+    fireEvent.click(sendButton as HTMLButtonElement);
+
+    await screen.findByRole("region", { name: "Ask suggestion" });
+    expect(textarea).toHaveValue("This is rough proposal copy.");
+  });
+
+  it("discards preview-required suggestions without applying", async () => {
+    mockTransformEditorSelection.mockResolvedValue({
+      kind: "text",
+      actionId: "rewrite",
+      text: "discarded proposal copy",
+      applyMode: "preview_required",
+      outputMode: "single_text",
+      variants: [],
+    });
+    const textarea = renderEditableProposal("This is rough proposal copy.");
+
+    await selectTextareaText(textarea, "rough proposal copy");
+    fireEvent.click(getToolbarButton("Rewrite"));
+
+    await screen.findByRole("region", { name: "Rewrite suggestion" });
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+    expect(textarea).toHaveValue("This is rough proposal copy.");
+    expect(
+      screen.queryByRole("region", { name: "Rewrite suggestion" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("applies fix grammar inline and exposes undo", async () => {
+    mockTransformEditorSelection.mockResolvedValue({
+      kind: "text",
+      actionId: "fix_grammar",
+      text: "clean proposal copy",
+      applyMode: "inline_replace_with_undo",
+      outputMode: "single_text",
+      variants: [],
+    });
+    const textarea = renderEditableProposal("This is rough proposal copy.");
+
+    await selectTextareaText(textarea, "rough proposal copy");
+    fireEvent.click(getToolbarButton("Fix"));
+
+    await screen.findByRole("region", { name: "Fix suggestion" });
+    expect(screen.getByText("Applied")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("This is clean proposal copy.");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("This is rough proposal copy.");
+    });
+  });
+
+  it("applies shorten inline and exposes undo", async () => {
+    mockTransformEditorSelection.mockResolvedValue({
+      kind: "text",
+      actionId: "shorten",
+      text: "short copy",
+      applyMode: "inline_replace_with_undo",
+      outputMode: "single_text",
+      variants: [],
+    });
+    const textarea = renderEditableProposal("This is rough proposal copy.");
+
+    await selectTextareaText(textarea, "rough proposal copy");
+    fireEvent.click(getToolbarButton("Shorten"));
+
+    await screen.findByRole("region", { name: "Shorten suggestion" });
+    expect(screen.getByText("Applied")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("This is short copy.");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("This is rough proposal copy.");
     });
   });
 
