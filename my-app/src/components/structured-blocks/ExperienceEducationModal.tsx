@@ -42,6 +42,11 @@ import {
   restoreAiUndoSnapshot,
   type AiUndoSnapshot,
 } from "../../lib/ai/applyAiSuggestion";
+import {
+  createAiInteractionId,
+  recordAiInteractionEvent,
+} from "../../lib/ai/aiInteractionTelemetry";
+import type { AiApplyMode, AiOutputMode } from "../../lib/ai/interactionRulebook";
 import { deriveResponsibilityBullets } from "../../lib/resumeResponsibilityAuthority";
 import {
   getDomSelectionState,
@@ -259,6 +264,9 @@ function ModalAiDiffCard({
 type InlineAiSuggestionState = {
   actionId: InlineAiActionId;
   actionLabel: string;
+  interactionId: string;
+  applyMode: AiApplyMode;
+  outputMode: AiOutputMode;
   beforeText: string;
   afterText: string;
   from: number;
@@ -442,6 +450,14 @@ const RichEditor = forwardRef<
       const view = (manager as any)?.view;
       if (!view) return;
 
+      const interactionId = createAiInteractionId();
+      recordAiInteractionEvent({
+        name: "ai_started",
+        interactionId,
+        surface: "experience_education_modal",
+        actionId,
+      });
+
       try {
         setPendingInlineAiActionId(actionId);
         setIsApplyingInlineAi(true);
@@ -453,12 +469,31 @@ const RichEditor = forwardRef<
         const normalizedResult = normalizeEditorAiTextResult(result, actionId);
 
         if (!normalizedResult) {
+          recordAiInteractionEvent({
+            name: "ai_failed",
+            interactionId,
+            surface: "experience_education_modal",
+            actionId,
+            errorKind: "empty_result",
+          });
           return;
         }
+
+        recordAiInteractionEvent({
+          name: "ai_completed",
+          interactionId,
+          surface: "experience_education_modal",
+          actionId: normalizedResult.actionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
+        });
 
         const suggestionBase = {
           actionId: normalizedResult.actionId,
           actionLabel: normalizedResult.actionLabel,
+          interactionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
           beforeText: inlineSelectionState.text,
           afterText: normalizedResult.text,
           from: inlineSelectionState.from,
@@ -490,6 +525,23 @@ const RichEditor = forwardRef<
           undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
         });
         onChangeDoc(afterDoc);
+        recordAiInteractionEvent({
+          name: "ai_accepted",
+          interactionId,
+          surface: "experience_education_modal",
+          actionId: normalizedResult.actionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
+        });
+      } catch (error) {
+        recordAiInteractionEvent({
+          name: "ai_failed",
+          interactionId,
+          surface: "experience_education_modal",
+          actionId,
+          errorKind: "request_failed",
+        });
+        throw error;
       } finally {
         setIsApplyingInlineAi(false);
         setPendingInlineAiActionId(null);
@@ -524,6 +576,14 @@ const RichEditor = forwardRef<
       undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
     });
     onChangeDoc(afterDoc);
+    recordAiInteractionEvent({
+      name: "ai_accepted",
+      interactionId: inlineAiSuggestion.interactionId,
+      surface: "experience_education_modal",
+      actionId: inlineAiSuggestion.actionId,
+      applyMode: inlineAiSuggestion.applyMode,
+      outputMode: inlineAiSuggestion.outputMode,
+    });
   }, [inlineAiSuggestion, manager, onChangeDoc]);
 
   const handleUndoInlineAiSuggestion = useCallback(() => {
@@ -541,8 +601,29 @@ const RichEditor = forwardRef<
     }
 
     onChangeDoc(ensureRemirrorDoc(restoredDoc as any));
+    recordAiInteractionEvent({
+      name: "ai_undone",
+      interactionId: inlineAiSuggestion.interactionId,
+      surface: "experience_education_modal",
+      actionId: inlineAiSuggestion.actionId,
+      applyMode: inlineAiSuggestion.applyMode,
+      outputMode: inlineAiSuggestion.outputMode,
+    });
     setInlineAiSuggestion(null);
   }, [inlineAiSuggestion, manager, onChangeDoc]);
+
+  const handleDiscardInlineAiSuggestion = useCallback(() => {
+    if (!inlineAiSuggestion) return;
+    recordAiInteractionEvent({
+      name: "ai_discarded",
+      interactionId: inlineAiSuggestion.interactionId,
+      surface: "experience_education_modal",
+      actionId: inlineAiSuggestion.actionId,
+      applyMode: inlineAiSuggestion.applyMode,
+      outputMode: inlineAiSuggestion.outputMode,
+    });
+    setInlineAiSuggestion(null);
+  }, [inlineAiSuggestion]);
 
   return (
     <div className="dasti-rich dasti-rich--cv-reading-measure">
@@ -564,7 +645,7 @@ const RichEditor = forwardRef<
           afterText={inlineAiSuggestion.afterText}
           status={inlineAiSuggestion.status}
           onAccept={handleAcceptInlineAiSuggestion}
-          onDiscard={() => setInlineAiSuggestion(null)}
+          onDiscard={handleDiscardInlineAiSuggestion}
           onUndo={handleUndoInlineAiSuggestion}
         />
       ) : null}
