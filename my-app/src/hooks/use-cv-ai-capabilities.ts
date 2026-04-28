@@ -22,6 +22,7 @@ const LEGACY_RUNTIME_ACTION_IDS = [
   "rewrite_summary_from_profile",
   "improve_summary_text",
   "generate_skills_from_experience",
+  "improve_experience_responsibilities",
   "improve_experience_bullets",
 ] as const satisfies readonly CvAiActionId[];
 
