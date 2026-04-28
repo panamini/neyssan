@@ -68,6 +68,13 @@ import { ProjectsModal } from "./structured-blocks/ProjectsModal";
 import FloatingAiToolbar, {
   type InlineAiActionId,
 } from "./FloatingAiToolbar";
+import AiSuggestionCard from "./ai/AiSuggestionCard";
+import {
+  createAiUndoSnapshot,
+  normalizeEditorAiTextResult,
+  restoreAiUndoSnapshot,
+  type AiUndoSnapshot,
+} from "../lib/ai/applyAiSuggestion";
 
 import { formatRangeFromItem } from "../lib/date-utils";
 import {
@@ -132,6 +139,17 @@ type InlineEditorSelectionState = {
   anchor: { left: number; top: number; bottom: number };
   from: number;
   to: number;
+};
+
+type InlineAiSuggestionState = {
+  actionId: InlineAiActionId;
+  actionLabel: string;
+  beforeText: string;
+  afterText: string;
+  from: number;
+  to: number;
+  status: "preview" | "accepted";
+  undoSnapshot?: AiUndoSnapshot<RemirrorJSON>;
 };
 
 type SectionAiMenuState =
@@ -543,74 +561,17 @@ function CvAiDiffCard({
   isApplying?: boolean;
 }) {
   return (
-    <div
-      style={{
-        margin: "0 var(--s3) var(--s3)",
-        padding: "var(--s3)",
-        borderRadius: "var(--radius-card)",
-        border: "1px solid var(--color-border)",
-        background: "var(--sfr)",
-        display: "grid",
-        gap: "var(--s2)",
-      }}
-    >
-      <p
-        style={{
-          margin: 0,
-          fontSize: "var(--tx)",
-          fontWeight: 600,
-          color: "var(--ti)",
-        }}
-      >
-        {label}
-      </p>
-      <div
-        style={{
-          margin: 0,
-          whiteSpace: "pre-wrap",
-          fontSize: "var(--tx)",
-          lineHeight: "var(--lx)",
-          color: "var(--tm2)",
-          textDecoration: "line-through",
-        }}
-      >
-        {formatDiffValue(before) || "No existing content."}
-      </div>
-      <div
-        style={{
-          margin: 0,
-          whiteSpace: "pre-wrap",
-          fontSize: "var(--tx)",
-          lineHeight: "var(--lx)",
-          color: "var(--ti)",
-        }}
-      >
-        {formatDiffValue(after)}
-      </div>
-      <div
-        style={{
-          display: "flex",
-          gap: "var(--s2)",
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          type="button"
-          className="dasti-button dasti-button--accent dasti-button--sm"
-          onClick={onAccept}
-          disabled={isApplying}
-        >
-          Accept
-        </button>
-        <button
-          type="button"
-          className="dasti-button dasti-button--secondary dasti-button--sm"
-          onClick={onDiscard}
-          disabled={isApplying}
-        >
-          Discard
-        </button>
-      </div>
+    <div style={{ margin: "0 var(--s3) var(--s3)" }}>
+      <AiSuggestionCard
+        compact
+        title={label}
+        actionLabel={label}
+        beforeText={formatDiffValue(before) || "No existing content."}
+        afterText={formatDiffValue(after)}
+        isApplying={isApplying}
+        onAccept={onAccept}
+        onDiscard={onDiscard}
+      />
     </div>
   );
 }
@@ -1510,6 +1471,8 @@ export default function SectionEditor({
   const [isApplyingInlineAi, setIsApplyingInlineAi] = useState(false);
   const [pendingInlineAiActionId, setPendingInlineAiActionId] =
     useState<InlineAiActionId | null>(null);
+  const [inlineAiSuggestion, setInlineAiSuggestion] =
+    useState<InlineAiSuggestionState | null>(null);
   const inlineSelectionDebounceRef = useRef<number | null>(null);
   const [sectionAiMenu, setSectionAiMenu] = useState<SectionAiMenuState>(null);
   const sectionAiMenuRef = useRef<HTMLDivElement | null>(null);
@@ -1670,26 +1633,46 @@ export default function SectionEditor({
           instruction,
           selectedText: inlineSelectionState.text,
         });
-        const replacementText =
-          typeof result === "string"
-            ? result.trim()
-            : typeof result?.text === "string"
-              ? result.text.trim()
-              : "";
+        const normalizedResult = normalizeEditorAiTextResult(result, actionId);
 
-        if (!replacementText) {
+        if (!normalizedResult) {
           return;
         }
 
+        const suggestionBase = {
+          actionId: normalizedResult.actionId,
+          actionLabel: normalizedResult.actionLabel,
+          beforeText: inlineSelectionState.text,
+          afterText: normalizedResult.text,
+          from: inlineSelectionState.from,
+          to: inlineSelectionState.to,
+        };
+
+        if (normalizedResult.applyMode === "preview_required") {
+          setInlineAiSuggestion({
+            ...suggestionBase,
+            status: "preview",
+          });
+          setInlineSelectionState(null);
+          return;
+        }
+
+        const beforeDoc = view.state.doc.toJSON() as RemirrorJSON;
         const tr = view.state.tr.insertText(
-          replacementText,
+          normalizedResult.text,
           inlineSelectionState.from,
           inlineSelectionState.to,
         );
         view.dispatch(tr);
         view.focus();
         setInlineSelectionState(null);
-        onContentChange?.(String(section.id), view.state.doc.toJSON());
+        const afterDoc = view.state.doc.toJSON() as RemirrorJSON;
+        setInlineAiSuggestion({
+          ...suggestionBase,
+          status: "accepted",
+          undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
+        });
+        onContentChange?.(String(section.id), afterDoc);
       } finally {
         setIsApplyingInlineAi(false);
         setPendingInlineAiActionId(null);
@@ -1703,6 +1686,47 @@ export default function SectionEditor({
       transformEditorSelectionAction,
     ],
   );
+
+  const handleAcceptInlineAiSuggestion = useCallback(() => {
+    if (!inlineAiSuggestion) return;
+
+    const view = (manager as any)?.view;
+    if (!view) return;
+
+    const beforeDoc = view.state.doc.toJSON() as RemirrorJSON;
+    const tr = view.state.tr.insertText(
+      inlineAiSuggestion.afterText,
+      inlineAiSuggestion.from,
+      inlineAiSuggestion.to,
+    );
+    view.dispatch(tr);
+    view.focus();
+    const afterDoc = view.state.doc.toJSON() as RemirrorJSON;
+    setInlineAiSuggestion({
+      ...inlineAiSuggestion,
+      status: "accepted",
+      undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
+    });
+    onContentChange?.(String(section.id), afterDoc);
+  }, [inlineAiSuggestion, manager, onContentChange, section.id]);
+
+  const handleUndoInlineAiSuggestion = useCallback(() => {
+    if (!inlineAiSuggestion?.undoSnapshot) return;
+
+    const view = (manager as any)?.view;
+    const restoredDoc = restoreAiUndoSnapshot(inlineAiSuggestion.undoSnapshot);
+    const nextState =
+      (manager as any)?.createState?.({ content: restoredDoc as any }) ??
+      undefined;
+
+    if (view && nextState && typeof view.updateState === "function") {
+      view.updateState(nextState);
+      view.focus();
+    }
+
+    onContentChange?.(String(section.id), restoredDoc);
+    setInlineAiSuggestion(null);
+  }, [inlineAiSuggestion, manager, onContentChange, section.id]);
 
   const currentCvSkills = useMemo(() => {
     if (!currentCv) return [] as string[];
@@ -5864,6 +5888,20 @@ export default function SectionEditor({
           onClose={() => setInlineSelectionState(null)}
           onRunAction={handleRunInlineAiAction}
         />
+      ) : null}
+      {inlineAiSuggestion ? (
+        <div style={{ padding: "var(--s3) var(--s3) 0" }}>
+          <AiSuggestionCard
+            compact
+            actionLabel={inlineAiSuggestion.actionLabel}
+            beforeText={inlineAiSuggestion.beforeText}
+            afterText={inlineAiSuggestion.afterText}
+            status={inlineAiSuggestion.status}
+            onAccept={handleAcceptInlineAiSuggestion}
+            onDiscard={() => setInlineAiSuggestion(null)}
+            onUndo={handleUndoInlineAiSuggestion}
+          />
+        </div>
       ) : null}
       <div className="section-container-header flex items-center justify-between">
         <label htmlFor={titleInputId} className="sr-only">
