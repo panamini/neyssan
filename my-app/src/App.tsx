@@ -317,7 +317,6 @@ function AppShell(): JSX.Element {
     <CvLibraryProvider>
       {/* .app — flex row, h:100vh overflow:hidden */}
       <div
-        className="pal-sauge"
         style={{
           display: "flex",
           flexDirection: "row",

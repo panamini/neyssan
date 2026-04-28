@@ -16,7 +16,8 @@
   --color-on-accent: #FAF9F5;
   --op: var(--color-on-accent);
 }
-.dark.pal-terre {
+.dark.pal-terre,
+.dark .pal-terre {
   --ac: #A15A42;
   --am: #D47554;
   --ap: rgba(212, 117, 84, 0.14);
@@ -36,7 +37,8 @@
   --color-on-accent: hsl(40, 20%, 99%);
   --op: var(--color-on-accent);
 }
-.dark.pal-sauge {
+.dark.pal-sauge,
+.dark .pal-sauge {
   --ac: hsl(155, 28%, 62%);
   --am: hsl(155, 28%, 72%);
   --ap: hsl(155, 20%, 18%);
@@ -56,7 +58,8 @@
   --color-on-accent: hsl(36, 28%, 96%);
   --op: var(--color-on-accent);
 }
-.dark.pal-ocre {
+.dark.pal-ocre,
+.dark .pal-ocre {
   --ac: hsl(34, 26%, 58%);
   --am: hsl(34, 28%, 68%);
   --ap: hsl(34, 18%, 18%);
@@ -76,7 +79,8 @@
   --color-on-accent: hsl(220, 14%, 96%);
   --op: var(--color-on-accent);
 }
-.dark.pal-pierre {
+.dark.pal-pierre,
+.dark .pal-pierre {
   --ac: hsl(220, 14%, 62%);
   --am: hsl(220, 14%, 72%);
   --ap: hsl(220, 8%, 18%);
@@ -96,7 +100,8 @@
   --color-on-accent: hsl(350, 18%, 96%);
   --op: var(--color-on-accent);
 }
-.dark.pal-bordeaux {
+.dark.pal-bordeaux,
+.dark .pal-bordeaux {
   --ac: hsl(348, 22%, 62%);
   --am: hsl(348, 22%, 72%);
   --ap: hsl(348, 16%, 16%);
@@ -116,7 +121,8 @@
   --color-on-accent: hsl(200, 14%, 96%);
   --op: var(--color-on-accent);
 }
-.dark.pal-encre {
+.dark.pal-encre,
+.dark .pal-encre {
   --ac: hsl(200, 18%, 62%);
   --am: hsl(200, 18%, 72%);
   --ap: hsl(200, 14%, 16%);
