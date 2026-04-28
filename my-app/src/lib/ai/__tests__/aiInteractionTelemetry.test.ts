@@ -12,6 +12,7 @@ import {
 describe("aiInteractionTelemetry", () => {
   afterEach(() => {
     setAiInteractionTelemetrySink(null);
+    vi.restoreAllMocks();
   });
 
   it("supports exactly the editor AI lifecycle events", () => {
@@ -105,6 +106,67 @@ describe("aiInteractionTelemetry", () => {
     expect(JSON.stringify(event)).not.toContain("private CV text");
     expect(JSON.stringify(event)).not.toContain("private AI text");
     expect(JSON.stringify(event)).not.toContain("private instruction");
+  });
+
+  it("returns the event when the configured telemetry sink throws", () => {
+    const listener = vi.fn();
+    setAiInteractionTelemetrySink(() => {
+      throw new Error("sink unavailable");
+    });
+    window.addEventListener(
+      AI_INTERACTION_TELEMETRY_EVENT,
+      listener as EventListener,
+    );
+
+    let event: AiInteractionTelemetryEvent | null = null;
+    try {
+      expect(() => {
+        event = recordAiInteractionEvent({
+          name: "ai_completed",
+          interactionId: "ai_sink_failure",
+          surface: "proposal_editor",
+          actionId: "shorten",
+          timestamp: 321,
+        });
+      }).not.toThrow();
+    } finally {
+      window.removeEventListener(
+        AI_INTERACTION_TELEMETRY_EVENT,
+        listener as EventListener,
+      );
+    }
+
+    expect(event).toMatchObject({
+      name: "ai_completed",
+      interactionId: "ai_sink_failure",
+      actionId: "shorten",
+      applyMode: "inline_replace_with_undo",
+    });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the event when browser event dispatch throws", () => {
+    vi.spyOn(window, "dispatchEvent").mockImplementation(() => {
+      throw new Error("dispatch unavailable");
+    });
+
+    let event: AiInteractionTelemetryEvent | null = null;
+    expect(() => {
+      event = recordAiInteractionEvent({
+        name: "ai_accepted",
+        interactionId: "ai_dispatch_failure",
+        surface: "section_editor",
+        actionId: "rewrite",
+        timestamp: 654,
+      });
+    }).not.toThrow();
+
+    expect(event).toMatchObject({
+      name: "ai_accepted",
+      interactionId: "ai_dispatch_failure",
+      actionId: "rewrite",
+      applyMode: "preview_required",
+    });
   });
 
   it("creates stable-looking interaction ids", () => {
