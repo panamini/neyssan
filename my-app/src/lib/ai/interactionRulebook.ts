@@ -5,6 +5,7 @@ export type AiActionId =
   | "clarify"
   | "strengthen"
   | "expand"
+  | "tailor_to_job"
   | "custom";
 
 export type AiRiskLevel = "low" | "medium" | "high" | "open_ended";
@@ -21,6 +22,7 @@ export type AiActionDefinition = {
   applyMode: AiApplyMode;
   outputMode: AiOutputMode;
   visibleInToolbar: boolean;
+  requiresJobContext?: boolean;
 };
 
 export const AI_ACTION_IDS = [
@@ -30,6 +32,7 @@ export const AI_ACTION_IDS = [
   "clarify",
   "strengthen",
   "expand",
+  "tailor_to_job",
   "custom",
 ] as const satisfies readonly AiActionId[];
 
@@ -38,6 +41,10 @@ export const VISIBLE_TOOLBAR_AI_ACTION_IDS = [
   "shorten",
   "fix_grammar",
   "custom",
+] as const satisfies readonly AiActionId[];
+
+export const JOB_CONTEXT_TOOLBAR_AI_ACTION_IDS = [
+  "tailor_to_job",
 ] as const satisfies readonly AiActionId[];
 
 export const AI_ACTION_DEFINITIONS = [
@@ -102,6 +109,17 @@ export const AI_ACTION_DEFINITIONS = [
     visibleInToolbar: false,
   },
   {
+    id: "tailor_to_job",
+    label: "Tailor",
+    instruction:
+      "Tailor this selection to the selected job while preserving the user's factual claims.",
+    risk: "high",
+    applyMode: "preview_required",
+    outputMode: "single_text",
+    visibleInToolbar: false,
+    requiresJobContext: true,
+  },
+  {
     id: "custom",
     label: "Ask",
     instruction: "",
@@ -131,3 +149,23 @@ export const VISIBLE_TOOLBAR_AI_ACTIONS = VISIBLE_TOOLBAR_AI_ACTION_IDS.map(
 ).filter((definition): definition is AiActionDefinition =>
   Boolean(definition),
 );
+
+export function getVisibleToolbarAiActions(options: {
+  includeJobContextActions?: boolean;
+} = {}): AiActionDefinition[] {
+  const actionIds = options.includeJobContextActions
+    ? [
+        "rewrite",
+        "shorten",
+        "fix_grammar",
+        ...JOB_CONTEXT_TOOLBAR_AI_ACTION_IDS,
+        "custom",
+      ]
+    : [...VISIBLE_TOOLBAR_AI_ACTION_IDS];
+
+  return actionIds
+    .map((actionId) => AI_ACTION_DEFINITION_BY_ID.get(actionId))
+    .filter((definition): definition is AiActionDefinition =>
+      Boolean(definition),
+    );
+}
