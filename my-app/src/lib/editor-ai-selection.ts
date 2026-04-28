@@ -213,14 +213,18 @@ function measureTextareaSelectionAnchor(
     "textIndent",
     "textAlign",
     "whiteSpace",
+    "wordBreak",
+    "overflowWrap",
     "wordSpacing",
+    "tabSize",
+    "direction",
+    "scrollbarGutter",
   ] as const;
 
   mirror.style.position = "absolute";
   mirror.style.visibility = "hidden";
   mirror.style.pointerEvents = "none";
   mirror.style.whiteSpace = "pre-wrap";
-  mirror.style.wordWrap = "break-word";
   mirror.style.overflow = "hidden";
 
   const textareaRect = textarea.getBoundingClientRect();
@@ -240,9 +244,6 @@ function measureTextareaSelectionAnchor(
 
   const rect = selectionSpan.getBoundingClientRect();
   const lineCount = Math.max(1, textarea.value.slice(start, end).split("\n").length);
-  const focusIndex =
-    textarea.selectionDirection === "backward" ? start : end;
-  const focusRect = measureTextareaCaretRect(textarea, focusIndex);
   document.body.removeChild(mirror);
 
   return {
@@ -262,15 +263,12 @@ function measureTextareaSelectionAnchor(
     belowLeft: rect.left + window.scrollX,
     belowRight: rect.right + window.scrollX,
     belowLineHeight: rect.height,
-    focusCenter:
-      focusRect.left + window.scrollX + Math.max(1, focusRect.width) / 2,
-    focusLeft: focusRect.left + window.scrollX,
-    focusRight:
-      focusRect.right + window.scrollX ||
-      focusRect.left + window.scrollX + 1,
-    focusTop: focusRect.top + window.scrollY,
-    focusBottom: focusRect.bottom + window.scrollY,
-    focusLineHeight: focusRect.height,
+    focusCenter: rect.left + window.scrollX + rect.width / 2,
+    focusLeft: rect.left + window.scrollX,
+    focusRight: rect.right + window.scrollX,
+    focusTop: rect.top + window.scrollY,
+    focusBottom: rect.bottom + window.scrollY,
+    focusLineHeight: rect.height,
     containerLeft: textareaRect.left + window.scrollX,
     containerRight: textareaRect.right + window.scrollX,
     containerTop: textareaRect.top + window.scrollY,
@@ -317,72 +315,6 @@ function isSelectionBackward(selection: Selection): boolean {
   } catch {
     return false;
   }
-}
-
-function measureTextareaCaretRect(
-  textarea: HTMLTextAreaElement,
-  offset: number,
-): DOMRect {
-  const computed = window.getComputedStyle(textarea);
-  const mirror = document.createElement("div");
-  const beforeSelection = document.createTextNode(textarea.value.slice(0, offset));
-  const caretMarker = document.createElement("span");
-  const afterSelection = document.createTextNode(
-    textarea.value.slice(offset) || "\u200b",
-  );
-  const properties = [
-    "boxSizing",
-    "width",
-    "height",
-    "overflowX",
-    "overflowY",
-    "borderTopWidth",
-    "borderRightWidth",
-    "borderBottomWidth",
-    "borderLeftWidth",
-    "paddingTop",
-    "paddingRight",
-    "paddingBottom",
-    "paddingLeft",
-    "fontFamily",
-    "fontSize",
-    "fontStyle",
-    "fontWeight",
-    "letterSpacing",
-    "lineHeight",
-    "textTransform",
-    "textIndent",
-    "textAlign",
-    "whiteSpace",
-    "wordSpacing",
-  ] as const;
-
-  mirror.style.position = "absolute";
-  mirror.style.visibility = "hidden";
-  mirror.style.pointerEvents = "none";
-  mirror.style.whiteSpace = "pre-wrap";
-  mirror.style.wordWrap = "break-word";
-  mirror.style.overflow = "hidden";
-
-  const textareaRect = textarea.getBoundingClientRect();
-  mirror.style.top = `${textareaRect.top + window.scrollY}px`;
-  mirror.style.left = `${textareaRect.left + window.scrollX}px`;
-
-  for (const property of properties) {
-    (mirror.style as any)[property] = computed[property];
-  }
-
-  caretMarker.textContent = "\u200b";
-  mirror.appendChild(beforeSelection);
-  mirror.appendChild(caretMarker);
-  mirror.appendChild(afterSelection);
-  document.body.appendChild(mirror);
-  mirror.scrollTop = textarea.scrollTop;
-  mirror.scrollLeft = textarea.scrollLeft;
-
-  const rect = caretMarker.getBoundingClientRect();
-  document.body.removeChild(mirror);
-  return rect;
 }
 
 function mergeClientRects(
