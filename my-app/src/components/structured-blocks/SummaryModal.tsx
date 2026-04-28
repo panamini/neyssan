@@ -25,6 +25,13 @@ import { docToPlainText } from "../remirror-editor/utils/text";
 import { Button } from "../ui/button";
 import { CvModalShell } from "./CvModalShell";
 import FloatingAiToolbar, { type InlineAiActionId } from "../FloatingAiToolbar";
+import AiSuggestionCard from "../ai/AiSuggestionCard";
+import {
+  createAiUndoSnapshot,
+  normalizeEditorAiTextResult,
+  restoreAiUndoSnapshot,
+  type AiUndoSnapshot,
+} from "../../lib/ai/applyAiSuggestion";
 import {
   getDomSelectionState,
   isInlineAiToolbarActiveElement,
@@ -39,6 +46,17 @@ interface SummaryModalProps {
   onDismissRecoveryNotes?: () => void;
   onClose: () => void;
 }
+
+type InlineAiSuggestionState = {
+  actionId: InlineAiActionId;
+  actionLabel: string;
+  beforeText: string;
+  afterText: string;
+  from: number;
+  to: number;
+  status: "preview" | "accepted";
+  undoSnapshot?: AiUndoSnapshot<RemirrorJSON>;
+};
 
 export function SummaryModal({
   open,
@@ -63,6 +81,8 @@ export function SummaryModal({
   const [isApplyingInlineAi, setIsApplyingInlineAi] = useState(false);
   const [pendingInlineAiActionId, setPendingInlineAiActionId] =
     useState<InlineAiActionId | null>(null);
+  const [inlineAiSuggestion, setInlineAiSuggestion] =
+    useState<InlineAiSuggestionState | null>(null);
   const selectionDebounceRef = useRef<number | null>(null);
 
   // Initialize Remirror doc once when opened
@@ -190,6 +210,7 @@ export function SummaryModal({
   useEffect(() => {
     if (!open) {
       setInlineSelectionState(null);
+      setInlineAiSuggestion(null);
     }
   }, [open]);
 
@@ -304,25 +325,45 @@ export function SummaryModal({
           instruction,
           selectedText: inlineSelectionState.text,
         });
-        const replacementText =
-          typeof result === "string"
-            ? result.trim()
-            : typeof result?.text === "string"
-              ? result.text.trim()
-              : "";
+        const normalizedResult = normalizeEditorAiTextResult(result, actionId);
 
-        if (!replacementText) {
+        if (!normalizedResult) {
           return;
         }
 
+        const suggestionBase = {
+          actionId: normalizedResult.actionId,
+          actionLabel: normalizedResult.actionLabel,
+          beforeText: inlineSelectionState.text,
+          afterText: normalizedResult.text,
+          from: inlineSelectionState.from,
+          to: inlineSelectionState.to,
+        };
+
+        if (normalizedResult.applyMode === "preview_required") {
+          setInlineAiSuggestion({
+            ...suggestionBase,
+            status: "preview",
+          });
+          setInlineSelectionState(null);
+          return;
+        }
+
+        const beforeDoc = view.state.doc.toJSON() as RemirrorJSON;
         const tr = view.state.tr.insertText(
-          replacementText,
+          normalizedResult.text,
           inlineSelectionState.from,
           inlineSelectionState.to,
         );
         view.dispatch(tr);
         view.focus();
         setInlineSelectionState(null);
+        const afterDoc = view.state.doc.toJSON() as RemirrorJSON;
+        setInlineAiSuggestion({
+          ...suggestionBase,
+          status: "accepted",
+          undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
+        });
       } finally {
         setIsApplyingInlineAi(false);
         setPendingInlineAiActionId(null);
@@ -330,6 +371,45 @@ export function SummaryModal({
     },
     [inlineSelectionState, manager, transformEditorSelectionAction],
   );
+
+  const handleAcceptInlineAiSuggestion = React.useCallback(() => {
+    if (!inlineAiSuggestion) return;
+
+    const view = (manager as any)?.view;
+    if (!view) return;
+
+    const beforeDoc = view.state.doc.toJSON() as RemirrorJSON;
+    const tr = view.state.tr.insertText(
+      inlineAiSuggestion.afterText,
+      inlineAiSuggestion.from,
+      inlineAiSuggestion.to,
+    );
+    view.dispatch(tr);
+    view.focus();
+    const afterDoc = view.state.doc.toJSON() as RemirrorJSON;
+    setInlineAiSuggestion({
+      ...inlineAiSuggestion,
+      status: "accepted",
+      undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
+    });
+  }, [inlineAiSuggestion, manager]);
+
+  const handleUndoInlineAiSuggestion = React.useCallback(() => {
+    if (!inlineAiSuggestion?.undoSnapshot) return;
+
+    const view = (manager as any)?.view;
+    const restoredDoc = restoreAiUndoSnapshot(inlineAiSuggestion.undoSnapshot);
+    const nextState =
+      (manager as any)?.createState?.({ content: restoredDoc as any }) ??
+      undefined;
+
+    if (view && nextState && typeof view.updateState === "function") {
+      view.updateState(nextState);
+      view.focus();
+    }
+
+    setInlineAiSuggestion(null);
+  }, [inlineAiSuggestion, manager]);
 
   // Keep hook order stable across renders; effect is a no-op when closed.
   useEffect(() => {
@@ -478,6 +558,20 @@ export function SummaryModal({
                   </div>
                 ))}
               </div>
+            </section>
+          ) : null}
+          {inlineAiSuggestion ? (
+            <section className="dasti-zone">
+              <AiSuggestionCard
+                compact
+                actionLabel={inlineAiSuggestion.actionLabel}
+                beforeText={inlineAiSuggestion.beforeText}
+                afterText={inlineAiSuggestion.afterText}
+                status={inlineAiSuggestion.status}
+                onAccept={handleAcceptInlineAiSuggestion}
+                onDiscard={() => setInlineAiSuggestion(null)}
+                onUndo={handleUndoInlineAiSuggestion}
+              />
             </section>
           ) : null}
           <section className="dasti-zone">
