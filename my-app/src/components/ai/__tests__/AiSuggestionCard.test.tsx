@@ -22,6 +22,14 @@ describe("AiSuggestionCard", () => {
     expect(
       screen.getByRole("region", { name: "Rewrite suggestion" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("AI draft")).toBeInTheDocument();
+    expect(screen.getByText("Needs review")).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", { name: "Current text" }),
+    ).toHaveTextContent("Original text");
+    expect(
+      screen.getByRole("group", { name: "Proposed text" }),
+    ).toHaveTextContent("Improved text");
     expect(screen.getByText("Original text")).toBeInTheDocument();
     expect(screen.getByText("Improved text")).toBeInTheDocument();
 
@@ -47,11 +55,33 @@ describe("AiSuggestionCard", () => {
 
     expect(screen.getByText("Applied")).toBeInTheDocument();
     expect(
+      screen.getByRole("group", { name: "Proposed text" }),
+    ).toHaveTextContent("Fixed text");
+    expect(
       screen.queryByRole("button", { name: "Accept" }),
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
 
     expect(onUndo).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps action controls disabled while applying", () => {
+    render(
+      <AiSuggestionCard
+        actionLabel="Tailor"
+        beforeText="Original text"
+        afterText="Tailored text"
+        isApplying
+      />,
+    );
+
+    expect(screen.getByRole("region", { name: "Tailor suggestion" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(screen.getByText("Applying")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Accept" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Discard" })).toBeDisabled();
   });
 });
