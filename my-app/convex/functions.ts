@@ -6,6 +6,7 @@ import { generateProposalArgs, handleGenerateProposal } from "./generateProposal
 import {
   parseStringArrayResult,
   runEditorAiTextPrompt,
+  runEditorSelectionTransform,
   runStyleRoutingAiTextPrompt,
 } from "./lib/editorAi";
 import {
@@ -154,23 +155,6 @@ export const suggestProposalStyle = action({
   },
 });
 
-const inlineEditorModeChoice = v.union(
-  v.literal("make_human"),
-  v.literal("make_clearer"),
-  v.literal("make_persuasive"),
-  v.literal("shorten"),
-  v.literal("lengthen"),
-  v.literal("fix_grammar"),
-  v.literal("rewrite"),
-  v.literal("expand"),
-  v.literal("clarify"),
-  v.literal("fix"),
-  v.literal("tone"),
-  v.literal("summarize"),
-  v.literal("ask"),
-  v.literal("custom"),
-);
-
 const cvSectionAiActionChoice = v.union(
   v.literal("rewrite_summary_from_profile"),
   v.literal("improve_summary_text"),
@@ -214,30 +198,12 @@ const editorLanguageValidator = v.object({
 
 export const transformEditorSelection = action({
   args: {
-    mode: inlineEditorModeChoice,
+    mode: v.string(),
     instruction: v.string(),
     selectedText: v.string(),
   },
   handler: async (_ctx, args) => {
-    const prompt = [
-      `Transformation mode: ${args.mode}`,
-      `Instruction: ${args.instruction.trim()}`,
-      "Rewrite the selected text only.",
-      "Preserve the original language unless the instruction explicitly changes it.",
-      "Return only the replacement text with no quotes, no markdown, and no commentary.",
-      "",
-      "Selected text:",
-      args.selectedText,
-    ].join("\n");
-
-    const text = await runEditorAiTextPrompt({
-      system:
-        "You are editing a user's text selection in place. Return only the replacement text. Do not add explanations, code fences, or surrounding quotes.",
-      prompt,
-      maxOutputTokens: 500,
-    });
-
-    return { text };
+    return runEditorSelectionTransform(args);
   },
 });
 
