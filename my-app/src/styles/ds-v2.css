@@ -1001,9 +1001,24 @@
   }
 
   .ds-sidebar__item--active {
+    position: relative;
     background: linear-gradient(90deg, var(--ap), transparent);
     color: var(--ti);
-    border-left: 2px solid var(--ac);
+  }
+
+  .ds-sidebar__item--active::before {
+    content: "";
+    position: absolute;
+    inset-block: 6px;
+    inset-inline-start: 0;
+    width: 2px;
+    border-radius: var(--radius-pill);
+    background: var(--ac);
+  }
+
+  .ds-sidebar__item--active .ds-sidebar__count {
+    background: var(--am-soft);
+    color: var(--ac);
   }
 
   .ds-paper {
