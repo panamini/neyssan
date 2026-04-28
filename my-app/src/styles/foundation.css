@@ -807,3 +807,48 @@
   --ease-bounce: var(--ezb);
   --focus-shadow-soft: 0 0 0 2px color-mix(in srgb, var(--fr) 58%, transparent);
 }
+
+/* ============================================================
+   DS v2 — motion tokens additionnels
+   Source: docs/UI/CODEX-DS-V2-PLAN.md §1.6
+   Additif uniquement. Ne renomme rien.
+   ============================================================ */
+:root {
+  --motion-duration-micro:   80ms;
+  --motion-duration-fast:   140ms;
+  --motion-duration-normal: 200ms;
+  --motion-duration-medium: 320ms;
+  --motion-duration-panel:  420ms;
+  --motion-duration-settle: 480ms;
+  --motion-duration-reveal: 600ms;
+  --motion-duration-brand: 2400ms;
+
+  --motion-ease-standard:   cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-enter:      cubic-bezier(0, 0, 0, 1);
+  --motion-ease-exit:       cubic-bezier(0.4, 0, 1, 1);
+  --motion-ease-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
+  --motion-ease-breathe:    cubic-bezier(0.4, 0, 0.6, 1);
+
+  --motion-opacity-breathe-low:  0.55;
+  --motion-opacity-breathe-high: 1;
+}
+
+/* Single ambient loop in the system: brand period only. Opacity-only, floored at 0.55. */
+@keyframes tw-breathe {
+  0%, 100% { opacity: var(--motion-opacity-breathe-high); }
+  50%      { opacity: var(--motion-opacity-breathe-low); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-micro:  0ms;
+    --motion-duration-fast:   0ms;
+    --motion-duration-normal: 0ms;
+    --motion-duration-medium: 0ms;
+    --motion-duration-panel:  0ms;
+    --motion-duration-settle: 0ms;
+    --motion-duration-reveal: 0ms;
+    --motion-duration-brand:  0ms;
+  }
+  @keyframes tw-breathe { 0%, 100% { opacity: 1; } }
+}
