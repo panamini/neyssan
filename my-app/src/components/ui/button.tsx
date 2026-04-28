@@ -3,80 +3,83 @@
 import React from "react";
 import clsx from "clsx";
 
-export interface ButtonProps {
-  children: React.ReactNode;
-  onClick?: (e?: React.MouseEvent<HTMLButtonElement>) => void;
-  disabled?: boolean;
-  variant?:
-    | "primary"
-    | "secondary"
-    | "ghost"
-    | "danger"
-    | "success"
-    | "warning"
-    | "accent";
-  size?: "sm" | "md" | "lg";
-  className?: string;
-  type?: "button" | "submit" | "reset";
-  title?: string;
+export type ButtonSize = "sm" | "md" | "lg";
+export type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "ghost"
+  | "accent"
+  | "danger"
+  | "success"
+  | "warning"
+  | "dark";
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  size?: ButtonSize;
+  variant?: ButtonVariant;
+  loading?: boolean;
+  loadingLabel?: string;
+  pill?: boolean;
+  iconLeft?: React.ReactNode;
+  iconRight?: React.ReactNode;
   ariaLabel?: string;
 }
 
-/**
- * Token-aware Button primitive.
- * - Uses semantic tokens defined in globals and index.css
- * - Exposes variants and sizes for consistent usage across the app
- */
 export function Button({
   children,
-  onClick,
   disabled = false,
   variant = "primary",
   size = "md",
-  className = "",
+  loading = false,
+  loadingLabel,
+  pill = false,
+  iconLeft,
+  iconRight,
+  className,
   type = "button",
-  title,
   ariaLabel,
+  onClick,
+  ...rest
 }: ButtonProps) {
-  const sizeClassMap: Record<NonNullable<ButtonProps["size"]>, string> = {
-    sm: "dasti-button--sm",
-    md: "dasti-button--md",
-    lg: "dasti-button--lg",
-  };
+  const isDisabled = disabled || loading;
 
-  const variantClassMap: Record<NonNullable<ButtonProps["variant"]>, string> = {
-    primary: "dasti-button--primary",
-    secondary: "dasti-button--secondary",
-    ghost: "dasti-button--ghost",
-    danger: "dasti-button--danger",
-    success: "dasti-button--success",
-    warning: "dasti-button--warning",
-    accent: "dasti-button--accent",
-  };
-
-  const classes = clsx(
-    "dasti-button",
-    sizeClassMap[size],
-    variantClassMap[variant],
-    className,
-  );
-
-  function handleClick(e?: React.MouseEvent<HTMLButtonElement>) {
-    if (disabled) return;
-    if (onClick) onClick(e);
+  function handleClick(event: React.MouseEvent<HTMLButtonElement>) {
+    if (isDisabled) return;
+    onClick?.(event);
   }
 
   return (
     <button
+      {...rest}
       type={type}
-      className={classes}
+      className={clsx(
+        "ds-btn",
+        `ds-btn--${size}`,
+        `ds-btn--${variant}`,
+        pill && "ds-btn--pill",
+        className,
+      )}
       onClick={handleClick}
-      disabled={disabled}
-      aria-disabled={disabled}
-      title={title}
-      aria-label={ariaLabel}
+      disabled={isDisabled}
+      aria-disabled={isDisabled}
+      aria-busy={loading || undefined}
+      aria-label={ariaLabel ?? rest["aria-label"]}
     >
-      {children}
+      {loading ? (
+        <>
+          <span>{loadingLabel ?? children}</span>
+          <span className="ds-btn__period" aria-hidden="true">
+            .
+          </span>
+        </>
+      ) : (
+        <>
+          {iconLeft ? <span aria-hidden="true">{iconLeft}</span> : null}
+          {children}
+          {iconRight ? <span aria-hidden="true">{iconRight}</span> : null}
+        </>
+      )}
     </button>
   );
 }
