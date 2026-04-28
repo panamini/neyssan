@@ -144,6 +144,7 @@ import {
   sanitizeProposalSignatureSettings,
   type ProposalSignatureSettings,
 } from "../lib/proposal-signature-settings";
+import type { EditorAiJobContext } from "../lib/ai/editorAiJobContext";
 
 type CurrentProposalSettings = {
   voicePreset: string;
@@ -214,6 +215,9 @@ type ProposalForgeCanonicalJob = {
   parseStatus: string;
   reviewState: string;
   summary: string;
+  visibleSummary?: string | null;
+  visibleRequirements?: string[];
+  visibleKeywords?: string[];
   rawDescription: string;
   responsibilities: string[];
   keywords: string[];
@@ -5657,6 +5661,30 @@ export function ProposalForge(): JSX.Element {
       briefSourceUrl?.trim() ||
       briefSourcePlatform?.trim(),
   );
+  const proposalEditorAiJobContext =
+    React.useMemo<EditorAiJobContext | null>(() => {
+      if (!canonicalJobId) return null;
+
+      return {
+        jobId: canonicalJobId,
+        title:
+          canonicalJobRecord?.title?.trim() ||
+          composePreviewValues?.jobTitle?.trim() ||
+          null,
+        company: canonicalJobRecord?.company?.trim() || null,
+        visibleSummary: canonicalJobRecord?.visibleSummary?.trim() || null,
+        visibleRequirements: canonicalJobRecord?.visibleRequirements ?? [],
+        visibleKeywords: canonicalJobRecord?.visibleKeywords ?? [],
+      };
+    }, [
+      canonicalJobId,
+      canonicalJobRecord?.company,
+      canonicalJobRecord?.title,
+      canonicalJobRecord?.visibleKeywords,
+      canonicalJobRecord?.visibleRequirements,
+      canonicalJobRecord?.visibleSummary,
+      composePreviewValues?.jobTitle,
+    ]);
   const hasMeaningfulOutputDraft = Boolean(
     proposalContent?.trim() ||
       proposalDocumentTitle?.trim() ||
@@ -6926,6 +6954,7 @@ export function ProposalForge(): JSX.Element {
                           }
                           mode={proposalOutputMode}
                           onModeChange={setProposalOutputMode}
+                          editorAiJobContext={proposalEditorAiJobContext}
                           showDocumentCaption={false}
                           documentTitleEditable={proposalOutputMode === "edit"}
                           onDocumentTitleChange={setProposalDocumentTitle}
