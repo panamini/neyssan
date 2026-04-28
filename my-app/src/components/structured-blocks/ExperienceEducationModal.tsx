@@ -35,6 +35,13 @@ import { CvModalShell } from "./CvModalShell";
 import { useCvAiCapabilities } from "../../hooks/use-cv-ai-capabilities";
 import { AI_UNAVAILABLE_TOAST } from "../../lib/toast-copy";
 import FloatingAiToolbar, { type InlineAiActionId } from "../FloatingAiToolbar";
+import AiSuggestionCard from "../ai/AiSuggestionCard";
+import {
+  createAiUndoSnapshot,
+  normalizeEditorAiTextResult,
+  restoreAiUndoSnapshot,
+  type AiUndoSnapshot,
+} from "../../lib/ai/applyAiSuggestion";
 import { deriveResponsibilityBullets } from "../../lib/resumeResponsibilityAuthority";
 import {
   getDomSelectionState,
@@ -237,65 +244,28 @@ function ModalAiDiffCard({
   onDiscard: () => void;
 }) {
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: "var(--s2)",
-        padding: "var(--s3)",
-        borderRadius: "var(--radius-card)",
-        border: "1px solid var(--color-border)",
-        background: "var(--sfr)",
-      }}
-    >
-      <div
-        style={{
-          fontSize: "var(--tx)",
-          fontWeight: 600,
-          color: "var(--ti)",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          whiteSpace: "pre-wrap",
-          fontSize: "var(--tx)",
-          lineHeight: "var(--lx)",
-          color: "var(--tm2)",
-          textDecoration: "line-through",
-        }}
-      >
-        {formatDiffLines(before)}
-      </div>
-      <div
-        style={{
-          whiteSpace: "pre-wrap",
-          fontSize: "var(--tx)",
-          lineHeight: "var(--lx)",
-          color: "var(--ti)",
-        }}
-      >
-        {formatDiffLines(after)}
-      </div>
-      <div style={{ display: "flex", gap: "var(--s2)", flexWrap: "wrap" }}>
-        <button
-          type="button"
-          className="dasti-button dasti-button--accent dasti-button--sm"
-          onClick={onAccept}
-        >
-          Accept
-        </button>
-        <button
-          type="button"
-          className="dasti-button dasti-button--secondary dasti-button--sm"
-          onClick={onDiscard}
-        >
-          Discard
-        </button>
-      </div>
-    </div>
+    <AiSuggestionCard
+      compact
+      actionLabel={label}
+      title={label}
+      beforeText={formatDiffLines(before)}
+      afterText={formatDiffLines(after)}
+      onAccept={onAccept}
+      onDiscard={onDiscard}
+    />
   );
 }
+
+type InlineAiSuggestionState = {
+  actionId: InlineAiActionId;
+  actionLabel: string;
+  beforeText: string;
+  afterText: string;
+  from: number;
+  to: number;
+  status: "preview" | "accepted";
+  undoSnapshot?: AiUndoSnapshot<RemirrorJSON>;
+};
 
 const RichEditor = forwardRef<
   RichEditorHandle,
@@ -339,6 +309,8 @@ const RichEditor = forwardRef<
   const [isApplyingInlineAi, setIsApplyingInlineAi] = useState(false);
   const [pendingInlineAiActionId, setPendingInlineAiActionId] =
     useState<InlineAiActionId | null>(null);
+  const [inlineAiSuggestion, setInlineAiSuggestion] =
+    useState<InlineAiSuggestionState | null>(null);
   const selectionDebounceRef = useRef<number | null>(null);
 
   const flush = useCallback(() => {
@@ -478,26 +450,46 @@ const RichEditor = forwardRef<
           instruction,
           selectedText: inlineSelectionState.text,
         });
-        const replacementText =
-          typeof result === "string"
-            ? result.trim()
-            : typeof result?.text === "string"
-              ? result.text.trim()
-              : "";
+        const normalizedResult = normalizeEditorAiTextResult(result, actionId);
 
-        if (!replacementText) {
+        if (!normalizedResult) {
           return;
         }
 
+        const suggestionBase = {
+          actionId: normalizedResult.actionId,
+          actionLabel: normalizedResult.actionLabel,
+          beforeText: inlineSelectionState.text,
+          afterText: normalizedResult.text,
+          from: inlineSelectionState.from,
+          to: inlineSelectionState.to,
+        };
+
+        if (normalizedResult.applyMode === "preview_required") {
+          setInlineAiSuggestion({
+            ...suggestionBase,
+            status: "preview",
+          });
+          setInlineSelectionState(null);
+          return;
+        }
+
+        const beforeDoc = view.state.doc.toJSON() as RemirrorJSON;
         const tr = view.state.tr.insertText(
-          replacementText,
+          normalizedResult.text,
           inlineSelectionState.from,
           inlineSelectionState.to,
         );
         view.dispatch(tr);
         view.focus();
         setInlineSelectionState(null);
-        onChangeDoc(ensureRemirrorDoc(view.state.doc.toJSON() as any));
+        const afterDoc = ensureRemirrorDoc(view.state.doc.toJSON() as any);
+        setInlineAiSuggestion({
+          ...suggestionBase,
+          status: "accepted",
+          undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
+        });
+        onChangeDoc(afterDoc);
       } finally {
         setIsApplyingInlineAi(false);
         setPendingInlineAiActionId(null);
@@ -511,6 +503,47 @@ const RichEditor = forwardRef<
     ],
   );
 
+  const handleAcceptInlineAiSuggestion = useCallback(() => {
+    if (!inlineAiSuggestion) return;
+
+    const view = (manager as any)?.view;
+    if (!view) return;
+
+    const beforeDoc = view.state.doc.toJSON() as RemirrorJSON;
+    const tr = view.state.tr.insertText(
+      inlineAiSuggestion.afterText,
+      inlineAiSuggestion.from,
+      inlineAiSuggestion.to,
+    );
+    view.dispatch(tr);
+    view.focus();
+    const afterDoc = ensureRemirrorDoc(view.state.doc.toJSON() as any);
+    setInlineAiSuggestion({
+      ...inlineAiSuggestion,
+      status: "accepted",
+      undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
+    });
+    onChangeDoc(afterDoc);
+  }, [inlineAiSuggestion, manager, onChangeDoc]);
+
+  const handleUndoInlineAiSuggestion = useCallback(() => {
+    if (!inlineAiSuggestion?.undoSnapshot) return;
+
+    const view = (manager as any)?.view;
+    const restoredDoc = restoreAiUndoSnapshot(inlineAiSuggestion.undoSnapshot);
+    const nextState =
+      (manager as any)?.createState?.({ content: restoredDoc as any }) ??
+      undefined;
+
+    if (view && nextState && typeof view.updateState === "function") {
+      view.updateState(nextState);
+      view.focus();
+    }
+
+    onChangeDoc(ensureRemirrorDoc(restoredDoc as any));
+    setInlineAiSuggestion(null);
+  }, [inlineAiSuggestion, manager, onChangeDoc]);
+
   return (
     <div className="dasti-rich dasti-rich--cv-reading-measure">
       {inlineSelectionState ? (
@@ -521,6 +554,18 @@ const RichEditor = forwardRef<
           pendingActionId={pendingInlineAiActionId}
           onClose={() => setInlineSelectionState(null)}
           onRunAction={handleRunInlineAiAction}
+        />
+      ) : null}
+      {inlineAiSuggestion ? (
+        <AiSuggestionCard
+          compact
+          actionLabel={inlineAiSuggestion.actionLabel}
+          beforeText={inlineAiSuggestion.beforeText}
+          afterText={inlineAiSuggestion.afterText}
+          status={inlineAiSuggestion.status}
+          onAccept={handleAcceptInlineAiSuggestion}
+          onDiscard={() => setInlineAiSuggestion(null)}
+          onUndo={handleUndoInlineAiSuggestion}
         />
       ) : null}
       <Remirror
