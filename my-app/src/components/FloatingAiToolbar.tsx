@@ -1,10 +1,18 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { BodyPortal } from "@/components/ui/body-portal";
-import { Check, Loader2, Minus, Pen, SendHorizontal, Wand2 } from "@/lib/icons";
+import {
+  Briefcase,
+  Check,
+  Loader2,
+  Minus,
+  Pen,
+  SendHorizontal,
+  Wand2,
+} from "@/lib/icons";
 import {
   VISIBLE_TOOLBAR_AI_ACTIONS,
-  VISIBLE_TOOLBAR_AI_ACTION_IDS,
+  getVisibleToolbarAiActions,
   type AiActionDefinition,
   type AiActionId,
 } from "@/lib/ai/interactionRulebook";
@@ -20,21 +28,21 @@ const TOOLBAR_FADE_TRANSITION = {
 } as const;
 const COLLAPSED_SHELL_WIDTH = 36;
 
-const VISIBLE_TOOLBAR_IDS = VISIBLE_TOOLBAR_AI_ACTION_IDS;
-type VisibleToolbarId = (typeof VISIBLE_TOOLBAR_IDS)[number];
-
-const TOOLBAR_ICONS: Record<
-  VisibleToolbarId,
-  React.ComponentType<{
-    size?: number;
-    strokeWidth?: number;
-    className?: string;
-    "aria-hidden"?: boolean | "true";
-  }>
+const TOOLBAR_ICONS: Partial<
+  Record<
+    AiActionId,
+    React.ComponentType<{
+      size?: number;
+      strokeWidth?: number;
+      className?: string;
+      "aria-hidden"?: boolean | "true";
+    }>
+  >
 > = {
   rewrite: Wand2,
   shorten: Minus,
   fix_grammar: Check,
+  tailor_to_job: Briefcase,
   custom: Pen,
 };
 
@@ -58,6 +66,7 @@ type FloatingAiToolbarProps = {
   open: boolean;
   isLoading?: boolean;
   pendingActionId?: InlineAiActionId | null;
+  includeJobContextActions?: boolean;
   onClose: () => void;
   onRunAction: (actionId: InlineAiActionId, instruction: string) => void;
 };
@@ -217,6 +226,7 @@ export function FloatingAiToolbar({
   open,
   isLoading = false,
   pendingActionId = null,
+  includeJobContextActions = false,
   onClose,
   onRunAction,
 }: FloatingAiToolbarProps) {
@@ -244,6 +254,10 @@ export function FloatingAiToolbar({
 
   const isAskOpen = activeActionId === "custom";
   const isPromptLoading = isLoading && pendingActionId === "custom";
+  const toolbarActions = React.useMemo(
+    () => getVisibleToolbarAiActions({ includeJobContextActions }),
+    [includeJobContextActions],
+  );
 
   const updatePosition = React.useCallback(() => {
     if (!anchor || !panelRef.current || typeof window === "undefined") {
@@ -595,13 +609,10 @@ export function FloatingAiToolbar({
               animate={{ opacity: 1 }}
               transition={TOOLBAR_FADE_TRANSITION}
             >
-              {VISIBLE_TOOLBAR_IDS.map((id) => {
-                const action = INLINE_AI_ACTIONS.find(
-                  (item) => item.id === id,
-                )!;
-                const Icon = TOOLBAR_ICONS[id];
-                const isAskAction = id === "custom";
-                const isPrimary = id === "rewrite";
+              {toolbarActions.map((action) => {
+                const Icon = TOOLBAR_ICONS[action.id] ?? Wand2;
+                const isAskAction = action.id === "custom";
+                const isPrimary = action.id === "rewrite";
                 const isActionLoading =
                   isLoading && pendingActionId === action.id;
                 const isActive = activeActionId === action.id;

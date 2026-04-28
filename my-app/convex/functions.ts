@@ -201,6 +201,17 @@ export const transformEditorSelection = action({
     mode: v.string(),
     instruction: v.string(),
     selectedText: v.string(),
+    jobContext: v.optional(
+      v.object({
+        jobId: v.string(),
+        title: v.optional(v.union(v.string(), v.null())),
+        company: v.optional(v.union(v.string(), v.null())),
+        sourceLanguage: v.optional(v.union(v.string(), v.null())),
+        visibleSummary: v.optional(v.union(v.string(), v.null())),
+        visibleRequirements: v.optional(v.array(v.string())),
+        visibleKeywords: v.optional(v.array(v.string())),
+      }),
+    ),
   },
   handler: async (_ctx, args) => {
     return runEditorSelectionTransform(args);

@@ -5,6 +5,7 @@ export type AiActionId =
   | "clarify"
   | "strengthen"
   | "expand"
+  | "tailor_to_job"
   | "custom";
 
 export type AiRiskLevel = "low" | "medium" | "high" | "open_ended";
@@ -20,6 +21,7 @@ export type AiActionDefinition = {
   risk: AiRiskLevel;
   applyMode: AiApplyMode;
   outputMode: AiOutputMode;
+  requiresJobContext?: boolean;
 };
 
 export const EDITOR_AI_ACTION_IDS = [
@@ -29,6 +31,7 @@ export const EDITOR_AI_ACTION_IDS = [
   "clarify",
   "strengthen",
   "expand",
+  "tailor_to_job",
   "custom",
 ] as const satisfies readonly AiActionId[];
 
@@ -86,6 +89,16 @@ export const EDITOR_AI_ACTION_DEFINITIONS = [
     risk: "medium",
     applyMode: "preview_required",
     outputMode: "single_text",
+  },
+  {
+    id: "tailor_to_job",
+    label: "Tailor",
+    instruction:
+      "Tailor this selection to the selected job while preserving the user's factual claims.",
+    risk: "high",
+    applyMode: "preview_required",
+    outputMode: "single_text",
+    requiresJobContext: true,
   },
   {
     id: "custom",
