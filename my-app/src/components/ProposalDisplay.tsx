@@ -54,6 +54,14 @@ import {
 } from "../lib/proposal-header";
 import { collectProposalFontDebugSnapshot } from "../lib/proposal-font-debug";
 import type { ProposalSignatureSettings } from "../lib/proposal-signature-settings";
+import AiSuggestionCard from "./ai/AiSuggestionCard";
+import {
+  createAiUndoSnapshot,
+  normalizeEditorAiTextResult,
+  replaceSelectedText,
+  restoreAiUndoSnapshot,
+  type AiUndoSnapshot,
+} from "../lib/ai/applyAiSuggestion";
 
 interface ProposalDisplayProps {
   proposalContent: string | null;
@@ -151,6 +159,16 @@ const PREVIEW_PARAGRAPH_ACTIONS: Array<{
     helperLabel: "Ask",
   },
 ];
+
+type ProposalAiSuggestion = {
+  actionId: InlineAiActionId;
+  actionLabel: string;
+  beforeText: string;
+  afterText: string;
+  selection: { start: number; end: number };
+  status: "preview" | "accepted";
+  undoSnapshot?: AiUndoSnapshot<string>;
+};
 
 function stripInlineMarkdown(text: string): string {
   return text
@@ -486,6 +504,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const [isApplyingInlineAi, setIsApplyingInlineAi] = React.useState(false);
   const [pendingInlineAiActionId, setPendingInlineAiActionId] =
     React.useState<InlineAiActionId | null>(null);
+  const [aiSuggestion, setAiSuggestion] =
+    React.useState<ProposalAiSuggestion | null>(null);
   const [queuedPreviewActionLabel, setQueuedPreviewActionLabel] =
     React.useState<string | null>(null);
   const [isApplicantDrawerOpen, setIsApplicantDrawerOpen] =
@@ -949,6 +969,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   React.useEffect(() => {
     if (!isEditable) {
       setTextareaSelectionState(null);
+      setAiSuggestion(null);
     }
   }, [isEditable]);
 
@@ -1114,28 +1135,49 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           instruction,
           selectedText: textareaSelectionState.text,
         });
-        const replacementText =
-          typeof result === "string"
-            ? result
-            : typeof result?.text === "string"
-              ? result.text
-              : "";
-        if (!replacementText.trim()) {
+        const normalizedResult = normalizeEditorAiTextResult(result, actionId);
+        if (!normalizedResult) {
           return;
         }
 
-        const nextContent =
-          proposalContent.slice(0, textareaSelectionState.start) +
-          replacementText +
-          proposalContent.slice(textareaSelectionState.end);
+        const suggestionBase = {
+          actionId: normalizedResult.actionId,
+          actionLabel: normalizedResult.actionLabel,
+          beforeText: textareaSelectionState.text,
+          afterText: normalizedResult.text,
+          selection: {
+            start: textareaSelectionState.start,
+            end: textareaSelectionState.end,
+          },
+        };
+
+        if (normalizedResult.applyMode === "preview_required") {
+          setAiSuggestion({
+            ...suggestionBase,
+            status: "preview",
+          });
+          setTextareaSelectionState(null);
+          return;
+        }
+
+        const nextContent = replaceSelectedText({
+          text: proposalContent,
+          selection: textareaSelectionState,
+          replacementText: normalizedResult.text,
+        });
         onContentChange?.(nextContent);
+        setAiSuggestion({
+          ...suggestionBase,
+          status: "accepted",
+          undoSnapshot: createAiUndoSnapshot(proposalContent, nextContent),
+        });
         setTextareaSelectionState(null);
 
         window.setTimeout(() => {
           const textarea = editableTextareaRef.current;
           if (!textarea) return;
           const selectionEnd =
-            textareaSelectionState.start + replacementText.length;
+            textareaSelectionState.start + normalizedResult.text.length;
           textarea.focus();
           textarea.setSelectionRange(selectionEnd, selectionEnd);
         }, 0);
@@ -1151,6 +1193,36 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       transformEditorSelectionAction,
     ],
   );
+
+  const handleAcceptAiSuggestion = React.useCallback(() => {
+    if (!aiSuggestion || !proposalContent) return;
+
+    const nextContent = replaceSelectedText({
+      text: proposalContent,
+      selection: aiSuggestion.selection,
+      replacementText: aiSuggestion.afterText,
+    });
+    onContentChange?.(nextContent);
+    setAiSuggestion({
+      ...aiSuggestion,
+      status: "accepted",
+      undoSnapshot: createAiUndoSnapshot(proposalContent, nextContent),
+    });
+    window.setTimeout(() => {
+      const textarea = editableTextareaRef.current;
+      if (!textarea) return;
+      const selectionEnd =
+        aiSuggestion.selection.start + aiSuggestion.afterText.length;
+      textarea.focus();
+      textarea.setSelectionRange(selectionEnd, selectionEnd);
+    }, 0);
+  }, [aiSuggestion, onContentChange, proposalContent]);
+
+  const handleUndoAiSuggestion = React.useCallback(() => {
+    if (!aiSuggestion?.undoSnapshot) return;
+    onContentChange?.(restoreAiUndoSnapshot(aiSuggestion.undoSnapshot));
+    setAiSuggestion(null);
+  }, [aiSuggestion, onContentChange]);
 
   const handlePreviewParagraphAction = React.useCallback(
     (label: string) => {
@@ -2018,7 +2090,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   <textarea
                     ref={attachEditableTextarea}
                     value={proposalContent ?? ""}
-                    onChange={(event) => onContentChange?.(event.target.value)}
+                    onChange={(event) => {
+                      setAiSuggestion(null);
+                      onContentChange?.(event.target.value);
+                    }}
                     onBlur={() => {
                       setTextareaSelectionState(null);
                       onContentCommit?.();
@@ -2239,6 +2314,18 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             Pick a paragraph, then tap {queuedPreviewActionLabel.toLowerCase()}.
           </div>
         ) : null}
+        {aiSuggestion ? (
+          <AiSuggestionCard
+            compact
+            actionLabel={aiSuggestion.actionLabel}
+            beforeText={aiSuggestion.beforeText}
+            afterText={aiSuggestion.afterText}
+            status={aiSuggestion.status}
+            onAccept={handleAcceptAiSuggestion}
+            onDiscard={() => setAiSuggestion(null)}
+            onUndo={handleUndoAiSuggestion}
+          />
+        ) : null}
         {renderDocumentStage()}
       </div>
     ) : (
@@ -2248,10 +2335,25 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         data-scroll-bottom={activeScrollBottom ? "true" : "false"}
         style={activeScrollFadeStyle}
       >
+        {aiSuggestion ? (
+          <AiSuggestionCard
+            compact
+            actionLabel={aiSuggestion.actionLabel}
+            beforeText={aiSuggestion.beforeText}
+            afterText={aiSuggestion.afterText}
+            status={aiSuggestion.status}
+            onAccept={handleAcceptAiSuggestion}
+            onDiscard={() => setAiSuggestion(null)}
+            onUndo={handleUndoAiSuggestion}
+          />
+        ) : null}
         <textarea
           ref={attachEditableTextarea}
           value={proposalContent}
-          onChange={(event) => onContentChange?.(event.target.value)}
+          onChange={(event) => {
+            setAiSuggestion(null);
+            onContentChange?.(event.target.value);
+          }}
           onBlur={() => {
             setTextareaSelectionState(null);
             onContentCommit?.();
