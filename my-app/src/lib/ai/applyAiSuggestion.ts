@@ -35,10 +35,6 @@ export type AiUndoSnapshot<T> = {
   after: T;
 };
 
-function isAiApplyMode(value: unknown): value is AiApplyMode {
-  return value === "inline_replace_with_undo" || value === "preview_required";
-}
-
 function isAiOutputMode(value: unknown): value is AiOutputMode {
   return value === "single_text";
 }
@@ -62,10 +58,7 @@ export function normalizeEditorAiTextResult(
       ? requestedDefinition
       : getAiActionDefinition(structuredResult.actionId) ?? requestedDefinition;
 
-  const applyMode =
-    !structuredResult || !isAiApplyMode(structuredResult.applyMode)
-      ? resultDefinition.applyMode
-      : structuredResult.applyMode;
+  const applyMode = requestedDefinition.applyMode;
   const outputMode =
     !structuredResult || !isAiOutputMode(structuredResult.outputMode)
       ? resultDefinition.outputMode

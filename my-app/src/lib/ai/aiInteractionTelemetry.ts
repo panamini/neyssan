@@ -99,18 +99,26 @@ export function recordAiInteractionEvent(
     ...(input.errorKind ? { errorKind: input.errorKind } : {}),
   };
 
-  telemetrySink?.(event);
+  try {
+    telemetrySink?.(event);
+  } catch {
+    // Telemetry must never interrupt editor AI flows.
+  }
 
   if (
     typeof window !== "undefined" &&
     typeof window.dispatchEvent === "function" &&
     typeof CustomEvent !== "undefined"
   ) {
-    window.dispatchEvent(
-      new CustomEvent(AI_INTERACTION_TELEMETRY_EVENT, {
-        detail: event,
-      }),
-    );
+    try {
+      window.dispatchEvent(
+        new CustomEvent(AI_INTERACTION_TELEMETRY_EVENT, {
+          detail: event,
+        }),
+      );
+    } catch {
+      // Telemetry must never interrupt editor AI flows.
+    }
   }
 
   return event;
