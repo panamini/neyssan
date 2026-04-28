@@ -242,8 +242,8 @@ describe("ExperienceModal CV AI", () => {
         expect.objectContaining({
           id: "exp-1",
           responsibilityBullets: [
-            "Reduced incident response times",
-            "Standardized patrol logs",
+            "Reduced incident response times.",
+            "Standardized patrol logs.",
           ],
           achievements: [],
           responsibilities: expect.objectContaining({
