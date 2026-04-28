@@ -59,6 +59,7 @@ import {
 import {
   ExperienceModal,
   EducationModal,
+  normalizeResponsibilityAiResultForSource,
 } from "./structured-blocks/ExperienceEducationModal";
 import {
   AffiliationModal,
@@ -84,6 +85,8 @@ import type { AiApplyMode, AiOutputMode } from "../lib/ai/interactionRulebook";
 import { formatRangeFromItem } from "../lib/date-utils";
 import {
   deriveResponsibilityBullets,
+  projectResponsibilitiesForWorkshop,
+  responsibilityValueToDisplayLines,
   responsibilityValueToPlainText,
 } from "../lib/resumeResponsibilityAuthority";
 import {
@@ -178,6 +181,8 @@ type ExperienceDiffState = {
   title: string;
   oldItems: string[];
   newItems: string[];
+  doc: RemirrorJSON;
+  responsibilityBullets?: string[];
 };
 
 function plainTextFromStructuredValue(value: unknown): string {
@@ -444,6 +449,92 @@ function getExperienceBulletLines(item: any): string[] {
     achievements: item?.achievements,
     fallbackToAchievements: true,
   });
+}
+
+function getExperienceDisplayLines(item: any): string[] {
+  const lines = responsibilityValueToDisplayLines(item?.responsibilities);
+  if (lines.length > 0) {
+    return lines;
+  }
+  return getExperienceBulletLines(item);
+}
+
+type ExperienceResponsibilityPreviewBlock =
+  | { kind: "paragraph"; text: string }
+  | { kind: "bullet_list"; items: string[] };
+
+function getExperienceResponsibilityPreviewBlocks(
+  item: any,
+): ExperienceResponsibilityPreviewBlock[] {
+  const projected = projectResponsibilitiesForWorkshop(item?.responsibilities);
+  const blocks = projected.rich.blocks
+    .map((block): ExperienceResponsibilityPreviewBlock | null => {
+      if (block.kind === "paragraph") {
+        const text = block.runs
+          .map((run) => run.text)
+          .join("")
+          .trim();
+        return text ? { kind: "paragraph", text } : null;
+      }
+
+      const items = block.items
+        .map((entry) =>
+          entry.runs
+            .map((run) => run.text)
+            .join("")
+            .trim(),
+        )
+        .filter(Boolean);
+      return items.length > 0 ? { kind: "bullet_list", items } : null;
+    })
+    .filter((block): block is ExperienceResponsibilityPreviewBlock =>
+      Boolean(block),
+    );
+
+  if (blocks.length > 0) {
+    return blocks;
+  }
+
+  const fallbackItems = getExperienceBulletLines(item);
+  return fallbackItems.length > 0
+    ? [{ kind: "bullet_list", items: fallbackItems }]
+    : [];
+}
+
+function countExperienceResponsibilityPreviewItems(
+  blocks: ExperienceResponsibilityPreviewBlock[],
+): number {
+  return blocks.reduce(
+    (total, block) =>
+      total + (block.kind === "paragraph" ? 1 : block.items.length),
+    0,
+  );
+}
+
+function limitExperienceResponsibilityPreviewBlocks(
+  blocks: ExperienceResponsibilityPreviewBlock[],
+  maxItems: number,
+): ExperienceResponsibilityPreviewBlock[] {
+  let remaining = maxItems;
+  const next: ExperienceResponsibilityPreviewBlock[] = [];
+
+  for (const block of blocks) {
+    if (remaining <= 0) break;
+
+    if (block.kind === "paragraph") {
+      next.push(block);
+      remaining -= 1;
+      continue;
+    }
+
+    const items = block.items.slice(0, remaining);
+    if (items.length > 0) {
+      next.push({ kind: "bullet_list", items });
+      remaining -= items.length;
+    }
+  }
+
+  return next;
 }
 
 function buildExperienceAiSourceText(item: any): string {
@@ -5175,18 +5266,40 @@ export default function SectionEditor({
       try {
         setSectionAiMenu(null);
         setSectionAiLoadingKey(`experience:${structuredId}`);
+        const responsibilitySource =
+          typeof rawItem?.responsibilities !== "undefined" &&
+          rawItem?.responsibilities !== null
+            ? rawItem.responsibilities
+            : rawItem?.responsibilityBullets;
+        const sourceShape = normalizeResponsibilityAiResultForSource({
+          source: responsibilitySource,
+          rawText: responsibilityValueToPlainText(responsibilitySource),
+          requestedActionId: "inspect",
+        }).shape;
         const result = await runCvSectionAiAction({
-          action: "improve_experience_bullets",
+          action:
+            sourceShape === "paragraph" || sourceShape === "mixed"
+              ? "improve_experience_responsibilities"
+              : "improve_experience_bullets",
           existingText: buildExperienceAiSourceText(rawItem),
+          outputShape: sourceShape,
         });
 
-        if (!result || result.kind !== "list" || !Array.isArray(result.items)) {
+        if (!result || (result.kind !== "list" && result.kind !== "text")) {
           return;
         }
 
-        const nextItems = dedupeStringList(
-          result.items.map((item: unknown) => String(item ?? "").trim()),
-        );
+        const normalized = normalizeResponsibilityAiResultForSource({
+          source: responsibilitySource,
+          rawItems: result.kind === "list" ? result.items : undefined,
+          rawText: result.kind === "text" ? result.text : undefined,
+          requestedActionId:
+            sourceShape === "paragraph" || sourceShape === "mixed"
+              ? "improve_experience_responsibilities"
+              : "improve_experience_bullets",
+        });
+        if (!normalized.ok) return;
+        const nextItems = responsibilityValueToDisplayLines(normalized.doc);
         if (nextItems.length === 0) return;
 
         setExperienceAiDiff({
@@ -5195,8 +5308,10 @@ export default function SectionEditor({
             String(rawItem?.position ?? "").trim() ||
             String(rawItem?.company ?? "").trim() ||
             "Experience entry",
-          oldItems: getExperienceBulletLines(rawItem),
+          oldItems: getExperienceDisplayLines(rawItem),
           newItems: nextItems,
+          doc: normalized.doc,
+          responsibilityBullets: normalized.responsibilityBullets,
         });
       } finally {
         setSectionAiLoadingKey(null);
@@ -5204,13 +5319,17 @@ export default function SectionEditor({
     }
 
     function applyExperienceAiDiff(diff: ExperienceDiffState) {
-      const nextDoc = buildBulletListDoc(diff.newItems);
+      const nextDoc = diff.doc;
       const nextStructured = structuredList.map((item) =>
         String(item?.id ?? "") === diff.itemId
           ? {
               ...item,
               responsibilities: nextDoc,
-              responsibilityBullets: diff.newItems,
+              responsibilityBullets:
+                diff.responsibilityBullets &&
+                diff.responsibilityBullets.length > 0
+                  ? diff.responsibilityBullets
+                  : undefined,
               achievements: [],
             }
           : item,
@@ -5272,12 +5391,21 @@ export default function SectionEditor({
         const title = position || company || "Experience entry";
         const subtitle =
           [company, location].filter(Boolean).join(" • ") || undefined;
-        const bulletSource = getExperienceBulletLines(rawItem);
-        const bulletLimit =
-          variant === "compact" && !previewExpanded ? 3 : bulletSource.length;
-        const bulletList = bulletSource.slice(0, bulletLimit);
+        const responsibilityBlocks =
+          getExperienceResponsibilityPreviewBlocks(rawItem);
+        const responsibilityItemCount =
+          countExperienceResponsibilityPreviewItems(responsibilityBlocks);
+        const responsibilityLimit =
+          variant === "compact" && !previewExpanded
+            ? 3
+            : responsibilityItemCount;
+        const visibleResponsibilityBlocks =
+          limitExperienceResponsibilityPreviewBlocks(
+            responsibilityBlocks,
+            responsibilityLimit,
+          );
         const canToggleBullets =
-          variant === "compact" && bulletSource.length > 3;
+          variant === "compact" && responsibilityItemCount > 3;
 
         return (
           <div
@@ -5324,12 +5452,30 @@ export default function SectionEditor({
                 })}
               </div>
             </div>
-            {bulletList.length > 0 ? (
-              <ul className="cv-entry-bullets">
-                {bulletList.map((line, bulletIdx) => (
-                  <li key={`${structuredId}-bullet-${bulletIdx}`}>{line}</li>
-                ))}
-              </ul>
+            {visibleResponsibilityBlocks.length > 0 ? (
+              <div className="cv-entry-responsibilities">
+                {visibleResponsibilityBlocks.map((block, blockIdx) =>
+                  block.kind === "paragraph" ? (
+                    <p
+                      key={`${structuredId}-responsibility-paragraph-${blockIdx}`}
+                      className="cv-entry-responsibility-paragraph"
+                    >
+                      {block.text}
+                    </p>
+                  ) : (
+                    <ul
+                      key={`${structuredId}-responsibility-list-${blockIdx}`}
+                      className="cv-entry-bullets"
+                    >
+                      {block.items.map((line, bulletIdx) => (
+                        <li key={`${structuredId}-bullet-${blockIdx}-${bulletIdx}`}>
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
+                  ),
+                )}
+              </div>
             ) : null}
             <RecoveryNotes
               notes={recoveryNotes}
@@ -6129,8 +6275,8 @@ export default function SectionEditor({
           onPointerDown={() => {
             if (remirrorViewAvailable) focusEditorAtEnd();
           }}
-          onPointerUp={scheduleInlineSelectionCheck}
-          onKeyUp={scheduleInlineSelectionCheck}
+          onPointerUp={() => scheduleInlineSelectionCheck()}
+          onKeyUp={() => scheduleInlineSelectionCheck()}
         >
           <Remirror
             manager={manager}

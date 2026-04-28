@@ -8213,18 +8213,33 @@
   color: var(--tm2);
 }
 
+.cv-entry-responsibilities {
+  display: grid;
+  gap: var(--s1);
+  max-inline-size: min(100%, var(--cv-editor-reading-measure-max));
+}
+
+.cv-entry-responsibility-paragraph {
+  margin: 0;
+  font-size: var(--tx);
+  line-height: var(--ls);
+  color: var(--ti);
+}
+
 .cv-entry-bullets {
   margin: 0;
-  padding-left: var(--s4);
+  padding-inline-start: var(--s4);
+  list-style: disc outside;
   display: grid;
   gap: var(--s1);
   font-size: var(--tx);
   line-height: var(--ls);
   color: var(--ti);
-  max-inline-size: min(100%, var(--cv-editor-reading-measure-max));
 }
 
 .cv-entry-bullets li {
+  display: list-item;
+  list-style: inherit;
   line-height: inherit;
 }
 
@@ -8233,6 +8248,23 @@
   font-size: 11px;
   line-height: var(--lx);
   color: var(--tm2);
+}
+
+.dasti-ai-applied-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--s1);
+  width: fit-content;
+  min-height: 28px;
+  padding: 0 var(--s1) 0 var(--s2);
+  border: 1px solid color-mix(in srgb, var(--color-success) 10%, var(--color-border));
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-success-soft) 22%, transparent);
+  color: var(--color-success-ink);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
 }
 
 .achievements-display .ProseMirror {
