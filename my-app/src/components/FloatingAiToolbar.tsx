@@ -2,53 +2,17 @@ import React from "react";
 import { motion } from "framer-motion";
 import { BodyPortal } from "@/components/ui/body-portal";
 import { Check, Loader2, Minus, Pen, SendHorizontal, Wand2 } from "@/lib/icons";
+import {
+  VISIBLE_TOOLBAR_AI_ACTIONS,
+  VISIBLE_TOOLBAR_AI_ACTION_IDS,
+  type AiActionDefinition,
+  type AiActionId,
+} from "@/lib/ai/interactionRulebook";
 import type { EditorSelectionAnchor } from "@/lib/editor-ai-selection";
 
-export const INLINE_AI_ACTIONS = [
-  {
-    id: "make_human",
-    label: "Rewrite",
-    instruction:
-      "Make this selection sound more human and natural while staying credible and professional.",
-  },
-  {
-    id: "shorten",
-    label: "Shorten",
-    instruction:
-      "Shorten this selection while preserving the strongest meaning and proof.",
-  },
-  {
-    id: "lengthen",
-    label: "Expand",
-    instruction:
-      "Make this selection a little longer and fuller while keeping the same core meaning.",
-  },
-  {
-    id: "make_clearer",
-    label: "Clarify",
-    instruction:
-      "Make this selection clearer, easier to scan, and more direct without changing its meaning.",
-  },
-  {
-    id: "make_persuasive",
-    label: "Strengthen",
-    instruction:
-      "Make this selection more persuasive and convincing without exaggerating or inventing facts.",
-  },
-  {
-    id: "fix_grammar",
-    label: "Fix",
-    instruction:
-      "Fix grammar, spelling, punctuation, and phrasing issues in this selection.",
-  },
-  {
-    id: "ask",
-    label: "Ask",
-    instruction: "",
-  },
-] as const;
+export const INLINE_AI_ACTIONS = VISIBLE_TOOLBAR_AI_ACTIONS;
 
-const DEFAULT_ACTION_ID = "make_human";
+const DEFAULT_ACTION_ID = "rewrite";
 const MOTION_EASE = [0.22, 1, 0.36, 1] as const;
 const TOOLBAR_FADE_TRANSITION = {
   duration: 0.18,
@@ -56,12 +20,7 @@ const TOOLBAR_FADE_TRANSITION = {
 } as const;
 const COLLAPSED_SHELL_WIDTH = 36;
 
-const VISIBLE_TOOLBAR_IDS = [
-  "make_human",
-  "shorten",
-  "fix_grammar",
-  "ask",
-] as const;
+const VISIBLE_TOOLBAR_IDS = VISIBLE_TOOLBAR_AI_ACTION_IDS;
 type VisibleToolbarId = (typeof VISIBLE_TOOLBAR_IDS)[number];
 
 const TOOLBAR_ICONS: Record<
@@ -73,10 +32,10 @@ const TOOLBAR_ICONS: Record<
     "aria-hidden"?: boolean | "true";
   }>
 > = {
-  make_human: Wand2,
+  rewrite: Wand2,
   shorten: Minus,
   fix_grammar: Check,
-  ask: Pen,
+  custom: Pen,
 };
 
 const ASK_SUGGESTIONS = [
@@ -92,9 +51,7 @@ const ASK_SUGGESTIONS = [
   "Make it sound less robotic…",
 ] as const;
 
-export type InlineAiActionId =
-  | (typeof INLINE_AI_ACTIONS)[number]["id"]
-  | "custom";
+export type InlineAiActionId = AiActionId;
 
 type FloatingAiToolbarProps = {
   anchor: EditorSelectionAnchor | null;
@@ -285,7 +242,7 @@ export function FloatingAiToolbar({
   const promptShellRef = React.useRef<HTMLDivElement | null>(null);
   const lastAnchorRef = React.useRef<EditorSelectionAnchor | null>(anchor);
 
-  const isAskOpen = activeActionId === "ask";
+  const isAskOpen = activeActionId === "custom";
   const isPromptLoading = isLoading && pendingActionId === "custom";
 
   const updatePosition = React.useCallback(() => {
@@ -493,12 +450,12 @@ export function FloatingAiToolbar({
 
   React.useEffect(() => {
     if (pendingActionId) {
-      setActiveActionId(pendingActionId === "custom" ? "ask" : pendingActionId);
+      setActiveActionId(pendingActionId);
     }
   }, [pendingActionId]);
 
   React.useEffect(() => {
-    if (activeActionId === "ask") {
+    if (activeActionId === "custom") {
       const idx = Math.floor(Math.random() * ASK_SUGGESTIONS.length);
       setAskPlaceholder(ASK_SUGGESTIONS[idx]);
     }
@@ -562,10 +519,10 @@ export function FloatingAiToolbar({
   }, [onClose, open]);
 
   const handlePresetAction = React.useCallback(
-    (action: (typeof INLINE_AI_ACTIONS)[number]) => {
-      if (action.id === "ask") {
+    (action: AiActionDefinition) => {
+      if (action.id === "custom") {
         setActiveActionId((current) =>
-          current === "ask" ? DEFAULT_ACTION_ID : "ask",
+          current === "custom" ? DEFAULT_ACTION_ID : "custom",
         );
         return;
       }
@@ -643,8 +600,8 @@ export function FloatingAiToolbar({
                   (item) => item.id === id,
                 )!;
                 const Icon = TOOLBAR_ICONS[id];
-                const isAskAction = id === "ask";
-                const isPrimary = id === "make_human";
+                const isAskAction = id === "custom";
+                const isPrimary = id === "rewrite";
                 const isActionLoading =
                   isLoading && pendingActionId === action.id;
                 const isActive = activeActionId === action.id;
@@ -737,7 +694,7 @@ export function FloatingAiToolbar({
                   aria-label="Ask AI"
                   value={customInstruction}
                   onChange={(event) => setCustomInstruction(event.target.value)}
-                  onFocus={() => setActiveActionId("ask")}
+                  onFocus={() => setActiveActionId("custom")}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && customInstruction.trim()) {
                       event.preventDefault();

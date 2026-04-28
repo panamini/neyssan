@@ -479,7 +479,11 @@ const RichEditor = forwardRef<
           selectedText: inlineSelectionState.text,
         });
         const replacementText =
-          typeof result?.text === "string" ? result.text.trim() : "";
+          typeof result === "string"
+            ? result.trim()
+            : typeof result?.text === "string"
+              ? result.text.trim()
+              : "";
 
         if (!replacementText) {
           return;
