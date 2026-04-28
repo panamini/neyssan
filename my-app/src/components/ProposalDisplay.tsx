@@ -136,7 +136,7 @@ const PREVIEW_PARAGRAPH_ACTIONS: Array<{
   helperLabel: string;
 }> = [
   {
-    id: "make_human",
+    id: "rewrite",
     label: "Rewrite",
     helperLabel: "Rewrite",
   },
@@ -146,7 +146,7 @@ const PREVIEW_PARAGRAPH_ACTIONS: Array<{
     helperLabel: "Shorten",
   },
   {
-    id: "ask",
+    id: "custom",
     label: "Ask",
     helperLabel: "Ask",
   },
@@ -1115,7 +1115,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           selectedText: textareaSelectionState.text,
         });
         const replacementText =
-          typeof result?.text === "string" ? result.text : "";
+          typeof result === "string"
+            ? result
+            : typeof result?.text === "string"
+              ? result.text
+              : "";
         if (!replacementText.trim()) {
           return;
         }

@@ -27,6 +27,10 @@ describe("ProposalDisplay", () => {
       writable: true,
       value: ResizeObserverMock,
     });
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
   });
 
   it("renders a copy button when proposal text is present", () => {
