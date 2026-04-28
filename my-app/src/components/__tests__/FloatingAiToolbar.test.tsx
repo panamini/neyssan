@@ -70,6 +70,46 @@ describe("FloatingAiToolbar", () => {
     );
   });
 
+  it("renders only the minimal canonical toolbar actions", async () => {
+    render(
+      <FloatingAiToolbar
+        anchor={{ left: 120, top: 80 }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByRole("button", { name: "Rewrite" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Shorten" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fix" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Clarify" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Strengthen" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Expand" })).toBeNull();
+  });
+
+  it("sends the canonical fix action id", async () => {
+    const onRunAction = vi.fn();
+
+    render(
+      <FloatingAiToolbar
+        anchor={{ left: 120, top: 80 }}
+        open
+        onClose={vi.fn()}
+        onRunAction={onRunAction}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Fix" }));
+
+    expect(onRunAction).toHaveBeenCalledWith(
+      "fix_grammar",
+      INLINE_AI_ACTIONS.find((action) => action.id === "fix_grammar")
+        ?.instruction,
+    );
+  });
+
   it("submits a custom instruction from the inline prompt", async () => {
     const onRunAction = vi.fn();
 
