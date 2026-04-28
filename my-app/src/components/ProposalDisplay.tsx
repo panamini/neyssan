@@ -62,6 +62,11 @@ import {
   restoreAiUndoSnapshot,
   type AiUndoSnapshot,
 } from "../lib/ai/applyAiSuggestion";
+import {
+  createAiInteractionId,
+  recordAiInteractionEvent,
+} from "../lib/ai/aiInteractionTelemetry";
+import type { AiApplyMode, AiOutputMode } from "../lib/ai/interactionRulebook";
 
 interface ProposalDisplayProps {
   proposalContent: string | null;
@@ -163,6 +168,9 @@ const PREVIEW_PARAGRAPH_ACTIONS: Array<{
 type ProposalAiSuggestion = {
   actionId: InlineAiActionId;
   actionLabel: string;
+  interactionId: string;
+  applyMode: AiApplyMode;
+  outputMode: AiOutputMode;
   beforeText: string;
   afterText: string;
   selection: { start: number; end: number };
@@ -1127,6 +1135,14 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     async (actionId: InlineAiActionId, instruction: string) => {
       if (!textareaSelectionState || !proposalContent) return;
 
+      const interactionId = createAiInteractionId();
+      recordAiInteractionEvent({
+        name: "ai_started",
+        interactionId,
+        surface: "proposal_editor",
+        actionId,
+      });
+
       try {
         setPendingInlineAiActionId(actionId);
         setIsApplyingInlineAi(true);
@@ -1137,12 +1153,31 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         });
         const normalizedResult = normalizeEditorAiTextResult(result, actionId);
         if (!normalizedResult) {
+          recordAiInteractionEvent({
+            name: "ai_failed",
+            interactionId,
+            surface: "proposal_editor",
+            actionId,
+            errorKind: "empty_result",
+          });
           return;
         }
+
+        recordAiInteractionEvent({
+          name: "ai_completed",
+          interactionId,
+          surface: "proposal_editor",
+          actionId: normalizedResult.actionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
+        });
 
         const suggestionBase = {
           actionId: normalizedResult.actionId,
           actionLabel: normalizedResult.actionLabel,
+          interactionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
           beforeText: textareaSelectionState.text,
           afterText: normalizedResult.text,
           selection: {
@@ -1171,6 +1206,14 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           status: "accepted",
           undoSnapshot: createAiUndoSnapshot(proposalContent, nextContent),
         });
+        recordAiInteractionEvent({
+          name: "ai_accepted",
+          interactionId,
+          surface: "proposal_editor",
+          actionId: normalizedResult.actionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
+        });
         setTextareaSelectionState(null);
 
         window.setTimeout(() => {
@@ -1181,6 +1224,15 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           textarea.focus();
           textarea.setSelectionRange(selectionEnd, selectionEnd);
         }, 0);
+      } catch (error) {
+        recordAiInteractionEvent({
+          name: "ai_failed",
+          interactionId,
+          surface: "proposal_editor",
+          actionId,
+          errorKind: "request_failed",
+        });
+        throw error;
       } finally {
         setIsApplyingInlineAi(false);
         setPendingInlineAiActionId(null);
@@ -1208,6 +1260,14 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       status: "accepted",
       undoSnapshot: createAiUndoSnapshot(proposalContent, nextContent),
     });
+    recordAiInteractionEvent({
+      name: "ai_accepted",
+      interactionId: aiSuggestion.interactionId,
+      surface: "proposal_editor",
+      actionId: aiSuggestion.actionId,
+      applyMode: aiSuggestion.applyMode,
+      outputMode: aiSuggestion.outputMode,
+    });
     window.setTimeout(() => {
       const textarea = editableTextareaRef.current;
       if (!textarea) return;
@@ -1221,8 +1281,29 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const handleUndoAiSuggestion = React.useCallback(() => {
     if (!aiSuggestion?.undoSnapshot) return;
     onContentChange?.(restoreAiUndoSnapshot(aiSuggestion.undoSnapshot));
+    recordAiInteractionEvent({
+      name: "ai_undone",
+      interactionId: aiSuggestion.interactionId,
+      surface: "proposal_editor",
+      actionId: aiSuggestion.actionId,
+      applyMode: aiSuggestion.applyMode,
+      outputMode: aiSuggestion.outputMode,
+    });
     setAiSuggestion(null);
   }, [aiSuggestion, onContentChange]);
+
+  const handleDiscardAiSuggestion = React.useCallback(() => {
+    if (!aiSuggestion) return;
+    recordAiInteractionEvent({
+      name: "ai_discarded",
+      interactionId: aiSuggestion.interactionId,
+      surface: "proposal_editor",
+      actionId: aiSuggestion.actionId,
+      applyMode: aiSuggestion.applyMode,
+      outputMode: aiSuggestion.outputMode,
+    });
+    setAiSuggestion(null);
+  }, [aiSuggestion]);
 
   const handlePreviewParagraphAction = React.useCallback(
     (label: string) => {
@@ -2322,7 +2403,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             afterText={aiSuggestion.afterText}
             status={aiSuggestion.status}
             onAccept={handleAcceptAiSuggestion}
-            onDiscard={() => setAiSuggestion(null)}
+            onDiscard={handleDiscardAiSuggestion}
             onUndo={handleUndoAiSuggestion}
           />
         ) : null}
@@ -2343,7 +2424,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             afterText={aiSuggestion.afterText}
             status={aiSuggestion.status}
             onAccept={handleAcceptAiSuggestion}
-            onDiscard={() => setAiSuggestion(null)}
+            onDiscard={handleDiscardAiSuggestion}
             onUndo={handleUndoAiSuggestion}
           />
         ) : null}

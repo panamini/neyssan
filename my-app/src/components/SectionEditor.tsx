@@ -75,6 +75,11 @@ import {
   restoreAiUndoSnapshot,
   type AiUndoSnapshot,
 } from "../lib/ai/applyAiSuggestion";
+import {
+  createAiInteractionId,
+  recordAiInteractionEvent,
+} from "../lib/ai/aiInteractionTelemetry";
+import type { AiApplyMode, AiOutputMode } from "../lib/ai/interactionRulebook";
 
 import { formatRangeFromItem } from "../lib/date-utils";
 import {
@@ -144,6 +149,9 @@ type InlineEditorSelectionState = {
 type InlineAiSuggestionState = {
   actionId: InlineAiActionId;
   actionLabel: string;
+  interactionId: string;
+  applyMode: AiApplyMode;
+  outputMode: AiOutputMode;
   beforeText: string;
   afterText: string;
   from: number;
@@ -1625,6 +1633,14 @@ export default function SectionEditor({
       const view = (manager as any)?.view;
       if (!view) return;
 
+      const interactionId = createAiInteractionId();
+      recordAiInteractionEvent({
+        name: "ai_started",
+        interactionId,
+        surface: "section_editor",
+        actionId,
+      });
+
       try {
         setPendingInlineAiActionId(actionId);
         setIsApplyingInlineAi(true);
@@ -1636,12 +1652,31 @@ export default function SectionEditor({
         const normalizedResult = normalizeEditorAiTextResult(result, actionId);
 
         if (!normalizedResult) {
+          recordAiInteractionEvent({
+            name: "ai_failed",
+            interactionId,
+            surface: "section_editor",
+            actionId,
+            errorKind: "empty_result",
+          });
           return;
         }
+
+        recordAiInteractionEvent({
+          name: "ai_completed",
+          interactionId,
+          surface: "section_editor",
+          actionId: normalizedResult.actionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
+        });
 
         const suggestionBase = {
           actionId: normalizedResult.actionId,
           actionLabel: normalizedResult.actionLabel,
+          interactionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
           beforeText: inlineSelectionState.text,
           afterText: normalizedResult.text,
           from: inlineSelectionState.from,
@@ -1673,6 +1708,23 @@ export default function SectionEditor({
           undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
         });
         onContentChange?.(String(section.id), afterDoc);
+        recordAiInteractionEvent({
+          name: "ai_accepted",
+          interactionId,
+          surface: "section_editor",
+          actionId: normalizedResult.actionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
+        });
+      } catch (error) {
+        recordAiInteractionEvent({
+          name: "ai_failed",
+          interactionId,
+          surface: "section_editor",
+          actionId,
+          errorKind: "request_failed",
+        });
+        throw error;
       } finally {
         setIsApplyingInlineAi(false);
         setPendingInlineAiActionId(null);
@@ -1708,6 +1760,14 @@ export default function SectionEditor({
       undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
     });
     onContentChange?.(String(section.id), afterDoc);
+    recordAiInteractionEvent({
+      name: "ai_accepted",
+      interactionId: inlineAiSuggestion.interactionId,
+      surface: "section_editor",
+      actionId: inlineAiSuggestion.actionId,
+      applyMode: inlineAiSuggestion.applyMode,
+      outputMode: inlineAiSuggestion.outputMode,
+    });
   }, [inlineAiSuggestion, manager, onContentChange, section.id]);
 
   const handleUndoInlineAiSuggestion = useCallback(() => {
@@ -1725,8 +1785,29 @@ export default function SectionEditor({
     }
 
     onContentChange?.(String(section.id), restoredDoc);
+    recordAiInteractionEvent({
+      name: "ai_undone",
+      interactionId: inlineAiSuggestion.interactionId,
+      surface: "section_editor",
+      actionId: inlineAiSuggestion.actionId,
+      applyMode: inlineAiSuggestion.applyMode,
+      outputMode: inlineAiSuggestion.outputMode,
+    });
     setInlineAiSuggestion(null);
   }, [inlineAiSuggestion, manager, onContentChange, section.id]);
+
+  const handleDiscardInlineAiSuggestion = useCallback(() => {
+    if (!inlineAiSuggestion) return;
+    recordAiInteractionEvent({
+      name: "ai_discarded",
+      interactionId: inlineAiSuggestion.interactionId,
+      surface: "section_editor",
+      actionId: inlineAiSuggestion.actionId,
+      applyMode: inlineAiSuggestion.applyMode,
+      outputMode: inlineAiSuggestion.outputMode,
+    });
+    setInlineAiSuggestion(null);
+  }, [inlineAiSuggestion]);
 
   const currentCvSkills = useMemo(() => {
     if (!currentCv) return [] as string[];
@@ -5898,7 +5979,7 @@ export default function SectionEditor({
             afterText={inlineAiSuggestion.afterText}
             status={inlineAiSuggestion.status}
             onAccept={handleAcceptInlineAiSuggestion}
-            onDiscard={() => setInlineAiSuggestion(null)}
+            onDiscard={handleDiscardInlineAiSuggestion}
             onUndo={handleUndoInlineAiSuggestion}
           />
         </div>

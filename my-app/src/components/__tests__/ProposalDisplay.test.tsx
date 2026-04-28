@@ -1,5 +1,5 @@
 import React from "react";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 import {
   act,
   fireEvent,
@@ -8,6 +8,10 @@ import {
   waitFor,
 } from "@testing-library/react";
 import ProposalDisplay from "../ProposalDisplay";
+import {
+  setAiInteractionTelemetrySink,
+  type AiInteractionTelemetryEvent,
+} from "../../lib/ai/aiInteractionTelemetry";
 
 const { mockTransformEditorSelection } = vi.hoisted(() => ({
   mockTransformEditorSelection: vi.fn(),
@@ -50,6 +54,12 @@ async function selectTextareaText(textarea: HTMLTextAreaElement, text: string) {
   });
 }
 
+function captureAiTelemetryEvents() {
+  const events: AiInteractionTelemetryEvent[] = [];
+  setAiInteractionTelemetrySink((event) => events.push(event));
+  return events;
+}
+
 function getToolbarButton(label: string): HTMLButtonElement {
   const match = screen
     .getAllByText(label)
@@ -66,6 +76,10 @@ function getToolbarButton(label: string): HTMLButtonElement {
 }
 
 describe("ProposalDisplay", () => {
+  afterEach(() => {
+    setAiInteractionTelemetrySink(null);
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     Object.defineProperty(navigator, "clipboard", {
@@ -91,6 +105,7 @@ describe("ProposalDisplay", () => {
   });
 
   it("previews rewrite suggestions without mutating the proposal before accept", async () => {
+    const telemetryEvents = captureAiTelemetryEvents();
     mockTransformEditorSelection.mockResolvedValue({
       kind: "text",
       actionId: "rewrite",
@@ -106,21 +121,51 @@ describe("ProposalDisplay", () => {
 
     await screen.findByRole("region", { name: "Rewrite suggestion" });
     expect(textarea).toHaveValue("This is rough proposal copy.");
+    expect(telemetryEvents.map((event) => event.name)).toEqual([
+      "ai_started",
+      "ai_completed",
+    ]);
+    expect(telemetryEvents[0]).toMatchObject({
+      surface: "proposal_editor",
+      actionId: "rewrite",
+      applyMode: "preview_required",
+    });
+    expect(new Set(telemetryEvents.map((event) => event.interactionId)).size).toBe(
+      1,
+    );
+    expect(JSON.stringify(telemetryEvents)).not.toContain(
+      "rough proposal copy",
+    );
+    expect(JSON.stringify(telemetryEvents)).not.toContain(
+      "polished proposal copy",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
 
     await waitFor(() => {
       expect(textarea).toHaveValue("This is polished proposal copy.");
     });
+    expect(telemetryEvents.map((event) => event.name)).toEqual([
+      "ai_started",
+      "ai_completed",
+      "ai_accepted",
+    ]);
 
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
 
     await waitFor(() => {
       expect(textarea).toHaveValue("This is rough proposal copy.");
     });
+    expect(telemetryEvents.map((event) => event.name)).toEqual([
+      "ai_started",
+      "ai_completed",
+      "ai_accepted",
+      "ai_undone",
+    ]);
   });
 
   it("previews custom Ask AI suggestions without auto-applying", async () => {
+    const telemetryEvents = captureAiTelemetryEvents();
     mockTransformEditorSelection.mockResolvedValue({
       kind: "text",
       actionId: "custom",
@@ -144,9 +189,24 @@ describe("ProposalDisplay", () => {
 
     await screen.findByRole("region", { name: "Ask suggestion" });
     expect(textarea).toHaveValue("This is rough proposal copy.");
+    expect(telemetryEvents).toEqual([
+      expect.objectContaining({
+        name: "ai_started",
+        surface: "proposal_editor",
+        actionId: "custom",
+        applyMode: "preview_required",
+      }),
+      expect.objectContaining({
+        name: "ai_completed",
+        surface: "proposal_editor",
+        actionId: "custom",
+        applyMode: "preview_required",
+      }),
+    ]);
   });
 
   it("discards preview-required suggestions without applying", async () => {
+    const telemetryEvents = captureAiTelemetryEvents();
     mockTransformEditorSelection.mockResolvedValue({
       kind: "text",
       actionId: "rewrite",
@@ -167,9 +227,48 @@ describe("ProposalDisplay", () => {
     expect(
       screen.queryByRole("region", { name: "Rewrite suggestion" }),
     ).not.toBeInTheDocument();
+    expect(telemetryEvents.map((event) => event.name)).toEqual([
+      "ai_started",
+      "ai_completed",
+      "ai_discarded",
+    ]);
+  });
+
+  it("records failed editor AI telemetry when no suggestion text is returned", async () => {
+    const telemetryEvents = captureAiTelemetryEvents();
+    mockTransformEditorSelection.mockResolvedValue({
+      kind: "text",
+      actionId: "rewrite",
+      text: "",
+      applyMode: "preview_required",
+      outputMode: "single_text",
+      variants: [],
+    });
+    const textarea = renderEditableProposal("This is rough proposal copy.");
+
+    await selectTextareaText(textarea, "rough proposal copy");
+    fireEvent.click(getToolbarButton("Rewrite"));
+
+    await waitFor(() => {
+      expect(telemetryEvents.map((event) => event.name)).toEqual([
+        "ai_started",
+        "ai_failed",
+      ]);
+    });
+    expect(telemetryEvents[1]).toMatchObject({
+      surface: "proposal_editor",
+      actionId: "rewrite",
+      applyMode: "preview_required",
+      errorKind: "empty_result",
+    });
+    expect(textarea).toHaveValue("This is rough proposal copy.");
+    expect(
+      screen.queryByRole("region", { name: "Rewrite suggestion" }),
+    ).not.toBeInTheDocument();
   });
 
   it("applies fix grammar inline and exposes undo", async () => {
+    const telemetryEvents = captureAiTelemetryEvents();
     mockTransformEditorSelection.mockResolvedValue({
       kind: "text",
       actionId: "fix_grammar",
@@ -189,12 +288,27 @@ describe("ProposalDisplay", () => {
     await waitFor(() => {
       expect(textarea).toHaveValue("This is clean proposal copy.");
     });
+    expect(telemetryEvents.map((event) => event.name)).toEqual([
+      "ai_started",
+      "ai_completed",
+      "ai_accepted",
+    ]);
+    expect(telemetryEvents[2]).toMatchObject({
+      actionId: "fix_grammar",
+      applyMode: "inline_replace_with_undo",
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
 
     await waitFor(() => {
       expect(textarea).toHaveValue("This is rough proposal copy.");
     });
+    expect(telemetryEvents.map((event) => event.name)).toEqual([
+      "ai_started",
+      "ai_completed",
+      "ai_accepted",
+      "ai_undone",
+    ]);
   });
 
   it("applies shorten inline and exposes undo", async () => {
