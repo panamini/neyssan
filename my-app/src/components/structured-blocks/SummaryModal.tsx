@@ -33,6 +33,11 @@ import {
   type AiUndoSnapshot,
 } from "../../lib/ai/applyAiSuggestion";
 import {
+  createAiInteractionId,
+  recordAiInteractionEvent,
+} from "../../lib/ai/aiInteractionTelemetry";
+import type { AiApplyMode, AiOutputMode } from "../../lib/ai/interactionRulebook";
+import {
   getDomSelectionState,
   isInlineAiToolbarActiveElement,
   isPrimaryPointerPressed,
@@ -50,6 +55,9 @@ interface SummaryModalProps {
 type InlineAiSuggestionState = {
   actionId: InlineAiActionId;
   actionLabel: string;
+  interactionId: string;
+  applyMode: AiApplyMode;
+  outputMode: AiOutputMode;
   beforeText: string;
   afterText: string;
   from: number;
@@ -317,6 +325,14 @@ export function SummaryModal({
       const view = (manager as any)?.view;
       if (!view) return;
 
+      const interactionId = createAiInteractionId();
+      recordAiInteractionEvent({
+        name: "ai_started",
+        interactionId,
+        surface: "summary_modal",
+        actionId,
+      });
+
       try {
         setPendingInlineAiActionId(actionId);
         setIsApplyingInlineAi(true);
@@ -328,12 +344,31 @@ export function SummaryModal({
         const normalizedResult = normalizeEditorAiTextResult(result, actionId);
 
         if (!normalizedResult) {
+          recordAiInteractionEvent({
+            name: "ai_failed",
+            interactionId,
+            surface: "summary_modal",
+            actionId,
+            errorKind: "empty_result",
+          });
           return;
         }
+
+        recordAiInteractionEvent({
+          name: "ai_completed",
+          interactionId,
+          surface: "summary_modal",
+          actionId: normalizedResult.actionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
+        });
 
         const suggestionBase = {
           actionId: normalizedResult.actionId,
           actionLabel: normalizedResult.actionLabel,
+          interactionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
           beforeText: inlineSelectionState.text,
           afterText: normalizedResult.text,
           from: inlineSelectionState.from,
@@ -364,6 +399,23 @@ export function SummaryModal({
           status: "accepted",
           undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
         });
+        recordAiInteractionEvent({
+          name: "ai_accepted",
+          interactionId,
+          surface: "summary_modal",
+          actionId: normalizedResult.actionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
+        });
+      } catch (error) {
+        recordAiInteractionEvent({
+          name: "ai_failed",
+          interactionId,
+          surface: "summary_modal",
+          actionId,
+          errorKind: "request_failed",
+        });
+        throw error;
       } finally {
         setIsApplyingInlineAi(false);
         setPendingInlineAiActionId(null);
@@ -392,6 +444,14 @@ export function SummaryModal({
       status: "accepted",
       undoSnapshot: createAiUndoSnapshot(beforeDoc, afterDoc),
     });
+    recordAiInteractionEvent({
+      name: "ai_accepted",
+      interactionId: inlineAiSuggestion.interactionId,
+      surface: "summary_modal",
+      actionId: inlineAiSuggestion.actionId,
+      applyMode: inlineAiSuggestion.applyMode,
+      outputMode: inlineAiSuggestion.outputMode,
+    });
   }, [inlineAiSuggestion, manager]);
 
   const handleUndoInlineAiSuggestion = React.useCallback(() => {
@@ -409,7 +469,28 @@ export function SummaryModal({
     }
 
     setInlineAiSuggestion(null);
+    recordAiInteractionEvent({
+      name: "ai_undone",
+      interactionId: inlineAiSuggestion.interactionId,
+      surface: "summary_modal",
+      actionId: inlineAiSuggestion.actionId,
+      applyMode: inlineAiSuggestion.applyMode,
+      outputMode: inlineAiSuggestion.outputMode,
+    });
   }, [inlineAiSuggestion, manager]);
+
+  const handleDiscardInlineAiSuggestion = React.useCallback(() => {
+    if (!inlineAiSuggestion) return;
+    recordAiInteractionEvent({
+      name: "ai_discarded",
+      interactionId: inlineAiSuggestion.interactionId,
+      surface: "summary_modal",
+      actionId: inlineAiSuggestion.actionId,
+      applyMode: inlineAiSuggestion.applyMode,
+      outputMode: inlineAiSuggestion.outputMode,
+    });
+    setInlineAiSuggestion(null);
+  }, [inlineAiSuggestion]);
 
   // Keep hook order stable across renders; effect is a no-op when closed.
   useEffect(() => {
@@ -569,7 +650,7 @@ export function SummaryModal({
                 afterText={inlineAiSuggestion.afterText}
                 status={inlineAiSuggestion.status}
                 onAccept={handleAcceptInlineAiSuggestion}
-                onDiscard={() => setInlineAiSuggestion(null)}
+                onDiscard={handleDiscardInlineAiSuggestion}
                 onUndo={handleUndoInlineAiSuggestion}
               />
             </section>
