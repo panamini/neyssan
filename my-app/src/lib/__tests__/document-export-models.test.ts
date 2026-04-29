@@ -24,7 +24,6 @@ describe("document-export-models", () => {
       currentCv: generateCvTemplate("Styled CV"),
       stylePreset: {
         ...DEFAULT_VERBATI_STYLE,
-        layout: "swiss",
         typography: "mono-signal",
       },
     });
@@ -33,11 +32,11 @@ describe("document-export-models", () => {
       expect.objectContaining({
         renderSource: "preview",
         stylePreset: expect.objectContaining({
-          layout: "swiss",
+          layout: "workshop",
           typography: "mono-signal",
         }),
         rendererVariantId: "swissminima",
-        resumeTemplateId: "swiss_resume_legacy",
+        resumeTemplateId: "workshop_resume_onecol_ats",
       }),
     );
   });
@@ -145,7 +144,6 @@ describe("document-export-models", () => {
     const snapshot = buildResumePrintDebugSnapshot({
       stylePreset: {
         ...DEFAULT_VERBATI_STYLE,
-        layout: "swiss",
         typography: "mono-signal",
       },
       rendererVariantId: "swissminima",
@@ -153,7 +151,7 @@ describe("document-export-models", () => {
 
     expect(snapshot).toEqual(
       expect.objectContaining({
-        layout: "swiss",
+        layout: "workshop",
         typography: "mono-signal",
         rendererVariantId: "swissminima",
         headingFontFamily: expect.stringContaining("Archivo"),
@@ -183,7 +181,6 @@ describe("document-export-models", () => {
       templateId: "two_column_rail",
       stylePreset: {
         ...DEFAULT_VERBATI_STYLE,
-        layout: "two-column",
         typography: "mono-signal",
       },
     });
@@ -193,7 +190,7 @@ describe("document-export-models", () => {
         renderSource: "preview",
         templateId: "two_column_rail",
         stylePreset: expect.objectContaining({
-          layout: "swiss",
+          layout: "workshop",
           typography: "mono-signal",
         }),
       }),
@@ -253,7 +250,6 @@ describe("document-export-models", () => {
     const snapshot = buildProposalPrintDebugSnapshot({
       stylePreset: {
         ...DEFAULT_VERBATI_STYLE,
-        layout: "two-column",
         typography: "mono-signal",
       },
       templateId: "two_column_rail",
@@ -262,7 +258,7 @@ describe("document-export-models", () => {
 
     expect(snapshot).toEqual(
       expect.objectContaining({
-        layout: "swiss",
+        layout: "workshop",
         typography: "mono-signal",
         templateId: "two_column_rail",
         bodyFontFamily: expect.stringContaining("Archivo"),
