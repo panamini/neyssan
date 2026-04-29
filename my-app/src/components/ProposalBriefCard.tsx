@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowSquareOut, ChevronDown } from "@/lib/icons";
 import { getProposalSourceLabel } from "../lib/proposal-source-platforms";
+import { StatusBadge } from "./ui/status-badge";
 
 type ProposalBriefReviewItem = {
   id: string;
@@ -492,20 +493,17 @@ export function ProposalBriefCard({
                             <div className="dasti-brief-card__review-label">
                               {item.label}
                             </div>
-                            <div
+                            <StatusBadge
+                              tone={isApproved ? "neutral" : "warning"}
                               className={[
                                 "dasti-brief-card__review-state",
-                                "dasti-pill",
-                                isApproved
-                                  ? "dasti-pill--success"
-                                  : "dasti-pill--warning",
                                 isApproved
                                   ? "dasti-brief-card__review-state--approved"
                                   : "dasti-brief-card__review-state--pending",
                               ].join(" ")}
                             >
                               {isApproved ? "Saved" : "Check"}
-                            </div>
+                            </StatusBadge>
                           </div>
                           <div className="dasti-brief-card__review-actions">
                             {!isApproved ? (

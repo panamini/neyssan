@@ -3,7 +3,13 @@
 import React from "react";
 import clsx from "clsx";
 
-export type PillTone = "neutral" | "accent" | "success" | "warning" | "danger";
+export type PillTone =
+  | "neutral"
+  | "accent"
+  | "info"
+  | "success"
+  | "warning"
+  | "danger";
 
 export interface PillProps extends React.HTMLAttributes<HTMLSpanElement> {
   tone?: PillTone;
