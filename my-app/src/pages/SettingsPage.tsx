@@ -318,16 +318,7 @@ function HeroPreview({ preset, slotName }: { preset: PresetSlot; slotName: strin
   const previewDef =
     styleOption.id === "auto"
       ? PROPOSAL_AUTO_STYLE_PREVIEW
-      : PROPOSAL_STYLE_PREVIEW_DEFINITIONS[
-          (
-            styleOption.id === "editorial"
-              ? "warm"
-              : styleOption.id === "modernist"
-                ? "technical"
-                : "balanced"
-          ) as keyof typeof PROPOSAL_STYLE_PREVIEW_DEFINITIONS
-        ]
-          ?? PROPOSAL_STYLE_PREVIEW_DEFINITIONS.balanced;
+      : PROPOSAL_STYLE_PREVIEW_DEFINITIONS.balanced;
 
   const cardRef = useRef<HTMLElement>(null);
   const rafRef = useRef(0);
