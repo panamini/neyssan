@@ -2088,6 +2088,8 @@
 
 .dasti-proposal-library-filter-menu__trigger-label {
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2356,42 +2358,28 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid
-    color-mix(in srgb, var(--color-border-strong) 76%, transparent);
-  background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ti);
+  min-height: 28px;
+  padding: 0 var(--s3);
+  border-radius: var(--radius-pill);
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  letter-spacing: 0;
+  text-transform: none;
   white-space: nowrap;
 }
 
 .dasti-count-pill {
   min-width: 24px;
   padding-inline: 8px;
-}
-
-.dasti-proposal-tone-badge {
-  background: color-mix(
-    in srgb,
-    var(--color-accent-pale) 34%,
-    var(--color-surface-raised) 66%
-  );
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-selected) 64%,
-    transparent
-  );
+  border: 1px solid transparent;
+  background: var(--sf2);
+  color: var(--tg3);
 }
 
 .dasti-proposal-tone-badge--compact {
-  min-height: 22px;
-  padding-inline: 8px;
-  font-size: 10px;
+  min-height: 28px;
+  padding-inline: var(--s3);
+  font-size: var(--tx);
 }
 
 .dasti-proposal-library-selected-shell .dasti-proposal-library-card--selected {
@@ -11432,23 +11420,23 @@
 .dasti-jobs-filter-cluster
   .dasti-jobs-filter-chip:not(.dasti-jobs-filter-chip--active) {
   border-color: transparent;
-  background: var(--color-surface-muted);
-  color: var(--tm2);
+  background: var(--sf2);
+  color: var(--tg3);
   box-shadow: none;
 }
 
 .dasti-jobs-filter-chip {
   appearance: none;
-  border: 1px solid
-    color-mix(in srgb, var(--color-border-strong) 76%, transparent);
+  border: 1px solid transparent;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
-  color: var(--ti);
+  background: var(--sf2);
+  color: var(--tg3);
   min-height: 28px;
-  padding: 0 10px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  padding: 0 var(--s3);
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  line-height: 1;
+  letter-spacing: 0;
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-standard),
@@ -11483,22 +11471,16 @@
 
 .dasti-jobs-filter-chip:hover,
 .dasti-jobs-filter-chip:focus-visible {
-  border-color: var(--color-border-contrast);
-  background: color-mix(in srgb, var(--color-surface-raised) 96%, transparent);
+  border-color: transparent;
+  background: var(--sf3);
+  color: var(--ti);
   outline: none;
 }
 
 .dasti-jobs-filter-chip--active {
-  background: color-mix(
-    in srgb,
-    var(--color-accent-pale) 34%,
-    var(--color-surface-raised) 66%
-  );
-  border-color: color-mix(
-    in srgb,
-    var(--color-border-selected) 64%,
-    transparent
-  );
+  background: var(--am-soft);
+  border-color: transparent;
+  color: var(--ac);
 }
 
 .dasti-jobs-view-toggle .dasti-jobs-view-toggle__button[aria-pressed="true"] {
@@ -11524,12 +11506,9 @@
 
 .dasti-jobs-filter-chip--active:hover,
 .dasti-jobs-filter-chip--active:focus-visible {
-  border-color: var(--color-border-selected);
-  background: color-mix(
-    in srgb,
-    var(--color-accent-pale) 42%,
-    var(--color-surface-raised) 58%
-  );
+  border-color: transparent;
+  background: var(--am-soft);
+  color: var(--ac);
 }
 
 .dasti-jobs-view-toggle
@@ -11639,21 +11618,17 @@
 .dasti-jobs-sample-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  padding: 0 8px;
+  min-height: 28px;
+  padding: 0 var(--s3);
   border-radius: var(--radius-pill);
-  border: 1px solid
-    color-mix(in srgb, var(--color-border-selected) 72%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--color-accent-pale) 22%,
-    var(--color-surface-raised) 78%
-  );
-  color: var(--ti);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  border: 1px solid transparent;
+  background: var(--am-soft);
+  color: var(--ac);
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
   white-space: nowrap;
 }
 
@@ -11678,16 +11653,16 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 24px;
-  padding: 0 8px;
+  min-height: 28px;
+  padding: 0 var(--s3);
   border-radius: var(--radius-pill);
-  border: 1px solid
-    color-mix(in srgb, var(--color-border-strong) 76%, transparent);
-  background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
-  color: var(--ti);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+  background: var(--sf2);
+  color: var(--tg3);
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  line-height: 1;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
@@ -12082,15 +12057,15 @@
 .dasti-match-read__stat {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  min-height: var(--pill-height-md);
+  gap: calc(var(--s2) - 2px);
+  min-height: 28px;
   min-width: 0;
-  padding: var(--pill-padding-sm);
-  border: 1px solid var(--color-border);
+  padding: 0 var(--s3);
+  border: 1px solid transparent;
   border-radius: var(--radius-pill);
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  font-size: var(--text-caption-size);
+  background: var(--sf2);
+  color: var(--tg3);
+  font-size: var(--tx);
   font-weight: var(--font-label-weight);
   line-height: 1;
   text-align: start;
@@ -12119,14 +12094,22 @@
 
 .dasti-match-read__stat--button:hover,
 .dasti-match-read__stat--button:focus-visible {
-  border-color: var(--border-selected);
+  background: var(--sf3);
+  border-color: transparent;
+  color: var(--ti);
   outline: none;
 }
 
 .dasti-match-read__stat--warning {
-  background: var(--color-warning-soft);
+  background: var(--wab);
   border-color: transparent;
-  color: var(--color-warning-ink);
+  color: var(--wat);
+}
+
+.dasti-match-read__stat--warning:hover,
+.dasti-match-read__stat--warning:focus-visible {
+  background: var(--wab);
+  color: var(--wat);
 }
 
 .dasti-match-read__details {
@@ -14296,15 +14279,25 @@
 }
 
 .dasti-compose-toolbar__tone-option--drawer {
-  width: var(--hs);
-  min-width: var(--hs);
+  width: auto;
+  min-width: max-content;
   height: var(--hs);
   min-height: var(--hs);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
   border-radius: calc(var(--radius-card) - 2px);
+  line-height: normal;
+}
+
+.dasti-compose-toolbar__tone-option-label {
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  line-height: 1;
+  color: var(--tg3);
+  white-space: nowrap;
 }
 
 .dasti-compose-toolbar__tone-option--drawer:hover

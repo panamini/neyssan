@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 
 const productCssPath = resolve(process.cwd(), "src/styles/product.css");
 const productCss = readFileSync(productCssPath, "utf8");
+const foundationCss = readFileSync(
+  resolve(process.cwd(), "src/styles/foundation.css"),
+  "utf8",
+);
 
 describe("JobsPage CSS contracts", () => {
   it("keeps Jobs filter drawers clear of the toolbar and above the list", () => {
@@ -26,7 +30,7 @@ describe("JobsPage CSS contracts", () => {
       /\.dasti-jobs-row--menu-open\s*\{[\s\S]*z-index:\s*calc\(var\(--z-popover\)\s*\+\s*1\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-jobs-row__menu-surface\s*\{[\s\S]*inline-size:\s*min\(188px,\s*calc\(100vw - \(var\(--space-4\) \* 2\)\)\);[\s\S]*min-inline-size:\s*min\(160px,\s*calc\(100vw - \(var\(--space-4\) \* 2\)\)\);[\s\S]*z-index:\s*calc\(var\(--z-popover\)\s*\+\s*2\);/,
+      /\.dasti-jobs-row__menu-surface\s*\{[\s\S]*inline-size:\s*max-content;[\s\S]*min-inline-size:\s*100%;[\s\S]*max-inline-size:\s*min\(188px,\s*calc\(100vw - \(var\(--space-4\) \* 2\)\)\);[\s\S]*z-index:\s*calc\(var\(--z-popover\)\s*\+\s*2\);/,
     );
   });
 
@@ -54,6 +58,29 @@ describe("JobsPage CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.dasti-jobs-detail__favorite-action\[aria-pressed="true"\],\s*[\s\S]*\.dasti-jobs-row__favorite\[aria-pressed="true"\]\s*\{[\s\S]*background:\s*var\(--proposal-chrome-control-active-bg\);/,
+    );
+  });
+
+  it("aligns job pills with DS v2 pill tokens instead of legacy uppercase chips", () => {
+    expect(foundationCss).toContain("--am-soft: #EBBCAF;");
+    expect(foundationCss).toContain("--am-soft: rgba(212, 117, 84, 0.20);");
+    expect(productCss).toMatch(
+      /\.dasti-jobs-filter-chip\s*\{[\s\S]*background:\s*var\(--sf2\);[\s\S]*color:\s*var\(--tg3\);[\s\S]*font-size:\s*var\(--tx\);[\s\S]*line-height:\s*1;[\s\S]*letter-spacing:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-filter-chip--active\s*\{[\s\S]*background:\s*var\(--am-soft\);[\s\S]*color:\s*var\(--ac\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-sample-badge\s*\{[\s\S]*min-height:\s*28px;[\s\S]*background:\s*var\(--am-soft\);[\s\S]*line-height:\s*1;[\s\S]*text-transform:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-match-chip,\s*\.dasti-jobs-row__meta-pill\s*\{[\s\S]*min-height:\s*28px;[\s\S]*background:\s*var\(--sf2\);[\s\S]*line-height:\s*1;[\s\S]*letter-spacing:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-match-read__stat\s*\{[\s\S]*min-height:\s*28px;[\s\S]*padding:\s*0 var\(--s3\);[\s\S]*background:\s*var\(--sf2\);[\s\S]*color:\s*var\(--tg3\);[\s\S]*font-size:\s*var\(--tx\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-match-read__stat--warning\s*\{[\s\S]*background:\s*var\(--wab\);[\s\S]*color:\s*var\(--wat\);/,
     );
   });
 });
