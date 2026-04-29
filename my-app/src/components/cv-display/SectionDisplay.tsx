@@ -7,7 +7,7 @@ import { StrictExtractButton } from '../StrictExtractButton';
 import { useCvLibrary } from '../../contexts/CvLibraryContext';
 import { formatRangeFromItem } from '../../lib/date-utils';
 import { remirrorJsonToString } from '../../lib/utils';
-import { splitResponsibilitiesIntoBullets } from '../../utils/cv/mapping-utils';
+import { splitResponsibilitiesIntoBullets } from '../../lib/resumeResponsibilityAuthority';
 import { isExperienceRenderable, isEducationRenderable } from '../../utils/cv/renderGuards';
 
 interface SectionDisplayProps {

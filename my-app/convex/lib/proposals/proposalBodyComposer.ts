@@ -337,6 +337,7 @@ export function buildStructuredCoverLetterComposerPrompt(args: {
   contentPlan: StructuredCoverLetterContentPlan;
   jobTitle: string;
   jobDescription: string;
+  generationControlsBlock?: string;
 }): string {
   const stylePack = COMPOSER_STYLE_PACKS[args.contentPlan.voice_preset];
   const examples = COMPOSER_EXAMPLES[args.contentPlan.language];
@@ -367,6 +368,7 @@ export function buildStructuredCoverLetterComposerPrompt(args: {
     `Tone direction: ${stylePack.tone}`,
     `Style traits: ${stylePack.guidance.join(" | ")}`,
     `Avoid cliche bridge language such as: ${stylePack.negative.join(" | ")}`,
+    args.generationControlsBlock,
     "Acceptable phrasing examples:",
     ...examples.acceptable.map((example) => `- ${example}`),
     "Unacceptable phrasing examples:",
@@ -420,7 +422,7 @@ export function buildStructuredCoverLetterComposerPrompt(args: {
     "",
     "Paragraph blueprint:",
     ...buildParagraphBlueprint(args),
-  ].join("\n");
+  ].filter((line): line is string => typeof line === "string").join("\n");
 }
 
 export function buildStructuredCoverLetterComposerRetryPrompt(args: {
@@ -429,6 +431,7 @@ export function buildStructuredCoverLetterComposerRetryPrompt(args: {
   jobTitle: string;
   jobDescription: string;
   failureReason: string;
+  generationControlsBlock?: string;
 }): string {
   return [
     buildStructuredCoverLetterComposerPrompt({
@@ -436,6 +439,7 @@ export function buildStructuredCoverLetterComposerRetryPrompt(args: {
       contentPlan: args.contentPlan,
       jobTitle: args.jobTitle,
       jobDescription: args.jobDescription,
+      generationControlsBlock: args.generationControlsBlock,
     }),
     "",
     "Revision required:",

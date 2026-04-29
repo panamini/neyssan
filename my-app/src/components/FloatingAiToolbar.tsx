@@ -176,7 +176,7 @@ export function FloatingAiToolbar({
   const [activeActionId, setActiveActionId] =
     React.useState<InlineAiActionId>(DEFAULT_ACTION_ID);
   const [customInstruction, setCustomInstruction] = React.useState("");
-  const [askPlaceholder, setAskPlaceholder] = React.useState(
+  const [askPlaceholder, setAskPlaceholder] = React.useState<string>(
     ASK_SUGGESTIONS[0],
   );
   const [position, setPosition] = React.useState<{

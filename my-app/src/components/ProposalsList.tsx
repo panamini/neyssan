@@ -274,6 +274,12 @@ function buildSavedApplicantHeader(
       normalizeSavedTextValue(proposal?.metadata?.applicantRole) ??
       fallbackHeader?.role ??
       null,
+    email: fallbackHeader?.email ?? null,
+    phone: fallbackHeader?.phone ?? null,
+    linkedin: fallbackHeader?.linkedin ?? null,
+    website: fallbackHeader?.website ?? null,
+    location: fallbackHeader?.location ?? null,
+    tag: fallbackHeader?.tag ?? null,
   };
 }
 
@@ -566,7 +572,18 @@ export default function ProposalsList({
   const fallbackProposals = React.useMemo(
     () =>
       !isLoaded || !isSignedIn || !isConvexAuthenticated
-        ? readStoredSavedProposalFixtures()
+        ? readStoredSavedProposalFixtures().map(
+            (proposal): SavedProposalRecord => ({
+              ...proposal,
+              _creationTime:
+                proposal._creationTime ??
+                proposal.updatedAt ??
+                proposal.createdAt ??
+                0,
+              metadata:
+                proposal.metadata as SavedProposalRecord["metadata"],
+            }),
+          )
         : [],
     [isConvexAuthenticated, isLoaded, isSignedIn],
   );
@@ -726,9 +743,7 @@ export default function ProposalsList({
   const selectedCardRef = React.useRef<HTMLDivElement | null>(null);
   const selectedTitleInputRef = React.useRef<HTMLTextAreaElement | null>(null);
   const shouldRevealSelectedCardRef = React.useRef(false);
-  const selectedSaveTimeoutRef = React.useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const selectedSaveTimeoutRef = React.useRef<number | null>(null);
   const pendingSelectedSavePromiseRef = React.useRef<Promise<void> | null>(
     null,
   );
@@ -937,20 +952,20 @@ export default function ProposalsList({
         : null),
     };
     if (selectedCustomAccentHex) {
-      return {
+      return resolveVerbatiStyle({
         ...nextStylePreset,
         palette: "custom" as const,
         accentHex: selectedCustomAccentHex,
-      };
+      });
     }
     if (selectedPaletteOverride) {
-      return {
+      return resolveVerbatiStyle({
         ...nextStylePreset,
         palette: selectedPaletteOverride,
         accentHex: undefined,
-      };
+      });
     }
-    return nextStylePreset;
+    return resolveVerbatiStyle(nextStylePreset);
   }, [
     selectedBaseStylePreset,
     selectedCustomAccentHex,
@@ -1179,7 +1194,9 @@ export default function ProposalsList({
             setIsUpdating(null);
           }
 
-          const queuedSnapshot = pendingSelectedSaveSnapshotRef.current;
+          const queuedSnapshot = pendingSelectedSaveSnapshotRef.current as
+            | typeof initialSnapshot
+            | null;
           nextSnapshot =
             queuedSnapshot &&
             queuedSnapshot.token !== lastPersistedSelectedTokenRef.current

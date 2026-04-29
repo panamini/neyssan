@@ -57,6 +57,10 @@ type SavedProposalForgeToolbarPreviewProps = {
 
 type DrawerId = "zoom" | "color" | null;
 
+function getTypographyFontWeight(typography: VerbatiTypographyPreset | string) {
+  return typography === "expert" ? 500 : 600;
+}
+
 export function SavedProposalForgeToolbarPreview({
   mode,
   onModeChange,
@@ -341,7 +345,7 @@ export function SavedProposalForgeToolbarPreview({
                           aria-hidden="true"
                           style={{
                             fontFamily: option.headingFamily,
-                            fontWeight: option.id === "expert" ? 500 : 600,
+                            fontWeight: getTypographyFontWeight(option.id),
                           }}
                         >
                           Aa
@@ -365,8 +369,9 @@ export function SavedProposalForgeToolbarPreview({
                       aria-hidden="true"
                       style={{
                         fontFamily: activeTypographyOption.headingFamily,
-                        fontWeight:
-                          activeTypographyOption.id === "expert" ? 500 : 600,
+                        fontWeight: getTypographyFontWeight(
+                          activeTypographyOption.id,
+                        ),
                       }}
                     >
                       Aa

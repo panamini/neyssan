@@ -116,6 +116,7 @@ type BuildProposalPlannerPromptArgs = {
   contextMode: ProposalPlannerContextMode;
   outputLanguage: ProposalPlannerOutputLanguage;
   personalizationContext: ProposalPlannerPersonalizationContext | null;
+  generationControlsBlock?: string;
 };
 
 const MAX_FACT_BANK_ITEMS = 18;
@@ -831,6 +832,7 @@ export function buildProposalPlannerPrompt(
     `Observed output language: ${args.outputLanguage}.`,
     `Target role: ${args.jobTitle}`,
     `Job description: ${compactWhitespace(args.jobDescription)}`,
+    args.generationControlsBlock,
     factBankBlock,
     "Planner rules:",
     ...SOURCE_BACKED_SPECIFICITY_RULES.map((rule) => `- ${rule}`),

@@ -28,8 +28,8 @@ export type MatchReviewFailureType =
 export type LiveMatchReviewRecord = {
   jobId: string;
   jobTitle: string;
-  company?: string | null;
-  profileLabel?: string | null;
+  company: string | null;
+  profileLabel: string | null;
   tier: MatchReadTier;
   verdict: JobMatchReviewVerdict;
   score: number | null;

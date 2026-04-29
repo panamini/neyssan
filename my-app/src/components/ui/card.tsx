@@ -30,7 +30,7 @@ export function Card({
       className: clsx(children.props.className, classes),
       "data-interactive": interactive || undefined,
       ...props,
-    });
+    } as React.HTMLAttributes<HTMLElement> & { "data-interactive"?: boolean });
   }
 
   const Tag = as;
