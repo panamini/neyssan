@@ -252,11 +252,12 @@
   }
 
   .ds-field:hover:not(:disabled, :focus) {
-    background: var(--sf1);
+    background: var(--sf3);
   }
 
   .ds-field:focus {
     border-color: var(--ti);
+    box-shadow: var(--field-focus-shadow) !important;
   }
 
   .ds-field--error {
