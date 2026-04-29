@@ -2024,7 +2024,11 @@ function renderProposalBlocks(
           signatureName && signatureRender?.kind === "image"
             ? `<img class="proposal-signature-image" src="${escapeHtml(signatureRender.imageDataUrl)}" alt="${escapeHtml(signatureName)}" />`
             : signatureName
-              ? `<p class="proposal-signature" style="${escapeHtml(`--proposal-signature-font-family: ${signatureRender?.fontFamily ?? "var(--body-font)"};`)}">${escapeHtml(signatureName)}</p>`
+              ? `<p class="proposal-signature" style="${escapeHtml(`--proposal-signature-font-family: ${
+                  signatureRender?.kind === "text"
+                    ? signatureRender.fontFamily
+                    : "var(--body-font)"
+                };`)}">${escapeHtml(signatureName)}</p>`
               : "";
 
         return `<div class="proposal-block proposal-block--closing" data-block="closing">
@@ -2056,9 +2060,11 @@ function renderProposalHtml(args: {
     proposalTemplateId: args.data.templateId,
     stylePreset: args.stylePreset,
   });
+  const bodyFontFamily =
+    profile.canonical.appearance.font.body.family ?? "var(--body-font)";
   const signatureRender = resolveProposalSignatureRender({
     settings: args.data.signatureSettings,
-    bodyFontFamily: profile.canonical.appearance.font.body.family,
+    bodyFontFamily,
   });
   const recipientLines = args.data.recipientDetails
     ? normalizeLocaleTypography(args.data.recipientDetails, locale)
@@ -2633,7 +2639,7 @@ export async function buildProposalDocxBuffer(args: {
   );
   const signatureRender = resolveProposalSignatureRender({
     settings: args.data.signatureSettings,
-    bodyFontFamily: profile.canonical.appearance.font.body.family,
+    bodyFontFamily: bodyFont,
   });
   const signatureFont =
     signatureRender.kind === "text"
