@@ -193,6 +193,7 @@ export function FloatingAiToolbar({
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const actionShellRef = React.useRef<HTMLDivElement | null>(null);
   const promptShellRef = React.useRef<HTMLDivElement | null>(null);
+  const askInputRef = React.useRef<HTMLInputElement | null>(null);
   const lastAnchorRef = React.useRef<EditorSelectionAnchor | null>(anchor);
 
   const isAskOpen = activeActionId === "custom";
@@ -507,6 +508,12 @@ export function FloatingAiToolbar({
   const isPositionReady =
     open && anchor !== null && position !== null && metrics.panelWidth > 0;
 
+  React.useEffect(() => {
+    if (!isAskOpen || !isPositionReady || isPromptLoading) return;
+
+    askInputRef.current?.focus({ preventScroll: true });
+  }, [isAskOpen, isPositionReady, isPromptLoading]);
+
   return (
     <BodyPortal>
       {shouldRenderToolbar && renderAnchor ? (
@@ -602,6 +609,7 @@ export function FloatingAiToolbar({
               <label style={{ display: "contents" }}>
                 <span className="sr-only">Ask AI</span>
                 <input
+                  ref={askInputRef}
                   type="text"
                   aria-label="Ask AI"
                   value={customInstruction}
