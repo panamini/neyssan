@@ -12,7 +12,7 @@
  */
 
 import { v4 as uuidv4 } from "uuid";
-import type { CvSection } from "../../types/cvDocument";
+import type { CvBlock, CvSection } from "../../types/cvDocument";
 import { ensureRemirrorDoc } from "../../components/remirror-editor/utils/conversion";
 import { splitResponsibilitiesIntoBullets } from "../../lib/resumeResponsibilityAuthority";
 import { CvSectionSchema, CvSectionSchemaStrict } from "../../schemas/cvDocument.schema";
@@ -120,7 +120,11 @@ export type AiDispatchSections = (
   params: AiDispatchSectionsParams
 ) => Promise<{ sections: unknown } | unknown>;
 
-function buildExperienceRepresentativeBlocks(items: any[]) {
+function isNotNull<T>(value: T | null): value is T {
+  return value !== null;
+}
+
+function buildExperienceRepresentativeBlocks(items: any[]): CvBlock[] {
   return items
     .filter((item) => item && typeof item === "object")
     .map((item) => {
@@ -141,10 +145,10 @@ function buildExperienceRepresentativeBlocks(items: any[]) {
         attributes: { linkedStructuredId: itemId },
       };
     })
-    .filter(Boolean);
+    .filter(isNotNull);
 }
 
-function buildEducationRepresentativeBlocks(items: any[]) {
+function buildEducationRepresentativeBlocks(items: any[]): CvBlock[] {
   return items
     .filter((item) => item && typeof item === "object")
     .map((item) => {
@@ -164,7 +168,7 @@ function buildEducationRepresentativeBlocks(items: any[]) {
         attributes: { linkedStructuredId: itemId },
       };
     })
-    .filter(Boolean);
+    .filter(isNotNull);
 }
 
 /**
@@ -1511,7 +1515,7 @@ function consolidateExperience(expArr: any[]): { items: any[]; diag: Consolidate
       job.responsibilities = null;
     }
     if (Array.isArray(job.responsibilityBullets)) {
-      job.responsibilityBullets = dedupeCaseInsensitive(job.responsibilityBullets.map((b) => sanitizeToken(String(b))).filter(Boolean));
+      job.responsibilityBullets = dedupeCaseInsensitive(job.responsibilityBullets.map((b: unknown) => sanitizeToken(String(b))).filter(Boolean));
       if (job.responsibilityBullets.length === 0) {
         delete job.responsibilityBullets;
       } else if (!job.responsibilities && job.__hasExplicitResponsibilities !== true) {
@@ -1521,7 +1525,7 @@ function consolidateExperience(expArr: any[]): { items: any[]; diag: Consolidate
       }
     }
     if (Array.isArray(job.achievements)) {
-      job.achievements = dedupeCaseInsensitive(job.achievements.map((a) => sanitizeToken(String(a))).filter(Boolean));
+      job.achievements = dedupeCaseInsensitive(job.achievements.map((a: unknown) => sanitizeToken(String(a))).filter(Boolean));
     }
     delete job.__hasExplicitResponsibilities;
   });
@@ -2217,7 +2221,7 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
         fieldOfStudy: "",
         startDate: undefined,
         endDate: undefined,
-        isCurrent: undefined,
+        isCurrent: false,
         description: toRemirror(text),
         grade: "",
       });
