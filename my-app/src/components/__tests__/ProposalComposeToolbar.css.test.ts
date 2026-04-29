@@ -2,8 +2,17 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const productCssPath = resolve(process.cwd(), "src/styles/product.css");
-const productCss = readFileSync(productCssPath, "utf8");
+const productCssPaths = [
+  "src/styles/product.css",
+  "src/styles/product-proposal.css",
+  "src/styles/product-libraries.css",
+  "src/styles/product-jobs.css",
+  "src/styles/product-cv.css",
+  "src/styles/product-settings.css",
+];
+const productCss = productCssPaths
+  .map((stylePath) => readFileSync(resolve(process.cwd(), stylePath), "utf8"))
+  .join("\n");
 
 describe("ProposalComposeToolbar CSS contracts", () => {
   it("keeps the tone group right-anchored even when the collapse control is absent", () => {
