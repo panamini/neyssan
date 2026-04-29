@@ -1154,6 +1154,185 @@
     }
   }
 
+  .ds-sheet-root {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    overflow: hidden;
+  }
+
+  .ds-sheet-root[data-side="bottom"] {
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .ds-sheet__overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: color-mix(in srgb, var(--ink) 35%, transparent);
+    backdrop-filter: blur(6px) saturate(140%);
+    cursor: default;
+  }
+
+  .ds-sheet {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    width: min(420px, 100%);
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--border-soft);
+    background: var(--sfr);
+    box-shadow: var(--shc);
+    transform: translateX(0);
+    transition: transform var(--motion-duration-panel)
+      var(--motion-ease-emphasized);
+  }
+
+  .ds-sheet[data-state="closed"] {
+    transform: translateX(100%);
+  }
+
+  .ds-sheet__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s3);
+    padding: var(--s4) var(--s5);
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .ds-sheet__title {
+    margin: 0;
+    color: var(--ti);
+    font-size: var(--tm);
+    line-height: var(--ll);
+    font-weight: 600;
+    letter-spacing: var(--tracking-tight);
+  }
+
+  .ds-sheet__description {
+    margin: var(--s1) 0 0;
+    color: var(--tm2);
+    font-size: var(--tx);
+    line-height: var(--lx);
+  }
+
+  .ds-sheet__close {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--tm2);
+    cursor: pointer;
+    transition:
+      background-color var(--motion-duration-fast)
+        var(--motion-ease-standard),
+      color var(--motion-duration-fast) var(--motion-ease-standard);
+  }
+
+  .ds-sheet__close:hover {
+    background: var(--sf2);
+    color: var(--ti);
+  }
+
+  .ds-sheet__close:focus-visible {
+    outline: 2px solid var(--ti);
+    outline-offset: 2px;
+  }
+
+  .ds-sheet__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s4);
+    padding: var(--s5);
+  }
+
+  .ds-sheet__footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--s2);
+    padding: var(--s4) var(--s5);
+    border-top: 1px solid var(--border-soft);
+    background: var(--sf1);
+  }
+
+  .ds-bottom-sheet {
+    position: relative;
+    width: 100%;
+    max-height: 75vh;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border-soft);
+    border-top-left-radius: var(--radius-4);
+    border-top-right-radius: var(--radius-4);
+    background: var(--sfr);
+    box-shadow: var(--shc);
+    transform: translateY(0);
+    transition: transform var(--motion-duration-panel)
+      var(--motion-ease-emphasized);
+  }
+
+  .ds-bottom-sheet[data-state="closed"] {
+    transform: translateY(100%);
+  }
+
+  .ds-bottom-sheet__handle {
+    align-self: center;
+    width: 36px;
+    height: 4px;
+    margin-top: var(--s2);
+    border-radius: var(--s1);
+    background: var(--border-strong);
+  }
+
+  .ds-bottom-sheet__header,
+  .ds-bottom-sheet__body,
+  .ds-bottom-sheet__footer {
+    padding: var(--s4) var(--s5);
+  }
+
+  .ds-bottom-sheet__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s3);
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .ds-bottom-sheet__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .ds-bottom-sheet__footer {
+    display: flex;
+    gap: var(--s2);
+    border-top: 1px solid var(--border-soft);
+    background: var(--sf1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ds-sheet,
+    .ds-bottom-sheet {
+      transition: none;
+    }
+  }
+
   .ds-ask-ai {
     display: inline-flex;
     align-items: center;
