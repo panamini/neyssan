@@ -176,8 +176,8 @@ describe("ProposalForge export behavior", () => {
         mode: "ats",
         fileNameBase: "Proposal - ATS",
         stylePreset: expect.objectContaining({
-          layout: "swiss",
-          typography: "quiet-editorial",
+          layout: "workshop",
+          typography: "geist-baskervville",
           palette: "pierre",
         }),
         data: expect.objectContaining({
@@ -238,17 +238,17 @@ describe("ProposalForge export behavior", () => {
         format: "pdf",
         mode: "styled",
         stylePreset: expect.objectContaining({
-          layout: "swiss",
-          typography: "quiet-editorial",
+          layout: "workshop",
+          typography: "geist-baskervville",
           palette: "pierre",
         }),
         data: expect.objectContaining({
           kind: "proposal",
           renderSource: "preview",
-          templateId: "swiss_margin",
+          templateId: "workshop_proposal_margin",
           stylePreset: expect.objectContaining({
-            layout: "swiss",
-            typography: "quiet-editorial",
+            layout: "workshop",
+            typography: "geist-baskervville",
             palette: "pierre",
           }),
         }),
