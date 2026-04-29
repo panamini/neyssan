@@ -268,17 +268,18 @@ function normalizeExperienceItem(entry: any, idx: number): IExperienceItem {
     ? undefined
     : providedEndPrecision ?? (endIsEmptyString ? startDatePrecision : endParsed.precision);
 
-  const hasExplicitResponsibilities = Object.prototype.hasOwnProperty.call(
-    entry ?? {},
-    "responsibilities",
-  );
   const responsibilities = normalizeRichField(entry?.responsibilities);
-  const responsibilityBullets = Array.isArray(entry?.responsibilities)
-      ? entry.responsibilities
+  const explicitlyClearedResponsibilities =
+    typeof entry?.responsibilities === "string" &&
+    normalizeWhitespace(entry.responsibilities).length === 0;
+  const responsibilityBullets = explicitlyClearedResponsibilities
+    ? undefined
+    : Array.isArray(entry?.responsibilityBullets)
+      ? entry.responsibilityBullets
           .map((value: unknown) => (typeof value === "string" ? normalizeWhitespace(value) : ""))
           .filter((value: string) => value.length > 0)
-      : !hasExplicitResponsibilities && Array.isArray(entry?.responsibilityBullets)
-        ? entry.responsibilityBullets
+      : Array.isArray(entry?.responsibilities)
+        ? entry.responsibilities
             .map((value: unknown) => (typeof value === "string" ? normalizeWhitespace(value) : ""))
             .filter((value: string) => value.length > 0)
       : undefined;
@@ -771,7 +772,7 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
             typeof item?.notes === "string"
               ? item.notes.trim()
               : item?.notes && typeof item.notes === "object"
-                ? normalizeWhitespace(JSON.stringify(item.notes)).text
+                ? normalizeWhitespace(JSON.stringify(item.notes))
                 : "";
           const content = ensureRemirrorDoc([membershipType, notes].filter(Boolean).join("\n"));
           const newBlock: CvBlock = CvBlockSchemaStrict.parse({
