@@ -167,6 +167,10 @@ function resolvePercentMm(
   return parsedPercent === undefined ? undefined : totalMm * parsedPercent;
 }
 
+function resolvePercentMmOrZero(totalMm: number, percentValue: string | undefined): number {
+  return resolvePercentMm(totalMm, percentValue) ?? 0;
+}
+
 function proposalBodySizePtFromTypography(fontSize: string): number {
   const millimeterExpressionMatch = fontSize.match(
     /calc\(\s*var\(--proposal-inline-mm\)\s*\*\s*(-?\d+(?:\.\d+)?)\s*\)/,
@@ -341,39 +345,39 @@ export function normalizeResumePreviewTokens(args: {
     tokens.geometry.primitives = {
       ...tokens.geometry.primitives,
       volkGrid: {
-        left: resolvePercentMm(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.left),
-        headerWidth: resolvePercentMm(
+        left: resolvePercentMmOrZero(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.left),
+        headerWidth: resolvePercentMmOrZero(
           tokens.geometry.page.widthMm,
           VOLK_REGISTER_GRID.headerWidth,
         ),
-        bodyWidth: resolvePercentMm(
+        bodyWidth: resolvePercentMmOrZero(
           tokens.geometry.page.widthMm,
           VOLK_REGISTER_GRID.bodyWidth,
         ),
-        titleTop: resolvePercentMm(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.titleTop),
-        subtitleTop: resolvePercentMm(
+        titleTop: resolvePercentMmOrZero(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.titleTop),
+        subtitleTop: resolvePercentMmOrZero(
           tokens.geometry.page.heightMm,
           VOLK_REGISTER_GRID.subtitleTop,
         ),
-        senderTop: resolvePercentMm(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.senderTop),
-        metaTop: resolvePercentMm(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.metaTop),
-        subjectTop: resolvePercentMm(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.subjectTop),
-        subjectValueTop: resolvePercentMm(
+        senderTop: resolvePercentMmOrZero(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.senderTop),
+        metaTop: resolvePercentMmOrZero(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.metaTop),
+        subjectTop: resolvePercentMmOrZero(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.subjectTop),
+        subjectValueTop: resolvePercentMmOrZero(
           tokens.geometry.page.heightMm,
           VOLK_REGISTER_GRID.subjectValueTop,
         ),
-        subjectValueLeft: resolvePercentMm(
+        subjectValueLeft: resolvePercentMmOrZero(
           tokens.geometry.page.widthMm,
           VOLK_REGISTER_GRID.subjectValueLeft,
         ),
-        bodyTop: resolvePercentMm(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.bodyTop),
-        dotLeft: resolvePercentMm(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.dotLeft),
-        dotTop: resolvePercentMm(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.dotTop),
-        bottomMargin: parseMm(VOLK_REGISTER_GRID.bottomMargin),
-        metaLeft0: resolvePercentMm(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.metaLefts[0]),
-        metaLeft1: resolvePercentMm(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.metaLefts[1]),
-        metaLeft2: resolvePercentMm(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.metaLefts[2]),
-        metaLeft3: resolvePercentMm(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.metaLefts[3]),
+        bodyTop: resolvePercentMmOrZero(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.bodyTop),
+        dotLeft: resolvePercentMmOrZero(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.dotLeft),
+        dotTop: resolvePercentMmOrZero(tokens.geometry.page.heightMm, VOLK_REGISTER_GRID.dotTop),
+        bottomMargin: parseMm(VOLK_REGISTER_GRID.bottomMargin) ?? 0,
+        metaLeft0: resolvePercentMmOrZero(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.metaLefts[0]),
+        metaLeft1: resolvePercentMmOrZero(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.metaLefts[1]),
+        metaLeft2: resolvePercentMmOrZero(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.metaLefts[2]),
+        metaLeft3: resolvePercentMmOrZero(tokens.geometry.page.widthMm, VOLK_REGISTER_GRID.metaLefts[3]),
       },
     };
   }
