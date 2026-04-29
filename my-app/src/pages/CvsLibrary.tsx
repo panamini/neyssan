@@ -2,6 +2,7 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Plus, X, Check } from "@/lib/icons";
 import { LibraryFilterMenu } from "../components/LibraryFilterMenu";
+import { Input } from "../components/ui";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   buildActiveCvSnapshotFromCvDocument,
@@ -242,7 +243,7 @@ export function CvsLibrary(): JSX.Element {
             <div className="dasti-proposal-library-utility-row">
               <label className="dasti-proposal-library-utility-row__search">
                 <span className="sr-only">Search all resumes</span>
-                <input
+                <Input
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
@@ -322,21 +323,22 @@ export function CvsLibrary(): JSX.Element {
                   {/* Main card button */}
                   <button
                     onClick={() => handleOpen(cv.id)}
-                    className="dasti-doc-card dasti-doc-card--library dasti-doc-card--cv-library"
+                    className="ds-card dasti-doc-card dasti-doc-card--library dasti-doc-card--cv-library"
+                    data-interactive="true"
                     style={{ flex: 1, paddingRight: "var(--s6)" }}
                   >
                     <div className="dasti-doc-card__stack">
                       <div className="dasti-doc-card__header">
                         <div className="dasti-doc-card__title-frame">
-                          <h2 className="dasti-doc-card__title">{displayTitle}</h2>
+                          <h2 className="ds-card__title dasti-doc-card__title">{displayTitle}</h2>
                         </div>
                       </div>
 
-                      <div className="dasti-doc-card__meta">
+                      <div className="ds-card__body dasti-doc-card__meta">
                         {displaySubtitle}
                       </div>
 
-                      <div className="dasti-doc-card__body-band">
+                      <div className="ds-card__content dasti-doc-card__body-band">
                         {summarySnippet ? (
                           <p className="dasti-doc-card__snippet dasti-doc-card__snippet--library">
                             {summarySnippet}
@@ -360,7 +362,7 @@ export function CvsLibrary(): JSX.Element {
                         ) : null}
                       </div>
 
-                      <div className="dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
+                      <div className="ds-card__footer dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
                         <div className="dasti-doc-card__stamp">{updatedAt}</div>
                       </div>
                     </div>

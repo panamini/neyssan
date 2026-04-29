@@ -173,114 +173,121 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: var(--control-md);
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-border-strong);
+  min-height: var(--hm);
+  padding: 0 var(--s4);
+  border: 1px solid transparent;
   border-radius: var(--radius-control);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+  background: var(--sfr);
+  color: var(--ti);
   font-family: var(--font-body-family);
-  font-size: var(--text-body-sm-size);
+  font-size: var(--ts);
   line-height: 1;
   font-weight: var(--font-label-weight);
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--sha);
   transition:
     background-color var(--motion-hover-duration) var(--motion-hover-ease),
     border-color var(--motion-hover-duration) var(--motion-hover-ease),
+    color var(--motion-hover-duration) var(--motion-hover-ease),
     box-shadow var(--motion-hover-duration) var(--motion-hover-ease),
     transform var(--motion-press-duration) var(--motion-press-ease);
 }
 
-.dasti-button:hover {
+.dasti-button:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
 .dasti-button:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: scale(var(--motion-press-scale));
+}
+
+.dasti-button:focus-visible {
+  outline: 2px solid var(--fr);
+  outline-offset: 2px;
 }
 
 .dasti-button:disabled {
-  opacity: 0.5;
+  opacity: 0.42;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
 }
 
 .dasti-button--primary {
-  background: var(--color-accent);
-  color: var(--color-on-accent);
+  background: var(--ac);
+  color: var(--op);
   border-color: transparent;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--sha);
 }
 
 .dasti-button--primary:hover:not(:disabled) {
-  background: var(--color-accent-hover);
+  background: var(--am);
+  box-shadow: var(--shb);
 }
 
 .dasti-button--secondary {
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  border-color: var(--color-border-strong);
-  box-shadow: var(--shadow-sm);
+  background: var(--sfr);
+  color: var(--ti);
+  border-color: var(--border-stronger, var(--border-strong));
+  box-shadow: var(--sha);
 }
 
 .dasti-button--accent {
-  background: var(--color-accent-soft);
-  color: var(--color-text);
+  background: var(--ap);
+  color: var(--ti);
   border-color: transparent;
 }
 
 .dasti-button--success {
-  background: var(--color-success-soft);
-  color: var(--color-success-ink);
+  background: var(--okb);
+  color: var(--okt);
   border-color: transparent;
 }
 
 .dasti-button--warning {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-ink);
+  background: var(--wab);
+  color: var(--wat);
   border-color: transparent;
 }
 
 .dasti-button--danger {
-  background: var(--color-danger-soft);
-  color: var(--color-danger-ink);
+  background: var(--erb);
+  color: var(--ert);
   border-color: transparent;
 }
 
 .dasti-button--secondary:hover:not(:disabled),
 .dasti-button--ghost:hover:not(:disabled) {
-  background: var(--color-surface-2);
+  background: var(--sf2);
 }
 
 .dasti-button--ghost {
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--tm2);
   border-color: transparent;
   box-shadow: none;
 }
 
 .dasti-button--ghost:hover:not(:disabled) {
-  color: var(--color-text);
+  color: var(--ti);
 }
 
 .dasti-button--accent:hover:not(:disabled) {
-  background: var(--color-accent-pale);
+  background: var(--as);
 }
 
 .dasti-button--danger:hover:not(:disabled) {
-  background: var(--color-danger);
-  color: var(--color-on-accent);
+  background: var(--er);
+  color: var(--op);
 }
 
 .dasti-button--success:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-success) 38%, var(--sfr) 62%);
+  background: color-mix(in srgb, var(--ok) 38%, var(--sfr) 62%);
 }
 
 .dasti-button--warning:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-warning) 38%, var(--sfr) 62%);
+  background: color-mix(in srgb, var(--wa) 38%, var(--sfr) 62%);
 }
 
 .dasti-button--pill {
@@ -288,19 +295,19 @@
 }
 
 .dasti-button--sm {
-  min-height: var(--control-sm);
-  padding: 0 var(--space-3);
-  font-size: var(--text-caption-size);
+  min-height: var(--hs);
+  padding: 0 var(--s3);
+  font-size: var(--tx);
 }
 
 .dasti-button--md {
-  min-height: var(--control-md);
+  min-height: var(--hm);
 }
 
 .dasti-button--lg {
-  min-height: var(--control-lg);
-  padding: 0 var(--space-5);
-  font-size: var(--text-body-size);
+  min-height: var(--hb);
+  padding: 0 var(--s5);
+  font-size: var(--tb);
 }
 
 .dasti-icon-button {
@@ -1247,9 +1254,9 @@
   height: var(--control-md);
   padding: 0 var(--s3);
   border-radius: var(--radius-control);
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+  border: 2px solid transparent;
+  background: var(--sf2);
+  color: var(--ti);
   font-family: var(--font-body-family);
   font-size: var(--text-body-sm-size);
   line-height: var(--text-body-sm-line);
@@ -1280,7 +1287,7 @@
 }
 
 textarea.dasti-field {
-  min-height: 120px;
+  min-height: 88px;
   height: auto;
   resize: vertical;
   padding: var(--s3);
@@ -1299,33 +1306,56 @@ textarea.dasti-field {
   background: color-mix(
     in srgb,
     var(--color-danger-soft) 35%,
-    var(--color-surface-raised)
+    var(--sf2)
   );
 }
 
 .dasti-field::placeholder,
 .dasti-select::placeholder {
-  color: var(--color-text-subtle);
+  color: var(--tg2);
+}
+
+.dasti-field:hover:not(:focus):not(:disabled),
+.dasti-select:hover:not(:focus):not(:disabled) {
+  background: var(--sf3);
 }
 
 .dasti-field:focus,
 .dasti-select:focus {
   outline: none;
-  border-color: var(--color-accent);
-  box-shadow: var(--focus-shadow-soft);
+  border-color: var(--ti);
+  box-shadow: var(--field-focus-shadow) !important;
 }
 
 .dasti-field:disabled,
 .dasti-select:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
+.dasti-field-no-glow:focus {
+  border-color: var(--ti) !important;
+  box-shadow: var(--field-focus-shadow) !important;
+}
+
 .dasti-rich {
-  border: 1px solid var(--color-border-strong);
+  border: 2px solid transparent;
   border-radius: var(--radius-control);
   overflow: hidden;
-  background: var(--sfr);
+  background: var(--sf2);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-rich:hover:not(:focus-within) {
+  background: var(--sf3);
+}
+
+.dasti-rich:focus-within {
+  border-color: var(--ti);
+  box-shadow: var(--field-focus-shadow) !important;
 }
 
 .dasti-rich .rich-content {
@@ -1340,6 +1370,12 @@ textarea.dasti-field {
   line-height: 1.75;
   color: var(--ti);
   outline: none;
+}
+
+.dasti-rich .ProseMirror:focus,
+.dasti-rich .ProseMirror:focus-visible {
+  border-radius: 0;
+  box-shadow: none !important;
 }
 
 .dasti-rich .ProseMirror p {

@@ -201,7 +201,11 @@ export function AchievementsBlock({
   // Collapsed preview handled by AchievementsDisplay via maxItems prop
 
   return (
-    <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container section-container--dismissable section-container--achievements">
+    <div
+      className="mb-4 ds-card border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container section-container--dismissable section-container--achievements"
+      data-interactive="true"
+      data-state="open"
+    >
       {onDeleteSection ? (
         <button
           type="button"
@@ -217,7 +221,7 @@ export function AchievementsBlock({
         </button>
       ) : null}
       <div className="section-container-header flex items-center justify-between">
-        <h3 className="cv-section-heading">{section.title}</h3>
+        <h3 className="ds-card__title cv-section-heading">{section.title}</h3>
         <div className="flex items-center" style={{ gap: 2 }}>
           <button
             type="button"
@@ -237,7 +241,7 @@ export function AchievementsBlock({
         </div>
       </div>
 
-      <div className="cv-section-body">
+      <div className="ds-card__content cv-section-body">
         <div
           className={[
             "cv-achievements-surface",

@@ -3,75 +3,66 @@
 import React from "react";
 import clsx from "clsx";
 
-export interface InputProps {
-  id?: string;
-  name?: string;
-  value?: string;
-  defaultValue?: string;
-  placeholder?: string;
-  disabled?: boolean;
-  type?: string;
+export interface InputProps
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> {
+  label?: string;
+  hint?: string;
+  error?: string;
   size?: "sm" | "md" | "lg";
   variant?: "default" | "ghost" | "error";
-  className?: string;
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
-  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  autoFocus?: boolean;
 }
 
-export function Input(props: InputProps) {
-  const {
-    id,
-    name,
-    value,
-    defaultValue,
-    placeholder,
-    disabled,
-    type = "text",
-    size = "md",
-    variant = "default",
-    className,
-    onChange,
-    onBlur,
-    onKeyDown,
-    autoFocus,
-  } = props;
-
-  const sizeMap: Record<NonNullable<InputProps["size"]>, string> = {
-    sm: "dasti-field--sm",
-    md: "dasti-field--md",
-    lg: "dasti-field--lg",
-  };
-
-  const variantMap: Record<NonNullable<InputProps["variant"]>, string> = {
-    default: "",
-    ghost: "dasti-field--ghost",
-    error: "dasti-field--error",
-  };
-
-  const classes = clsx(
-    "dasti-field",
-    sizeMap[size],
-    variantMap[variant],
-    disabled && "opacity-50 cursor-not-allowed",
-    className,
+export function Input({
+  id,
+  label,
+  hint,
+  error,
+  size,
+  variant = "default",
+  className,
+  ...props
+}: InputProps) {
+  const generatedId = React.useId();
+  const inputId = id ?? generatedId;
+  const messageId = `${inputId}-message`;
+  const hasMessage = Boolean(error || hint);
+  const input = (
+    <input
+      {...props}
+      id={inputId}
+      aria-invalid={Boolean(error) || undefined}
+      aria-describedby={hasMessage ? messageId : props["aria-describedby"]}
+      className={clsx(
+        "ds-field",
+        size && `ds-field--${size}`,
+        (error || variant === "error") && "ds-field--error",
+        variant === "ghost" && "ds-field--ghost",
+        className,
+      )}
+    />
   );
 
+  if (!label && !hint && !error) {
+    return input;
+  }
+
   return (
-    <input
-      id={id}
-      name={name}
-      value={value}
-      defaultValue={defaultValue}
-      placeholder={placeholder}
-      disabled={disabled}
-      type={type}
-      onChange={onChange}
-      onBlur={onBlur}
-      onKeyDown={onKeyDown}
-      autoFocus={autoFocus}
-      className={classes}
-    />
+    <div className="ds-field-group">
+      {label ? (
+        <label className="ds-field-label" htmlFor={inputId}>
+          {label}
+        </label>
+      ) : null}
+      {input}
+      {error ? (
+        <span id={messageId} className="ds-field-error">
+          {error}
+        </span>
+      ) : hint ? (
+        <span id={messageId} className="ds-field-hint">
+          {hint}
+        </span>
+      ) : null}
+    </div>
   );
 }
