@@ -1247,9 +1247,9 @@
   height: var(--control-md);
   padding: 0 var(--s3);
   border-radius: var(--radius-control);
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+  border: 2px solid transparent;
+  background: var(--sf2);
+  color: var(--ti);
   font-family: var(--font-body-family);
   font-size: var(--text-body-sm-size);
   line-height: var(--text-body-sm-line);
@@ -1280,7 +1280,7 @@
 }
 
 textarea.dasti-field {
-  min-height: 120px;
+  min-height: 88px;
   height: auto;
   resize: vertical;
   padding: var(--s3);
@@ -1299,26 +1299,36 @@ textarea.dasti-field {
   background: color-mix(
     in srgb,
     var(--color-danger-soft) 35%,
-    var(--color-surface-raised)
+    var(--sf2)
   );
 }
 
 .dasti-field::placeholder,
 .dasti-select::placeholder {
-  color: var(--color-text-subtle);
+  color: var(--tg2);
+}
+
+.dasti-field:hover:not(:focus):not(:disabled),
+.dasti-select:hover:not(:focus):not(:disabled) {
+  background: var(--sf3);
 }
 
 .dasti-field:focus,
 .dasti-select:focus {
   outline: none;
-  border-color: var(--color-accent);
-  box-shadow: var(--focus-shadow-soft);
+  border-color: var(--ti);
+  box-shadow: var(--field-focus-shadow) !important;
 }
 
 .dasti-field:disabled,
 .dasti-select:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
+}
+
+.dasti-field-no-glow:focus {
+  border-color: var(--ti) !important;
+  box-shadow: var(--field-focus-shadow) !important;
 }
 
 .dasti-rich {

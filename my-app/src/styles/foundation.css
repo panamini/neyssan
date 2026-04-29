@@ -479,6 +479,7 @@
   --bg: #FAF9F5;   /* app content canvas — lighter/cleaner */
   --sf1: #F8F7F3;  /* sidebar chrome — slightly deeper than content */
   --sf2: #F0EEE6;  /* secondary surfaces + resume stage */
+  --sf3: #F5F4EF;  /* subtle-fill input hover */
   --sfr: #FFFFFF;  /* raised: toolbars, cards, popovers — white for clear elevation */
   --ti: #0F0C08;
   --tm2: rgba(15, 12, 8, 0.64);
@@ -553,6 +554,7 @@
   --bg: #0D0D0D;         /* INKWELL — page canvas */
   --sf1: #0E0E0E;        /* sidebar chrome — fractionally above canvas */
   --sf2: #1A1918;        /* card rest, panels, secondary surfaces — subtle step up */
+  --sf3: #161616;        /* subtle-fill input hover — between canvas and sf2 */
   --sfr: #222120;        /* raised: toolbars, cards, popovers, modals */
   --paper: #E8E5DB;      /* document body — warm cream dimmed for dark */
   --ti: #DAD9D3;
@@ -806,6 +808,7 @@
   --ease: var(--ez);
   --ease-bounce: var(--ezb);
   --focus-shadow-soft: 0 0 0 2px color-mix(in srgb, var(--fr) 58%, transparent);
+  --field-focus-shadow: none;
 }
 
 /* ============================================================

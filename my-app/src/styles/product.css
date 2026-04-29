@@ -1506,7 +1506,7 @@
   padding-inline-start: var(--proposal-sheet-margin-inline-inner);
   padding-inline-end: var(--proposal-sheet-margin-inline-outer);
   padding-block-end: var(--s3);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .dasti-proposal-sheet__header--brief,
@@ -2022,7 +2022,7 @@
 
 .dasti-proposal-library-utility-row__input:hover {
   border-color: color-mix(in srgb, var(--ti) 16%, transparent);
-  background: var(--color-surface-muted);
+  background: var(--sf3);
 }
 
 .dasti-proposal-library-utility-row__input:focus-visible {
@@ -3896,6 +3896,10 @@
   --quick-start-sheet-min-block-size: calc(
     (var(--quick-start-choice-block-size) * 2) + var(--space-7) + var(--space-8)
   );
+  --quick-start-frame-closed-block-size: calc(
+    var(--hs) + clamp(var(--space-4), 2.5vw, var(--space-5)) +
+      var(--quick-start-sheet-min-block-size)
+  );
   min-height: calc(100dvh - var(--hdr, 0px));
   padding: clamp(var(--space-5), 5vw, var(--space-7));
   display: flex;
@@ -3932,6 +3936,9 @@
   width: min(100%, var(--quick-start-sheet-inline-size));
   display: grid;
   gap: clamp(var(--space-4), 2.5vw, var(--space-5));
+  block-size: var(--quick-start-frame-closed-block-size);
+  align-content: start;
+  overflow: visible;
 }
 
 .dasti-quick-start-pane__controls {
@@ -5152,7 +5159,7 @@
   padding: 0;
   border: 0;
   border-radius: inherit;
-  background: var(--document-viewer-frame-surface);
+  background: var(--sfr);
   box-shadow: none;
   color: var(--ti);
   overflow: hidden;
@@ -5412,7 +5419,7 @@
   padding-inline: var(--space-3);
   border: 2px solid transparent;
   border-radius: calc(var(--radius-card) - 6px);
-  background: color-mix(in srgb, var(--color-surface-muted) 84%, transparent);
+  background: var(--sf2);
   color: var(--ti);
   font: inherit;
   line-height: 1.35;
@@ -5426,15 +5433,23 @@
   color: color-mix(in srgb, var(--tm2) 74%, transparent);
 }
 
+.dasti-proposal-editor-page__field-input:hover:not(:disabled, :focus) {
+  background: var(--sf3);
+}
+
 .dasti-proposal-editor-page__field-input:focus {
   outline: none;
-  border-color: var(--color-text);
-  background: color-mix(
-    in srgb,
-    var(--color-surface-muted) 72%,
-    var(--sfr) 28%
-  );
-  box-shadow: none;
+  border-color: var(--ti);
+  background: var(--sf2);
+  box-shadow: var(--field-focus-shadow) !important;
+}
+
+.dasti-proposal-editor-page__field-input:focus-visible {
+  box-shadow: var(--field-focus-shadow) !important;
+}
+
+.dasti-proposal-editor-page__field-input:disabled {
+  opacity: 0.5;
 }
 
 .dasti-proposal-editor-page__field-textarea {
@@ -7515,6 +7530,12 @@
   box-shadow:
     var(--document-viewer-frame-shadow),
     0 12px 28px -24px color-mix(in srgb, var(--shadow-color) 92%, transparent);
+}
+
+.dasti-proposal-compose-column--workspace .dasti-proposal-sheet--composer,
+.dasti-proposal-compose-column--workspace
+  .dasti-proposal-sheet__header--composer {
+  background: var(--sfr);
 }
 
 .dasti-proposal-compose-column--workspace .dasti-proposal-sheet__body::before,

@@ -34,6 +34,9 @@ describe("ProposalBriefCard CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-sheet__header--brief,\s*\.dasti-proposal-sheet__header--composer\s*\{[\s\S]*background:\s*var\(--document-viewer-frame-surface\);[\s\S]*background-clip:\s*padding-box;/,
     );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-sheet__header\s*\{[\s\S]*border-bottom:\s*1px solid var\(--border-soft\);/,
+    );
     expect(productCss).toContain(".dasti-brief-card--compact {");
     expect(productCss).toContain("gap: 0;");
     expect(productCss).toContain(
