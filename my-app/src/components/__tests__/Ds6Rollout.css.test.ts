@@ -71,6 +71,15 @@ describe("DS-6 rollout contracts", () => {
     expect(primitivesCss).toMatch(
       /\.dasti-field-no-glow:focus\s*\{[\s\S]*border-color:\s*var\(--ti\) !important;[\s\S]*box-shadow:\s*var\(--field-focus-shadow\) !important;/,
     );
+    expect(primitivesCss).toMatch(
+      /\.dasti-rich\s*\{[\s\S]*border:\s*2px solid transparent;[\s\S]*background:\s*var\(--sf2\);/,
+    );
+    expect(primitivesCss).toMatch(
+      /\.dasti-rich:focus-within\s*\{[\s\S]*border-color:\s*var\(--ti\);[\s\S]*box-shadow:\s*var\(--field-focus-shadow\) !important;/,
+    );
+    expect(primitivesCss).toMatch(
+      /\.dasti-rich \.ProseMirror:focus,[\s\S]*\.dasti-rich \.ProseMirror:focus-visible\s*\{[\s\S]*box-shadow:\s*none !important;/,
+    );
     for (const source of migratedInlineFieldSources) {
       expect(source).not.toContain("focus:border-[color:var(--ac)]");
       expect(source).not.toContain("focus:[box-shadow:0_0_0_3px_var(--fr)]");

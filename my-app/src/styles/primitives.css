@@ -1332,10 +1332,23 @@ textarea.dasti-field {
 }
 
 .dasti-rich {
-  border: 1px solid var(--color-border-strong);
+  border: 2px solid transparent;
   border-radius: var(--radius-control);
   overflow: hidden;
-  background: var(--sfr);
+  background: var(--sf2);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-rich:hover:not(:focus-within) {
+  background: var(--sf3);
+}
+
+.dasti-rich:focus-within {
+  border-color: var(--ti);
+  box-shadow: var(--field-focus-shadow) !important;
 }
 
 .dasti-rich .rich-content {
@@ -1350,6 +1363,12 @@ textarea.dasti-field {
   line-height: 1.75;
   color: var(--ti);
   outline: none;
+}
+
+.dasti-rich .ProseMirror:focus,
+.dasti-rich .ProseMirror:focus-visible {
+  border-radius: 0;
+  box-shadow: none !important;
 }
 
 .dasti-rich .ProseMirror p {
