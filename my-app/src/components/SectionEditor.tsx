@@ -2473,9 +2473,13 @@ export default function SectionEditor({
     }
 
     return (
-      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+      <div
+        className="mb-4 ds-card border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container"
+        data-interactive="true"
+        data-state={collapsed ? "collapsed" : "open"}
+      >
         <div className="section-container-header flex items-center justify-between">
-          <h3 className="cv-section-heading">{section.title}</h3>
+          <h3 className="ds-card__title cv-section-heading">{section.title}</h3>
           <div className="dasti-icon-cluster dasti-icon-cluster--tight">
             {renderAiMenuTrigger({
               menu: { type: "summary" },
@@ -2548,7 +2552,7 @@ export default function SectionEditor({
 
         {collapsed && (
           <div
-            className="cv-section-preview cursor-pointer"
+            className="ds-card__body cv-section-preview cursor-pointer"
             role="button"
             tabIndex={0}
             aria-label="Edit summary"
@@ -2600,7 +2604,7 @@ export default function SectionEditor({
         )}
 
         {!collapsed && (
-          <div className="cv-section-body cv-section-body--stack">
+          <div className="ds-card__content cv-section-body cv-section-body--stack">
             <SummaryBlock
               section={section as any}
               onChange={(updatedSection) => {
@@ -2771,11 +2775,15 @@ export default function SectionEditor({
     }
 
     return (
-      <div className="mb-4 section-container section-container--dismissable">
+      <div
+        className="mb-4 ds-card section-container section-container--dismissable"
+        data-interactive="true"
+        data-state={collapsed ? "collapsed" : "open"}
+      >
         {renderOptionalSectionDismissButton()}
         <div className="section-container-header flex items-center justify-between">
           <h3
-            className="cv-section-heading cursor-pointer"
+            className="ds-card__title cv-section-heading cursor-pointer"
             onClick={() => openHobbiesModal()}
           >
             {formatSectionDisplayTitle(section, { fallback: "Hobbies" })}
@@ -2837,7 +2845,7 @@ export default function SectionEditor({
         />
 
         {collapsed ? (
-          <div className="cv-section-preview">
+          <div className="ds-card__body cv-section-preview">
             {visibleItems.length === 0 ? (
               <button
                 type="button"
@@ -2883,7 +2891,7 @@ export default function SectionEditor({
           </div>
         ) : (
           <div
-            className="cv-section-body cv-section-body--stack"
+            className="ds-card__content cv-section-body cv-section-body--stack"
             onClick={(event) => {
               if (event.target === event.currentTarget) {
                 openHobbiesModal();
@@ -2892,7 +2900,7 @@ export default function SectionEditor({
           >
             {visibleItems.length === 0 ? (
               <div
-                className="cv-section-preview cursor-pointer"
+                className="ds-card__body cv-section-preview cursor-pointer"
                 role="button"
                 tabIndex={0}
                 aria-label="Edit hobbies"
@@ -3309,9 +3317,13 @@ export default function SectionEditor({
     );
 
     return (
-        <div className="mb-4 section-container">
+        <div
+          className="mb-4 ds-card section-container"
+          data-interactive="true"
+          data-state={collapsed ? "collapsed" : "open"}
+        >
           <div className="section-container-header flex items-center justify-between">
-            <h3 className="cv-section-heading">{section.title}</h3>
+            <h3 className="ds-card__title cv-section-heading">{section.title}</h3>
             <div className="flex items-center gap-1">
               {renderAiMenuTrigger({
                 menu: { type: "skills" },
@@ -3383,7 +3395,7 @@ export default function SectionEditor({
         />
 
         {collapsed && (
-          <div className="cv-section-preview">
+          <div className="ds-card__body cv-section-preview">
             <div className="flex flex-wrap gap-2">
               {visibleSkillItems.length === 0 ? (
                 <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
@@ -3792,7 +3804,9 @@ export default function SectionEditor({
     return (
       <div
         ref={sectionContainerRef}
-        className="mb-4 section-container section-container--dismissable"
+        className="mb-4 ds-card section-container section-container--dismissable"
+        data-interactive="true"
+        data-state={collapsed ? "collapsed" : "open"}
       >
         <button
           type="button"
@@ -3807,7 +3821,7 @@ export default function SectionEditor({
           <X size={13} strokeWidth={2.1} aria-hidden />
         </button>
         <div className="section-container-header flex items-center justify-between">
-          <h3 className="cv-section-heading">{section.title}</h3>
+          <h3 className="ds-card__title cv-section-heading">{section.title}</h3>
           <div className="flex items-center gap-1">
             {renderAiMenuTrigger({
               menu: { type: "languages" },
@@ -3880,7 +3894,7 @@ export default function SectionEditor({
           onDismiss={handleDismissLanguageSuggestion}
         />
 
-        <div className={collapsed ? "cv-section-preview" : "cv-section-body cv-section-body--stack"}>
+        <div className={collapsed ? "ds-card__body cv-section-preview" : "ds-card__content cv-section-body cv-section-body--stack"}>
           {visibleLanguageItems.length === 0 ? (
             <span className="cv-preview-empty cv-preview-text cv-preview-text--muted">
               Add your first language
@@ -4022,11 +4036,15 @@ export default function SectionEditor({
     }
 
     return (
-      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container section-container--dismissable">
+      <div
+        className="mb-4 ds-card border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container section-container--dismissable"
+        data-interactive="true"
+        data-state={collapsed ? "collapsed" : "open"}
+      >
         {renderOptionalSectionDismissButton()}
         <div className="section-container-header flex items-center justify-between">
           <h3
-            className="cv-section-heading cursor-pointer"
+            className="ds-card__title cv-section-heading cursor-pointer"
             onClick={() => openCertificationModal()}
           >
             {section.title}
@@ -4064,7 +4082,7 @@ export default function SectionEditor({
 
         {!collapsed ? (
           <div
-            className="cv-section-body cv-section-body--stack"
+            className="ds-card__content cv-section-body cv-section-body--stack"
             onClick={(event) => {
               if (event.target === event.currentTarget) {
                 openCertificationModal();
@@ -4073,7 +4091,7 @@ export default function SectionEditor({
           >
             {visibleItems.length === 0 ? (
               <div
-                className="cv-section-preview cursor-pointer"
+                className="ds-card__body cv-section-preview cursor-pointer"
                 role="button"
                 tabIndex={0}
                 aria-label="Edit certifications"
@@ -4146,7 +4164,7 @@ export default function SectionEditor({
           </div>
         ) : (
           <div
-            className="cv-section-preview cursor-pointer"
+            className="ds-card__body cv-section-preview cursor-pointer"
             role="button"
             tabIndex={0}
             aria-label="Edit certifications"
@@ -4247,11 +4265,15 @@ export default function SectionEditor({
     }
 
     return (
-      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container section-container--dismissable">
+      <div
+        className="mb-4 ds-card border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container section-container--dismissable"
+        data-interactive="true"
+        data-state={collapsed ? "collapsed" : "open"}
+      >
         {renderOptionalSectionDismissButton()}
         <div className="section-container-header flex items-center justify-between">
           <h3
-            className="cv-section-heading cursor-pointer"
+            className="ds-card__title cv-section-heading cursor-pointer"
             onClick={() => openAffiliationModal()}
           >
             {section.title}
@@ -4289,7 +4311,7 @@ export default function SectionEditor({
 
         {!collapsed ? (
           <div
-            className="cv-section-body cv-section-body--stack"
+            className="ds-card__content cv-section-body cv-section-body--stack"
             onClick={(event) => {
               if (event.target === event.currentTarget) {
                 openAffiliationModal();
@@ -4298,7 +4320,7 @@ export default function SectionEditor({
           >
             {visibleItems.length === 0 ? (
               <div
-                className="cv-section-preview cursor-pointer"
+                className="ds-card__body cv-section-preview cursor-pointer"
                 role="button"
                 tabIndex={0}
                 aria-label="Edit affiliations"
@@ -4370,7 +4392,7 @@ export default function SectionEditor({
           </div>
         ) : (
           <div
-            className="cv-section-preview cursor-pointer"
+            className="ds-card__body cv-section-preview cursor-pointer"
             role="button"
             tabIndex={0}
             aria-label="Edit affiliations"
@@ -4511,6 +4533,7 @@ export default function SectionEditor({
         ref={sectionContainerRef}
         className={[
           "mb-4",
+          "ds-card",
           "border",
           "[border-color:var(--color-border)]",
           "[border-radius:var(--radius-card)]",
@@ -4519,6 +4542,8 @@ export default function SectionEditor({
         ]
           .filter(Boolean)
           .join(" ")}
+        data-interactive="true"
+        data-state={collapsed ? "collapsed" : "open"}
         onPointerEnter={() =>
           publishActiveTarget(canonicalTextSectionType, "editor-hover")
         }
@@ -4527,7 +4552,7 @@ export default function SectionEditor({
         {renderOptionalSectionDismissButton()}
         <div className="section-container-header flex items-center justify-between">
           <h3
-            className="cv-section-heading cursor-pointer"
+            className="ds-card__title cv-section-heading cursor-pointer"
             onClick={() => openTextSectionModal()}
           >
             {displaySectionTitle}
@@ -4565,7 +4590,9 @@ export default function SectionEditor({
 
         <div
           className={
-            collapsed ? "cv-section-preview" : "cv-section-body cv-section-body--stack"
+            collapsed
+              ? "ds-card__body cv-section-preview"
+              : "ds-card__content cv-section-body cv-section-body--stack"
           }
           role={isCustomTextSection ? "button" : undefined}
           tabIndex={isCustomTextSection ? 0 : undefined}
@@ -4738,9 +4765,13 @@ export default function SectionEditor({
     }
 
     return (
-      <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+      <div
+        className="mb-4 ds-card border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container"
+        data-interactive="true"
+        data-state={collapsed ? "collapsed" : "open"}
+      >
         <div className="section-container-header flex items-center justify-between">
-          <h3 className="cv-section-heading">{section.title}</h3>
+          <h3 className="ds-card__title cv-section-heading">{section.title}</h3>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -4774,7 +4805,7 @@ export default function SectionEditor({
 
         {!collapsed && (
           <div
-            className="cv-section-body cursor-pointer"
+            className="ds-card__content cv-section-body cursor-pointer"
             role="button"
             tabIndex={0}
             aria-label="Edit profile"
@@ -5687,6 +5718,7 @@ export default function SectionEditor({
       <div
         className={[
           "mb-4",
+          "ds-card",
           "border",
           "[border-color:var(--color-border)]",
           "[border-radius:var(--radius-card)]",
@@ -5695,10 +5727,12 @@ export default function SectionEditor({
         ]
           .filter(Boolean)
           .join(" ")}
+        data-interactive="true"
+        data-state={collapsed ? "collapsed" : "open"}
       >
         {sectionType === "projects" ? renderOptionalSectionDismissButton() : null}
         <div className="section-container-header flex items-center justify-between">
-          <h3 className="cv-section-heading">{section.title}</h3>
+          <h3 className="ds-card__title cv-section-heading">{section.title}</h3>
           <div className="dasti-icon-cluster dasti-icon-cluster--tight">
             <button
               type="button"
@@ -5732,7 +5766,7 @@ export default function SectionEditor({
 
         {collapsed && (
           <div
-            className="cv-section-preview cursor-pointer"
+            className="ds-card__body cv-section-preview cursor-pointer"
             role="button"
             tabIndex={0}
             aria-label={`Edit ${sectionType}`}
@@ -5831,7 +5865,7 @@ export default function SectionEditor({
 
         {!collapsed && (
           <div
-            className="cv-section-body cv-section-body--stack cursor-pointer"
+            className="ds-card__content cv-section-body cv-section-body--stack cursor-pointer"
             role="button"
             tabIndex={0}
             aria-label={`Edit ${sectionType}`}
@@ -6105,7 +6139,11 @@ export default function SectionEditor({
   }
 
   return (
-    <div className="mb-4 border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container">
+    <div
+      className="mb-4 ds-card border [border-color:var(--color-border)] [border-radius:var(--radius-card)] section-container"
+      data-interactive="true"
+      data-state={collapsed ? "collapsed" : "open"}
+    >
       {inlineSelectionState ? (
         <FloatingAiToolbar
           open
@@ -6271,7 +6309,7 @@ export default function SectionEditor({
 
       {!collapsed && (
         <div
-          className="p-1 editor-wrapper"
+          className="ds-card__content cv-section-body p-1 editor-wrapper"
           onPointerDown={() => {
             if (remirrorViewAvailable) focusEditorAtEnd();
           }}

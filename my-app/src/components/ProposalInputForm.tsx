@@ -1658,22 +1658,22 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                               {sourceMetadataCards.map((item) => (
                                 <div
                                   key={`${item.label}:${item.value}`}
-                                  className="dasti-proposal-source-summary__card"
+                                  className="ds-card ds-card--muted dasti-proposal-source-summary__card"
                                 >
-                                  <div className="dasti-proposal-source-summary__label">
+                                  <div className="ds-card__eyebrow dasti-proposal-source-summary__label">
                                     {item.label}
                                   </div>
-                                  <div className="dasti-proposal-source-summary__value">
+                                  <div className="ds-card__body dasti-proposal-source-summary__value">
                                     {item.value}
                                   </div>
                                 </div>
                               ))}
                               {sourceSummary.toneCues.length > 0 ? (
-                                <div className="dasti-proposal-source-summary__card">
-                                  <div className="dasti-proposal-source-summary__label">
+                                <div className="ds-card ds-card--muted dasti-proposal-source-summary__card">
+                                  <div className="ds-card__eyebrow dasti-proposal-source-summary__label">
                                     Tone cues
                                   </div>
-                                  <div className="dasti-proposal-source-summary__value dasti-proposal-source-summary__value--chips">
+                                  <div className="ds-card__body dasti-proposal-source-summary__value dasti-proposal-source-summary__value--chips">
                                     {sourceSummary.toneCues.map((cue) => (
                                       <span
                                         key={cue}
