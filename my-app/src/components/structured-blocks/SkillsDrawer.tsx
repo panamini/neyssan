@@ -1,7 +1,6 @@
 import React from "react";
 import type { ISkillItem, Level } from "../../types/cvDocument";
-import { useCloseOnEscape } from "../../hooks/use-close-on-escape";
-import { BodyPortal } from "@/components/ui/body-portal";
+import { Sheet } from "@/components/ui/sheet";
 
 interface SkillsDrawerProps {
   open: boolean;
@@ -73,8 +72,6 @@ export function SkillsDrawer({
   const [selected, setSelected] = React.useState<Set<string>>(() => new Set());
   const [levelChoice, setLevelChoice] = React.useState<Level>("Intermediate");
   const [isDeleteConfirming, setIsDeleteConfirming] = React.useState(false);
-
-  useCloseOnEscape({ open, onClose });
 
   // Anchor for shift-click range selection
   const anchorRef = React.useRef<{ bucket: Bucket; index: number } | null>(
@@ -189,47 +186,43 @@ export function SkillsDrawer({
   }
 
   return (
-    <BodyPortal>
-      <div
-        className="fixed inset-0 z-[10010]"
-        onMouseDownCapture={(e) => e.stopPropagation()}
-        onPointerDownCapture={(e) => e.stopPropagation()}
-      >
-        {/* overlay */}
-        <div
-          className="absolute inset-0"
-          aria-hidden
-          onClick={onClose}
-          style={{
-            background: "var(--dialog-backdrop-bg)",
-            backdropFilter: "blur(var(--dialog-backdrop-blur))",
-            WebkitBackdropFilter: "blur(var(--dialog-backdrop-blur))",
-          }}
-        />
-
-        {/* panel */}
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Manage Skills"
-          className="absolute inset-y-0 right-0 flex w-full max-w-md border-l [box-shadow:var(--shc)] [background:var(--sfr)] text-foreground [border-color:var(--color-border)]"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex flex-col w-full h-full">
-            <div className="flex items-center justify-between px-4 py-3 border-b [border-color:var(--color-border)]">
-              <h2 className="text-base font-semibold">Manage Skills</h2>
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-2 py-1 text-sm rounded hover:[background:var(--as)] focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
-                aria-label="Close"
-              >
-                Close
-              </button>
-            </div>
-
+    <Sheet
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
+      }}
+      side="right"
+      title="Manage skills"
+      ariaLabel="Manage skills"
+      footer={
+        <>
+          <div className="text-xs text-muted">
+            {totalSelected > 0 ? `${totalSelected} selected` : "\u00A0"}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-2 rounded [background:var(--sf2)] hover:brightness-95 focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              disabled
+              className="px-3 py-2 rounded cursor-not-allowed bg-primary text-foreground opacity-60"
+              aria-disabled="true"
+              title="All changes apply immediately"
+            >
+              Apply
+            </button>
+          </div>
+        </>
+      }
+      footerClassName="justify-between"
+    >
             {/* tabs */}
-            <div className="px-4 pt-3">
+            <div>
               <div
                 role="tablist"
                 aria-label="Skills views"
@@ -267,7 +260,7 @@ export function SkillsDrawer({
             </div>
 
             {/* content */}
-            <div className="flex-1 p-4 overflow-auto">
+            <div>
               {tab === "manage" ? (
                 <div className="space-y-6">
                   {/* Bulk actions bar */}
@@ -511,35 +504,7 @@ export function SkillsDrawer({
                 </div>
               )}
             </div>
-
-            {/* footer */}
-            <div className="flex items-center justify-between gap-2 px-4 py-3 border-t [border-color:var(--color-border)]">
-              <div className="text-xs text-muted">
-                {totalSelected > 0 ? `${totalSelected} selected` : "\u00A0"}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-3 py-2 rounded [background:var(--sf2)] hover:brightness-95 focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  className="px-3 py-2 rounded cursor-not-allowed bg-primary text-foreground opacity-60"
-                  aria-disabled="true"
-                  title="All changes apply immediately"
-                >
-                  Apply
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </BodyPortal>
+    </Sheet>
   );
 }
 
