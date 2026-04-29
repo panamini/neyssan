@@ -589,6 +589,37 @@ Use Radix-style imperative API (or keep your existing one — verify). Required 
 - Esc and overlay-click close (default).
 - Focus trap and return-focus: keep current Radix behavior.
 
+### 4.7b Sheet — `components/ui/sheet.tsx`
+
+Right-side drawer + bottom-sheet variant. Replaces ad-hoc `SkillsDrawer`, `AddSectionBottomSheet`, and any inline drawer markup. CSS lives in `ds-v2.css` under classes `.ds-sheet`, `.ds-sheet__overlay`, `.ds-sheet__header`, `.ds-sheet__title`, `.ds-sheet__close`, `.ds-sheet__body`, `.ds-sheet__footer`, `.ds-bottom-sheet`, `.ds-bottom-sheet__handle`, `.ds-bottom-sheet__header/body/footer` (copy verbatim from `docs/UI/SKELETON.html` section 06b).
+
+```ts
+export interface SheetProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  side?: "right" | "bottom";        // default "right"
+  title: string;                     // sentence case, period optional
+  description?: string;
+  children: React.ReactNode;         // body content
+  footer?: React.ReactNode;          // action row
+  ariaLabel?: string;                // override if title is visual-only
+}
+```
+
+Behavior:
+- Portal to `document.body` to escape stacking contexts.
+- Frost overlay (`.ds-sheet__overlay`) closes on click.
+- Esc closes. Focus trap inside panel. Return focus to trigger on close.
+- `side="right"` slides via `transform: translateX`. `side="bottom"` slides via `transform: translateY` and renders a drag handle.
+- `data-state="open" | "closed"` on the panel drives the transition.
+- `prefers-reduced-motion` neutralizes the slide.
+- Body uses `overflow-y: auto`. Header/footer pinned, sticky when body scrolls.
+
+Migration:
+- `SkillsDrawer.tsx` → `Sheet side="right"` with skills picker as body.
+- `AddSectionBottomSheet.tsx` → `Sheet side="bottom"`.
+- Any other ad-hoc drawer markup in `components/` should migrate too — grep for `position: fixed` + `transform: translateX` / `translateY` patterns.
+
 ### 4.8 Skeleton — `components/ui/skeleton.tsx`
 
 ```ts
@@ -613,6 +644,7 @@ export { StatusBadge } from "./status-badge";
 export { Skeleton } from "./skeleton";
 export { ToastProvider, toast } from "./toast";
 export { Dialog } from "./dialog";
+export { Sheet } from "./sheet";
 ```
 
 ---
