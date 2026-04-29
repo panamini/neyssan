@@ -17,6 +17,7 @@ import {
   type ProposalGenerateButtonVisualState,
 } from "./ProposalGenerateGlyph";
 import { SaveIndicator, type SaveStatus } from "./ui/SaveIndicator";
+import { ToneBadge, type ToneBadgeTone } from "./ui/tone-badge";
 import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 import type { FormValues } from "./ProposalInputForm.schemas";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
@@ -52,6 +53,7 @@ type ToneOption = {
   label: string;
   description: string;
   Icon: typeof Wand2;
+  tone?: ToneBadgeTone;
 };
 
 const TONE_OPTIONS: ToneOption[] = [
@@ -60,24 +62,28 @@ const TONE_OPTIONS: ToneOption[] = [
     label: getVoicePresetDisplayLabel(null),
     description: "System picks the tone.",
     Icon: Wand2,
+    tone: "auto",
   },
   {
     id: "engaging",
     label: getVoicePresetDisplayLabel("engaging"),
     description: "Warm and approachable.",
     Icon: Feather,
+    tone: "warm",
   },
   {
     id: "signature",
     label: getVoicePresetDisplayLabel("signature"),
     description: "Natural and credible.",
     Icon: PenNib,
+    tone: "natural",
   },
   {
     id: "expert",
     label: getVoicePresetDisplayLabel("expert"),
     description: "Formal and composed.",
     Icon: Stamp,
+    tone: "formal",
   },
 ];
 
@@ -317,6 +323,13 @@ export function ProposalComposeToolbar({
                             strokeWidth={1.7}
                             aria-hidden="true"
                           />
+                          {option.tone ? (
+                            <ToneBadge tone={option.tone}>{option.label}</ToneBadge>
+                          ) : (
+                            <span className="dasti-compose-toolbar__tone-option-label">
+                              {option.label}
+                            </span>
+                          )}
                           <ToneTooltip
                             className="dasti-compose-toolbar__tooltip--drawer"
                             title={option.label}

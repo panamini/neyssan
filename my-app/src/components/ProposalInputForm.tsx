@@ -71,6 +71,7 @@ import {
 } from "./ProposalGenerateGlyph";
 import { buildProposalSourceSummary } from "../lib/proposal-source-summary";
 import { CvPickerCard } from "./cv/CvPickerCard";
+import { ToneBadge, type ToneBadgeTone } from "./ui/tone-badge";
 
 interface ProposalInputFormProps {
   onSubmit: (
@@ -148,21 +149,25 @@ const TONE_OPTIONS: Array<{
   id: ProposalVoicePreset;
   uiLabel: string;
   description: string;
+  tone: ToneBadgeTone;
 }> = [
   {
     id: "engaging",
     uiLabel: getVoicePresetDisplayLabel("engaging"),
     description: "Warm and approachable.",
+    tone: "warm",
   },
   {
     id: "signature",
     uiLabel: getVoicePresetDisplayLabel("signature"),
     description: "Natural and credible.",
+    tone: "natural",
   },
   {
     id: "expert",
     uiLabel: getVoicePresetDisplayLabel("expert"),
     description: "Formal and composed.",
+    tone: "formal",
   },
 ];
 
@@ -170,6 +175,7 @@ const AUTO_TONE_OPTION = {
   id: null,
   uiLabel: getVoicePresetDisplayLabel(null),
   description: "Auto-fit to the client.",
+  tone: "auto",
 } as const;
 
 const VISIBLE_TONE_OPTION_IDS = new Set<ProposalVoicePreset>(
@@ -2003,7 +2009,11 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                       <div className="dasti-menu-option__row dasti-menu-option__row--between">
                         <div className="dasti-menu-option__copy">
                           <div className="dasti-menu-option__title">
-                            {opt.uiLabel}
+                            {"tone" in opt ? (
+                              <ToneBadge tone={opt.tone}>{opt.uiLabel}</ToneBadge>
+                            ) : (
+                              opt.uiLabel
+                            )}
                           </div>
                           <div className="dasti-menu-option__description">
                             {opt.description}

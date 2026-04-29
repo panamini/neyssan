@@ -9,29 +9,44 @@
   color-scheme: light;
   --ac: #A84E2E;                   /* terracotta primary */
   --am: #D97757;                   /* clay action / CTA */
+  --am-soft: #EBBCAF;              /* clay accent fill for active pills */
   --ap: rgba(168, 78, 46, 0.10);   /* terracotta wash */
   --as: rgba(168, 78, 46, 0.16);   /* terracotta soft tint */
   --fr: #D97757;                   /* focus ring */
+  --link: #2A78D6;
+  --link-hover: #5391DD;
+  --info-bg: #B0D3FA;
   --color-on-accent: #FAF9F5;      /* ink on filled accent button */
   --op: var(--color-on-accent);    /* legacy alias */
   --btn-dark-bg: #191915;
   --btn-dark-fg: #FAF9F5;
+  --paper-dark-heading-ink: #0F0C08;
+  --paper-dark-body-ink: #2F2D29;
+  --paper-dark-meta-ink: rgb(15 12 8 / 55%);
   --ti-soft: #2F2D29;
   --text-body: #484643;
   --tg3: #7E7D79;
   --tm3: var(--tg3);
   --tg4: #A4A39F;
+  --border-stronger: #B6B5B1;
 }
 .dark {
   --ac: #A15A42;                   /* deep terracotta on dark */
   --am: #D47554;                   /* clay action on dark */
+  --am-soft: rgba(212, 117, 84, 0.20);
   --ap: rgba(212, 117, 84, 0.14);
   --as: rgba(212, 117, 84, 0.20);
   --fr: #D47554;
+  --link: #2B99FF;
+  --link-hover: #237FCF;
+  --info-bg: rgba(43, 153, 255, 0.16);
   --color-on-accent: #0E0E0E;
   --op: var(--color-on-accent);
   --btn-dark-bg: #DAD9D3;
   --btn-dark-fg: #0E0E0E;
+  --paper-dark-heading-ink: #0F0C08;
+  --paper-dark-body-ink: #2F2D29;
+  --paper-dark-meta-ink: rgb(15 12 8 / 55%);
   --selection-highlight-bg: color-mix(in oklch, var(--ac) 34%, transparent);
   --selection-highlight-fg: var(--ti);
   --ti-soft: #B8B7AE;
@@ -39,6 +54,7 @@
   --tg3: #6E6D69;
   --tm3: var(--tg3);
   --tg4: #504F4C;
+  --border-stronger: #6E6D69;
 }
 
 /* --- Tokens universels (indépendants du thème) ------------- */
@@ -499,6 +515,18 @@
   --wa: hsl(32, 40%, 34%);
   --wab: hsl(32, 32%, 93%);
   --wat: hsl(32, 40%, 26%);
+  --tone-auto-bg: var(--sf2);
+  --tone-auto-border: transparent;
+  --tone-auto-ink: var(--tg3);
+  --tone-warm-bg: hsl(30deg 40% 93%);
+  --tone-warm-border: hsl(28deg 30% 80%);
+  --tone-warm-ink: hsl(28deg 40% 32%);
+  --tone-formal-bg: hsl(220deg 16% 93%);
+  --tone-formal-border: hsl(220deg 12% 80%);
+  --tone-formal-ink: hsl(220deg 18% 32%);
+  --tone-natural-bg: hsl(150deg 16% 92%);
+  --tone-natural-border: hsl(150deg 18% 78%);
+  --tone-natural-ink: hsl(150deg 22% 28%);
 
   /* §9 Ombres light — dasti preview catalog */
   --sha: 0 1px 2px hsla(30, 15%, 10%, 0.04),
@@ -568,12 +596,24 @@
   --ok: hsl(150, 22%, 56%);
   --okb: hsl(150, 14%, 14%);
   --okt: hsl(150, 22%, 70%);
-  --er: hsl(10, 34%, 58%);   /* warm brick — not alarm red */
+  --er: hsl(10, 30%, 58%);   /* warm brick — not alarm red */
   --erb: hsl(10, 20%, 16%);
   --ert: hsl(10, 34%, 72%);
   --wa: hsl(34, 30%, 62%);
   --wab: hsl(34, 14%, 14%);
   --wat: hsl(34, 30%, 74%);
+  --tone-auto-bg: var(--sf2);
+  --tone-auto-border: transparent;
+  --tone-auto-ink: var(--tg3);
+  --tone-warm-bg: hsl(30deg 18% 16%);
+  --tone-warm-border: hsl(28deg 16% 28%);
+  --tone-warm-ink: hsl(28deg 30% 72%);
+  --tone-formal-bg: hsl(220deg 12% 16%);
+  --tone-formal-border: hsl(220deg 10% 28%);
+  --tone-formal-ink: hsl(220deg 18% 72%);
+  --tone-natural-bg: hsl(150deg 12% 14%);
+  --tone-natural-border: hsl(150deg 12% 26%);
+  --tone-natural-ink: hsl(150deg 22% 68%);
 
   /* §9 Ombres dark */
   --sha: 0 1px 2px rgba(0, 0, 0, 0.50),
