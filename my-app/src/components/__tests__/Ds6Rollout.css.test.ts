@@ -2,10 +2,17 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const productCss = readFileSync(
-  resolve(process.cwd(), "src/styles/product.css"),
-  "utf8",
-);
+const productCssPaths = [
+  "src/styles/product.css",
+  "src/styles/product-proposal.css",
+  "src/styles/product-libraries.css",
+  "src/styles/product-jobs.css",
+  "src/styles/product-cv.css",
+  "src/styles/product-settings.css",
+];
+const productCss = productCssPaths
+  .map((stylePath) => readFileSync(resolve(process.cwd(), stylePath), "utf8"))
+  .join("\n");
 const dsCss = readFileSync(resolve(process.cwd(), "src/styles/ds-v2.css"), "utf8");
 const foundationCss = readFileSync(
   resolve(process.cwd(), "src/styles/foundation.css"),

@@ -6,10 +6,17 @@ const foundationCss = readFileSync(
   resolve(process.cwd(), "src/styles/foundation.css"),
   "utf8",
 );
-const productCss = readFileSync(
-  resolve(process.cwd(), "src/styles/product.css"),
-  "utf8",
-);
+const productCssPaths = [
+  "src/styles/product.css",
+  "src/styles/product-proposal.css",
+  "src/styles/product-libraries.css",
+  "src/styles/product-jobs.css",
+  "src/styles/product-cv.css",
+  "src/styles/product-settings.css",
+];
+const productCss = productCssPaths
+  .map((stylePath) => readFileSync(resolve(process.cwd(), stylePath), "utf8"))
+  .join("\n");
 
 describe("CV editor reading measure", () => {
   it("defines the CV reading measure token at 70ch", () => {
