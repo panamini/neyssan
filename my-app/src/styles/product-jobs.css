@@ -11,9 +11,14 @@
 
 .dasti-jobs-layout {
   display: grid;
-  grid-template-columns: minmax(0, min(100%, 560px)) minmax(0, 1fr);
-  gap: var(--space-5);
-  align-items: start;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 0;
+  align-items: stretch;
+  min-height: min(820px, calc(100dvh - var(--app-topbar-height, 0px) - 96px));
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: var(--sf1);
+  overflow: hidden;
 }
 
 .dasti-jobs-list-pane,
@@ -23,14 +28,25 @@
 
 .dasti-jobs-list-pane {
   display: grid;
+  align-content: start;
   gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-3);
+  border-inline-end: 1px solid var(--border-soft);
+  background: var(--sf1);
 }
 
 .dasti-jobs-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) auto;
   gap: var(--space-2);
   align-items: center;
+  padding-block-end: var(--space-1);
+  background: color-mix(in srgb, var(--sf1) 92%, transparent);
+  backdrop-filter: blur(8px);
 }
 
 .dasti-jobs-toolbar__search,
@@ -79,6 +95,10 @@
   gap: var(--space-2);
   align-items: center;
   overflow: visible;
+}
+
+.dasti-jobs-filter-cluster--capture {
+  margin-inline-start: auto;
 }
 
 .dasti-jobs-filter-chips .dasti-proposal-library-filter-menu {
@@ -226,6 +246,7 @@
 .dasti-jobs-list {
   display: grid;
   gap: var(--space-2);
+  overflow-y: auto;
 }
 
 .dasti-jobs-list-item {
@@ -435,6 +456,8 @@
 .dasti-jobs-detail-pane {
   display: grid;
   min-height: 0;
+  padding: var(--space-4);
+  overflow: auto;
 }
 
 .dasti-jobs-inline-detail {
@@ -446,6 +469,23 @@
 .dasti-jobs-detail {
   display: grid;
   gap: var(--space-4);
+}
+
+.dasti-jobs-detail__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.dasti-jobs-detail__content {
+  min-width: 0;
+}
+
+.dasti-jobs-detail__match {
+  position: sticky;
+  top: var(--space-4);
+  min-width: 0;
 }
 
 .dasti-jobs-detail__topline {
@@ -606,6 +646,84 @@
   gap: var(--space-1);
   color: var(--tm2);
   font-size: var(--ts);
+}
+
+.ds-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  width: fit-content;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  background: var(--sf2);
+  color: var(--tg3);
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  line-height: 1;
+}
+
+.ds-verdict__dot {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.ds-verdict--strong {
+  background: var(--sug-bg, var(--am-soft));
+  color: var(--sug-text, var(--ac));
+}
+
+.ds-verdict--worth {
+  background: var(--am-soft);
+  color: var(--ac);
+}
+
+.ds-verdict--maybe {
+  background: var(--sf2);
+  color: var(--tm2);
+}
+
+.ds-verdict--skip {
+  background: var(--wab);
+  color: var(--wat);
+}
+
+.dasti-job-match-panel {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.dasti-job-match-panel__verdict {
+  min-height: 28px;
+  padding-inline: var(--space-3);
+  font-size: var(--ts);
+}
+
+.dasti-job-match-panel__rows {
+  display: grid;
+  gap: var(--space-2);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--border-soft);
+}
+
+.dasti-job-match-panel__row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--space-2);
+  color: var(--text-body);
+  font-size: var(--tx);
+  line-height: var(--lb);
+}
+
+.dasti-job-match-panel__row span:first-child {
+  color: var(--tg3);
+}
+
+.dasti-job-match-panel__breakdown {
+  justify-self: start;
 }
 
 .dasti-jobs-detail__actions {
@@ -786,12 +904,30 @@
     justify-content: start;
   }
 
+  .dasti-jobs-detail__body {
+    grid-template-columns: 1fr;
+  }
+
+  .dasti-jobs-detail__match {
+    position: static;
+  }
+
   .dasti-jobs-detail-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 760px) {
+  .dasti-jobs-layout {
+    border-radius: 0;
+  }
+
+  .dasti-jobs-list-pane,
+  .dasti-jobs-detail-pane {
+    padding: var(--space-3);
+    border-inline-end: 0;
+  }
+
   .dasti-jobs-toolbar {
     grid-template-columns: 1fr;
   }
