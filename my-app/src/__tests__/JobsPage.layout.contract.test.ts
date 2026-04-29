@@ -6,6 +6,18 @@ const jobsPageSource = readFileSync(
   resolve(process.cwd(), "src/pages/JobsPage.tsx"),
   "utf8",
 );
+const jobsWorkspaceSource = readFileSync(
+  resolve(process.cwd(), "src/components/jobs/JobsWorkspace.tsx"),
+  "utf8",
+);
+const jobsListSource = readFileSync(
+  resolve(process.cwd(), "src/components/jobs/JobsList.tsx"),
+  "utf8",
+);
+const jobDetailSource = readFileSync(
+  resolve(process.cwd(), "src/components/jobs/JobDetail.tsx"),
+  "utf8",
+);
 const productCssPaths = [
   "src/styles/product.css",
   "src/styles/product-proposal.css",
@@ -26,24 +38,24 @@ describe("JobsPage collapsed layout contract", () => {
     expect(productCss).toMatch(
       /\.dasti-jobs-toolbar\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*0;/,
     );
-    expect(jobsPageSource).toContain("Paste URL");
-    expect(jobsPageSource).toContain("Capture with extension");
-    expect(jobsPageSource).toContain("Remote");
-    expect(jobsPageSource).toContain("Senior");
-    expect(jobsPageSource).toContain("Generate proposal");
+    expect(jobsListSource).toContain("Paste URL");
+    expect(jobsListSource).toContain("Capture with extension");
+    expect(jobsListSource).toContain("Remote");
+    expect(jobsListSource).toContain("Senior");
+    expect(jobDetailSource).toContain("Generate proposal");
   });
 
   it("renders selected job detail inline after the active row at the collapsed breakpoint", () => {
-    expect(jobsPageSource).toContain(
+    expect(jobsWorkspaceSource).toContain(
       "const JOBS_TWO_PANE_MIN_VIEWPORT_WIDTH = 1440;",
     );
-    expect(jobsPageSource).toContain(
+    expect(jobsWorkspaceSource).toContain(
       "viewportWidth < JOBS_TWO_PANE_MIN_VIEWPORT_WIDTH",
     );
-    expect(jobsPageSource).toContain("shouldRenderInlineDetailPane");
-    expect(jobsPageSource).toContain('className="dasti-jobs-list-item"');
-    expect(jobsPageSource).toContain('className="dasti-jobs-inline-detail"');
-    expect(jobsPageSource).toContain("!shouldRenderInlineDetailPane");
+    expect(jobsWorkspaceSource).toContain("shouldRenderInlineDetailPane");
+    expect(jobsListSource).toContain('className="dasti-jobs-list-item"');
+    expect(jobsListSource).toContain('className="dasti-jobs-inline-detail"');
+    expect(jobsWorkspaceSource).toContain("!shouldRenderInlineDetailPane");
   });
 
   it("keeps jobs controls compact and left-anchored inside the list pane", () => {
@@ -68,7 +80,12 @@ describe("JobsPage collapsed layout contract", () => {
   });
 
   it("uses the list magnifying glass icon for the jobs search affordance", () => {
-    expect(jobsPageSource).toContain("ListMagnifyingGlass");
+    expect(jobsListSource).toContain("ListMagnifyingGlass");
     expect(productCss).toContain(".dasti-jobs-toolbar__search-icon");
+  });
+
+  it("keeps JobsPage as the extracted route shell", () => {
+    expect(jobsPageSource.split("\n").length).toBeLessThan(400);
+    expect(jobsPageSource).toContain("JobsWorkspacePage");
   });
 });
