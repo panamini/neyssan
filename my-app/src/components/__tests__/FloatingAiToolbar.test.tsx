@@ -180,6 +180,24 @@ describe("FloatingAiToolbar", () => {
     expect(screen.queryByRole("button", { name: "Send request" })).toBeNull();
   });
 
+  it("focuses the Ask field when the inline prompt opens", async () => {
+    render(
+      <FloatingAiToolbar
+        anchor={{ left: 120, top: 80 }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Ask" }))[0]);
+
+    const askField = screen.getByRole("textbox", { name: "Ask AI" });
+    await waitFor(() => {
+      expect(askField).toHaveFocus();
+    });
+  });
+
   it("shows the targeted custom loading state without relabeling preset actions", async () => {
     const onRunAction = vi.fn();
     const props = {
