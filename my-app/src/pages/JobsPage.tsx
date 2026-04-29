@@ -111,6 +111,9 @@ type JobsPageListItem = {
   lastOpenedAt: number;
   lastActivityAt: number;
   linkedDocumentCount: number;
+  keywords?: string[];
+  visibleKeywords?: string[];
+  skills?: string[];
 };
 
 type JobsPageReviewItem = {
@@ -1055,13 +1058,13 @@ function matchesListFilters(
 function resolveMatchTierLabel(tier: JobsPageListItem["matchTier"]): string {
   switch (tier) {
     case "strong":
-      return "Strong lead";
+      return "Strong match";
     case "partial":
-      return "Possible lead";
+      return "Worth a shot";
     case "weak":
       return "Probably skip";
     case "unknown":
-      return "Not enough signal";
+      return "Maybe";
   }
 }
 
@@ -1238,6 +1241,8 @@ function JobsPageContent(): JSX.Element {
   const [hasDocsOnly, setHasDocsOnly] = React.useState(false);
   const [needsReviewOnly, setNeedsReviewOnly] = React.useState(false);
   const [favoritesOnly, setFavoritesOnly] = React.useState(false);
+  const [remoteOnly, setRemoteOnly] = React.useState(false);
+  const [seniorOnly, setSeniorOnly] = React.useState(false);
   const [sortOrder, setSortOrder] = React.useState<JobsSortOrder>("recent");
   const [optimisticActivityById, setOptimisticActivityById] = React.useState<
     Record<string, number>
@@ -1455,6 +1460,9 @@ function JobsPageContent(): JSX.Element {
         const searchableText = [
           job.title,
           job.company,
+          ...(job.skills ?? []),
+          ...(job.keywords ?? []),
+          ...(job.visibleKeywords ?? []),
           job.sourceDomain,
           job.sourceType,
         ]
@@ -1463,6 +1471,23 @@ function JobsPageContent(): JSX.Element {
           .toLowerCase();
 
         return searchableText.includes(normalizedQuery);
+      })
+      .filter((job) => {
+        if (
+          remoteOnly &&
+          !`${job.location} ${job.title}`.toLowerCase().includes("remote")
+        ) {
+          return false;
+        }
+        if (
+          seniorOnly &&
+          !`${job.title} ${job.company}`
+            .toLowerCase()
+            .match(/\bsenior\b|\bstaff\b|\blead\b/)
+        ) {
+          return false;
+        }
+        return true;
       });
 
     baseList.sort((left, right) => {
@@ -1495,7 +1520,9 @@ function JobsPageContent(): JSX.Element {
     hasDocsOnly,
     matchFilter,
     needsReviewOnly,
+    remoteOnly,
     searchQuery,
+    seniorOnly,
     sortOrder,
   ]);
 
@@ -2112,21 +2139,16 @@ function JobsPageContent(): JSX.Element {
           <div className="dasti-jobs-detail__identity">
             <div className="dasti-jobs-detail__title">
               <span>{selectedJob.title || "Untitled job"}</span>
-              {isMobileJobsLayout ? (
+              <div
+                className="dasti-jobs-detail__header-actions"
+                aria-label="Job actions"
+              >
                 <button
                   type="button"
                   className="dasti-icon-button dasti-jobs-detail__favorite-action"
                   aria-pressed={selectedJobIsFavorite}
-                  aria-label={
-                    selectedJobIsFavorite
-                      ? "Remove job from favorites"
-                      : "Mark job as favorite"
-                  }
-                  title={
-                    selectedJobIsFavorite
-                      ? "Remove from favorites"
-                      : "Mark favorite"
-                  }
+                  aria-label="Favorite"
+                  title="Favorite"
                   onClick={() => {
                     void handleSetJobFavorite(
                       selectedJob.id,
@@ -2141,11 +2163,32 @@ function JobsPageContent(): JSX.Element {
                     aria-hidden="true"
                   />
                 </button>
-              ) : null}
-              <div
-                className="dasti-jobs-detail__header-actions"
-                aria-label="Job actions"
-              >
+                <button
+                  type="button"
+                  className="dasti-jobs-detail__header-action"
+                  onClick={() => {
+                    void handleSetJobFavorite(selectedJob.id, true);
+                  }}
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="dasti-jobs-detail__header-action"
+                  disabled={!selectedJob.sourceUrl}
+                  onClick={() => handleOpenJobSource(selectedJob.sourceUrl)}
+                >
+                  <ArrowSquareOut
+                    size={14}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    {selectedSourceLabel
+                      ? `View on ${selectedSourceLabel}`
+                      : "View source"}
+                  </span>
+                </button>
                 <div
                   ref={resumePickerRef}
                   className="dasti-jobs-detail__resume-picker dasti-jobs-detail__header-resume"
@@ -2244,7 +2287,7 @@ function JobsPageContent(): JSX.Element {
                     strokeWidth={1.8}
                     aria-hidden="true"
                   />
-                  <span>Draft Proposal</span>
+                  <span>Generate proposal</span>
                 </button>
               </div>
               {selectedJob.isSample ? (
@@ -2284,17 +2327,52 @@ function JobsPageContent(): JSX.Element {
           </div>
         </div>
 
-        {selectedJob.matchRead ? (
-          <MatchReadBlock
-            matchRead={selectedJob.matchRead}
-            matchReview={selectedJob.matchReview}
-            visibleRequirements={selectedJob.visibleRequirements}
-            jobTitle={selectedJob.title}
-            jobCompany={selectedJob.company}
-            jobLocation={selectedJob.location}
-            onRefreshMatch={handleRefreshSelectedJobMatch}
-          />
-        ) : null}
+        <div className="dasti-jobs-detail__body">
+          <div className="dasti-jobs-detail__content">
+            <ProposalBriefCard
+              sourceJobTitle={selectedJob.title}
+              outputDocumentTitle={null}
+              jobDescription={selectedJob.rawDescription}
+              showHeader={false}
+              sourceUrl={selectedJob.sourceUrl}
+              sourcePlatform={selectedJob.sourceType}
+              summaryText={selectedJob.summary}
+              visibleSummaryText={selectedJob.visibleSummary}
+              requirements={selectedJob.mustHaves}
+              visibleRequirements={selectedJob.visibleRequirements}
+              keywords={selectedJob.keywords}
+              visibleKeywords={selectedJob.visibleKeywords}
+              extractionUnavailable={
+                selectedJob.visibleExtractionSource !== "llm"
+              }
+              parseStatus={selectedJob.parseStatus}
+              trustState={selectedJob.reviewState}
+              linkedDocumentCount={selectedJob.linkedProposalCount}
+              linkedProposals={selectedJob.linkedProposals}
+              reviewItems={selectedJob.reviewItems}
+              onSaveField={handleSaveField}
+              onApproveReviewItem={(item) =>
+                handleApproveReviewItem(item as JobsPageReviewItem)
+              }
+              onSaveReviewItem={(item, nextValue) =>
+                handleSaveReviewItem(item as JobsPageReviewItem, nextValue)
+              }
+            />
+          </div>
+          <aside className="dasti-jobs-detail__match" aria-label="Match panel">
+            {selectedJob.matchRead ? (
+              <MatchReadBlock
+                matchRead={selectedJob.matchRead}
+                matchReview={selectedJob.matchReview}
+                visibleRequirements={selectedJob.visibleRequirements}
+                jobTitle={selectedJob.title}
+                jobCompany={selectedJob.company}
+                jobLocation={selectedJob.location}
+                onRefreshMatch={handleRefreshSelectedJobMatch}
+              />
+            ) : null}
+          </aside>
+        </div>
 
         <JobsStructuredShadowInternalPanel
           jobId={selectedJob.id}
@@ -2312,34 +2390,6 @@ function JobsPageContent(): JSX.Element {
             refreshKey={selectedJobRefreshKey}
           />
         ) : null}
-
-        <ProposalBriefCard
-          sourceJobTitle={selectedJob.title}
-          outputDocumentTitle={null}
-          jobDescription={selectedJob.rawDescription}
-          showHeader={false}
-          sourceUrl={selectedJob.sourceUrl}
-          sourcePlatform={selectedJob.sourceType}
-          summaryText={selectedJob.summary}
-          visibleSummaryText={selectedJob.visibleSummary}
-          requirements={selectedJob.mustHaves}
-          visibleRequirements={selectedJob.visibleRequirements}
-          keywords={selectedJob.keywords}
-          visibleKeywords={selectedJob.visibleKeywords}
-          extractionUnavailable={selectedJob.visibleExtractionSource !== "llm"}
-          parseStatus={selectedJob.parseStatus}
-          trustState={selectedJob.reviewState}
-          linkedDocumentCount={selectedJob.linkedProposalCount}
-          linkedProposals={selectedJob.linkedProposals}
-          reviewItems={selectedJob.reviewItems}
-          onSaveField={handleSaveField}
-          onApproveReviewItem={(item) =>
-            handleApproveReviewItem(item as JobsPageReviewItem)
-          }
-          onSaveReviewItem={(item, nextValue) =>
-            handleSaveReviewItem(item as JobsPageReviewItem, nextValue)
-          }
-        />
       </div>
     );
   };
@@ -2471,27 +2521,27 @@ function JobsPageContent(): JSX.Element {
                       options={[
                         {
                           value: "all",
-                          label: "All matches",
+                          label: "Worth+ a shot",
                           description: "Show every match tier.",
                         },
                         {
                           value: "strong",
-                          label: "Strong",
+                          label: "Strong match",
                           description: "Highest-confidence matches.",
                         },
                         {
                           value: "partial",
-                          label: "Partial",
+                          label: "Worth a shot",
                           description: "Some signals match.",
                         },
                         {
                           value: "weak",
-                          label: "Weak",
+                          label: "Probably skip",
                           description: "Low-signal matches.",
                         },
                         {
                           value: "unknown",
-                          label: "Unknown",
+                          label: "Maybe",
                           description: "No resolved match tier.",
                         },
                       ]}
@@ -2547,6 +2597,56 @@ function JobsPageContent(): JSX.Element {
                         onClick={() => setFavoritesOnly((current) => !current)}
                       >
                         Favorites
+                      </button>
+                      <button
+                        type="button"
+                        className={[
+                          "dasti-jobs-filter-chip",
+                          remoteOnly ? "dasti-jobs-filter-chip--active" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => setRemoteOnly((current) => !current)}
+                      >
+                        Remote
+                      </button>
+                      <button
+                        type="button"
+                        className={[
+                          "dasti-jobs-filter-chip",
+                          seniorOnly ? "dasti-jobs-filter-chip--active" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onClick={() => setSeniorOnly((current) => !current)}
+                      >
+                        Senior
+                      </button>
+                      <button
+                        type="button"
+                        className="dasti-jobs-filter-chip"
+                        onClick={() => showToast("Filter saved.")}
+                      >
+                        + filter
+                      </button>
+                    </div>
+                    <div
+                      className="dasti-jobs-filter-cluster dasti-jobs-filter-cluster--capture"
+                      aria-label="Job capture"
+                    >
+                      <button
+                        type="button"
+                        className="dasti-jobs-filter-chip"
+                        onClick={handleImportFirstJob}
+                      >
+                        Paste URL
+                      </button>
+                      <button
+                        type="button"
+                        className="dasti-jobs-filter-chip"
+                        onClick={handleImportFirstJob}
+                      >
+                        Capture with extension
                       </button>
                     </div>
                   </div>
@@ -2760,7 +2860,9 @@ function JobsPageContent(): JSX.Element {
                                       type="button"
                                       className="dasti-icon-button dasti-jobs-row__menu-trigger"
                                       aria-label={`More actions for ${title}`}
-                                      onClick={(event) => event.stopPropagation()}
+                                      onClick={(event) =>
+                                        event.stopPropagation()
+                                      }
                                     >
                                       <DotsThree
                                         size={16}
