@@ -310,19 +310,20 @@ export function ProposalsLibrary(): JSX.Element {
                       params.set("id", String(p._id));
                       void navigate(`/proposal?${params.toString()}`);
                     }}
-                    className="dasti-doc-card dasti-doc-card--library dasti-doc-card--proposal-library"
+                    className="ds-card dasti-doc-card dasti-doc-card--library dasti-doc-card--proposal-library"
+                    data-interactive="true"
                     style={{ paddingRight: "var(--s6)" }}
                   >
                     <div className="dasti-doc-card__stack">
                       <div className="dasti-doc-card__header">
                         <div className="dasti-doc-card__title-frame dasti-doc-card__title-frame--top">
-                          <h2 className="dasti-doc-card__title">
+                          <h2 className="ds-card__title dasti-doc-card__title">
                             {p.title ?? "Untitled"}
                           </h2>
                         </div>
                       </div>
 
-                      <div className="dasti-doc-card__body-band">
+                      <div className="ds-card__content dasti-doc-card__body-band">
                         <p
                           className={
                             snippet
@@ -334,7 +335,7 @@ export function ProposalsLibrary(): JSX.Element {
                         </p>
                       </div>
 
-                      <div className="dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
+                      <div className="ds-card__footer dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
                         <div className="dasti-doc-card__footer-meta">
                           <span>{label}</span>
                           <span>·</span>

@@ -952,23 +952,24 @@ export function VerbatiProposalWorkspace({
                       }
                       className={
                         isSelected
-                          ? "dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser dasti-doc-card--selected"
-                          : "dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser"
+                          ? "ds-card ds-card--elevated dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser dasti-doc-card--selected"
+                          : "ds-card dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser"
                       }
+                      data-interactive="true"
                       aria-pressed={isSelected}
                     >
                       <div className="dasti-doc-card__stack">
                         <div className="dasti-doc-card__header">
                           <div className="dasti-doc-card__title-frame">
-                            <h3 className="dasti-doc-card__title">
+                            <h3 className="ds-card__title dasti-doc-card__title">
                               {option.title}
                             </h3>
                           </div>
                         </div>
-                        <div className="dasti-doc-card__meta">
+                        <div className="ds-card__body dasti-doc-card__meta">
                           {option.subtitle}
                         </div>
-                        <div className="dasti-doc-card__footer dasti-doc-card__footer--chooser">
+                        <div className="ds-card__footer dasti-doc-card__footer dasti-doc-card__footer--chooser">
                           <div className="dasti-doc-card__stamp">{option.stamp}</div>
                         </div>
                       </div>
