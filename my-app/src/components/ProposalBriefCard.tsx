@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowSquareOut, ChevronDown } from "@/lib/icons";
 import { getProposalSourceLabel } from "../lib/proposal-source-platforms";
+import { StatusBadge } from "./ui/status-badge";
 
 type ProposalBriefReviewItem = {
   id: string;
@@ -387,11 +388,11 @@ export function ProposalBriefCard({
           <div className="dasti-brief-card__workspace">
             <div className="dasti-brief-card__review-column">
               {extractionUnavailable ? (
-                <div className="dasti-brief-card__review-item dasti-brief-card__review-item--unavailable">
-                  <div className="dasti-brief-card__review-label">
+                <div className="ds-card ds-card--muted dasti-brief-card__review-item dasti-brief-card__review-item--unavailable">
+                  <div className="ds-card__eyebrow dasti-brief-card__review-label">
                     EXTRACTION. PAUSED.
                   </div>
-                  <p className="dasti-brief-card__summary-copy">
+                  <p className="ds-card__body dasti-brief-card__summary-copy">
                     Job read is out of order.
                     <br />
                     Posting stays intact.
@@ -399,10 +400,10 @@ export function ProposalBriefCard({
                 </div>
               ) : null}
               {shouldRenderExtractedSummary ? (
-                <div className="dasti-brief-card__review-item" id="job-summary">
+                <div className="ds-card dasti-brief-card__review-item" id="job-summary">
                   <div className="dasti-brief-card__review-head">
                     <div>
-                      <div className="dasti-brief-card__review-label">
+                      <div className="ds-card__eyebrow dasti-brief-card__review-label">
                         Extracted summary
                       </div>
                     </div>
@@ -460,7 +461,7 @@ export function ProposalBriefCard({
                       </button>
                     </div>
                   ) : (
-                    <p className="dasti-brief-card__summary-copy">
+                    <p className="ds-card__body dasti-brief-card__summary-copy">
                       {resolvedSummaryText}
                     </p>
                   )}
@@ -484,28 +485,25 @@ export function ProposalBriefCard({
                       <div
                         key={item.id}
                         id={resolveReviewItemAnchorId(fieldKey)}
-                        className="dasti-brief-card__review-item"
+                        className="ds-card dasti-brief-card__review-item"
                         data-state={isApproved ? "success" : "warning"}
                       >
                         <div className="dasti-brief-card__review-head">
                           <div>
-                            <div className="dasti-brief-card__review-label">
+                            <div className="ds-card__eyebrow dasti-brief-card__review-label">
                               {item.label}
                             </div>
-                            <div
+                            <StatusBadge
+                              tone={isApproved ? "neutral" : "warning"}
                               className={[
                                 "dasti-brief-card__review-state",
-                                "dasti-pill",
-                                isApproved
-                                  ? "dasti-pill--success"
-                                  : "dasti-pill--warning",
                                 isApproved
                                   ? "dasti-brief-card__review-state--approved"
                                   : "dasti-brief-card__review-state--pending",
                               ].join(" ")}
                             >
                               {isApproved ? "Saved" : "Check"}
-                            </div>
+                            </StatusBadge>
                           </div>
                           <div className="dasti-brief-card__review-actions">
                             {!isApproved ? (

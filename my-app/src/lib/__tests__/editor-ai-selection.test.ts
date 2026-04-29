@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getDomSelectionState } from "../editor-ai-selection";
+import {
+  getDomSelectionState,
+  getTextareaSelectionState,
+} from "../editor-ai-selection";
 
 describe("getDomSelectionState", () => {
   afterEach(() => {
@@ -101,5 +104,53 @@ describe("getDomSelectionState", () => {
     } as Selection);
 
     expect(getDomSelectionState(root)).toBeNull();
+  });
+});
+
+describe("getTextareaSelectionState", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.innerHTML = "";
+  });
+
+  it("anchors focus metrics to the highlighted textarea span", () => {
+    const textarea = document.createElement("textarea");
+    textarea.value = "A proposal line";
+    document.body.appendChild(textarea);
+    textarea.setSelectionRange(0, 1, "backward");
+
+    const textareaRect = new DOMRect(20, 40, 360, 180);
+    const selectedRect = new DOMRect(24, 52, 8, 20);
+
+    vi.spyOn(textarea, "getBoundingClientRect").mockReturnValue(textareaRect);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function getBoundingClientRectMock() {
+        if (
+          this instanceof HTMLSpanElement &&
+          this.textContent === textarea.value.slice(0, 1)
+        ) {
+          return selectedRect;
+        }
+
+        return new DOMRect(0, 0, 0, 0);
+      },
+    );
+
+    expect(getTextareaSelectionState(textarea)).toEqual({
+      text: "A",
+      start: 0,
+      end: 1,
+      anchor: expect.objectContaining({
+        leftEdge: 24,
+        rightEdge: 32,
+        top: 52,
+        bottom: 72,
+        focusLeft: 24,
+        focusRight: 32,
+        focusTop: 52,
+        focusBottom: 72,
+        focusCenter: 28,
+      }),
+    });
   });
 });

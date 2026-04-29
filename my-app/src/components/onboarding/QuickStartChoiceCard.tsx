@@ -35,7 +35,11 @@ export function QuickStartChoiceCard({
   const showExpanded = selected && Boolean(expandedContent);
   return (
     <div
-      className={["dasti-quick-start-choice", className].filter(Boolean).join(" ")}
+      className={["ds-card", "dasti-quick-start-choice", className]
+        .filter(Boolean)
+        .join(" ")}
+      data-interactive={disabled || loading ? undefined : "true"}
+      data-state={loading ? "loading" : undefined}
       data-quick-start-selected={selected ? "true" : undefined}
     >
       <button
@@ -57,9 +61,13 @@ export function QuickStartChoiceCard({
                 aria-hidden="true"
               />
             ) : null}
-            <div className="dasti-quick-start-choice__title">{label}</div>
+            <div className="ds-card__title dasti-quick-start-choice__title">
+              {label}
+            </div>
           </div>
-          <div className="dasti-quick-start-choice__hint">{hint}</div>
+          <div className="ds-card__body dasti-quick-start-choice__hint">
+            {hint}
+          </div>
           {meta ? <div className="dasti-quick-start-choice__meta">{meta}</div> : null}
         </div>
       </button>

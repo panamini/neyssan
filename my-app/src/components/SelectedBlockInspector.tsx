@@ -1177,7 +1177,7 @@ export function SelectedBlockInspector({
             <div>
               <label className="text-xs [color:var(--tg2)]">Achievement</label>
               <textarea
-                className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                 value={String(formState.achievement ?? "")}
                 onChange={(e) =>
                   handleFieldChange("achievement", e.target.value)
@@ -1278,7 +1278,7 @@ export function SelectedBlockInspector({
                 <div>
                   <label className="text-xs [color:var(--tg2)]">Company</label>
                   <input
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                     value={formState.company ?? ""}
                     onChange={(e) =>
                       handleFieldChange("company", e.target.value)
@@ -1288,7 +1288,7 @@ export function SelectedBlockInspector({
                 <div>
                   <label className="text-xs [color:var(--tg2)]">Position</label>
                   <input
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                     value={formState.position ?? ""}
                     onChange={(e) =>
                       handleFieldChange("position", e.target.value)
@@ -1301,7 +1301,7 @@ export function SelectedBlockInspector({
                   </label>
                   <div className="grid grid-cols-3 gap-2 mt-1">
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                       value={formState.startMonth ?? ""}
                       onChange={(e) =>
                         handleFieldChange("startMonth", e.target.value)
@@ -1322,7 +1322,7 @@ export function SelectedBlockInspector({
                       <option value="12">Dec</option>
                     </select>
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                       value={formState.startYear ?? ""}
                       onChange={(e) =>
                         handleFieldChange("startYear", e.target.value)
@@ -1340,7 +1340,7 @@ export function SelectedBlockInspector({
                         type="number"
                         min={1}
                         max={31}
-                        className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                        className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                         value={formState.startDay ?? ""}
                         onChange={(e) =>
                           handleFieldChange("startDay", e.target.value)
@@ -1384,7 +1384,7 @@ export function SelectedBlockInspector({
                   <label className="text-xs [color:var(--tg2)]">End date</label>
                   <div className="grid grid-cols-3 gap-2 mt-1">
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow disabled:opacity-50"
                       value={formState.endMonth ?? ""}
                       disabled={Boolean(formState.isCurrent)}
                       onChange={(e) =>
@@ -1406,7 +1406,7 @@ export function SelectedBlockInspector({
                       <option value="12">Dec</option>
                     </select>
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow disabled:opacity-50"
                       value={formState.endYear ?? ""}
                       disabled={Boolean(formState.isCurrent)}
                       onChange={(e) =>
@@ -1425,7 +1425,7 @@ export function SelectedBlockInspector({
                         type="number"
                         min={1}
                         max={31}
-                        className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                        className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow disabled:opacity-50"
                         value={formState.endDay ?? ""}
                         disabled={Boolean(formState.isCurrent)}
                         onChange={(e) =>
@@ -1495,7 +1495,7 @@ export function SelectedBlockInspector({
                 <div className="md:col-span-2">
                   <label className="text-xs [color:var(--tg2)]">Location</label>
                   <input
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                     value={formState.location ?? ""}
                     onChange={(e) =>
                       handleFieldChange("location", e.target.value)
@@ -1509,7 +1509,7 @@ export function SelectedBlockInspector({
                     Achievements (one per line)
                   </label>
                   <textarea
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                     value={
                       Array.isArray(formState.achievements)
                         ? (formState.achievements as any[]).join("\n")
@@ -1533,7 +1533,7 @@ export function SelectedBlockInspector({
                     Institution
                   </label>
                   <input
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                     value={formState.institution ?? ""}
                     onChange={(e) =>
                       handleFieldChange("institution", e.target.value)
@@ -1543,7 +1543,7 @@ export function SelectedBlockInspector({
                 <div>
                   <label className="text-xs [color:var(--tg2)]">Degree</label>
                   <input
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                     value={formState.degree ?? ""}
                     onChange={(e) =>
                       handleFieldChange("degree", e.target.value)
@@ -1557,7 +1557,7 @@ export function SelectedBlockInspector({
                   </label>
                   <div className="grid grid-cols-3 gap-2 mt-1">
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                       value={formState.startMonth ?? ""}
                       onChange={(e) =>
                         handleFieldChange("startMonth", e.target.value)
@@ -1578,7 +1578,7 @@ export function SelectedBlockInspector({
                       <option value="12">Dec</option>
                     </select>
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                       value={formState.startYear ?? ""}
                       onChange={(e) =>
                         handleFieldChange("startYear", e.target.value)
@@ -1596,7 +1596,7 @@ export function SelectedBlockInspector({
                         type="number"
                         min={1}
                         max={31}
-                        className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                        className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                         value={formState.startDay ?? ""}
                         onChange={(e) =>
                           handleFieldChange("startDay", e.target.value)
@@ -1641,7 +1641,7 @@ export function SelectedBlockInspector({
                   <label className="text-xs [color:var(--tg2)]">End date</label>
                   <div className="grid grid-cols-3 gap-2 mt-1">
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow disabled:opacity-50"
                       value={formState.endMonth ?? ""}
                       disabled={Boolean(formState.isCurrent)}
                       onChange={(e) =>
@@ -1663,7 +1663,7 @@ export function SelectedBlockInspector({
                       <option value="12">Dec</option>
                     </select>
                     <select
-                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                      className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow disabled:opacity-50"
                       value={formState.endYear ?? ""}
                       disabled={Boolean(formState.isCurrent)}
                       onChange={(e) =>
@@ -1682,7 +1682,7 @@ export function SelectedBlockInspector({
                         type="number"
                         min={1}
                         max={31}
-                        className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none disabled:opacity-50"
+                        className="px-2 py-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow disabled:opacity-50"
                         value={formState.endDay ?? ""}
                         disabled={Boolean(formState.isCurrent)}
                         onChange={(e) =>
@@ -1755,7 +1755,7 @@ export function SelectedBlockInspector({
                     Field of study
                   </label>
                   <input
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                     value={formState.fieldOfStudy ?? ""}
                     onChange={(e) =>
                       handleFieldChange("fieldOfStudy", e.target.value)
@@ -1766,7 +1766,7 @@ export function SelectedBlockInspector({
                 <div className="md:col-span-2">
                   <label className="text-xs [color:var(--tg2)]">Grade</label>
                   <input
-                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                     value={formState.grade ?? ""}
                     onChange={(e) => handleFieldChange("grade", e.target.value)}
                   />
@@ -1776,7 +1776,7 @@ export function SelectedBlockInspector({
               <div className="md:col-span-2">
                 <label className="text-xs [color:var(--tg2)]">Title</label>
                 <input
-                  className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                  className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                   value={formState.title ?? ""}
                   onChange={(e) => handleFieldChange("title", e.target.value)}
                 />

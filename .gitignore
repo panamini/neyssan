@@ -124,6 +124,8 @@ audit_report.json
 *.model
 *.bin
 *.pt
+!e2e/ds-v2.spec.ts-snapshots/
+!e2e/ds-v2.spec.ts-snapshots/*.png
 *.pth
 *.onnx
 *.h5
