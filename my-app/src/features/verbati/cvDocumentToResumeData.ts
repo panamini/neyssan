@@ -526,7 +526,7 @@ function mapSkills(skillsContext?: SectionContext): {
   }
 
   const structuredSkills = readStructured<ISkillItem>(skillsContext.section)
-    .map((item, index) => {
+    .map((item, index): ResumeSkillItem | null => {
       const name = String(item.name ?? "").trim();
       if (!name) {
         return null;
@@ -737,6 +737,9 @@ function mapCertifications(
     certificationsContext.section,
   )
     .map((item, index) => {
+      const extendedItem = item as ICertificationItem & {
+        licenseNumber?: string | null;
+      };
       const name = String(item.certificationName ?? "").trim();
       const issuer = String(item.issuingOrganization ?? "").trim();
       const issuedYear = formatByPrecision(item.issueDate, "year");
@@ -746,7 +749,7 @@ function mapCertifications(
           ? `${issuedYear} — ${expiryYear}`
           : issuedYear || (expiryYear ? `Expires ${expiryYear}` : "");
       const credentialId = String(
-        item.credentialId ?? item.licenseNumber ?? "",
+        item.credentialId ?? extendedItem.licenseNumber ?? "",
       ).trim();
       const meta = [dateRange, credentialId ? `Credential ID: ${credentialId}` : null]
         .map((value) => String(value ?? "").trim())

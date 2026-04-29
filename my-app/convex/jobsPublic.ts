@@ -87,6 +87,12 @@ const NEXT_STEP_FALLBACK_ACTION_ORDER = [
   "resume",
   "save_for_later",
 ] as const;
+type NextStepAction = (typeof NEXT_STEP_FALLBACK_ACTION_ORDER)[number];
+type NextStepBlock = {
+  headline: string;
+  usesCohortData: boolean;
+  actions: NextStepAction[];
+};
 const STRUCTURED_MATCH_READ_INTERNAL_VIEWERS_ENV =
   "STRUCTURED_MATCH_READ_INTERNAL_VIEWERS";
 const STRUCTURED_MATCH_READ_INTERNAL_EMAILS_ENV =
@@ -1059,7 +1065,10 @@ function buildNextStepHeadline(
   return `Most users with a ${tierLabel} match generated a cover letter first.`;
 }
 
-async function resolveNextStepBlock(ctx: any, tier: MatchReadTier) {
+async function resolveNextStepBlock(
+  ctx: any,
+  tier: MatchReadTier,
+): Promise<NextStepBlock> {
   if (!FEATURE_COHORT_NEXT_STEPS) {
     return {
       headline: "Common next steps",
@@ -1075,18 +1084,31 @@ async function resolveNextStepBlock(ctx: any, tier: MatchReadTier) {
     )
     .collect();
 
-  const normalizedOutcomes = metrics
-    .map((metric: any) => ({
+  const normalizedOutcomeCandidates: Array<{
+    tier: string;
+    outcome: "cover_letter" | "resume" | null;
+  }> = (metrics as any[])
+    .map((metric: any): {
+      tier: string;
+      outcome: "cover_letter" | "resume" | null;
+    } => ({
       tier: String(metric?.labels?.tier ?? ""),
       outcome: normalizeDecisionOutcome(String(metric?.labels?.outcome ?? "")),
-    }))
-    .filter((entry) => entry.outcome !== null);
+    }));
+  const normalizedOutcomes = normalizedOutcomeCandidates.filter(
+    (
+      entry,
+    ): entry is {
+      tier: string;
+      outcome: "cover_letter" | "resume";
+    } => entry.outcome !== null,
+  );
 
   const hasEnoughTotalData =
     normalizedOutcomes.length >= COHORT_MIN_TOTAL_DECISIONS;
   const tierMetrics = normalizedOutcomes.filter((entry) => entry.tier === tier);
   const hasEnoughTierData = tierMetrics.length >= COHORT_MIN_TIER_DECISIONS;
-  const actionOrder = [...NEXT_STEP_FALLBACK_ACTION_ORDER];
+  const actionOrder: NextStepAction[] = [...NEXT_STEP_FALLBACK_ACTION_ORDER];
 
   if (!hasEnoughTotalData || !hasEnoughTierData) {
     return {
@@ -1096,9 +1118,9 @@ async function resolveNextStepBlock(ctx: any, tier: MatchReadTier) {
     };
   }
 
-  const counts = new Map<string, number>();
+  const counts = new Map<NextStepAction, number>();
   for (const entry of tierMetrics) {
-    counts.set(entry.outcome!, (counts.get(entry.outcome!) ?? 0) + 1);
+    counts.set(entry.outcome, (counts.get(entry.outcome) ?? 0) + 1);
   }
 
   const orderedActions = [...actionOrder].sort((left, right) => {
@@ -1318,7 +1340,7 @@ function buildJobProjection(
   nextStepBlock: {
     headline: string;
     usesCohortData: boolean;
-    actions: readonly ("cover_letter" | "resume" | "save_for_later")[];
+    actions: NextStepAction[];
   } | null = null,
   linkedProposalCount = 0,
   linkedProposals: Array<{
