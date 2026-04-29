@@ -31,3 +31,5 @@ convex/_generated
 
 # Temporary audit artifacts
 tmp-audit/
+
+.env copy.private
