@@ -11,6 +11,10 @@ function buildLinkedId(section: string, index: number): string {
   return `${section}-${index + 1}`;
 }
 
+function isNotNull<T>(value: T | null): value is T {
+  return value !== null;
+}
+
 export function buildCanonicalResumeRenderModelFromCv(
   document: CvDocument,
 ): ResumeData {
@@ -124,7 +128,7 @@ export function buildCanonicalResumeRenderModelFromAuthoritative(
           sectionOrder: 0,
         };
       })
-      .filter((item): item is ResumeData["achievementItems"][number] => item !== null),
+      .filter(isNotNull),
     hobbies: model.hobbies.map((item) => cleanString(item)).filter(Boolean),
     hobbyItems: model.hobbies
       .map((item, index) => {
@@ -141,7 +145,7 @@ export function buildCanonicalResumeRenderModelFromAuthoritative(
           sectionOrder: 0,
         };
       })
-      .filter((item): item is ResumeData["hobbyItems"][number] => item !== null),
+      .filter(isNotNull),
     certifications: model.certifications
       .map((item, index) => {
         const name = cleanString(item.name);
@@ -164,7 +168,7 @@ export function buildCanonicalResumeRenderModelFromAuthoritative(
           sectionOrder: 0,
         };
       })
-      .filter((item): item is ResumeData["certifications"][number] => item !== null),
+      .filter(isNotNull),
     affiliations: [],
     textSections: [],
   };
