@@ -30,7 +30,6 @@ import {
   type VerbatiFontPairId,
 } from "../features/verbati/fontCatalog";
 import {
-  VERBATI_LAYOUT_OPTIONS,
   resolveVerbatiStyle,
   sanitizePersistedVerbatiStyle,
 } from "../features/verbati/style";
@@ -124,7 +123,7 @@ const TONE_OPTIONS: Array<{
 // ─── Style options ─────────────────────────────────────────────────────────────
 
 type StyleOption = {
-  id: "auto" | "swiss" | "editorial" | "modernist" | "workshop";
+  id: "auto" | "workshop";
   label: string;
   description: string;
   isAuto?: boolean;
@@ -132,15 +131,8 @@ type StyleOption = {
 
 const STYLE_OPTIONS = ([
   { id: "auto",     label: "Auto",      description: "Matches the look to the role.",                   isAuto: true },
-  { id: "swiss", label: "Swiss", description: "Quiet Swiss grid. Serif-led rhythm." },
-  { id: "editorial", label: "Editorial", description: "Editorial pacing. Rich reading voice." },
-  { id: "modernist", label: "Mono", description: "Tight grid. Technical contrast." },
   { id: "workshop", label: "Workshop", description: "Workshop ATS. Paired margin twin." },
-] satisfies StyleOption[]).filter(
-  (option) =>
-    option.id !== "workshop" ||
-    VERBATI_LAYOUT_OPTIONS.some((layout) => layout.id === "workshop"),
-);
+] satisfies StyleOption[]);
 
 function buildPresetSlotStylePreset(preset: PresetSlot): VerbatiStylePreset {
   const baseStyle = preset.verbatiStyle
@@ -169,29 +161,14 @@ function resolvePresetLayoutSelection(
   }
 
   const stylePreset = buildPresetSlotStylePreset(preset);
-  switch (stylePreset.layout) {
-    case "editorial":
-      return "editorial";
-    case "modernist":
-      return "modernist";
-    case "workshop":
-      return "workshop";
-    default:
-      return "swiss";
-  }
+  return stylePreset.layout === "workshop" ? "workshop" : "auto";
 }
 
 function resolveStyleChoiceForLayout(
   layoutId: Exclude<StyleOption["id"], "auto">,
 ): ProposalStyleChoice {
   switch (layoutId) {
-    case "editorial":
-      return "warm";
-    case "modernist":
-      return "technical";
     case "workshop":
-      return "balanced";
-    case "swiss":
     default:
       return "balanced";
   }

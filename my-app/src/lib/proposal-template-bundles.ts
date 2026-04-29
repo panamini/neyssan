@@ -37,53 +37,53 @@ type BundleBase = Omit<ProposalTemplateBundleDefinition, "stylePreset" | "templa
 const TEMPLATE_BUNDLE_BASES: readonly BundleBase[] = [
   {
     id: "swiss_serif",
-    label: "Swiss Serif",
-    description: "Calm Swiss grid with a softer serif-led headline.",
+    label: "Workshop Serif",
+    description: "Calm workshop structure with a softer serif-led headline.",
     settingsStyleChoice: "balanced",
     stylePreset: {
-      layout: "swiss",
+      layout: "workshop",
       typography: "geist-baskervville",
       palette: "pierre",
     },
   },
   {
     id: "swiss_mono",
-    label: "Swiss Mono",
-    description: "Clean grid with a sharper mono-led register.",
+    label: "Workshop Mono",
+    description: "Clean workshop structure with a sharper mono-led register.",
     stylePreset: {
-      layout: "swiss",
+      layout: "workshop",
       typography: "expert",
       palette: "encre",
     },
   },
   {
     id: "magazine_editorial",
-    label: "Magazine Editorial",
-    description: "Wide editorial pacing with a richer reading voice.",
+    label: "Workshop Editorial",
+    description: "Workshop structure with a richer reading voice.",
     settingsStyleChoice: "warm",
     stylePreset: {
-      layout: "editorial",
+      layout: "workshop",
       typography: "engaging",
       palette: "bordeaux",
     },
   },
   {
     id: "magazine_serif",
-    label: "Magazine Serif",
-    description: "Magazine proportions with a calmer serif rhythm.",
+    label: "Workshop Signature",
+    description: "Workshop structure with a calmer serif rhythm.",
     stylePreset: {
-      layout: "editorial",
+      layout: "workshop",
       typography: "signature",
       palette: "ocre",
     },
   },
   {
     id: "grid_mono",
-    label: "Grid Mono",
-    description: "Tighter modernist structure with precise technical contrast.",
+    label: "Workshop Signal",
+    description: "Workshop structure with precise technical contrast.",
     settingsStyleChoice: "technical",
     stylePreset: {
-      layout: "modernist",
+      layout: "workshop",
       typography: "expert",
       palette: "encre",
     },
@@ -123,24 +123,14 @@ export const PROPOSAL_TYPOGRAPHY_OPTIONS: ReadonlyArray<{
 ] as const;
 
 export const PROPOSAL_LAYOUT_OPTIONS: ReadonlyArray<{
-  id: Extract<VerbatiLayoutPreset, "swiss" | "editorial" | "modernist">;
+  id: Extract<VerbatiLayoutPreset, "workshop">;
   label: string;
   description: string;
 }> = [
   {
-    id: "swiss",
-    label: "Swiss",
-    description: "Quiet grid with broad readability.",
-  },
-  {
-    id: "editorial",
-    label: "Magazine",
-    description: "Long reading line with editorial pacing.",
-  },
-  {
-    id: "modernist",
-    label: "Grid",
-    description: "Denser signal and a tighter information ladder.",
+    id: "workshop",
+    label: "Workshop",
+    description: "Document-first layout for CV and proposal parity.",
   },
 ] as const;
 
