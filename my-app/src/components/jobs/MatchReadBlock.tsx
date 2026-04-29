@@ -1,5 +1,6 @@
 import React from "react";
 import { selectVisibleMissingRequirements } from "../../lib/jobs/visibleMissingRequirements";
+import { JobMatchPanel } from "./JobMatchPanel";
 
 type MatchRead = {
   tier: "strong" | "partial" | "weak" | "unknown";
@@ -53,61 +54,6 @@ type JobMatchReview = {
   }>;
 };
 
-function renderDetailItems(items: readonly string[], keyPrefix: string) {
-  if (items.length === 1) {
-    return <p className="dasti-jobs-detail-section__paragraph">{items[0]}</p>;
-  }
-
-  return (
-    <ul className="dasti-jobs-detail-section__list">
-      {items.map((item) => (
-        <li
-          key={`${keyPrefix}-${item}`}
-          className="dasti-jobs-detail-section__item"
-        >
-          {item}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function formatTierLabel(tier: MatchRead["tier"]): string {
-  if (tier === "strong") {
-    return "Strong";
-  }
-  if (tier === "partial") {
-    return "Partial";
-  }
-  if (tier === "weak") {
-    return "Weak";
-  }
-  return "Unknown";
-}
-
-function formatSuggestedNextStepLabel(
-  nextStep: JobMatchReview["suggested_next_step"],
-): string {
-  switch (nextStep) {
-    case "apply":
-      return "Apply";
-    case "apply_if_requirement_true":
-      return "Apply if true";
-    case "improve_profile_first":
-      return "Improve profile first";
-    case "skip":
-      return "Skip";
-    case "review_manually":
-      return "Review manually";
-  }
-}
-
-function formatReviewScore(score: JobMatchReview["score"]): string | null {
-  return typeof score === "number" && Number.isFinite(score)
-    ? `${Math.round(score)}%`
-    : null;
-}
-
 function hasUsableMatchReview(
   matchReview: JobMatchReview | null | undefined,
 ): matchReview is JobMatchReview {
@@ -151,17 +97,7 @@ export function MatchReadBlock({
     jobCompany,
     jobLocation,
   });
-  const scoreLabel =
-    matchRead.scoreVisible && matchRead.score !== null
-      ? `${formatTierLabel(matchRead.tier)} · ${matchRead.score}%`
-      : formatTierLabel(matchRead.tier);
-
   if (hasUsableMatchReview(matchReview)) {
-    const tierLabel = formatTierLabel(matchRead.tier);
-    const reviewScoreLabel = formatReviewScore(matchReview.score);
-    const titleLabel = reviewScoreLabel
-      ? `${tierLabel} · ${reviewScoreLabel}`
-      : tierLabel;
     const oneLiner = matchReview.one_liner.trim();
     const whyItems = matchReview.why_this_may_interest_you
       .map((item) => item.trim())
@@ -173,66 +109,21 @@ export function MatchReadBlock({
       .slice(0, 2);
 
     return (
-      <section
-        id="job-match"
-        className="dasti-proposal-sheet dasti-match-read"
-        aria-label="Match"
-      >
-        <div className="dasti-proposal-sheet__header dasti-match-read__header">
-          <div className="dasti-stack dasti-match-read__copy">
-            <div className="dasti-brief-card__summary-label">Match</div>
-            <div className="dasti-empty-state__title">{titleLabel}</div>
-            {oneLiner ? (
-              <p className="dasti-empty-state__subtitle">{oneLiner}</p>
-            ) : null}
-            <div className="dasti-match-read__stats">
-              <span className="dasti-match-read__stat">
-                <span className="dasti-match-read__stat-label">Next</span>
-                <span className="dasti-match-read__stat-value">
-                  {formatSuggestedNextStepLabel(
-                    matchReview.suggested_next_step,
-                  )}
-                </span>
-              </span>
-            </div>
-          </div>
-          <div className="dasti-match-read__actions">
-            {onRefreshMatch ? (
-              <button
-                type="button"
-                className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
-                onClick={onRefreshMatch}
-              >
-                Refresh match
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        {whyItems.length > 0 || watchOutItems.length > 0 ? (
-          <div className="dasti-brief-card__summary dasti-match-read__details">
-            {whyItems.length > 0 ? (
-              <div className="dasti-brief-card__summary-block">
-                <div className="dasti-brief-card__summary-label">
-                  Why this may interest you
-                </div>
-                <div className="dasti-jobs-detail-section__stack">
-                  {renderDetailItems(whyItems, "match-review-why")}
-                </div>
-              </div>
-            ) : null}
-
-            {watchOutItems.length > 0 ? (
-              <div className="dasti-brief-card__summary-block">
-                <div className="dasti-brief-card__summary-label">Watch out</div>
-                <div className="dasti-jobs-detail-section__stack">
-                  {renderDetailItems(watchOutItems, "match-review-watch")}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
+      <JobMatchPanel
+        tier={matchRead.tier}
+        matched={matchRead.matched}
+        missing={visibleMissingRequirements}
+        profileLabel={matchRead.basedOn.profileLabel}
+        oneLiner={oneLiner}
+        reviewVerdict={matchReview.verdict}
+        suggestedNextStep={matchReview.suggested_next_step}
+        whyItems={whyItems}
+        watchOutItems={watchOutItems}
+        jobLocation={jobLocation}
+        isExpanded={isExpanded}
+        onToggleExpanded={() => setIsExpanded((current) => !current)}
+        onRefreshMatch={onRefreshMatch}
+      />
     );
   }
 
@@ -335,99 +226,16 @@ export function MatchReadBlock({
   }
 
   return (
-    <section
-      id="job-match"
-      className="dasti-proposal-sheet dasti-match-read"
-      aria-label="Match"
-      data-expanded={isExpanded ? "true" : "false"}
-    >
-      <div className="dasti-proposal-sheet__header dasti-match-read__header">
-        <div className="dasti-stack dasti-match-read__copy">
-          <div className="dasti-brief-card__summary-label">Match</div>
-          <div className="dasti-empty-state__title">{scoreLabel}</div>
-          <div className="dasti-match-read__stats">
-            <span className="dasti-match-read__stat">
-              <span className="dasti-match-read__stat-label">Matched</span>
-              <span className="dasti-match-read__stat-value">
-                {matchRead.matched.length}
-              </span>
-            </span>
-            {visibleMissingRequirements.length > 0 ? (
-              <button
-                type="button"
-                className="dasti-match-read__stat dasti-match-read__stat--button dasti-match-read__stat--warning"
-                onClick={() => setIsExpanded(true)}
-              >
-                <span className="dasti-match-read__stat-label">Missing</span>
-                <span className="dasti-match-read__stat-value">
-                  {visibleMissingRequirements.length}
-                </span>
-              </button>
-            ) : null}
-          </div>
-        </div>
-        <div className="dasti-match-read__actions">
-          {onRefreshMatch ? (
-            <button
-              type="button"
-              className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
-              onClick={onRefreshMatch}
-            >
-              Refresh match
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
-            onClick={() => setIsExpanded((current) => !current)}
-          >
-            {isExpanded ? "Close match" : "Open match"}
-          </button>
-        </div>
-      </div>
-
-      {isExpanded ? (
-        <div className="dasti-brief-card__summary dasti-match-read__details">
-          {matchRead.matched.length > 0 ? (
-            <div className="dasti-brief-card__summary-block">
-              <div className="dasti-brief-card__summary-label">Matched</div>
-              <div className="dasti-jobs-detail-section__stack">
-                {matchRead.matched.map((item) => (
-                  <div
-                    key={`matched-${item}`}
-                    className="dasti-jobs-detail-section__item"
-                  >
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {visibleMissingRequirements.length > 0 ? (
-            <div className="dasti-brief-card__summary-block">
-              <div className="dasti-brief-card__summary-label">Missing</div>
-              <div className="dasti-jobs-detail-section__stack">
-                {visibleMissingRequirements.map((item) => (
-                  <div
-                    key={`missing-${item}`}
-                    className="dasti-jobs-detail-section__item"
-                  >
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          <div className="dasti-brief-card__summary-block">
-            <div className="dasti-brief-card__summary-label">Based on</div>
-            <p className="dasti-brief-card__summary-copy">
-              {matchRead.basedOn.profileLabel} · Job requirements
-            </p>
-          </div>
-        </div>
-      ) : null}
-    </section>
+    <JobMatchPanel
+      tier={matchRead.tier}
+      matched={matchRead.matched}
+      missing={visibleMissingRequirements}
+      profileLabel={matchRead.basedOn.profileLabel}
+      suggestedNextStep={null}
+      jobLocation={jobLocation}
+      isExpanded={isExpanded}
+      onToggleExpanded={() => setIsExpanded((current) => !current)}
+      onRefreshMatch={onRefreshMatch}
+    />
   );
 }

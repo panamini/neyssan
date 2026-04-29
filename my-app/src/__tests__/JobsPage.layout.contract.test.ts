@@ -19,6 +19,20 @@ const productCss = productCssPaths
   .join("\n");
 
 describe("JobsPage collapsed layout contract", () => {
+  it("keeps the PR3 jobs workspace on the skeleton split-view contract", () => {
+    expect(productCss).toMatch(
+      /\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*360px\s+minmax\(0,\s*1fr\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-toolbar\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*0;/,
+    );
+    expect(jobsPageSource).toContain("Paste URL");
+    expect(jobsPageSource).toContain("Capture with extension");
+    expect(jobsPageSource).toContain("Remote");
+    expect(jobsPageSource).toContain("Senior");
+    expect(jobsPageSource).toContain("Generate proposal");
+  });
+
   it("renders selected job detail inline after the active row at the collapsed breakpoint", () => {
     expect(jobsPageSource).toContain(
       "const JOBS_TWO_PANE_MIN_VIEWPORT_WIDTH = 1440;",
@@ -34,7 +48,7 @@ describe("JobsPage collapsed layout contract", () => {
 
   it("keeps jobs controls compact and left-anchored inside the list pane", () => {
     expect(productCss).toMatch(
-      /\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*min\(100%,\s*560px\)\)\s*minmax\(0,\s*1fr\);/,
+      /\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*360px\s+minmax\(0,\s*1fr\);/,
     );
     expect(productCss).toMatch(
       /@media\s*\(max-width:\s*1439px\)\s*\{[\s\S]*\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*min\(100%,\s*560px\)\);/,
