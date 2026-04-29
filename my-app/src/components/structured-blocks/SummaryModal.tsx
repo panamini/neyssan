@@ -664,8 +664,8 @@ export function SummaryModal({
               >
                 <div
                   className="rich-content"
-                  onPointerUp={scheduleSelectionCheck}
-                  onKeyUp={scheduleSelectionCheck}
+                  onPointerUp={() => scheduleSelectionCheck(true)}
+                  onKeyUp={() => scheduleSelectionCheck(true)}
                 >
                   <EditorToolbar position="top" />
                   <EditorComponent />

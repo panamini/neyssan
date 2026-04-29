@@ -193,7 +193,7 @@ function ToastContainer({
 }
 
 function Toast({ item, onClose }: { item: ToastItem; onClose: () => void }) {
-  const timerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const timerRef = useRef<number | null>(null);
   const startedAtRef = useRef(0);
   const remainingRef = useRef(item.durationMs);
 

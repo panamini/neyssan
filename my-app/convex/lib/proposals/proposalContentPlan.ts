@@ -753,6 +753,7 @@ export function buildStructuredCoverLetterContentPlanPrompt(args: {
   voicePreset: ProposalVoicePreset;
   jobTitle: string;
   jobDescription: string;
+  generationControlsBlock?: string;
 }): string {
   const evidenceSummary = buildProposalEvidenceSummary(args.plannerResult);
   return [
@@ -768,6 +769,7 @@ export function buildStructuredCoverLetterContentPlanPrompt(args: {
     `- opening_strategy: ${args.plannerResult.opening_strategy}`,
     `- no_context_mode: ${args.plannerResult.context_mode === "none" ? "true" : "false"}`,
     `- proof_strategy: ${args.plannerResult.proof_strategy}`,
+    args.generationControlsBlock,
     "",
     "Paragraph contract:",
     "- Exactly 2 or 3 body paragraphs.",
@@ -809,7 +811,7 @@ export function buildStructuredCoverLetterContentPlanPrompt(args: {
     "",
     "Top achievement facts to prefer when present:",
     ...renderIndexedList(evidenceSummary.topAchievements),
-  ].join("\n");
+  ].filter((line): line is string => typeof line === "string").join("\n");
 }
 
 export function buildStructuredCoverLetterBodyPrompt(args: {

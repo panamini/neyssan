@@ -123,6 +123,7 @@ export type PremiumCoverLetterAttemptResult =
 export type PremiumCoverLetterWriter = (args: {
   prompt: string;
   schema: Record<string, unknown>;
+  signal?: AbortSignal;
 }) => Promise<CoverLetterBodyParts>;
 
 export const PREMIUM_COVER_LETTER_OPENAI_MODEL: PremiumCoverLetterWriterModel =
@@ -1251,6 +1252,7 @@ export function buildPremiumCoverLetterBrief(args: {
 
 export function buildPremiumCoverLetterPrompt(args: {
   brief: CoverLetterBrief;
+  generationControlsBlock?: string;
 }): string {
   const presetGuidance = resolvePremiumCoverLetterPresetGuidance(
     args.brief.preset,
@@ -1280,6 +1282,7 @@ export function buildPremiumCoverLetterPrompt(args: {
     "Preset affects rhetorical texture only. It must not change truthfulness, claim strength, or evidence priority.",
     "Across cv_direct and cv_adjacent modes, sound like a person making a case in a letter, not a memo explaining why the evidence is relevant.",
     presetGuidance,
+    args.generationControlsBlock,
     ...contextGuidance,
     "Return exactly one JSON object with this schema and no extra text:",
     JSON.stringify({
@@ -1295,7 +1298,7 @@ export function buildPremiumCoverLetterPrompt(args: {
     "CloseLine: one short forward-looking sentence that is role-specific and situational — it can reference a concrete next step, a specific contribution, or a detail from the operating context of this role. Vary the shape each time.",
     "Banned openers for any block: 'That combination', 'Applied to', 'Applied in', 'Applied here', 'That kind of', 'That background'. Banned close stems: 'I would welcome the chance to', \"I'd welcome the chance to\", 'I would bring that same', 'I would bring that level'.",
     `Structured brief: ${JSON.stringify(structuredBrief)}`,
-  ].join("\n");
+  ].filter((line): line is string => typeof line === "string").join("\n");
 }
 
 function resolvePremiumCoverLetterPresetGuidance(
@@ -1499,6 +1502,7 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
   apiKey: string;
   prompt: string;
   writerModel?: PremiumCoverLetterWriterModel;
+  signal?: AbortSignal;
 }): Promise<CoverLetterBodyParts> {
   const resolvedModel = resolvePremiumCoverLetterWriterModel(args.writerModel);
   const requestBody = buildPremiumCoverLetterOpenAIRequest({
@@ -1516,23 +1520,29 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
     const zodTextFormat = zodHelperModule?.zodTextFormat ?? null;
 
     if (typeof client.responses?.parse === "function" && zodTextFormat) {
-      const response = await client.responses.parse({
-        model: resolvedModel,
-        input: args.prompt,
-        text: {
-          format: zodTextFormat(
-            PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
-            "cover_letter_body_parts",
-          ),
-        },
-      } as any);
+      const response = await client.responses.parse(
+        {
+          model: resolvedModel,
+          input: args.prompt,
+          text: {
+            format: zodTextFormat(
+              PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
+              "cover_letter_body_parts",
+            ),
+          },
+        } as any,
+        args.signal ? ({ signal: args.signal } as any) : undefined,
+      );
 
       return PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
         response?.output_parsed ?? extractOpenAIJsonPayload(response),
       );
     }
 
-    const response = await client.responses.create(requestBody as any);
+    const response = await client.responses.create(
+      requestBody as any,
+      args.signal ? ({ signal: args.signal } as any) : undefined,
+    );
     return PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
       extractOpenAIJsonPayload(response),
     );
@@ -1544,6 +1554,7 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${args.apiKey}`,
     },
+    signal: args.signal,
     body: JSON.stringify(requestBody),
   });
   if (!response.ok) {
@@ -1651,6 +1662,8 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   jobTitle: string;
   jobDescription: string;
   candidateName?: string;
+  generationControlsBlock?: string;
+  signal?: AbortSignal;
   systemInferenceHints?: string[];
   writer: PremiumCoverLetterWriter;
   onFailure?: (failure: PremiumCoverLetterFailureTrace) => void;
@@ -1669,7 +1682,16 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     });
     return null;
   }
+  if (!isPremiumCoverLetterPreset(args.voicePreset)) {
+    args.onFailure?.({
+      stage: "eligibility",
+      reason: "ineligible",
+      eligibilityReason: "preset_not_supported",
+    });
+    return null;
+  }
   const contextClass = eligibility.contextClass;
+  const voicePreset = args.voicePreset;
 
   const allowedFactsPack = buildAllowedFactsPack({
     personalizationContext: args.personalizationContext,
@@ -1694,7 +1716,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   }
 
   const brief = buildPremiumCoverLetterBrief({
-    preset: args.voicePreset,
+    preset: voicePreset,
     outputLanguage: args.outputLanguage,
     jobTitle: args.jobTitle,
     jobDescription: args.jobDescription,
@@ -1702,11 +1724,15 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     allowedFactsPack,
     rankedEvidencePack,
   });
-  const prompt = buildPremiumCoverLetterPrompt({ brief });
+  const prompt = buildPremiumCoverLetterPrompt({
+    brief,
+    generationControlsBlock: args.generationControlsBlock,
+  });
   let bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
     await args.writer({
       prompt,
       schema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+      signal: args.signal,
     }),
   );
 

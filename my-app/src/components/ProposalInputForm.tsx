@@ -1185,10 +1185,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           icon: isSelected ? (
             <Check size={15} strokeWidth={1.8} aria-hidden="true" />
           ) : null,
-          label: "tone" in opt ? (
+          label: (
             <ToneBadge tone={opt.tone}>{opt.uiLabel}</ToneBadge>
-          ) : (
-            opt.uiLabel
           ),
           description: opt.description,
           onSelect: () => handleVoicePresetChange(opt.id),

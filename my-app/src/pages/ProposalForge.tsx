@@ -84,6 +84,7 @@ import {
 import {
   PROPOSAL_CHARACTER_LIMIT_TOAST_THRESHOLDS,
   resolveProposalCharacterLimitSelection,
+  type ProposalCharacterLimitMode,
 } from "../../convex/lib/proposals/generationControls";
 import type { Id } from "../../convex/_generated/dataModel";
 import {
@@ -110,6 +111,7 @@ import {
   resolveProposalStyle,
   resolveProposalStyleStatus,
 } from "../features/verbati/styleState";
+import type { VerbatiStylePreset } from "../features/verbati/types";
 import {
   findProposalTemplateBundleIdByStylePreset,
   getProposalTemplateBundleDefinition,
@@ -378,12 +380,7 @@ type ProposalDocumentMetadata = {
   formalityLevel?: FormValues["formalityLevel"];
   creativity?: FormValues["creativity"];
   templateId?: ProposalTemplateId;
-  verbatiStyle?: {
-    layout: string;
-    typography: string;
-    palette: string;
-    accentHex?: string;
-  };
+  verbatiStyle?: VerbatiStylePreset;
   styleLinkMode?: ProposalStyleLinkMode;
   styleChoice?: ProposalStyleChoice;
   templateBundleId?: ProposalTemplateBundleId;
@@ -397,8 +394,15 @@ type ProposalDocumentMetadata = {
   headerShowSubject?: boolean;
   headerShowRecipient?: boolean;
   headerShowRecipientDetails?: boolean;
-  characterLimitMode?: FormValues["characterLimitMode"];
+  characterLimitMode?: ProposalCharacterLimitMode | null;
   characterLimitValue?: number | null;
+};
+
+type ProposalWorkspaceCssVars = React.CSSProperties & {
+  "--document-viewer-shell-inline-size"?: string;
+  "--proposal-workspace-output-shell-inline-size"?: string;
+  "--proposal-workspace-shell-block-size"?: string;
+  "--proposal-compose-column-inline-size"?: string;
 };
 
 type SavedProposalRecord = {
@@ -439,6 +443,19 @@ function buildProfessionalApplicationSubject(args: {
   }
 
   return `Application for the position of ${jobTitle}`;
+}
+
+function isProposalCharacterLimitMode(
+  value: unknown,
+): value is ProposalCharacterLimitMode {
+  return (
+    value === "none" ||
+    value === "linkedin_note_200" ||
+    value === "linkedin_inmail_2000" ||
+    value === "indeed_cover_letter_4000" ||
+    value === "upwork_proposal_advisory" ||
+    value === "custom"
+  );
 }
 
 function resolveAttachedCvSelectionById(
@@ -633,7 +650,7 @@ function serializeProposalMetadataVerbatiStyle(
 function buildResolvedRenderTraceSnapshot(args: {
   proposalId?: unknown;
   templateId?: unknown;
-  stylePreset?: ReturnType<typeof resolveVerbatiStyle> | null;
+  stylePreset?: VerbatiStylePreset | null;
   sourceCvId?: unknown;
   styleLinkMode?: ProposalStyleLinkMode | null;
   styleSource?: string | null;
@@ -1014,7 +1031,35 @@ export function ProposalForge(): JSX.Element {
     isConvexAuthenticated ? {} : "skip",
   ) as SavedProposalRecord[] | undefined;
   const fallbackSavedProposals = React.useMemo(
-    () => (!isConvexAuthenticated ? readStoredSavedProposalFixtures() : []),
+    () =>
+      !isConvexAuthenticated
+        ? readStoredSavedProposalFixtures().map(
+            (proposal): SavedProposalRecord => ({
+              ...proposal,
+              _id: proposal._id as Id<"proposals">,
+              _creationTime:
+                proposal._creationTime ??
+                proposal.updatedAt ??
+                proposal.createdAt ??
+                0,
+              title: proposal.title ?? "Untitled cover letter",
+              content: proposal.content ?? "",
+              status: proposal.status ?? "saved",
+              updatedAt:
+                proposal.updatedAt ??
+                proposal._creationTime ??
+                proposal.createdAt ??
+                0,
+              createdAt:
+                proposal.createdAt ??
+                proposal._creationTime ??
+                proposal.updatedAt ??
+                0,
+              sections: proposal.sections ?? [],
+              metadata: proposal.metadata as ProposalDocumentMetadata | undefined,
+            }),
+          )
+        : [],
     [isConvexAuthenticated],
   );
   const deleteProposal = useMutation(api.deleteProposalPublic.default);
@@ -1185,10 +1230,14 @@ export function ProposalForge(): JSX.Element {
           null,
       };
     });
-  const draftCharacterLimitMode =
+  const draftCharacterLimitModeCandidate =
     composePreviewValues?.characterLimitMode ??
     storedOutputDraft?.characterLimitMode ??
     null;
+  const draftCharacterLimitMode: ProposalCharacterLimitMode | null =
+    isProposalCharacterLimitMode(draftCharacterLimitModeCandidate)
+      ? draftCharacterLimitModeCandidate
+      : null;
   const draftCharacterLimitValue =
     composePreviewValues?.characterLimitValue ??
     storedOutputDraft?.characterLimitValue ??
@@ -1369,9 +1418,7 @@ export function ProposalForge(): JSX.Element {
   const generatedProposalIdRef = React.useRef<Id<"proposals"> | null>(
     storedOutputDraft?.generatedProposalId ?? null,
   );
-  const composeAutosaveTimeoutRef = React.useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const composeAutosaveTimeoutRef = React.useRef<number | null>(null);
   const pendingComposeSavePromiseRef =
     React.useRef<Promise<Id<"proposals"> | null> | null>(null);
   const pendingQueuedComposeSnapshotRef = React.useRef<{
@@ -1379,7 +1426,7 @@ export function ProposalForge(): JSX.Element {
     title: string;
     content: string;
     metadata: ProposalDocumentMetadata | undefined;
-    status?: string;
+    status: string;
     token: string;
   } | null>(null);
   const isSavingComposeProposalRef = React.useRef(false);
@@ -2624,7 +2671,9 @@ export function ProposalForge(): JSX.Element {
             isSavingComposeProposalRef.current = false;
           }
 
-          const queuedSnapshot = pendingQueuedComposeSnapshotRef.current;
+          const queuedSnapshot = pendingQueuedComposeSnapshotRef.current as
+            | typeof initialSnapshot
+            | null;
           nextSnapshot =
             queuedSnapshot &&
             queuedSnapshot.token !== lastPersistedComposeTokenRef.current
@@ -3536,10 +3585,13 @@ export function ProposalForge(): JSX.Element {
         nextTrace.proposalStyleLinkMode ||
         previousTrace.proposalTemplateId !== nextTrace.proposalTemplateId ||
         previousTrace.hasUserEditedStyle !== nextTrace.hasUserEditedStyle ||
-        !stylesEqual(
-          previousTrace.proposalStylePreset ?? undefined,
-          nextTrace.proposalStylePreset ?? undefined,
-        ))
+        (previousTrace.proposalStylePreset && nextTrace.proposalStylePreset
+          ? !stylesEqual(
+              previousTrace.proposalStylePreset,
+              nextTrace.proposalStylePreset,
+            )
+          : previousTrace.proposalStylePreset !==
+            nextTrace.proposalStylePreset))
     ) {
       traceProposalStyle({
         step: "compose-style-transition",
@@ -3620,10 +3672,14 @@ export function ProposalForge(): JSX.Element {
         nextTrace.savedProposalStyleLinkMode ||
         previousTrace.savedProposalTemplateId !==
           nextTrace.savedProposalTemplateId ||
-        !stylesEqual(
-          previousTrace.savedProposalStylePreset ?? undefined,
-          nextTrace.savedProposalStylePreset ?? undefined,
-        ))
+        (previousTrace.savedProposalStylePreset &&
+        nextTrace.savedProposalStylePreset
+          ? !stylesEqual(
+              previousTrace.savedProposalStylePreset,
+              nextTrace.savedProposalStylePreset,
+            )
+          : previousTrace.savedProposalStylePreset !==
+            nextTrace.savedProposalStylePreset))
     ) {
       traceProposalStyle({
         step: "saved-style-transition",
@@ -6033,7 +6089,7 @@ export function ProposalForge(): JSX.Element {
                           : null,
                       templateId:
                         source.kind === "proposal" && "templateId" in source
-                          ? source.templateId
+                          ? source.templateId ?? fallbackProposalTemplateId
                           : effectiveProposalTemplateId ??
                             fallbackProposalTemplateId,
                       stylePreset: exportStylePreset,
@@ -6132,7 +6188,7 @@ export function ProposalForge(): JSX.Element {
         minWidth: 0,
       }
     : { width: "100%", minWidth: 0 };
-  const composeColumnShellWidthStyle: React.CSSProperties = {
+  const composeColumnShellWidthStyle: ProposalWorkspaceCssVars = {
     ...stackedCardWidthStyle,
     "--document-viewer-shell-inline-size": proposalWorkbenchColumnInlineSize,
   };
@@ -6144,7 +6200,7 @@ export function ProposalForge(): JSX.Element {
     maxWidth: proposalToolbarInlineSize,
     minWidth: 0,
   };
-  const proposalWorkbenchFrameStyle: React.CSSProperties = {
+  const proposalWorkbenchFrameStyle: ProposalWorkspaceCssVars = {
     width: "100%",
     maxWidth: liveWorkbenchMaxWidth,
     marginInline: shouldRenderColdStartInlineOnly
@@ -6158,7 +6214,7 @@ export function ProposalForge(): JSX.Element {
     "--proposal-workspace-shell-block-size": proposalWorkspaceShellBlockSize,
     "--proposal-compose-column-inline-size": proposalComposeColumnInlineSize,
   };
-  const proposalWorkbenchToolbarSlotStyle: React.CSSProperties = {
+  const proposalWorkbenchToolbarSlotStyle: ProposalWorkspaceCssVars = {
     width: "100%",
     maxWidth: proposalToolbarInlineSize,
     marginInline: 0,
@@ -7020,11 +7076,12 @@ export function ProposalForge(): JSX.Element {
                                 showPromptControl={false}
                                 onSelectBundle={() => {}}
                                 onSelectLayout={(layout) =>
-                                  applyProposalDirectStyle({
-                                    ...effectiveProposalStylePresetWithPalette,
-                                    familyId: layout,
-                                    layout,
-                                  })
+                                  applyProposalDirectStyle(
+                                    resolveVerbatiStyle({
+                                      ...effectiveProposalStylePresetWithPalette,
+                                      layout,
+                                    }),
+                                  )
                                 }
                                 onSelectTypography={(typography) =>
                                   applyProposalDirectStyle({

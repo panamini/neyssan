@@ -1947,10 +1947,8 @@ export function repairProposalSentenceLocally(
   }
 
   if (
-    (args.plan.context_mode === "none" &&
-      hasStrictNoContextRepairViolation(normalizedReplacement)) ||
-    ((args.plan.context_mode === "none" || args.plan.domain_gap === "distant") &&
-      hasOverProjectiveRepairWording(normalizedReplacement))
+    args.plan.domain_gap === "distant" &&
+    hasOverProjectiveRepairWording(normalizedReplacement)
   ) {
     return args.flaggedSentence.safeRewriteMode === "interest_only"
       ? interestOnlyFallback
