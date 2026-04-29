@@ -42,6 +42,11 @@ type LayoutOption = {
 };
 
 type TypographyOption = VerbatiFontPairOption;
+type VerbatiStyleInput =
+  | Partial<VerbatiStylePreset>
+  | Record<string, unknown>
+  | null
+  | undefined;
 
 export const DEFAULT_VERBATI_STYLE: VerbatiStylePreset = {
   familyId: "workshop",
@@ -149,7 +154,7 @@ export function getVerbatiStyleFromCv(
 }
 
 export function sanitizePersistedVerbatiStyle(
-  candidate: Partial<VerbatiStylePreset> | null | undefined,
+  candidate: VerbatiStyleInput,
 ): VerbatiStylePreset | null {
   const safeCandidate = candidate ?? {};
   const familyId =
@@ -169,13 +174,17 @@ export function sanitizePersistedVerbatiStyle(
     palette,
     accentHex:
       palette === "custom"
-        ? normalizeVerbatiAccentHex(safeCandidate.accentHex)
+        ? normalizeVerbatiAccentHex(
+            typeof safeCandidate.accentHex === "string"
+              ? safeCandidate.accentHex
+              : undefined,
+          )
         : undefined,
   };
 }
 
 export function resolveVerbatiStyle(
-  candidate: Partial<VerbatiStylePreset> | null | undefined,
+  candidate: VerbatiStyleInput,
 ): VerbatiStylePreset {
   const safeCandidate = candidate ?? {};
   const familyId =
@@ -200,7 +209,11 @@ export function resolveVerbatiStyle(
     palette: paletteOption,
     accentHex:
       paletteOption === "custom"
-        ? normalizeVerbatiAccentHex(safeCandidate.accentHex)
+        ? normalizeVerbatiAccentHex(
+            typeof safeCandidate.accentHex === "string"
+              ? safeCandidate.accentHex
+              : undefined,
+          )
         : undefined,
   };
 }
