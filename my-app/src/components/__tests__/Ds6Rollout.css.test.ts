@@ -27,6 +27,22 @@ const proposalsListSource = readFileSync(
   resolve(process.cwd(), "src/components/ProposalsList.tsx"),
   "utf8",
 );
+const proposalInputFormSource = readFileSync(
+  resolve(process.cwd(), "src/components/ProposalInputForm.tsx"),
+  "utf8",
+);
+const proposalComposeToolbarSource = readFileSync(
+  resolve(process.cwd(), "src/components/ProposalComposeToolbar.tsx"),
+  "utf8",
+);
+const libraryFilterMenuSource = readFileSync(
+  resolve(process.cwd(), "src/components/LibraryFilterMenu.tsx"),
+  "utf8",
+);
+const toneBadgeSource = readFileSync(
+  resolve(process.cwd(), "src/components/ui/tone-badge.tsx"),
+  "utf8",
+);
 const migratedInlineFieldSources = [
   "src/components/ProfileEditors.tsx",
   "src/components/SelectedBlockInspector.tsx",
@@ -53,6 +69,7 @@ describe("DS-6 rollout contracts", () => {
     expect(dsCss).toMatch(
       /\.ds-field:focus\s*\{[\s\S]*border-color:\s*var\(--ti\);[\s\S]*box-shadow:\s*var\(--field-focus-shadow\) !important;/,
     );
+    expect(foundationCss).toContain("--er: hsl(10, 30%, 58%);");
     expect(primitivesCss).toMatch(
       /\.dasti-field,\s*\.dasti-select\s*\{[\s\S]*border:\s*2px solid transparent;[\s\S]*background:\s*var\(--sf2\);[\s\S]*color:\s*var\(--ti\);/,
     );
@@ -90,6 +107,64 @@ describe("DS-6 rollout contracts", () => {
     expect(proposalsLibrarySource).toContain("<ToneBadge");
     expect(proposalsListSource).toContain("<ToneBadge");
     expect(proposalsListSource).toContain("toneBadgeTone(");
+    expect(proposalInputFormSource).toContain("<ToneBadge");
+    expect(proposalComposeToolbarSource).toContain("<ToneBadge");
+    expect(libraryFilterMenuSource).toContain("<ToneBadge");
+    expect(toneBadgeSource).toContain('"auto" | "warm" | "formal" | "natural"');
+    expect(proposalInputFormSource).toContain('tone: "auto"');
+    expect(proposalComposeToolbarSource).toContain('tone: "auto"');
+    expect(proposalsLibrarySource).toContain('tone: "warm"');
+    expect(proposalsLibrarySource).toContain('tone: "natural"');
+    expect(proposalsLibrarySource).toContain('tone: "formal"');
+    expect(foundationCss).toContain("--tone-auto-bg: var(--sf2);");
+    expect(foundationCss).toContain("--tone-warm-bg: hsl(30deg 40% 93%);");
+    expect(dsCss).toContain(".ds-tone--warm");
+    expect(dsCss).toContain(".ds-tone--auto");
+    expect(dsCss).toContain("background: var(--tone-warm-bg);");
+    expect(dsCss).toContain("background: var(--tone-auto-bg);");
+    expect(productCss).toMatch(
+      /\.dasti-count-pill,\s*\.dasti-proposal-tone-badge\s*\{[\s\S]*min-height:\s*28px;[\s\S]*letter-spacing:\s*0;[\s\S]*text-transform:\s*none;/,
+    );
+    expect(dsCss).toMatch(
+      /\.ds-pill--info\s*\{[\s\S]*background:\s*var\(--info-bg/,
+    );
+    expect(dsCss).toMatch(
+      /\.ds-status--accent\s+\.ds-status__dot\s*\{[\s\S]*--ds-status-dot-color:\s*var\(--ac\);/,
+    );
+    expect(dsCss).toMatch(
+      /\.ds-status--success\s+\.ds-status__dot\s*\{[\s\S]*--ds-status-dot-color:\s*var\(--ok\);/,
+    );
+  });
+
+  it("keeps legacy dasti buttons aligned with DS button tokens", () => {
+    expect(primitivesCss).toMatch(
+      /\.dasti-button\s*\{[\s\S]*border:\s*1px solid transparent;[\s\S]*background:\s*var\(--sfr\);[\s\S]*font-size:\s*var\(--ts\);/,
+    );
+    expect(primitivesCss).toMatch(
+      /\.dasti-button--primary\s*\{[\s\S]*background:\s*var\(--ac\);[\s\S]*color:\s*var\(--op\);/,
+    );
+    expect(primitivesCss).toMatch(
+      /\.dasti-button--secondary\s*\{[\s\S]*background:\s*var\(--sfr\);[\s\S]*border-color:\s*var\(--border-stronger,\s*var\(--border-strong\)\);/,
+    );
+    expect(primitivesCss).toMatch(
+      /\.dasti-button--sm\s*\{[\s\S]*min-height:\s*var\(--hs\);[\s\S]*font-size:\s*var\(--tx\);/,
+    );
+  });
+
+  it("keeps DS-2 open visual notes fixed", () => {
+    expect(foundationCss).toContain("--border-stronger: #B6B5B1;");
+    expect(foundationCss).toContain("--border-stronger: #6E6D69;");
+    expect(foundationCss).toContain("--paper-dark-heading-ink: #0F0C08;");
+    expect(foundationCss).toContain("--paper-dark-body-ink: #2F2D29;");
+    expect(dsCss).toMatch(
+      /\.ds-btn--secondary\s*\{[\s\S]*border-color:\s*var\(--border-stronger,\s*var\(--border-strong\)\);/,
+    );
+    expect(dsCss).toMatch(
+      /\.dark \.ds-paper,[\s\S]*\[data-theme="dark"\] \.ds-paper\s*\{[\s\S]*color:\s*var\(--paper-dark-heading-ink\);/,
+    );
+    expect(dsCss).toMatch(
+      /\.dark \.ds-paper p,[\s\S]*\[data-theme="dark"\] \.ds-paper p\s*\{[\s\S]*color:\s*var\(--paper-dark-body-ink\);/,
+    );
   });
 
   it("uses the DS sidebar active gradient and stripe", () => {

@@ -1,10 +1,12 @@
 import React from "react";
 import { Check, ChevronDown } from "@/lib/icons";
+import { ToneBadge, type ToneBadgeTone } from "./ui/tone-badge";
 
 export type LibraryFilterMenuOption<TValue extends string> = {
   value: TValue;
   label: string;
   description?: string;
+  tone?: ToneBadgeTone;
 };
 
 type LibraryFilterMenuProps<TValue extends string> = {
@@ -62,7 +64,11 @@ export function LibraryFilterMenu<TValue extends string>({
         onClick={() => setIsOpen((open) => !open)}
       >
         <span className="dasti-proposal-library-filter-menu__trigger-label">
-          {activeOption?.label ?? label}
+          {activeOption?.tone ? (
+            <ToneBadge tone={activeOption.tone}>{activeOption.label}</ToneBadge>
+          ) : (
+            (activeOption?.label ?? label)
+          )}
         </span>
         <ChevronDown
           className="dasti-proposal-library-filter-menu__chevron"
@@ -108,7 +114,11 @@ export function LibraryFilterMenu<TValue extends string>({
                 </span>
                 <span className="dasti-proposal-chrome-option__copy">
                   <span className="dasti-proposal-chrome-option__title">
-                    {option.label}
+                    {option.tone ? (
+                      <ToneBadge tone={option.tone}>{option.label}</ToneBadge>
+                    ) : (
+                      option.label
+                    )}
                   </span>
                   {option.description ? (
                     <span className="dasti-proposal-chrome-option__description">

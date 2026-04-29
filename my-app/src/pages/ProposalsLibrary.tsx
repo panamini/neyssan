@@ -20,14 +20,21 @@ const PROPOSAL_TONE_FILTER_OPTIONS = [
   {
     value: "engaging",
     label: "Warm",
+    tone: "warm",
     description: "Approachable and personal.",
   },
   {
     value: "signature",
     label: "Natural",
+    tone: "natural",
     description: "Conversational and credible.",
   },
-  { value: "expert", label: "Formal", description: "Composed and measured." },
+  {
+    value: "expert",
+    label: "Formal",
+    tone: "formal",
+    description: "Composed and measured.",
+  },
 ] as const;
 
 const PROPOSAL_SORT_OPTIONS = [

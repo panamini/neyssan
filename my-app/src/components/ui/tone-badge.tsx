@@ -3,7 +3,7 @@
 import React from "react";
 import clsx from "clsx";
 
-export type ToneBadgeTone = "warm" | "formal" | "natural";
+export type ToneBadgeTone = "auto" | "warm" | "formal" | "natural";
 
 export interface ToneBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   tone?: ToneBadgeTone;
