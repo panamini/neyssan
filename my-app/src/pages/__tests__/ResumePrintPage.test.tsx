@@ -347,6 +347,7 @@ describe("ResumePrintPage", () => {
       ...buildPayload(),
       stylePreset: {
         ...DEFAULT_VERBATI_STYLE,
+        familyId: "swiss",
         layout: "swiss",
         typography: "quiet-editorial",
       },
