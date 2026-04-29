@@ -1,5 +1,6 @@
 import React from "react";
 import { ColorWheel } from "@/lib/icons";
+import { Menu } from "./ui/menu";
 import { ProposalColorPickerPopover } from "./ProposalColorPickerPopover";
 import {
   PROPOSAL_PALETTE_OPTIONS,
@@ -62,7 +63,6 @@ export function ProposalArtifactInspector({
   const rootRef = React.useRef<HTMLDivElement>(null);
   const colorGroupRef = React.useRef<HTMLDivElement>(null);
   const colorDrawerRef = React.useRef<HTMLDivElement>(null);
-  const [isStyleDrawerOpen, setIsStyleDrawerOpen] = React.useState(false);
   const [isColorPickerOpen, setIsColorPickerOpen] = React.useState(false);
   const [isColorDrawerOpen, setIsColorDrawerOpen] = React.useState(false);
   const colorPickerAnchorRef = React.useRef<HTMLButtonElement>(null);
@@ -73,12 +73,12 @@ export function ProposalArtifactInspector({
       : null;
   const activeStyleOption =
     STYLE_OPTIONS.find((option) => option.id === styleBundleId) ?? STYLE_OPTIONS[0];
-  const hasOpenDrawer = isStyleDrawerOpen || isColorDrawerOpen || isColorPickerOpen;
+  const hasOpenDrawer = isColorDrawerOpen || isColorPickerOpen;
   const isColorControlOpen =
     customAccentHex !== null ? isColorPickerOpen : isColorDrawerOpen;
 
   React.useEffect(() => {
-    if (!isColorDrawerOpen && !isStyleDrawerOpen) return;
+    if (!isColorDrawerOpen) return;
 
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node | null;
@@ -86,7 +86,6 @@ export function ProposalArtifactInspector({
         if (isColorPickerOpen && isColorDrawerOpen) {
           return;
         }
-        setIsStyleDrawerOpen(false);
         setIsColorDrawerOpen(false);
       }
     };
@@ -96,7 +95,6 @@ export function ProposalArtifactInspector({
         if (isColorPickerOpen && isColorDrawerOpen) {
           return;
         }
-        setIsStyleDrawerOpen(false);
         setIsColorDrawerOpen(false);
       }
     };
@@ -107,7 +105,7 @@ export function ProposalArtifactInspector({
       window.removeEventListener("mousedown", handlePointerDown);
       window.removeEventListener("keydown", handleEscape);
     };
-  }, [isColorDrawerOpen, isColorPickerOpen, isStyleDrawerOpen]);
+  }, [isColorDrawerOpen, isColorPickerOpen]);
 
   const rootClass = [
     "dasti-artifact-inspector",
@@ -133,82 +131,56 @@ export function ProposalArtifactInspector({
     >
       <div className="dasti-artifact-inspector__group" role="group" aria-label="Style">
         <span className="dasti-artifact-inspector__section-label">Style</span>
-        <button
-          type="button"
-          className={[
-            "dasti-artifact-inspector__action",
-            "dasti-artifact-inspector__action--style-trigger",
-            isStyleDrawerOpen ? "dasti-artifact-inspector__action--active" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          aria-pressed={isStyleDrawerOpen}
-          aria-expanded={isStyleDrawerOpen}
-          aria-haspopup="dialog"
-          onClick={() => {
-            setIsColorDrawerOpen(false);
-            setIsStyleDrawerOpen((current) => !current);
-          }}
-          aria-label="Style"
-          data-toolbar-tooltip={hasOpenDrawer ? undefined : "Style"}
-        >
-          <span
-            className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
-            aria-hidden="true"
-            style={{
-              fontFamily: activeStyleOption.preview.headingFont,
-              fontWeight: activeStyleOption.preview.headingWeight,
-              fontStyle: activeStyleOption.preview.fontStyle ?? "normal",
-            }}
-          >
-            Aa
-          </span>
-        </button>
-
-        {isStyleDrawerOpen ? (
-          <div
-            className="dasti-artifact-inspector__style-drawer dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
-            role="dialog"
-            aria-label="Style options"
-          >
-            {STYLE_OPTIONS.map((option) => {
-              const active = styleBundleId === option.id;
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={[
-                    "dasti-artifact-inspector__action",
-                    "dasti-artifact-inspector__action--drawer",
-                    active ? "dasti-artifact-inspector__action--active" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  aria-pressed={active}
-                  onClick={() => {
-                    onStyleBundleChange(active ? null : option.id);
-                    setIsStyleDrawerOpen(false);
-                  }}
-                  aria-label={option.label}
-                  data-toolbar-tooltip={option.label}
-                  data-toolbar-tooltip-placement="inline-end"
-                >
-                  <span
-                    className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
-                    aria-hidden="true"
-                    style={{
-                      fontFamily: option.preview.headingFont,
-                      fontWeight: option.preview.headingWeight,
-                      fontStyle: option.preview.fontStyle ?? "normal",
-                    }}
-                  >
-                    Aa
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
+        <Menu
+          ariaLabel="Style options"
+          align="end"
+          sections={[
+            {
+              items: STYLE_OPTIONS.map((option) => {
+                const active = styleBundleId === option.id;
+                return {
+                  id: option.id,
+                  role: "menuitemradio",
+                  selected: active,
+                  ariaLabel: option.label,
+                  label: (
+                    <span
+                      style={{
+                        fontFamily: option.preview.headingFont,
+                        fontWeight: option.preview.headingWeight,
+                        fontStyle: option.preview.fontStyle ?? "normal",
+                      }}
+                    >
+                      {option.label}
+                    </span>
+                  ),
+                  description: option.description,
+                  onSelect: () => onStyleBundleChange(active ? null : option.id),
+                };
+              }),
+            },
+          ]}
+          trigger={
+            <button
+              type="button"
+              className="dasti-artifact-inspector__action dasti-artifact-inspector__action--style-trigger"
+              aria-label="Style"
+              data-toolbar-tooltip={hasOpenDrawer ? undefined : "Style"}
+            >
+              <span
+                className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
+                aria-hidden="true"
+                style={{
+                  fontFamily: activeStyleOption.preview.headingFont,
+                  fontWeight: activeStyleOption.preview.headingWeight,
+                  fontStyle: activeStyleOption.preview.fontStyle ?? "normal",
+                }}
+              >
+                Aa
+              </span>
+            </button>
+          }
+        />
       </div>
 
       <div
@@ -232,7 +204,6 @@ export function ProposalArtifactInspector({
           aria-expanded={isColorControlOpen}
           aria-haspopup="dialog"
           onClick={() => {
-            setIsStyleDrawerOpen(false);
             if (customAccentHex !== null) {
               setIsColorDrawerOpen(false);
               setIsColorPickerOpen((current) => !current);
