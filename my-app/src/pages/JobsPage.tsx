@@ -17,6 +17,7 @@ import { LibraryFilterMenu } from "../components/LibraryFilterMenu";
 import { ProposalBriefCard } from "../components/ProposalBriefCard";
 import { FirstRunPanel } from "../components/jobs/FirstRunPanel";
 import { MatchReadBlock } from "../components/jobs/MatchReadBlock";
+import { Menu } from "../components/ui/menu";
 import { useToast } from "../components/ui/toast";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { getProposalSourceLabel } from "../lib/proposal-source-platforms";
@@ -1256,11 +1257,7 @@ function JobsPageContent(): JSX.Element {
     openedAt: number;
     decisionRecorded: boolean;
   } | null>(null);
-  const rowMenuRef = React.useRef<HTMLDivElement | null>(null);
   const resumePickerRef = React.useRef<HTMLDivElement | null>(null);
-  const [openRowMenuJobId, setOpenRowMenuJobId] = React.useState<string | null>(
-    null,
-  );
   const [isResumePickerOpen, setIsResumePickerOpen] = React.useState(false);
   const [selectedJobRefreshKey, setSelectedJobRefreshKey] = React.useState(0);
   const [confirmingPermanentDeleteJobId, setConfirmingPermanentDeleteJobId] =
@@ -1359,36 +1356,6 @@ function JobsPageContent(): JSX.Element {
   }, []);
 
   React.useEffect(() => {
-    if (!openRowMenuJobId) {
-      return undefined;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (target && !rowMenuRef.current?.contains(target)) {
-        setOpenRowMenuJobId(null);
-        setConfirmingPermanentDeleteJobId(null);
-      }
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpenRowMenuJobId(null);
-        setConfirmingPermanentDeleteJobId(null);
-      }
-    };
-
-    window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("keydown", handleEscape);
-
-    return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [openRowMenuJobId]);
-
-  React.useEffect(() => {
-    setOpenRowMenuJobId(null);
     setConfirmingPermanentDeleteJobId(null);
   }, [jobsView]);
 
@@ -2020,7 +1987,6 @@ function JobsPageContent(): JSX.Element {
     async (jobId: string) => {
       try {
         await restoreArchivedJob({ jobId });
-        setOpenRowMenuJobId(null);
         setConfirmingPermanentDeleteJobId(null);
         await navigate(buildJobsListRoute("active"));
       } catch (error) {
@@ -2037,7 +2003,6 @@ function JobsPageContent(): JSX.Element {
     async (jobId: string) => {
       try {
         await deleteArchivedJob({ jobId });
-        setOpenRowMenuJobId(null);
         setConfirmingPermanentDeleteJobId(null);
       } catch (error) {
         showToast("Delete failed.", {
@@ -2051,7 +2016,6 @@ function JobsPageContent(): JSX.Element {
 
   const handleDuplicateJob = React.useCallback(
     async (jobId: string) => {
-      setOpenRowMenuJobId(null);
       setConfirmingPermanentDeleteJobId(null);
       setDuplicateTransition({
         sourceJobId: jobId,
@@ -2620,8 +2584,6 @@ function JobsPageContent(): JSX.Element {
                       const isFavorite =
                         optimisticFavoriteById[job.id] ?? job.isFavorite;
                       const matchLabel = resolveMatchTierLabel(job.matchTier);
-                      const isRowMenuOpen = openRowMenuJobId === job.id;
-
                       return (
                         <div
                           key={job.id}
@@ -2632,9 +2594,6 @@ function JobsPageContent(): JSX.Element {
                             className={[
                               "dasti-jobs-row",
                               isActive ? "dasti-jobs-row--active" : null,
-                              isRowMenuOpen
-                                ? "dasti-jobs-row--menu-open"
-                                : null,
                             ]
                               .filter(Boolean)
                               .join(" ")}
@@ -2713,168 +2672,104 @@ function JobsPageContent(): JSX.Element {
                                   </button>
                                 ) : null}
                               </div>
-                              <div
-                                ref={isRowMenuOpen ? rowMenuRef : null}
-                                className="dasti-import-dropdown dasti-jobs-row__menu"
-                                data-open={isRowMenuOpen ? "true" : "false"}
-                              >
-                                <button
-                                  type="button"
-                                  className="dasti-icon-button dasti-jobs-row__menu-trigger"
-                                  aria-label={`More actions for ${title}`}
-                                  aria-expanded={isRowMenuOpen}
-                                  aria-haspopup="menu"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setOpenRowMenuJobId((current) =>
-                                      current === job.id ? null : job.id,
-                                    );
-                                  }}
-                                >
-                                  <DotsThree
-                                    size={16}
-                                    strokeWidth={1.7}
-                                    aria-hidden="true"
-                                  />
-                                </button>
-                                {isRowMenuOpen ? (
-                                  <div
-                                    className="dasti-import-dropdown__menu dasti-import-dropdown__menu--compact dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-jobs-row__menu-surface"
-                                    role="menu"
-                                    aria-label={`Actions for ${title}`}
-                                  >
-                                    {jobsView === "active" ? (
-                                      <>
-                                        <button
-                                          type="button"
-                                          role="menuitem"
-                                          className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
-                                          disabled={!job.sourceUrl}
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            setOpenRowMenuJobId(null);
-                                            handleOpenJobSource(job.sourceUrl);
-                                          }}
-                                        >
-                                          <span className="dasti-cv-style-presets__option-copy">
-                                            <span className="dasti-cv-style-presets__option-title">
-                                              Open source
-                                            </span>
-                                          </span>
-                                        </button>
-                                        <button
-                                          type="button"
-                                          role="menuitem"
-                                          className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            setOpenRowMenuJobId(null);
-                                            void handleArchiveJob(job.id);
-                                          }}
-                                        >
-                                          <span className="dasti-cv-style-presets__option-copy">
-                                            <span className="dasti-cv-style-presets__option-title">
-                                              Archive
-                                            </span>
-                                          </span>
-                                        </button>
-                                        <button
-                                          type="button"
-                                          role="menuitem"
-                                          className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            setOpenRowMenuJobId(null);
-                                            void handleDuplicateJob(job.id);
-                                          }}
-                                        >
-                                          <span className="dasti-cv-style-presets__option-copy">
-                                            <span className="dasti-cv-style-presets__option-title">
-                                              Duplicate
-                                            </span>
-                                          </span>
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <button
-                                          type="button"
-                                          role="menuitem"
-                                          className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            void handleRestoreArchivedJob(
-                                              job.id,
-                                            );
-                                          }}
-                                        >
-                                          <span className="dasti-cv-style-presets__option-copy">
-                                            <span className="dasti-cv-style-presets__option-title">
-                                              Restore
-                                            </span>
-                                          </span>
-                                        </button>
-                                        {confirmingPermanentDeleteJobId ===
-                                        job.id ? (
-                                          <>
-                                            <button
-                                              type="button"
-                                              role="menuitem"
-                                              className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
-                                              onClick={(event) => {
-                                                event.stopPropagation();
-                                                void handleDeleteArchivedJob(
-                                                  job.id,
-                                                );
-                                              }}
-                                            >
-                                              <span className="dasti-cv-style-presets__option-copy">
-                                                <span className="dasti-cv-style-presets__option-title">
-                                                  Confirm
-                                                </span>
-                                              </span>
-                                            </button>
-                                            <button
-                                              type="button"
-                                              role="menuitem"
-                                              className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
-                                              onClick={(event) => {
-                                                event.stopPropagation();
-                                                setConfirmingPermanentDeleteJobId(
-                                                  null,
-                                                );
-                                              }}
-                                            >
-                                              <span className="dasti-cv-style-presets__option-copy">
-                                                <span className="dasti-cv-style-presets__option-title">
-                                                  Cancel
-                                                </span>
-                                              </span>
-                                            </button>
-                                          </>
-                                        ) : (
-                                          <button
-                                            type="button"
-                                            role="menuitem"
-                                            className="dasti-cv-style-presets__option dasti-proposal-chrome-option dasti-jobs-row__menu-option"
-                                            onClick={(event) => {
-                                              event.stopPropagation();
-                                              setConfirmingPermanentDeleteJobId(
-                                                job.id,
-                                              );
-                                            }}
-                                          >
-                                            <span className="dasti-cv-style-presets__option-copy">
-                                              <span className="dasti-cv-style-presets__option-title">
-                                                Delete forever
-                                              </span>
-                                            </span>
-                                          </button>
-                                        )}
-                                      </>
-                                    )}
-                                  </div>
-                                ) : null}
+                              <div className="dasti-import-dropdown dasti-jobs-row__menu">
+                                <Menu
+                                  ariaLabel={`Actions for ${title}`}
+                                  align="end"
+                                  sections={[
+                                    {
+                                      items:
+                                        jobsView === "active"
+                                          ? [
+                                              {
+                                                id: "open-source",
+                                                label: "Open source",
+                                                disabled: !job.sourceUrl,
+                                                onSelect: () =>
+                                                  handleOpenJobSource(
+                                                    job.sourceUrl,
+                                                  ),
+                                              },
+                                              {
+                                                id: "archive",
+                                                label: "Archive",
+                                                onSelect: () =>
+                                                  void handleArchiveJob(job.id),
+                                              },
+                                              {
+                                                id: "duplicate",
+                                                label: "Duplicate",
+                                                onSelect: () =>
+                                                  void handleDuplicateJob(
+                                                    job.id,
+                                                  ),
+                                              },
+                                            ]
+                                          : confirmingPermanentDeleteJobId ===
+                                              job.id
+                                            ? [
+                                                {
+                                                  id: "restore",
+                                                  label: "Restore",
+                                                  onSelect: () =>
+                                                    void handleRestoreArchivedJob(
+                                                      job.id,
+                                                    ),
+                                                },
+                                                {
+                                                  id: "confirm-delete",
+                                                  label: "Confirm",
+                                                  tone: "danger",
+                                                  onSelect: () =>
+                                                    void handleDeleteArchivedJob(
+                                                      job.id,
+                                                    ),
+                                                },
+                                                {
+                                                  id: "cancel-delete",
+                                                  label: "Cancel",
+                                                  onSelect: () =>
+                                                    setConfirmingPermanentDeleteJobId(
+                                                      null,
+                                                    ),
+                                                },
+                                              ]
+                                            : [
+                                                {
+                                                  id: "restore",
+                                                  label: "Restore",
+                                                  onSelect: () =>
+                                                    void handleRestoreArchivedJob(
+                                                      job.id,
+                                                    ),
+                                                },
+                                                {
+                                                  id: "delete-forever",
+                                                  label: "Delete forever",
+                                                  tone: "danger",
+                                                  onSelect: () =>
+                                                    setConfirmingPermanentDeleteJobId(
+                                                      job.id,
+                                                    ),
+                                                },
+                                              ],
+                                    },
+                                  ]}
+                                  trigger={
+                                    <button
+                                      type="button"
+                                      className="dasti-icon-button dasti-jobs-row__menu-trigger"
+                                      aria-label={`More actions for ${title}`}
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      <DotsThree
+                                        size={16}
+                                        strokeWidth={1.7}
+                                        aria-hidden="true"
+                                      />
+                                    </button>
+                                  }
+                                />
                               </div>
                             </div>
                           </article>

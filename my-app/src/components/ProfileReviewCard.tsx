@@ -38,6 +38,7 @@ import OrganizeSectionsList from "./cv-editor/OrganizeSectionsList";
 import ResumeExportControl, {
   type ResumeExportRequest,
 } from "./ResumeExportControl";
+import { Menu, type MenuSection } from "./ui/menu";
 import type {
   CvDocument,
   CvSection,
@@ -669,7 +670,6 @@ export function ProfileReviewCard({
   // Use document-driven runtime detector primarily; fall back to env flag
   const v1Enabled = isV1Active || isV1SectionsEnabled();
   const requestedCvIdRef = useRef<string | null>(null);
-  const manageSectionsMenuRef = useRef<HTMLDivElement | null>(null);
   const inlineReviewRef = useRef<HTMLElement | null>(null);
   const recoveryPanelRef = useRef<HTMLDivElement | null>(null);
   const previousRecoveryOpenRef = useRef<boolean | null>(null);
@@ -1002,8 +1002,6 @@ export function ProfileReviewCard({
   const [recentlyAddedSectionType, setRecentlyAddedSectionType] =
     useState<string>("");
   const [isOrganizeSectionsMode, setIsOrganizeSectionsMode] =
-    useState<boolean>(false);
-  const [isManageSectionsMenuOpen, setIsManageSectionsMenuOpen] =
     useState<boolean>(false);
   const [isImportWarningDismissed, setIsImportWarningDismissed] =
     useState<boolean>(false);
@@ -2085,20 +2083,6 @@ export function ProfileReviewCard({
   }, [pendingTouchedRecoverySectionIds, sections]);
 
   React.useEffect(() => {
-    if (!isManageSectionsMenuOpen) return undefined;
-
-    const handleDocumentClick = (event: MouseEvent) => {
-      if (manageSectionsMenuRef.current?.contains(event.target as Node)) return;
-      setIsManageSectionsMenuOpen(false);
-    };
-
-    document.addEventListener("mousedown", handleDocumentClick);
-    return () => {
-      document.removeEventListener("mousedown", handleDocumentClick);
-    };
-  }, [isManageSectionsMenuOpen]);
-
-  React.useEffect(() => {
     if (!onHiddenSectionIdsChange) {
       return;
     }
@@ -2354,7 +2338,6 @@ export function ProfileReviewCard({
       }
       pushToast("Added.");
       setRecentlyAddedSectionType(option.value);
-      setIsManageSectionsMenuOpen(false);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[ProfileReviewCard] addSection failed", err);
@@ -2386,7 +2369,6 @@ export function ProfileReviewCard({
     }
 
     reorderSections(nextSections as any);
-    setIsManageSectionsMenuOpen(false);
     setRecentlyAddedSectionType("");
     pushToast("Removed.");
   }
@@ -2408,7 +2390,6 @@ export function ProfileReviewCard({
     }
 
     reorderSections(nextSections as any);
-    setIsManageSectionsMenuOpen(false);
     setRecentlyAddedSectionType("");
     const removedLabel =
       removableAddedSections.find(
@@ -2416,6 +2397,46 @@ export function ProfileReviewCard({
       )?.label ?? "Section";
     pushToast(`${removedLabel} removed.`);
   }
+
+  const manageSectionsMenuSections: MenuSection[] = [
+    ...(addableSectionOptions.length > 0
+      ? [
+          {
+            label: "Add sections",
+            items: addableSectionOptions.map((option) => ({
+              id: `add-${option.value}`,
+              label: option.label,
+              description: option.description,
+              onSelect: () => handleAddSection(option.value),
+            })),
+          },
+        ]
+      : []),
+    ...(removableAddedSections.length > 0
+      ? [
+          {
+            label: "Remove sections",
+            items: [
+              ...removableAddedSections.map((section) => ({
+                id: `remove-${section.sectionId}`,
+                label: `Remove ${section.label}`,
+                onSelect: () => handleRemoveAddedSection(section.sectionId),
+              })),
+              ...(removableAddedSections.length > 1
+                ? [
+                    {
+                      id: "remove-all",
+                      label: "Remove all",
+                      tone: "danger" as const,
+                      onSelect: handleClearAddedSections,
+                    },
+                  ]
+                : []),
+            ],
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div>
@@ -2821,127 +2842,35 @@ export function ProfileReviewCard({
               {addableSectionOptions.length > 0 ||
               removableAddedSections.length > 0 ? (
                 <div
-                  ref={manageSectionsMenuRef}
                   className="dasti-import-dropdown"
-                  data-open={isManageSectionsMenuOpen ? "true" : "false"}
                   style={{ flex: "0 0 auto" }}
                 >
-                  <button
-                    type="button"
-                    aria-label="Manage sections"
-                    className="dasti-select dasti-select--sm dasti-add-section-trigger"
-                    onClick={() =>
-                      setIsManageSectionsMenuOpen((current) => !current)
-                    }
-                  >
-                    <span
-                      className="dasti-add-section-trigger__spacer"
-                      aria-hidden
-                    />
-                    <span className="dasti-add-section-trigger__label">
-                      Manage sections
-                    </span>
-                    <span className="dasti-add-section-trigger__icon">
-                      {isManageSectionsMenuOpen ? (
-                        <X className="h-4 w-4 [color:var(--ti)]" aria-hidden />
-                      ) : (
-                        <ChevronDown
-                          className="h-4 w-4 [color:var(--tg2)]"
+                  <Menu
+                    ariaLabel="Manage sections"
+                    align="end"
+                    sections={manageSectionsMenuSections}
+                    trigger={
+                      <button
+                        type="button"
+                        aria-label="Manage sections"
+                        className="dasti-select dasti-select--sm dasti-add-section-trigger"
+                      >
+                        <span
+                          className="dasti-add-section-trigger__spacer"
                           aria-hidden
                         />
-                      )}
-                    </span>
-                  </button>
-                  {isManageSectionsMenuOpen ? (
-                    <div className="dasti-import-dropdown__menu dasti-add-section-menu dasti-add-section-menu--manage dasti-toolbar-drawer-surface dasti-proposal-chrome-drawer--stack">
-                      {addableSectionOptions.length > 0 ? (
-                        <>
-                          <div className="dasti-add-section-menu__heading">
-                            Add sections
-                          </div>
-                          {addableSectionOptions.map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              className="dasti-menu-option dasti-menu-option--section"
-                              onClick={() => {
-                                handleAddSection(option.value);
-                              }}
-                            >
-                              <div className="dasti-menu-option__row">
-                                <div className="dasti-menu-option__copy">
-                                  <div className="dasti-menu-option__title">
-                                    {option.label}
-                                  </div>
-                                  {option.description ? (
-                                    <div className="dasti-menu-option__description">
-                                      {option.description}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </button>
-                          ))}
-                        </>
-                      ) : null}
-                      {addableSectionOptions.length > 0 &&
-                      removableAddedSections.length > 0 ? (
-                        <div
-                          className="dasti-add-section-menu__divider"
-                          aria-hidden="true"
-                        />
-                      ) : null}
-                      {removableAddedSections.length > 0 ? (
-                        <>
-                          <div className="dasti-add-section-menu__heading">
-                            Remove sections
-                          </div>
-                          {removableAddedSections.map((section) => {
-                            const sectionLabel = section.label;
-                            return (
-                              <button
-                                key={section.sectionId}
-                                type="button"
-                                className="dasti-menu-option dasti-menu-option--section"
-                                onClick={() => {
-                                  handleRemoveAddedSection(section.sectionId);
-                                }}
-                              >
-                                <div className="dasti-menu-option__row">
-                                  <div className="dasti-menu-option__copy">
-                                    <div className="dasti-menu-option__title">
-                                      Remove {sectionLabel}
-                                    </div>
-                                  </div>
-                                </div>
-                              </button>
-                            );
-                          })}
-                          {removableAddedSections.length > 1 ? (
-                            <button
-                              type="button"
-                              className="dasti-menu-option dasti-menu-option--section"
-                              onClick={handleClearAddedSections}
-                            >
-                              <div className="dasti-menu-option__row">
-                                <div className="dasti-menu-option__copy">
-                                  <div className="dasti-menu-option__title">
-                                    Remove all
-                                  </div>
-                                </div>
-                              </div>
-                            </button>
-                          ) : null}
-                        </>
-                      ) : null}
-                      {addableSectionOptions.length === 0 &&
-                      removableAddedSections.length === 0 ? (
-                        <div className="dasti-add-section-menu__empty">
-                          All sections added.
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
+                        <span className="dasti-add-section-trigger__label">
+                          Manage sections
+                        </span>
+                        <span className="dasti-add-section-trigger__icon">
+                          <ChevronDown
+                            className="h-4 w-4 [color:var(--tg2)]"
+                            aria-hidden
+                          />
+                        </span>
+                      </button>
+                    }
+                  />
                 </div>
               ) : (
                 <span className="dasti-cv-edit-toolbar__hint">
