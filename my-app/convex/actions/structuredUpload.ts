@@ -1,7 +1,8 @@
 'use node';
 
 import { action } from "../_generated/server";
-import { FormData } from "undici";
+import { Blob } from "node:buffer";
+import { FormData, fetch as undiciFetch } from "undici";
 import { v, ConvexError } from "convex/values";
 import { recordTelemetry } from "../../config/llmTelemetry";
 import { canonicalizeParserResult, firstSentence } from "../lib/parsing/canonicalize";
@@ -12,7 +13,7 @@ import {
   type AuthoritativeResume,
 } from "../../src/lib/authoritative-resume";
 
-type UResponse = import("undici").Response;
+type UResponse = Awaited<ReturnType<typeof undiciFetch>>;
 
 type ParserRunnerMeta = {
   returncode?: number;
@@ -837,7 +838,7 @@ export const structuredUpload = action({
         if (!sectionsFound || typeof sectionsFound !== "object") {
           return 0;
         }
-        return Object.values(sectionsFound).reduce((sum, value) => {
+        return Object.values(sectionsFound).reduce<number>((sum, value) => {
           if (typeof value === "number" && Number.isFinite(value)) {
             return sum + value;
           }
@@ -899,7 +900,7 @@ export const structuredUpload = action({
       return order;
     };
 
-    const modeSequence = activeUseMistral ? ["auto"] : computeModeSequence();
+    const modeSequence: ParserMode[] = activeUseMistral ? ["auto"] : computeModeSequence();
 
     for (const attempt of parserAttempts) {
       const parserEndpoint = attempt.endpoint;
@@ -945,11 +946,13 @@ export const structuredUpload = action({
         return next;
       };
 
+      const parserFetchTimeoutMs = activeUseMistral ? 240_000 : 90_000;
+
       const performFetch = async (formData: FormData, retryIndex: number, modeUsed: ParserMode) => {
         const fetchStartedAt = nowMs();
         const controller = new AbortController();
-        const parserFetchTimeoutMs = activeUseMistral ? 240_000 : 90_000;
         const timer = setTimeout(() => controller.abort(), parserFetchTimeoutMs);
+        let endpointToCall = endpointForLog;
         try {
           const targetOrigin = (() => {
             try {
@@ -958,7 +961,6 @@ export const structuredUpload = action({
               return parserEndpoint.origin || baseOrigin || "http://127.0.0.1:8001";
             }
           })();
-          let endpointToCall: string;
           try {
             endpointToCall = new URL(parserPath, targetOrigin).toString();
           } catch {
@@ -983,7 +985,7 @@ export const structuredUpload = action({
           if (parserAccessHeaders) {
             Object.assign(headers, parserAccessHeaders);
           }
-          const response = await fetch(endpointToCall, {
+          const response = await undiciFetch(endpointToCall, {
             method: "POST",
             headers,
             body: formData,
@@ -1068,6 +1070,10 @@ export const structuredUpload = action({
               );
             }
             response = null;
+            continue;
+          }
+
+          if (!response) {
             continue;
           }
 
@@ -1178,16 +1184,17 @@ export const structuredUpload = action({
                 if (!result.normalized || typeof result.normalized !== "object") {
                   result.normalized = {} as any;
                 }
+                const resultNormalized = result.normalized as Record<string, any>;
                 if (typeof result.rawText === "string") {
-                  if (typeof result.normalized.rawText !== "string" || !result.normalized.rawText.trim()) {
-                    result.normalized.rawText = result.rawText;
+                  if (typeof resultNormalized.rawText !== "string" || !resultNormalized.rawText.trim()) {
+                    resultNormalized.rawText = result.rawText;
                   }
                 }
-                if (!Array.isArray(result.normalized.rawSections)) {
+                if (!Array.isArray(resultNormalized.rawSections)) {
                   if (Array.isArray((result as any).rawSections)) {
-                    result.normalized.rawSections = (result as any).rawSections;
+                    resultNormalized.rawSections = (result as any).rawSections;
                   } else if (typeof result.rawText === "string" && result.rawText.trim()) {
-                    result.normalized.rawSections = [{ label: "BODY", content: result.rawText }];
+                    resultNormalized.rawSections = [{ label: "BODY", content: result.rawText }];
                   }
                 }
               }

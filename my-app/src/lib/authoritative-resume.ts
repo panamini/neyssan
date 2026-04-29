@@ -104,6 +104,10 @@ function cleanString(value: unknown): string {
   return value.trim();
 }
 
+function isNotNull<T>(value: T | null): value is T {
+  return value !== null;
+}
+
 function cleanOptionalString(value: unknown): string | undefined {
   const cleaned = cleanString(value);
   return cleaned || undefined;
@@ -307,7 +311,7 @@ export function buildAuthoritativeResumeExportModel(
         achievements,
       } satisfies AuthoritativeResumeExperience;
     })
-    .filter((entry): entry is AuthoritativeResumeExperience => entry !== null);
+    .filter(isNotNull);
 
   const education = asArray(normalized.education)
     .map((entry) => {
@@ -332,7 +336,7 @@ export function buildAuthoritativeResumeExportModel(
         description,
       } satisfies AuthoritativeResumeEducation;
     })
-    .filter((entry): entry is AuthoritativeResumeEducation => entry !== null);
+    .filter(isNotNull);
 
   const skills = asArray(normalized.skills)
     .map((entry) => {
@@ -340,7 +344,7 @@ export function buildAuthoritativeResumeExportModel(
       const name = readString(record, "name");
       return name ? ({ name } satisfies AuthoritativeResumeSkill) : null;
     })
-    .filter((entry): entry is AuthoritativeResumeSkill => entry !== null);
+    .filter(isNotNull);
 
   const languages = asArray(normalized.languages)
     .map((entry) => {
@@ -354,7 +358,7 @@ export function buildAuthoritativeResumeExportModel(
         level: readOptionalString(record, "level"),
       } satisfies AuthoritativeResumeLanguage;
     })
-    .filter((entry): entry is AuthoritativeResumeLanguage => entry !== null);
+    .filter(isNotNull);
 
   const projects = asArray(normalized.projects)
     .map((entry) => {
@@ -378,7 +382,7 @@ export function buildAuthoritativeResumeExportModel(
         summary: summaryText,
       } satisfies AuthoritativeResumeProject;
     })
-    .filter((entry): entry is AuthoritativeResumeProject => entry !== null);
+    .filter(isNotNull);
 
   const certifications = asArray(normalized.certifications)
     .map((entry) => {
@@ -400,7 +404,7 @@ export function buildAuthoritativeResumeExportModel(
         credentialId: readOptionalString(record, "credentialId"),
       } satisfies AuthoritativeResumeCertification;
     })
-    .filter((entry): entry is AuthoritativeResumeCertification => entry !== null);
+    .filter(isNotNull);
 
   return {
     schemaVersion: 1,

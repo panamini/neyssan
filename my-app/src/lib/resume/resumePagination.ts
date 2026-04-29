@@ -628,7 +628,7 @@ function buildPlannerMetrics(args: {
     tokens.flow.density.titleAdjustPt,
   );
   const titleLineHeight =
-    tokens.flow.type.title.lineHeight ?? args.template.preview.bodyLineHeight;
+    tokens.flow.type.title.lineHeight ?? tokens.flow.type.body.lineHeight ?? 1.1;
   const titleSizeMm = ptToMm(
     (tokens.flow.type.title.sizePt ?? 0) + (tokens.flow.density.titleAdjustPt ?? 0),
   );
