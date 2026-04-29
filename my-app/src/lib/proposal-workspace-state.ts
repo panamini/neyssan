@@ -23,7 +23,7 @@ export type StoredProposalComposeDraft = {
   proposalType?: string;
   voicePreset?: string | null;
   toneTuning?: string | null;
-  characterLimitMode?: string;
+  characterLimitMode?: string | null;
   characterLimitValue?: number | null;
   /** Source URL from Clerk chrome-extension handoff (persisted so it survives URL param removal) */
   sourceUrl?: string | null;

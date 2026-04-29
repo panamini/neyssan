@@ -893,7 +893,7 @@ export function ProposalDocumentRenderer({
   const volkFallbackParagraphs = React.useMemo(
     () =>
       buildVolkFallbackParagraphs({
-        documentTitle,
+        documentTitle: documentTitle ?? null,
         railTitle: resolvedRailTitle,
       }),
     [documentTitle, resolvedRailTitle],

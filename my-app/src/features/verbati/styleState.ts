@@ -270,13 +270,22 @@ export function resolveAppliedVisualStyleState(args: {
     };
   }
 
+  if (args.source.kind === "preset_custom") {
+    return {
+      style,
+      provenance: {
+        kind: "preset_custom",
+        presetId: args.source.presetId,
+        presetNameSnapshot: args.source.presetNameSnapshot,
+      },
+      diff,
+      dirty,
+    };
+  }
+
   return {
     style,
-    provenance: {
-      kind: "preset_custom",
-      presetId: args.source.presetId,
-      presetNameSnapshot: args.source.presetNameSnapshot,
-    },
+    provenance: { kind: "custom_no_preset" },
     diff,
     dirty,
   };

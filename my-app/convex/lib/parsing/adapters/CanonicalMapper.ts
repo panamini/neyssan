@@ -27,6 +27,10 @@ type LanguageArray = NonNullable<CanonicalCV["languages"]>;
 
 type ExperienceConf = NonNullable<StrictExperienceItem["confidences"]>;
 type ExperienceProv = NonNullable<StrictExperienceItem["provenance"]>;
+type StrictExperienceItemExtended = StrictExperienceItem & {
+  summary?: string | null;
+  responsibilityBullets?: string[] | null;
+};
 type EducationConf = NonNullable<StrictEducationItem["confidences"]>;
 type EducationProv = NonNullable<StrictEducationItem["provenance"]>;
 type SkillConf = NonNullable<StrictSkillItem["confidences"]>;
@@ -274,6 +278,7 @@ function mapExperienceItem(
   telemetry: TelemetryEvent[],
   summary: ConfidenceSummary[]
 ): WorkArray[number] {
+  const extendedItem = item as StrictExperienceItemExtended;
   const baseSlot = `work[${index}]`;
   const conf: Partial<ExperienceConf> = item.confidences ?? {};
   const prov: Partial<ExperienceProv> = item.provenance ?? {};
@@ -314,16 +319,16 @@ function mapExperienceItem(
   }, `${baseSlot}.isCurrent`, telemetry, summary);
 
   const summaryValue =
-    typeof item.summary === "string"
-      ? item.summary
+    typeof extendedItem.summary === "string"
+      ? extendedItem.summary
       : typeof item.responsibilities === "string"
       ? item.responsibilities
       : null;
   const summaryField = wrapField(summaryValue, {
-    conf: conf.summary ?? conf.responsibilities,
-    source: prov.summary?.source ?? prov.responsibilities?.source,
-    section: prov.summary?.section ?? prov.responsibilities?.section ?? "experience",
-    bonusApplied: prov.summary?.bonusApplied ?? prov.responsibilities?.bonusApplied,
+    conf: conf.responsibilities,
+    source: prov.responsibilities?.source,
+    section: prov.responsibilities?.section ?? "experience",
+    bonusApplied: prov.responsibilities?.bonusApplied,
   }, `${baseSlot}.summary`, telemetry, summary);
 
   const achievementProv = prov.achievements;
@@ -336,10 +341,12 @@ function mapExperienceItem(
     }, `${baseSlot}.achievements[${achIndex}]`, telemetry, summary)
   );
 
-  const highlightTexts = normalizeHighlights(item.responsibilityBullets ?? item.responsibilities);
+  const highlightTexts = normalizeHighlights(
+    extendedItem.responsibilityBullets ?? item.responsibilities,
+  );
   const highlights = highlightTexts.map((text, hlIndex) =>
     wrapField(text, {
-      conf: conf.responsibilities ?? conf.achievements ?? conf.summary ?? null,
+      conf: conf.responsibilities ?? conf.achievements ?? null,
       source: prov.responsibilities?.source ?? prov.achievements?.source ?? prov.company?.source,
       section: prov.responsibilities?.section ?? "experience",
       bonusApplied: prov.responsibilities?.bonusApplied ?? prov.achievements?.bonusApplied,

@@ -19,6 +19,7 @@ export const PROPOSAL_TEMPLATE_IDS = [
 ] as const;
 
 export type ProposalTemplateId = (typeof PROPOSAL_TEMPLATE_IDS)[number];
+type LegacyProposalTemplateId = (typeof PROPOSAL_LEGACY_TEMPLATE_IDS)[number];
 
 export const DEFAULT_PROPOSAL_TEMPLATE_ID: ProposalTemplateId =
   "editorial_wide";
@@ -166,11 +167,19 @@ export function isProposalTemplateId(
   );
 }
 
+function isLegacyProposalTemplateId(
+  value: ProposalTemplateId,
+): value is LegacyProposalTemplateId {
+  return (PROPOSAL_LEGACY_TEMPLATE_IDS as readonly string[]).includes(value);
+}
+
 export function resolveProposalTemplateId(
   value: unknown,
 ): ProposalTemplateId {
   if (isProposalTemplateId(value)) {
-    return PROPOSAL_TEMPLATE_ALIASES[value] ?? value;
+    return isLegacyProposalTemplateId(value)
+      ? PROPOSAL_TEMPLATE_ALIASES[value] ?? value
+      : value;
   }
 
   return DEFAULT_PROPOSAL_TEMPLATE_ID;

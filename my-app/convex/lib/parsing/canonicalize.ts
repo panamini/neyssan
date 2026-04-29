@@ -785,7 +785,9 @@ function sanitizeRobertSmithQwikresumeRawSections(rawSections: RawSection[], nor
     return rawSections;
   }
   return rawSections.filter((section) => {
-    const family = SECTION_LABEL_TO_KEY[coerceString(section.label).toUpperCase()] ?? normalizeHeadingKey(section.label);
+    const family =
+      SECTION_LABEL_TO_KEY[coerceString(section.label).toUpperCase()] ??
+      normalizeHeadingKey(coerceString(section.label));
     if (family !== "education") return true;
     return !isQwikresumeTemplateEducationNoise(section.content);
   });
@@ -1614,7 +1616,7 @@ function parseProjectLines(lines: string[]): Array<{ title: string; summary?: st
     const matches = Array.from(text.matchAll(collapsedProjectAnchorRe));
     if (matches.length < 2) return [];
     return matches
-      .map((match, idx) => {
+      .map((match, idx): ProjectLine | null => {
         const nextIndex = matches[idx + 1]?.index ?? text.length;
         const segmentStart = match.index ?? 0;
         const segment = text.slice(segmentStart, nextIndex).trim();
@@ -1634,7 +1636,7 @@ function parseProjectLines(lines: string[]): Array<{ title: string; summary?: st
           splitRecovered: true,
         };
       })
-      .filter((entry): entry is ProjectLine => Boolean(entry));
+      .filter((entry): entry is ProjectLine => entry !== null);
   };
 
   const flush = () => {
@@ -2056,12 +2058,12 @@ function deriveNameFromContext(normalized: any, context: CanonicalizeContext): s
       const segments = rawLine
         .trim()
         .split(/\s{2,}/)
-        .map((segment) => segment.replace(/\s+/g, ""))
+        .map((segment: string) => segment.replace(/\s+/g, ""))
         .filter(Boolean);
       if (segments.length < 2 || segments.length > 4) continue;
-      if (segments.some((segment) => /[^A-Za-z]/.test(segment))) continue;
+      if (segments.some((segment: string) => /[^A-Za-z]/.test(segment))) continue;
       const formatted = segments
-        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
+        .map((segment: string) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
         .join(" ");
       if (!formatted) continue;
       if (!isUsablePersonName(formatted, rawLine)) continue;
@@ -2181,30 +2183,30 @@ function deriveDesiredPosition(normalized: any, context: CanonicalizeContext): s
   let fallbackRole: string | undefined;
   if (contactRawFallback) {
     const rawLines = contactRawFallback.split(/\r?\n/);
-    rawLines.forEach((rawLine) => {
+    rawLines.forEach((rawLine: string) => {
       if (!rawLine) return;
       const segments = rawLine
         .trim()
         .split(/\s{2,}/)
-        .map((segment) => segment.replace(/\s+/g, ""))
+        .map((segment: string) => segment.replace(/\s+/g, ""))
         .filter(Boolean);
       if (segments.length >= 2 && segments.length <= 6) {
         const candidate = segments
-          .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
+          .map((segment: string) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
           .join(" ");
         const candidateTokens = candidate.toLowerCase().split(/\s+/);
         if (process.env.DEBUG_ROLE === "1") {
           // eslint-disable-next-line no-console
           console.log("[role fallback candidate]", candidate, candidateTokens);
         }
-        if (candidateTokens.some((token) => ROLE_KEYWORD_HINTS.has(token))) {
+        if (candidateTokens.some((token: string) => ROLE_KEYWORD_HINTS.has(token))) {
           if (!fallbackRole) fallbackRole = candidate;
         }
         considerCandidate(candidate, 3);
       }
     });
     if (!fallbackRole) {
-      const originalLines = rawLines.map((line) => line.trim()).filter(Boolean);
+      const originalLines = rawLines.map((line: string) => line.trim()).filter(Boolean);
       if (originalLines.length >= 2) {
         const inferredRole = normalizeRoleCandidate(originalLines[1]);
         if (inferredRole) {
@@ -2826,12 +2828,15 @@ function extractImmediateHeaderLocationForResolvedName(
   if (!resolvedNameKey) return undefined;
 
   for (const source of collectIdentityContactRawTextSources(normalized, rawSections, context)) {
-    const lines = splitIdentityContactBlockLines(source).slice(0, 8);
+    const lines: string[] = splitIdentityContactBlockLines(source).slice(0, 8);
     if (!lines.length) continue;
 
     const nameIndex = lines.findIndex((line) => {
       const formatted = formatHeaderPersonNameCandidate(line);
-      return Boolean(formatted) && normalizeCandidateForStoplist(formatted) === resolvedNameKey;
+      return (
+        typeof formatted === "string" &&
+        normalizeCandidateForStoplist(formatted) === resolvedNameKey
+      );
     });
     if (nameIndex < 0 || nameIndex > 1) continue;
 
@@ -4427,11 +4432,11 @@ function recoverExperienceFromLooseText(normalized: any, context: CanonicalizeCo
   const sourceText = sourceTextRaw;
   if (!sourceText) return [];
 
-  const lines = sourceText
+  const lines: string[] = sourceText
     .split(/\r?\n/)
-    .map((line) => collapseSpacedCaps(cleanLine(line)))
-    .map((line) => line.replace(/^[•*\-–—\u2022]+\s*/, "").trim())
-    .filter(Boolean);
+    .map((line: string) => collapseSpacedCaps(cleanLine(line)))
+    .map((line: string) => line.replace(/^[•*\-–—\u2022]+\s*/, "").trim())
+    .filter((line: string): line is string => Boolean(line));
   if (!lines.length) return [];
 
   const experienceHeading = /^(professional\s+)?experience|work experience|employment history|career history|experience$/i;
@@ -5743,7 +5748,7 @@ function shouldRewriteLanguagesRaw(rawValue: unknown, languages: any[]): boolean
 
 function canonicalizeAchievements(rawValue: unknown, normalized: any, rawSections: RawSection[], context: CanonicalizeContext): any[] {
   const arr = ensureArray<any>(rawValue)
-    .map((entry, idx) => {
+    .map((entry, idx): { id: string; text: string } | null => {
       const text = coerceString(entry?.text ?? entry?.content ?? entry);
       if (!text) return null;
       return {
@@ -5751,7 +5756,7 @@ function canonicalizeAchievements(rawValue: unknown, normalized: any, rawSection
         text,
       };
     })
-    .filter(Boolean);
+    .filter((entry): entry is { id: string; text: string } => entry !== null);
 
   const items: Array<{ id: string; text: string }> = [];
   const seen = new Set<string>();

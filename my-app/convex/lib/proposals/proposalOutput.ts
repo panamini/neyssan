@@ -58,7 +58,7 @@ function normalizeTitle(value: string | null | undefined): string | null {
 
 function isUsableTitle(value: string | null | undefined): value is string {
   const normalized = normalizeTitle(value);
-  return Boolean(normalized) && !TITLE_PLACEHOLDER_PATTERN.test(normalized);
+  return normalized !== null && !TITLE_PLACEHOLDER_PATTERN.test(normalized);
 }
 
 export function getProposalTitleFallback(format: ProposalOutputFormat): string {

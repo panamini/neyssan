@@ -8,11 +8,12 @@ interface SkillsTaxonomy {
 }
 
 interface Stoplist {
-  terms: string[];
+  terms?: string[];
+  categories?: Record<string, string[]>;
 }
 
 const taxonomy = taxonomyJson as SkillsTaxonomy;
-const stoplist = stoplistJson as Stoplist & { categories?: Record<string, string[]> };
+const stoplist = stoplistJson as Stoplist;
 
 // pipeline-note: all skill aliasing, stoplists, and canonical vocab live here.
 // canonicalize.ts, cvMapper.ts, and any LLM adapters should call helpers from

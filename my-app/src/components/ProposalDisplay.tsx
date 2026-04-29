@@ -2197,9 +2197,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                       setTextareaSelectionState(null);
                       onContentCommit?.();
                     }}
-                    onSelect={scheduleTextareaSelectionCheck}
-                    onMouseUp={scheduleTextareaSelectionCheck}
-                    onKeyUp={scheduleTextareaSelectionCheck}
+                    onSelect={() => scheduleTextareaSelectionCheck(true)}
+                    onMouseUp={() => scheduleTextareaSelectionCheck(true)}
+                    onKeyUp={() => scheduleTextareaSelectionCheck(true)}
                     onScroll={() => {
                       updateEditableScrollEdges();
                       scheduleTextareaSelectionCheck();
@@ -2457,9 +2457,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             setTextareaSelectionState(null);
             onContentCommit?.();
           }}
-          onSelect={scheduleTextareaSelectionCheck}
-          onMouseUp={scheduleTextareaSelectionCheck}
-          onKeyUp={scheduleTextareaSelectionCheck}
+          onSelect={() => scheduleTextareaSelectionCheck(true)}
+          onMouseUp={() => scheduleTextareaSelectionCheck(true)}
+          onKeyUp={() => scheduleTextareaSelectionCheck(true)}
           placeholder="Content appears here"
           className="dasti-proposal-sheet__body--editable"
           style={{

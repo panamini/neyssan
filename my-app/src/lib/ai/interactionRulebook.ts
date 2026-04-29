@@ -153,7 +153,7 @@ export const VISIBLE_TOOLBAR_AI_ACTIONS = VISIBLE_TOOLBAR_AI_ACTION_IDS.map(
 export function getVisibleToolbarAiActions(options: {
   includeJobContextActions?: boolean;
 } = {}): AiActionDefinition[] {
-  const actionIds = options.includeJobContextActions
+  const actionIds: readonly AiActionId[] = options.includeJobContextActions
     ? [
         "rewrite",
         "shorten",

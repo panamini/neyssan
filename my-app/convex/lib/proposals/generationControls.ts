@@ -1,4 +1,8 @@
-import type { ProposalToneTuning } from "./voicePresets";
+export type ProposalToneTuning =
+  | "more_human"
+  | "more_direct"
+  | "more_structured"
+  | "more_confident";
 
 export type ProposalCharacterLimitMode =
   | "none"

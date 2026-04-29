@@ -383,7 +383,7 @@ export function VerbatiCvPreviewPanel({
         </div>
       ) : null}
 
-      {shouldDelayResolvedPreview ? null : hostMode === "workspace" ? (
+      {shouldDelayResolvedPreview || !previewData ? null : hostMode === "workspace" ? (
         <div className="dasti-resume-preview-panel__surface dasti-resume-preview-panel__surface--workspace">
           <VerbatiResumePreview
             data={previewData}

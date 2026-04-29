@@ -27,7 +27,7 @@ type EmbeddedStyleInspectorProps = {
   stylePreset: VerbatiStylePreset;
   templateId?: ProposalTemplateId | null;
   bundleOptions?: ReadonlyArray<{
-    id: string;
+    id: VerbatiStyleBundleId;
     label: string;
     description: string;
     stylePreset: VerbatiStylePreset;
@@ -58,6 +58,10 @@ type DrawerId =
   | "typography"
   | "color"
   | "prompt";
+
+function getTypographyFontWeight(typography: VerbatiTypographyPreset | string) {
+  return typography === "expert" ? 500 : 600;
+}
 
 function InspectorTooltip({
   title,
@@ -272,7 +276,7 @@ export function EmbeddedStyleInspector({
                       <span
                         style={{
                           fontFamily: option.headingFamily,
-                          fontWeight: option.id === "expert" ? 500 : 600,
+                          fontWeight: getTypographyFontWeight(option.id),
                         }}
                       >
                         {option.name}
@@ -294,8 +298,9 @@ export function EmbeddedStyleInspector({
                     aria-hidden="true"
                     style={{
                       fontFamily: activeTypographyOption.headingFamily,
-                      fontWeight:
-                        activeTypographyOption.id === "expert" ? 500 : 600,
+                      fontWeight: getTypographyFontWeight(
+                        activeTypographyOption.id,
+                      ),
                     }}
                   >
                     Aa
@@ -387,7 +392,7 @@ export function EmbeddedStyleInspector({
                 style={{
                   fontFamily: activeTypographyOption.headingFamily,
                   fontWeight:
-                    activeTypographyOption.id === "expert" ? 500 : 600,
+                    getTypographyFontWeight(activeTypographyOption.id),
                 }}
               >
                 Aa
@@ -449,10 +454,9 @@ export function EmbeddedStyleInspector({
                           aria-hidden="true"
                           style={{
                             fontFamily: typographyOption.headingFamily,
-                            fontWeight:
-                              bundle.stylePreset.typography === "expert"
-                                ? 500
-                                : 600,
+                            fontWeight: getTypographyFontWeight(
+                              bundle.stylePreset.typography,
+                            ),
                           }}
                         >
                           Aa
@@ -489,8 +493,9 @@ export function EmbeddedStyleInspector({
                         aria-hidden="true"
                         style={{
                           fontFamily: typographyOption.headingFamily,
-                          fontWeight:
-                            bundle.stylePreset.typography === "expert" ? 500 : 600,
+                            fontWeight: getTypographyFontWeight(
+                              bundle.stylePreset.typography,
+                            ),
                         }}
                       >
                         Aa
@@ -636,7 +641,7 @@ export function EmbeddedStyleInspector({
                               aria-hidden="true"
                               style={{
                                 fontFamily: option.headingFamily,
-                                fontWeight: option.id === "expert" ? 500 : 600,
+                                fontWeight: getTypographyFontWeight(option.id),
                               }}
                             >
                               Aa

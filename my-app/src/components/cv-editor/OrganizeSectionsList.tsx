@@ -5,6 +5,7 @@ import {
   closestCenter,
   useSensor,
   useSensors,
+  type DraggableAttributes,
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
@@ -30,6 +31,8 @@ import {
   isSectionRemovableInOrganization,
   isSectionReorderLocked,
 } from "../../lib/cv-section-organization";
+
+type SortableListeners = ReturnType<typeof useSortable>["listeners"];
 
 type OrganizeSectionsListProps = {
   sections: CvSection[];
@@ -194,8 +197,8 @@ function SectionCard(props: {
   activeDragSectionId: string | null;
   isDragging?: boolean;
   isDropTarget?: boolean;
-  dragHandleAttributes?: Record<string, unknown>;
-  dragHandleListeners?: Record<string, unknown>;
+  dragHandleAttributes?: DraggableAttributes;
+  dragHandleListeners?: SortableListeners;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onHide: () => void;
