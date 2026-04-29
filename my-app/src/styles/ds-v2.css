@@ -304,6 +304,19 @@
     box-shadow: var(--shb);
   }
 
+  .ds-card[data-state="loading"] {
+    pointer-events: none;
+  }
+
+  .ds-card__eyebrow {
+    margin: 0;
+    font-size: var(--tx);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tm2);
+  }
+
   .ds-card__title {
     font-size: var(--ts);
     font-weight: var(--font-label-weight);

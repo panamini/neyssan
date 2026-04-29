@@ -1809,17 +1809,17 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                         </div>
                         {onHeaderVisibilityChange ? (
                           <section
-                            className="dasti-proposal-editor-page__drawer-card dasti-proposal-editor-page__drawer-card--visibility"
+                            className="ds-card ds-card--muted dasti-proposal-editor-page__drawer-card dasti-proposal-editor-page__drawer-card--visibility"
                             aria-labelledby={headerVisibilityTitleId}
                           >
                             <div className="dasti-proposal-editor-page__drawer-card-header">
                               <div>
-                                <p className="dasti-proposal-editor-page__drawer-card-kicker">
+                                <p className="ds-card__eyebrow dasti-proposal-editor-page__drawer-card-kicker">
                                   Shown in header
                                 </p>
                                 <h5
                                   id={headerVisibilityTitleId}
-                                  className="dasti-proposal-editor-page__drawer-card-title"
+                                  className="ds-card__title dasti-proposal-editor-page__drawer-card-title"
                                 >
                                   Pick what appears on the letter.
                                 </h5>
@@ -1882,17 +1882,17 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                           </section>
                         ) : null}
                         <section
-                          className="dasti-proposal-editor-page__drawer-card"
+                          className="ds-card ds-card--muted dasti-proposal-editor-page__drawer-card"
                           aria-labelledby={applicantCardTitleId}
                         >
                           <div className="dasti-proposal-editor-page__drawer-card-header">
                             <div>
-                              <p className="dasti-proposal-editor-page__drawer-card-kicker">
+                              <p className="ds-card__eyebrow dasti-proposal-editor-page__drawer-card-kicker">
                                 Applicant
                               </p>
                               <h5
                                 id={applicantCardTitleId}
-                                className="dasti-proposal-editor-page__drawer-card-title"
+                                className="ds-card__title dasti-proposal-editor-page__drawer-card-title"
                               >
                                 Your sender line.
                               </h5>
@@ -1955,17 +1955,17 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                         </section>
                         {recipientDetailsEditable ? (
                           <section
-                            className="dasti-proposal-editor-page__drawer-card"
+                            className="ds-card ds-card--muted dasti-proposal-editor-page__drawer-card"
                             aria-labelledby={recipientCardTitleId}
                           >
                             <div className="dasti-proposal-editor-page__drawer-card-header">
                               <div>
-                                <p className="dasti-proposal-editor-page__drawer-card-kicker">
+                                <p className="ds-card__eyebrow dasti-proposal-editor-page__drawer-card-kicker">
                                   Recipient
                                 </p>
                                 <h5
                                   id={recipientCardTitleId}
-                                  className="dasti-proposal-editor-page__drawer-card-title"
+                                  className="ds-card__title dasti-proposal-editor-page__drawer-card-title"
                                 >
                                   Who the letter is addressed to.
                                 </h5>
@@ -2102,17 +2102,17 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                         salutationEditable ||
                         documentTitleEditable ? (
                           <section
-                            className="dasti-proposal-editor-page__drawer-card"
+                            className="ds-card ds-card--muted dasti-proposal-editor-page__drawer-card"
                             aria-labelledby={letterDetailsCardTitleId}
                           >
                             <div className="dasti-proposal-editor-page__drawer-card-header">
                               <div>
-                                <p className="dasti-proposal-editor-page__drawer-card-kicker">
+                                <p className="ds-card__eyebrow dasti-proposal-editor-page__drawer-card-kicker">
                                   Letter details
                                 </p>
                                 <h5
                                   id={letterDetailsCardTitleId}
-                                  className="dasti-proposal-editor-page__drawer-card-title"
+                                  className="ds-card__title dasti-proposal-editor-page__drawer-card-title"
                                 >
                                   Date, subject, and opening line.
                                 </h5>

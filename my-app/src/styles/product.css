@@ -17477,3 +17477,85 @@ button.dasti-settings-signature-tool:focus-visible {
     width: 100%;
   }
 }
+
+/* DS v2 card bridge for active legacy product surfaces. */
+:where(
+    .dasti-doc-card,
+    .dasti-proposal-library-info-card,
+    .dasti-proposal-library-card,
+    .dasti-brief-card__review-item,
+    .dasti-proposal-source-summary__card,
+    .dasti-quick-start-choice,
+    .section-container
+  ).ds-card {
+  border-color: var(--border-soft);
+  border-radius: var(--radius-3);
+  background: var(--sfr);
+  box-shadow: var(--sha);
+  transition:
+    border-color var(--dur-2) var(--ez),
+    box-shadow var(--dur-2) var(--ez),
+    transform var(--dur-2) var(--ez);
+}
+
+:where(
+    .dasti-proposal-library-info-card,
+    .dasti-proposal-library-card,
+    .dasti-brief-card__review-item,
+    .dasti-proposal-source-summary__card,
+    .dasti-quick-start-choice,
+    .section-container
+  ).ds-card.ds-card--muted {
+  background: var(--sf1);
+}
+
+.section-container.ds-card[data-state="collapsed"] {
+  background: var(--sf1);
+}
+
+:where(
+    .dasti-doc-card,
+    .dasti-proposal-library-card,
+    .dasti-brief-card__review-item,
+    .dasti-quick-start-choice
+  ).ds-card.ds-card--elevated {
+  box-shadow: var(--shb);
+}
+
+:where(
+    .dasti-doc-card,
+    .dasti-proposal-library-card,
+    .dasti-quick-start-choice,
+    .section-container
+  ).ds-card[data-interactive="true"]:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shb);
+}
+
+:where(
+    .dasti-doc-card,
+    .dasti-proposal-library-card,
+    .dasti-quick-start-choice,
+    .section-container
+  ).ds-card[data-interactive="true"]:active {
+  transform: translateY(0);
+  box-shadow: var(--sha);
+}
+
+.dasti-quick-start-choice.ds-card {
+  padding: 0;
+  gap: 0;
+}
+
+.dasti-proposal-editor-page__drawer-card.ds-card {
+  padding: var(--s4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-3);
+  background: var(--sf1);
+  box-shadow: var(--sha);
+}
+
+.dasti-proposal-editor-page__drawer-card.ds-card:last-child {
+  padding-block-end: var(--s4);
+  border-bottom: 1px solid var(--border-soft);
+}
