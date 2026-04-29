@@ -87,7 +87,9 @@ function normalizeSignatureValue(value: string | undefined | null) {
     .trim();
 }
 
-function joinSignatureParts(parts: ReadonlyArray<string>) {
+function joinSignatureParts(
+  parts: ReadonlyArray<string | null | undefined>,
+) {
   return parts.map((part) => normalizeSignatureValue(part)).join("|");
 }
 
