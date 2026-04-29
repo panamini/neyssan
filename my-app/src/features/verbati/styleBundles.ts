@@ -32,7 +32,7 @@ const STYLE_BUNDLE_BASES: ReadonlyArray<{
     label: "Clean",
     description: "Tighter grid, restrained typography, quieter colour.",
     stylePreset: {
-      layout: "modernist",
+      layout: "workshop",
       typography: "expert",
       palette: "pierre",
     },
@@ -42,7 +42,7 @@ const STYLE_BUNDLE_BASES: ReadonlyArray<{
     label: "Soft",
     description: "Softer split layout with a warmer, friendlier tone.",
     stylePreset: {
-      layout: "two-column",
+      layout: "workshop",
       typography: "signature",
       palette: "sauge",
     },
@@ -52,7 +52,7 @@ const STYLE_BUNDLE_BASES: ReadonlyArray<{
     label: "Editorial",
     description: "Long reading line, serif-led hierarchy, richer accent.",
     stylePreset: {
-      layout: "editorial",
+      layout: "workshop",
       typography: "engaging",
       palette: "bordeaux",
     },
@@ -62,7 +62,7 @@ const STYLE_BUNDLE_BASES: ReadonlyArray<{
     label: "Bold",
     description: "Sharper contrast, tighter signal, stronger emphasis.",
     stylePreset: {
-      layout: "swiss",
+      layout: "workshop",
       typography: "expert",
       palette: "encre",
     },

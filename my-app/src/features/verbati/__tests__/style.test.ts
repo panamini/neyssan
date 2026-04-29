@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { resolveProposalTemplateId } from "../../../../convex/lib/proposals/renderTemplates";
 import {
+  DEFAULT_VERBATI_STYLE,
   getProposalTwinTemplateId,
   getResumeTemplateId,
   getStyleFamilyId,
+  resolveLegacyResumeRendererVariantId,
   resolveVerbatiStyle,
   sanitizePersistedVerbatiStyle,
   serializeVerbatiStyle,
@@ -12,6 +14,13 @@ import {
 } from "../style";
 
 describe("verbati style normalization", () => {
+  it("uses workshop as the default active layout", () => {
+    expect(DEFAULT_VERBATI_STYLE).toMatchObject({
+      familyId: "workshop",
+      layout: "workshop",
+    });
+  });
+
   it("normalizes only true legacy layout aliases and preserves valid semantic layouts", () => {
     expect(
       resolveVerbatiStyle({
@@ -150,6 +159,12 @@ describe("verbati style normalization", () => {
     expect(getProposalTwinTemplateId(legacyResolved)).toBe(
       getProposalTwinTemplateId(familyResolved),
     );
+    expect(resolveLegacyResumeRendererVariantId(legacyResolved)).toBe(
+      "robial",
+    );
+    expect(resolveLegacyResumeRendererVariantId(familyResolved)).toBe(
+      "robial",
+    );
   });
 
   it("resolves workshop family identity to the scaffolded paired templates", () => {
@@ -166,11 +181,14 @@ describe("verbati style normalization", () => {
     expect(getProposalTwinTemplateId(workshopStyle)).toBe(
       "workshop_proposal_margin",
     );
+    expect(resolveLegacyResumeRendererVariantId(workshopStyle)).toBe(
+      "swissminima",
+    );
   });
 
-  it("keeps workshop hidden from layout options while the feature flag is off", () => {
-    expect(
-      VERBATI_LAYOUT_OPTIONS.some((option) => option.id === "workshop"),
-    ).toBe(false);
+  it("exposes only workshop as the active layout option", () => {
+    expect(VERBATI_LAYOUT_OPTIONS.map((option) => option.id)).toEqual([
+      "workshop",
+    ]);
   });
 });
