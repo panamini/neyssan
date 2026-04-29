@@ -506,24 +506,33 @@ export function writeStoredProposalOutputDraft(
 
     if (!draft) {
       removeStoredProposalOutputDraftRaw();
-    } else if (preferSessionStorageForProposalOutputDraft) {
-      window.sessionStorage.setItem(
-        PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY,
-        fallbackRaw ?? nextRaw,
-      );
     } else {
-      window.localStorage.setItem(
-        PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
-        nextRaw,
-      );
-      preferSessionStorageForProposalOutputDraft = false;
-      hasWarnedSessionFallbackForProposalOutputDraft = false;
-      try {
-        window.sessionStorage.removeItem(
+      if (preferSessionStorageForProposalOutputDraft) {
+        const sessionRaw = fallbackRaw ?? nextRaw;
+        if (sessionRaw === null) {
+          return;
+        }
+        window.sessionStorage.setItem(
           PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY,
+          sessionRaw,
         );
-      } catch {
-        // Best-effort.
+      } else {
+        if (nextRaw === null) {
+          return;
+        }
+        window.localStorage.setItem(
+          PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+          nextRaw,
+        );
+        preferSessionStorageForProposalOutputDraft = false;
+        hasWarnedSessionFallbackForProposalOutputDraft = false;
+        try {
+          window.sessionStorage.removeItem(
+            PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY,
+          );
+        } catch {
+          // Best-effort.
+        }
       }
     }
   } catch (error) {
