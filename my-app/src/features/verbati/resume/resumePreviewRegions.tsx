@@ -11,7 +11,7 @@ import {
 export type PreviewRegionSurface = "section" | "item";
 
 type PreviewRegionProps = React.HTMLAttributes<HTMLElement> & {
-  as?: keyof JSX.IntrinsicElements;
+  as?: keyof HTMLElementTagNameMap;
   sectionType: ResumePreviewSectionType;
   sectionId?: string;
   sectionTitle?: string;
@@ -60,7 +60,7 @@ export function PreviewSectionRegion({
   surface,
   ...props
 }: PreviewRegionProps) {
-  const Component = as as keyof JSX.IntrinsicElements;
+  const Component = as as React.ElementType<React.HTMLAttributes<HTMLElement>>;
 
   return (
     <Component
@@ -86,7 +86,7 @@ export function PreviewItemRegion({
   surface,
   ...props
 }: PreviewRegionProps) {
-  const Component = as as keyof JSX.IntrinsicElements;
+  const Component = as as React.ElementType<React.HTMLAttributes<HTMLElement>>;
 
   return (
     <Component
