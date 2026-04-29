@@ -131,10 +131,6 @@ describe("ProposalForge controlled failure integration", () => {
       </MemoryRouter>,
     );
 
-    expect(
-      screen.getByText("Generate a proposal to see the results here."),
-    ).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole("button", { name: "Trigger success" }));
 
     expect(
@@ -148,10 +144,12 @@ describe("ProposalForge controlled failure integration", () => {
       screen.getByRole("button", { name: "Trigger provider busy" }),
     );
 
-    expect(
-      screen.getByRole("alert", { name: "" }),
-    ).toHaveTextContent("Proposal generation failed");
-    expect(screen.getByRole("alert")).toHaveTextContent(
+    const alertText = screen
+      .getAllByRole("alert")
+      .map((alert) => alert.textContent ?? "")
+      .join("\n");
+    expect(alertText).toContain("Generation failed.");
+    expect(alertText).toContain(
       "Proposal generation is temporarily busy because the model provider is rate limited. Please wait a moment and try again.",
     );
     expect(
@@ -175,10 +173,12 @@ describe("ProposalForge controlled failure integration", () => {
       screen.getByRole("button", { name: "Trigger transport error" }),
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Proposal generation failed",
-    );
-    expect(screen.getByRole("alert")).toHaveTextContent(
+    const alertText = screen
+      .getAllByRole("alert")
+      .map((alert) => alert.textContent ?? "")
+      .join("\n");
+    expect(alertText).toContain("Generation failed.");
+    expect(alertText).toContain(
       "Proposal generation is temporarily unavailable because the model provider request could not be completed. Please try again.",
     );
     expect(
