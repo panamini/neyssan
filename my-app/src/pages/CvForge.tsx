@@ -46,6 +46,7 @@ import {
   buildResumePrintDebugSnapshot,
   buildResumeExportSource,
   buildStyledResumePrintSource,
+  type ExportDocumentFormat,
 } from "../lib/document-export-models";
 import {
   applyHiddenSectionsToCvDocument,
@@ -564,8 +565,13 @@ export function CvForge(): JSX.Element {
       try {
         await (request.format === "pdf" || request.format === "docx"
           ? (async () => {
+              const exportFormat: ExportDocumentFormat =
+                request.format === "pdf" ? "pdf" : "docx";
+              const pdfMode =
+                request.format === "pdf" ? request.mode : undefined;
+              const isStyledPdf = pdfMode === "styled";
               const source =
-                request.format === "pdf" && request.mode === "styled"
+                isStyledPdf
                   ? buildStyledResumePrintSource({
                       currentCv: exportCurrentCv,
                       stylePreset,
@@ -580,11 +586,25 @@ export function CvForge(): JSX.Element {
                 throw new Error("Resume export source is unavailable.");
               }
 
-              if (
-                request.format === "pdf" &&
-                request.mode === "styled" &&
-                "renderSource" in source
-              ) {
+              const styledMetadata =
+                isStyledPdf && "renderSource" in source
+                  ? {
+                      resumeTypographyAudit:
+                        buildResumeTypographyAuditMetadata({
+                          cvId: String(currentCv.id),
+                          cvUrl:
+                            typeof window !== "undefined"
+                              ? window.location.href
+                              : null,
+                          rendererVariantId: source.rendererVariantId,
+                          stylePreset: source.stylePreset,
+                          previewCapture: readResumePreviewDebugCapture(),
+                          timestamp: Date.now(),
+                        }),
+                    }
+                  : undefined;
+
+              if (isStyledPdf && "renderSource" in source) {
                 const previewCapture = readResumePreviewDebugCapture();
                 const exportContext = {
                   cvId: currentCv?.id ? String(currentCv.id) : null,
@@ -608,38 +628,17 @@ export function CvForge(): JSX.Element {
 
               return exportDocumentFile({
                 kind: "resume",
-                format: request.format,
-                mode: request.format === "pdf" ? request.mode : undefined,
+                format: exportFormat,
+                mode: pdfMode,
                 data: source,
                 stylePreset: stylePreset,
                 fileNameBase:
-                  request.format === "docx"
+                  exportFormat === "docx"
                     ? "Resume - Editable"
-                    : request.mode === "ats"
+                    : pdfMode === "ats"
                       ? "Resume - ATS"
                       : "Resume - Styled",
-                metadata:
-                  request.format === "pdf" && request.mode === "styled"
-                    ? {
-                        resumeTypographyAudit:
-                          buildResumeTypographyAuditMetadata(
-                            currentCv
-                              ? {
-                                  cvId: String(currentCv.id),
-                                  cvUrl:
-                                    typeof window !== "undefined"
-                                      ? window.location.href
-                                      : null,
-                                  rendererVariantId: source.rendererVariantId,
-                                  stylePreset: source.stylePreset,
-                                  previewCapture:
-                                    readResumePreviewDebugCapture(),
-                                  timestamp: Date.now(),
-                                }
-                              : null,
-                          ),
-                      }
-                    : undefined,
+                metadata: styledMetadata,
               });
             })()
           : hasTrustedExport && authoritativeResume
