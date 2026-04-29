@@ -192,7 +192,7 @@ describe("VerbatiCvPreviewPanel", () => {
   it("keeps the small live render on the selected style without layout slideshow arrows", () => {
     render(<VerbatiCvPreviewPanel />);
 
-    expect(screen.getByText("Preview layout: swiss")).toBeInTheDocument();
+    expect(screen.getByText("Preview layout: workshop")).toBeInTheDocument();
     expect(screen.getByText("Preview title: Protection Guard")).toBeInTheDocument();
     expect(screen.getByText("Preview projects: 1")).toBeInTheDocument();
     expect(
@@ -250,16 +250,17 @@ describe("VerbatiCvPreviewPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open text styles" }));
 
     expect(
-      screen.getByRole("button", { name: "Civic Correspondence" }),
+      screen.getByRole("menuitemradio", { name: "Civic Correspondence" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Quiet Editorial" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: "Quiet Editorial" })).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Open layout controls" }),
     );
 
-    expect(screen.getByRole("button", { name: "Volk Register" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Swiss Minima" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: "Workshop" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitemradio", { name: "Volk Register" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitemradio", { name: "Swiss Minima" })).not.toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -283,12 +284,12 @@ describe("VerbatiCvPreviewPanel", () => {
     render(<VerbatiCvPreviewPanel hostMode="workspace" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Open text styles" }));
-    fireEvent.click(screen.getByRole("button", { name: "Soft Serif" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Soft Serif" }));
 
     fireEvent.click(
       screen.getByRole("button", { name: "Open layout controls" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Workshop" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Workshop" }));
 
     fireEvent.click(
       screen.getByRole("button", { name: "Open palette controls" }),

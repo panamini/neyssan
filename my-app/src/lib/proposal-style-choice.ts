@@ -62,12 +62,12 @@ const PROPOSAL_STYLE_DEFINITIONS: Record<
     label: "Formal",
     description: "Sharper structure and a more composed executive tone.",
     stylePreset: resolveVerbatiStyle({
-      layout: "quire",
+      layout: "workshop",
       typography: "expert",
       palette: "pierre",
     }),
     templateId: getProposalTwinTemplateId({
-      layout: "quire",
+      layout: "workshop",
       typography: "expert",
       palette: "pierre",
     }),
@@ -76,12 +76,12 @@ const PROPOSAL_STYLE_DEFINITIONS: Record<
     label: "Warm",
     description: "Friendlier editorial pacing with softer, more human emphasis.",
     stylePreset: resolveVerbatiStyle({
-      layout: "editorial",
+      layout: "workshop",
       typography: "engaging",
       palette: "bordeaux",
     }),
     templateId: getProposalTwinTemplateId({
-      layout: "editorial",
+      layout: "workshop",
       typography: "engaging",
       palette: "bordeaux",
     }),
@@ -90,12 +90,12 @@ const PROPOSAL_STYLE_DEFINITIONS: Record<
     label: "Technical",
     description: "Denser signal, stronger structure, and a more precise grid.",
     stylePreset: resolveVerbatiStyle({
-      layout: "modernist",
+      layout: "workshop",
       typography: "expert",
       palette: "encre",
     }),
     templateId: getProposalTwinTemplateId({
-      layout: "modernist",
+      layout: "workshop",
       typography: "expert",
       palette: "encre",
     }),
@@ -104,12 +104,12 @@ const PROPOSAL_STYLE_DEFINITIONS: Record<
     label: "Balanced",
     description: "Calm default with even hierarchy and broad readability.",
     stylePreset: resolveVerbatiStyle({
-      layout: "swiss",
+      layout: "workshop",
       typography: "geist-baskervville",
       palette: "pierre",
     }),
     templateId: getProposalTwinTemplateId({
-      layout: "swiss",
+      layout: "workshop",
       typography: "geist-baskervville",
       palette: "pierre",
     }),

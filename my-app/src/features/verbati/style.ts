@@ -18,7 +18,6 @@ import {
   serializeVerbatiThemeVars,
   type VerbatiPaletteOption,
 } from "../../lib/layout/documentAppearance";
-import { isWorkshopFamilyEnabled } from "../../lib/flags";
 import {
   getStyleFamilyProposalTemplateId,
   getStyleFamilyResumeTemplateId,
@@ -45,11 +44,13 @@ type LayoutOption = {
 type TypographyOption = VerbatiFontPairOption;
 
 export const DEFAULT_VERBATI_STYLE: VerbatiStylePreset = {
-  familyId: "swiss",
-  layout: "swiss",
+  familyId: "workshop",
+  layout: "workshop",
   typography: "geist-baskervville",
   palette: "sauge",
 };
+
+const ACTIVE_VERBATI_LAYOUT_FAMILIES = new Set<StyleFamilyId>(["workshop"]);
 
 export const VERBATI_LAYOUT_OPTIONS: LayoutOption[] = STYLE_FAMILY_DEFINITIONS.map(
   (family) => ({
@@ -57,7 +58,7 @@ export const VERBATI_LAYOUT_OPTIONS: LayoutOption[] = STYLE_FAMILY_DEFINITIONS.m
     name: family.label,
     description: family.description,
   }),
-).filter((option) => option.id !== "workshop" || isWorkshopFamilyEnabled());
+).filter((option) => ACTIVE_VERBATI_LAYOUT_FAMILIES.has(option.id));
 
 export const VERBATI_TYPOGRAPHY_OPTIONS: TypographyOption[] = [
   ...VERBATI_FONT_PAIR_OPTIONS,

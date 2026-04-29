@@ -162,34 +162,17 @@ describe("SettingsPage preview controls", () => {
     });
   });
 
-  it("switches style cards and refreshes the preview badge", async () => {
-    const user = userEvent.setup();
+  it("shows only auto and workshop style cards", () => {
     const { container } = render(<SettingsPage />);
     const previewBadge = () =>
       container.querySelector(".dasti-settings-hero-preview__style-badge");
-    const editorialStyleButton = screen
-      .getAllByRole("button", { name: /Editorial/ })
-      .find((element) =>
-        element.className.includes("dasti-settings-style-card"),
-      );
+    const styleCardLabels = Array.from(
+      container.querySelectorAll(".dasti-settings-style-card__label"),
+    ).map((element) => element.textContent);
+    const uniqueStyleCardLabels = Array.from(new Set(styleCardLabels));
 
-    expect(previewBadge()).toHaveTextContent("Swiss");
-    expect(editorialStyleButton).toBeTruthy();
-
-    await user.click(editorialStyleButton!);
-
-    await waitFor(() => {
-      expect(savePresetMock).toHaveBeenCalled();
-    });
-
-    const lastCall = getLastSavePresetPayload();
-    expect(lastCall).toMatchObject({
-      slot: 1,
-      preset: expect.objectContaining({
-        styleChoice: "warm",
-      }),
-    });
-    expect(previewBadge()).toHaveTextContent("Editorial");
+    expect(previewBadge()).toHaveTextContent("Workshop");
+    expect(uniqueStyleCardLabels).toEqual(["Auto", "Workshop"]);
   });
 
   it("saves workshop as canonical verbatiStyle on the preset slot", async () => {
@@ -231,8 +214,10 @@ describe("SettingsPage preview controls", () => {
     const { container } = render(<SettingsPage />);
 
     expect(
-      container.querySelectorAll(".dasti-settings-style-card").length,
-    ).toBeGreaterThanOrEqual(3);
+      Array.from(
+        container.querySelectorAll(".dasti-settings-style-card__label"),
+      ).map((element) => element.textContent),
+    ).toEqual(["Auto", "Auto", "Workshop", "Workshop"]);
   });
 
   it("updates the hero preview tilt when the pointer moves", async () => {
