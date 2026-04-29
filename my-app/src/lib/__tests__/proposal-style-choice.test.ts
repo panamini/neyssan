@@ -37,7 +37,7 @@ describe("proposal-style-choice pairing", () => {
       resolveProposalStyleChoiceFromRenderState({
         stylePreset: {
           familyId: technical.stylePreset.familyId,
-          layout: "swiss",
+          layout: "workshop",
           typography: technical.stylePreset.typography,
           palette: technical.stylePreset.palette,
         },
