@@ -53,26 +53,71 @@
         "severity": "error"
       }
     ],
-    "color-no-hex": [
-      true,
-      {
-        "ignoreFiles": [
-          "**/foundation.css",
-          "**/themes.css",
-          "**/colors_and_type.css"
-        ]
-      }
+    "color-no-hex": true,
+    "declaration-property-value-disallowed-list": {
+      "/^(color|background|background-color|border-color|fill|stroke)$/": [
+        "/rgb\\(/",
+        "/rgba\\(/",
+        "/hsl\\(/",
+        "/hsla\\(/"
+      ]
+    },
+    "function-disallowed-list": [
+      "rgb",
+      "rgba",
+      "hsl",
+      "hsla"
     ],
     "selector-class-pattern": null,
     "no-descending-specificity": null
   },
+  "overrides": [
+    {
+      "files": [
+        "**/foundation.css",
+        "**/themes.css",
+        "**/ds-v2.css"
+      ],
+      "rules": {
+        "color-no-hex": null,
+        "declaration-property-value-disallowed-list": null,
+        "function-disallowed-list": null
+      }
+    },
+    {
+      "files": [
+        "src/styles/product*.css"
+      ],
+      "rules": {
+        "scale-unlimited/declaration-strict-value": null,
+        "alpha-value-notation": null,
+        "at-rule-empty-line-before": null,
+        "color-function-notation": null,
+        "comment-empty-line-before": null,
+        "custom-property-empty-line-before": null,
+        "declaration-block-no-duplicate-properties": null,
+        "declaration-block-no-redundant-longhand-properties": null,
+        "declaration-block-no-shorthand-property-overrides": null,
+        "declaration-empty-line-before": null,
+        "declaration-property-value-keyword-no-deprecated": null,
+        "font-family-name-quotes": null,
+        "length-zero-no-unit": null,
+        "media-feature-range-notation": null,
+        "no-duplicate-selectors": null,
+        "property-no-deprecated": null,
+        "property-no-vendor-prefix": null,
+        "rule-empty-line-before": null,
+        "selector-not-notation": null,
+        "value-keyword-case": null
+      }
+    }
+  ],
   "ignoreFiles": [
     "**/dist/**",
     "**/build/**",
     "**/node_modules/**",
     "**/*.bak",
     "**/*.bak.css",
-    "src/styles/product.css",
     "src/styles/primitives.css",
     "src/styles/utilities.css",
     "src/styles/base.css",

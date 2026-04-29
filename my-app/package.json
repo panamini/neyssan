@@ -15,7 +15,7 @@
     "test": "vitest --exclude pdf-ingest/*",
     "test:watch": "vitest",
     "test:golden": "vitest --run -t \"Golden set NER fusion\"",
-    "lint:css": "stylelint 'src/styles/ds-v2.css' 'src/components/ds/**/*.css' --allow-empty-input",
+    "lint:css": "stylelint 'src/styles/ds-v2.css' 'src/styles/product*.css' 'src/components/ds/**/*.css' --allow-empty-input",
     "pw:version": "playwright --version",
     "pw:install": "playwright install chromium",
     "pw:test": "playwright test",
