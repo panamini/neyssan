@@ -6,8 +6,17 @@ const themesCssPath = resolve(process.cwd(), "src/styles/themes.css");
 const themesCss = readFileSync(themesCssPath, "utf8");
 const appPath = resolve(process.cwd(), "src/App.tsx");
 const appSource = readFileSync(appPath, "utf8");
-const productCssPath = resolve(process.cwd(), "src/styles/product.css");
-const productCss = readFileSync(productCssPath, "utf8");
+const productCssPaths = [
+  "src/styles/product.css",
+  "src/styles/product-proposal.css",
+  "src/styles/product-libraries.css",
+  "src/styles/product-jobs.css",
+  "src/styles/product-cv.css",
+  "src/styles/product-settings.css",
+];
+const productCss = productCssPaths
+  .map((stylePath) => readFileSync(resolve(process.cwd(), stylePath), "utf8"))
+  .join("\n");
 
 describe("theme palette CSS contracts", () => {
   it("keeps dark palette tokens active when the palette class is inside the dark root", () => {

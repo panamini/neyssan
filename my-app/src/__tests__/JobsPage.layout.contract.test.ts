@@ -6,10 +6,17 @@ const jobsPageSource = readFileSync(
   resolve(process.cwd(), "src/pages/JobsPage.tsx"),
   "utf8",
 );
-const productCss = readFileSync(
-  resolve(process.cwd(), "src/styles/product.css"),
-  "utf8",
-);
+const productCssPaths = [
+  "src/styles/product.css",
+  "src/styles/product-proposal.css",
+  "src/styles/product-libraries.css",
+  "src/styles/product-jobs.css",
+  "src/styles/product-cv.css",
+  "src/styles/product-settings.css",
+];
+const productCss = productCssPaths
+  .map((stylePath) => readFileSync(resolve(process.cwd(), stylePath), "utf8"))
+  .join("\n");
 
 describe("JobsPage collapsed layout contract", () => {
   it("renders selected job detail inline after the active row at the collapsed breakpoint", () => {
