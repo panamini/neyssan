@@ -68,9 +68,10 @@ export function writeStoredProposalComposeDraft(
     if (!draft) {
       window.localStorage.removeItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY);
     } else {
+      const serializedDraft = JSON.stringify(draft);
       window.localStorage.setItem(
         PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-        nextRaw,
+        serializedDraft,
       );
     }
   } catch {
