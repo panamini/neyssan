@@ -92,6 +92,7 @@ pnpm add -D stylelint stylelint-config-standard stylelint-declaration-strict-val
 | **DS-7** | `chore: remove .bak files and dead duplicates` | Remove `*.bak`, `COLORPALETTE*.HTML`, `proposainputform.bak`, `ProfileForm copy.md`. |
 | **DS-8** | `test(ds-v2): playwright visual baselines for SKELETON-equivalent stories` | `e2e/ds-v2.spec.ts`. |
 | **DS-9** | `feat(ds-v2): Sheet primitive (right drawer + bottom sheet) + migrate SkillsDrawer/AddSectionBottomSheet` | New `src/components/ui/sheet.tsx`, append CSS from `SKELETON.html` §06b to `src/styles/ds-v2.css`, refactor `src/components/structured-blocks/SkillsDrawer.tsx` and `src/components/AddSectionBottomSheet.tsx` to use `<Sheet>`. **Portal to `document.body`** to escape stacking contexts. See plan §4.7b. |
+| **DS-10** | `feat(ds-v2): Menu primitive (dropdown anchored to trigger) + migrate ad-hoc menus` | New `src/components/ui/menu.tsx`, append CSS from `SKELETON.html` §06c to `src/styles/ds-v2.css`, migrate `LibraryFilterMenu.tsx` and inline popover/menu markup in `ProposalDisplay.tsx`, `ProposalComposeToolbar.tsx`, `SectionEditor.tsx`, `ProposalArtifactInspector.tsx`, `EmbeddedStyleInspector.tsx`. **Portal to `document.body`**. See plan §4.7c. |
 
 Dependencies: DS-2 → DS-3 → DS-4 → DS-5 → DS-6 → DS-7 → DS-8.
 
