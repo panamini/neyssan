@@ -1,5 +1,6 @@
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import { resolveProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
+import { resolveProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 import { getVerbatiTypographyFamilies, resolveVerbatiStyle } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import { getProposalDocumentTypography } from "./proposal-document-typography";
@@ -68,8 +69,9 @@ export function buildProposalFontDebugSnapshot(args: {
 }): ProposalFontDebugSnapshot {
   const stylePreset = resolveVerbatiStyle(args.stylePreset);
   const typographyFamilies = getVerbatiTypographyFamilies(stylePreset);
+  const voicePreset = resolveProposalVoicePreset(args.voicePreset);
   const documentTypography = getProposalDocumentTypography(
-    args.voicePreset ?? null,
+    voicePreset ?? null,
     stylePreset,
   );
 
