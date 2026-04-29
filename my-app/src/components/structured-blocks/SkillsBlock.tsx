@@ -161,7 +161,7 @@ export function SkillsBlock({
               handleAdd(input);
             }
           }}
-          className="flex-grow px-2 py-1 bg-transparent border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+          className="flex-grow px-2 py-1 bg-transparent border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
         />
         <button
           type="button"

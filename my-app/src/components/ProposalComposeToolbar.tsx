@@ -17,6 +17,8 @@ import {
   type ProposalGenerateButtonVisualState,
 } from "./ProposalGenerateGlyph";
 import { SaveIndicator, type SaveStatus } from "./ui/SaveIndicator";
+import { Menu, type MenuSection } from "./ui/menu";
+import { ToneBadge, type ToneBadgeTone } from "./ui/tone-badge";
 import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 import type { FormValues } from "./ProposalInputForm.schemas";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
@@ -52,6 +54,7 @@ type ToneOption = {
   label: string;
   description: string;
   Icon: typeof Wand2;
+  tone?: ToneBadgeTone;
 };
 
 const TONE_OPTIONS: ToneOption[] = [
@@ -60,24 +63,28 @@ const TONE_OPTIONS: ToneOption[] = [
     label: getVoicePresetDisplayLabel(null),
     description: "System picks the tone.",
     Icon: Wand2,
+    tone: "auto",
   },
   {
     id: "engaging",
     label: getVoicePresetDisplayLabel("engaging"),
     description: "Warm and approachable.",
     Icon: Feather,
+    tone: "warm",
   },
   {
     id: "signature",
     label: getVoicePresetDisplayLabel("signature"),
     description: "Natural and credible.",
     Icon: PenNib,
+    tone: "natural",
   },
   {
     id: "expert",
     label: getVoicePresetDisplayLabel("expert"),
     description: "Formal and composed.",
     Icon: Stamp,
+    tone: "formal",
   },
 ];
 
@@ -133,58 +140,34 @@ export function ProposalComposeToolbar({
   jobHref = null,
 }: ProposalComposeToolbarProps): JSX.Element {
   const rootRef = React.useRef<HTMLDivElement>(null);
-  const [isToneMenuOpen, setIsToneMenuOpen] = React.useState(false);
 
   const activeOption =
     TONE_OPTIONS.find((option) =>
       option.id === null ? value === null : option.id === value,
     ) ?? TONE_OPTIONS[0];
   const hasSaveIndicator = Boolean(styleStatusLabel || saveStatus !== "idle");
-
-  React.useEffect(() => {
-    if (!collapsed || !isToneMenuOpen) return;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      if (target && !rootRef.current?.contains(target)) {
-        setIsToneMenuOpen(false);
-      }
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsToneMenuOpen(false);
-      }
-    };
-
-    window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("keydown", handleEscape);
-    return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [collapsed, isToneMenuOpen]);
-
-  React.useEffect(() => {
-    if (!collapsed) {
-      setIsToneMenuOpen(false);
-    }
-  }, [collapsed]);
-
-  const toggleToneMenu = React.useCallback(() => {
-    if (disabled) return;
-    if (collapsed) {
-      setIsToneMenuOpen((current) => !current);
-    }
-  }, [collapsed, disabled]);
-
-  const handleToneSelect = React.useCallback(
-    (preset: FormValues["voicePreset"] | null) => {
-      onChange(preset);
-      setIsToneMenuOpen(false);
+  const toneMenuSections: MenuSection[] = [
+    {
+      items: TONE_OPTIONS.map((option) => {
+        const active = option.id === null ? value === null : option.id === value;
+        return {
+          id: option.id ?? "auto",
+          role: "menuitemradio",
+          selected: active,
+          icon: <option.Icon size={15} strokeWidth={1.7} />,
+          label: option.tone ? (
+            <ToneBadge tone={option.tone}>{option.label}</ToneBadge>
+          ) : (
+            option.label
+          ),
+          description: option.description,
+          disabled,
+          onSelect: () => onChange(option.id),
+        };
+      }),
     },
-    [onChange],
-  );
+  ];
+
   const handleClearCv = React.useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault();
@@ -213,7 +196,6 @@ export function ProposalComposeToolbar({
           ? "dasti-compose-toolbar--collapsed-anchor-container"
           : "",
         transitionState ? `dasti-compose-toolbar--${transitionState}` : "",
-        isToneMenuOpen ? "dasti-compose-toolbar--drawer-open" : "",
         compact ? "dasti-compose-toolbar--compact" : "",
         !collapsed && !hasCollapseControl
           ? "dasti-compose-toolbar--no-collapse-anchor"
@@ -254,79 +236,30 @@ export function ProposalComposeToolbar({
               </Link>
             ) : null}
             <span className="dasti-compose-toolbar__tone-anchor">
-              <button
-                type="button"
-                className={[
-                  "dasti-compose-toolbar__tone-option",
-                  "dasti-compose-toolbar__tone-option--collapsed",
-                  "dasti-compose-toolbar__tone-option--active",
-                  isToneMenuOpen
-                    ? "dasti-compose-toolbar__tone-option--popover-open"
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                onClick={toggleToneMenu}
-                aria-expanded={isToneMenuOpen}
-                aria-haspopup="dialog"
-                aria-label={`Tone of voice ${activeOption.label}`}
-                data-toolbar-tooltip={
-                  isToneMenuOpen ? undefined : activeOption.label
+              <Menu
+                ariaLabel="Tone of voice"
+                align="end"
+                sections={toneMenuSections}
+                trigger={
+                  <button
+                    type="button"
+                    className={[
+                      "dasti-compose-toolbar__tone-option",
+                      "dasti-compose-toolbar__tone-option--collapsed",
+                      "dasti-compose-toolbar__tone-option--active",
+                    ].join(" ")}
+                    aria-label={`Tone of voice ${activeOption.label}`}
+                    data-toolbar-tooltip={activeOption.label}
+                    disabled={disabled}
+                  >
+                    <activeOption.Icon
+                      size={15}
+                      strokeWidth={1.7}
+                      aria-hidden="true"
+                    />
+                  </button>
                 }
-                disabled={disabled}
-              >
-                <activeOption.Icon
-                  size={15}
-                  strokeWidth={1.7}
-                  aria-hidden="true"
-                />
-              </button>
-
-              {isToneMenuOpen ? (
-                <div
-                  className="dasti-compose-toolbar__tone-popover dasti-compose-toolbar__tone-popover--collapsed dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
-                  role="dialog"
-                  aria-label="Tone of voice"
-                >
-                  <div className="dasti-compose-toolbar__tone-list">
-                    {TONE_OPTIONS.map((option) => {
-                      const active =
-                        option.id === null
-                          ? value === null
-                          : option.id === value;
-                      return (
-                        <button
-                          key={option.id ?? "auto"}
-                          type="button"
-                          className={[
-                            "dasti-compose-toolbar__tone-option",
-                            "dasti-compose-toolbar__tone-option--drawer",
-                            active
-                              ? "dasti-compose-toolbar__tone-option--active"
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                          onClick={() => handleToneSelect(option.id)}
-                          aria-pressed={active}
-                          aria-label={option.label}
-                          disabled={disabled}
-                        >
-                          <option.Icon
-                            size={15}
-                            strokeWidth={1.7}
-                            aria-hidden="true"
-                          />
-                          <ToneTooltip
-                            className="dasti-compose-toolbar__tooltip--drawer"
-                            title={option.label}
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
+              />
             </span>
             {onGenerateFromBrief ? (
               <button

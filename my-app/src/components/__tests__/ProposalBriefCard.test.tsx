@@ -164,9 +164,12 @@ describe("resolveProposalBriefCardTitle", () => {
     const card = within(keywordsCard as HTMLElement);
     expect(keywordsCard).toHaveAttribute("data-state", "warning");
     expect(card.getByText("Check")).toHaveClass(
-      "dasti-pill",
-      "dasti-pill--warning",
+      "ds-status",
+      "ds-status--warning",
     );
+    expect(
+      card.getByText("Check").querySelector(".ds-status__dot"),
+    ).toBeInTheDocument();
     expect(card.getByRole("button", { name: "Keep" })).toHaveClass(
       "dasti-button",
       "dasti-button--sm",
@@ -205,9 +208,12 @@ describe("resolveProposalBriefCardTitle", () => {
 
     const card = within(summaryCard as HTMLElement);
     expect(card.getByText("Saved")).toHaveClass(
-      "dasti-pill",
-      "dasti-pill--success",
+      "ds-status",
+      "ds-status--neutral",
     );
+    expect(
+      card.getByText("Saved").querySelector(".ds-status__dot"),
+    ).toBeInTheDocument();
     expect(card.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
   });
 

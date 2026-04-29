@@ -27,7 +27,9 @@ describe("QuickStartChoiceCard", () => {
       screen.getByRole("button", { name: /^Capture the role\b/i }),
     ).toHaveAttribute("aria-pressed", "true");
     const dialog = screen.getByRole("dialog", { name: "Capture the role" });
-    expect(within(dialog).getByRole("link", { name: "Install extension" })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("link", { name: "Install extension" }),
+    ).toBeInTheDocument();
     expect(container.querySelector(".dasti-quick-start-choice__expanded")).toBeNull();
   });
 });

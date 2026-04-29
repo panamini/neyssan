@@ -213,7 +213,7 @@ export function LanguagesModal({
                     ref={(node) => {
                       inputRefs.current[String(row.id ?? `row-${idx}`)] = node;
                     }}
-                    className="flex-1 min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="flex-1 min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                     placeholder="Language name"
                     value={row.name ?? ""}
                     onChange={(e) => updateRow(idx, { name: e.target.value })}

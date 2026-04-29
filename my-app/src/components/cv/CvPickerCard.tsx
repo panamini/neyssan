@@ -40,23 +40,23 @@ export function CvPickerCard({
   const chooserDateSource = option.updatedAt ?? option.createdAt ?? null;
   const chooserDate = formatUiDate(chooserDateSource);
   const cardClassName = clsx(
-    "dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser dasti-doc-card--cv-library",
+    "ds-card dasti-doc-card dasti-doc-card--library dasti-doc-card--chooser dasti-doc-card--cv-library",
     compact && "dasti-doc-card--compact",
-    selected && "dasti-doc-card--selected",
+    selected && "ds-card--elevated dasti-doc-card--selected",
   );
   const footerClassName = clsx(
-    "dasti-doc-card__footer dasti-doc-card__footer--chooser dasti-doc-card__footer--stamp-only",
+    "ds-card__footer dasti-doc-card__footer dasti-doc-card__footer--chooser dasti-doc-card__footer--stamp-only",
     onAction && "dasti-doc-card__footer--chooser-action",
   );
   const cardBody = (
     <div className="dasti-doc-card__stack">
       <div className="dasti-doc-card__header">
         <div className="dasti-doc-card__title-frame">
-          <h3 className="dasti-doc-card__title">{option.title}</h3>
+          <h3 className="ds-card__title dasti-doc-card__title">{option.title}</h3>
         </div>
       </div>
 
-      <div className="dasti-doc-card__meta">
+      <div className="ds-card__body dasti-doc-card__meta">
         {formatCvDisplaySubtitle({
           title: option.title,
           profileName: option.profileName,
@@ -92,6 +92,7 @@ export function CvPickerCard({
       <button
         type="button"
         className={cardClassName}
+        data-interactive="true"
         aria-pressed={selected}
         onClick={() => onSelect(option.id)}
       >

@@ -214,7 +214,6 @@ export function CoverLetterStartSurface({
                     </div>
                   }
                   className="dasti-quick-start-sheet__choice-card"
-                  expandedPlacement="centered"
                   primaryAction
                 />
                 <QuickStartChoiceCard

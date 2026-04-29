@@ -15,6 +15,7 @@ import {
   X,
 } from "@/lib/icons";
 import { ProposalColorPickerPopover } from "./ProposalColorPickerPopover";
+import { Menu } from "./ui/menu";
 import { SaveIndicator, type SaveStatus } from "./ui/SaveIndicator";
 import { DOCUMENT_ZOOM_STEPS } from "../lib/document-stage";
 import {
@@ -54,7 +55,7 @@ type SavedProposalForgeToolbarPreviewProps = {
   saveStatus?: SaveStatus;
 };
 
-type DrawerId = "zoom" | "layout" | "typography" | "color" | null;
+type DrawerId = "zoom" | "color" | null;
 
 export function SavedProposalForgeToolbarPreview({
   mode,
@@ -295,135 +296,46 @@ export function SavedProposalForgeToolbarPreview({
             <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider dasti-saved-proposal-forge-toolbar-preview__style-divider" />
 
             <span className="dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--layout">
-              <button
-                type="button"
-                className={[
-                  "dasti-icon-button",
-                  openDrawer === "layout" ? "dasti-icon-button--active" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                aria-pressed={openDrawer === "layout"}
-                aria-expanded={openDrawer === "layout"}
-                aria-haspopup="dialog"
-                onClick={() => handleToggleDrawer("layout")}
-                aria-label={`Layout ${activeLayoutOption.name}`}
-                data-toolbar-tooltip={
-                  openDrawer === "layout" ? undefined : activeLayoutOption.name
+              <Menu
+                ariaLabel="Layout options"
+                align="end"
+                sections={[
+                  {
+                    items: VERBATI_LAYOUT_OPTIONS.map((option) => ({
+                      id: option.id,
+                      label: option.name,
+                      description: option.description,
+                      icon: <Layout size={14} strokeWidth={1.8} />,
+                      role: "menuitemradio",
+                      selected: option.id === activeLayoutOption.id,
+                      onSelect: () => onLayoutChange(option.id),
+                    })),
+                  },
+                ]}
+                trigger={
+                  <button
+                    type="button"
+                    className="dasti-icon-button"
+                    aria-label={`Layout ${activeLayoutOption.name}`}
+                    data-toolbar-tooltip={activeLayoutOption.name}
+                  >
+                    <Layout size={14} strokeWidth={1.8} aria-hidden="true" />
+                  </button>
                 }
-              >
-                <Layout size={14} strokeWidth={1.8} aria-hidden="true" />
-              </button>
-
-              {openDrawer === "layout" ? (
-                <div
-                  className="dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-saved-proposal-forge-toolbar-preview__drawer dasti-saved-proposal-forge-toolbar-preview__drawer--center dasti-saved-proposal-forge-toolbar-preview__drawer--layout"
-                  role="dialog"
-                  aria-label="Layout options"
-                >
-                  {VERBATI_LAYOUT_OPTIONS.map((option) => {
-                    const active = option.id === activeLayoutOption.id;
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        className={[
-                          "dasti-proposal-chrome-option",
-                          active ? "dasti-proposal-chrome-option--active" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        aria-pressed={active}
-                        onClick={() => {
-                          onLayoutChange(option.id);
-                          setOpenDrawer(null);
-                        }}
-                      >
-                        <span
-                          className="dasti-proposal-chrome-option__icon"
-                          aria-hidden="true"
-                        >
-                          <Layout size={14} strokeWidth={1.8} />
-                        </span>
-                        <span className="dasti-proposal-chrome-option__copy">
-                          <span className="dasti-proposal-chrome-option__title">
-                            {option.name}
-                          </span>
-                          <span className="dasti-proposal-chrome-option__description">
-                            {option.description}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
+              />
             </span>
 
             <span className="dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--style">
-              <button
-                type="button"
-                className={[
-                  "dasti-artifact-inspector__action",
-                  "dasti-artifact-inspector__action--style-trigger",
-                  openDrawer === "typography"
-                    ? "dasti-artifact-inspector__action--active"
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                aria-pressed={openDrawer === "typography"}
-                aria-expanded={openDrawer === "typography"}
-                aria-haspopup="dialog"
-                onClick={() => handleToggleDrawer("typography")}
-                aria-label="Open text styles"
-                data-toolbar-tooltip={
-                  openDrawer === "typography" ? undefined : "Text"
-                }
-              >
-                <span
-                  className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
-                  aria-hidden="true"
-                  style={{
-                    fontFamily: activeTypographyOption.headingFamily,
-                    fontWeight:
-                      activeTypographyOption.id === "expert" ? 500 : 600,
-                  }}
-                >
-                  Aa
-                </span>
-              </button>
-
-              {openDrawer === "typography" ? (
-                <div
-                  className="dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack dasti-saved-proposal-forge-toolbar-preview__drawer dasti-saved-proposal-forge-toolbar-preview__drawer--center dasti-saved-proposal-forge-toolbar-preview__drawer--style"
-                  role="dialog"
-                  aria-label="Text styles"
-                >
-                  {VERBATI_TYPOGRAPHY_OPTIONS.map((option) => {
-                    const active = typographyValue === option.id;
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        className={[
-                          "dasti-artifact-inspector__action",
-                          "dasti-artifact-inspector__action--drawer",
-                          active
-                            ? "dasti-artifact-inspector__action--active"
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        aria-pressed={active}
-                        onClick={() => {
-                          onTypographyChange(option.id);
-                          setOpenDrawer(null);
-                        }}
-                        aria-label={option.name}
-                        data-toolbar-tooltip={option.name}
-                        data-toolbar-tooltip-placement="inline-end"
-                      >
+              <Menu
+                ariaLabel="Text styles"
+                align="end"
+                sections={[
+                  {
+                    items: VERBATI_TYPOGRAPHY_OPTIONS.map((option) => ({
+                      id: option.id,
+                      ariaLabel: option.name,
+                      label: option.name,
+                      icon: (
                         <span
                           className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
                           aria-hidden="true"
@@ -434,11 +346,34 @@ export function SavedProposalForgeToolbarPreview({
                         >
                           Aa
                         </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
+                      ),
+                      role: "menuitemradio",
+                      selected: typographyValue === option.id,
+                      onSelect: () => onTypographyChange(option.id),
+                    })),
+                  },
+                ]}
+                trigger={
+                  <button
+                    type="button"
+                    className="dasti-artifact-inspector__action dasti-artifact-inspector__action--style-trigger"
+                    aria-label="Open text styles"
+                    data-toolbar-tooltip="Text"
+                  >
+                    <span
+                      className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
+                      aria-hidden="true"
+                      style={{
+                        fontFamily: activeTypographyOption.headingFamily,
+                        fontWeight:
+                          activeTypographyOption.id === "expert" ? 500 : 600,
+                      }}
+                    >
+                      Aa
+                    </span>
+                  </button>
+                }
+              />
             </span>
 
             <span className="dasti-saved-proposal-forge-toolbar-preview__anchor dasti-saved-proposal-forge-toolbar-preview__anchor--color">

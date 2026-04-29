@@ -9,7 +9,7 @@ describe("ProposalArtifactInspector", () => {
     vi.restoreAllMocks();
   });
 
-  it("opens the style drawer as a downward menu and uses shared toolbar tooltip attributes", async () => {
+  it("opens style options through the shared menu primitive", async () => {
     const user = userEvent.setup();
 
     render(
@@ -35,15 +35,14 @@ describe("ProposalArtifactInspector", () => {
     await user.click(styleTrigger);
 
     expect(
-      screen.getByRole("dialog", { name: "Style options" }),
+      screen.getByRole("menu", { name: "Style options" }),
     ).toBeInTheDocument();
-    expect(styleTrigger).not.toHaveAttribute("data-toolbar-tooltip");
-    expect(colorTrigger).not.toHaveAttribute("data-toolbar-tooltip");
-    const swissOption = screen.getByRole("button", { name: "Swiss" });
-    expect(swissOption).toHaveAttribute(
-      "data-toolbar-tooltip-placement",
-      "inline-end",
-    );
+    expect(styleTrigger).toHaveAttribute("aria-haspopup", "menu");
+    expect(styleTrigger).toHaveAttribute("aria-expanded", "true");
+    expect(colorTrigger).toHaveAttribute("data-toolbar-tooltip", "Colors");
+    expect(
+      screen.getByRole("menuitemradio", { name: "Swiss" }),
+    ).toHaveAttribute("aria-checked", "true");
   });
 
   it("reopens the custom color picker directly when a custom accent is active", async () => {

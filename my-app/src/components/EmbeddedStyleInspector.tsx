@@ -1,5 +1,6 @@
 import React from "react";
 import { ColorWheel, Layout, Wand2 } from "@/lib/icons";
+import { Menu } from "./ui/menu";
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import type { VerbatiStyleBundleId } from "../../convex/lib/proposals/styleSuggestions";
 import { ProposalColorPickerPopover } from "./ProposalColorPickerPopover";
@@ -256,87 +257,59 @@ export function EmbeddedStyleInspector({
             aria-label="Text styles"
           >
             <span className="dasti-artifact-inspector__section-label">Text</span>
-            <button
-              type="button"
-              className={[
-                "dasti-artifact-inspector__action",
-                "dasti-artifact-inspector__action--style-trigger",
-                activeDrawer === "typography"
-                  ? "dasti-artifact-inspector__action--active"
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              aria-label="Open text styles"
-              aria-expanded={activeDrawer === "typography"}
-              aria-haspopup="dialog"
-              onClick={() => toggleDrawer("typography")}
-              disabled={readOnly}
-            >
-              <span
-                className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
-                aria-hidden="true"
-                style={{
-                  fontFamily: activeTypographyOption.headingFamily,
-                  fontWeight:
-                    activeTypographyOption.id === "expert" ? 500 : 600,
-                }}
-              >
-                Aa
-              </span>
-              <span className="dasti-artifact-inspector__label">Text</span>
-              {!hasOpenDrawer ? (
-                <InspectorTooltip
-                  className="dasti-artifact-inspector__tooltip--trigger"
-                  title="Text"
-                />
-              ) : null}
-            </button>
-
-            {activeDrawer === "typography" ? (
-              <div
-                className="dasti-resume-style-inspector__drawer dasti-resume-style-inspector__drawer--layout dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
-                role="dialog"
-                aria-label="Text styles"
-              >
-                <div className="dasti-resume-style-inspector__layout-list">
-                  {VERBATI_TYPOGRAPHY_OPTIONS.map((option) => {
-                    const active = option.id === stylePreset.typography;
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        className={[
-                          "dasti-proposal-chrome-option",
-                          "dasti-resume-style-inspector__layout-option",
-                          active
-                            ? "dasti-resume-style-inspector__layout-option--active dasti-proposal-chrome-option--active"
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        aria-pressed={active}
-                        onClick={() => {
-                          onSelectTypography(option.id);
-                          setActiveDrawer(null);
+            <Menu
+              ariaLabel="Text styles"
+              align="end"
+              sections={[
+                {
+                  items: VERBATI_TYPOGRAPHY_OPTIONS.map((option) => ({
+                    id: option.id,
+                    role: "menuitemradio",
+                    selected: option.id === stylePreset.typography,
+                    disabled: readOnly,
+                    ariaLabel: option.name,
+                    label: (
+                      <span
+                        style={{
+                          fontFamily: option.headingFamily,
+                          fontWeight: option.id === "expert" ? 500 : 600,
                         }}
-                        disabled={readOnly}
                       >
-                        <span
-                          className="dasti-resume-style-inspector__layout-title"
-                          style={{
-                            fontFamily: option.headingFamily,
-                            fontWeight: option.id === "expert" ? 500 : 600,
-                          }}
-                        >
-                          {option.name}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
+                        {option.name}
+                      </span>
+                    ),
+                    onSelect: () => onSelectTypography(option.id),
+                  })),
+                },
+              ]}
+              trigger={
+                <button
+                  type="button"
+                  className="dasti-artifact-inspector__action dasti-artifact-inspector__action--style-trigger"
+                  aria-label="Open text styles"
+                  disabled={readOnly}
+                >
+                  <span
+                    className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--aa"
+                    aria-hidden="true"
+                    style={{
+                      fontFamily: activeTypographyOption.headingFamily,
+                      fontWeight:
+                        activeTypographyOption.id === "expert" ? 500 : 600,
+                    }}
+                  >
+                    Aa
+                  </span>
+                  <span className="dasti-artifact-inspector__label">Text</span>
+                  {!hasOpenDrawer ? (
+                    <InspectorTooltip
+                      className="dasti-artifact-inspector__tooltip--trigger"
+                      title="Text"
+                    />
+                  ) : null}
+                </button>
+              }
+            />
           </div>
 
           <div
@@ -345,75 +318,46 @@ export function EmbeddedStyleInspector({
             aria-label="Layout"
           >
             <span className="dasti-artifact-inspector__section-label">Layout</span>
-            <button
-              type="button"
-              className={[
-                "dasti-artifact-inspector__action",
-                activeDrawer === "layout"
-                  ? "dasti-artifact-inspector__action--active"
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              aria-label="Open layout controls"
-              aria-expanded={activeDrawer === "layout"}
-              aria-haspopup="dialog"
-              onClick={() => toggleDrawer("layout")}
-              disabled={readOnly}
-            >
-              <span
-                className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--layout"
-                aria-hidden="true"
-              >
-                <Layout size={14} strokeWidth={1.8} />
-              </span>
-              <span className="dasti-artifact-inspector__label">Layout</span>
-              {!hasOpenDrawer ? (
-                <InspectorTooltip
-                  className="dasti-artifact-inspector__tooltip--trigger"
-                  title="Layout"
-                />
-              ) : null}
-            </button>
-
-            {activeDrawer === "layout" ? (
-              <div
-                className="dasti-resume-style-inspector__drawer dasti-resume-style-inspector__drawer--layout dasti-proposal-chrome-drawer dasti-proposal-chrome-drawer--stack"
-                role="dialog"
-                aria-label="Layout controls"
-              >
-                <div className="dasti-resume-style-inspector__layout-list">
-                  {VERBATI_LAYOUT_OPTIONS.map((option) => {
-                    const active = option.id === stylePreset.layout;
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        className={[
-                          "dasti-proposal-chrome-option",
-                          "dasti-resume-style-inspector__layout-option",
-                          active
-                            ? "dasti-resume-style-inspector__layout-option--active dasti-proposal-chrome-option--active"
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        aria-pressed={active}
-                        onClick={() => {
-                          onSelectLayout(option.id);
-                          setActiveDrawer(null);
-                        }}
-                        disabled={readOnly}
-                      >
-                        <span className="dasti-resume-style-inspector__layout-title">
-                          {option.name}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
+            <Menu
+              ariaLabel="Layout controls"
+              align="end"
+              sections={[
+                {
+                  items: VERBATI_LAYOUT_OPTIONS.map((option) => ({
+                    id: option.id,
+                    role: "menuitemradio",
+                    selected: option.id === stylePreset.layout,
+                    disabled: readOnly,
+                    label: option.name,
+                    description: option.description,
+                    icon: <Layout size={14} strokeWidth={1.8} />,
+                    onSelect: () => onSelectLayout(option.id),
+                  })),
+                },
+              ]}
+              trigger={
+                <button
+                  type="button"
+                  className="dasti-artifact-inspector__action"
+                  aria-label="Open layout controls"
+                  disabled={readOnly}
+                >
+                  <span
+                    className="dasti-artifact-inspector__icon dasti-artifact-inspector__icon--layout"
+                    aria-hidden="true"
+                  >
+                    <Layout size={14} strokeWidth={1.8} />
+                  </span>
+                  <span className="dasti-artifact-inspector__label">Layout</span>
+                  {!hasOpenDrawer ? (
+                    <InspectorTooltip
+                      className="dasti-artifact-inspector__tooltip--trigger"
+                      title="Layout"
+                    />
+                  ) : null}
+                </button>
+              }
+            />
           </div>
         </>
       ) : (
