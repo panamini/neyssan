@@ -620,6 +620,51 @@ Migration:
 - `AddSectionBottomSheet.tsx` → `Sheet side="bottom"`.
 - Any other ad-hoc drawer markup in `components/` should migrate too — grep for `position: fixed` + `transform: translateX` / `translateY` patterns.
 
+### 4.7c Menu — `components/ui/menu.tsx`
+
+Dropdown menu anchored to a trigger button (kebab, "More", select-style trigger). Replaces ad-hoc menus / popovers in `LibraryFilterMenu.tsx`, `ProposalDisplay.tsx`, `ProposalComposeToolbar.tsx`, `SectionEditor.tsx`, `ProposalArtifactInspector.tsx`, `EmbeddedStyleInspector.tsx`. CSS lives in `ds-v2.css` under `.ds-menu`, `.ds-menu__item`, `.ds-menu__item--danger`, `.ds-menu__icon`, `.ds-menu__label`, `.ds-menu__label-text`, `.ds-menu__shortcut`, `.ds-menu__separator` (copy verbatim from `docs/UI/SKELETON.html` §06c).
+
+```ts
+export interface MenuItem {
+  id: string;
+  label: string;
+  icon?: React.ReactNode;
+  shortcut?: string;        // e.g. "⌘D"
+  tone?: "default" | "danger";
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+export interface MenuSection {
+  label?: string;           // optional uppercase heading
+  items: MenuItem[];
+}
+
+export interface MenuProps {
+  trigger: React.ReactElement;          // any button — Menu wires aria + ref
+  sections: MenuSection[];              // groups separated by .ds-menu__separator
+  align?: "start" | "end";              // anchor align, default "start"
+  side?: "bottom" | "top";              // default "bottom"
+  ariaLabel: string;
+}
+```
+
+Behavior:
+- **Portal to `document.body`** to escape stacking contexts.
+- Position with floating-ui (or your existing primitive — verify before adding deps).
+- Trigger gets `aria-haspopup="menu"` + `aria-expanded`.
+- Esc closes. Click outside closes. Tab moves focus out and closes.
+- Arrow keys navigate items. Enter/Space activates.
+- `data-state="open" | "closed"` on `.ds-menu` drives the fade+slide transition.
+- Highlighted item gets `data-highlighted` (keyboard nav) — CSS already styles it.
+- `prefers-reduced-motion` neutralizes the transition.
+- One menu open at a time.
+
+Migration grep targets:
+- `LibraryFilterMenu.tsx` — full migration.
+- Any `position: absolute` + `z-index` on a button-anchored list in the components directory.
+- Any inline popover with manual show/hide state.
+
 ### 4.8 Skeleton — `components/ui/skeleton.tsx`
 
 ```ts
@@ -645,6 +690,7 @@ export { Skeleton } from "./skeleton";
 export { ToastProvider, toast } from "./toast";
 export { Dialog } from "./dialog";
 export { Sheet } from "./sheet";
+export { Menu } from "./menu";
 ```
 
 ---
