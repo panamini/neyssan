@@ -29,3 +29,5 @@ export { Dialog, DialogActions, DialogContent } from "./dialog";
 export type { DialogProps } from "./dialog";
 export { Menu } from "./menu";
 export type { MenuItem, MenuProps, MenuSection } from "./menu";
+export { Sheet } from "./sheet";
+export type { SheetProps } from "./sheet";
