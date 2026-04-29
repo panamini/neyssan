@@ -3,6 +3,7 @@ import { useQuery, useMutation, useAction, useConvexAuth } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { useToast } from "./ui/toast";
+import { ToneBadge, type ToneBadgeTone } from "./ui";
 import { AUTH_REQUIRED_TOAST } from "../lib/toast-copy";
 import ProposalDisplay from "./ProposalDisplay";
 import { SavedProposalForgeToolbarPreview } from "./SavedProposalForgeToolbarPreview";
@@ -480,6 +481,16 @@ const PINCH_DETAIL_THRESHOLD = 1.12;
 
 function toneLabel(preset: ProposalVoicePreset | null): string {
   return getVoicePresetDisplayLabel(preset);
+}
+
+function toneBadgeTone(preset: ProposalVoicePreset | null): ToneBadgeTone {
+  if (preset === "engaging" || preset === "storyteller") {
+    return "warm";
+  }
+  if (preset === "expert") {
+    return "formal";
+  }
+  return "natural";
 }
 
 function buildProposalMeta(
@@ -1607,10 +1618,10 @@ export default function ProposalsList({
     "geist-baskervville";
 
   const selectedHeaderCard = selected ? (
-    <div className="dasti-proposal-library-info-card dasti-proposal-library-sidebar__heading">
+    <div className="ds-card ds-card--muted dasti-proposal-library-info-card dasti-proposal-library-sidebar__heading">
       <div className="dasti-proposal-library-info-card__stack">
         <div className="dasti-proposal-library-sidebar__eyebrow-row">
-          <div className="dasti-proposal-library-sidebar__eyebrow">
+          <div className="ds-card__eyebrow dasti-proposal-library-sidebar__eyebrow">
             Saved proposals
           </div>
           <span
@@ -1648,7 +1659,7 @@ export default function ProposalsList({
           <h3 className="dasti-proposal-library-info-card__title-heading">
             <button
               type="button"
-              className="dasti-proposal-sheet__title dasti-proposal-library-info-card__title dasti-proposal-library-info-card__title-button"
+              className="ds-card__title dasti-proposal-sheet__title dasti-proposal-library-info-card__title dasti-proposal-library-info-card__title-button"
               onClick={() => setIsEditingSelectedTitle(true)}
               aria-label="Rename saved proposal"
             >
@@ -1656,7 +1667,7 @@ export default function ProposalsList({
             </button>
           </h3>
         ) : null}
-        <div className="dasti-proposal-library-info-card__footer">
+        <div className="ds-card__footer dasti-proposal-library-info-card__footer">
           {selectedHeaderMetadataLine ? (
             <div className="dasti-proposal-sheet__meta dasti-proposal-library-info-card__details">
               <span className="dasti-proposal-library-info-card__details-line">
@@ -1666,9 +1677,12 @@ export default function ProposalsList({
           ) : null}
           {selectedToneLabel ? (
             <div className="dasti-proposal-library-sidebar__tone-row">
-              <span className="dasti-proposal-tone-badge">
+              <ToneBadge
+                tone={toneBadgeTone(selected ? getStoredVoicePreset(selected) : null)}
+                className="dasti-proposal-tone-badge"
+              >
                 {selectedToneLabel}
-              </span>
+              </ToneBadge>
             </div>
           ) : null}
         </div>
@@ -1832,12 +1846,16 @@ export default function ProposalsList({
                     key={proposal._id}
                     className={[
                       "dasti-doc-card",
+                      "ds-card",
                       "dasti-doc-card--library",
                       "dasti-doc-card--proposal-library",
-                      isSelectedCard ? "dasti-doc-card--selected" : null,
+                      isSelectedCard
+                        ? "ds-card--elevated dasti-doc-card--selected"
+                        : null,
                     ]
                       .filter(Boolean)
                       .join(" ")}
+                    data-interactive="true"
                   >
                     <button
                       type="button"
@@ -1850,13 +1868,13 @@ export default function ProposalsList({
                       <div className="dasti-doc-card__stack">
                         <div className="dasti-doc-card__header">
                           <div className="dasti-doc-card__title-frame dasti-doc-card__title-frame--top">
-                            <h3 className="dasti-doc-card__title">
+                            <h3 className="ds-card__title dasti-doc-card__title">
                               {(proposal.title || "").trim() ||
                                 "Saved proposal"}
                             </h3>
                           </div>
                         </div>
-                        <div className="dasti-doc-card__body-band">
+                        <div className="ds-card__content dasti-doc-card__body-band">
                           <p
                             className={
                               snippet
@@ -1867,11 +1885,14 @@ export default function ProposalsList({
                             {snippet || "Draft preview appears here."}
                           </p>
                         </div>
-                        <div className="dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
+                        <div className="ds-card__footer dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
                           <div className="dasti-doc-card__footer-meta">
-                            <span className="dasti-proposal-tone-badge dasti-proposal-tone-badge--compact">
+                            <ToneBadge
+                              tone={toneBadgeTone(getStoredVoicePreset(proposal))}
+                              className="dasti-proposal-tone-badge dasti-proposal-tone-badge--compact"
+                            >
                               {proposalToneLabel}
-                            </span>
+                            </ToneBadge>
                             <span>
                               {buildProposalMeta(proposal, {
                                 includeTone: false,
@@ -1922,7 +1943,7 @@ export default function ProposalsList({
                 <div
                   ref={selectedCardRef}
                   tabIndex={-1}
-                  className="dasti-proposal-library-card dasti-proposal-library-card--selected"
+                  className="ds-card ds-card--elevated dasti-proposal-library-card dasti-proposal-library-card--selected"
                 >
                   <ProposalDisplay
                     proposalContent={editContent}
@@ -1997,7 +2018,8 @@ export default function ProposalsList({
                     return (
                       <div
                         key={proposal._id}
-                        className="dasti-proposal-library-card dasti-proposal-library-card--secondary"
+                        className="ds-card ds-card--muted dasti-proposal-library-card dasti-proposal-library-card--secondary"
+                        data-interactive="true"
                         role="button"
                         tabIndex={0}
                         aria-label={`Open saved proposal ${proposal.title ?? ""}`}

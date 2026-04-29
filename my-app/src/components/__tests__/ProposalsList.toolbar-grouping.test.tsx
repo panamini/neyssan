@@ -217,9 +217,9 @@ describe("ProposalsList toolbar grouping", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open text styles" }));
     expect(
-      screen.getByRole("dialog", { name: "Text styles" }),
+      screen.getByRole("menu", { name: "Text styles" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Soft Serif" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Soft Serif" }));
 
     await waitFor(() => {
       expect(getMainProposalDisplayCall()?.stylePreset).toEqual(
@@ -234,16 +234,16 @@ describe("ProposalsList toolbar grouping", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /layout swiss/i }));
     expect(
-      screen.getByRole("dialog", { name: "Layout options" }),
+      screen.getByRole("menu", { name: "Layout options" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", {
-        name: /Workshop Family identity scaffold for the workshop paired templates\./i,
+      screen.getByRole("menuitemradio", {
+        name: "Workshop",
       }),
     ).toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", {
-        name: /^Editorial Editorial split layout with a broader, calmer rhythm\.$/i,
+      screen.getByRole("menuitemradio", {
+        name: "Editorial",
       }),
     );
 

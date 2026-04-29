@@ -316,7 +316,7 @@ export function HobbiesModal({
                     ref={(node) => {
                       inputRefs.current[String(row.id ?? `row-${index}`)] = node;
                     }}
-                    className="w-full min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+                    className="w-full min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                     placeholder="Hobby name"
                     value={row.name ?? ""}
                     onChange={(event) =>

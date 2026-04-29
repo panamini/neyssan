@@ -5,8 +5,9 @@ import clsx from "clsx";
 import { X } from "@/lib/icons";
 import { useCloseOnEscape } from "@/hooks/use-close-on-escape";
 import { BodyPortal } from "@/components/ui/body-portal";
+import { IconButton } from "@/components/ui/icon-button";
 
-const DIALOG_EXIT_DURATION = 150;
+const DIALOG_EXIT_DURATION = 160;
 
 export interface DialogProps {
   open: boolean;
@@ -14,18 +15,20 @@ export interface DialogProps {
   title?: string;
   children: React.ReactNode;
   className?: string;
+  size?: "sm" | "md" | "lg";
 }
 
-export function Dialog({
+function DialogRootComponent({
   open,
   onClose,
   title,
   children,
   className,
+  size = "md",
 }: DialogProps) {
   const [isVisible, setIsVisible] = React.useState(open);
-  const [surfaceState, setSurfaceState] = React.useState<"closed" | "open">(
-    open ? "closed" : "closed",
+  const [surfaceState, setSurfaceState] = React.useState<"closing" | "open">(
+    open ? "open" : "closing",
   );
   const exitTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const enterFrameRef = React.useRef<number | null>(null);
@@ -35,13 +38,13 @@ export function Dialog({
       if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
       if (enterFrameRef.current) cancelAnimationFrame(enterFrameRef.current);
       setIsVisible(true);
-      setSurfaceState("closed");
+      setSurfaceState("closing");
       enterFrameRef.current = requestAnimationFrame(() => {
         setSurfaceState("open");
       });
     } else if (isVisible) {
       if (enterFrameRef.current) cancelAnimationFrame(enterFrameRef.current);
-      setSurfaceState("closed");
+      setSurfaceState("closing");
       exitTimerRef.current = setTimeout(() => {
         setIsVisible(false);
       }, DIALOG_EXIT_DURATION);
@@ -50,7 +53,7 @@ export function Dialog({
       if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
       if (enterFrameRef.current) cancelAnimationFrame(enterFrameRef.current);
     };
-  }, [open]);
+  }, [isVisible, open]);
 
   useCloseOnEscape({ open, onClose });
 
@@ -58,59 +61,37 @@ export function Dialog({
 
   return (
     <BodyPortal>
-      <div
-        className={clsx(
-          "dasti-dialog-root fixed inset-0 z-[10000] flex items-center justify-center p-4",
-        )}
-        data-state={surfaceState}
-      >
+      <div className="dasti-dialog-root">
         <div
-          className="dasti-dialog-overlay fixed inset-0"
-          style={{
-            background: "var(--dialog-backdrop-bg-strong)",
-            backdropFilter: "blur(var(--dialog-backdrop-blur)) saturate(1.2)",
-            WebkitBackdropFilter:
-              "blur(var(--dialog-backdrop-blur)) saturate(1.2)",
-          }}
+          className="ds-dialog-overlay"
+          data-state={surfaceState}
           onClick={onClose}
           aria-hidden="true"
         />
         <div
           className={clsx(
-            "dasti-dialog-panel relative isolate [background:var(--sfr)] border [border-color:var(--color-border)] [border-radius:var(--radius-surface)] [box-shadow:var(--shc)] w-full overflow-hidden [max-width:var(--modal-max-width)]",
+            "ds-dialog",
+            size !== "md" && `ds-dialog--${size}`,
             className,
           )}
+          data-state={surfaceState}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={title ? "dialog-title" : undefined}
         >
-          {title && (
-            <div
-              className="flex items-start justify-between gap-4 border-b px-6 py-5 [border-color:var(--color-border)]"
-              style={{
-                background: "var(--frost-bg)",
-                backdropFilter: "blur(12px) saturate(1.4)",
-                WebkitBackdropFilter: "blur(12px) saturate(1.4)",
-              }}
-            >
-              <div className="min-w-0">
-                <h2
-                  className="text-[var(--tm)] font-semibold leading-[var(--ll)] text-foreground"
-                  style={{
-                    fontFamily:
-                      "var(--proposal-ui-heading-trial-font, var(--font-body-family))",
-                  }}
-                >
-                  {title}
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                className="inline-flex h-[var(--hs)] min-w-[var(--hs)] items-center justify-center border border-transparent bg-transparent px-2 [border-radius:var(--radius-control)] [color:var(--tm2)] transition-colors hover:[background:var(--sf2)] hover:[color:var(--ti)]"
-              >
-                <X className="h-5 w-5" />
-              </button>
+          {title ? (
+            <div className="ds-dialog__title" id="dialog-title">
+              {title}
             </div>
-          )}
+          ) : null}
+          <IconButton
+            label="Close."
+            variant="ghost"
+            onClick={onClose}
+            className="ds-dialog__close"
+          >
+            <X size={16} />
+          </IconButton>
           {children}
         </div>
       </div>
@@ -124,11 +105,7 @@ export interface DialogContentProps {
 }
 
 export function DialogContent({ children, className }: DialogContentProps) {
-  return (
-    <div className={clsx("px-6 py-4 text-foreground", className)}>
-      {children}
-    </div>
-  );
+  return <div className={clsx("ds-dialog__body", className)}>{children}</div>;
 }
 
 export interface DialogActionsProps {
@@ -137,14 +114,58 @@ export interface DialogActionsProps {
 }
 
 export function DialogActions({ children, className }: DialogActionsProps) {
+  return <div className={clsx("ds-dialog__footer", className)}>{children}</div>;
+}
+
+function DialogTrigger({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <>{children}</>;
+}
+
+function DialogTitle({
+  children,
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div
-      className={clsx(
-        "flex justify-end gap-3 border-t px-6 py-4 [border-color:var(--color-border)]",
-        className,
-      )}
-    >
+    <div className={clsx("ds-dialog__title", className)} {...props}>
       {children}
     </div>
   );
 }
+
+function DialogDescription({
+  children,
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={clsx("ds-dialog__body", className)} {...props}>
+      {children}
+    </div>
+  );
+}
+
+function DialogFooter({
+  children,
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={clsx("ds-dialog__footer", className)} {...props}>
+      {children}
+    </div>
+  );
+}
+
+export const Dialog = Object.assign(DialogRootComponent, {
+  Root: DialogRootComponent,
+  Trigger: DialogTrigger,
+  Content: DialogContent,
+  Title: DialogTitle,
+  Description: DialogDescription,
+  Footer: DialogFooter,
+});

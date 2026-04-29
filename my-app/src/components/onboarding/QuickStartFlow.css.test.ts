@@ -26,6 +26,7 @@ describe("Quick Start layout CSS contracts", () => {
 
   it("keeps card rows and sheet height stable between entry slides", () => {
     const paneBlock = readCssBlock(".dasti-quick-start-pane");
+    const frameBlock = readCssBlock(".dasti-quick-start-pane__frame");
     const sheetBlock = readCssBlock(".dasti-quick-start-sheet");
     const choiceButtonBlock = readCssBlock(".dasti-quick-start-choice__button");
 
@@ -33,6 +34,12 @@ describe("Quick Start layout CSS contracts", () => {
     expect(paneBlock).toContain("var(--control-lg)");
     expect(paneBlock).toContain("var(--space-2)");
     expect(paneBlock).toContain("--quick-start-sheet-min-block-size: calc(");
+    expect(paneBlock).toContain("--quick-start-frame-closed-block-size: calc(");
+    expect(frameBlock).toContain(
+      "block-size: var(--quick-start-frame-closed-block-size);",
+    );
+    expect(frameBlock).toContain("align-content: start;");
+    expect(frameBlock).toContain("overflow: visible;");
     expect(sheetBlock).toContain(
       "min-block-size: var(--quick-start-sheet-min-block-size);",
     );

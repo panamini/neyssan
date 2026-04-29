@@ -2,8 +2,7 @@ import React from "react";
 import { isV1SectionsEnabled } from "../lib/flags";
 import { ADDITIONAL_INFORMATION_SECTION_TITLE } from "../lib/cv-section-organization";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
-import { useCloseOnEscape } from "../hooks/use-close-on-escape";
-import { BodyPortal } from "@/components/ui/body-portal";
+import { Sheet } from "@/components/ui/sheet";
 
 interface AddSectionBottomSheetProps {
   isOpen: boolean;
@@ -21,9 +20,15 @@ export function AddSectionBottomSheet({
   onClose,
   onSelect,
 }: AddSectionBottomSheetProps) {
-  useCloseOnEscape({ open: isOpen, onClose });
-
   if (!isOpen) return null;
+
+  return <AddSectionBottomSheetContent onClose={onClose} onSelect={onSelect} />;
+}
+
+function AddSectionBottomSheetContent({
+  onClose,
+  onSelect,
+}: Pick<AddSectionBottomSheetProps, "onClose" | "onSelect">) {
   const { isV1Active, currentCv } = useCvLibrary();
 
   const handlePick = (type: string) => {
@@ -164,60 +169,38 @@ export function AddSectionBottomSheet({
   });
 
   return (
-    <BodyPortal>
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="fixed inset-0 z-50 flex items-end sm:hidden"
-      >
-        {/* Backdrop */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: "var(--dialog-backdrop-bg)",
-            backdropFilter: "blur(var(--dialog-backdrop-blur-soft))",
-            WebkitBackdropFilter: "blur(var(--dialog-backdrop-blur-soft))",
-          }}
-          onClick={onClose}
-          aria-hidden
-        />
-        {/* Sheet */}
-        <div className="relative w-full p-4 [box-shadow:var(--shc)] rounded-t-xl [background:var(--sfr)] text-[var(--foreground)]">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-base font-semibold">Add Section</h3>
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      side="bottom"
+      title="Add section"
+      ariaLabel="Add section"
+      bodyClassName="sm:hidden"
+      className="sm:hidden"
+    >
+      {options.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3">
+          {options.map((opt) => (
             <button
-              type="button"
-              aria-label="Close"
-              onClick={onClose}
-              className="p-2 rounded [background:transparent] [color:var(--tm2)] hover:[background:var(--sf2)] hover:[color:var(--ti)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]"
+              key={opt.type}
+              className={`p-3 text-left border rounded hover:[background:var(--sf2)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)] ${
+                opt.fullSpan ? "col-span-2" : ""
+              }`}
+              onClick={() => handlePick(opt.type)}
             >
-              ✕
+              <div className="font-medium">{opt.title}</div>
+              <div className="text-xs opacity-70">{opt.desc}</div>
             </button>
-          </div>
-
-          {options.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3">
-              {options.map((opt) => (
-                <button
-                  key={opt.type}
-                  className={`p-3 text-left border rounded hover:[background:var(--sf2)] focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)] ${
-                    opt.fullSpan ? "col-span-2" : ""
-                  }`}
-                  onClick={() => handlePick(opt.type)}
-                >
-                  <div className="font-medium">{opt.title}</div>
-                  <div className="text-xs opacity-70">{opt.desc}</div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="px-3 py-4 text-sm border rounded text-[var(--foreground)]/70">
-              All optional sections are already added.
-            </div>
-          )}
+          ))}
         </div>
-      </div>
-    </BodyPortal>
+      ) : (
+        <div className="px-3 py-4 text-sm border rounded text-[var(--foreground)]/70">
+          All optional sections are already added.
+        </div>
+      )}
+    </Sheet>
   );
 }
 

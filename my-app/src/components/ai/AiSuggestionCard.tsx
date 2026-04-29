@@ -1,6 +1,13 @@
 import React from "react";
+import clsx from "clsx";
+
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { DiffBlock, type DiffMode } from "./DiffBlock";
 
 type AiSuggestionCardStatus = "preview" | "accepted";
+type AiSuggestionCardState = "loading" | "ready" | "error";
+type AiSuggestionCardMode = "default" | "compact" | "list";
 
 type AiSuggestionCardProps = {
   actionLabel: string;
@@ -8,12 +15,73 @@ type AiSuggestionCardProps = {
   beforeText: string;
   afterText: string;
   status?: AiSuggestionCardStatus;
+  state?: AiSuggestionCardState;
+  mode?: AiSuggestionCardMode;
   compact?: boolean;
   isApplying?: boolean;
+  errorMessage?: string;
   onAccept?: () => void;
   onDiscard?: () => void;
+  onRetry?: () => void;
   onUndo?: () => void;
 };
+
+function overlineForAction(actionLabel: string) {
+  return `AI · ${actionLabel.trim().toUpperCase()}`;
+}
+
+function resolveDiffMode(beforeText: string, afterText: string): DiffMode {
+  if (beforeText && afterText) return "replace";
+  if (afterText) return "add";
+  return "remove";
+}
+
+function splitListText(text: string) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^[-*•]\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function DiffArea({
+  beforeText,
+  afterText,
+  mode,
+}: {
+  beforeText: string;
+  afterText: string;
+  mode: AiSuggestionCardMode;
+}) {
+  if (mode === "list") {
+    const beforeItems = splitListText(beforeText);
+    const afterItems = splitListText(afterText);
+    const maxLength = Math.max(beforeItems.length, afterItems.length);
+
+    return (
+      <ul className="ds-ai-card__body" aria-label="Suggested changes">
+        {Array.from({ length: maxLength }, (_, index) => {
+          const before = beforeItems[index] ?? "";
+          const after = afterItems[index] ?? "";
+          const diffMode = resolveDiffMode(before, after);
+
+          return (
+            <li key={`${before}-${after}-${index}`}>
+              <DiffBlock mode={diffMode} before={before} after={after} />
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  return (
+    <DiffBlock
+      mode={resolveDiffMode(beforeText, afterText)}
+      before={beforeText || undefined}
+      after={afterText || undefined}
+    />
+  );
+}
 
 export function AiSuggestionCard({
   actionLabel,
@@ -21,232 +89,121 @@ export function AiSuggestionCard({
   beforeText,
   afterText,
   status = "preview",
+  state,
+  mode = "default",
   compact = false,
   isApplying = false,
+  errorMessage,
   onAccept,
   onDiscard,
+  onRetry,
   onUndo,
 }: AiSuggestionCardProps) {
+  const resolvedState: AiSuggestionCardState = state ?? "ready";
+  const resolvedMode: AiSuggestionCardMode = compact ? "compact" : mode;
   const resolvedTitle = title ?? `${actionLabel} suggestion`;
+  const isAccepted = status === "accepted" && !isApplying;
   const statusLabel = isApplying
-    ? "Applying"
-    : status === "accepted"
-      ? "Applied"
-      : "Needs review";
-  const isAcceptedStatus = status === "accepted" && !isApplying;
-  const statusStyle: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    minHeight: "20px",
-    padding: "0 var(--s2)",
-    borderRadius: "var(--radius-pill)",
-    border: isAcceptedStatus
-      ? "1px solid color-mix(in srgb, var(--color-success) 10%, var(--color-border))"
-      : "1px solid color-mix(in srgb, var(--color-border) 78%, transparent)",
-    background: isAcceptedStatus
-      ? "color-mix(in srgb, var(--color-success-soft) 26%, transparent)"
-      : "color-mix(in srgb, var(--sf2) 48%, transparent)",
-    color: isAcceptedStatus ? "var(--color-success-ink)" : "var(--tm2)",
-    fontSize: "10px",
-    fontWeight: 650,
-    lineHeight: 1,
-    whiteSpace: "nowrap",
-  };
+    ? "Applying."
+    : isAccepted
+      ? "Applied."
+      : resolvedState === "error"
+        ? "Needs review."
+        : "Needs review.";
 
   return (
     <section
       role="region"
       aria-label={resolvedTitle}
-      aria-busy={isApplying || undefined}
-      style={{
-        display: "grid",
-        gap: compact ? "var(--s2)" : "var(--s3)",
-        padding: compact ? "var(--s2)" : "var(--s3)",
-        borderRadius: "calc(var(--radius-card) - 4px)",
-        border:
-          status === "accepted"
-            ? "1px solid color-mix(in srgb, var(--color-success) 6%, var(--color-border))"
-            : "1px solid color-mix(in srgb, var(--color-border) 86%, transparent)",
-        background: "var(--sfr)",
-        boxShadow:
-          "0 1px 2px color-mix(in srgb, var(--shadow-color) 10%, transparent)",
-      }}
+      aria-busy={isApplying || resolvedState === "loading" || undefined}
+      className={clsx(
+        "ds-ai-card",
+        resolvedMode === "compact" && "ds-ai-card--compact",
+      )}
+      data-state="open"
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: "var(--s3)",
-          minWidth: 0,
-        }}
+      <div className="ds-ai-card__body">
+        {resolvedMode === "compact" ? null : (
+          <div className="ds-ai-card__overline">
+            {overlineForAction(actionLabel)}
+          </div>
+        )}
+        <div className="ds-ai-card__title">{resolvedTitle}</div>
+      </div>
+
+      <StatusBadge
+        tone={isAccepted ? "success" : resolvedState === "error" ? "danger" : "accent"}
+        pulsing={isApplying || resolvedState === "loading"}
       >
-        <div
-          style={{
-            display: "grid",
-            gap: "var(--s1)",
-            minWidth: 0,
-          }}
-        >
-          <div
-            style={{
-              fontSize: "10px",
-              fontWeight: 700,
-              letterSpacing: "0.1em",
-              lineHeight: 1.2,
-              textTransform: "uppercase",
-              color: "var(--color-accent-hover)",
-            }}
-          >
-            AI draft
-          </div>
-          <div
-            style={{
-              fontSize: "var(--ts)",
-              fontWeight: 650,
-              lineHeight: "var(--ls)",
-              color: "var(--ti)",
-            }}
-          >
-            {resolvedTitle}
-          </div>
+        {statusLabel}
+      </StatusBadge>
+
+      {resolvedState === "loading" || isApplying ? (
+        <div className="ds-ai-card__loading">
+          Reading
+          <span className="ds-btn__period" aria-hidden="true">
+            .
+          </span>
         </div>
-        <span aria-live="polite" style={statusStyle}>
-          {statusLabel}
-        </span>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gap: "var(--s2)",
-          gridTemplateColumns: compact
-            ? "1fr"
-            : "minmax(0, 0.95fr) minmax(0, 1.05fr)",
-        }}
-      >
-        <TextPanel
-          label="Current"
-          text={beforeText || "No existing content."}
-          variant="before"
+      ) : resolvedState === "error" ? (
+        <div className="ds-ai-card__error">
+          {errorMessage ?? "Couldn't finish."}
+        </div>
+      ) : (
+        <DiffArea
+          beforeText={beforeText}
+          afterText={afterText}
+          mode={resolvedMode}
         />
-        <TextPanel
-          label="Proposed"
-          text={afterText}
-          variant={status === "accepted" ? "accepted" : "after"}
-        />
-      </div>
+      )}
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          gap: "var(--s1)",
-          flexWrap: "wrap",
-          paddingTop: "var(--s1)",
-        }}
-      >
-        {status === "preview" ? (
+      <div className="ds-ai-card__footer">
+        {resolvedState === "loading" || isApplying ? (
+          <Button type="button" variant="ghost" size="sm" onClick={onDiscard}>
+            Cancel
+          </Button>
+        ) : resolvedState === "error" ? (
           <>
-            <button
+            <Button type="button" variant="ghost" size="sm" onClick={onDiscard}>
+              Dismiss
+            </Button>
+            {onRetry ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={onRetry}
+              >
+                Try again
+              </Button>
+            ) : null}
+          </>
+        ) : status === "preview" ? (
+          <>
+            <Button
               type="button"
-              className="dasti-button dasti-button--ghost dasti-button--sm"
+              variant="ghost"
+              size="sm"
               onClick={onDiscard}
-              disabled={isApplying}
             >
               Discard
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="dasti-button dasti-button--accent dasti-button--sm"
+              variant="primary"
+              size="sm"
               onClick={onAccept}
-              disabled={isApplying}
             >
               Accept
-            </button>
+            </Button>
           </>
         ) : (
-          <button
-            type="button"
-            className="dasti-button dasti-button--ghost dasti-button--sm"
-            onClick={onUndo}
-            disabled={isApplying}
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={onUndo}>
             Undo
-          </button>
+          </Button>
         )}
       </div>
     </section>
-  );
-}
-
-function TextPanel({
-  label,
-  text,
-  variant,
-}: {
-  label: string;
-  text: string;
-  variant: "before" | "after" | "accepted";
-}) {
-  const isBefore = variant === "before";
-  const isAccepted = variant === "accepted";
-  const panelStyle: React.CSSProperties = {
-    display: "grid",
-    gap: "var(--s1)",
-    minWidth: 0,
-    paddingLeft: "var(--s2)",
-    borderLeft: isBefore
-      ? "2px solid color-mix(in srgb, var(--color-border) 72%, transparent)"
-      : isAccepted
-        ? "2px solid color-mix(in srgb, var(--color-success) 24%, transparent)"
-        : "2px solid color-mix(in srgb, var(--color-accent) 34%, transparent)",
-  };
-  const textStyle: React.CSSProperties = {
-    minHeight: "1.75rem",
-    whiteSpace: "pre-wrap",
-    fontSize: "var(--tx)",
-    lineHeight: "var(--lx)",
-    color: isBefore ? "var(--tm2)" : "var(--ti)",
-    overflowWrap: "anywhere",
-    padding: isBefore ? undefined : "var(--s1) var(--s2)",
-    borderRadius: isBefore ? undefined : "calc(var(--radius-card) - 8px)",
-    background: isBefore
-      ? undefined
-      : isAccepted
-        ? "color-mix(in srgb, var(--color-success-soft) 16%, transparent)"
-        : "color-mix(in srgb, var(--color-accent-pale) 22%, transparent)",
-  };
-
-  return (
-    <div role="group" aria-label={`${label} text`} style={panelStyle}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "var(--s2)",
-        }}
-      >
-        <span
-          style={{
-            fontSize: "10px",
-            fontWeight: 700,
-            letterSpacing: "0.08em",
-            lineHeight: 1.2,
-            textTransform: "uppercase",
-            color: isBefore
-              ? "var(--tm2)"
-              : isAccepted
-                ? "var(--color-success-ink)"
-                : "var(--color-accent-hover)",
-          }}
-        >
-          {label}
-        </span>
-      </div>
-      <div style={textStyle}>{text}</div>
-    </div>
   );
 }
 

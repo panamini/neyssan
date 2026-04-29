@@ -208,16 +208,16 @@ describe("EmbeddedStyleInspector", () => {
       screen.getByRole("button", { name: "Open layout controls" }),
     );
 
-    expect(screen.getByRole("button", { name: "Swiss Minima" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Volk Register" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Two Column" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: "Swiss Minima" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: "Volk Register" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: "Two Column" })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Workshop" }),
+      screen.getByRole("menuitemradio", { name: "Workshop" }),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Open text styles" }));
 
-    expect(screen.getByRole("button", { name: "Civic Correspondence" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: "Civic Correspondence" })).toBeInTheDocument();
   });
 
   it("applies the chosen layout from the layout drawer", async () => {
@@ -244,7 +244,7 @@ describe("EmbeddedStyleInspector", () => {
     await user.click(
       screen.getByRole("button", { name: "Open layout controls" }),
     );
-    await user.click(screen.getByRole("button", { name: "Two Column" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Two Column" }));
 
     expect(onSelectLayout).toHaveBeenCalledWith("two-column");
   });
@@ -275,10 +275,10 @@ describe("EmbeddedStyleInspector", () => {
     await user.click(
       screen.getByRole("button", { name: "Open layout controls" }),
     );
-    await user.click(screen.getByRole("button", { name: "Workshop" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Workshop" }));
 
     await user.click(screen.getByRole("button", { name: "Open text styles" }));
-    await user.click(screen.getByRole("button", { name: "Soft Serif" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Soft Serif" }));
 
     await user.click(
       screen.getByRole("button", { name: "Open palette controls" }),

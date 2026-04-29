@@ -419,14 +419,9 @@ describe("ProposalForge attached CV sync", () => {
       name: /^Capture the role\b/i,
     });
     expect(captureRole).toHaveAttribute("aria-pressed", "true");
-    const captureRoleDialog = screen.getByRole("dialog", {
-      name: "Capture the role",
-    });
     expect(
-      within(captureRoleDialog).getByRole("link", {
-        name: /Install extension/i,
-      }),
-    ).toBeInTheDocument();
+      captureRole.closest(".dasti-quick-start-choice")?.querySelector("a"),
+    ).not.toBeNull();
     expect(
       screen.getByRole("link", { name: /Install extension/i }),
     ).toHaveAttribute("href", PROPOSAL_EXTENSION_INSTALL_LINK.href);
@@ -614,7 +609,7 @@ describe("ProposalForge attached CV sync", () => {
     ).toHaveAttribute("href", PROPOSAL_EXTENSION_INSTALL_LINK.href);
   });
 
-  it("toggles the extension helper open and closed on repeated clicks", async () => {
+  it("toggles the extension helper inline inside the quick start window", async () => {
     render(
       <MemoryRouter initialEntries={[buildCoverLetterStartEntry()]}>
         <ProposalForge />
@@ -634,7 +629,9 @@ describe("ProposalForge attached CV sync", () => {
     expect(
       screen.getByRole("link", { name: /Install extension/i }),
     ).toBeInTheDocument();
-    expect(toggle.closest(".dasti-quick-start-choice")?.querySelector("a")).toBeNull();
+    expect(
+      toggle.closest(".dasti-quick-start-choice")?.querySelector("a"),
+    ).not.toBeNull();
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-pressed", "false");

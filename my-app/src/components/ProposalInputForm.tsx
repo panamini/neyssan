@@ -5,9 +5,9 @@ import { useForm } from "react-hook-form";
 import styles from "./ProposalInputForm.module.css";
 import { zodResolver } from "@hookform/resolvers/zod";
 import clsx from "clsx";
-import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent } from "./ui/dialog";
+import { Menu, type MenuSection } from "./ui/menu";
 
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -71,6 +71,7 @@ import {
 } from "./ProposalGenerateGlyph";
 import { buildProposalSourceSummary } from "../lib/proposal-source-summary";
 import { CvPickerCard } from "./cv/CvPickerCard";
+import { ToneBadge, type ToneBadgeTone } from "./ui/tone-badge";
 
 interface ProposalInputFormProps {
   onSubmit: (
@@ -148,21 +149,25 @@ const TONE_OPTIONS: Array<{
   id: ProposalVoicePreset;
   uiLabel: string;
   description: string;
+  tone: ToneBadgeTone;
 }> = [
   {
     id: "engaging",
     uiLabel: getVoicePresetDisplayLabel("engaging"),
     description: "Warm and approachable.",
+    tone: "warm",
   },
   {
     id: "signature",
     uiLabel: getVoicePresetDisplayLabel("signature"),
     description: "Natural and credible.",
+    tone: "natural",
   },
   {
     id: "expert",
     uiLabel: getVoicePresetDisplayLabel("expert"),
     description: "Formal and composed.",
+    tone: "formal",
   },
 ];
 
@@ -170,6 +175,7 @@ const AUTO_TONE_OPTION = {
   id: null,
   uiLabel: getVoicePresetDisplayLabel(null),
   description: "Auto-fit to the client.",
+  tone: "auto",
 } as const;
 
 const VISIBLE_TONE_OPTION_IDS = new Set<ProposalVoicePreset>(
@@ -1127,38 +1133,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     handleSelectCv(pendingCvId);
   }
 
-  /* ── Cbar state (Type + Tone dropdowns) ─────────────────── */
-  const [openMenu, setOpenMenu] = React.useState<"type" | "tone" | null>(null);
-  const [menuPos, setMenuPos] = React.useState<{
-    left: number;
-    bottom: number;
-  }>({ left: 0, bottom: 0 });
-  const typeChipRef = React.useRef<HTMLButtonElement>(null);
-  const toneChipRef = React.useRef<HTMLButtonElement>(null);
   const jobDescriptionRef = React.useRef<HTMLTextAreaElement | null>(null);
-
-  const toggleMenu = React.useCallback(
-    (which: "type" | "tone") => {
-      const ref = which === "type" ? typeChipRef : toneChipRef;
-      if (openMenu === which) {
-        setOpenMenu(null);
-        return;
-      }
-      if (ref.current) {
-        const r = ref.current.getBoundingClientRect();
-        setMenuPos({ left: r.left, bottom: window.innerHeight - r.top + 4 });
-      }
-      setOpenMenu(which);
-    },
-    [openMenu],
-  );
-
-  React.useEffect(() => {
-    if (!openMenu) return;
-    const close = () => setOpenMenu(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [openMenu]);
 
   const typeLabel =
     selectedProposalType === "cover_letter" ? "Letter" : "Proposal";
@@ -1166,6 +1141,61 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     ? TONE_OPTIONS.find((t) => t.id === selectedVisibleVoicePreset)?.uiLabel ??
       selectedVoicePresetDefinition.label
     : AUTO_TONE_OPTION.uiLabel;
+  const typeMenuSections: MenuSection[] = [
+    {
+      items: (
+        [
+          {
+            value: "cover_letter",
+            label: "Letter",
+            desc: "For a job application.",
+          },
+          {
+            value: "freelance_proposal",
+            label: "Proposal",
+            desc: "For a freelance project.",
+          },
+        ] as const
+      )
+        .filter((opt) => opt.value !== selectedProposalType)
+        .map((opt) => ({
+          id: opt.value,
+          label: opt.label,
+          description: opt.desc,
+          onSelect: () => {
+            form.setValue("proposalType", opt.value, {
+              shouldDirty: true,
+              shouldValidate: true,
+            });
+          },
+        })),
+    },
+  ];
+  const toneMenuSections: MenuSection[] = [
+    {
+      items: [AUTO_TONE_OPTION, ...TONE_OPTIONS].map((opt) => {
+        const isSelected =
+          opt.id === null
+            ? !selectedVisibleVoicePreset
+            : selectedVisibleVoicePreset === opt.id;
+        return {
+          id: opt.id ?? "auto",
+          role: "menuitemradio",
+          selected: isSelected,
+          icon: isSelected ? (
+            <Check size={15} strokeWidth={1.8} aria-hidden="true" />
+          ) : null,
+          label: "tone" in opt ? (
+            <ToneBadge tone={opt.tone}>{opt.uiLabel}</ToneBadge>
+          ) : (
+            opt.uiLabel
+          ),
+          description: opt.description,
+          onSelect: () => handleVoicePresetChange(opt.id),
+        };
+      }),
+    },
+  ];
   const [isRawJobTextExpanded, setIsRawJobTextExpanded] =
     React.useState<boolean>(true);
   const sourceSummary = React.useMemo(
@@ -1628,22 +1658,22 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                               {sourceMetadataCards.map((item) => (
                                 <div
                                   key={`${item.label}:${item.value}`}
-                                  className="dasti-proposal-source-summary__card"
+                                  className="ds-card ds-card--muted dasti-proposal-source-summary__card"
                                 >
-                                  <div className="dasti-proposal-source-summary__label">
+                                  <div className="ds-card__eyebrow dasti-proposal-source-summary__label">
                                     {item.label}
                                   </div>
-                                  <div className="dasti-proposal-source-summary__value">
+                                  <div className="ds-card__body dasti-proposal-source-summary__value">
                                     {item.value}
                                   </div>
                                 </div>
                               ))}
                               {sourceSummary.toneCues.length > 0 ? (
-                                <div className="dasti-proposal-source-summary__card">
-                                  <div className="dasti-proposal-source-summary__label">
+                                <div className="ds-card ds-card--muted dasti-proposal-source-summary__card">
+                                  <div className="ds-card__eyebrow dasti-proposal-source-summary__label">
                                     Tone cues
                                   </div>
-                                  <div className="dasti-proposal-source-summary__value dasti-proposal-source-summary__value--chips">
+                                  <div className="ds-card__body dasti-proposal-source-summary__value dasti-proposal-source-summary__value--chips">
                                     {sourceSummary.toneCues.map((cue) => (
                                       <span
                                         key={cue}
@@ -1809,51 +1839,59 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                       ) : null}
                     </div>
                   ) : null}
-                  <button
-                    ref={typeChipRef}
-                    type="button"
-                    aria-label="Document type"
-                    data-toolbar-tooltip="Type"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleMenu("type");
-                    }}
-                    className="dasti-proposal-chip dasti-toolbar-tooltip-trigger--above"
-                  >
-                    <span className="dasti-proposal-chip__label">
-                      {typeLabel}
-                    </span>
-                    <ChevronDown
-                      size={12}
-                      strokeWidth={1.5}
-                      aria-hidden="true"
-                    />
-                  </button>
+                  <Menu
+                    ariaLabel="Document type"
+                    align="end"
+                    side="top"
+                    sections={typeMenuSections}
+                    trigger={
+                      <button
+                        type="button"
+                        aria-label="Document type"
+                        data-toolbar-tooltip="Type"
+                        onClick={(e) => e.stopPropagation()}
+                        className="dasti-proposal-chip dasti-toolbar-tooltip-trigger--above"
+                      >
+                        <span className="dasti-proposal-chip__label">
+                          {typeLabel}
+                        </span>
+                        <ChevronDown
+                          size={12}
+                          strokeWidth={1.5}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    }
+                  />
                   {!suppressToneControls && (
-                    <button
-                      ref={toneChipRef}
-                      type="button"
-                      aria-label="Tone"
-                      data-toolbar-tooltip="Tone"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleMenu("tone");
-                      }}
-                      className={
-                        selectedVisibleVoicePreset
-                          ? "dasti-proposal-chip dasti-proposal-chip--active dasti-toolbar-tooltip-trigger--above"
-                          : "dasti-proposal-chip dasti-toolbar-tooltip-trigger--above"
+                    <Menu
+                      ariaLabel="Tone"
+                      align="end"
+                      side="top"
+                      sections={toneMenuSections}
+                      trigger={
+                        <button
+                          type="button"
+                          aria-label="Tone"
+                          data-toolbar-tooltip="Tone"
+                          onClick={(e) => e.stopPropagation()}
+                          className={
+                            selectedVisibleVoicePreset
+                              ? "dasti-proposal-chip dasti-proposal-chip--active dasti-toolbar-tooltip-trigger--above"
+                              : "dasti-proposal-chip dasti-toolbar-tooltip-trigger--above"
+                          }
+                        >
+                          <span className="dasti-proposal-chip__label">
+                            {toneUiLabel}
+                          </span>
+                          <ChevronDown
+                            size={12}
+                            strokeWidth={1.5}
+                            aria-hidden="true"
+                          />
+                        </button>
                       }
-                    >
-                      <span className="dasti-proposal-chip__label">
-                        {toneUiLabel}
-                      </span>
-                      <ChevronDown
-                        size={12}
-                        strokeWidth={1.5}
-                        aria-hidden="true"
-                      />
-                    </button>
+                    />
                   )}
                   <button
                     type={canSubmitGeneration ? "submit" : "button"}
@@ -1924,108 +1962,6 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           </div>
         </div>
       </form>
-      {/* Portal dropdowns for cbar */}
-      {openMenu !== null &&
-        createPortal(
-          <div
-            className="dasti-proposal-floating-menu dasti-proposal-chrome-drawer--stack"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: "fixed",
-              zIndex: 900,
-              minWidth: 220,
-              left: menuPos.left,
-              bottom: menuPos.bottom,
-              top: "auto",
-            }}
-          >
-            {openMenu === "type" && (
-              <>
-                {(
-                  [
-                    {
-                      value: "cover_letter",
-                      label: "Letter",
-                      desc: "For a job application.",
-                    },
-                    {
-                      value: "freelance_proposal",
-                      label: "Proposal",
-                      desc: "For a freelance project.",
-                    },
-                  ] as const
-                )
-                  .filter((opt) => opt.value !== selectedProposalType)
-                  .map((opt) => (
-                    <div
-                      key={opt.value}
-                      onClick={() => {
-                        form.setValue("proposalType", opt.value, {
-                          shouldDirty: true,
-                          shouldValidate: true,
-                        });
-                        setOpenMenu(null);
-                      }}
-                      className="dasti-menu-option"
-                    >
-                      <div className="dasti-menu-option__title">
-                        {opt.label}
-                      </div>
-                      <div className="dasti-menu-option__description">
-                        {opt.desc}
-                      </div>
-                    </div>
-                  ))}
-              </>
-            )}
-            {!suppressToneControls && openMenu === "tone" ? (
-              <div style={{ display: "grid", gap: "var(--s1)" }}>
-                {[AUTO_TONE_OPTION, ...TONE_OPTIONS].map((opt) => {
-                  const isSelected =
-                    opt.id === null
-                      ? !selectedVisibleVoicePreset
-                      : selectedVisibleVoicePreset === opt.id;
-
-                  return (
-                    <button
-                      key={opt.id ?? "auto"}
-                      type="button"
-                      onClick={() => {
-                        handleVoicePresetChange(opt.id);
-                        setOpenMenu(null);
-                      }}
-                      className={clsx(
-                        "dasti-menu-option dasti-menu-option--tone",
-                        isSelected && "dasti-menu-option--selected",
-                      )}
-                      aria-pressed={isSelected}
-                    >
-                      <div className="dasti-menu-option__row dasti-menu-option__row--between">
-                        <div className="dasti-menu-option__copy">
-                          <div className="dasti-menu-option__title">
-                            {opt.uiLabel}
-                          </div>
-                          <div className="dasti-menu-option__description">
-                            {opt.description}
-                          </div>
-                        </div>
-                        {isSelected ? (
-                          <span
-                            className="dasti-menu-option__check"
-                            aria-hidden
-                          >
-                            <Check size={15} strokeWidth={1.8} />
-                          </span>
-                        ) : null}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>,
-          document.body,
-        )}
     </div>
   );
 };
