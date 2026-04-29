@@ -1526,7 +1526,7 @@ export default function SectionEditor({
 
     const blocks = Array.isArray(section.blocks) ? section.blocks : [];
     const derivedProjects = blocks
-      .map((block, index) => {
+      .map((block, index): IProjectItem | null => {
         const title = String(block.title ?? "").trim();
         const description = plainTextFromBlockValue(block);
         if (!title && !description) {
@@ -4499,7 +4499,7 @@ export default function SectionEditor({
           String(section.id),
           section.title,
         );
-        const existingPrimaryBlock = blocks[0] as
+        const existingPrimaryBlock = blocks[0] as unknown as
           | Record<string, unknown>
           | undefined;
         const nextPrimaryBlock = {

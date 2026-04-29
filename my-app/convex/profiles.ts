@@ -257,7 +257,7 @@ export const upsert = internalMutation({
     if (existing) {
       return ctx.db.patch(existing._id, {
         preferences: args.preferences,
-        version: existing.version + 1,
+        version: (existing.version ?? 1) + 1,
         updatedAt: Date.now(),
       });
     } else {

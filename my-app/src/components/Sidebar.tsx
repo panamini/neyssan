@@ -950,7 +950,7 @@ export const Sidebar: React.FC = () => {
     () =>
       proposalDocsForTitles
         .slice(0, MAX_RECENT_ITEMS)
-        .map((doc) => ({
+        .map((doc): SidebarListItem => ({
           key: doc.key,
           title: proposalTitles.get(doc.key) ?? "Untitled cover letter",
           href:

@@ -109,6 +109,7 @@ export interface IExperienceItem extends ICVArrayItem {
   endDate?: string | null;
   dateConfidence?: RangeConfidence;
   responsibilities?: string[];
+  responsibilityBullets?: string[];
   achievements?: string[];
   summary?: string | null;
   summarySource?: "original" | "synthesized_from_responsibilities" | null;

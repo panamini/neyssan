@@ -2,7 +2,7 @@ import React from "react";
 import { X } from "@/lib/icons";
 import "./resume-preview.css";
 
-import { resumeLayoutSpec } from "./resume-layout.spec";
+import { resumeLayoutSpec } from "./resume-layout-spec";
 import {
   getResumeTemplateId,
   resolveVerbatiStyle,
@@ -738,7 +738,7 @@ function findLabeledItem<T extends ResumeLabeledValue>(
 }
 
 function uniqueRows(
-  rows: Array<ResumeLabeledValue | null>,
+  rows: Array<ResumeLabeledValue | null | undefined>,
 ): ResumeLabeledValue[] {
   const seen = new Set<string>();
   const result: ResumeLabeledValue[] = [];
@@ -1193,6 +1193,7 @@ const QUIRE_SIDEBAR_SECTION_HEADING: React.CSSProperties = {
 function QuirePage({
   variant,
   data,
+  activeTarget = null,
   comparisonLabel,
   compactComparison,
   onActivateComparison,
@@ -1200,6 +1201,7 @@ function QuirePage({
 }: {
   variant: ResumeVariant;
   data: ResumeData;
+  activeTarget?: ResumeActiveTarget | null;
   comparisonLabel?: string;
   compactComparison?: boolean;
   onActivateComparison?: (() => void) | undefined;
@@ -2305,9 +2307,8 @@ function SwissMinimaPage({
   >([]);
   const stackRef = React.useRef<HTMLDivElement | null>(null);
 
-  const supportSections = React.useMemo(
-    () =>
-      [
+  const supportSections = React.useMemo<SwissMinimaSupportSection[]>(() => {
+    const sections: Array<SwissMinimaSupportSection | null> = [
         data.projects.length > 0
           ? {
               key: "projects",
@@ -2735,13 +2736,16 @@ function SwissMinimaPage({
             </p>
           ),
         })),
-      ]
+      ];
+
+      return sections
         .filter(
           (
             value,
           ): value is SwissMinimaSupportSection => Boolean(value),
         )
-        .sort((left, right) => left.sectionOrder - right.sectionOrder),
+        .sort((left, right) => left.sectionOrder - right.sectionOrder);
+    },
     [
       activeTarget,
       data.achievementItems,
@@ -2762,10 +2766,17 @@ function SwissMinimaPage({
     [supportSections],
   );
   const pageContentHeightPx = React.useMemo(() => {
-    const canonical = normalizeResumePreviewTokens(variant, stylePreset);
+    const normalizedStyle = resolveVerbatiStyle(stylePreset ?? null);
+    const templateDefinition = getResumeTemplateDefinition(
+      getResumeTemplateId(normalizedStyle),
+    );
+    const canonical = normalizeResumePreviewTokens({
+      resumeTemplateId: templateDefinition.id,
+      stylePreset: normalizedStyle,
+    });
     return Math.max(
       1,
-      Math.floor(canonical.geometry.page.liveArea.heightMm * MM_TO_PX),
+      Math.floor((canonical.geometry.page.liveArea?.heightMm ?? 297) * MM_TO_PX),
     );
   }, [stylePreset, variant]);
   const swissMinimaPageStyle = React.useMemo(
@@ -3480,7 +3491,9 @@ function SwissMinimaPage({
         className="resume-page-measure-shell"
         aria-hidden="true"
         data-no-pan="true"
-        inert=""
+        {...({ inert: "" } as React.HTMLAttributes<HTMLDivElement> & {
+          inert: string;
+        })}
       >
         <article
           className={`resume-page resume-page--${variant.id} resume-page--measure`}
@@ -5157,6 +5170,7 @@ function ResumeVariantPage({
       <QuirePage
         variant={variant}
         data={data}
+        activeTarget={activeTarget}
         comparisonLabel={comparisonLabel}
         compactComparison={compactComparison}
         onActivateComparison={onActivateComparison}

@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import { v } from "convex/values";
 import {
   DEFAULT_PROPOSAL_VOICE_PRESET,
@@ -200,6 +201,11 @@ type PresetSlotData = {
   name?: string;
 };
 
+type UserProfileReplacement = Omit<
+  Doc<"userProfiles">,
+  "_id" | "_creationTime"
+>;
+
 function applyPresetToCurrentProposalFields(
   nextReplacement: Record<string, unknown>,
   preset: PresetSlotData,
@@ -311,8 +317,8 @@ export const savePreset = mutation({
 
     await Promise.all(
       profiles.map((profile) => {
-        const { _creationTime, _id, ...rest } = profile;
-        const nextReplacement: Record<string, unknown> = {
+        const { _creationTime, _id, ...rest } = profile as Doc<"userProfiles">;
+        const nextReplacement: UserProfileReplacement = {
           ...rest,
           [fieldKey]: cleanPreset,
           updatedAt: Date.now(),
@@ -357,8 +363,8 @@ export const setActivePreset = mutation({
 
     await Promise.all(
       profiles.map((profile) => {
-        const { _creationTime, _id, ...rest } = profile;
-        const nextReplacement: Record<string, unknown> = {
+        const { _creationTime, _id, ...rest } = profile as Doc<"userProfiles">;
+        const nextReplacement: UserProfileReplacement = {
           ...rest,
           proposalActivePresetSlot: args.slot,
           updatedAt: Date.now(),
@@ -507,8 +513,8 @@ export const setCurrent = mutation({
 
     if (needsWrite) {
       const replacementByProfile = profiles.map((profile) => {
-        const { _creationTime, _id, ...rest } = profile;
-        const nextReplacement: Record<string, unknown> = {
+        const { _creationTime, _id, ...rest } = profile as Doc<"userProfiles">;
+        const nextReplacement: UserProfileReplacement = {
           ...rest,
           proposalTemplateId: nextTemplateId,
           updatedAt: Date.now(),

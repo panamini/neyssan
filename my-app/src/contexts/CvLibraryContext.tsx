@@ -14,7 +14,12 @@ import { useMutation } from "convex/react";
 import { convexClient } from "../lib/convex-client";
 import { useConvexStorageAdapter } from "../adapters/StorageAdapter";
 import { mapProfileToCvDocument } from "../adapters/profile-mapper";
-import type { CvDocument, CvSection, CvBlock } from "../types/cvDocument";
+import type {
+  CvDocument,
+  CvSection,
+  CvBlock,
+  IProfileItem,
+} from "../types/cvDocument";
 import { safeParseCvDocument } from "../schemas/cvDocument.schema";
 import type { RemirrorJSON } from "remirror";
 import { ensureRemirrorDoc } from "../components/remirror-editor/utils/conversion";
@@ -105,6 +110,10 @@ function hasTextContent(value: unknown): boolean {
   return fragments.some((fragment) => fragment.length > 0);
 }
 
+function isProfileStructuredItem(value: unknown): value is IProfileItem {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
 function hasMeaningfulCvContent(doc: CvDocument | null): boolean {
   if (!doc) return false;
   if (!isPlaceholderCvTitle(doc.title)) return true;
@@ -116,8 +125,9 @@ function hasMeaningfulCvContent(doc: CvDocument | null): boolean {
       : [];
 
     if (section.type === "profile") {
+      const profileItems = structured.filter(isProfileStructuredItem);
       if (
-        structured.some((item) =>
+        profileItems.some((item) =>
           [
             item?.name,
             item?.email,
@@ -338,7 +348,7 @@ function expandLibrarySummaryOnlyCv(doc: CvDocument): CvDocument {
   const existingProfileItem = Array.isArray(
     existingProfileSection?.structuredContent,
   )
-    ? existingProfileSection.structuredContent[0]
+    ? existingProfileSection.structuredContent.find(isProfileStructuredItem)
     : undefined;
 
   const mergedSections = template.sections.map((section) => {
@@ -347,7 +357,7 @@ function expandLibrarySummaryOnlyCv(doc: CvDocument): CvDocument {
     }
 
     const templateProfileItem = Array.isArray(section.structuredContent)
-      ? section.structuredContent[0]
+      ? section.structuredContent.find(isProfileStructuredItem)
       : undefined;
     if (!templateProfileItem) {
       return section;

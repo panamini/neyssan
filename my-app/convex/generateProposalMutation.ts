@@ -127,9 +127,9 @@ const proposalVoicePresetChoice = v.union(
 
 const proposalToneTuningChoice = v.union(
   v.literal("more_human"),
-  v.literal("more_concise"),
-  v.literal("more_formal"),
-  v.literal("warmer"),
+  v.literal("more_direct"),
+  v.literal("more_structured"),
+  v.literal("more_confident"),
 );
 
 const proposalCharacterLimitModeChoice = v.union(
@@ -189,6 +189,7 @@ type PersonalizationMode = "default" | "explicit_only";
 export type GenerateProposalArgs = {
   jobTitle: string;
   jobDescription: string;
+  jobId?: string;
   clientRunId?: string;
   proposalType:
     | "technical"
@@ -572,7 +573,7 @@ export type CoverLetterRoutingTelemetry = {
   normalizedFailureCode: string | null;
   runtimeFailureReason: string | null;
   counterfactualNextStructuredGate:
-    | Exclude<StructuredCoverLetterRolloutFallbackReason, "rollout_disabled">
+    | StructuredCoverLetterRolloutFallbackReason
     | "eligible";
   attemptedPath: CoverLetterTelemetryAttemptedPathLabel;
   requestedModelType: ProposalModelType;
@@ -1151,7 +1152,7 @@ function isProposalProviderTransportError(
 
 function coerceProposalProviderBusyToConvexError(
   error: ProposalProviderBusyError,
-): ConvexError {
+): ConvexError<any> {
   return new ConvexError({
     code: CONTROLLED_PROPOSAL_PROVIDER_BUSY_CODE,
     message: CONTROLLED_PROPOSAL_PROVIDER_BUSY_MESSAGE,
@@ -1165,7 +1166,7 @@ function coerceProposalProviderBusyToConvexError(
 
 function coerceProposalProviderTransportToConvexError(
   error: ProposalProviderTransportError,
-): ConvexError {
+): ConvexError<any> {
   return new ConvexError({
     code: CONTROLLED_PROPOSAL_PROVIDER_TRANSPORT_ERROR_CODE,
     message: CONTROLLED_PROPOSAL_PROVIDER_TRANSPORT_ERROR_MESSAGE,
@@ -1277,7 +1278,7 @@ export type ProposalFinalizationDebugTrace = {
 export function coerceProposalFinalizationFailureToConvexError(args: {
   error: unknown;
   attemptedPath: ProposalGenerationPathLabel;
-}): ConvexError {
+}): ConvexError<any> {
   const message =
     args.error instanceof Error ? args.error.message : String(args.error);
   return new ConvexError(
@@ -2852,7 +2853,7 @@ function getCounterfactualNextStructuredGate(args: {
   sourceFactBank: readonly string[];
   resolvedStructuredRolloutMode: StructuredMistralCoverLetterRolloutMode;
 }):
-  | Exclude<StructuredCoverLetterRolloutFallbackReason, "rollout_disabled">
+  | StructuredCoverLetterRolloutFallbackReason
   | "eligible" {
   const counterfactualRolloutValue =
     resolveCounterfactualStructuredRolloutValue(
@@ -3315,7 +3316,7 @@ function sanitizePresetGuidanceForClaimSafety(guidance: string): string {
 }
 
 function buildCoverLetterPresetBodyOverlay(
-  voicePreset: ProposalVoicePreset | undefined,
+  voicePreset: ProposalVoicePreset | null | undefined,
 ): string[] {
   switch (voicePreset) {
     case "expert":
@@ -9319,13 +9320,10 @@ export async function handleGenerateProposal(
               tone: "technical",
               formalityLevel: effectiveTone.formalityLevel,
               creativity: effectiveTone.creativity,
-            }, {
-              signal: cancellationContext?.signal,
             });
             proposalContent = proposal.content;
           } else if (outputFormat === "application_message") {
             proposalContent = await gpt4Adapter.generate(prompt, {
-              signal: cancellationContext?.signal,
             });
           } else {
             const proposal = await proposalService.generateCreativeProposal({
@@ -9336,8 +9334,6 @@ export async function handleGenerateProposal(
               ),
               creativeDirection:
                 effectivePersonalization?.desiredPosition ?? "",
-            }, {
-              signal: cancellationContext?.signal,
             });
             proposalContent = proposal.content;
           }
@@ -9908,7 +9904,9 @@ export async function handleGenerateProposal(
       if (isProposalProviderBusyError(error)) {
         markProviderBusyFailure();
         routingFailureStage = error.stage;
-        routingNormalizedFailureCode = CONTROLLED_PROPOSAL_PROVIDER_BUSY_CODE;
+        const triggerCode: ProposalFallbackTriggerCode =
+          CONTROLLED_PROPOSAL_PROVIDER_BUSY_CODE;
+        routingNormalizedFailureCode = triggerCode;
         if (
           canAttemptProposalFallback({
             requestedModelType,
@@ -9918,13 +9916,13 @@ export async function handleGenerateProposal(
             hasAttemptedFallback,
           })
         ) {
-          fallbackTriggerCode = routingNormalizedFailureCode;
+          fallbackTriggerCode = triggerCode;
           usedFallback = true;
           hasAttemptedFallback = true;
           logProposalFallbackActivation({
             requestedModelType,
             fallbackModelType: "chatgpt",
-            triggerCode: routingNormalizedFailureCode,
+            triggerCode,
             triggerStage: routingFailureStage,
             hasCv: plannerContextMode !== "none",
             attemptedPath: attemptedGenerationPath,
@@ -9939,8 +9937,9 @@ export async function handleGenerateProposal(
       }
       if (isProposalProviderTransportError(error)) {
         routingFailureStage = error.stage;
-        routingNormalizedFailureCode =
+        const triggerCode: ProposalFallbackTriggerCode =
           CONTROLLED_PROPOSAL_PROVIDER_TRANSPORT_ERROR_CODE;
+        routingNormalizedFailureCode = triggerCode;
         if (
           canAttemptProposalFallback({
             requestedModelType,
@@ -9950,13 +9949,13 @@ export async function handleGenerateProposal(
             hasAttemptedFallback,
           })
         ) {
-          fallbackTriggerCode = routingNormalizedFailureCode;
+          fallbackTriggerCode = triggerCode;
           usedFallback = true;
           hasAttemptedFallback = true;
           logProposalFallbackActivation({
             requestedModelType,
             fallbackModelType: "chatgpt",
-            triggerCode: routingNormalizedFailureCode,
+            triggerCode,
             triggerStage: routingFailureStage,
             hasCv: plannerContextMode !== "none",
             attemptedPath: attemptedGenerationPath,

@@ -47,9 +47,10 @@ export function normalizeEditorAiTextResult(
   if (!requestedDefinition) return null;
 
   const structuredResult = typeof result === "string" ? null : result;
-  const text = structuredResult
-    ? String(structuredResult.text ?? "").trim()
-    : result.trim();
+  const text =
+    typeof result === "string"
+      ? result.trim()
+      : String(result.text ?? "").trim();
 
   if (!text) return null;
 

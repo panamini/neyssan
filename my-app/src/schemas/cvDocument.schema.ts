@@ -368,8 +368,10 @@ const _CvDocumentBaseStrict = z.object({
   tags: z.array(z.string()).optional(),
   summary: z.union([RemirrorJSONSchema, z.string()]).optional(),
 });
-export const CvDocumentSchema = _CvDocumentBase.passthrough();
-export const CvDocumentSchemaStrict = _CvDocumentBaseStrict.strict();
+export const CvDocumentSchema: z.ZodType<CvDocumentType> =
+  _CvDocumentBase.passthrough() as z.ZodType<CvDocumentType>;
+export const CvDocumentSchemaStrict: z.ZodType<CvDocumentType> =
+  _CvDocumentBaseStrict.strict() as z.ZodType<CvDocumentType>;
 // Schema output types (avoid exporting names that clash with application TS interfaces)
 export type CvDocumentSchemaOutput = z.infer<typeof CvDocumentSchema>;
 export type CvDocumentSchemaStrictOutput = z.infer<typeof CvDocumentSchemaStrict>;

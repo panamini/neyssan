@@ -5,48 +5,20 @@ import {
   QueryCtx,
 } from "./_generated/server";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
-import type { ProposalTemplateId } from "./lib/proposals/renderTemplates";
+import type { Doc } from "./_generated/dataModel";
 import {
   getPrimaryProfileForClerk,
   listProfilesForClerk,
   resolveCanonicalProfileKeywordsForWrite,
+  type StoredUserProfile,
 } from "./lib/userProfiles";
 import {
   canonicalizeUserProfileMetadata,
   userProfileMetadataValidator,
 } from "./lib/userProfileMetadata";
 
-export type UserProfile = {
-  _id: Id<"userProfiles">;
-  _creationTime: number;
-  clerkId?: string;
-  email: string;
-  name?: string;
-  version: number;
-  createdAt: number;
-  updatedAt: number;
-  preferences: {
-    rateLimits?: Record<string, unknown>;
-    writingStyle: string;
-    tonePreference: string;
-    autoSend: boolean;
-  };
-  summary?: string;
-  skills?: string[];
-  keywords?: string[];
-  experience?: Array<Record<string, unknown>>;
-  education?: Array<Record<string, unknown>>;
-  linkedIn?: string;
-  raw_text?: string;
-  proposalVoicePreset?:
-    | "signature"
-    | "expert"
-    | "direct"
-    | "engaging"
-    | "storyteller";
-  proposalTemplateId?: ProposalTemplateId;
-};
+export type UserProfile = StoredUserProfile;
+type UserProfileInsert = Omit<Doc<"userProfiles">, "_id" | "_creationTime">;
 
 export const createOrUpdateUser = internalMutation({
   args: {
@@ -75,7 +47,7 @@ export const createOrUpdateUser = internalMutation({
       );
       return existingUser._id;
     } else {
-      const newUser: Omit<UserProfile, "_id" | "_creationTime"> = {
+      const newUser: UserProfileInsert = {
         clerkId,
         email,
         ...(name !== undefined && { name }),
