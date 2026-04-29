@@ -36,8 +36,8 @@ RUN --mount=type=cache,target=/var/cache/apt \
     rm -rf /var/lib/apt/lists/*
 
 # Isolated virtualenv for main service (kept in base so deps stage can reuse)
-RUN python -m venv "${VIRTUAL_ENV}" && \
-    pip install --upgrade pip setuptools wheel
+RUN /usr/local/bin/python -m venv "${VIRTUAL_ENV}" && \
+    "${VIRTUAL_ENV}/bin/python" -m pip install --upgrade pip setuptools wheel
 
 WORKDIR /app
 
@@ -60,7 +60,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
 
 # 1) Pre-install Paddle core (kept minimal here)
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir "paddlepaddle==3.2.0"
+    "${VIRTUAL_ENV}/bin/python" -m pip install --no-cache-dir "paddlepaddle==3.2.0"
 
 # 2) App deps — prefer the lockfile when present for determinism
 COPY cv_parser_service/requirements.lock /tmp/service-requirements.lock
@@ -69,30 +69,30 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     bash -lc 'set -euo pipefail; \
       if [[ -s /tmp/service-requirements.lock ]]; then \
         echo ">>> Installing from requirements.lock"; \
-        python -m pip install --no-cache-dir -r /tmp/service-requirements.lock; \
+        /opt/venv/bin/python -m pip install --no-cache-dir -r /tmp/service-requirements.lock; \
       else \
         echo ">>> Installing from requirements.txt"; \
-        python -m pip install --no-cache-dir -r /tmp/service-requirements.txt; \
+        /opt/venv/bin/python -m pip install --no-cache-dir -r /tmp/service-requirements.txt; \
       fi; \
-      python -m pip check; \
-      python -c "import fastapi, uvicorn"'
+      /opt/venv/bin/python -m pip check; \
+      /opt/venv/bin/python -c "import fastapi, uvicorn"'
 
 # 3) Create isolated docTR venv and install backend per-architecture.
 #    On arm64/aarch64 install TF+docTR into /opt/doctr-venv.
 ARG TARGETARCH
 RUN set -eux; \
-    python -m venv /opt/doctr-venv; \
-    /opt/doctr-venv/bin/pip install --upgrade pip setuptools wheel; \
+    /usr/local/bin/python -m venv /opt/doctr-venv; \
+    /opt/doctr-venv/bin/python -m pip install --upgrade pip setuptools wheel; \
     arch="${TARGETARCH:-$(uname -m)}"; \
     if [ "$arch" = "arm64" ] || [ "$arch" = "aarch64" ]; then \
-      /opt/doctr-venv/bin/pip install --no-cache-dir \
+      /opt/doctr-venv/bin/python -m pip install --no-cache-dir \
         "tensorflow==2.15.*" \
         "keras==2.15.*" \
         "python-doctr[tf]==0.10.*"; \
       echo "Installed TensorFlow/docTR for ARM64 architecture"; \
     else \
       # Keep a minimal docTR install for non-TF (PyTorch) flows; this is optional but keeps import surface stable.
-      /opt/doctr-venv/bin/pip install --no-cache-dir "python-doctr[torch]==0.10.*" || true; \
+      /opt/doctr-venv/bin/python -m pip install --no-cache-dir "python-doctr[torch]==0.10.*" || true; \
       echo "Created doctr venv without TensorFlow for TARGETARCH=$arch"; \
     fi; \
     test -f /opt/doctr-venv/bin/python && echo "docTR venv created successfully" || echo "WARNING: docTR venv creation failed"
@@ -132,7 +132,7 @@ ENV PYTHONUNBUFFERED=1 \
     NUMEXPR_NUM_THREADS=1 \
     PADDLE_CPU_MATH_LIBRARY_NUM_THREADS=1 \
     OPENBLAS_CORETYPE=ARMV8 \
-    PADDLE_WORKER_PYTHON=/opt/paddle-venv/bin/python \
+    CV_PADDLE_WORKER_PYTHON=/opt/venv/bin/python \
     FLAGS_allocator_strategy=naive_best_fit \
     FLAGS_use_mkldnn=false \
     FLAGS_use_cuda=false \
@@ -154,6 +154,7 @@ WORKDIR /app
 
 # ✅ Bring the entire prebuilt venvs from deps (no dynamic COPY tricks)
 COPY --from=deps /opt/venv /opt/venv
+RUN /opt/venv/bin/python -c "import fastapi, uvicorn"
 COPY --from=deps /opt/doctr-venv /opt/doctr-venv
 
 # App code last for faster rebuilds
@@ -164,44 +165,9 @@ COPY scripts /app/scripts
 RUN --mount=type=cache,target=/root/.npm \
     if [ -f /app/package-lock.json ]; then npm ci; fi && \
     npm ci --prefix /app/my-app && \
-    if [ -f /app/package-lock.json ]; then \
-      PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH}" npx playwright install --with-deps chromium; \
-    else \
-      PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH}" npx --prefix /app/my-app playwright install --with-deps chromium; \
-    fi
+    PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH}" npx --prefix /app/my-app playwright install --with-deps chromium
 
-# Dedicated Paddle venv (system BLAS serial build only)
-RUN PYTHON_FOR_PADDLE="$(command -v python3.11 || command -v python3)" && \
-    "${PYTHON_FOR_PADDLE}" -m venv /opt/paddle-venv --system-site-packages && \
-    /opt/paddle-venv/bin/pip install --upgrade pip setuptools wheel && \
-    /opt/paddle-venv/bin/pip install --no-cache-dir --no-deps paddlepaddle==3.2.0 && \
-    /opt/paddle-venv/bin/pip install --no-cache-dir --prefer-binary "paddleocr[doc-parser]==3.2.0" && \
-    /opt/paddle-venv/bin/pip install --no-cache-dir --prefer-binary "paddlex==3.2.0" && \
-    /opt/paddle-venv/bin/pip install --no-cache-dir \
-        Pillow \
-        pypdfium2 \
-        protobuf \
-        threadpoolctl \
-        typing-extensions==4.12.2 \
-        httpx \
-        networkx \
-        'opt-einsum==3.3.0' \
-        'safetensors>=0.6.0' \
-        'PyYAML==6.0.2' \
-        requests \
-        chardet \
-        colorlog \
-        filelock \
-        'ruamel.yaml>=0.18.0' \
-        'ruamel.yaml.clib>=0.2.7' \
-        ujson \
-        'pydantic>=2,<3' \
-        prettytable \
-        py-cpuinfo \
-        'pandas>=1.3' \
-        huggingface_hub \
-        'modelscope>=1.28.0' \
-        'aistudio_sdk>=0.3.5'
+RUN /opt/venv/bin/python -c "import fastapi, uvicorn"
 
 # Non-root user & writable caches
 RUN useradd -m -u 10001 -s /usr/sbin/nologin app && \

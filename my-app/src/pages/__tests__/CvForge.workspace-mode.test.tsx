@@ -362,7 +362,7 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByRole("menuitemradio", { name: /Stone Swiss/i }));
 
     expect(
-      screen.getByText("Preview style: swiss|quiet-editorial|pierre"),
+      screen.getByText("Preview style: workshop|quiet-editorial|pierre"),
     ).toBeInTheDocument();
   });
 

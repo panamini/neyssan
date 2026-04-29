@@ -28,5 +28,14 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/vite-env.d.ts", "src", "convex", "config", "types", "test.js", "src/adapters"]
+  "include": ["src/vite-env.d.ts", "src", "convex", "config", "types", "test.js", "src/adapters"],
+  "exclude": [
+    "**/__tests__/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/*.bak",
+    "**/prev_canonicalize*.ts",
+    "src/ProposalGenerator.tsx",
+    "src/pages/ProposalForgeNext.tsx"
+  ]
 }
