@@ -1,5 +1,5 @@
 import React from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -73,14 +73,15 @@ describe("ProposalComposeToolbar", () => {
     await user.click(
       screen.getByRole("button", { name: "Tone of voice Natural" }),
     );
-    expect(
-      screen.getByRole("dialog", { name: "Tone of voice" }),
-    ).toBeInTheDocument();
+    const menu = screen.getByRole("menu", { name: "Tone of voice" });
+    expect(menu).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(
-      screen.queryByRole("dialog", { name: "Tone of voice" }),
-    ).not.toBeInTheDocument();
+    fireEvent.keyDown(menu, { key: "Escape" });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("menu", { name: "Tone of voice" }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   it("uses app tooltips without native title attributes on the compose and CV controls", () => {

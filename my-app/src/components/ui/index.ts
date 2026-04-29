@@ -27,3 +27,5 @@ export { ToastProvider, toast, useToast } from "./toast";
 export type { ToastInput, ToastTone } from "./toast";
 export { Dialog, DialogActions, DialogContent } from "./dialog";
 export type { DialogProps } from "./dialog";
+export { Menu } from "./menu";
+export type { MenuItem, MenuProps, MenuSection } from "./menu";

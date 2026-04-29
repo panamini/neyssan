@@ -187,7 +187,7 @@ describe("ProfileReviewCard add section order", () => {
     await user.click(screen.getByRole("button", { name: "Manage sections" }));
 
     const optionTitles = Array.from(
-      document.querySelectorAll(".dasti-add-section-menu .dasti-menu-option__title"),
+      document.querySelectorAll(".ds-menu__label-primary"),
       (node) => node.textContent?.trim(),
     );
 
@@ -216,7 +216,7 @@ describe("ProfileReviewCard add section order", () => {
     render(<ProfileReviewCard />);
 
     await user.click(screen.getByRole("button", { name: "Manage sections" }));
-    await user.click(screen.getByRole("button", { name: "Projects" }));
+    await user.click(screen.getByRole("menuitem", { name: "Projects" }));
 
     await waitFor(() =>
       expect(reorderSectionsMock).toHaveBeenCalledWith(
@@ -247,7 +247,7 @@ describe("ProfileReviewCard add section order", () => {
     render(<ProfileReviewCard />);
 
     await user.click(screen.getByRole("button", { name: "Manage sections" }));
-    await user.click(screen.getByRole("button", { name: "Achievements" }));
+    await user.click(screen.getByRole("menuitem", { name: "Achievements" }));
 
     await waitFor(() =>
       expect(reorderSectionsMock).toHaveBeenCalledWith(
@@ -281,7 +281,7 @@ describe("ProfileReviewCard add section order", () => {
 
     await user.click(screen.getByRole("button", { name: "Manage sections" }));
     await user.click(
-      screen.getByRole("button", { name: /Additional information/i }),
+      screen.getByRole("menuitem", { name: /Additional information/i }),
     );
 
     await waitFor(() =>
