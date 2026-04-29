@@ -14,7 +14,7 @@ export function SkillAdder({ onAdd }: SkillAdderProps) {
         aria-label="New skill"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none"
+        className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
         placeholder="Add skill"
       />
       <Button
@@ -52,11 +52,11 @@ export function ExperienceAdder({ onAdd }: ExperienceAdderProps) {
   return (
     <div className="p-2 border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)]">
       <div className="grid gap-2 md:grid-cols-2">
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none" />
-        <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none" />
-        <input value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="Start date (YYYY-MM-DD)" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none" />
-        <input value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="End date (YYYY-MM-DD or empty)" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none" />
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" rows={2} className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none md:col-span-2" />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow" />
+        <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow" />
+        <input value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="Start date (YYYY-MM-DD)" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow" />
+        <input value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="End date (YYYY-MM-DD or empty)" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow" />
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" rows={2} className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow md:col-span-2" />
       </div>
       <div className="flex gap-2 mt-2">
         <Button
@@ -104,11 +104,11 @@ export function EducationAdder({ onAdd }: EducationAdderProps) {
   return (
     <div className="p-2 border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)]">
       <div className="grid gap-2 md:grid-cols-2">
-        <input value={school} onChange={(e) => setSchool(e.target.value)} placeholder="School" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none" />
-        <input value={degree} onChange={(e) => setDegree(e.target.value)} placeholder="Degree" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none" />
-        <input value={fieldOfStudy} onChange={(e) => setFieldOfStudy(e.target.value)} placeholder="Field of study" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none" />
-        <input value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="Start date (YYYY-MM-DD)" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none" />
-        <input value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="End date (YYYY-MM-DD or empty)" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ac)] focus:[box-shadow:0_0_0_3px_var(--fr)] outline-none" />
+        <input value={school} onChange={(e) => setSchool(e.target.value)} placeholder="School" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow" />
+        <input value={degree} onChange={(e) => setDegree(e.target.value)} placeholder="Degree" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow" />
+        <input value={fieldOfStudy} onChange={(e) => setFieldOfStudy(e.target.value)} placeholder="Field of study" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow" />
+        <input value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="Start date (YYYY-MM-DD)" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow" />
+        <input value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="End date (YYYY-MM-DD or empty)" className="px-2 py-1 text-sm border [border-color:var(--color-border-strong)] [border-radius:var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow" />
       </div>
       <div className="flex gap-2 mt-2">
         <Button

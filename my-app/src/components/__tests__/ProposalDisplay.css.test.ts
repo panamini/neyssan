@@ -196,6 +196,9 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-compose-column--workspace\s+\.dasti-proposal-sheet,\s*[\s\S]*\.dasti-proposal-output-shell--workspace\s+\.dasti-document-shell\s*\{[\s\S]*box-shadow:\s*[\s\S]*var\(--document-viewer-frame-shadow\)/,
     );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-compose-column--workspace\s+\.dasti-proposal-sheet--composer,\s*[\s\S]*\.dasti-proposal-compose-column--workspace\s+\.dasti-proposal-sheet__header--composer\s*\{[\s\S]*background:\s*var\(--sfr\);/,
+    );
   });
 
   it("gives document edit mode full-width paper, bottom-safe scrolling, and an anchored count pill", () => {
@@ -460,10 +463,22 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-editor-page__drawer\s*\{[\s\S]*--proposal-editor-page-close-block-inset:\s*clamp\(36px,\s*5vw,\s*56px\);[\s\S]*--proposal-editor-page-close-inline-inset:\s*clamp\(32px,\s*5vw,\s*56px\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-editor-page__drawer\s*\{[\s\S]*background:\s*var\(--document-viewer-frame-surface\);/,
+      /\.dasti-proposal-editor-page__drawer\s*\{[\s\S]*background:\s*var\(--sfr\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-editor-page__drawer-close\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset-block-start:\s*var\(--proposal-editor-page-close-block-inset\);[\s\S]*inset-inline-end:\s*var\(--proposal-editor-page-close-inline-inset\);[\s\S]*background:\s*var\(--proposal-chrome-control-bg\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-editor-page__field-input\s*\{[\s\S]*border:\s*2px solid transparent;[\s\S]*background:\s*var\(--sf2\);[\s\S]*color:\s*var\(--ti\);[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-editor-page__field-input:hover:not\(:disabled,\s*:focus\)\s*\{[\s\S]*background:\s*var\(--sf3\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-editor-page__field-input:focus\s*\{[\s\S]*border-color:\s*var\(--ti\);[\s\S]*background:\s*var\(--sf2\);[\s\S]*box-shadow:\s*var\(--field-focus-shadow\) !important;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-editor-page__field-input:focus-visible\s*\{[\s\S]*box-shadow:\s*var\(--field-focus-shadow\) !important;/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-editor-page__drawer-card:last-child\s*\{[\s\S]*border-bottom:\s*0;/,
