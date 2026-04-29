@@ -390,6 +390,104 @@ input[type="range"] { width: 140px; }
 }
 
 /* ============================================================================
+   06c · MENU (dropdown / popover anchored to a trigger)
+   ============================================================================ */
+.ds-menu-preview {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.ds-menu {
+  min-width: 200px;
+  padding: var(--s2);
+  background: var(--sfr);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-control);
+  box-shadow: var(--shb);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  transform-origin: top left;
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-enter),
+    transform var(--motion-duration-fast) var(--motion-ease-enter);
+}
+.ds-menu[data-state="open"] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.ds-menu[data-state="closed"] {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  pointer-events: none;
+}
+.ds-menu__label {
+  padding: var(--s2) var(--s3);
+  font-size: var(--tx);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--tm3);
+}
+.ds-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  font-size: var(--ts);
+  color: var(--ti);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--r-control) - 4px);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--motion-duration-micro) var(--motion-ease-standard);
+}
+.ds-menu__item:hover,
+.ds-menu__item[data-highlighted] {
+  background: var(--sf2);
+}
+.ds-menu__item:focus-visible {
+  outline: 2px solid var(--ti);
+  outline-offset: -2px;
+}
+.ds-menu__item[disabled] {
+  color: var(--tm3);
+  cursor: not-allowed;
+}
+.ds-menu__item--danger { color: var(--danger); }
+.ds-menu__item--danger:hover,
+.ds-menu__item--danger[data-highlighted] {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.ds-menu__icon {
+  width: 16px; height: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--tm2);
+}
+.ds-menu__label-text { flex: 1; }
+.ds-menu__shortcut {
+  font-family: var(--font-mono);
+  font-size: var(--tx);
+  color: var(--tm3);
+  letter-spacing: 0.04em;
+}
+.ds-menu__separator {
+  height: 1px;
+  margin: var(--s2) 0;
+  background: var(--border-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-menu { transition: none; }
+}
+
+/* ============================================================================
    07 · SIDEBAR — gradient + 2px inset stripe (dasti signature)
    ============================================================================ */
 .ds-sidebar-demo { display: grid; grid-template-columns: 240px 1fr; gap: var(--s4); }
@@ -843,6 +941,53 @@ input[type="range"] { width: 140px; }
         <button class="ds-btn ds-btn--md ds-btn--primary" style="width: 100%">Continue</button>
       </footer>
     </aside>
+  </div>
+</section>
+
+<!-- 06c MENU ─────────────────────────────────────────────────────────── -->
+<section class="section" id="menu">
+  <div class="section-head">
+    <span class="overline">06c · Surface</span>
+    <h2 class="section-title">Menu — dropdown anchored to a trigger</h2>
+    <p class="section-desc">Floating menu opened by a button (kebab, "More", select-style trigger). Portal to <code>document.body</code>. Items support icon + label + optional shortcut. Danger variant for destructive actions. Replaces ad-hoc <code>LibraryFilterMenu</code>, popovers in <code>ProposalDisplay</code>, <code>ProposalComposeToolbar</code>, <code>SectionEditor</code>, etc.</p>
+  </div>
+
+  <div class="ds-menu-preview" style="display:flex; gap:var(--s5); flex-wrap:wrap; align-items:flex-start">
+    <div>
+      <button class="ds-btn ds-btn--md ds-btn--secondary" style="margin-bottom:var(--s2)">Actions ▾</button>
+      <div class="ds-menu" data-state="open" role="menu">
+        <button class="ds-menu__item" role="menuitem">
+          <span class="ds-menu__icon" aria-hidden="true">↗</span>
+          <span class="ds-menu__label-text">Open in new tab</span>
+          <span class="ds-menu__shortcut">⌘O</span>
+        </button>
+        <button class="ds-menu__item" role="menuitem">
+          <span class="ds-menu__icon" aria-hidden="true">⎘</span>
+          <span class="ds-menu__label-text">Duplicate</span>
+          <span class="ds-menu__shortcut">⌘D</span>
+        </button>
+        <button class="ds-menu__item" role="menuitem">
+          <span class="ds-menu__icon" aria-hidden="true">↗</span>
+          <span class="ds-menu__label-text">Export as PDF</span>
+        </button>
+        <div class="ds-menu__separator" role="separator"></div>
+        <div class="ds-menu__label">Danger zone</div>
+        <button class="ds-menu__item ds-menu__item--danger" role="menuitem">
+          <span class="ds-menu__icon" aria-hidden="true">×</span>
+          <span class="ds-menu__label-text">Delete</span>
+          <span class="ds-menu__shortcut">⌫</span>
+        </button>
+      </div>
+    </div>
+
+    <div>
+      <button class="ds-btn ds-btn--md ds-btn--ghost" style="margin-bottom:var(--s2)">⋯</button>
+      <div class="ds-menu" data-state="open" role="menu">
+        <button class="ds-menu__item" role="menuitem"><span class="ds-menu__label-text">Rename</span></button>
+        <button class="ds-menu__item" role="menuitem"><span class="ds-menu__label-text">Move to…</span></button>
+        <button class="ds-menu__item" role="menuitem" disabled><span class="ds-menu__label-text">Archive</span></button>
+      </div>
+    </div>
   </div>
 </section>
 
