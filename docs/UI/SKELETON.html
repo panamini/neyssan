@@ -297,6 +297,99 @@ input[type="range"] { width: 140px; }
 .ds-dialog__footer{ display: flex; gap: var(--s2); justify-content: flex-end; margin-top: var(--s5); }
 
 /* ============================================================================
+   06b · SHEET / DRAWER  (right-side panel + bottom-sheet variant)
+   ============================================================================ */
+.ds-sheet-preview {
+  position: relative;
+  width: 100%;
+  height: 360px;
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--r-surface);
+  background: var(--bg);
+  overflow: hidden;
+}
+.ds-sheet__overlay {
+  position: absolute; inset: 0;
+  background: color-mix(in srgb, var(--ink) 35%, transparent);
+  backdrop-filter: blur(6px) saturate(140%);
+  -webkit-backdrop-filter: blur(6px) saturate(140%);
+}
+.ds-sheet {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: min(420px, 100%);
+  background: var(--sfr);
+  border-left: 1px solid var(--border-soft);
+  box-shadow: var(--shc);
+  display: flex; flex-direction: column;
+  transform: translateX(0);
+  transition: transform var(--motion-duration-panel) var(--motion-ease-emphasized);
+}
+.ds-sheet[data-state="closed"] { transform: translateX(100%); }
+.ds-sheet__header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  border-bottom: 1px solid var(--border-soft);
+}
+.ds-sheet__title {
+  font-size: var(--tm);
+  line-height: var(--ll);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+}
+.ds-sheet__close {
+  width: 32px; height: 32px;
+  border: none; background: transparent;
+  color: var(--tm2);
+  border-radius: var(--r-control);
+  cursor: pointer;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+.ds-sheet__close:hover { background: var(--sf2); color: var(--ti); }
+.ds-sheet__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--s5);
+  display: flex; flex-direction: column; gap: var(--s4);
+}
+.ds-sheet__footer {
+  display: flex; gap: var(--s2); justify-content: flex-end;
+  padding: var(--s4) var(--s5);
+  border-top: 1px solid var(--border-soft);
+  background: var(--sf1);
+}
+
+/* Bottom-sheet variant — slides from bottom, mobile-first */
+.ds-bottom-sheet {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  max-height: 75%;
+  background: var(--sfr);
+  border-top: 1px solid var(--border-soft);
+  border-top-left-radius: var(--r-surface);
+  border-top-right-radius: var(--r-surface);
+  box-shadow: var(--shc);
+  display: flex; flex-direction: column;
+  transform: translateY(0);
+  transition: transform var(--motion-duration-panel) var(--motion-ease-emphasized);
+}
+.ds-bottom-sheet[data-state="closed"] { transform: translateY(100%); }
+.ds-bottom-sheet__handle {
+  align-self: center;
+  width: 36px; height: 4px;
+  margin-top: var(--s2);
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+.ds-bottom-sheet__header,
+.ds-bottom-sheet__body,
+.ds-bottom-sheet__footer { padding: var(--s4) var(--s5); }
+.ds-bottom-sheet__body { flex: 1; overflow-y: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-sheet, .ds-bottom-sheet { transition: none; }
+}
+
+/* ============================================================================
    07 · SIDEBAR — gradient + 2px inset stripe (dasti signature)
    ============================================================================ */
 .ds-sidebar-demo { display: grid; grid-template-columns: 240px 1fr; gap: var(--s4); }
@@ -703,6 +796,53 @@ input[type="range"] { width: 140px; }
       <button class="ds-btn ds-btn--md ds-btn--ghost">Keep editing</button>
       <button class="ds-btn ds-btn--md ds-btn--danger">Discard</button>
     </div>
+  </div>
+</section>
+
+<!-- 06b SHEETS ───────────────────────────────────────────────────────── -->
+<section class="section" id="sheet">
+  <div class="section-head">
+    <span class="overline">06b · Surface</span>
+    <h2 class="section-title">Sheet — right drawer + bottom sheet</h2>
+    <p class="section-desc">Right drawer for desktop side panels (skills, sections, filters). Bottom sheet for mobile pickers. Frost overlay, slide via <code>--motion-duration-panel</code> + <code>--motion-ease-emphasized</code>. Replaces ad-hoc <code>SkillsDrawer</code> and <code>AddSectionBottomSheet</code>.</p>
+  </div>
+
+  <div class="ds-sheet-preview">
+    <div class="ds-sheet__overlay"></div>
+    <aside class="ds-sheet" role="dialog" aria-labelledby="sheet-title">
+      <header class="ds-sheet__header">
+        <h3 id="sheet-title" class="ds-sheet__title">Edit skills</h3>
+        <button class="ds-sheet__close" aria-label="Close panel.">×</button>
+      </header>
+      <div class="ds-sheet__body">
+        <p style="font-size: var(--ts); color: var(--tm2); margin: 0;">Body content scrolls when overflowing. Use stack of fields with consistent <code>--s4</code> gaps.</p>
+        <div class="ds-pill-row">
+          <span class="ds-pill ds-pill--accent">React</span>
+          <span class="ds-pill ds-pill--accent">TypeScript</span>
+          <span class="ds-pill ds-pill--accent">Postgres</span>
+        </div>
+      </div>
+      <footer class="ds-sheet__footer">
+        <button class="ds-btn ds-btn--md ds-btn--ghost">Cancel</button>
+        <button class="ds-btn ds-btn--md ds-btn--primary">Save</button>
+      </footer>
+    </aside>
+  </div>
+
+  <div class="ds-sheet-preview" style="height: 320px; margin-top: var(--s5)">
+    <div class="ds-sheet__overlay"></div>
+    <aside class="ds-bottom-sheet" role="dialog" aria-labelledby="bsheet-title">
+      <div class="ds-bottom-sheet__handle" aria-hidden="true"></div>
+      <header class="ds-bottom-sheet__header">
+        <h3 id="bsheet-title" class="ds-sheet__title">Add section</h3>
+      </header>
+      <div class="ds-bottom-sheet__body">
+        <p style="font-size: var(--ts); color: var(--tm2); margin: 0;">Mobile-friendly picker. Slides from bottom, drag handle, max 75% viewport height.</p>
+      </div>
+      <footer class="ds-bottom-sheet__footer">
+        <button class="ds-btn ds-btn--md ds-btn--primary" style="width: 100%">Continue</button>
+      </footer>
+    </aside>
   </div>
 </section>
 
