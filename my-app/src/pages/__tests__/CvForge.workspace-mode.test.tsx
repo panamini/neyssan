@@ -100,6 +100,12 @@ vi.mock("convex/react", () => ({
         activeSlot: 1,
       };
     }
+    if (reference === "proposalSettings.getCurrent") {
+      return {
+        voicePreset: "engaging",
+        savedVoicePreset: "engaging",
+      };
+    }
     if (reference === "jobsPublic.getById") {
       if (args === "skip") {
         return undefined;
@@ -124,6 +130,7 @@ vi.mock("../../../convex/_generated/api", () => ({
   api: {
     proposalSettings: {
       getPresets: "proposalSettings.getPresets",
+      getCurrent: "proposalSettings.getCurrent",
     },
     functions: {
       transformEditorSelection: "functions.transformEditorSelection",
@@ -474,6 +481,8 @@ describe("CvForge workspace mode", () => {
       screen.getByRole("complementary", { name: "CV forge rail" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import CV" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New CV" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Sections" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -491,7 +500,10 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("tab", { name: "Style" }));
 
-    expect(screen.getByText("Document style. Applies to the full CV page.")).toBeInTheDocument();
+    expect(screen.getByText(/CV style/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Settings → Document style" }),
+    ).toHaveAttribute("href", "/settings");
   });
 
   it("opens a non-empty section editor from the paper and highlights the rail row", async () => {
@@ -1220,7 +1232,7 @@ describe("CvForge workspace mode", () => {
     ]);
   });
 
-  it("keeps tone selection local and sends freeform summary Ask with CV context", async () => {
+  it("uses the default settings tone and sends freeform summary Ask with CV context", async () => {
     const user = userEvent.setup();
     const importCv = vi.fn(async () => undefined);
     runCvSectionAiActionMock.mockResolvedValueOnce({
@@ -1236,9 +1248,8 @@ describe("CvForge workspace mode", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Ask for Summary" }));
-    await user.click(screen.getByRole("button", { name: "Warm" }));
     expect(importCv).not.toHaveBeenCalled();
-    expect(screen.getByText("Warm tone")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Warm" })).not.toBeInTheDocument();
 
     await user.type(
       screen.getByPlaceholderText("Tighten the second bullet, drop the buzzwords."),
@@ -1260,6 +1271,9 @@ describe("CvForge workspace mode", () => {
     );
     expect(runCvSectionAiActionMock.mock.lastCall?.[0].instruction).toContain(
       "TypeScript",
+    );
+    expect(runCvSectionAiActionMock.mock.lastCall?.[0].instruction).toContain(
+      "Tone preference: warm.",
     );
     expect(transformEditorSelectionMock).not.toHaveBeenCalled();
   });
@@ -1493,7 +1507,7 @@ describe("CvForge workspace mode", () => {
     expect(screen.getByText("Preview host: panel")).toBeInTheDocument();
   });
 
-  it("shows only the saved cv library when the picker is loaded", () => {
+  it("keeps the CV Forge workspace mounted instead of reopening the legacy picker", () => {
     useCvLibraryMock.mockReturnValue(
       buildCvLibraryState({
         currentCv: null,
@@ -1501,32 +1515,21 @@ describe("CvForge workspace mode", () => {
       }),
     );
 
-    const { container } = render(
+    render(
       <MemoryRouter initialEntries={["/cv"]}>
         <CvForge />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Choose your CV")).toBeInTheDocument();
-    expect(screen.getByText("Open a saved CV.")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Open a saved CV, import a new one, or start from scratch."),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Import new" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Start from scratch" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Open selected CV" }),
-    ).toBeInTheDocument();
-    expect(
-      container.querySelector(".dasti-doc-card--chooser.dasti-doc-card--selected"),
-    ).toBeTruthy();
+    expect(screen.queryByText("Choose your CV")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open selected CV" })).not.toBeInTheDocument();
+    expect(screen.getByText("Upload PDF")).toBeInTheDocument();
+    expect(screen.getByText("Start blank")).toBeInTheDocument();
   });
 
   it("opens the loaded workspace cv instead of reopening the picker when no id param is present", () => {
+    window.localStorage.removeItem("twoweeks:quick-start-completed");
+
     render(
       <MemoryRouter initialEntries={["/cv"]}>
         <CvForge />

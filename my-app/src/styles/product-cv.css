@@ -259,32 +259,12 @@
 
 .dasti-cv-review-banner__actions,
 .dasti-cv-review-block__actions,
-.dasti-cv-tone-row,
 .dasti-cv-style-pills,
 .dasti-cv-style-swatches {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-2);
-}
-
-.dasti-cv-tone-chip {
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  cursor: pointer;
-}
-
-.dasti-cv-tone-chip[data-selected="true"] {
-  box-shadow:
-    0 0 0 2px var(--sf0),
-    0 0 0 4px color-mix(in srgb, var(--ac) 36%, transparent);
-}
-
-.dasti-cv-tone-chip:focus-visible {
-  outline: 2px solid var(--ac);
-  outline-offset: 3px;
 }
 
 .dasti-cv-rail {
@@ -461,6 +441,14 @@
   font-size: var(--tx);
 }
 
+.dasti-cv-rail-pane__hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
 .dasti-cv-rail-label {
   color: var(--ac);
   font-size: var(--tx);
@@ -480,10 +468,15 @@
   line-height: var(--lx);
 }
 
-.dasti-cv-style-note {
-  padding: var(--space-2);
-  border-radius: var(--radius-card);
-  background: var(--sf1);
+.dasti-cv-rail-link {
+  color: var(--ac);
+  text-decoration: none;
+}
+
+.dasti-cv-rail-link:hover,
+.dasti-cv-rail-link:focus-visible {
+  text-decoration: underline;
+  outline: none;
 }
 
 .dasti-cv-org-list {

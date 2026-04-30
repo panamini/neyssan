@@ -1,5 +1,5 @@
 import React from "react";
-import { ClipboardText, FilePdf, ShareFat } from "@/lib/icons";
+import { ClipboardText, FilePdf, PenLine, ShareFat, Upload } from "@/lib/icons";
 import { Button, Menu, Pill, Sheet, ToneBadge } from "../ui";
 import type { CvToneChoice } from "./CvRail";
 
@@ -22,6 +22,8 @@ type CvStageBarProps = {
   tone: CvToneChoice;
   onModeChange: (mode: "edit" | "preview") => void;
   onOpenImportReview: () => void;
+  onImportCv: () => void;
+  onNewCv: () => void;
   onExportPdf: () => void;
   onExportDocx: () => void;
 };
@@ -35,6 +37,8 @@ export function CvStageBar({
   tone,
   onModeChange,
   onOpenImportReview,
+  onImportCv,
+  onNewCv,
   onExportPdf,
   onExportDocx,
 }: CvStageBarProps): JSX.Element {
@@ -169,6 +173,26 @@ export function CvStageBar({
         </div>
         <Button type="button" size="sm" variant="ghost" disabled>
           Version history
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={onImportCv}
+          disabled={exporting}
+          iconLeft={<Upload size={14} strokeWidth={1.8} />}
+        >
+          Import CV
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          onClick={onNewCv}
+          disabled={exporting}
+          iconLeft={<PenLine size={14} strokeWidth={1.8} />}
+        >
+          New CV
         </Button>
         <Menu
           ariaLabel="Share CV"

@@ -2,7 +2,7 @@ import React from "react";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
-import { Check, PenLine, Upload, X } from "@/lib/icons";
+import { PenLine, Upload, X } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
@@ -53,12 +53,7 @@ import {
 import { exportDocumentFile } from "../lib/exportDocumentFile";
 import type { CvDocument } from "../types/cvDocument";
 import { buildCanonicalResumeRenderModelFromCv } from "../lib/buildCanonicalResumeRenderModel";
-import { formatCvDisplayTitle } from "../lib/proposal-personalization";
 import { deriveCvTitleFromSections } from "../lib/normalize-cv";
-import {
-  CvPickerCard,
-  type CvPickerCardOption,
-} from "../components/cv/CvPickerCard";
 import CvStageBar from "../components/cv/CvStageBar";
 import CvReviewBanner from "../components/cv/CvReviewBanner";
 import CvRail, {
@@ -89,20 +84,11 @@ type CvForgeCanonicalJob = {
 
 const CV_FORGE_WORKSPACE_MODE_STORAGE_KEY = "dasti:cv-forge-workspace-mode:v1";
 const ENTRY_PICKER_PENDING_ROUTE_ID = "__entry-picker-pending-route__";
-const CV_FORGE_TONE_STORAGE_PREFIX = "dasti:cv-forge-tone:";
-function isCvToneChoice(value: unknown): value is CvToneChoice {
-  return value === "warm" || value === "formal" || value === "natural";
-}
 
-function readStoredCvTone(cvId: string | null | undefined): CvToneChoice {
-  if (!cvId || typeof window === "undefined") return "formal";
-  const stored = window.localStorage.getItem(`${CV_FORGE_TONE_STORAGE_PREFIX}${cvId}`);
-  return isCvToneChoice(stored) ? stored : "formal";
-}
-
-function writeStoredCvTone(cvId: string | null | undefined, tone: CvToneChoice) {
-  if (!cvId || typeof window === "undefined") return;
-  window.localStorage.setItem(`${CV_FORGE_TONE_STORAGE_PREFIX}${cvId}`, tone);
+function mapDefaultVoicePresetToCvTone(value: unknown): CvToneChoice {
+  if (value === "engaging") return "warm";
+  if (value === "expert") return "formal";
+  return "natural";
 }
 
 function cleanCvMetadataForImport(metadata: CvDocument["metadata"]): CvDocument["metadata"] {
@@ -562,63 +548,6 @@ function readStoredCvForgeWorkspaceMode(): CvForgeWorkspaceMode {
     : "edit";
 }
 
-function readCvPickerProfilePreview(
-  cv: CvDocument,
-): Record<string, unknown> | null {
-  const profileSection = Array.isArray(cv.sections)
-    ? cv.sections.find((section) => String(section.type) === "profile")
-    : null;
-  const profileEntry = Array.isArray(profileSection?.structuredContent)
-    ? profileSection.structuredContent[0]
-    : null;
-
-  return profileEntry && typeof profileEntry === "object"
-    ? (profileEntry as Record<string, unknown>)
-    : null;
-}
-
-function readCvPickerString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : undefined;
-}
-
-function buildCvForgePickerOption(cv: CvDocument): CvPickerCardOption {
-  const profilePreview = readCvPickerProfilePreview(cv);
-  const profileName = readCvPickerString(profilePreview?.name);
-  const desiredPosition =
-    readCvPickerString(profilePreview?.desiredPosition) ??
-    readCvPickerString(profilePreview?.title);
-
-  return {
-    id: String(cv.id),
-    title: formatCvDisplayTitle({
-      title: String(cv.title ?? "Untitled CV"),
-      profileName,
-      desiredPosition,
-      email: readCvPickerString(profilePreview?.email),
-      phone: readCvPickerString(profilePreview?.phone),
-      linkedin: readCvPickerString(profilePreview?.linkedin),
-      website: readCvPickerString(profilePreview?.website),
-      location: readCvPickerString(profilePreview?.location),
-    }),
-    updatedAt:
-      typeof cv.metadata?.updatedAt === "string"
-        ? cv.metadata.updatedAt
-        : undefined,
-    createdAt:
-      typeof cv.metadata?.createdAt === "string"
-        ? cv.metadata.createdAt
-        : undefined,
-    profileName,
-    desiredPosition,
-    email: readCvPickerString(profilePreview?.email),
-    phone: readCvPickerString(profilePreview?.phone),
-    linkedin: readCvPickerString(profilePreview?.linkedin),
-    website: readCvPickerString(profilePreview?.website),
-  };
-}
-
 function readImportRecoverySession(
   currentCv: CvDocument | null | undefined,
 ): ImportRecoverySession | null {
@@ -896,9 +825,6 @@ export function CvForge(): JSX.Element {
     currentCvId,
     createNewCv,
     importCv,
-    cvs,
-    isLibraryHydrated,
-    lastLibraryFetchFailed,
     loadCv,
   } = useCvLibrary();
   const { importFile: importStructuredCvFile } = useStructuredMistralImport({
@@ -908,6 +834,11 @@ export function CvForge(): JSX.Element {
     ((api.functions as any)?.runCvSectionAiAction ??
       "functions.runCvSectionAiAction") as any,
   );
+  const defaultProposalSettings = useQuery(
+    ((api.proposalSettings as any)?.getCurrent ??
+      "proposalSettings.getCurrent") as any,
+    isConvexAuthenticated ? {} : "skip",
+  ) as { voicePreset?: unknown; savedVoicePreset?: unknown } | undefined;
   const cvImportInputRef = React.useRef<HTMLInputElement | null>(null);
   const [workspaceMode, setWorkspaceMode] =
     React.useState<CvForgeWorkspaceMode>(() =>
@@ -919,8 +850,8 @@ export function CvForge(): JSX.Element {
     React.useState<ResumeActiveTarget | null>(null);
   const [hiddenSectionIds, setHiddenSectionIds] = React.useState<string[]>([]);
   const [cvRailTab, setCvRailTab] = React.useState<CvRailTab>("sections");
-  const [cvTone, setCvTone] = React.useState<CvToneChoice>(() =>
-    readStoredCvTone(currentCv?.id),
+  const cvTone = mapDefaultVoicePresetToCvTone(
+    defaultProposalSettings?.savedVoicePreset ?? defaultProposalSettings?.voicePreset,
   );
   const [cvRailAiSuggestion, setCvRailAiSuggestion] =
     React.useState<CvRailAiSuggestion | null>(null);
@@ -1038,9 +969,6 @@ export function CvForge(): JSX.Element {
   const { showToast } = useToast();
   const [isCreatingEntryCv, setIsCreatingEntryCv] = React.useState(false);
   const [isImportingEntryCv, setIsImportingEntryCv] = React.useState(false);
-  const [pendingEntryCvId, setPendingEntryCvId] = React.useState<string | null>(
-    null,
-  );
   const [entryPickerTransitionCvId, setEntryPickerTransitionCvId] =
     React.useState<string | null>(null);
   const [pendingFreshEntryBaseCvId, setPendingFreshEntryBaseCvId] =
@@ -1056,52 +984,6 @@ export function CvForge(): JSX.Element {
   const jobDetailRoute = requestedJobId
     ? `/jobs/${encodeURIComponent(requestedJobId)}`
     : null;
-  const cvPickerOptions = React.useMemo(
-    () => (cvs ?? []).map((cv) => buildCvForgePickerOption(cv)),
-    [cvs],
-  );
-  const hasSavedCvOptions = cvPickerOptions.length > 0;
-  const hasCompletedQuickStart =
-    typeof window !== "undefined" &&
-    window.localStorage.getItem("twoweeks:quick-start-completed") === "1";
-  // Keep the picker hidden while a local CV selection is in flight and the
-  // URL `id` param is catching up to the chosen document.
-  const shouldShowEntryPicker =
-    isLibraryHydrated &&
-    !lastLibraryFetchFailed &&
-    !requestedCvId &&
-    !entryPickerTransitionCvId &&
-    (!currentCvId || !hasCompletedQuickStart);
-  const shouldUseDirectPickerActions =
-    Boolean(currentCvId) && !hasCompletedQuickStart;
-  const entryPickerDefaultCvId = React.useMemo(() => {
-    if (cvPickerOptions.length === 1) {
-      return cvPickerOptions[0].id;
-    }
-    if (
-      currentCvId &&
-      cvPickerOptions.some((option) => option.id === currentCvId)
-    ) {
-      return currentCvId;
-    }
-    return cvPickerOptions[0]?.id ?? null;
-  }, [currentCvId, cvPickerOptions]);
-
-  React.useEffect(() => {
-    if (!shouldShowEntryPicker) {
-      setPendingEntryCvId(null);
-      return;
-    }
-
-    setPendingEntryCvId((current) => {
-      if (current && cvPickerOptions.some((option) => option.id === current)) {
-        return current;
-      }
-
-      return entryPickerDefaultCvId;
-    });
-  }, [cvPickerOptions, entryPickerDefaultCvId, shouldShowEntryPicker]);
-
   React.useEffect(() => {
     if (
       !entryPickerTransitionCvId ||
@@ -1116,7 +998,6 @@ export function CvForge(): JSX.Element {
   }, [entryPickerTransitionCvId, requestedCvId]);
 
   React.useEffect(() => {
-    setCvTone(readStoredCvTone(currentCv?.id));
     setCvRailAiSuggestion(null);
     setCvRailAppliedAiEdit(null);
   }, [currentCv?.id]);
@@ -1664,12 +1545,6 @@ export function CvForge(): JSX.Element {
     );
   }, [currentCv?.id]);
 
-  const handlePasteText = React.useCallback(() => {
-    showToast("Paste resume text is still handled from the import screen.", {
-      variant: "info",
-    });
-  }, [showToast]);
-
   const handleSelectTemplate = React.useCallback(
     (template: "editorial" | "minimal" | "classic") => {
       const layout = template === "editorial" ? "workshop" : "swiss";
@@ -1706,14 +1581,6 @@ export function CvForge(): JSX.Element {
       );
     },
     [setStylePreset],
-  );
-
-  const handleSelectTone = React.useCallback(
-    (tone: CvToneChoice) => {
-      setCvTone(tone);
-      writeStoredCvTone(currentCv?.id, tone);
-    },
-    [currentCv?.id],
   );
 
   const handleRunAskAiForSection = React.useCallback(
@@ -2142,53 +2009,6 @@ export function CvForge(): JSX.Element {
     [cvTone, handleRunAskAiForSection],
   );
 
-  const handleOpenCvById = React.useCallback(
-    async (cvId: string) => {
-      const selectedOption =
-        cvPickerOptions.find((option) => option.id === cvId) ?? null;
-      const resumeName = selectedOption?.title ?? null;
-
-      try {
-        if (requestedJobId) {
-          await setJobResume({
-            jobId: requestedJobId,
-            resumeId: cvId,
-            resumeName,
-          });
-          loadCv(cvId);
-          if (jobDetailRoute) {
-            void navigate(jobDetailRoute);
-          }
-          return;
-        }
-
-        setEntryPickerTransitionCvId(cvId);
-        loadCv(cvId);
-        navigateToSelectedCv(cvId);
-      } catch (error) {
-        showToast("Attach failed.", { variant: "error" });
-      }
-    },
-    [
-      cvPickerOptions,
-      jobDetailRoute,
-      loadCv,
-      navigate,
-      navigateToSelectedCv,
-      requestedJobId,
-      setJobResume,
-      showToast,
-    ],
-  );
-
-  const handleOpenSelectedCv = React.useCallback(() => {
-    if (!pendingEntryCvId) {
-      return;
-    }
-
-    void handleOpenCvById(pendingEntryCvId);
-  }, [handleOpenCvById, pendingEntryCvId]);
-
   const handleImportEntryCv = React.useCallback(() => {
     if (isEntryPickerBusy) {
       return;
@@ -2359,122 +2179,7 @@ export function CvForge(): JSX.Element {
             )}
           </div>
         ) : null}
-        {shouldShowEntryPicker ? (
-          <div
-            className="dasti-proposal-sheet dasti-proposal-sheet--composer"
-            style={{
-              width: "100%",
-              maxWidth: "960px",
-              marginInline: "auto",
-            }}
-          >
-            <div className="dasti-proposal-sheet__header dasti-proposal-sheet__header--composer">
-              <div className="dasti-proposal-sheet__heading dasti-proposal-sheet__heading--full">
-                <p className="dasti-proposal-compose-shell__status-heading">
-                  Choose your CV
-                </p>
-                <h1 className="dasti-proposal-title-input">
-                  {hasSavedCvOptions
-                    ? "Open a saved CV."
-                    : "Open a saved CV, import a new one, or start from scratch."}
-                </h1>
-              </div>
-            </div>
-            <div className="dasti-proposal-sheet__body dasti-proposal-sheet__body--composer">
-              {cvPickerOptions.length === 0 ? (
-                <div className="dasti-empty-state dasti-jobs-empty-state">
-                  <div className="dasti-empty-state__title">
-                    No saved CVs yet
-                  </div>
-                  <p className="dasti-empty-state__subtitle">
-                    Import an existing CV or create a fresh one to open CvForge.
-                  </p>
-                </div>
-              ) : (
-                <div
-                  className="dasti-grid-auto"
-                  style={
-                    {
-                      "--grid-min-col": "280px",
-                      "--grid-gap": "var(--layout-card-grid)",
-                    } as React.CSSProperties
-                  }
-                >
-                  {cvPickerOptions.map((option) => (
-                    <CvPickerCard
-                      key={option.id}
-                      actionLabel={
-                        shouldUseDirectPickerActions ? "Use this CV" : undefined
-                      }
-                      onAction={
-                        shouldUseDirectPickerActions
-                          ? (cvId) => {
-                              void handleOpenCvById(cvId);
-                            }
-                          : undefined
-                      }
-                      option={option}
-                      selected={pendingEntryCvId === option.id}
-                      onSelect={
-                        shouldUseDirectPickerActions
-                          ? undefined
-                          : setPendingEntryCvId
-                      }
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-            <div
-              className="dasti-cluster"
-              style={
-                {
-                  "--cluster-gap": "var(--space-2)",
-                  justifyContent: "flex-end",
-                  padding: "0 var(--space-4) var(--space-4)",
-                } as React.CSSProperties
-              }
-            >
-              {!hasSavedCvOptions ? (
-                <>
-                  <button
-                    type="button"
-                    className="dasti-button dasti-button--secondary dasti-button--sm"
-                    onClick={handleImportEntryCv}
-                    disabled={isEntryPickerBusy}
-                  >
-                    <span>
-                      {isImportingEntryCv ? "Importing..." : "Import new"}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="dasti-button dasti-button--secondary dasti-button--sm"
-                    onClick={() => {
-                      void handleStartFreshEntryCv();
-                    }}
-                    disabled={isEntryPickerBusy}
-                  >
-                    <span>
-                      {isCreatingEntryCv ? "Creating..." : "Start from scratch"}
-                    </span>
-                  </button>
-                </>
-              ) : shouldUseDirectPickerActions ? null : (
-                <button
-                  type="button"
-                  className="dasti-button dasti-button--accent dasti-button--sm"
-                  onClick={handleOpenSelectedCv}
-                  disabled={!pendingEntryCvId || isEntryPickerBusy}
-                >
-                  <Check size={16} strokeWidth={1.9} aria-hidden="true" />
-                  <span>Open selected CV</span>
-                </button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <>
+        <>
             <div className="dasti-cv-skeleton-forge" style={cvWorkbenchShellStyle}>
               <div className="dasti-cv-skeleton-forge__stage">
                 <CvStageBar
@@ -2486,6 +2191,10 @@ export function CvForge(): JSX.Element {
                   tone={cvTone}
                   onModeChange={setWorkspaceMode}
                   onOpenImportReview={() => setImportReviewOpen(true)}
+                  onImportCv={handleImportEntryCv}
+                  onNewCv={() => {
+                    void handleStartFreshEntryCv();
+                  }}
                   onExportPdf={() =>
                     void handleResumeExport({ format: "pdf", mode: "styled" })
                   }
@@ -2531,20 +2240,6 @@ export function CvForge(): JSX.Element {
                       </span>
                       <span className="dasti-cv-import-choice__desc">
                         Mistral parses it. Sections appear in seconds.
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="dasti-cv-import-choice"
-                      onClick={handlePasteText}
-                      disabled={isEntryPickerBusy}
-                    >
-                      <span aria-hidden="true">T</span>
-                      <span className="dasti-cv-import-choice__title">
-                        Paste text
-                      </span>
-                      <span className="dasti-cv-import-choice__desc">
-                        From LinkedIn, a doc, anywhere.
                       </span>
                     </button>
                     <button
@@ -2606,13 +2301,11 @@ export function CvForge(): JSX.Element {
                 onUndoAiSuggestion={handleUndoAiSuggestion}
                 onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
                 onDismissListAiSuggestion={handleDismissListAiSuggestion}
-                onSelectTone={handleSelectTone}
                 onAddSection={handleAddSection}
                 onSelectTemplate={handleSelectTemplate}
                 onSelectFontPair={handleSelectFontPair}
                 onSelectAccent={handleSelectAccent}
                 onImportPdf={handleImportEntryCv}
-                onPasteText={handlePasteText}
               />
             </div>
             <SectionEditorSheet
@@ -2638,8 +2331,7 @@ export function CvForge(): JSX.Element {
               blocks={importReviewBlocks}
               onOpenChange={setImportReviewOpen}
             />
-          </>
-        )}
+        </>
         <input
           ref={cvImportInputRef}
           type="file"

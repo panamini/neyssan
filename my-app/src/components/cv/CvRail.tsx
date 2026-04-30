@@ -26,7 +26,7 @@ import {
   Upload,
   Wand2,
 } from "@/lib/icons";
-import { Button, Menu, ToneBadge } from "../ui";
+import { Button, Menu } from "../ui";
 import AiSuggestionCard from "../ai/AiSuggestionCard";
 import type { CvSection } from "../../types/cvDocument";
 import {
@@ -95,13 +95,11 @@ type CvRailProps = {
   onUndoAiSuggestion: () => void;
   onAcceptListAiSuggestion: (value: string) => void;
   onDismissListAiSuggestion: (value: string) => void;
-  onSelectTone: (tone: CvToneChoice) => void;
   onAddSection: (sectionKind: CvAddSectionKind) => void;
   onSelectTemplate: (template: "editorial" | "minimal" | "classic") => void;
   onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
   onSelectAccent: (accent: CvAccentChoice) => void;
   onImportPdf: () => void;
-  onPasteText: () => void;
 };
 
 export type CvAddSectionKind =
@@ -344,10 +342,6 @@ function FontPairMenu({
             id: option.id,
             role: "menuitemradio",
             selected: option.id === activeOption.id,
-            icon:
-              option.id === activeOption.id ? (
-                <Check size={14} strokeWidth={1.9} />
-              ) : undefined,
             label: (
               <span
                 className="dasti-cv-font-menu__sample"
@@ -415,13 +409,11 @@ export function CvRail({
   onUndoAiSuggestion,
   onAcceptListAiSuggestion,
   onDismissListAiSuggestion,
-  onSelectTone,
   onAddSection,
   onSelectTemplate,
   onSelectFontPair,
   onSelectAccent,
   onImportPdf,
-  onPasteText,
 }: CvRailProps): JSX.Element {
   const activeSection = getActiveSection(sections, activeSectionId);
   const [aiPrompt, setAiPrompt] = React.useState("");
@@ -432,7 +424,6 @@ export function CvRail({
   const activeAiMode = activeSection ? getRailAiMode(activeSection) : "none";
   const activeUsesStructuredSuggestions =
     activeSection ? usesStructuredSuggestions(activeSection) : false;
-  const activeUsesTone = activeSection?.type === "summary";
   const scopedAiSuggestion =
     aiSuggestion && aiSuggestion.sectionId === activeSectionId ? aiSuggestion : null;
   const scopedAppliedAiEdit =
@@ -543,7 +534,12 @@ export function CvRail({
         <div className="dasti-cv-rail-pane" data-rail-pane="sections">
           <div className="dasti-cv-rail-pane__head">
             <span className="dasti-cv-rail-label">Organize</span>
-            <span>Drag to reorder · wand</span>
+            <span className="dasti-cv-rail-pane__hint">
+              <span>Drag to reorder</span>
+              <span aria-hidden="true">·</span>
+              <Wand2 size={13} strokeWidth={1.8} aria-hidden="true" />
+              <span>Improve with Ask</span>
+            </span>
           </div>
           {sections.length === 0 ? (
             <div className="dasti-cv-rail-empty">No sections yet.</div>
@@ -734,24 +730,6 @@ export function CvRail({
                   setAiPrompt(event.currentTarget.value);
                 }}
               />
-              {activeUsesTone ? (
-                <div className="dasti-cv-tone-row">
-                  {(["warm", "formal", "natural"] as const).map((tone) => (
-                    <button
-                      key={tone}
-                      type="button"
-                      className="dasti-cv-tone-chip"
-                      aria-pressed={selectedTone === tone}
-                      data-selected={selectedTone === tone ? "true" : undefined}
-                      onClick={() => onSelectTone(tone)}
-                    >
-                      <ToneBadge tone={tone}>
-                        {tone.charAt(0).toUpperCase() + tone.slice(1)}
-                      </ToneBadge>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
               <Button
                 type="button"
                 variant="primary"
@@ -882,7 +860,11 @@ export function CvRail({
       {activeTab === "style" ? (
         <div className="dasti-cv-rail-pane" data-rail-pane="style">
           <div className="dasti-cv-style-note">
-            Document style. Applies to the full CV page.
+            CV style. Defaults:{" "}
+            <a className="dasti-cv-rail-link" href="/settings">
+              Settings → Document style
+            </a>
+            .
           </div>
           <div className="dasti-cv-rail-label">Template</div>
           <div className="dasti-cv-style-pills">
@@ -933,9 +915,6 @@ export function CvRail({
           iconLeft={<Upload size={14} strokeWidth={1.8} />}
         >
           {isImporting ? "Importing PDF" : "Import PDF"}
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={onPasteText}>
-          Paste resume text
         </Button>
       </div>
     </aside>

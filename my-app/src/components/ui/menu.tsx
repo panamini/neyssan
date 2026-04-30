@@ -3,6 +3,7 @@
 import React from "react";
 import clsx from "clsx";
 import { BodyPortal } from "@/components/ui/body-portal";
+import { Check } from "@/lib/icons";
 
 export type MenuItemTone = "neutral" | "danger";
 
@@ -346,6 +347,11 @@ export function Menu({
                       </span>
                       {item.shortcut ? (
                         <span className="ds-menu__shortcut">{item.shortcut}</span>
+                      ) : null}
+                      {item.selected ? (
+                        <span className="ds-menu__selected" aria-hidden="true">
+                          <Check size={14} strokeWidth={1.9} />
+                        </span>
                       ) : null}
                     </button>
                   );

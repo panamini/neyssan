@@ -1156,6 +1156,16 @@
     letter-spacing: 0.04em;
   }
 
+  .ds-menu__selected {
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--ac);
+  }
+
   .ds-menu__separator {
     height: 1px;
     margin: var(--s2) 0;
