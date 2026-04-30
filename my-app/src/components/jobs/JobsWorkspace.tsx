@@ -230,7 +230,13 @@ type JobsPageDetail = {
 } | null;
 
 type JobsSortOrder = "recent" | "oldest" | "title" | "company";
-type JobsMatchFilter = "all" | "strong" | "partial" | "weak" | "unknown";
+type JobsMatchFilter =
+  | "worth_plus"
+  | "all"
+  | "strong"
+  | "partial"
+  | "weak"
+  | "unknown";
 type JobsViewMode = "active" | "archived";
 
 const STRUCTURED_MATCH_REVIEW_LABELS = [
@@ -1009,7 +1015,18 @@ function matchesListFilters(
 ): boolean {
   const reviewState = optimisticReviewState ?? job.reviewState;
   const isFavorite = optimisticFavorite ?? job.isFavorite;
-  if (matchFilter !== "all" && job.matchTier !== matchFilter) {
+  if (
+    matchFilter === "worth_plus" &&
+    job.matchTier !== "strong" &&
+    job.matchTier !== "partial"
+  ) {
+    return false;
+  }
+  if (
+    matchFilter !== "all" &&
+    matchFilter !== "worth_plus" &&
+    job.matchTier !== matchFilter
+  ) {
     return false;
   }
   if (hasDocsOnly && job.linkedDocumentCount === 0) {
@@ -2027,6 +2044,7 @@ function JobsPageContent(): JSX.Element {
       selectedJobId={selectedJobId}
       selectedJobIsLoading={selectedJobIsLoading}
       selectedJob={selectedJob}
+      selectedJobMatchTier={selectedJobSummary?.matchTier}
       selectedJobIsFavorite={selectedJobIsFavorite}
       selectedJobResumeDisplayName={selectedJobResumeDisplayName}
       selectedSourceLabel={selectedSourceLabel}
@@ -2170,7 +2188,6 @@ function JobsPageContent(): JSX.Element {
                 }}
                 onConfirmPermanentDeleteJobIdChange={setConfirmingPermanentDeleteJobId}
                 onImportFirstJob={handleImportFirstJob}
-                onAddFilter={() => showToast("Filter saved.")}
               />
             ) : null}
 

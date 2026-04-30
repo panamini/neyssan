@@ -26,7 +26,13 @@ type JobsListItem = {
 };
 
 type JobsSortOrder = "recent" | "oldest" | "title" | "company";
-type JobsMatchFilter = "all" | "strong" | "partial" | "weak" | "unknown";
+type JobsMatchFilter =
+  | "worth_plus"
+  | "all"
+  | "strong"
+  | "partial"
+  | "weak"
+  | "unknown";
 type JobsViewMode = "active" | "archived";
 
 type JobsListProps = {
@@ -64,7 +70,6 @@ type JobsListProps = {
   onDeleteArchivedJob: (jobId: string) => void;
   onConfirmPermanentDeleteJobIdChange: (jobId: string | null) => void;
   onImportFirstJob: () => void;
-  onAddFilter: () => void;
 };
 
 const JOBS_SORT_OPTIONS = [
@@ -88,8 +93,13 @@ const JOBS_SORT_OPTIONS = [
 
 const JOBS_MATCH_FILTER_OPTIONS = [
   {
-    value: "all",
+    value: "worth_plus",
     label: "Worth+ a shot",
+    description: "Worth a shot or better.",
+  },
+  {
+    value: "all",
+    label: "All jobs",
     description: "Show every match tier.",
   },
   {
@@ -192,7 +202,6 @@ export function JobsList({
   onDeleteArchivedJob,
   onConfirmPermanentDeleteJobIdChange,
   onImportFirstJob,
-  onAddFilter,
 }: JobsListProps): JSX.Element {
   return (
     <section className="dasti-jobs-list-pane" aria-label="Jobs list">
@@ -309,9 +318,11 @@ export function JobsList({
             <button
               type="button"
               className="dasti-jobs-filter-chip"
-              onClick={onAddFilter}
+              disabled
+              title="Additional filters coming soon"
             >
               + filter
+              <span className="dasti-jobs-filter-chip__status">Coming</span>
             </button>
           </div>
           <div
