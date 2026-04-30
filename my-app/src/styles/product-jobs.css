@@ -200,6 +200,25 @@
   outline: none;
 }
 
+.dasti-jobs-filter-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  transform: none;
+}
+
+.dasti-jobs-filter-chip:disabled:hover,
+.dasti-jobs-filter-chip:disabled:focus-visible {
+  background: var(--sf2);
+  color: var(--tg3);
+}
+
+.dasti-jobs-filter-chip__status {
+  margin-inline-start: var(--space-1);
+  color: var(--tm2);
+  font-size: var(--tx);
+  font-weight: var(--font-body-weight);
+}
+
 .dasti-jobs-filter-chip--active {
   background: var(--am-soft);
   border-color: transparent;

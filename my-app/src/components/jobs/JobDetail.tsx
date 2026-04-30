@@ -19,6 +19,7 @@ type JobDetailProps = {
   selectedJobId?: string;
   selectedJobIsLoading: boolean;
   selectedJob: any;
+  selectedJobMatchTier?: string | null;
   selectedJobIsFavorite: boolean;
   selectedJobResumeDisplayName: string | null;
   selectedSourceLabel: string | null;
@@ -45,10 +46,37 @@ function resolveLocationModeLabel(value: string): string {
   return normalizedValue || "Location unavailable";
 }
 
+function resolveMatchTierLabel(tier: string | null | undefined): string {
+  switch (tier) {
+    case "strong":
+      return "Strong match";
+    case "partial":
+      return "Worth a shot";
+    case "weak":
+      return "Probably skip";
+    default:
+      return "Maybe";
+  }
+}
+
+function resolveMatchTierTone(tier: string | null | undefined): string {
+  switch (tier) {
+    case "strong":
+      return "strong";
+    case "partial":
+      return "worth";
+    case "weak":
+      return "skip";
+    default:
+      return "maybe";
+  }
+}
+
 export function JobDetail({
   selectedJobId,
   selectedJobIsLoading,
   selectedJob,
+  selectedJobMatchTier,
   selectedJobIsFavorite,
   selectedJobResumeDisplayName,
   selectedSourceLabel,
@@ -91,6 +119,15 @@ export function JobDetail({
       </div>
     );
   }
+
+  const selectedJobResolvedMatchTier =
+    selectedJobMatchTier ?? selectedJob.matchTier;
+  const selectedJobVerdictLabel = resolveMatchTierLabel(
+    selectedJobResolvedMatchTier,
+  );
+  const selectedJobVerdictTone = resolveMatchTierTone(
+    selectedJobResolvedMatchTier,
+  );
 
   return (
     <div className="dasti-jobs-detail">
@@ -258,6 +295,13 @@ export function JobDetail({
             <span>{selectedJob.company || "Unknown company"}</span>
             <span>·</span>
             <span>{resolveLocationModeLabel(selectedJob.location)}</span>
+            <span>·</span>
+            <span
+              className={`ds-verdict ds-verdict--${selectedJobVerdictTone} dasti-jobs-detail__verdict`}
+            >
+              <span className="ds-verdict__dot" aria-hidden="true" />
+              {selectedJobVerdictLabel}
+            </span>
             {selectedSourceLabel ? (
               <>
                 <span>·</span>
