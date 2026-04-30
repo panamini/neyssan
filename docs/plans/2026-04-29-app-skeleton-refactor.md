@@ -8,12 +8,14 @@
 Use these files before any implementation:
 
 - `.agents/skills/twoweeks-app-skeleton/SKILL.md`
+- `docs/UI/SKELETON.html`
+- `docs/UI/CODEX-HANDOFF.md`
 - `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/APP-SKELETON.html`
 - `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/SKELETON-AUDIT.md`
 - `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/REFONTE-AUDIT.md`
 - `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/FEATURES-KEEP-VS-REMOVE.md`
 
-`APP-SKELETON.html` is the real UX target. The markdown files exist to turn it into PR contracts and preserve/restore/remove decisions.
+`docs/UI/SKELETON.html` is the discoverable UX target in the active repo. The `.claude/worktrees/...` mirror remains the fuller reference until all skeleton docs are mirrored into `docs/UI/`. The markdown files exist to turn the HTML into PR contracts and preserve/restore/remove decisions.
 
 ## Implementation sequence
 
@@ -43,6 +45,7 @@ Use these files before any implementation:
 - Per-document style overrides persist with the document.
 - Onboarding replay is command-palette first.
 - PR3 keeps the backend extraction readiness fix in scope when it is required for Jobs detail-pane acceptance. Treat language-localization output as follow-up work, not part of PR3.
+- Keep `All jobs` as the default Jobs filter until live data proves that `Worth+ a shot` should be the default for signed-in users with CV signals.
 
 ## Verification
 
