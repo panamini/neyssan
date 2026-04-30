@@ -2527,7 +2527,17 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         window.localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ?? "",
       ).trim();
       const requestedRouteCvId = readRequestedCvIdFromWindowLocation();
-      const restoreId = requestedRouteCvId || activeId;
+      let restoreId = requestedRouteCvId || activeId;
+      if (!restoreId) {
+        restoreId =
+          [...cvs]
+            .sort(
+              (a, b) =>
+                (readUpdatedAtMs(b) ?? 0) - (readUpdatedAtMs(a) ?? 0),
+            )
+            .find((doc) => doc?.id)?.id ?? "";
+        restoreId = String(restoreId).trim();
+      }
 
       if (!restoreId) {
         hasHydratedActiveCvRef.current = true;
@@ -3550,8 +3560,6 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         return;
       if (currentCvId) {
         window.localStorage.setItem(ACTIVE_CV_STORAGE_KEY, currentCvId);
-      } else {
-        window.localStorage.removeItem(ACTIVE_CV_STORAGE_KEY);
       }
     } catch {
       /* best-effort */
@@ -3632,6 +3640,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   function deleteCvCtx(id: string): void {
     try {
       if (typeof window !== "undefined" && (window as any).localStorage) {
+        if (
+          (window as any).localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ===
+          String(id)
+        ) {
+          (window as any).localStorage.removeItem(ACTIVE_CV_STORAGE_KEY);
+        }
         (window as any).localStorage.removeItem(
           getLocalCvDocumentStorageKey(id),
         );

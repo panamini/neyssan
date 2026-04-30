@@ -1,4 +1,4 @@
-import { Check, ChevronDown } from "@/lib/icons";
+import { ChevronDown } from "@/lib/icons";
 import { Menu, type MenuSection } from "./ui/menu";
 import { ToneBadge, type ToneBadgeTone } from "./ui/tone-badge";
 
@@ -32,7 +32,6 @@ export function LibraryFilterMenu<TValue extends string>({
           id: option.value,
           role: "menuitemradio",
           selected: active,
-          icon: active ? <Check size={14} strokeWidth={2.2} /> : null,
           label: option.tone ? (
             <ToneBadge tone={option.tone}>{option.label}</ToneBadge>
           ) : (

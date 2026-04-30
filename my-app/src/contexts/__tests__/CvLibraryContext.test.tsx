@@ -720,6 +720,58 @@ describe('CvLibraryContext', () => {
     expect(ctx.currentCv?.title).toBe('Beta CV');
   });
 
+  it('restores the most recently updated local cv when the active cv id is missing', async () => {
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha CV',
+      metadata: {
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+    const beta = {
+      id: 'cv_beta',
+      title: 'Beta CV',
+      metadata: {
+        createdAt: '2026-04-29T00:00:00.000Z',
+        updatedAt: '2026-04-30T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([alpha, beta]));
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_beta'));
+    expect(mockLocalStorage.getItem('cvActiveId')).toBe('cv_beta');
+  });
+
+  it('does not clear the stored active cv id during a failed restore', async () => {
+    mockLocalStorage.setItem('cvActiveId', 'cv_missing');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.isLoading).toBe(false));
+    expect(ctx.currentCvId).toBeNull();
+    expect(mockLocalStorage.getItem('cvActiveId')).toBe('cv_missing');
+  });
+
   it('migrates legacy library and doc cache keys into the current storage keys on mount', async () => {
     const now = new Date().toISOString();
     const alpha = {
