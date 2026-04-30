@@ -8,14 +8,14 @@
 Use these files before any implementation:
 
 - `.agents/skills/twoweeks-app-skeleton/SKILL.md`
-- `docs/UI/SKELETON.html`
 - `docs/UI/CODEX-HANDOFF.md`
 - `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/APP-SKELETON.html`
 - `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/SKELETON-AUDIT.md`
 - `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/REFONTE-AUDIT.md`
 - `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/FEATURES-KEEP-VS-REMOVE.md`
+- `docs/UI/SKELETON.html` only for DS v2 primitive styling
 
-`docs/UI/SKELETON.html` is the discoverable UX target in the active repo. The `.claude/worktrees/...` mirror remains the fuller reference until all skeleton docs are mirrored into `docs/UI/`. The markdown files exist to turn the HTML into PR contracts and preserve/restore/remove decisions.
+`.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/APP-SKELETON.html` is the real app UX target. `docs/UI/SKELETON.html` is a DS v2 primitives skeleton, not the app page skeleton. The markdown files exist to turn the app HTML into PR contracts and preserve/restore/remove decisions.
 
 ## Implementation sequence
 
