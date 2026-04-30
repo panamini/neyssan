@@ -1182,9 +1182,6 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           id: opt.id ?? "auto",
           role: "menuitemradio",
           selected: isSelected,
-          icon: isSelected ? (
-            <Check size={15} strokeWidth={1.8} aria-hidden="true" />
-          ) : null,
           label: (
             <ToneBadge tone={opt.tone}>{opt.uiLabel}</ToneBadge>
           ),
