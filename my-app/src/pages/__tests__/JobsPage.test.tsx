@@ -1890,6 +1890,7 @@ describe("JobsPage", () => {
       <MemoryRouter initialEntries={["/jobs?view=list"]}>
         <Routes>
           <Route path="/jobs" element={<JobsPage />} />
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -1911,6 +1912,67 @@ describe("JobsPage", () => {
         name: "Remove Operations Associate from favorites",
       }),
     ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("opens a selected job from the list into the non-mobile right detail pane", async () => {
+    selectedJobResult = {
+      ...selectedJob,
+      visibleSummary: "LLM visible summary for the selected job.",
+      visibleRequirements: ["LLM visible requirement"],
+      visibleKeywords: ["llm keyword"],
+      visibleExtractionSource: "llm",
+    } as typeof selectedJob;
+
+    render(
+      <MemoryRouter initialEntries={["/jobs?view=list"]}>
+        <Routes>
+          <Route
+            path="/jobs"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route
+            path="/jobs/:jobId"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByText("Operations Associate"),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/jobs/job_alpha",
+      );
+    });
+
+    const detailPane = await screen.findByRole("region", {
+      name: "Job detail",
+    });
+    expect(
+      within(detailPane).getByLabelText("Match panel"),
+    ).toBeInTheDocument();
+    expect(
+      within(detailPane).getByText("LLM visible summary for the selected job."),
+    ).toBeInTheDocument();
+    expect(
+      within(detailPane).getByText("Worth a shot — review."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Selected job detail" }),
+    ).toBeNull();
   });
 
   it("toggles favorite off from the jobs list row", async () => {

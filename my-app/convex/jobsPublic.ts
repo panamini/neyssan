@@ -19,6 +19,7 @@ import { buildScoringProfileFieldsFromCvDocument } from "./profiles";
 import {
   buildCanonicalJobDraftFromSource,
   buildNormalizedJobExtractionFromHeuristic,
+  detectJobPostingLanguage,
   flattenExtractionValues,
   type CanonicalJobExtraction,
   resolveReparsedCompany,
@@ -88,6 +89,21 @@ const NEXT_STEP_FALLBACK_ACTION_ORDER = [
   "save_for_later",
 ] as const;
 type NextStepAction = (typeof NEXT_STEP_FALLBACK_ACTION_ORDER)[number];
+
+function resolveEffectiveJobRawLanguageDetected(job: {
+  rawLanguageDetected?: string | null;
+  rawDescription?: string | null;
+  title?: string | null;
+}): string {
+  const stored = String(job.rawLanguageDetected ?? "").trim();
+  const detected = detectJobPostingLanguage(
+    `${job.title ?? ""}\n${job.rawDescription ?? ""}`,
+  );
+  if (stored.toLowerCase().startsWith("en") && detected !== "en") {
+    return detected;
+  }
+  return stored || detected;
+}
 type NextStepBlock = {
   headline: string;
   usesCohortData: boolean;
@@ -1321,7 +1337,7 @@ async function resolveVisibleExtractionForJob(ctx: any, job: any) {
       requirements: visibleFallbackMustHaves,
       keywords: visibleFallbackKeywords,
     },
-    rawLanguageDetected: job.rawLanguageDetected,
+    rawLanguageDetected: resolveEffectiveJobRawLanguageDetected(job),
   });
 }
 
@@ -1410,7 +1426,7 @@ function buildJobProjection(
         requirements: flattenExtractionValues(mustHavesExtraction),
         keywords: flattenExtractionValues(keywordsExtraction),
       },
-      rawLanguageDetected: job.rawLanguageDetected,
+      rawLanguageDetected: resolveEffectiveJobRawLanguageDetected(job),
     });
   const reviewItems = projectReviewItemsWithVisibleExtraction({
     reviewItems: job.reviewItems ?? [],
@@ -1713,7 +1729,14 @@ async function listProjectedJobsForProfiles(
     };
   });
 
-  return projections;
+  return projections.sort((left: any, right: any) => {
+    const leftActivity = Number(left.lastActivityAt ?? left.updatedAt ?? 0);
+    const rightActivity = Number(right.lastActivityAt ?? right.updatedAt ?? 0);
+    if (rightActivity !== leftActivity) {
+      return rightActivity - leftActivity;
+    }
+    return String(left.title ?? "").localeCompare(String(right.title ?? ""));
+  });
 }
 
 async function listProjectedJobsForProfile(
@@ -2033,11 +2056,13 @@ export const getById = query({
       .withIndex("by_job_id", (q) => q.eq("job_id", job._id))
       .order("desc")
       .take(JOB_DETAIL_SHADOW_ROWS_LIMIT);
+    const effectiveRawLanguageDetected =
+      resolveEffectiveJobRawLanguageDetected(job);
     const structuredDebug = buildStructuredMatchReadDebug({
       old: pendingMatchRead,
       job: {
         id: String(job._id),
-        rawLanguageDetected: job.rawLanguageDetected,
+        rawLanguageDetected: effectiveRawLanguageDetected,
       },
       profile: matchReadProfile,
       shadowRows,
@@ -2067,12 +2092,15 @@ export const getById = query({
         requirements: visibleFallbackMustHaves,
         keywords: visibleFallbackKeywords,
       },
-      rawLanguageDetected: job.rawLanguageDetected,
+      rawLanguageDetected: effectiveRawLanguageDetected,
     });
     const structuredShadowSummary =
       await resolveStructuredShadowSummaryForInternalUi({
         identity,
-        job,
+        job: {
+          ...job,
+          rawLanguageDetected: effectiveRawLanguageDetected,
+        },
         matchRead: pendingMatchRead,
         sourceProfile: matchReadProfile,
         shadowRows,
@@ -2153,6 +2181,8 @@ export const debugInspectMatchInputByJobId = query({
       jobId: String(job._id),
       profileId: scoringProfile?.id ?? null,
     });
+    const effectiveRawLanguageDetected =
+      resolveEffectiveJobRawLanguageDetected(job);
     const structuredShadowFlagEnabled = isStructuredMatchReadShadowEnabled();
     const structuredShadowInternalViewer =
       isStructuredMatchReadInternalViewer(identity);
@@ -2164,7 +2194,7 @@ export const debugInspectMatchInputByJobId = query({
             old: pendingMatchRead,
             job: {
               id: String(job._id),
-              rawLanguageDetected: job.rawLanguageDetected,
+              rawLanguageDetected: effectiveRawLanguageDetected,
             },
             profile: sourceProfile,
             shadowRows: await ctx.db
@@ -2179,7 +2209,7 @@ export const debugInspectMatchInputByJobId = query({
       uiEnabled: isStructuredMatchReadInternalUiEnabled(),
       advisoryBetaEnabled: isStructuredMatchReadAdvisoryBetaEnabled(),
       advisoryBetaViewer: isStructuredMatchReadBetaViewer(identity),
-      rawLanguageDetected: job.rawLanguageDetected,
+      rawLanguageDetected: effectiveRawLanguageDetected,
     });
 
     return {
@@ -2292,11 +2322,13 @@ export const recordStructuredMatchReview = mutation({
       .query("job_extraction_shadow")
       .withIndex("by_job_id", (q) => q.eq("job_id", normalizedJobId))
       .collect();
+    const effectiveRawLanguageDetected =
+      resolveEffectiveJobRawLanguageDetected(job);
     const debug = buildStructuredMatchReadDebug({
       old: pendingMatchRead,
       job: {
         id: String(job._id),
-        rawLanguageDetected: job.rawLanguageDetected,
+        rawLanguageDetected: effectiveRawLanguageDetected,
       },
       profile: sourceProfile,
       shadowRows,
@@ -2308,7 +2340,7 @@ export const recordStructuredMatchReview = mutation({
       uiEnabled: isStructuredMatchReadInternalUiEnabled(),
       advisoryBetaEnabled,
       advisoryBetaViewer: isStructuredMatchReadBetaViewer(identity),
-      rawLanguageDetected: job.rawLanguageDetected,
+      rawLanguageDetected: effectiveRawLanguageDetected,
     });
     if (summary.status !== "available") {
       throw new Error("Structured match shadow is unavailable");
@@ -2476,11 +2508,13 @@ export const exportLiveMatchReviewRecordsForUser = query({
           .query("job_extraction_shadow")
           .withIndex("by_job_id", (q: any) => q.eq("job_id", job._id))
           .collect();
+        const effectiveRawLanguageDetected =
+          resolveEffectiveJobRawLanguageDetected(job);
         const structuredDebug = buildStructuredMatchReadDebug({
           old: pendingMatchRead,
           job: {
             id: String(job._id),
-            rawLanguageDetected: job.rawLanguageDetected,
+            rawLanguageDetected: effectiveRawLanguageDetected,
           },
           profile: matchReadProfile,
           shadowRows,
