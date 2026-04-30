@@ -1,11 +1,11 @@
 # Codex handoff — DS v2 + AI primitives styling
 
-> **Read first:** [SKELETON.html](./SKELETON.html) is the active-repo UX reference. [CODEX-DS-V2-PLAN.md](./CODEX-DS-V2-PLAN.md) remains the implementation spec for DS primitives. The fuller app-skeleton mirror still lives in `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/` until it is copied into `docs/UI/`.
+> **Read first for app refonte:** `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/APP-SKELETON.html` is the real app skeleton. [SKELETON.html](./SKELETON.html) is only the DS v2 primitives visual reference. [CODEX-DS-V2-PLAN.md](./CODEX-DS-V2-PLAN.md) remains the implementation spec for DS primitives.
 
 ## App skeleton authority
 
-- `docs/UI/SKELETON.html` is the discoverable reference for current sessions in this repo.
-- `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/APP-SKELETON.html` remains the comparison mirror when the active repo copy is incomplete.
+- `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/APP-SKELETON.html` is the full app visual and interaction contract for navigation, dashboard, Proposal forge, Jobs, CV forge, Documents, Templates, Settings, Sign-in, command palette, onboarding, Safe-send, and Import review.
+- `docs/UI/SKELETON.html` is the DS v2 primitives reference for tokens, buttons, cards, dialogs, sheets, menus, status pills, AI cards, and toolbar styling. Do not use it as the app page skeleton.
 - PR-level contracts for the refonte live in `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/{SKELETON-AUDIT,REFONTE-AUDIT,FEATURES-KEEP-VS-REMOVE}.md` until they are mirrored into `docs/UI/`.
 - PR3 keeps the backend extraction readiness fix in scope when it is required for Jobs detail-pane acceptance. Language localization stays follow-up work.
 
