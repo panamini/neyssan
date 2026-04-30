@@ -1,6 +1,13 @@
 # Codex handoff — DS v2 + AI primitives styling
 
-> **Read first:** [SKELETON.html](./SKELETON.html) (visual reference, validated by user) and [CODEX-DS-V2-PLAN.md](./CODEX-DS-V2-PLAN.md) (full spec — but several sections are now obsolete, see §0 below).
+> **Read first:** [SKELETON.html](./SKELETON.html) is the active-repo UX reference. [CODEX-DS-V2-PLAN.md](./CODEX-DS-V2-PLAN.md) remains the implementation spec for DS primitives. The fuller app-skeleton mirror still lives in `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/` until it is copied into `docs/UI/`.
+
+## App skeleton authority
+
+- `docs/UI/SKELETON.html` is the discoverable reference for current sessions in this repo.
+- `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/APP-SKELETON.html` remains the comparison mirror when the active repo copy is incomplete.
+- PR-level contracts for the refonte live in `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/{SKELETON-AUDIT,REFONTE-AUDIT,FEATURES-KEEP-VS-REMOVE}.md` until they are mirrored into `docs/UI/`.
+- PR3 keeps the backend extraction readiness fix in scope when it is required for Jobs detail-pane acceptance. Language localization stays follow-up work.
 
 ---
 
