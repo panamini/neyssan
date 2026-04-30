@@ -387,6 +387,34 @@ describe("selectVisibleJobExtraction", () => {
       keywords: ["React", "SQL", "SaaS", "HIPAA", "API"],
     });
   });
+
+  it("does not reject JavaScript skills as scraper metadata", () => {
+    const juniorDeveloperOutput: NormalizedJobExtraction = {
+      ...technicalEnglishOutput,
+      summary_short:
+        "Entry-level Junior Web Developer assisting in coding, design, and maintenance of websites with focus on UX and SEO.",
+      role_title_normalized: "Junior Web Developer",
+      requirements: [
+        { value: "HTML, HTML5", type: "skill", required: true },
+        { value: "CSS, CSS3", type: "skill", required: true },
+        { value: "JavaScript", type: "skill", required: true },
+        { value: "PHP", type: "skill", required: true },
+        { value: "WordPress CMS framework", type: "tool", required: true },
+      ],
+      keywords_canonical: ["javascript", "php", "wordpress", "ux design"],
+    };
+
+    expect(
+      select({
+        rawLanguageDetected: "en",
+        shadowRows: [row({ llm_normalized_output: juniorDeveloperOutput })],
+      }),
+    ).toMatchObject({
+      source: "llm",
+      requirements: expect.arrayContaining(["JavaScript"]),
+      keywords: expect.arrayContaining(["javascript"]),
+    });
+  });
 });
 
 describe("isUiSafeVisibleJobExtraction", () => {

@@ -46,8 +46,6 @@ type JobsListProps = {
   optimisticFavoriteById: Record<string, boolean>;
   optimisticReviewStateById: Record<string, string>;
   confirmingPermanentDeleteJobId: string | null;
-  shouldRenderInlineDetailPane: boolean;
-  renderSelectedJobDetail: () => JSX.Element | null;
   onSearchQueryChange: (value: string) => void;
   onSortOrderChange: (value: JobsSortOrder) => void;
   onMatchFilterChange: (value: JobsMatchFilter) => void;
@@ -176,8 +174,6 @@ export function JobsList({
   optimisticFavoriteById,
   optimisticReviewStateById,
   confirmingPermanentDeleteJobId,
-  shouldRenderInlineDetailPane,
-  renderSelectedJobDetail,
   onSearchQueryChange,
   onSortOrderChange,
   onMatchFilterChange,
@@ -511,14 +507,6 @@ export function JobsList({
                     </div>
                   </div>
                 </article>
-                {shouldRenderInlineDetailPane && isActive ? (
-                  <section
-                    className="dasti-jobs-inline-detail"
-                    aria-label="Selected job detail"
-                  >
-                    {renderSelectedJobDetail()}
-                  </section>
-                ) : null}
               </div>
             );
           })}

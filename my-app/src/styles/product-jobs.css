@@ -14,7 +14,8 @@
   grid-template-columns: 360px minmax(0, 1fr);
   gap: 0;
   align-items: stretch;
-  min-height: min(820px, calc(100dvh - var(--app-topbar-height, 0px) - 96px));
+  height: min(820px, calc(100dvh - var(--app-topbar-height, 0px) - 96px));
+  min-height: 0;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-card);
   background: var(--sf1);
@@ -27,8 +28,8 @@
 }
 
 .dasti-jobs-list-pane {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
   min-height: 0;
   padding: var(--space-3);
@@ -244,8 +245,11 @@
 }
 
 .dasti-jobs-list {
-  display: grid;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   gap: var(--space-2);
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -454,28 +458,29 @@
 }
 
 .dasti-jobs-detail-pane {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   padding: var(--space-4);
   overflow: auto;
 }
 
-.dasti-jobs-inline-detail {
-  display: grid;
-  min-width: 0;
-  padding-block: var(--space-2) var(--space-3);
-}
-
 .dasti-jobs-detail {
-  display: grid;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   gap: var(--space-4);
+  min-height: 0;
 }
 
 .dasti-jobs-detail__body {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
   gap: var(--space-4);
   align-items: start;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .dasti-jobs-detail__content {
@@ -898,27 +903,9 @@
   gap: var(--space-2);
 }
 
-@media (max-width: 1439px) {
-  .dasti-jobs-layout {
-    grid-template-columns: minmax(0, min(100%, 560px));
-    justify-content: start;
-  }
-
-  .dasti-jobs-detail__body {
-    grid-template-columns: 1fr;
-  }
-
-  .dasti-jobs-detail__match {
-    position: static;
-  }
-
-  .dasti-jobs-detail-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (max-width: 760px) {
   .dasti-jobs-layout {
+    grid-template-columns: 1fr;
     border-radius: 0;
   }
 
@@ -933,6 +920,18 @@
   }
 
   .dasti-jobs-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dasti-jobs-detail__body {
+    grid-template-columns: 1fr;
+  }
+
+  .dasti-jobs-detail__match {
+    position: static;
+  }
+
+  .dasti-jobs-detail-grid {
     grid-template-columns: 1fr;
   }
 

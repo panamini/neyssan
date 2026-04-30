@@ -28,7 +28,7 @@ const MAX_REQUIREMENTS = 24;
 const MAX_KEYWORDS = 32;
 
 const SCRAPER_METADATA_RE =
-  /\b(cookie|cookies|privacy policy|terms of use|sign in|log in|subscribe|newsletter|captcha|javascript|enable cookies|all rights reserved|posted \d+ days ago)\b/i;
+  /\b(cookie|cookies|privacy policy|terms of use|sign in|log in|subscribe|newsletter|captcha|enable javascript|enable cookies|all rights reserved|posted \d+ days ago)\b/i;
 const NAVIGATION_TEXT_RE =
   /\b(skip to|main content|navigation|back to search|see more jobs|similar jobs|apply now|save job|share this job)\b/i;
 const MARKDOWN_OR_CODE_RE = /```|~~~|^\s{0,3}#{1,6}\s|\[[^\]]+\]\([^)]+\)|<\/?[a-z][\s\S]*>/i;

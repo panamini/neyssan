@@ -233,8 +233,6 @@ type JobsSortOrder = "recent" | "oldest" | "title" | "company";
 type JobsMatchFilter = "all" | "strong" | "partial" | "weak" | "unknown";
 type JobsViewMode = "active" | "archived";
 
-const JOBS_TWO_PANE_MIN_VIEWPORT_WIDTH = 1440;
-
 const STRUCTURED_MATCH_REVIEW_LABELS = [
   "good",
   "acceptable but conservative",
@@ -1465,8 +1463,6 @@ function JobsPageContent(): JSX.Element {
   ]);
 
   const isMobileJobsLayout = viewportWidth < 760;
-  const isCollapsedJobsLayout =
-    viewportWidth < JOBS_TWO_PANE_MIN_VIEWPORT_WIDTH;
 
   React.useEffect(() => {
     if (
@@ -2022,17 +2018,8 @@ function JobsPageContent(): JSX.Element {
   );
   const shouldShowListPane =
     jobsView === "archived" || !isMobileJobsLayout || !selectedJobId;
-  const selectedJobIsVisibleInList = Boolean(
-    selectedJobId && filteredJobs.some((job) => job.id === selectedJobId),
-  );
-  const shouldRenderInlineDetailPane =
-    jobsView === "active" &&
-    isCollapsedJobsLayout &&
-    !isMobileJobsLayout &&
-    selectedJobIsVisibleInList;
   const shouldShowDetailPane =
     jobsView === "active" &&
-    !shouldRenderInlineDetailPane &&
     (!isMobileJobsLayout || Boolean(selectedJobId));
 
   const renderSelectedJobDetail = (): JSX.Element | null => (
@@ -2155,8 +2142,6 @@ function JobsPageContent(): JSX.Element {
                 optimisticFavoriteById={optimisticFavoriteById}
                 optimisticReviewStateById={optimisticReviewStateById}
                 confirmingPermanentDeleteJobId={confirmingPermanentDeleteJobId}
-                shouldRenderInlineDetailPane={shouldRenderInlineDetailPane}
-                renderSelectedJobDetail={renderSelectedJobDetail}
                 onSearchQueryChange={setSearchQuery}
                 onSortOrderChange={setSortOrder}
                 onMatchFilterChange={setMatchFilter}

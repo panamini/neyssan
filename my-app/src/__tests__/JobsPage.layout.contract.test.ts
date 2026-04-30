@@ -45,17 +45,16 @@ describe("JobsPage collapsed layout contract", () => {
     expect(jobDetailSource).toContain("Generate proposal");
   });
 
-  it("renders selected job detail inline after the active row at the collapsed breakpoint", () => {
-    expect(jobsWorkspaceSource).toContain(
-      "const JOBS_TWO_PANE_MIN_VIEWPORT_WIDTH = 1440;",
+  it("keeps selected job detail in the right pane for non-mobile widths", () => {
+    expect(jobsWorkspaceSource).not.toContain(
+      "JOBS_TWO_PANE_MIN_VIEWPORT_WIDTH",
     );
+    expect(jobsWorkspaceSource).not.toContain("shouldRenderInlineDetailPane");
+    expect(jobsListSource).not.toContain("dasti-jobs-inline-detail");
     expect(jobsWorkspaceSource).toContain(
-      "viewportWidth < JOBS_TWO_PANE_MIN_VIEWPORT_WIDTH",
+      'className="dasti-jobs-detail-pane"',
     );
-    expect(jobsWorkspaceSource).toContain("shouldRenderInlineDetailPane");
-    expect(jobsListSource).toContain('className="dasti-jobs-list-item"');
-    expect(jobsListSource).toContain('className="dasti-jobs-inline-detail"');
-    expect(jobsWorkspaceSource).toContain("!shouldRenderInlineDetailPane");
+    expect(jobsWorkspaceSource).toContain('aria-label="Job detail"');
   });
 
   it("keeps jobs controls compact and left-anchored inside the list pane", () => {
@@ -63,7 +62,31 @@ describe("JobsPage collapsed layout contract", () => {
       /\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*360px\s+minmax\(0,\s*1fr\);/,
     );
     expect(productCss).toMatch(
-      /@media\s*\(max-width:\s*1439px\)\s*\{[\s\S]*\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*min\(100%,\s*560px\)\);/,
+      /\.dasti-jobs-layout\s*\{[\s\S]*height:\s*min\(820px,\s*calc\(100dvh - var\(--app-topbar-height,\s*0px\) - 96px\)\);[\s\S]*min-height:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-list-pane\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-list\s*\{[\s\S]*display:\s*flex;[\s\S]*flex:\s*1 1 auto;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;[\s\S]*overflow-y:\s*auto;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-detail-pane\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-detail\s*\{[\s\S]*display:\s*flex;[\s\S]*flex:\s*1 1 auto;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-detail__body\s*\{[\s\S]*display:\s*grid;[\s\S]*flex:\s*1 1 auto;[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(280px,\s*320px\);[\s\S]*min-height:\s*0;[\s\S]*overflow-y:\s*auto;/,
+    );
+    expect(productCss).not.toMatch(
+      /@media\s*\(max-width:\s*1439px\)[\s\S]*grid-template-columns:\s*minmax\(0,\s*min\(100%,\s*560px\)\);/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*1fr;/,
+    );
+    expect(productCss).not.toMatch(
+      /@media\s*\(max-width:\s*1120px\)[\s\S]*\.dasti-jobs-detail__body\s*\{[\s\S]*grid-template-columns:\s*1fr;/,
     );
     expect(productCss).toMatch(
       /\.dasti-jobs-filter-chips\s+\.dasti-proposal-library-filter-menu__drawer\s*\{[\s\S]*inset-inline-start:\s*0;[\s\S]*inset-inline-end:\s*auto;[\s\S]*inline-size:\s*max-content;/,
