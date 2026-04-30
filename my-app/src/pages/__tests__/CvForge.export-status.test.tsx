@@ -195,6 +195,26 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
   ),
 }));
 
+vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
+  VerbatiResumePreview: ({
+    data,
+  }: {
+    data?: {
+      summary?: string;
+      languages?: unknown[];
+    };
+  }) => {
+    const sections = ["Profile"];
+    if (data?.summary) sections.push("Summary");
+    if ((data?.languages ?? []).length > 0) sections.push("Languages");
+    return (
+      <div className="dasti-doc-viewer-shell dasti-doc-viewer-shell--resume-panel">
+        <div data-testid="preview-sections-panel">{sections.join(" > ")}</div>
+      </div>
+    );
+  },
+}));
+
 vi.mock("../../features/verbati/useBoundVerbatiCvStyle", () => ({
   useBoundVerbatiCvStyle: () => useBoundVerbatiCvStyleMock(),
 }));
@@ -289,35 +309,21 @@ describe("CvForge export status", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("ATS Ready")).toBeInTheDocument();
+    expect(screen.getByText("ATS-ready")).toBeInTheDocument();
 
     expect(
-      screen.queryByRole("button", { name: "Export ATS PDF" }),
+      screen.queryByRole("button", { name: "More export formats" }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Export Styled PDF" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "More export formats" }),
-    ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "More export formats" }));
-    expect(screen.getAllByText("Trusted Mistral v3").length).toBeGreaterThan(0);
-    expect(screen.getByRole("menuitem", { name: /Export ATS PDF/i })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /Export DOCX/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole("menuitem", { name: /Export Markdown/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /Export JSON/i })).toBeInTheDocument();
-
-    await user.click(screen.getByRole("menuitem", { name: /Export ATS PDF/i }));
+    await user.click(screen.getByRole("button", { name: "Share" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: "resume",
         format: "pdf",
-        mode: "ats",
-        fileNameBase: "Resume - ATS",
+        mode: "styled",
+        fileNameBase: "Resume - Styled",
         stylePreset: expect.objectContaining({
           layout: "swiss",
           typography: "quiet-editorial",
@@ -325,7 +331,7 @@ describe("CvForge export status", () => {
         }),
         data: expect.objectContaining({
           kind: "resume",
-          exportSource: "authoritative",
+          renderSource: "preview",
         }),
       }),
     );
@@ -358,6 +364,18 @@ describe("CvForge export status", () => {
             ],
           },
           {
+            id: "summary-section",
+            title: "Summary",
+            type: "summary",
+            blocks: [],
+            structuredContent: [
+              {
+                id: "summary-item",
+                summary: "Summary text",
+              },
+            ],
+          },
+          {
             id: "languages-section",
             title: "Languages",
             type: "languages",
@@ -382,19 +400,20 @@ describe("CvForge export status", () => {
     );
 
     expect(screen.getByTestId("preview-sections-panel")).toHaveTextContent(
-      "Profile > Languages",
+      "Profile > Summary > Languages",
     );
 
-    await user.click(screen.getByRole("button", { name: "Hide Languages" }));
+    await user.click(screen.getAllByTitle("Hide")[1]);
 
     expect(screen.getByTestId("preview-sections-panel")).toHaveTextContent(
-      "Profile",
+      "Profile > Summary",
     );
     expect(screen.getByTestId("preview-sections-panel")).not.toHaveTextContent(
       "Languages",
     );
 
-    await user.click(screen.getByRole("button", { name: "Export Styled PDF" }));
+    await user.click(screen.getByRole("button", { name: "Share" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -465,6 +484,19 @@ describe("CvForge export status", () => {
               },
             ],
           },
+          {
+            id: "skills-section",
+            title: "Skills",
+            type: "skills",
+            blocks: [],
+            structuredContent: [
+              {
+                id: "skill-item",
+                name: "TypeScript",
+                level: "Advanced",
+              },
+            ],
+          },
         ],
       },
       importCv: importCvMock,
@@ -480,7 +512,7 @@ describe("CvForge export status", () => {
       "Profile > Summary > Languages",
     );
 
-    await user.click(screen.getByRole("button", { name: "Hide Summary" }));
+    await user.click(screen.getAllByTitle("Hide")[0]);
 
     expect(screen.getByTestId("preview-sections-panel")).toHaveTextContent(
       "Profile > Languages",
@@ -515,29 +547,15 @@ describe("CvForge export status", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Standard Export")).toBeInTheDocument();
-    expect(screen.queryByText("ATS Ready")).toBeNull();
+    expect(screen.getByText("ATS review")).toBeInTheDocument();
+    expect(screen.queryByText("ATS-ready")).toBeNull();
 
     expect(
-      screen.queryByRole("button", { name: "Export ATS PDF" }),
+      screen.queryByRole("button", { name: "More export formats" }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Export Styled PDF" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "More export formats" }),
-    ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "More export formats" }));
-    expect(screen.getAllByText("Not ATS-verified").length).toBeGreaterThan(0);
-    expect(screen.getByRole("menuitem", { name: /Export ATS PDF/i })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /Export DOCX/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole("menuitem", { name: /Export Markdown/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /Export JSON/i })).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Export Styled PDF" }));
+    await user.click(screen.getByRole("button", { name: "Share" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -609,18 +627,23 @@ describe("CvForge export status", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "More export formats" }));
-    await user.click(screen.getByRole("menuitem", { name: /Export ATS PDF/i }));
-    await user.click(screen.getByRole("button", { name: "Export Styled PDF" }));
+    await user.click(screen.getByRole("button", { name: "Share" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
+    await user.click(screen.getByRole("button", { name: "Share" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         kind: "resume",
         format: "pdf",
-        mode: "ats",
+        mode: "styled",
         stylePreset: expect.objectContaining({
           layout: "swiss",
+        }),
+        data: expect.objectContaining({
+          renderSource: "preview",
+          rendererVariantId: "swissminima",
         }),
       }),
     );
@@ -684,8 +707,8 @@ describe("CvForge export status", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "More export formats" }));
-    await user.click(screen.getByRole("menuitem", { name: /Export DOCX/i }));
+    await user.click(screen.getByRole("button", { name: "Share" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export DOCX" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -741,40 +764,30 @@ describe("CvForge export status", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "More export formats" }));
-    await user.click(screen.getByRole("menuitem", { name: /Export ATS PDF/i }));
+    await user.click(screen.getByRole("button", { name: "Share" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
 
-    expect(
-      screen.queryByRole("button", { name: "Export ATS PDF" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Export Styled PDF" }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "More export formats" }),
-    ).toBeDisabled();
+    expect(screen.getByText(/Exporting PDF/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Share" }));
+
+    expect(screen.getByRole("menuitem", { name: "Export PDF" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Export DOCX" })).toBeDisabled();
 
     expect(exportDocumentFileMock).toHaveBeenCalledTimes(1);
 
     resolveExport?.({ filename: "Resume - ATS.pdf" });
 
-    expect(
-      screen.queryByRole("button", { name: "Export ATS PDF" }),
-    ).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Export Styled PDF" }),
-      ).not.toBeDisabled();
-      expect(
-        screen.getByRole("button", { name: "More export formats" }),
-      ).not.toBeDisabled();
+      expect(screen.getByRole("menuitem", { name: "Export PDF" })).not.toBeDisabled();
+      expect(screen.getByRole("menuitem", { name: "Export DOCX" })).not.toBeDisabled();
     });
 
-    await user.click(screen.getByRole("button", { name: "Open resume preview" }));
-
-    expect(
-      screen.getByText("Preview host: workspace"),
-    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    expect(screen.getByRole("button", { name: "Page preview" })).toHaveAttribute(
+      "data-selected",
+      "true",
+    );
 
     resolveExport = null;
     exportDocumentFileMock.mockImplementation(
@@ -784,32 +797,19 @@ describe("CvForge export status", () => {
         }),
     );
 
-    await user.click(screen.getByRole("button", { name: "Export Styled PDF" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
+    await user.click(screen.getByRole("button", { name: "Share" }));
 
-    expect(
-      screen.queryByRole("button", { name: "Export ATS PDF" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Export Styled PDF" }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "More export formats" }),
-    ).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Export PDF" })).toBeDisabled();
+    expect(screen.getByRole("menuitem", { name: "Export DOCX" })).toBeDisabled();
 
     expect(exportDocumentFileMock).toHaveBeenCalledTimes(2);
 
     resolveExport?.({ filename: "Resume - Styled.pdf" });
 
-    expect(
-      screen.queryByRole("button", { name: "Export ATS PDF" }),
-    ).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Export Styled PDF" }),
-      ).not.toBeDisabled();
-      expect(
-        screen.getByRole("button", { name: "More export formats" }),
-      ).not.toBeDisabled();
+      expect(screen.getByRole("menuitem", { name: "Export PDF" })).not.toBeDisabled();
+      expect(screen.getByRole("menuitem", { name: "Export DOCX" })).not.toBeDisabled();
     });
   });
 
@@ -849,7 +849,8 @@ describe("CvForge export status", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Export Styled PDF" }));
+    await user.click(screen.getByRole("button", { name: "Share" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({

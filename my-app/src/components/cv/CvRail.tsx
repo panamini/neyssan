@@ -1,0 +1,945 @@
+import React from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  Check,
+  ChevronDown,
+  Eye,
+  EyeClosed,
+  GripHorizontal,
+  Plus,
+  TrashSimple,
+  Upload,
+  Wand2,
+} from "@/lib/icons";
+import { Button, Menu, ToneBadge } from "../ui";
+import AiSuggestionCard from "../ai/AiSuggestionCard";
+import type { CvSection } from "../../types/cvDocument";
+import {
+  formatSectionDisplayTitle,
+  getSectionOrganizationControlPolicy,
+} from "../../lib/cv-section-organization";
+import type { VerbatiStylePreset } from "../../features/verbati/types";
+import {
+  getVerbatiFontPairOption,
+  type VerbatiFontPairId,
+} from "../../features/verbati/fontCatalog";
+
+export type CvRailTab = "sections" | "ai" | "style";
+export type CvToneChoice = "warm" | "formal" | "natural";
+
+export type CvRailAiSuggestion = {
+  kind?: "text";
+  sectionId: string;
+  sectionLabel: string;
+  beforeText: string;
+  afterText: string;
+  state: "loading" | "ready" | "error";
+  errorMessage?: string;
+  interactionId?: string;
+} | {
+  kind: "list";
+  sectionId: string;
+  sectionLabel: string;
+  beforeText: string;
+  items: string[];
+  state: "loading" | "ready" | "error";
+  errorMessage?: string;
+  interactionId?: string;
+};
+
+export type CvRailAppliedAiEdit = {
+  sectionId: string;
+  sectionLabel: string;
+  previousText: string;
+};
+
+type CvRailProps = {
+  sections: CvSection[];
+  hiddenSectionIds: string[];
+  activeSectionId: string | null;
+  activeTab: CvRailTab;
+  stylePreset: VerbatiStylePreset;
+  selectedTone: CvToneChoice;
+  aiSuggestion: CvRailAiSuggestion | null;
+  appliedAiEdit: CvRailAppliedAiEdit | null;
+  isImporting: boolean;
+  onActiveTabChange: (tab: CvRailTab) => void;
+  onSelectSection: (sectionId: string, options?: { openEditor?: boolean }) => void;
+  onToggleHiddenSection: (sectionId: string) => void;
+  onDeleteSection: (sectionId: string) => void;
+  onReorderSections: (activeSectionId: string, overSectionId: string) => void;
+  onMoveSection: (sectionId: string, direction: -1 | 1) => void;
+  onAskAiForSection: (sectionId: string) => void;
+  onRunAskAiForSection: (args: {
+    sectionId: string;
+    prompt: string;
+    tone: CvToneChoice;
+  }) => Promise<void>;
+  onAcceptAiSuggestion: () => void;
+  onDiscardAiSuggestion: () => void;
+  onUndoAiSuggestion: () => void;
+  onAcceptListAiSuggestion: (value: string) => void;
+  onDismissListAiSuggestion: (value: string) => void;
+  onSelectTone: (tone: CvToneChoice) => void;
+  onAddSection: (sectionKind: CvAddSectionKind) => void;
+  onSelectTemplate: (template: "editorial" | "minimal" | "classic") => void;
+  onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
+  onSelectAccent: (accent: CvAccentChoice) => void;
+  onImportPdf: () => void;
+  onPasteText: () => void;
+};
+
+export type CvAddSectionKind =
+  | "projects"
+  | "achievements"
+  | "certifications"
+  | "publications"
+  | "awards"
+  | "volunteer"
+  | "references"
+  | "languages"
+  | "hobbies"
+  | "additional_information"
+  | "custom";
+
+export type CvAccentChoice =
+  | "terre"
+  | "ink"
+  | "cobalt"
+  | "sauge"
+  | "plum"
+  | "ochre";
+
+const ADD_SECTION_ITEMS: Array<{ id: CvAddSectionKind; label: string }> = [
+  { id: "projects", label: "Projects" },
+  { id: "achievements", label: "Achievements" },
+  { id: "certifications", label: "Certifications" },
+  { id: "languages", label: "Languages" },
+  { id: "hobbies", label: "Hobbies" },
+];
+
+const FONT_PAIR_IDS: VerbatiFontPairId[] = [
+  "geist-baskervville",
+  "mono-signal",
+  "fd-garamond-geist",
+  "ledger-sans",
+];
+
+const FONT_PAIR_OPTIONS = FONT_PAIR_IDS.map((id) => getVerbatiFontPairOption(id));
+
+const ACCENT_OPTIONS: Array<{
+  id: CvAccentChoice;
+  label: string;
+  palette?: VerbatiStylePreset["palette"];
+  accentHex: string;
+}> = [
+  { id: "terre", label: "Terre", palette: "custom", accentHex: "#A84E2E" },
+  { id: "ink", label: "Ink", palette: "custom", accentHex: "#0F0C08" },
+  { id: "cobalt", label: "Cobalt", palette: "custom", accentHex: "#2A78D6" },
+  { id: "sauge", label: "Sauge", palette: "sauge", accentHex: "#6E7E62" },
+  { id: "plum", label: "Plum", palette: "custom", accentHex: "#7A4FA0" },
+  { id: "ochre", label: "Ochre", palette: "ocre", accentHex: "#B4762D" },
+];
+
+function getSectionId(section: CvSection, index: number): string {
+  return String(section.id ?? `${section.type}-${index}`);
+}
+
+function getItemCount(section: CvSection): number {
+  if (Array.isArray(section.structuredContent)) {
+    return section.structuredContent.length;
+  }
+  return Array.isArray(section.blocks) ? section.blocks.length : 0;
+}
+
+function getActiveSection(
+  sections: CvSection[],
+  activeSectionId: string | null,
+): CvSection | null {
+  if (!activeSectionId) return sections[0] ?? null;
+  return (
+    sections.find((section, index) => getSectionId(section, index) === activeSectionId) ??
+    sections[0] ??
+    null
+  );
+}
+
+function isHobbiesSection(section: CvSection): boolean {
+  return (
+    String(section.type) === "hobbies" ||
+    section.title.trim().toLowerCase() === "hobbies"
+  );
+}
+
+function getRailAiMode(
+  section: CvSection,
+): "none" | "rail" | "editor" {
+  if (section.type === "profile" || section.type === "contact") return "none";
+  if (
+    section.type === "summary" ||
+    section.type === "skills" ||
+    section.type === "languages" ||
+    isHobbiesSection(section) ||
+    section.type === "text"
+  ) {
+    return "rail";
+  }
+  return "editor";
+}
+
+function usesStructuredSuggestions(section: CvSection): boolean {
+  return (
+    section.type === "skills" ||
+    section.type === "languages" ||
+    isHobbiesSection(section)
+  );
+}
+
+type SortableSectionRowProps = {
+  sectionId: string;
+  label: string;
+  hidden: boolean;
+  active: boolean;
+  itemCount: number;
+  onSelectSection: (sectionId: string, options?: { openEditor?: boolean }) => void;
+  onMoveSection: (sectionId: string, direction: -1 | 1) => void;
+  children: React.ReactNode;
+};
+
+type CvAddSectionMenuProps = {
+  onAddSection: (sectionKind: CvAddSectionKind) => void;
+};
+
+function SortableSectionRow({
+  sectionId,
+  label,
+  hidden,
+  active,
+  itemCount,
+  onSelectSection,
+  onMoveSection,
+  children,
+}: SortableSectionRowProps): JSX.Element {
+  const sortable = useSortable({ id: sectionId });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(sortable.transform),
+    transition: sortable.transition,
+  };
+
+  return (
+    <div
+      ref={sortable.setNodeRef}
+      className="dasti-cv-org-row"
+      data-active={active ? "true" : undefined}
+      data-hidden={hidden ? "true" : undefined}
+      style={style}
+    >
+      <button
+        type="button"
+        className="dasti-cv-org-handle"
+        aria-label={`Reorder ${label}`}
+        title="Drag to reorder"
+        {...sortable.attributes}
+        {...sortable.listeners}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            onMoveSection(sectionId, -1);
+            return;
+          }
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            onMoveSection(sectionId, 1);
+            return;
+          }
+        }}
+      >
+        <GripHorizontal size={16} strokeWidth={1.8} />
+      </button>
+      <button
+        type="button"
+        className="dasti-cv-org-row__main"
+        onClick={() => onSelectSection(sectionId, { openEditor: true })}
+      >
+        <span className="dasti-cv-org-row__title">{label}</span>
+        <span className="dasti-cv-org-row__count">
+          {hidden ? "hidden" : itemCount > 1 ? `${itemCount} items` : ""}
+        </span>
+      </button>
+      <span className="dasti-cv-org-row__actions">{children}</span>
+    </div>
+  );
+}
+
+function CvAddSectionMenu({ onAddSection }: CvAddSectionMenuProps): JSX.Element {
+  return (
+    <Menu
+      ariaLabel="Add a section"
+      side="top"
+      menuClassName="dasti-cv-add-section-menu"
+      matchTriggerWidth
+      sections={[
+        {
+          label: "Add a section",
+          items: ADD_SECTION_ITEMS.map((item) => ({
+            id: item.id,
+            label: item.label,
+            onSelect: () => onAddSection(item.id),
+          })),
+        },
+        {
+          items: [
+            {
+              id: "custom",
+              label: "Custom section",
+              icon: <Plus size={14} strokeWidth={1.8} />,
+              onSelect: () => onAddSection("custom"),
+            },
+          ],
+        },
+      ]}
+      trigger={
+        <button type="button" className="dasti-cv-org-add">
+          <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
+          Add section
+        </button>
+      }
+    />
+  );
+}
+
+function FontPairMenu({
+  value,
+  onSelectFontPair,
+}: {
+  value: VerbatiFontPairId;
+  onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
+}): JSX.Element {
+  const activeOption = getVerbatiFontPairOption(value);
+
+  return (
+    <Menu
+      ariaLabel="Font pair"
+      menuClassName="dasti-cv-font-menu"
+      matchTriggerWidth
+      sections={[
+        {
+          label: "Font pair",
+          items: FONT_PAIR_OPTIONS.map((option) => ({
+            id: option.id,
+            role: "menuitemradio",
+            selected: option.id === activeOption.id,
+            icon:
+              option.id === activeOption.id ? (
+                <Check size={14} strokeWidth={1.9} />
+              ) : undefined,
+            label: (
+              <span
+                className="dasti-cv-font-menu__sample"
+                style={
+                  {
+                    "--cv-font-pair-heading": option.headingFamily,
+                    "--cv-font-pair-body": option.bodyFamily,
+                  } as React.CSSProperties
+                }
+              >
+                <span className="dasti-cv-font-menu__sample-title">
+                  {option.headingLabel}
+                </span>
+                <span className="dasti-cv-font-menu__sample-body">
+                  {option.bodyLabel}
+                </span>
+              </span>
+            ),
+            ariaLabel: option.name,
+            onSelect: () => onSelectFontPair(option.id),
+          })),
+        },
+      ]}
+      trigger={
+        <button type="button" className="dasti-cv-font-menu-trigger">
+          <span
+            className="dasti-cv-font-menu-trigger__label"
+            style={
+              {
+                "--cv-font-pair-heading": activeOption.headingFamily,
+                "--cv-font-pair-body": activeOption.bodyFamily,
+              } as React.CSSProperties
+            }
+          >
+            <span>{activeOption.headingLabel}</span>
+            <small>{activeOption.bodyLabel}</small>
+          </span>
+          <ChevronDown size={14} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+      }
+    />
+  );
+}
+
+export function CvRail({
+  sections,
+  hiddenSectionIds,
+  activeSectionId,
+  activeTab,
+  stylePreset,
+  selectedTone,
+  aiSuggestion,
+  appliedAiEdit,
+  isImporting,
+  onActiveTabChange,
+  onSelectSection,
+  onToggleHiddenSection,
+  onDeleteSection,
+  onReorderSections,
+  onMoveSection,
+  onAskAiForSection,
+  onRunAskAiForSection,
+  onAcceptAiSuggestion,
+  onDiscardAiSuggestion,
+  onUndoAiSuggestion,
+  onAcceptListAiSuggestion,
+  onDismissListAiSuggestion,
+  onSelectTone,
+  onAddSection,
+  onSelectTemplate,
+  onSelectFontPair,
+  onSelectAccent,
+  onImportPdf,
+  onPasteText,
+}: CvRailProps): JSX.Element {
+  const activeSection = getActiveSection(sections, activeSectionId);
+  const [aiPrompt, setAiPrompt] = React.useState("");
+  const [streamExpanded, setStreamExpanded] = React.useState(false);
+  const activeSectionLabel = activeSection
+    ? formatSectionDisplayTitle(activeSection, { fallback: "Section" })
+    : "";
+  const activeAiMode = activeSection ? getRailAiMode(activeSection) : "none";
+  const activeUsesStructuredSuggestions =
+    activeSection ? usesStructuredSuggestions(activeSection) : false;
+  const activeUsesTone = activeSection?.type === "summary";
+  const scopedAiSuggestion =
+    aiSuggestion && aiSuggestion.sectionId === activeSectionId ? aiSuggestion : null;
+  const scopedAppliedAiEdit =
+    appliedAiEdit && appliedAiEdit.sectionId === activeSectionId
+      ? appliedAiEdit
+      : null;
+  const sortableSectionIds = React.useMemo(
+    () => sections.map((section, index) => getSectionId(section, index)),
+    [sections],
+  );
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+  const activeAccent = ACCENT_OPTIONS.find((option) => {
+    if (option.palette && option.palette !== stylePreset.palette) return false;
+    if (option.palette && option.palette !== "custom") {
+      return !stylePreset.accentHex;
+    }
+    return (
+      String(stylePreset.accentHex ?? "").toLowerCase() ===
+      option.accentHex.toLowerCase()
+    );
+  });
+  const isAiRunning = aiSuggestion?.state === "loading";
+  const streamState = "active";
+  const streamCount = "2 of 3";
+  const streamStages = [
+    {
+      label: "Parsing imported résumé",
+      state: "done",
+    },
+    {
+      label: "Structuring sections",
+      state: "active",
+    },
+    {
+      label: "Final pass",
+      state: "pending",
+    },
+  ] as const;
+
+  function handleDragEnd(event: DragEndEvent) {
+    const activeId = String(event.active.id);
+    const overId = event.over?.id ? String(event.over.id) : null;
+    if (!overId || activeId === overId) return;
+    onReorderSections(activeId, overId);
+  }
+
+  return (
+    <aside className="dasti-cv-rail" aria-label="CV forge rail">
+      <div className="dasti-cv-rail-tabs" role="tablist" aria-label="CV forge tools">
+        {(["sections", "ai", "style"] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            data-active={activeTab === tab ? "true" : undefined}
+            onClick={() => onActiveTabChange(tab)}
+          >
+            {tab === "sections" ? "Sections" : tab === "ai" ? "Ask" : "Style"}
+          </button>
+        ))}
+      </div>
+
+      {isImporting ? (
+        <>
+          <button
+            type="button"
+            className="dasti-cv-ai-stream"
+            data-state={streamState}
+            data-expanded={streamExpanded ? "true" : undefined}
+            aria-expanded={streamExpanded}
+            aria-live="polite"
+            onClick={() => setStreamExpanded((expanded) => !expanded)}
+          >
+            <span className="dasti-cv-ai-stream__dot" />
+            <span className="dasti-cv-ai-stream__label">Structuring sections</span>
+            <span className="dasti-cv-ai-stream__count">{streamCount}</span>
+            <ChevronDown
+              className="dasti-cv-ai-stream__caret"
+              size={14}
+              strokeWidth={1.8}
+              aria-hidden="true"
+            />
+          </button>
+          {streamExpanded ? (
+            <div className="dasti-cv-ai-stage-list">
+              {streamStages.map((stage) => (
+                <div
+                  key={stage.label}
+                  className="dasti-cv-ai-stage"
+                  data-state={stage.state}
+                >
+                  <span className="dasti-cv-ai-stage__dot" />
+                  <span>{stage.label}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {activeTab === "sections" ? (
+        <div className="dasti-cv-rail-pane" data-rail-pane="sections">
+          <div className="dasti-cv-rail-pane__head">
+            <span className="dasti-cv-rail-label">Organize</span>
+            <span>Drag to reorder · wand</span>
+          </div>
+          {sections.length === 0 ? (
+            <div className="dasti-cv-rail-empty">No sections yet.</div>
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={sortableSectionIds}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="dasti-cv-org-list">
+                  {sections.map((section, index) => {
+                    const sectionId = getSectionId(section, index);
+                    const hidden = hiddenSectionIds.includes(sectionId);
+                    const policy = getSectionOrganizationControlPolicy(section);
+                    const label = formatSectionDisplayTitle(section, {
+                      fallback: "Section",
+                    });
+	                    const railAiMode = getRailAiMode(section);
+	                    return (
+	                      <SortableSectionRow
+	                        key={sectionId}
+	                        sectionId={sectionId}
+	                        label={label}
+	                        hidden={hidden}
+	                        active={sectionId === activeSectionId}
+	                        itemCount={getItemCount(section)}
+	                        onSelectSection={onSelectSection}
+	                        onMoveSection={onMoveSection}
+	                      >
+	                        {railAiMode !== "none" ? (
+	                          <button
+	                            type="button"
+	                            className="dasti-cv-org-row__action dasti-cv-org-row__action--wand"
+	                            title={
+                              railAiMode === "rail"
+                                ? `Ask for ${label}`
+                                : `Open ${label} item editor`
+	                            }
+	                            aria-label={
+                              railAiMode === "rail"
+                                ? `Ask for ${label}`
+                                : `Open ${label} item editor`
+	                            }
+	                            onClick={() => {
+	                              if (usesStructuredSuggestions(section)) {
+	                                onSelectSection(sectionId, { openEditor: true });
+	                                void onRunAskAiForSection({
+	                                  sectionId,
+	                                  prompt: "",
+	                                  tone: selectedTone,
+	                                });
+	                                return;
+	                              }
+	                              if (railAiMode === "rail") {
+	                                onAskAiForSection(sectionId);
+	                                void onRunAskAiForSection({
+	                                  sectionId,
+	                                  prompt: "",
+	                                  tone: selectedTone,
+	                                });
+	                                return;
+	                              }
+	                              onSelectSection(sectionId, { openEditor: true });
+	                            }}
+	                          >
+	                            <Wand2 size={14} strokeWidth={1.8} aria-hidden="true" />
+	                          </button>
+	                        ) : null}
+	                        {policy.showVisibilityToggle ? (
+	                          <button
+	                            type="button"
+	                            className="dasti-cv-org-row__action"
+	                            title={hidden ? "Show" : "Hide"}
+	                            aria-label={`${hidden ? "Show" : "Hide"} ${label}`}
+	                            onClick={() => onToggleHiddenSection(sectionId)}
+	                          >
+	                            {hidden ? (
+	                              <EyeClosed size={14} strokeWidth={1.8} aria-hidden="true" />
+	                            ) : (
+	                              <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
+	                            )}
+	                          </button>
+	                        ) : null}
+	                        {policy.showDeleteControl ? (
+	                          <button
+	                            type="button"
+	                            className="dasti-cv-org-row__action"
+	                            data-tone="danger"
+	                            title="Delete"
+	                            aria-label={`Delete ${label}`}
+	                            onClick={() => onDeleteSection(sectionId)}
+	                          >
+	                            <TrashSimple size={14} strokeWidth={1.8} aria-hidden="true" />
+	                          </button>
+	                        ) : null}
+	                      </SortableSectionRow>
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
+          <CvAddSectionMenu onAddSection={onAddSection} />
+          <div className="dasti-cv-rail-hint">
+            Click a section row to edit its items. Each section opens its own
+            editor.
+          </div>
+        </div>
+      ) : null}
+
+      {activeTab === "ai" ? (
+        <div className="dasti-cv-rail-pane" data-rail-pane="ai">
+          <div className="dasti-cv-rail-label">
+            {activeSection && activeAiMode !== "none"
+              ? activeSectionLabel
+              : "Ask"}
+          </div>
+          <div className="dasti-cv-rail-hint">
+            {activeSection
+              ? activeAiMode === "rail"
+                ? "Editing the section selected in the paper or rail."
+                : activeAiMode === "editor"
+                  ? "This section uses item-level controls in the typed editor."
+                  : "Profile fields use direct field editing."
+              : "Pick a section in the paper or rail to start."}
+          </div>
+          {activeAiMode === "editor" ? (
+            <>
+              <div className="dasti-cv-rail-hint">
+                Use the item wands in the typed editor for exact entries.
+              </div>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                disabled={!activeSection}
+                onClick={() => {
+                  if (!activeSectionId) return;
+                  onSelectSection(activeSectionId, { openEditor: true });
+                }}
+              >
+                {activeSection ? `Open ${activeSectionLabel} editor` : "Open editor"}
+              </Button>
+            </>
+          ) : activeUsesStructuredSuggestions ? (
+            <>
+              <div className="dasti-cv-rail-hint">
+                Skills, languages, and hobbies use editable chips in the section editor.
+              </div>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                disabled={!activeSection || activeAiMode !== "rail" || isAiRunning}
+                onClick={() => {
+                  if (!activeSectionId || activeAiMode !== "rail") return;
+                  onSelectSection(activeSectionId, { openEditor: true });
+                  void onRunAskAiForSection({
+                    sectionId: activeSectionId,
+                    prompt: "",
+                    tone: selectedTone,
+                  });
+                }}
+              >
+                {isAiRunning ? (
+                  <>
+                    Generating suggestions<span className="ds-btn__period">.</span>
+                  </>
+                ) : scopedAiSuggestion ? (
+                  `Refresh in ${activeSectionLabel} editor`
+                ) : (
+                  `Open ${activeSectionLabel} editor`
+                )}
+              </Button>
+            </>
+          ) : (
+            <>
+              <textarea
+                className="ds-field ds-field--textarea dasti-cv-ai-prompt"
+                placeholder="Tighten the second bullet, drop the buzzwords."
+                disabled={!activeSection || activeAiMode !== "rail" || isAiRunning}
+                value={aiPrompt}
+                onChange={(event) => {
+                  setAiPrompt(event.currentTarget.value);
+                }}
+              />
+              {activeUsesTone ? (
+                <div className="dasti-cv-tone-row">
+                  {(["warm", "formal", "natural"] as const).map((tone) => (
+                    <button
+                      key={tone}
+                      type="button"
+                      className="dasti-cv-tone-chip"
+                      aria-pressed={selectedTone === tone}
+                      data-selected={selectedTone === tone ? "true" : undefined}
+                      onClick={() => onSelectTone(tone)}
+                    >
+                      <ToneBadge tone={tone}>
+                        {tone.charAt(0).toUpperCase() + tone.slice(1)}
+                      </ToneBadge>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                disabled={!activeSection || activeAiMode !== "rail" || isAiRunning}
+                onClick={() => {
+                  if (!activeSectionId || activeAiMode !== "rail") return;
+                  const prompt =
+                    aiPrompt.trim() || `Improve the ${activeSectionLabel} section.`;
+                  void onRunAskAiForSection({
+                    sectionId: activeSectionId,
+                    prompt,
+                    tone: selectedTone,
+                  });
+                }}
+              >
+                {isAiRunning ? (
+                  <>
+                    Asking AI<span className="ds-btn__period">.</span>
+                  </>
+                ) : activeSection ? (
+                  activeAiMode === "rail"
+                    ? `Ask ${activeSectionLabel}`
+                    : "Ask section"
+                ) : (
+                  "Ask section"
+                )}
+              </Button>
+            </>
+          )}
+          {scopedAiSuggestion?.kind === "list" && activeUsesStructuredSuggestions ? (
+            <div className="dasti-cv-rail-hint">
+              Suggestions appear in the section editor as chips you can add or
+              dismiss.
+            </div>
+          ) : scopedAiSuggestion?.kind === "list" ? (
+            <div
+              className="dasti-cv-ai-list-card"
+              role="region"
+              aria-label={`Suggested items for ${scopedAiSuggestion.sectionLabel}`}
+              data-state={scopedAiSuggestion.state}
+            >
+              <div className="dasti-cv-ai-list-card__title">
+                {`Suggested items for ${scopedAiSuggestion.sectionLabel}`}
+              </div>
+              {scopedAiSuggestion.state === "loading" ? (
+                <p className="dasti-cv-ai-list-card__copy">
+                  Generating suggestions<span className="ds-btn__period">.</span>
+                </p>
+              ) : scopedAiSuggestion.state === "error" ? (
+                <p className="dasti-cv-ai-list-card__error">
+                  {scopedAiSuggestion.errorMessage ?? "AI suggestions are unavailable."}
+                </p>
+              ) : scopedAiSuggestion.items.length > 0 ? (
+                <div className="dasti-cv-ai-list-card__items">
+                  {scopedAiSuggestion.items.map((item) => (
+                    <span className="dasti-cv-ai-list-chip" key={item}>
+                      <span>{item}</span>
+                      <button
+                        type="button"
+                        aria-label={`Add suggested item ${item}`}
+                        onClick={() => onAcceptListAiSuggestion(item)}
+                      >
+                        Add
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Dismiss suggested item ${item}`}
+                        onClick={() => onDismissListAiSuggestion(item)}
+                      >
+                        Dismiss
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="dasti-cv-ai-list-card__copy">
+                  No new suggestions for this section.
+                </p>
+              )}
+            </div>
+          ) : scopedAiSuggestion ? (
+            <AiSuggestionCard
+              compact
+              actionLabel="Ask"
+              title={`Suggested edit for ${scopedAiSuggestion.sectionLabel}`}
+              beforeText={scopedAiSuggestion.beforeText}
+              afterText={scopedAiSuggestion.afterText}
+              state={scopedAiSuggestion.state}
+              errorMessage={scopedAiSuggestion.errorMessage}
+              onAccept={onAcceptAiSuggestion}
+              onDiscard={onDiscardAiSuggestion}
+              onRetry={() => {
+                if (!activeSectionId) return;
+                void onRunAskAiForSection({
+                  sectionId: activeSectionId,
+                  prompt:
+                    aiPrompt.trim() ||
+                    `Improve the ${activeSectionLabel} section.`,
+                  tone: selectedTone,
+                });
+              }}
+            />
+          ) : scopedAppliedAiEdit ? (
+            <div
+              role="status"
+              aria-label={`Applied. Undo ${scopedAppliedAiEdit.sectionLabel}`}
+              className="dasti-ai-applied-status"
+            >
+              <span>Applied.</span>
+              <button
+                type="button"
+                className="dasti-ai-applied-status__undo"
+                onClick={onUndoAiSuggestion}
+              >
+                Undo
+              </button>
+            </div>
+          ) : null}
+          <div className="dasti-cv-rail-hint">
+            {activeAiMode === "editor"
+              ? "Use the item wands in the section editor for exact entries."
+              : "CVs are edited section-by-section. To rewrite multiple sections, run them one at a time."}
+          </div>
+        </div>
+      ) : null}
+
+      {activeTab === "style" ? (
+        <div className="dasti-cv-rail-pane" data-rail-pane="style">
+          <div className="dasti-cv-style-note">
+            Document style. Applies to the full CV page.
+          </div>
+          <div className="dasti-cv-rail-label">Template</div>
+          <div className="dasti-cv-style-pills">
+            <button
+              type="button"
+              data-selected={stylePreset.layout === "workshop" ? "true" : undefined}
+              onClick={() => onSelectTemplate("editorial")}
+            >
+              Workshop
+            </button>
+          </div>
+          <div className="dasti-cv-rail-label">Font pair</div>
+          <FontPairMenu
+            value={stylePreset.typography as VerbatiFontPairId}
+            onSelectFontPair={onSelectFontPair}
+          />
+          <div className="dasti-cv-rail-label">Accent</div>
+          <div className="dasti-cv-style-swatches" aria-label="Accent colors">
+            {ACCENT_OPTIONS.map((swatch) => (
+              <button
+                key={swatch.id}
+                type="button"
+                className={`dasti-cv-style-swatch dasti-cv-style-swatch--${swatch.id}`}
+                style={
+                  {
+                    "--cv-accent-swatch": swatch.accentHex,
+                  } as React.CSSProperties
+                }
+                aria-label={`Use ${swatch.label} accent`}
+                aria-pressed={activeAccent?.id === swatch.id}
+                data-selected={activeAccent?.id === swatch.id ? "true" : undefined}
+                onClick={() => onSelectAccent(swatch.id)}
+              >
+                {activeAccent?.id === swatch.id ? <Check size={12} strokeWidth={1.9} /> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="dasti-cv-rail-footer">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onImportPdf}
+          disabled={isImporting}
+          iconLeft={<Upload size={14} strokeWidth={1.8} />}
+        >
+          {isImporting ? "Importing PDF" : "Import PDF"}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onPasteText}>
+          Paste resume text
+        </Button>
+      </div>
+    </aside>
+  );
+}
+
+export default CvRail;

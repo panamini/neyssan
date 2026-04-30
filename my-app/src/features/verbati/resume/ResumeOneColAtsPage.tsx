@@ -118,6 +118,7 @@ function renderSectionHeading(title: string, continued: boolean) {
           textTransform: "uppercase",
           letterSpacing: "0.08em",
           fontWeight: 700,
+          color: "var(--color-accent)",
         }}
       >
         {title}
@@ -134,7 +135,7 @@ function renderSectionHeading(title: string, continued: boolean) {
           flex: 1,
           height: "0.35mm",
           background:
-            "color-mix(in srgb, var(--color-border-strong) 58%, transparent)",
+            "color-mix(in srgb, var(--color-accent) 58%, transparent)",
         }}
       />
     </div>
@@ -347,7 +348,7 @@ function renderProfileFragment(args: {
         gap: "var(--header-row-gap)",
         paddingBottom: "var(--header-bottom-padding)",
         borderBottom:
-          "0.3mm solid color-mix(in srgb, var(--color-border-strong) 58%, transparent)",
+          "0.3mm solid color-mix(in srgb, var(--color-accent) 42%, transparent)",
       }}
     >
       <div style={{ display: "grid", gap: "1.5mm" }}>

@@ -29,7 +29,10 @@ const WORKSHOP_PREVIEW_THEME_VAR_NAMES = [
   "--color-text-muted",
   "--color-text-subtle",
   "--color-border-strong",
+  "--color-accent",
+  "--color-accent-hover",
   "--color-accent-soft",
+  "--color-on-accent",
   "--paper",
 ] as const;
 

@@ -161,10 +161,10 @@ export class ConvexStorageAdapter {
 
     // Prepare payload for Convex backend: strip fields that the backend validator
     // does not accept (e.g., metadata.createdAt). Keep a copy for local caching.
-    const backendPayload: any = { ...cv };
-    if (backendPayload.metadata && typeof backendPayload.metadata === "object") {
+    const backendPayload: any = {};
+    if (cv.metadata && typeof cv.metadata === "object") {
       // shallow clone metadata and remove fields that the backend validator does not accept
-      const md = { ...backendPayload.metadata } as Record<string, any>;
+      const md = { ...cv.metadata } as Record<string, any>;
       delete md.createdAt;
       delete md.updatedAt;
       delete md.version;

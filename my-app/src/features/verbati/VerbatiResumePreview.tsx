@@ -9,6 +9,7 @@ import { useDocumentStageLayout } from "../../hooks/use-document-stage-layout";
 import { useDocumentViewportCentering } from "../../hooks/use-document-viewport-centering";
 import ResumePage from "./resume/ResumePage";
 import ResumeTemplateRenderer, {
+  RESUME_TEMPLATE_PAGE_GAP_PX,
   WORKSHOP_TEMPLATE_RENDERER_ID,
   getResumeTemplateCanvasHeight,
 } from "./resume/ResumeTemplateRenderer";
@@ -50,6 +51,7 @@ type VerbatiResumePreviewProps = {
   stylePreset: VerbatiStylePreset;
   compareLayouts?: boolean;
   hostMode?: "panel" | "workspace";
+  scrollMode?: "contained" | "natural";
   railLeadControl?: React.ReactNode;
   railStartAddon?: React.ReactNode;
   onSelectComparisonLayout?:
@@ -229,6 +231,7 @@ export function VerbatiResumePreview({
   stylePreset,
   compareLayouts = false,
   hostMode = "panel",
+  scrollMode = "contained",
   railLeadControl = null,
   railStartAddon = null,
   onSelectComparisonLayout,
@@ -275,6 +278,7 @@ export function VerbatiResumePreview({
     React.useState<ResumePreviewMetrics>(DEFAULT_RESUME_PREVIEW_METRICS);
   const stageMeasureRef = React.useRef<HTMLDivElement | null>(null);
   const isWorkspaceMode = hostMode === "workspace";
+  const usesNaturalPageScroll = scrollMode === "natural";
   const handlePreviewMetricsChange = React.useCallback(
     (nextMetrics: ResumePreviewMetrics) => {
       setResumePreviewMetrics((current) =>
@@ -345,6 +349,28 @@ export function VerbatiResumePreview({
   const effectivePageCount = usesWorkshopTemplateRenderer
     ? visiblePageCount
     : resumePreviewMetrics.pageCount;
+  const pageBreakMarkers = React.useMemo(() => {
+    if (effectivePageCount <= 1) {
+      return [];
+    }
+    const pageGapPx = usesWorkshopTemplateRenderer
+      ? RESUME_TEMPLATE_PAGE_GAP_PX
+      : resumePreviewMetrics.pageGapPx * previewScale;
+
+    return Array.from({ length: effectivePageCount - 1 }, (_, index) => {
+      const pageIndex = index + 1;
+      return {
+        pageNumber: pageIndex + 1,
+        topPx: pageIndex * (stageLayout.pageHeight + pageGapPx) - pageGapPx / 2,
+      };
+    });
+  }, [
+    effectivePageCount,
+    previewScale,
+    resumePreviewMetrics.pageGapPx,
+    stageLayout.pageHeight,
+    usesWorkshopTemplateRenderer,
+  ]);
   const stageMode =
     stageLayout.overflowX ||
     stageLayout.overflowY ||
@@ -667,6 +693,9 @@ export function VerbatiResumePreview({
       if (compareLayouts || event.ctrlKey) {
         return;
       }
+      if (usesNaturalPageScroll) {
+        return;
+      }
 
       const viewport = resumeViewportRef.current;
       if (!viewport) {
@@ -717,7 +746,7 @@ export function VerbatiResumePreview({
         event.preventDefault();
       }
     },
-    [compareLayouts, isWorkspaceMode, workspaceViewMode],
+    [compareLayouts, isWorkspaceMode, usesNaturalPageScroll, workspaceViewMode],
   );
 
   React.useEffect(() => {
@@ -759,9 +788,10 @@ export function VerbatiResumePreview({
             : "false"
         }
         data-document-stage="true"
+        data-scroll-mode={scrollMode}
         style={{
           width: `${stageLayout.stageWidth}px`,
-          height: `${stageLayout.stageHeight}px`,
+          height: `${usesNaturalPageScroll ? canvasHeightPx : stageLayout.stageHeight}px`,
         }}
         {...viewportPanProps}
       >
@@ -777,6 +807,24 @@ export function VerbatiResumePreview({
           }}
           onClick={onLinkIntent ? handlePreviewCanvasClick : undefined}
         >
+          {pageBreakMarkers.length > 0 ? (
+            <div className="dasti-document-page-markers" aria-hidden="true">
+              {pageBreakMarkers.map((marker) => (
+                <div
+                  key={`resume-page-marker-${marker.pageNumber}`}
+                  className="dasti-document-page-marker"
+                  style={{
+                    "--page-marker-top": `${roundPx(marker.topPx)}px`,
+                  } as React.CSSProperties}
+                >
+                  <span className="dasti-document-page-marker__label">
+                    Page {marker.pageNumber}
+                  </span>
+                  <span className="dasti-document-page-marker__line" />
+                </div>
+              ))}
+            </div>
+          ) : null}
           {usesWorkshopTemplateRenderer ? (
             <ResumeTemplateRenderer
               data={data}
@@ -825,6 +873,12 @@ export function VerbatiResumePreview({
             </div>
           ) : null}
           {documentStage}
+          <span
+            className="dasti-doc-page-count dasti-doc-page-count--resume-panel"
+            aria-label="Page count"
+          >
+            {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
+          </span>
         </div>
       </div>
     );

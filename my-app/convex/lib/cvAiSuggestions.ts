@@ -164,6 +164,39 @@ const languageAliasEntries = Array.from(languageAliasMap.entries()).sort(
   (left, right) => right[0].split(/\s+/).length - left[0].split(/\s+/).length,
 );
 
+const programmingLanguageFalsePositives = new Set([
+  "c",
+  "c++",
+  "c#",
+  "css",
+  "go",
+  "html",
+  "java",
+  "javascript",
+  "python",
+  "r",
+  "ruby",
+  "rust",
+  "scala",
+  "sql",
+  "typescript",
+]);
+
+const knownHobbyLabels = new Set([
+  "chess",
+  "creative writing",
+  "cycling",
+  "drawing",
+  "hiking",
+  "music",
+  "painting",
+  "photography",
+  "reading",
+  "running",
+  "travel",
+  "volunteering",
+]);
+
 function collectLanguageMatchesFromTexts(texts: string[]): string[] {
   const matches: string[] = [];
   const seen = new Set<string>();
@@ -201,7 +234,42 @@ function collectLanguageMatchesFromTexts(texts: string[]): string[] {
   return matches;
 }
 
+export function filterLanguageSuggestionItems(items: string[]): string[] {
+  return dedupeCaseInsensitive(
+    items
+      .map((item) => {
+        const normalized = normalizeMatchingText(item);
+        if (programmingLanguageFalsePositives.has(normalized)) return "";
+        return languageAliasMap.get(normalized) ?? "";
+      })
+      .filter(Boolean),
+  );
+}
+
+export function filterHobbySuggestionItems(args: {
+  items: string[];
+  blockedItems?: string[];
+}): string[] {
+  const blocked = new Set(
+    dedupeCaseInsensitive(args.blockedItems ?? []).map((item) =>
+      item.toLocaleLowerCase(),
+    ),
+  );
+
+  return dedupeCaseInsensitive(args.items)
+    .filter((item) => !blocked.has(item.toLocaleLowerCase()))
+    .filter((item) => {
+      const normalized = item.trim().toLocaleLowerCase();
+      return (
+        knownHobbyLabels.has(normalized) ||
+        collectSkillMatchesFromTexts([item]).length === 0
+      );
+    })
+    .filter((item) => filterLanguageSuggestionItems([item]).length === 0);
+}
+
 export function buildSkillSuggestionShortlist(args: {
+  summary?: string;
   experiences?: CvAiExperienceEvidence[];
   educations?: CvAiEducationEvidence[];
   existingItems?: string[];
@@ -215,7 +283,11 @@ export function buildSkillSuggestionShortlist(args: {
   const educationTexts = (args.educations ?? [])
     .map(buildEducationEvidenceText)
     .filter(Boolean);
-  const evidenceTexts = [...experienceTexts, ...educationTexts];
+  const evidenceTexts = [
+    args.summary ?? "",
+    ...experienceTexts,
+    ...educationTexts,
+  ].filter(Boolean);
 
   const extractedSkills = collectSkillsFromSources({
     fallbackTexts: evidenceTexts,
