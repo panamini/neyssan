@@ -76,6 +76,13 @@ function applyAutoTitleIfPlaceholder(doc: CvDocument): CvDocument {
   return { ...doc, title: derived };
 }
 
+function readUpdatedAtMs(doc: CvDocument | null | undefined): number | null {
+  const value = doc?.metadata?.updatedAt;
+  if (typeof value !== "string") return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function collectTextContent(value: unknown, sink: string[]): void {
   if (typeof value === "string") {
     const compact = value.replace(/\s+/g, " ").trim();
@@ -1731,6 +1738,24 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     if (!freshestLocal) return true;
     if (deepEqual(stripMetadata(freshestLocal), stripMetadata(remoteDoc)))
       return true;
+
+    const localUpdatedAtMs = readUpdatedAtMs(freshestLocal);
+    const remoteUpdatedAtMs = readUpdatedAtMs(remoteDoc);
+    if (
+      localUpdatedAtMs !== null &&
+      remoteUpdatedAtMs !== null &&
+      localUpdatedAtMs > remoteUpdatedAtMs
+    ) {
+      dbg(
+        "[CvLibraryContext] background refresh skipped: local snapshot is newer than remote",
+        {
+          targetId,
+          localUpdatedAt: freshestLocal.metadata?.updatedAt,
+          remoteUpdatedAt: remoteDoc.metadata?.updatedAt,
+        },
+      );
+      return false;
+    }
 
     const localMetrics = getDocumentCompletenessMetrics(freshestLocal);
     const remoteMetrics = getDocumentCompletenessMetrics(remoteDoc);

@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { runEditorSelectionTransform } from "../editorAi";
+import { runEditorAiTextPrompt, runEditorSelectionTransform } from "../editorAi";
 
 describe("editor AI transform contract", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
   async function runTransform(mode: string) {
     const runTextPrompt = vi.fn().mockResolvedValue(" Improved text ");
 
@@ -137,5 +142,104 @@ describe("editor AI transform contract", () => {
       }),
     ).rejects.toThrow(/Unsupported editor AI action/);
     expect(runTextPrompt).not.toHaveBeenCalled();
+  });
+
+  it("can prefer the Mistral helper route for fast structured actions", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "openai-test-key");
+    vi.stubEnv("MISTRAL_API_KEY", "mistral-test-key");
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: '["React"]' } }],
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runEditorAiTextPrompt({
+      system: "Return JSON.",
+      prompt: "Suggest skills.",
+      maxOutputTokens: 120,
+      providerPreference: "mistral",
+      mistralModelOverride: "ministral-test",
+    });
+
+    expect(result).toBe('["React"]');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://api.mistral.ai/v1/chat/completions",
+    );
+    expect(
+      JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)),
+    ).toMatchObject({
+      model: "ministral-test",
+      max_tokens: 120,
+    });
+  });
+
+  it("can require the Mistral helper route without falling back to OpenAI", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "openai-test-key");
+    vi.stubEnv("MISTRAL_API_KEY", "");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      runEditorAiTextPrompt({
+        system: "Rewrite.",
+        prompt: "Improve summary.",
+        providerPreference: "mistral_only",
+        mistralModelOverride: "mistral-small-latest",
+      }),
+    ).rejects.toThrow(/Mistral helper AI provider is not configured/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("passes a Mistral JSON schema response format when requested", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "openai-test-key");
+    vi.stubEnv("MISTRAL_API_KEY", "mistral-test-key");
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "{\"paragraph\":\"Led operations.\"}" } }],
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runEditorAiTextPrompt({
+      system: "Return JSON.",
+      prompt: "Rewrite responsibilities.",
+      providerPreference: "mistral",
+      mistralModelOverride: "ministral-test",
+      mistralResponseFormat: {
+        type: "json_schema",
+        json_schema: {
+          name: "cv_experience_responsibility_paragraph",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["paragraph"],
+            properties: {
+              paragraph: { type: "string" },
+            },
+          },
+        },
+      },
+    });
+
+    expect(
+      JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)),
+    ).toMatchObject({
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "cv_experience_responsibility_paragraph",
+          strict: true,
+        },
+      },
+    });
   });
 });

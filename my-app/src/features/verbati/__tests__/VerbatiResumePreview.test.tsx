@@ -271,6 +271,31 @@ describe("VerbatiResumePreview", () => {
     });
   });
 
+  it("shows page count and page divider markers in panel mode", async () => {
+    resumePreviewMetricsRef.current = {
+      pageCount: 2,
+      pageGapPx: 16,
+      stackHeightPx: 2262,
+    };
+
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="panel"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Page count")).toHaveTextContent("2 pages");
+    });
+    expect(screen.getByText("Page 2")).toBeInTheDocument();
+  });
+
   it("keeps non-workshop families entirely on the legacy ResumePage path", () => {
     render(
       <VerbatiResumePreview
@@ -899,5 +924,39 @@ describe("VerbatiResumePreview", () => {
 
     expect(viewport!.scrollTop).toBe(600);
     expect(scrollRoot.scrollTop).toBe(0);
+  });
+
+  it("lets embedded natural-scroll panels leave wheel scrolling to the page", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="panel"
+        scrollMode="natural"
+      />,
+    );
+
+    const viewport = document.querySelector(
+      ".dasti-doc-viewport--resume",
+    ) as HTMLDivElement | null;
+
+    expect(viewport).not.toBeNull();
+    Object.defineProperty(viewport!, "clientHeight", {
+      configurable: true,
+      value: 600,
+    });
+    Object.defineProperty(viewport!, "scrollHeight", {
+      configurable: true,
+      value: 1200,
+    });
+    viewport!.scrollTop = 600;
+
+    fireEvent.wheel(viewport!, { deltaY: 120 });
+
+    expect(viewport!.scrollTop).toBe(600);
   });
 });
