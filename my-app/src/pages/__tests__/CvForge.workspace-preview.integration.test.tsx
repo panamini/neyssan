@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -72,14 +72,40 @@ vi.mock("../../components/ProfileReviewCard", () => ({
   ),
 }));
 
-vi.mock("../../components/EmbeddedStyleInspector", () => ({
-  default: () => <div data-testid="embedded-style-inspector" />,
-}));
-
 vi.mock("../../contexts/CvLibraryContext", () => ({
   useCvLibrary: () => ({
-    currentCv: null,
+    currentCv: {
+      id: "cv_123",
+      title: "Test CV",
+      metadata: {
+        createdAt: "2026-04-17T12:00:00.000Z",
+        updatedAt: "2026-04-17T12:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "profile-1",
+          type: "profile",
+          title: "Profile",
+          blocks: [],
+          structuredContent: [{ id: "profile-item-1", name: "Ada Lovelace" }],
+        },
+        {
+          id: "summary-1",
+          type: "summary",
+          title: "Summary",
+          blocks: [],
+          structuredContent: [{ id: "summary-item-1", summary: "Builder." }],
+        },
+      ],
+    },
+    currentCvId: "cv_123",
+    createNewCv: vi.fn(async () => undefined),
     importCv: vi.fn(),
+    cvs: [],
+    isLibraryHydrated: true,
+    lastLibraryFetchFailed: false,
+    loadCv: vi.fn(() => true),
   }),
 }));
 
@@ -122,15 +148,35 @@ vi.mock("../../features/verbati/resume/ResumePage", () => ({
   default: () => <div data-testid="resume-page" />,
 }));
 
-vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
-  VerbatiCvPreviewPanel: ({
+vi.mock("../../lib/buildCanonicalResumeRenderModel", () => ({
+  buildCanonicalResumeRenderModelFromCv: () => ({
+    name: "Ada Lovelace",
+    title: "Product Designer",
+    summary: "Builder.",
+    contact: [],
+    metadata: [],
+    experience: [],
+    education: [],
+    skills: [{ label: "TypeScript" }],
+    projects: [],
+    certifications: [],
+    languages: [],
+    affiliations: [],
+    textSections: [],
+  }),
+}));
+
+vi.mock("../../features/verbati/cvDocumentToResumeData", () => ({
+  hasRenderableResumeData: (data: unknown) => Boolean(data),
+}));
+
+vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
+  VerbatiResumePreview: ({
     hostMode = "panel",
-    railLeadControl,
     onLinkIntent,
     activeTarget,
   }: {
     hostMode?: "panel" | "workspace";
-    railLeadControl?: React.ReactNode;
     onLinkIntent?: (intent: {
       requestId: string;
       sectionType: "experience";
@@ -142,59 +188,12 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
     }) => void;
     activeTarget?: { sectionType: string; itemId?: string } | null;
   }) => (
-    <>
-      {hostMode === "workspace" ? (
-        <div className="dasti-doc-viewer-shell dasti-doc-viewer-shell--resume-workspace">
-          <div className="dasti-proposal-sheet__body--document-viewer">
-            <div
-              className="dasti-doc-viewport dasti-doc-viewport--resume"
-              data-document-stage="true"
-              data-stage-mode="fit"
-            >
-              {railLeadControl}
-              <div data-testid="embedded-style-inspector" />
-              <div data-testid="verbati-preview-workspace">
-                <button
-                  type="button"
-                  onClick={() =>
-                    onLinkIntent?.({
-                      requestId: `${hostMode}-intent-1`,
-                      sectionType: "experience",
-                      itemId: "exp-1",
-                      source: "preview-workspace",
-                      shouldOpenModal: true,
-                      sectionId: "experience-1",
-                      sectionTitle: "Experience",
-                    })
-                  }
-                >
-                  Trigger modal preview link
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onLinkIntent?.({
-                      requestId: `${hostMode}-intent-inline`,
-                      sectionType: "custom",
-                      source: "preview-workspace",
-                      shouldOpenModal: false,
-                      sectionId: "custom-text-1",
-                      sectionTitle: "Community",
-                    } as any)
-                  }
-                >
-                  Trigger inline preview link
-                </button>
-                <div data-testid="verbati-preview-active-workspace">
-                  {activeTarget
-                    ? `${activeTarget.sectionType}:${activeTarget.itemId ?? "section"}`
-                    : "none"}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
+    <div className="dasti-doc-viewer-shell dasti-doc-viewer-shell--resume-panel">
+      <div
+        className="dasti-doc-viewport dasti-doc-viewport--resume"
+        data-document-stage="true"
+        data-stage-mode="fit"
+      >
         <div data-testid={`verbati-preview-${hostMode}`}>
           <button
             type="button"
@@ -233,8 +232,8 @@ vi.mock("../../features/verbati/VerbatiCvPreviewPanel", () => ({
               : "none"}
           </div>
         </div>
-      )}
-    </>
+      </div>
+    </div>
   ),
 }));
 
@@ -243,7 +242,7 @@ describe("CvForge workspace preview integration", () => {
     window.localStorage.removeItem("dasti:cv-forge-workspace-mode:v1");
   });
 
-  it("routes preview mode through the live resume workspace canvas stage", async () => {
+  it("routes page preview through the PR4 forge shell and live resume canvas stage", async () => {
     const user = userEvent.setup();
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
@@ -257,13 +256,23 @@ describe("CvForge workspace preview integration", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open resume preview" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
 
     expect(
-      container.querySelector(".dasti-doc-viewer-shell--resume-workspace"),
+      container.querySelector(".dasti-doc-viewer-shell--resume-panel"),
     ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-doc-viewer-shell--resume-workspace"),
+    ).toBeNull();
+    expect(
+      container.querySelector(".dasti-document-rail--resume-workspace"),
+    ).toBeNull();
+    expect(container.querySelector(".dasti-cv-skeleton-forge")).toBeTruthy();
+    expect(container.querySelector(".dasti-cv-page-preview-stage")).toBeTruthy();
+    expect(container.querySelector(".dasti-cv-preview-workbench")).toBeNull();
+    expect(
+      screen.getByRole("complementary", { name: "CV forge rail" }),
+    ).toBeInTheDocument();
     expect(
       container.querySelector(
         '.dasti-doc-viewport--resume[data-document-stage="true"]',
@@ -274,7 +283,7 @@ describe("CvForge workspace preview integration", () => {
     ).toBeNull();
   });
 
-  it("opens the live style controls when no saved styles exist", async () => {
+  it("opens PR4 skeleton style controls instead of the old style inspector", async () => {
     const user = userEvent.setup();
 
     render(
@@ -283,13 +292,11 @@ describe("CvForge workspace preview integration", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open resume style controls" }),
-    );
+    await user.click(screen.getByRole("tab", { name: "Style" }));
 
-    expect(
-      screen.getByTestId("embedded-style-inspector"),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Font pair" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use Terre accent" })).toBeInTheDocument();
+    expect(screen.queryByTestId("embedded-style-inspector")).toBeNull();
   });
 
   it("keeps workspace preview mode for modal-canonical preview intents", async () => {
@@ -301,21 +308,19 @@ describe("CvForge workspace preview integration", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open resume preview" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
 
     await user.click(
       screen.getByRole("button", { name: "Trigger modal preview link" }),
     );
 
     expect(
-      container.querySelector(".dasti-doc-viewer-shell--resume-workspace"),
+      container.querySelector(".dasti-cv-page-preview-stage"),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Back to resume editing" }),
-    ).toBeVisible();
-    expect(screen.getByTestId("verbati-preview-active-workspace")).toHaveTextContent(
+      screen.queryByRole("button", { name: "Back to resume editing" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("verbati-preview-active-panel")).toHaveTextContent(
       "experience:exp-1",
     );
   });
@@ -323,32 +328,24 @@ describe("CvForge workspace preview integration", () => {
   it("switches back to edit only for inline preview intents", async () => {
     const user = userEvent.setup();
 
-    render(
+    const { container } = render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
         <CvForge />
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open resume preview" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
 
     await user.click(
       screen.getByRole("button", { name: "Trigger inline preview link" }),
     );
 
-    await waitFor(() =>
-      expect(screen.getByText("Mock profile editor cv_123")).toBeVisible(),
-    );
     expect(
-      screen.getByRole("button", { name: "Open resume preview" }),
-    ).toBeVisible();
-    expect(screen.getByTestId("profile-review-link-intent")).toHaveTextContent(
+      container.querySelector(".dasti-cv-page-preview-stage"),
+    ).toBeNull();
+    expect(screen.getByTestId("verbati-preview-active-panel")).toHaveTextContent(
       "custom:section",
     );
-    expect(
-      screen.getByTestId("profile-review-active-target"),
-    ).toHaveTextContent("custom:section");
   });
 
   it("routes panel preview clicks while staying in edit mode", async () => {
@@ -364,12 +361,12 @@ describe("CvForge workspace preview integration", () => {
       screen.getAllByRole("button", { name: "Trigger modal preview link" })[0],
     );
 
-    expect(screen.getByText("Mock profile editor cv_123")).toBeVisible();
-    expect(screen.getByTestId("profile-review-link-intent")).toHaveTextContent(
+    expect(screen.getByTestId("verbati-preview-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("verbati-preview-active-panel")).toHaveTextContent(
       "experience:exp-1",
     );
     expect(
-      screen.getByTestId("profile-review-active-target"),
-    ).toHaveTextContent("experience:exp-1");
+      screen.queryByText("Mock profile editor cv_123"),
+    ).not.toBeInTheDocument();
   });
 });

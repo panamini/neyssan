@@ -46,6 +46,7 @@ vi.mock("convex/react", () => ({
     }
     return vi.fn(async () => undefined);
   }),
+  useAction: vi.fn(() => vi.fn(async () => undefined)),
   useQuery: vi.fn((reference: string, args?: unknown) => {
     if (args === "skip") {
       return undefined;
@@ -213,7 +214,8 @@ describe("CvForge entry picker", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Mock profile editor none")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Upload PDF/i })).toBeInTheDocument();
+    expect(screen.queryByText("Choose your CV")).not.toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
   });
 
@@ -229,7 +231,8 @@ describe("CvForge entry picker", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Mock profile editor none")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Upload PDF/i })).toBeInTheDocument();
+    expect(screen.queryByText("Choose your CV")).not.toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
   });
 

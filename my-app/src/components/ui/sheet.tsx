@@ -15,6 +15,7 @@ export interface SheetProps {
   footer?: React.ReactNode;
   ariaLabel?: string;
   className?: string;
+  overlayClassName?: string;
   bodyClassName?: string;
   footerClassName?: string;
 }
@@ -47,6 +48,7 @@ export function Sheet({
   footer,
   ariaLabel,
   className,
+  overlayClassName,
   bodyClassName,
   footerClassName,
 }: SheetProps): JSX.Element | null {
@@ -54,12 +56,17 @@ export function Sheet({
   const descriptionId = React.useId();
   const panelRef = React.useRef<HTMLElement | null>(null);
   const returnFocusRef = React.useRef<HTMLElement | null>(null);
+  const onOpenChangeRef = React.useRef(onOpenChange);
   const exitTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const enterFrameRef = React.useRef<number | null>(null);
   const [isVisible, setIsVisible] = React.useState(open);
   const [surfaceState, setSurfaceState] = React.useState<"closed" | "open">(
     open ? "open" : "closed",
   );
+
+  React.useEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  }, [onOpenChange]);
 
   React.useEffect(() => {
     if (open) {
@@ -79,7 +86,7 @@ export function Sheet({
       setSurfaceState("closed");
       exitTimerRef.current = setTimeout(() => {
         setIsVisible(false);
-        returnFocusRef.current?.focus?.();
+        returnFocusRef.current?.focus?.({ preventScroll: true });
       }, SHEET_EXIT_DURATION);
     }
   }, [isVisible, open]);
@@ -95,14 +102,13 @@ export function Sheet({
     if (!open) return undefined;
 
     const focusFrame = requestAnimationFrame(() => {
-      const [firstFocusable] = getFocusableElements(panelRef.current);
-      (firstFocusable ?? panelRef.current)?.focus?.();
+      panelRef.current?.focus?.({ preventScroll: true });
     });
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onOpenChange(false);
+        onOpenChangeRef.current(false);
         return;
       }
 
@@ -110,7 +116,7 @@ export function Sheet({
       const focusable = getFocusableElements(panelRef.current);
       if (focusable.length === 0) {
         event.preventDefault();
-        panelRef.current?.focus?.();
+        panelRef.current?.focus?.({ preventScroll: true });
         return;
       }
 
@@ -132,7 +138,7 @@ export function Sheet({
       cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onOpenChange, open]);
+  }, [open]);
 
   if (!isVisible) return null;
 
@@ -144,7 +150,7 @@ export function Sheet({
       <div className="ds-sheet-root" data-side={side}>
         <button
           type="button"
-          className="ds-sheet__overlay"
+          className={clsx("ds-sheet__overlay", overlayClassName)}
           data-state={surfaceState}
           onClick={() => onOpenChange(false)}
           aria-label="Close panel"

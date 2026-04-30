@@ -29,6 +29,7 @@ const {
     supportedActions: [
       "generate_skills_suggestions",
       "generate_language_suggestions",
+      "generate_hobby_suggestions",
       "rewrite_summary_from_profile",
       "improve_summary_text",
       "improve_experience_bullets",
@@ -118,6 +119,7 @@ vi.mock("../../hooks/use-cv-ai-capabilities", () => ({
     supportedActions: [
       "generate_skills_suggestions",
       "generate_language_suggestions",
+      "generate_hobby_suggestions",
       "rewrite_summary_from_profile",
       "improve_summary_text",
       "improve_experience_bullets",
@@ -127,6 +129,7 @@ vi.mock("../../hooks/use-cv-ai-capabilities", () => ({
       [
         "generate_skills_suggestions",
         "generate_language_suggestions",
+        "generate_hobby_suggestions",
         "rewrite_summary_from_profile",
         "improve_summary_text",
         "improve_experience_bullets",

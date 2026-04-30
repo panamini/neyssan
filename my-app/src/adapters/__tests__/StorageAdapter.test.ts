@@ -31,6 +31,21 @@ describe("StorageAdapter persistence", () => {
     );
   });
 
+  it("does not duplicate the CV sections beside the embedded cvDocument payload", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Payload Size Guard CV");
+
+    await adapter.save(cv);
+
+    expect(patchMutation).toHaveBeenCalledTimes(1);
+    const payload = patchMutation.mock.calls[0][0].patch;
+    expect(payload.cvDocument.sections).toHaveLength(cv.sections.length);
+    expect(payload.sections).toBeUndefined();
+    expect(payload.title).toBeUndefined();
+    expect(payload.id).toBeUndefined();
+  });
+
   it("keeps import recovery session only in the embedded cvDocument payload", async () => {
     const patchMutation = vi.fn().mockResolvedValue(undefined);
     const adapter = new ConvexStorageAdapter(patchMutation);

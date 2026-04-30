@@ -175,6 +175,48 @@ describe("ResumeOneColAtsPage", () => {
     );
   });
 
+  it("applies the document accent to workshop section titles and rules", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const plan = planWorkshopResumePages({
+      data: {
+        ...resumeMock,
+        metadata: resumeMock.metadata.slice(0, 1),
+        contact: resumeMock.contact.slice(0, 2),
+        experience: resumeMock.experience.slice(0, 1),
+        projects: [],
+        education: [],
+        certifications: [],
+        affiliations: [],
+        hobbyItems: [],
+        hobbies: [],
+        textSections: [],
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const profileHeader = container.querySelector('[data-preview-section="profile"]');
+    const sectionHeading = container.querySelector("h2");
+    const sectionRule = sectionHeading?.parentElement?.querySelector("div");
+
+    expect(profileHeader?.getAttribute("style")).toContain(
+      "var(--color-accent)",
+    );
+    expect(sectionHeading?.getAttribute("style")).toContain(
+      "color: var(--color-accent);",
+    );
+    expect(sectionRule?.getAttribute("style")).toContain(
+      "var(--color-accent)",
+    );
+  });
+
   it("renders full workshop summary text in preview mode without clamp or ellipsis styles", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const longSummary = repeatWords("full-summary", 60);
