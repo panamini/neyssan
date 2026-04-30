@@ -511,8 +511,8 @@ describe("JobsPage", () => {
     expect(
       (await screen.findAllByText("Operations Associate")).length,
     ).toBeGreaterThan(0);
-    expect(await screen.findByText("Support Specialist")).toBeInTheDocument();
     expect(await screen.findByText("Acme · Paris")).toBeInTheDocument();
+    expect(await screen.findByText("Support Specialist")).toBeInTheDocument();
     expect(
       await screen.findByText("Northwind · Location unavailable"),
     ).toBeInTheDocument();
@@ -2164,6 +2164,9 @@ describe("JobsPage", () => {
         name: /More actions for/i,
       }),
     ).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "+ filter Coming" }),
+    ).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Match quality" }));
     fireEvent.click(
