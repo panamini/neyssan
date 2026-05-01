@@ -25,6 +25,10 @@ import {
 } from "../schemas/cvDocument.schema";
 import { mapProfileToCvDocument } from "./profile-mapper";
 import {
+  decodeCvDocumentFromConvex,
+  encodeCvDocumentForConvex,
+} from "./cvDocumentPersistence";
+import {
   getLegacyLocalCvDocumentStorageKey,
   getLocalCvDocumentStorageKey,
   LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
@@ -129,7 +133,8 @@ export function mapPersistedProfileToCvDocument(
 
   const embeddedDocument = rawProfile.cvDocument;
   if (embeddedDocument && typeof embeddedDocument === "object") {
-    const embeddedResult = safeParseCvDocument(embeddedDocument);
+    const decodedEmbeddedDocument = decodeCvDocumentFromConvex(embeddedDocument);
+    const embeddedResult = safeParseCvDocument(decodedEmbeddedDocument);
     if (embeddedResult.ok) {
       return embeddedResult.value;
     }
@@ -176,7 +181,7 @@ export class ConvexStorageAdapter {
       // Keep other allowed keys (source, importedAt, confidence, filename)
       backendPayload.metadata = md;
     }
-    backendPayload.cvDocument = cv;
+    backendPayload.cvDocument = encodeCvDocumentForConvex(cv);
 
     // Instrument: record metadata keys and short stack to in-app debug stream before mutation
     try {
