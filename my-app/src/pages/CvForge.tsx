@@ -2044,6 +2044,7 @@ export function CvForge(): JSX.Element {
   const {
     currentCv,
     currentCvId,
+    cvs,
     createNewCv,
     importCv,
     isLoading: isCvLibraryLoading,
@@ -2347,6 +2348,35 @@ export function CvForge(): JSX.Element {
       );
     },
     [location.pathname, location.state, navigate, search],
+  );
+
+  const resumeOptions = React.useMemo(
+    () =>
+      cvs.map((cv) => {
+        const cvId = String(cv.id);
+        const sectionCount = Array.isArray(cv.sections) ? cv.sections.length : 0;
+        return {
+          id: cvId,
+          title:
+            typeof cv.title === "string" && cv.title.trim()
+              ? cv.title.trim()
+              : deriveCvTitleFromSections(cv.sections),
+          description:
+            sectionCount > 0
+              ? `${sectionCount} ${sectionCount === 1 ? "section" : "sections"}`
+              : "Saved resume.",
+          selected: cvId === String(currentCvId ?? ""),
+        };
+      }),
+    [currentCvId, cvs],
+  );
+
+  const handlePickResume = React.useCallback(
+    (cvId: string) => {
+      loadCv(cvId);
+      navigateToSelectedCv(cvId);
+    },
+    [loadCv, navigateToSelectedCv],
   );
 
   React.useEffect(() => {
@@ -5010,9 +5040,11 @@ export function CvForge(): JSX.Element {
                   importIssueCount={importReviewBlocks.length}
                   exporting={exportingFormat !== null}
                   tone={cvTone}
+                  resumeOptions={resumeOptions}
                   onModeChange={setWorkspaceMode}
                   onOpenImportReview={() => setImportReviewOpen(true)}
                   onImportCv={handleImportEntryCv}
+                  onPickResume={handlePickResume}
                   onNewCv={() => {
                     void handleStartFreshEntryCv();
                   }}

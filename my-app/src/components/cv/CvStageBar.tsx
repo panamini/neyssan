@@ -13,6 +13,13 @@ type SafeSendRow = {
   action?: React.ReactNode;
 };
 
+export type CvStageBarResumeOption = {
+  id: string;
+  title: string;
+  description: string | null;
+  selected: boolean;
+};
+
 type CvStageBarProps = {
   mode: "edit" | "preview";
   hasCurrentCv: boolean;
@@ -20,9 +27,11 @@ type CvStageBarProps = {
   importIssueCount: number;
   exporting: boolean;
   tone: CvToneChoice;
+  resumeOptions: CvStageBarResumeOption[];
   onModeChange: (mode: "edit" | "preview") => void;
   onOpenImportReview: () => void;
   onImportCv: () => void;
+  onPickResume: (cvId: string) => void;
   onNewCv: () => void;
   onExportPdf: () => void;
   onExportDocx: () => void;
@@ -35,14 +44,42 @@ export function CvStageBar({
   importIssueCount,
   exporting,
   tone,
+  resumeOptions,
   onModeChange,
   onOpenImportReview,
   onImportCv,
+  onPickResume,
   onNewCv,
   onExportPdf,
   onExportDocx,
 }: CvStageBarProps): JSX.Element {
   const [safeSendOpen, setSafeSendOpen] = React.useState(false);
+  const resumeMenuSections = React.useMemo(
+    () => [
+      {
+        label: "Pick resume",
+        items:
+          resumeOptions.length > 0
+            ? resumeOptions.map((option) => ({
+                id: option.id,
+                role: "menuitemradio" as const,
+                selected: option.selected,
+                label: option.title,
+                description: option.description ?? "Saved resume.",
+                onSelect: () => onPickResume(option.id),
+              }))
+            : [
+                {
+                  id: "no-resumes",
+                  label: "No resumes available",
+                  description: "Import or create a resume first.",
+                  disabled: true,
+                },
+              ],
+      },
+    ],
+    [onPickResume, resumeOptions],
+  );
   const safeSendRows: SafeSendRow[] = [
     {
       title: "Source job linked",
@@ -174,6 +211,23 @@ export function CvStageBar({
         <Button type="button" size="sm" variant="ghost" disabled>
           Version history
         </Button>
+        <Menu
+          ariaLabel="Pick resume"
+          align="end"
+          matchTriggerWidth
+          menuClassName="dasti-cv-stage-bar__resume-menu"
+          sections={resumeMenuSections}
+          trigger={
+            <button
+              type="button"
+              className="ds-btn ds-btn--sm ds-btn--secondary dasti-cv-stage-bar__pick-resume"
+              disabled={exporting}
+            >
+              Pick resume
+              <span aria-hidden="true">▾</span>
+            </button>
+          }
+        />
         <Button
           type="button"
           size="sm"

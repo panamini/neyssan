@@ -1909,18 +1909,12 @@
 
 .dashboard-head__title {
   margin: 0;
-  color: var(--ti);
-  font-size: clamp(28px, 4vw, 44px);
-  line-height: 1;
-  letter-spacing: 0;
 }
 
 .dashboard-head__sub {
   margin: var(--space-2) 0 0;
   max-width: 620px;
   color: var(--color-text-muted);
-  font-size: var(--tb);
-  line-height: 1.45;
 }
 
 .dashboard-head__actions {

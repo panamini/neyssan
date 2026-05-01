@@ -269,6 +269,10 @@
   flex-shrink: 0;
 }
 
+.dasti-cv-stage-bar__resume-menu {
+  max-height: min(calc((var(--s2) * 2) + var(--lx) + (7 * 54px)), calc(100vh - 16px));
+}
+
 .dasti-cv-stage-bar [aria-disabled="true"],
 .dasti-cv-stage-bar button:disabled {
   flex-shrink: 0;

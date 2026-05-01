@@ -224,8 +224,8 @@ export function DocumentsPage(): JSX.Element {
       <div className="dasti-page-shell dasti-documents-page">
         <div className="dasti-page-header dasti-documents-page__head">
           <div className="dasti-stack">
-            <h1 className="dasti-stack__title">Documents</h1>
-            <p className="dasti-stack__subtitle">Proposals, CVs, and drafts you have created.</p>
+            <h1 className="dasti-stack__title page-head__title">Documents</h1>
+            <p className="dasti-stack__subtitle page-head__sub">Proposals, CVs, and drafts you have created.</p>
           </div>
           <div className="dasti-page-actions">
             <Button type="button" variant="secondary" size="md" onClick={handleImportCv}>
