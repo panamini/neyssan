@@ -501,6 +501,45 @@ function resolveSourceCvTitle(
   return getLocalActiveCvSnapshotById(normalizedSourceCvId)?.title ?? null;
 }
 
+function resolveSafeSendMatchReviewAccepted(
+  jobRecord: ProposalForgeCanonicalJob | undefined,
+): boolean | null {
+  if (!jobRecord) {
+    return null;
+  }
+
+  return jobRecord.reviewState === "ready";
+}
+
+function resolveSafeSendImportIssues(
+  sourceCvId: string | null | undefined,
+): boolean | null {
+  const normalizedSourceCvId = normalizeSourceCvId(sourceCvId);
+  if (!normalizedSourceCvId) {
+    return null;
+  }
+
+  const attachedCvDocument = getLocalCvDocumentById(normalizedSourceCvId);
+  if (!attachedCvDocument) {
+    return null;
+  }
+
+  const importRecoverySession = attachedCvDocument.metadata?.importRecoverySession;
+  if (!importRecoverySession || typeof importRecoverySession !== "object") {
+    return false;
+  }
+
+  const session = importRecoverySession as {
+    status?: unknown;
+    items?: Array<{ reviewStatus?: unknown }>;
+  };
+  return (
+    session.status === "pending" ||
+    (Array.isArray(session.items) &&
+      session.items.some((item) => item.reviewStatus === "pending"))
+  );
+}
+
 function resolveSourceCvStylePreset(
   sourceCvId: string | null | undefined,
 ): ReturnType<typeof getVerbatiStyleFromCv> | null {
@@ -6910,6 +6949,12 @@ export function ProposalForge(): JSX.Element {
                         )}
                         sourceCvSelected={Boolean(attachedCvId)}
                         proposalLinked={Boolean(proposalContent)}
+                        matchReviewAccepted={resolveSafeSendMatchReviewAccepted(
+                          canonicalJobRecord,
+                        )}
+                        hasUnresolvedImportIssues={resolveSafeSendImportIssues(
+                          attachedCvId,
+                        )}
                         hasPlaceholderText={/(\[[^\]]+\]|\blorem\b|\{\{[^}]+\}\})/i.test(
                           [
                             proposalContent,

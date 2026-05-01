@@ -217,6 +217,85 @@ describe("ProposalForge workbench layout", () => {
     expect(sourceJobRow).toHaveAttribute("data-state", "clear");
   });
 
+  it("wires active job review and CV import recovery signals into Safe-send", async () => {
+    useQueryMock.mockImplementation((query: unknown, args: unknown) => {
+      if (query === "jobsPublic.getById" && args && args !== "skip") {
+        return {
+          id: "job_safe_send",
+          title: "Game UI Artist",
+          company: "Studio",
+          sourceUrl: "https://example.com/job",
+          sourceDomain: "example.com",
+          sourceType: "manual",
+          applicationUrl: "https://example.com/apply",
+          parseStatus: "parsed",
+          reviewState: "ready",
+          summary: "Game UI role.",
+          rawDescription:
+            "Detailed role description for the proposal brief capsule tests.",
+          responsibilities: [],
+          keywords: [],
+          mustHaves: [],
+          toneCues: [],
+          contacts: [],
+          status: "active",
+          resumeId: "cv_pending_recovery",
+          resumeName: "Recovered CV",
+          linkedProposalCount: 0,
+          linkedProposals: [],
+          reviewItems: [],
+        };
+      }
+      return null;
+    });
+    window.localStorage.setItem(
+      "cv:cv_pending_recovery",
+      JSON.stringify({
+        id: "cv_pending_recovery",
+        title: "Recovered CV",
+        metadata: {
+          createdAt: "2026-05-01T00:00:00.000Z",
+          updatedAt: "2026-05-01T00:00:00.000Z",
+          version: 1,
+          importRecoverySession: {
+            status: "pending",
+            updatedAt: "2026-05-01T00:00:00.000Z",
+            items: [{ blockId: "recovery-1", reviewStatus: "pending" }],
+            overflowCount: 0,
+            reviewLimit: 3,
+          },
+        },
+        sections: [],
+      }),
+    );
+
+    renderProposalForge("/proposal?jobId=job_safe_send");
+
+    const stage = await screen.findByLabelText("Proposal document stage");
+    fireEvent.click(within(stage).getByRole("button", { name: /share/i }));
+    const menu = await screen.findByRole("menu", { name: "Share proposal" });
+    fireEvent.click(
+      within(menu).getByRole("menuitem", { name: "Safe-send checklist…" }),
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Safe-send checklist",
+    });
+    const matchReviewRow = within(dialog)
+      .getByText("Match review not accepted")
+      .closest(".dasti-proposal-safe-send__row");
+    expect(matchReviewRow).toHaveAttribute("data-state", "clear");
+    expect(
+      within(matchReviewRow as HTMLElement).getByText("Accepted"),
+    ).toBeInTheDocument();
+
+    const importIssueRow = within(dialog)
+      .getByText("Unresolved import issues")
+      .closest(".dasti-proposal-safe-send__row");
+    expect(importIssueRow).toHaveAttribute("data-state", "warn");
+    expect(within(importIssueRow as HTMLElement).getByText("Resolve")).toBeInTheDocument();
+  });
+
   it("renders the skeleton rail with lightweight setup and no visible legacy compose controls", () => {
     const { container } = renderProposalForge();
 
