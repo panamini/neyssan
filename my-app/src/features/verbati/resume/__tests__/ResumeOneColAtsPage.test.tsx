@@ -432,10 +432,19 @@ describe("ResumeOneColAtsPage", () => {
       />,
     );
 
-    expect(screen.getByText("Led product design.")).toBeInTheDocument();
-    const bullet = screen.getByRole("textbox", { name: "Edit experience bullet" });
-    expect(bullet).toHaveAttribute("data-paper-field-path", expect.stringContaining("responsibilityBullets.0"));
-    expect(bullet).toHaveTextContent("");
+    const richBody = screen.getByRole("textbox", {
+      name: "Edit experience responsibilities",
+    });
+    expect(richBody).toHaveClass("paper-rich-inline-editor");
+    expect(richBody).toHaveAttribute(
+      "data-paper-field-path",
+      expect.stringContaining("responsibilities"),
+    );
+    expect(richBody.querySelector("p")?.textContent).toBe("Led product design.");
+    expect(richBody.querySelector("li")?.textContent).toBe("");
+    expect(
+      screen.queryByRole("textbox", { name: "Edit experience bullet" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
   });
 
@@ -1175,7 +1184,16 @@ describe("ResumeOneColAtsPage", () => {
               },
               {
                 kind: "bullet_list" as const,
-                items: [{ runs: [{ text: "Launched activation checklist." }] }],
+                items: [
+                  {
+                    runs: [
+                      { text: "Launched " },
+                      { text: "activation", bold: true },
+                      { text: " checklist", italic: true },
+                      { text: ".", underline: true },
+                    ],
+                  },
+                ],
               },
             ],
           },
@@ -1211,9 +1229,67 @@ describe("ResumeOneColAtsPage", () => {
     expect(experienceBody?.querySelector("li")?.textContent).toBe(
       "Launched activation checklist.",
     );
+    expect(experienceBody?.querySelector("li strong")?.textContent).toBe("activation");
+    expect(experienceBody?.querySelector("li em")?.textContent).toBe(" checklist");
+    expect(experienceBody?.querySelector("li u")?.textContent).toBe(".");
     expect(
       screen.queryByRole("textbox", { name: "Edit experience bullet" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("uses the rich body editor for editable experience bullet-only rich responsibilities", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: "",
+          bullets: ["Launched activation checklist."],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "bullet_list" as const,
+                items: [{ runs: [{ text: "Launched activation checklist." }] }],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const experienceBody = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.item:exp-1.responsibilities"]',
+    );
+    expect(experienceBody).toHaveAttribute("role", "textbox");
+    expect(experienceBody).toHaveClass("paper-rich-inline-editor");
+    expect(experienceBody?.querySelector("li")?.textContent).toBe(
+      "Launched activation checklist.",
+    );
+    expect(
+      screen.queryByRole("textbox", { name: "Edit experience bullet" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+ Add paragraph/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
   });
 
   it("hydrates responsibilitiesRich marks in editable workshop display mode", () => {

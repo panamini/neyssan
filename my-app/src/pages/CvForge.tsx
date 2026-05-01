@@ -1130,7 +1130,7 @@ function updateStructuredItemResponsibilities(
   const nextItem: Record<string, unknown> = {
     ...item,
     responsibilities,
-    __draftResponsibilityBulletCount: 0,
+    __draftResponsibilityBulletCount: responsibilityBullets?.length ?? 0,
   };
   if (responsibilityBullets && responsibilityBullets.length > 0) {
     nextItem.responsibilityBullets = responsibilityBullets;
@@ -2913,10 +2913,23 @@ export function CvForge(): JSX.Element {
       if (target.fieldPath === "structuredContent.0.summary") {
         nextSection = updateSummaryStructuredDoc(section, doc);
       } else {
+        const responsibilityMatch = target.fieldPath.match(
+          /^structuredContent\.item:([^.]*)\.responsibilities$/,
+        );
+        if (responsibilityMatch && target.sectionType === "experience") {
+          const itemId = responsibilityMatch[1] ?? "";
+          nextSection = updateStructuredItemResponsibilities(
+            section,
+            itemId,
+            doc,
+            responsibilityBulletCacheFromDoc(doc),
+          );
+        }
+
         const itemMatch = target.fieldPath.match(
           /^structuredContent\.item:([^.]*)\.description$/,
         );
-        if (itemMatch && target.sectionType === "projects") {
+        if (!nextSection && itemMatch && target.sectionType === "projects") {
           const itemId = itemMatch[1] ?? "";
           const items = getStructuredItems(section);
           const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
