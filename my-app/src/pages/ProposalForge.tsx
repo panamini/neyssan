@@ -4296,6 +4296,18 @@ export function ProposalForge(): JSX.Element {
     openCoverLetterComposeSurface({ openCvPicker: true });
   }, [openCoverLetterComposeSurface]);
 
+  const handleCreateCvInForge = React.useCallback(() => {
+    void navigate("/cv", {
+      state: { cvForgeAction: "createBlank" },
+    });
+  }, [navigate]);
+
+  const handleImportCvInForge = React.useCallback(() => {
+    void navigate("/cv", {
+      state: { cvForgeAction: "importCv" },
+    });
+  }, [navigate]);
+
   const handleImportResumeIntoCoverLetter = React.useCallback(() => {
     setShowExtensionHelper(false);
     setCoverLetterInlineImportError(null);
@@ -6838,8 +6850,8 @@ export function ProposalForge(): JSX.Element {
                       cvOptions={sourceCvOptions}
                       onSelectCv={handleAttachedCvChange}
                       onClearCv={() => handleAttachedCvChange(null)}
-                      onCreateCv={handleReturnToQuickStart}
-                      onImportCv={handleImportResumeIntoCoverLetter}
+                      onCreateCv={handleCreateCvInForge}
+                      onImportCv={handleImportCvInForge}
                       hasProposalContent={Boolean(proposalContent)}
                       generateLabel={composeGenerateControl.label}
                       generateDisabled={composeGenerateControl.disabled || loading || isLoadingHandoff}
