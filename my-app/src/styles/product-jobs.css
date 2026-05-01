@@ -2,8 +2,11 @@
 
 .dasti-jobs-page {
   --page-shell-max-width: 100%;
-  --page-shell-gap: var(--space-5);
-  grid-template-rows: auto minmax(0, 1fr);
+  --page-shell-gap: 0;
+  --page-shell-pad-top: 0;
+  --page-shell-pad-bottom: 0;
+  --page-shell-pad-inline: 0;
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
 }
 
@@ -18,9 +21,9 @@
   align-items: stretch;
   height: 100%;
   min-height: 0;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-card);
-  background: var(--sf1);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
 }
 
