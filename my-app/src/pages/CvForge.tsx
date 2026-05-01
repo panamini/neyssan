@@ -2068,6 +2068,7 @@ export function CvForge(): JSX.Element {
     isConvexAuthenticated ? {} : "skip",
   ) as { voicePreset?: unknown; savedVoicePreset?: unknown } | undefined;
   const cvImportInputRef = React.useRef<HTMLInputElement | null>(null);
+  const consumedCvForgeActionRef = React.useRef<string | null>(null);
   const paperStageRef = React.useRef<HTMLDivElement | null>(null);
   const inlinePaperSelectionDebounceRef = React.useRef<number | null>(null);
   const [workspaceMode, setWorkspaceMode] =
@@ -4912,6 +4913,12 @@ export function CvForge(): JSX.Element {
       return;
     }
 
+    const actionKey = `${location.key}:${cvForgeAction}`;
+    if (consumedCvForgeActionRef.current === actionKey) {
+      return;
+    }
+    consumedCvForgeActionRef.current = actionKey;
+
     const nextState = { ...(state ?? {}) };
     delete nextState.cvForgeAction;
     void navigate(
@@ -4928,6 +4935,7 @@ export function CvForge(): JSX.Element {
   }, [
     handleImportEntryCv,
     handleStartFreshEntryCv,
+    location.key,
     location.pathname,
     location.search,
     location.state,
