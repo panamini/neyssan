@@ -4902,6 +4902,38 @@ export function CvForge(): JSX.Element {
     }
   }, [createNewCv, currentCvId, isEntryPickerBusy, showToast]);
 
+  React.useEffect(() => {
+    const state =
+      typeof location.state === "object" && location.state !== null
+        ? (location.state as Record<string, unknown>)
+        : null;
+    const cvForgeAction = state?.cvForgeAction;
+    if (cvForgeAction !== "createBlank" && cvForgeAction !== "importCv") {
+      return;
+    }
+
+    const nextState = { ...(state ?? {}) };
+    delete nextState.cvForgeAction;
+    void navigate(
+      { pathname: location.pathname, search: location.search },
+      { replace: true, state: nextState },
+    );
+
+    if (cvForgeAction === "createBlank") {
+      void handleStartFreshEntryCv();
+      return;
+    }
+
+    handleImportEntryCv();
+  }, [
+    handleImportEntryCv,
+    handleStartFreshEntryCv,
+    location.pathname,
+    location.search,
+    location.state,
+    navigate,
+  ]);
+
   return (
     <div
       className="dasti-page-scroll"
