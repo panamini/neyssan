@@ -6838,6 +6838,8 @@ export function ProposalForge(): JSX.Element {
                       cvOptions={sourceCvOptions}
                       onSelectCv={handleAttachedCvChange}
                       onClearCv={() => handleAttachedCvChange(null)}
+                      onCreateCv={handleReturnToQuickStart}
+                      onImportCv={handleImportResumeIntoCoverLetter}
                       hasProposalContent={Boolean(proposalContent)}
                       generateLabel={composeGenerateControl.label}
                       generateDisabled={composeGenerateControl.disabled || loading || isLoadingHandoff}

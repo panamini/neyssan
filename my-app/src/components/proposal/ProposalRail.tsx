@@ -41,6 +41,8 @@ type ProposalRailProps = {
   cvOptions: ProposalRailCvOption[];
   onSelectCv: (cvId: string) => void;
   onClearCv: () => void;
+  onCreateCv: () => void;
+  onImportCv: () => void;
 };
 
 export function ProposalRail({
@@ -65,6 +67,8 @@ export function ProposalRail({
   cvOptions,
   onSelectCv,
   onClearCv,
+  onCreateCv,
+  onImportCv,
 }: ProposalRailProps): JSX.Element {
   const visibleKeywords = keywords.slice(0, 3);
   const cvMenuSections = React.useMemo<MenuSection[]>(() => {
@@ -79,6 +83,20 @@ export function ProposalRail({
     }));
 
     return [
+      {
+        items: [
+          {
+            id: "create-cv",
+            label: "Create new CV",
+            onSelect: onCreateCv,
+          },
+          {
+            id: "import-cv",
+            label: "Import new CV",
+            onSelect: onImportCv,
+          },
+        ],
+      },
       {
         label: "Pick a CV",
         items:
@@ -107,7 +125,7 @@ export function ProposalRail({
           ]
         : []),
     ];
-  }, [cvOptions, onClearCv, onSelectCv, sourceCvTitle]);
+  }, [cvOptions, onClearCv, onCreateCv, onImportCv, onSelectCv, sourceCvTitle]);
 
   return (
     <aside className="forge__rail dasti-proposal-skeleton-rail" aria-label="Proposal rail">
