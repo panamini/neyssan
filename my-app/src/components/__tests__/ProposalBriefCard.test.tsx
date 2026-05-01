@@ -80,7 +80,8 @@ describe("resolveProposalBriefCardTitle", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getAllByText("Check fields")).toHaveLength(1);
+    expect(screen.getAllByText("Ready").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Check fields")).not.toBeInTheDocument();
     expect(screen.queryByText("Review state")).not.toBeInTheDocument();
     expect(screen.queryByText(/Review state:/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
@@ -162,24 +163,16 @@ describe("resolveProposalBriefCardTitle", () => {
         .find((card) => card !== null) ?? null;
     expect(keywordsCard).not.toBeNull();
     const card = within(keywordsCard as HTMLElement);
-    expect(keywordsCard).toHaveAttribute("data-state", "warning");
-    expect(card.getByText("Check")).toHaveClass(
-      "ds-status",
-      "ds-status--warning",
+    expect(keywordsCard).toHaveAttribute("data-state", "validated");
+    expect(card.getByLabelText("Validated")).toHaveClass(
+      "dasti-brief-card__section-status--validated",
     );
-    expect(
-      card.getByText("Check").querySelector(".ds-status__dot"),
-    ).toBeInTheDocument();
-    expect(card.getByRole("button", { name: "Keep" })).toHaveClass(
-      "dasti-button",
-      "dasti-button--sm",
-      "dasti-button--pill",
-      "dasti-button--accent",
-    );
+    expect(card.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
+    expect(card.queryByText("Check")).not.toBeInTheDocument();
     expect(card.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();
   });
 
-  it("marks approved review cards with success state instead of pending warning", () => {
+  it("marks approved review cards with validated state instead of pending warning", () => {
     render(
       <MemoryRouter>
         <ProposalBriefCard
@@ -204,17 +197,14 @@ describe("resolveProposalBriefCardTitle", () => {
       .getByText("Summary")
       .closest(".dasti-brief-card__review-item");
     expect(summaryCard).not.toBeNull();
-    expect(summaryCard).toHaveAttribute("data-state", "success");
+    expect(summaryCard).toHaveAttribute("data-state", "validated");
 
     const card = within(summaryCard as HTMLElement);
-    expect(card.getByText("Saved")).toHaveClass(
-      "ds-status",
-      "ds-status--neutral",
+    expect(card.getByLabelText("Validated")).toHaveClass(
+      "dasti-brief-card__section-status--validated",
     );
-    expect(
-      card.getByText("Saved").querySelector(".ds-status__dot"),
-    ).toBeInTheDocument();
     expect(card.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
+    expect(card.queryByText("Saved")).not.toBeInTheDocument();
   });
 
   it("renders LLM-backed summary requirements and keywords review cards", () => {
@@ -262,7 +252,8 @@ describe("resolveProposalBriefCardTitle", () => {
     ).toHaveLength(1);
     expect(screen.getAllByText("Guest service").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/guest service/).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: "Keep" })).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Check")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit Summary" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit Requirements" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit Keywords" })).toBeInTheDocument();

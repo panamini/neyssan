@@ -99,6 +99,12 @@ function formatVerdictHeadline(label: string, nextStep?: string | null): string 
   }
 }
 
+function formatSentence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "Not enough signal yet.";
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
 export function JobMatchPanel({
   tier,
   matched,
@@ -118,10 +124,17 @@ export function JobMatchPanel({
   const tone = resolveVerdictTone(tier, reviewVerdict);
   const skillsCopy =
     matched.length > 0
-      ? `${matched.slice(0, 3).join(", ")} — overlap.`
+      ? `${matched.slice(0, 3).join(", ")} — strong overlap.`
       : "No clear skill overlap yet.";
+  const seniorityCopy = whyItems[0]
+    ? formatSentence(whyItems[0])
+    : "Profile suggests sufficient seniority.";
+  const locationCopy = jobLocation?.trim()
+    ? `${jobLocation.trim()} · match.`
+    : "Location unavailable.";
   const gapCopy =
-    missing.length > 0 ? `${missing[0]} needs review.` : "No major gap flagged.";
+    missing.length > 0 ? formatSentence(`${missing[0]} needs review`) : "No major gap flagged.";
+  const watchOutCopy = watchOutItems[0] ? formatSentence(watchOutItems[0]) : gapCopy;
   const explanation =
     oneLiner?.trim() ||
     `${formatSuggestedNextStep(suggestedNextStep)} ${gapCopy}`;
@@ -134,8 +147,19 @@ export function JobMatchPanel({
       data-expanded={isExpanded ? "true" : "false"}
     >
       <div className="dasti-proposal-sheet__header dasti-match-read__header">
+        <div className="dasti-job-match-panel__header-line">
+          <div className="ds-card__eyebrow">Verdict</div>
+          {onRefreshMatch ? (
+            <button
+              type="button"
+              className="dasti-job-match-panel__refresh"
+              onClick={onRefreshMatch}
+            >
+              Refresh match
+            </button>
+          ) : null}
+        </div>
         <div className="dasti-stack dasti-match-read__copy">
-          <div className="dasti-brief-card__summary-label">Verdict</div>
           <div
             className={[
               "ds-verdict",
@@ -146,18 +170,7 @@ export function JobMatchPanel({
             <span className="ds-verdict__dot" aria-hidden="true" />
             {formatVerdictHeadline(verdictLabel, suggestedNextStep)}
           </div>
-          <p className="dasti-empty-state__subtitle">{explanation}</p>
-        </div>
-        <div className="dasti-match-read__actions">
-          {onRefreshMatch ? (
-            <button
-              type="button"
-              className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
-              onClick={onRefreshMatch}
-            >
-              Refresh match
-            </button>
-          ) : null}
+          <p className="dasti-job-match-panel__explanation">{explanation}</p>
         </div>
       </div>
 
@@ -168,21 +181,21 @@ export function JobMatchPanel({
         </div>
         <div className="dasti-job-match-panel__row">
           <span>Seniority</span>
-          <span>{whyItems[0] ?? `${profileLabel} has usable signal.`}</span>
+          <span>{seniorityCopy}</span>
         </div>
         <div className="dasti-job-match-panel__row">
           <span>Location</span>
-          <span>{jobLocation?.trim() || "Location unavailable."}</span>
+          <span>{locationCopy}</span>
         </div>
         <div className="dasti-job-match-panel__row">
           <span>Gap</span>
-          <span>{watchOutItems[0] ?? gapCopy}</span>
+          <span>{watchOutCopy}</span>
         </div>
       </div>
 
       <button
         type="button"
-        className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost dasti-job-match-panel__breakdown"
+        className="ds-btn ds-btn--sm ds-btn--accent dasti-job-match-panel__breakdown"
         onClick={onToggleExpanded}
       >
         {isExpanded ? "Hide breakdown" : "See full breakdown"}

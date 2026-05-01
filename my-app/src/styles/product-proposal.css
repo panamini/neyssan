@@ -5223,10 +5223,49 @@
   gap: 12px;
 }
 
+.dasti-brief-card__section-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dasti-brief-card__section-status {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--ac);
+}
+
+.dasti-brief-card__section-status--uncertain {
+  background: var(--danger);
+}
+
+.dasti-brief-card__section-status--edited {
+  background: var(--ac);
+}
+
 .dasti-brief-card__review-label {
   font-size: var(--ts);
   font-weight: 700;
+  color: var(--ac);
+}
+
+.dasti-brief-card__section-edit {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tg2);
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  cursor: pointer;
+}
+
+.dasti-brief-card__section-edit:hover,
+.dasti-brief-card__section-edit:focus-visible {
   color: var(--ti);
+  outline: none;
 }
 
 .dasti-brief-card__review-state {
