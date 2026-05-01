@@ -8,6 +8,8 @@
 - `docs/UI/SKELETON.html` is the DS v2 primitives reference for tokens, buttons, cards, dialogs, sheets, menus, status pills, AI cards, and toolbar styling. Do not use it as the app page skeleton.
 - PR-level contracts for the refonte live in `.claude/worktrees/hungry-mcnulty-1722ea/docs/UI/{SKELETON-AUDIT,REFONTE-AUDIT,FEATURES-KEEP-VS-REMOVE}.md` until they are mirrored into `docs/UI/`.
 - PR3 keeps the backend extraction readiness fix in scope when it is required for Jobs detail-pane acceptance. Language localization stays follow-up work.
+- Current CV Forge checkpoint lives in `docs/plans/2026-04-30-cv-forge-pr4-remaining-tasks.md`. Read it before continuing PR4, because it records post-implementation drift that is newer than the static skeleton briefs.
+- Current `/proposal` PR4 checkpoint lives in `docs/plans/2026-05-01-proposal-forge-pr4-checkpoint.md`. It records completed P0/P1 Proposal Forge work and deferred P2/send-surface items.
 
 ---
 
