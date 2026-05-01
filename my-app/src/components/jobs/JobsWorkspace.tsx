@@ -2103,14 +2103,6 @@ function JobsPageContent(): JSX.Element {
   return (
     <div className="dasti-page-scroll">
       <div className="dasti-page-shell dasti-jobs-page">
-        <div className="dasti-page-header">
-          <div className="dasti-stack">
-            <h1 className="dasti-stack__title">Jobs</h1>
-            <p className="dasti-stack__subtitle dasti-jobs-page__subtitle">
-              Saved jobs. Review. Act.
-            </p>
-          </div>
-        </div>
 
         {authStatusMessage ? (
           <div className="dasti-hint" style={{ padding: "var(--space-5) 0" }}>
