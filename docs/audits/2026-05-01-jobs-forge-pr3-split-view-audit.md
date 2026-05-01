@@ -44,10 +44,10 @@ Already aligned:
 Gaps vs `APP-SKELETON.html` / PR3:
 
 - Class contract is partially aligned after P0: active code now exposes the requested `.jobs`, `.jobs__list`, `.jobs__detail`, and `.jobs__match` aliases, but still does not expose the full optional skeleton set such as `.jobs__filters`, `.jobs__items`, and `.jobs__item`.
-- Active page wraps the split grid in a Dasti page header/shell/card (`dasti-page-shell`, `dasti-jobs-layout` with border/radius and capped height), while the skeleton shows a full-height `.jobs` workspace.
-- PR3 says below `1024px` collapse to single column; active collapse/state switch is at `< 760px`.
-- PR3/skeleton show `Worth+ a shot` selected on initial load; active `matchFilter` initializes to `all`.
-- Skeleton rows are low-density button-like list items with `data-active`; active rows are card-like `article` rows with separate side controls/overflow menu. This preserves behavior but is heavier than the skeleton surface.
+- P1 aligned the active shell closer to the full-height `.jobs` skeleton workspace while preserving the Dasti page shell/chrome.
+- P1 moved the collapse breakpoint toward the PR3 contract: active list/detail collapse now uses `<1024px`.
+- Deferred default filter contract: PR3/skeleton show `Worth+ a shot` selected on initial load, but active `matchFilter` intentionally remains `all`. Revisit later as a separate product decision slice.
+- P1 lightened list row surface density toward skeleton list items while preserving the active row structure and controls.
 - Skeleton detail header is a distinct `jobs__detail-header` surface with title/sub/actions; active uses `dasti-jobs-detail__topline` and inline header actions inside the title row.
 - Skeleton match panel uses `.jobs__match` with compact card styling and top `0`; active uses `dasti-proposal-sheet dasti-match-read dasti-job-match-panel` and sticky top `var(--space-4)`.
 
@@ -71,12 +71,20 @@ Completed:
    - `rtk npx tsc --noEmit --pretty false`
    - `rtk git diff --check -- my-app/src/components/jobs/JobsWorkspace.tsx my-app/src/components/jobs/JobsList.tsx my-app/src/components/jobs/JobMatchPanel.tsx my-app/src/__tests__/JobsPage.layout.contract.test.ts`
 
-### P1 candidates only
+### P1 checkpoint
+
+Completed:
 
 1. Full-height skeleton `.jobs` shell alignment.
-2. Mobile collapse breakpoint from `<760px` toward `<1024px`.
-3. Default match filter from `all` toward `Worth+ a shot`, if product agrees.
-4. Visual lightening of list rows and match panel.
+   - Commit: `7e1453fcb feat(jobs): align split-view shell breakpoint`
+2. Mobile collapse breakpoint moved from `<760px` toward `<1024px`.
+   - Commit: `7e1453fcb feat(jobs): align split-view shell breakpoint`
+3. Visual lightening of list rows and match panel.
+   - Commit: `ccc57195f feat(jobs): lighten split-view surfaces`
+
+Deferred:
+
+- Default match filter contract. Current default filter stays `all`. The PR3/skeleton `Worth+ a shot` default alignment is intentionally not done yet and should be revisited later as a separate decision slice.
 
 ### P2 — polish / follow-ups
 
@@ -87,4 +95,4 @@ Completed:
 
 ## Current checkpoint
 
-P0 is complete. Do not start P1 until a candidate above is selected explicitly.
+P0 and the selected P1 shell/breakpoint plus visual-density slices are complete. The remaining default filter contract is deferred: keep `all` until product explicitly chooses `Worth+ a shot` as the initial Jobs filter.
