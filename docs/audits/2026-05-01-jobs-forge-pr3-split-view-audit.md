@@ -96,3 +96,31 @@ Deferred:
 ## Current checkpoint
 
 P0 and the selected P1 shell/breakpoint plus visual-density slices are complete. The remaining default filter contract is deferred: keep `all` until product explicitly chooses `Worth+ a shot` as the initial Jobs filter.
+
+## Final checkpoint for this Jobs pass
+
+Jobs Forge is closed for this pass. No more Jobs code should be implemented in this slice.
+
+Completed Jobs slices:
+
+- Active `/jobs` split-view route audit and route authority confirmation.
+- Skeleton split-view aliases on active list, detail, root, and match surfaces.
+- Full-height split-view shell and `<1024px` collapse breakpoint alignment.
+- Lighter list/detail/match panel surfaces while preserving active data and routing behavior.
+- Detail parsing/readability tightening, match-panel hierarchy cleanup, and redundant match divider removal.
+- Job-card/action refinements: smaller `Generate proposal` detail CTA, no proposal icon/period, no review/check dot on cards, favorite control placement after location, and full-width match details.
+- Viewed state refinement: `Unviewed` is based on `lastOpenedAt`, and opening a job marks it viewed through the existing `markJobOpened` flow.
+- Action-row cleanup: redundant LinkedIn/source action-row noise removed.
+
+Deferred explicitly:
+
+- §8.2 section-header/check-flow refinement is deferred.
+- Sidebar/topbar parity work is deferred.
+- Deeper mobile QA is deferred; only existing responsive contract/test coverage was exercised in this pass.
+
+Current product decisions:
+
+- Default filter remains `All jobs`.
+- `Worth+ a shot` remains visible as a user-selectable filter, but it is not the default.
+- The `From LinkedIn` provenance pill is kept where the product surface still exposes it.
+- Redundant action-row LinkedIn/source affordances are removed.
