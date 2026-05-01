@@ -43,6 +43,8 @@ type ResumeDataMappingOptions = {
 };
 
 const DRAFT_EMPTY_RESPONSIBILITY_BULLET = "__draft_empty_responsibility_bullet__";
+const DRAFT_EMPTY_EXPERIENCE_DESCRIPTION =
+  "__draft_empty_experience_description__";
 type SectionContext = {
   section: CvSection;
   sectionId: string;
@@ -386,12 +388,19 @@ function mapExperience(
               bullet !== DRAFT_EMPTY_RESPONSIBILITY_BULLET &&
               String(bullet ?? "").trim(),
           );
+      const hasDraftDescription = Boolean(
+        (item as unknown as Record<string, unknown>).__draftDescription,
+      );
       const description = [
         toPlainText(item.description),
         responsibilitiesProjection.prose,
       ]
         .filter(Boolean)
         .join("\n\n");
+      const visibleDescription =
+        description || (options.includeDrafts && hasDraftDescription
+          ? DRAFT_EMPTY_EXPERIENCE_DESCRIPTION
+          : "");
       const role = String(item.position ?? "").trim();
       const company = String(item.company ?? "").trim();
       const location = String(item.location ?? "").trim();
@@ -399,7 +408,7 @@ function mapExperience(
 
       const includeDraftItem = Boolean(options.includeDrafts);
 
-      if (!includeDraftItem && !role && !company && visibleBullets.length === 0 && !description) {
+      if (!includeDraftItem && !role && !company && visibleBullets.length === 0 && !visibleDescription) {
         return null;
       }
 
@@ -417,7 +426,7 @@ function mapExperience(
         company,
         period,
         location,
-        ...(description ? { description } : {}),
+        ...(visibleDescription ? { description: visibleDescription } : {}),
         bullets: visibleBullets.length > 0 || !includeDraftItem ? visibleBullets : [""],
         ...(responsibilitiesProjection.rich.blocks.length > 0
           ? { responsibilitiesRich: responsibilitiesProjection.rich }

@@ -1,4 +1,5 @@
 import React from "react";
+import { Eye, EyeClosed, TrashSimple, Wand2 } from "@/lib/icons";
 
 import type { ResumeActiveTarget } from "../resumeLinking";
 import { buildResumeEducationDisplay } from "./resumeEducation";
@@ -37,12 +38,22 @@ type ResumeOneColAtsPageProps = {
   template: ResumeTemplateDefinition;
   activeTarget?: ResumeActiveTarget | null;
   inlineEditing?: ResumeInlineEditing | null;
+  sectionActions?: ResumeSectionActions | null;
+};
+
+export type ResumeSectionActions = {
+  hiddenSectionIds: readonly string[];
+  onAsk: (sectionId: string) => void;
+  onToggleHidden: (sectionId: string) => void;
+  onDelete: (sectionId: string) => void;
 };
 
 const experienceWrapStyle = {
   overflowWrap: "anywhere" as const,
   wordBreak: "break-word" as const,
 };
+const DRAFT_EMPTY_EXPERIENCE_DESCRIPTION =
+  "__draft_empty_experience_description__";
 
 const workshopLabelTextStyle = {
   fontSize: "var(--text-caption-size)",
@@ -103,14 +114,25 @@ const workshopCompactRowTextStyle = {
   lineHeight: "var(--text-body-sm-line)",
 };
 
-function renderSectionHeading(title: string, continued: boolean) {
+function renderSectionHeading(args: {
+  title: string;
+  continued: boolean;
+  sectionId?: string;
+  sectionActions?: ResumeSectionActions | null;
+}) {
+  const sectionId = args.sectionId;
+  const sectionHidden = Boolean(
+    sectionId && args.sectionActions?.hiddenSectionIds.includes(sectionId),
+  );
   return (
     <div
+      className="dasti-cv-paper-section-heading"
       style={{
         display: "flex",
         alignItems: "baseline",
         gap: "1.4mm",
         marginBottom: "var(--main-heading-margin)",
+        position: "relative",
       }}
     >
       <h2
@@ -130,9 +152,9 @@ function renderSectionHeading(title: string, continued: boolean) {
           color: "var(--color-accent)",
         }}
       >
-        {title}
+        {args.title}
       </h2>
-      {continued ? (
+      {args.continued ? (
         <span
           style={workshopLabelTextStyle}
         >
@@ -147,6 +169,54 @@ function renderSectionHeading(title: string, continued: boolean) {
             "color-mix(in srgb, var(--color-accent) 58%, transparent)",
         }}
       />
+      {sectionId && args.sectionActions ? (
+        <div className="dasti-cv-paper-section-controls" data-paper-section-controls="true">
+          <button
+            type="button"
+            className="dasti-cv-paper-section-control"
+            aria-label={`Ask AI for ${args.title}`}
+            title={`Ask AI for ${args.title}`}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              args.sectionActions?.onAsk(sectionId);
+            }}
+          >
+            <Wand2 size={13} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="dasti-cv-paper-section-control"
+            aria-label={`${sectionHidden ? "Show" : "Hide"} ${args.title}`}
+            title={sectionHidden ? "Show" : "Hide"}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              args.sectionActions?.onToggleHidden(sectionId);
+            }}
+          >
+            {sectionHidden ? (
+              <EyeClosed size={13} strokeWidth={1.8} aria-hidden="true" />
+            ) : (
+              <Eye size={13} strokeWidth={1.8} aria-hidden="true" />
+            )}
+          </button>
+          <button
+            type="button"
+            className="dasti-cv-paper-section-control"
+            data-tone="danger"
+            aria-label={`Delete ${args.title}`}
+            title="Delete"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              args.sectionActions?.onDelete(sectionId);
+            }}
+          >
+            <TrashSimple size={13} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -409,7 +479,9 @@ function renderExperienceContent(args: {
       return (
         <InlineEditableText
           key={`editable-experience-text-${blockIndex}`}
-          value={block.text}
+          value={
+            block.text === DRAFT_EMPTY_EXPERIENCE_DESCRIPTION ? "" : block.text
+          }
           editable
           editTarget={editTarget}
           onActivate={(target) => args.inlineEditing?.onActivate(target)}
@@ -434,6 +506,16 @@ function renderExperienceContent(args: {
     });
 
     nodes.push(
+      <div key="editable-add-paragraph">
+        {renderInlineAddButton({
+          inlineEditing: args.inlineEditing,
+          sectionId: args.sectionId,
+          sectionType: args.sectionType ?? "experience",
+          itemKind: "paragraph",
+          parentItemId: args.item.id,
+          label: "Add paragraph",
+        })}
+      </div>,
       <div key="editable-add-bullet">
         {renderInlineAddButton({
           inlineEditing: args.inlineEditing,
@@ -521,6 +603,20 @@ function renderInlineField(args: {
   );
 }
 
+function isActiveItemEditTarget(
+  inlineEditing: ResumeInlineEditing | null | undefined,
+  itemId: string,
+) {
+  return Boolean(
+    inlineEditing?.enabled &&
+      inlineEditing.activeTarget?.fieldPath.includes(`structuredContent.item:${itemId}.`),
+  );
+}
+
+function hasVisibleText(...values: Array<string | undefined | null>) {
+  return values.some((value) => String(value ?? "").trim().length > 0);
+}
+
 function renderInlineAddButton(args: {
   inlineEditing?: ResumeInlineEditing | null;
   sectionId?: string;
@@ -577,11 +673,11 @@ function renderProfileFragment(args: {
     ...data.metadata.map((item) => String(item.itemId ?? item.label.toLowerCase())),
   ]);
   const optionalContactFields = [
-    { key: "email", label: "email" },
-    { key: "phone", label: "phone" },
-    { key: "location", label: "location" },
-    { key: "linkedin", label: "LinkedIn" },
-    { key: "website", label: "website" },
+    { key: "email", label: "Email", addLabel: "email" },
+    { key: "phone", label: "Phone", addLabel: "phone" },
+    { key: "location", label: "Location", addLabel: "location" },
+    { key: "linkedin", label: "LinkedIn", addLabel: "LinkedIn" },
+    { key: "website", label: "Website", addLabel: "website" },
   ].filter((item, index, items) => {
     if (populatedProfileFieldKeys.has(item.key)) return false;
     return items.findIndex((candidate) => candidate.key === item.key) === index;
@@ -663,16 +759,39 @@ function renderProfileFragment(args: {
         ) : null}
       </div>
       {data.contact.length > 0 ? (
-        <div
+        <dl
+          data-paper-profile-contact="true"
           style={{
+            margin: 0,
             display: "grid",
-            gap: "1.1mm",
+            gridTemplateColumns: "repeat(auto-fit, minmax(32mm, 1fr))",
+            gap: "2.4mm 4mm",
           }}
         >
           {data.contact.map((item) => (
-            <React.Fragment key={item.itemId ?? item.label}>
+            <div
+              key={item.itemId ?? item.label}
+              data-paper-profile-contact-item={item.itemId ?? item.label.toLowerCase()}
+              style={{ display: "grid", gap: "0.5mm" }}
+            >
+              <dt
+                style={{
+                  margin: 0,
+                  ...workshopLabelTextStyle,
+                }}
+              >
+                {item.label}
+              </dt>
+              <dd
+                style={{
+                  margin: 0,
+                  fontSize: "var(--text-meta-size)",
+                  lineHeight: "var(--text-meta-line)",
+                  color: "var(--color-text-muted)",
+                }}
+              >
               {renderInlineField({
-              as: "p",
+              as: "span",
               value: item.value,
               editable,
               inlineEditing,
@@ -693,15 +812,15 @@ function renderProfileFragment(args: {
                 surface: "item",
               }),
               style: {
-                margin: 0,
                 fontSize: "var(--text-meta-size)",
                 lineHeight: "var(--text-meta-line)",
                 color: "var(--color-text-muted)",
               },
             })}
-            </React.Fragment>
+              </dd>
+            </div>
           ))}
-        </div>
+        </dl>
       ) : null}
       {data.metadata.length > 0 ? (
         <PreviewSectionRegion
@@ -804,7 +923,7 @@ function renderProfileFragment(args: {
               onMouseDown={(event) => event.stopPropagation()}
               onPointerDown={(event) => event.stopPropagation()}
             >
-              + {item.label}
+              + {item.addLabel}
             </button>
           ))}
         </div>
@@ -1059,31 +1178,32 @@ function renderFragmentContent(args: {
                 fontWeight: 700,
               }}
             >
-              {renderInlineField({
-                as: "span",
-                value: item.degree || (editable ? "" : educationDisplay.title),
-                editable,
-                inlineEditing,
-                editTarget: {
-                  sectionId: fragment.sectionId ?? "",
-                  sectionType: "education",
-                  fieldPath: itemFieldPath("degree"),
-                  fieldKind: "heading",
-                },
-                ariaLabel: "Edit education degree",
-                placeholder: "Degree",
-                previewAttrs: buildPreviewRegionAttrs({
-                  sectionType: "education",
-                  sectionId: fragment.sectionId,
-                  sectionTitle: fragment.title ?? "Education",
-                  itemId: item.id,
-                  activeTarget,
-                  surface: "item",
-                }),
-              })}
-              {item.fieldOfStudy || editable ? ", " : null}
-              {item.fieldOfStudy || editable
-                ? renderInlineField({
+              {editable ? (
+                <>
+                  {renderInlineField({
+                    as: "span",
+                    value: item.degree,
+                    editable,
+                    inlineEditing,
+                    editTarget: {
+                      sectionId: fragment.sectionId ?? "",
+                      sectionType: "education",
+                      fieldPath: itemFieldPath("degree"),
+                      fieldKind: "heading",
+                    },
+                    ariaLabel: "Edit education degree",
+                    placeholder: "Degree",
+                    previewAttrs: buildPreviewRegionAttrs({
+                      sectionType: "education",
+                      sectionId: fragment.sectionId,
+                      sectionTitle: fragment.title ?? "Education",
+                      itemId: item.id,
+                      activeTarget,
+                      surface: "item",
+                    }),
+                  })}
+                  {", "}
+                  {renderInlineField({
                     as: "span",
                     value: item.fieldOfStudy ?? "",
                     editable,
@@ -1104,8 +1224,11 @@ function renderFragmentContent(args: {
                       activeTarget,
                       surface: "item",
                     }),
-                  })
-                : null}
+                  })}
+                </>
+              ) : (
+                educationDisplay.title
+              )}
             </h3>
             <p
               style={{
@@ -1115,30 +1238,36 @@ function renderFragmentContent(args: {
                 color: "var(--color-text-muted)",
               }}
             >
-              {renderInlineField({
-                as: "span",
-                value: item.school || educationDisplay.previewMeta,
-                editable: Boolean(inlineEditing?.enabled),
-                inlineEditing,
-                editTarget: {
-                  sectionId: fragment.sectionId ?? "",
-                  sectionType: "education",
-                  fieldPath: itemFieldPath("institution"),
-                  fieldKind: "meta",
-                },
-                ariaLabel: "Edit school",
-                placeholder: "School",
-                previewAttrs: buildPreviewRegionAttrs({
-                  sectionType: "education",
-                  sectionId: fragment.sectionId,
-                  sectionTitle: fragment.title ?? "Education",
-                  itemId: item.id,
-                  activeTarget,
-                  surface: "item",
-                }),
-              })}
-              {item.period ? " · " : null}
-              {item.period}
+              {editable ? (
+                <>
+                  {renderInlineField({
+                    as: "span",
+                    value: item.school,
+                    editable,
+                    inlineEditing,
+                    editTarget: {
+                      sectionId: fragment.sectionId ?? "",
+                      sectionType: "education",
+                      fieldPath: itemFieldPath("institution"),
+                      fieldKind: "meta",
+                    },
+                    ariaLabel: "Edit school",
+                    placeholder: "School",
+                    previewAttrs: buildPreviewRegionAttrs({
+                      sectionType: "education",
+                      sectionId: fragment.sectionId,
+                      sectionTitle: fragment.title ?? "Education",
+                      itemId: item.id,
+                      activeTarget,
+                      surface: "item",
+                    }),
+                  })}
+                  {item.period ? " · " : null}
+                  {item.period}
+                </>
+              ) : (
+                educationDisplay.previewMeta
+              )}
             </p>
           </PreviewItemRegion>
         );
@@ -1155,7 +1284,9 @@ function renderFragmentContent(args: {
       ];
     case "skills":
       return [
-        ...fragment.items.map((item, itemIndex) => (
+        ...fragment.items
+          .filter((item) => hasVisibleText(item.name) || isActiveItemEditTarget(inlineEditing, item.id))
+          .map((item, itemIndex) => (
         <React.Fragment key={item.id}>
           {renderInlineField({
             as: "span",
@@ -1204,7 +1335,13 @@ function renderFragmentContent(args: {
       ];
     case "selected_projects":
       return [
-        ...fragment.items.map((item) => (
+        ...fragment.items
+          .filter(
+            (item) =>
+              hasVisibleText(item.name, item.meta, item.description) ||
+              isActiveItemEditTarget(inlineEditing, item.id),
+          )
+          .map((item) => (
         <article
           key={item.id}
           style={{
@@ -1268,7 +1405,7 @@ function renderFragmentContent(args: {
                   fieldKind: "meta",
                 },
                 ariaLabel: "Edit project meta",
-                placeholder: "Project context",
+                placeholder: "Role / scope",
                 previewAttrs: buildPreviewRegionAttrs({
                   sectionType: "selected_projects",
                   sectionId: fragment.sectionId,
@@ -1297,7 +1434,7 @@ function renderFragmentContent(args: {
               fieldKind: "paragraph",
             },
             ariaLabel: "Edit project description",
-            placeholder: "Project details",
+            placeholder: "Type an impact note...",
             previewAttrs: buildPreviewRegionAttrs({
               sectionType: "selected_projects",
               sectionId: fragment.sectionId,
@@ -1306,6 +1443,7 @@ function renderFragmentContent(args: {
               activeTarget,
               surface: "item",
             }),
+            preservePreviewItemId: true,
             style: {
               margin: 0,
               fontSize: workshopBodyFontSize,
@@ -1326,7 +1464,13 @@ function renderFragmentContent(args: {
       ];
     case "languages":
       return [
-        ...fragment.items.map((item) => (
+        ...fragment.items
+          .filter(
+            (item) =>
+              hasVisibleText(item.name, item.level) ||
+              isActiveItemEditTarget(inlineEditing, item.id),
+          )
+          .map((item) => (
         <li key={item.id}>
           {renderInlineField({
             as: "span",
@@ -1392,7 +1536,13 @@ function renderFragmentContent(args: {
       ];
     case "certifications":
       return [
-        ...fragment.items.map((item) => (
+        ...fragment.items
+          .filter(
+            (item) =>
+              hasVisibleText(item.name, item.issuer, item.meta) ||
+              isActiveItemEditTarget(inlineEditing, item.id),
+          )
+          .map((item) => (
         <li key={item.id}>
           {renderInlineField({
             as: "span",
@@ -1465,7 +1615,9 @@ function renderFragmentContent(args: {
       ];
     case "achievements":
       return [
-        ...fragment.items.map((item) => (
+        ...fragment.items
+          .filter((item) => hasVisibleText(item.text) || isActiveItemEditTarget(inlineEditing, item.id))
+          .map((item) => (
         <li key={item.id}>
           {renderInlineField({
             as: "span",
@@ -1508,7 +1660,17 @@ function renderFragmentContent(args: {
       ];
     case "affiliations":
       return [
-        ...fragment.items.map((item) => (
+        ...fragment.items
+          .filter(
+            (item) =>
+              hasVisibleText(
+                item.organizationName,
+                item.roleOrMembershipType,
+                item.dateRange,
+                item.notes,
+              ) || isActiveItemEditTarget(inlineEditing, item.id),
+          )
+          .map((item) => (
         <li key={item.id}>
           {renderInlineField({
             as: "span",
@@ -1610,7 +1772,9 @@ function renderFragmentContent(args: {
       ];
     case "hobbies":
       return [
-        ...fragment.items.map((item, itemIndex) => (
+        ...fragment.items
+          .filter((item) => hasVisibleText(item.name) || isActiveItemEditTarget(inlineEditing, item.id))
+          .map((item, itemIndex) => (
         <li key={item.id}>
           {renderInlineField({
             as: "span",
@@ -1726,8 +1890,9 @@ function renderSectionFragment(args: {
   activeTarget?: ResumeActiveTarget | null;
   template: ResumeTemplateDefinition;
   inlineEditing?: ResumeInlineEditing | null;
+  sectionActions?: ResumeSectionActions | null;
 }) {
-  const { fragment, data, activeTarget, inlineEditing } = args;
+  const { fragment, data, activeTarget, inlineEditing, sectionActions } = args;
   const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
   if (!fragment.title) {
     return renderFragmentContent({
@@ -1808,7 +1973,12 @@ function renderSectionFragment(args: {
         gap: formatMillimeters(workshopLayout.sectionShellGapMm),
       }}
     >
-      {renderSectionHeading(fragment.title, fragment.continued)}
+      {renderSectionHeading({
+        title: fragment.title,
+        continued: fragment.continued,
+        sectionId: fragment.sectionId,
+        sectionActions: inlineEditing?.enabled ? sectionActions : null,
+      })}
       {content}
     </PreviewSectionRegion>
   );
@@ -1820,6 +1990,7 @@ export function ResumeOneColAtsPage({
   template,
   activeTarget = null,
   inlineEditing = null,
+  sectionActions = null,
 }: ResumeOneColAtsPageProps) {
   return (
     <div
@@ -1847,6 +2018,7 @@ export function ResumeOneColAtsPage({
             activeTarget,
             template,
             inlineEditing,
+            sectionActions,
           })}
         </React.Fragment>
       ))}

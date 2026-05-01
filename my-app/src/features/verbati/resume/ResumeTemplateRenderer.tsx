@@ -16,7 +16,9 @@ import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layo
 import type { ResumeActiveTarget } from "../resumeLinking";
 import type { VerbatiStylePreset } from "../types";
 import { buildVerbatiThemeVars } from "../style";
-import ResumeOneColAtsPage from "./ResumeOneColAtsPage";
+import ResumeOneColAtsPage, {
+  type ResumeSectionActions,
+} from "./ResumeOneColAtsPage";
 import type { ResumeData } from "./resume.types";
 import type { ResumeInlineEditing } from "./InlineEditableText";
 
@@ -85,6 +87,7 @@ type ResumeTemplateRendererProps = {
   committedPages?: WorkshopResumeCommittedPage[];
   activeTarget?: ResumeActiveTarget | null;
   inlineEditing?: ResumeInlineEditing | null;
+  sectionActions?: ResumeSectionActions | null;
   stageLayout?: DocumentStageLayout;
   onStablePageCountChange?: ((pageCount: number) => void) | undefined;
 };
@@ -143,6 +146,7 @@ export function ResumeTemplateRenderer({
   committedPages,
   activeTarget = null,
   inlineEditing = null,
+  sectionActions = null,
   stageLayout,
   onStablePageCountChange,
 }: ResumeTemplateRendererProps) {
@@ -270,6 +274,7 @@ export function ResumeTemplateRenderer({
               template={templateDefinition}
               activeTarget={activeTarget}
               inlineEditing={inlineEditing}
+              sectionActions={sectionActions}
             />
           </div>
         </div>

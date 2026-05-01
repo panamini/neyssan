@@ -32,6 +32,7 @@ export type ResumeInlineEditing = {
       | "experience"
       | "education"
       | "bullet"
+      | "paragraph"
       | "profile-contact";
     parentItemId?: string;
   }) => void;
@@ -207,6 +208,9 @@ export function InlineEditableText({
       }}
       onBlur={() => {
         isFocusedRef.current = false;
+        if (ref.current && !ref.current.textContent?.trim()) {
+          ref.current.textContent = "";
+        }
         setEditState("idle");
         onDeactivate?.(editTarget);
       }}
