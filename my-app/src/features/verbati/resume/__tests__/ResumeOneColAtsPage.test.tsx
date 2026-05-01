@@ -1237,6 +1237,57 @@ describe("ResumeOneColAtsPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("hides draft experience description sentinel text in the rich body editor", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: "__draft_empty_experience_description__",
+          bullets: [""],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: "__draft_empty_experience_description__" }],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [{ runs: [{ text: "" }] }],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const experienceBody = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.item:exp-1.responsibilities"]',
+    );
+    expect(experienceBody).toHaveAttribute("role", "textbox");
+    expect(experienceBody).not.toHaveTextContent("__draft_empty_experience_description__");
+  });
+
   it("uses the rich body editor for editable experience bullet-only rich responsibilities", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const data = {

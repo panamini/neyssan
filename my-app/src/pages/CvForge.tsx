@@ -1602,23 +1602,28 @@ function focusInlinePaperEditTarget(target: ActivePaperEditTarget): void {
       typeof CSS !== "undefined" && typeof CSS.escape === "function"
         ? CSS.escape(value)
         : value.replace(/"/g, '\\"');
+    const fieldPath = target.fieldPath.replace(
+      /\.responsibilityBullets\.\d+$/,
+      ".responsibilities",
+    );
     const editable = document.querySelector<HTMLElement>(
       `[data-inline-paper-editable="true"][data-paper-section-id="${escape(
         target.sectionId,
-      )}"][data-paper-field-path="${escape(target.fieldPath)}"]`,
+      )}"][data-paper-field-path="${escape(fieldPath)}"]`,
     );
     if (!editable) {
       focusPreviewSection(target.sectionId);
       return;
     }
-    editable.focus({ preventScroll: false });
-    if (editable instanceof HTMLTextAreaElement) {
-      const caretPosition = editable.value.length;
-      editable.setSelectionRange(caretPosition, caretPosition);
+    const focusTarget = editable.querySelector<HTMLElement>(".ProseMirror") ?? editable;
+    focusTarget.focus({ preventScroll: false });
+    if (focusTarget instanceof HTMLTextAreaElement) {
+      const caretPosition = focusTarget.value.length;
+      focusTarget.setSelectionRange(caretPosition, caretPosition);
       return;
     }
     const range = document.createRange();
-    range.selectNodeContents(editable);
+    range.selectNodeContents(focusTarget);
     range.collapse(false);
     const selection = window.getSelection();
     selection?.removeAllRanges();
