@@ -199,7 +199,7 @@ describe("StorageAdapter persistence", () => {
     expect(payload.id).toBeUndefined();
   });
 
-  it("keeps import recovery session only in the embedded cvDocument payload", async () => {
+  it("strips import recovery session from backend payloads while keeping the local runtime snapshot", async () => {
     const patchMutation = vi.fn().mockResolvedValue(undefined);
     const adapter = new ConvexStorageAdapter(patchMutation);
     const cv = generateCvTemplateV1("Recovery Persistence CV");
@@ -231,12 +231,17 @@ describe("StorageAdapter persistence", () => {
     expect(patchMutation).toHaveBeenCalledTimes(1);
     const payload = patchMutation.mock.calls[0][0].patch;
     expect(payload.metadata.importRecoverySession).toBeUndefined();
-    expect(payload.cvDocument.metadata.importRecoverySession).toEqual(
+    expect(payload.cvDocument.metadata.importRecoverySession).toBeUndefined();
+
+    const cachedDocument = JSON.parse(
+      window.localStorage.getItem(`cv:${cv.id}`) as string,
+    );
+    expect(cachedDocument.metadata.importRecoverySession).toEqual(
       expect.objectContaining({ status: "completed" }),
     );
   });
 
-  it("strips authoritativeResume from backend metadata but keeps it in the runtime snapshot", async () => {
+  it("strips authoritativeResume from backend payloads but keeps it in the runtime snapshot", async () => {
     const patchMutation = vi.fn().mockResolvedValue(undefined);
     const adapter = new ConvexStorageAdapter(patchMutation);
     const cv = generateCvTemplateV1("Trusted Runtime CV");
@@ -252,14 +257,7 @@ describe("StorageAdapter persistence", () => {
     expect(patchMutation).toHaveBeenCalledTimes(1);
     const payload = patchMutation.mock.calls[0][0].patch;
     expect(payload.metadata.authoritativeResume).toBeUndefined();
-    expect(payload.cvDocument.metadata.authoritativeResume).toEqual(
-      expect.objectContaining({
-        source: "mistral_v3",
-        trusted: false,
-        fallbackToLegacy: true,
-        normalized: null,
-      }),
-    );
+    expect(payload.cvDocument.metadata.authoritativeResume).toBeUndefined();
 
     const cachedDocument = JSON.parse(
       window.localStorage.getItem(`cv:${cv.id}`) as string,
@@ -323,6 +321,82 @@ describe("StorageAdapter persistence", () => {
     expect(
       restored?.sections.some((section) => section.type === "summary"),
     ).toBe(true);
+  });
+
+  it("keeps style-only backend payloads small even when runtime metadata has large import artifacts", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Oversized Style Save CV");
+    const largeText = "x".repeat(650_000);
+    cv.metadata.verbatiStyle = {
+      layout: "workshop",
+      palette: "bordeaux",
+      typography: "soft-serif",
+      accentHex: "#9a2d45",
+    };
+    cv.metadata.authoritativeResume = {
+      source: "mistral_v3",
+      trusted: true,
+      fallbackToLegacy: false,
+      normalized: { raw: largeText },
+    } as any;
+    cv.metadata.importRecoverySession = {
+      status: "completed",
+      updatedAt: new Date().toISOString(),
+      overflowCount: 0,
+      reviewLimit: 12,
+      items: [],
+      baseSectionsSnapshot: [
+        {
+          id: "large-snapshot",
+          type: "text",
+          title: "Large Snapshot",
+          blocks: [
+            {
+              id: "large-block",
+              type: "text",
+              content: {
+                type: "doc",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: largeText }],
+                  },
+                ],
+              },
+            },
+          ],
+          structuredContent: null,
+        },
+      ],
+    } as any;
+
+    await expect(adapter.save(cv)).resolves.toBeUndefined();
+
+    const payload = patchMutation.mock.calls[0][0].patch;
+    const serializedPayload = JSON.stringify(payload);
+    expect(payload.metadata.authoritativeResume).toBeUndefined();
+    expect(payload.metadata.importRecoverySession).toBeUndefined();
+    expect(payload.cvDocument.metadata.authoritativeResume).toBeUndefined();
+    expect(payload.cvDocument.metadata.importRecoverySession).toBeUndefined();
+    expect(serializedPayload.length).toBeLessThan(250_000);
+    expect(payload.metadata.verbatiStyle).toEqual({
+      layout: "workshop",
+      palette: "bordeaux",
+      typography: "soft-serif",
+      accentHex: "#9a2d45",
+    });
+
+    const cachedDocument = JSON.parse(
+      window.localStorage.getItem(`cv:${cv.id}`) as string,
+    );
+    expect(cachedDocument.metadata.authoritativeResume.normalized.raw).toHaveLength(
+      650_000,
+    );
+    expect(
+      cachedDocument.metadata.importRecoverySession.baseSectionsSnapshot[0]
+        .blocks[0].content.content[0].content[0].text,
+    ).toHaveLength(650_000);
   });
 
   it("sends metadata.verbatiStyle through patch metadata and keeps it in cvDocument", async () => {
