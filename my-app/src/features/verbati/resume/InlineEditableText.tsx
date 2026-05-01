@@ -1,4 +1,5 @@
 import React from "react";
+import type { RemirrorJSON } from "remirror";
 
 export type ActivePaperEditTarget = {
   sectionId: string;
@@ -18,6 +19,7 @@ export type ResumeInlineEditing = {
   onSummaryChange: (text: string) => void;
   onTextSectionChange: (sectionId: string, text: string) => void;
   onFieldChange?: (target: ActivePaperEditTarget, text: string) => void;
+  onFieldDocChange?: (target: ActivePaperEditTarget, doc: RemirrorJSON) => void;
   onAddItem?: (request: {
     sectionId: string;
     sectionType: string;

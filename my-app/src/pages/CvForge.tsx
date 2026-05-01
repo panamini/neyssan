@@ -465,17 +465,21 @@ function readInlinePaperEditTarget(
   };
 }
 
-function updateSummaryStructuredText(section: CvSection, text: string): CvSection {
+function updateSummaryStructuredDoc(section: CvSection, doc: RemirrorJSON): CvSection {
   const items = getStructuredItems(section);
   const item = items[0] ?? { id: `summary-${section.id ?? "section"}-0` };
 
   return {
     ...section,
     structuredContent: [
-      { ...item, summary: ensurePlainTextRemirrorDoc(text) },
+      { ...item, summary: doc },
       ...items.slice(1),
     ] as CvSection["structuredContent"],
   };
+}
+
+function updateSummaryStructuredText(section: CvSection, text: string): CvSection {
+  return updateSummaryStructuredDoc(section, ensurePlainTextRemirrorDoc(text));
 }
 
 function updateStructuredItemField(
@@ -2808,6 +2812,34 @@ export function CvForge(): JSX.Element {
     [applyInlineFieldChange],
   );
 
+  const handleInlineFieldDocChange = React.useCallback(
+    (target: ActivePaperEditTarget, doc: RemirrorJSON) => {
+      pendingInlineFieldChangeRef.current = null;
+      const baseSections =
+        latestInlineSectionsRef.current.length > 0
+          ? latestInlineSectionsRef.current
+          : currentSections;
+      const section = findSectionById(baseSections, target.sectionId);
+      if (!section || target.fieldPath !== "structuredContent.0.summary") {
+        return;
+      }
+      const nextSection = updateSummaryStructuredDoc(section, doc);
+      if (JSON.stringify(nextSection) === JSON.stringify(section)) {
+        return;
+      }
+      setPendingActiveSection(nextSection);
+      setResumeActiveTarget(getSectionTarget(nextSection));
+      const nextSections = baseSections.map((currentSection, index) =>
+        getCvSectionId(currentSection, index) === target.sectionId
+          ? nextSection
+          : currentSection,
+      );
+      latestInlineSectionsRef.current = nextSections;
+      persistSections(nextSections);
+    },
+    [currentSections, persistSections],
+  );
+
   React.useEffect(
     () => () => {
       if (inlineFieldChangeTimerRef.current !== null) {
@@ -3211,6 +3243,7 @@ export function CvForge(): JSX.Element {
       onSummaryChange: handleInlineSummaryChange,
       onTextSectionChange: handleInlineTextSectionChange,
       onFieldChange: handleInlineFieldChange,
+      onFieldDocChange: handleInlineFieldDocChange,
       onAddItem: handleInlineAddItem,
     }),
     [
@@ -3218,6 +3251,7 @@ export function CvForge(): JSX.Element {
       flushPendingInlineFieldChange,
       handleInlineAddItem,
       handleInlineFieldChange,
+      handleInlineFieldDocChange,
       handleInlineSummaryChange,
       handleInlineTextSectionChange,
       inlineEditTarget,
