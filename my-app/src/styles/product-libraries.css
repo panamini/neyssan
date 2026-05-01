@@ -1180,3 +1180,271 @@
   transform: translateY(0);
   box-shadow: var(--sha);
 }
+
+/* PR5 documents/templates skeleton surfaces. */
+
+.library-tabs {
+  display: inline-flex;
+  gap: var(--s1);
+  padding: var(--s1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--sf1);
+}
+
+.library-tabs button {
+  min-height: var(--control-sm);
+  padding-inline: var(--s3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--tm2);
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  cursor: pointer;
+}
+
+.library-tabs button[data-active="true"],
+.library-tabs button[aria-selected="true"] {
+  background: var(--sf0);
+  color: var(--ti);
+  box-shadow: var(--shadow-sm);
+}
+
+.dasti-documents-page,
+.dasti-templates-page {
+  --page-shell-max-width: 1180px;
+  --page-shell-gap: var(--layout-page-stack);
+}
+
+.dasti-documents-page__head,
+.dasti-templates-page__head {
+  align-items: flex-start;
+}
+
+.dasti-documents-toolbar,
+.dasti-template-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.dasti-documents-toolbar__search {
+  width: min(100%, 260px);
+}
+
+.dasti-documents-grid,
+.dasti-template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--s4);
+}
+
+.dasti-documents-card {
+  position: relative;
+  min-height: 164px;
+  align-content: stretch;
+}
+
+.dasti-documents-card__surface,
+.dasti-documents-card--new button {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: var(--s2);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dasti-documents-card__surface {
+  padding-inline-end: var(--s7);
+}
+
+.dasti-documents-card__menu {
+  position: absolute;
+  inset-block-start: var(--s3);
+  inset-inline-end: var(--s3);
+  min-height: var(--control-xs);
+  padding-inline: var(--s2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--sf0);
+  color: var(--tm2);
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  cursor: pointer;
+}
+
+.dasti-documents-card__menu:hover,
+.dasti-documents-card__menu:focus-visible {
+  color: var(--ti);
+  border-color: var(--border-strong);
+  outline: none;
+}
+
+.dasti-documents-card--new {
+  place-items: center;
+  min-height: 164px;
+  color: var(--tm2);
+  background: var(--sf1);
+}
+
+.dasti-documents-card--new button {
+  place-items: center;
+  text-align: center;
+  font-weight: var(--font-label-weight);
+}
+
+.empty-state {
+  display: grid;
+  justify-items: center;
+  gap: var(--s3);
+  padding: var(--layout-empty-state-pad) 0;
+  text-align: center;
+}
+
+.empty-state__title {
+  margin: 0;
+  color: var(--ti);
+  font-family: var(--font-serif-display);
+  font-size: var(--tl);
+  line-height: var(--ll);
+  letter-spacing: var(--tracking-tight);
+}
+
+.empty-state__desc {
+  max-width: 56ch;
+  color: var(--tm2);
+  font-size: var(--ts);
+  line-height: var(--ls);
+}
+
+.dasti-template-filter__spacer {
+  flex: 1 1 auto;
+}
+
+.dasti-template-card {
+  display: grid;
+  gap: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-3);
+  background: var(--sfr);
+  box-shadow: var(--sha);
+  color: var(--ti);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-2) var(--ez),
+    box-shadow var(--dur-2) var(--ez),
+    transform var(--dur-2) var(--ez);
+}
+
+.dasti-template-card:hover,
+.dasti-template-card:focus-visible {
+  border-color: var(--border-strong);
+  box-shadow: var(--shb);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.dasti-template-card[data-selected="true"] {
+  border-color: var(--ac);
+}
+
+.dasti-template-card__preview {
+  min-height: 220px;
+  display: grid;
+  align-content: start;
+  gap: var(--s2);
+  padding: var(--s5);
+  border-radius: var(--radius-2);
+  background: var(--paper);
+  color: var(--paper-dark-body-ink);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.dasti-template-card__preview span {
+  display: block;
+  font-size: var(--tx);
+  line-height: var(--lx);
+  color: var(--paper-dark-meta-ink);
+}
+
+.dasti-template-card__preview .dasti-template-card__name-line {
+  font-family: var(--font-serif-display);
+  font-size: var(--ts);
+  line-height: var(--ls);
+  color: var(--paper-dark-heading-ink);
+}
+
+.dasti-template-card__preview .dasti-template-card__heading-line {
+  margin-block-start: var(--s2);
+  color: var(--ac);
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dasti-template-card--minimal .dasti-template-card__preview,
+.dasti-template-card--compact .dasti-template-card__preview {
+  gap: var(--s1);
+}
+
+.dasti-template-card--bold .dasti-template-card__name-line {
+  font-family: var(--font-body-family);
+  font-weight: var(--font-label-weight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.dasti-template-card--classic .dasti-template-card__preview {
+  text-align: center;
+}
+
+.dasti-template-card--letterpress .dasti-template-card__preview {
+  font-family: var(--font-serif-display);
+}
+
+.dasti-template-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.dasti-template-card__name {
+  color: var(--ti);
+  font-weight: var(--font-label-weight);
+}
+
+.dasti-template-card__kind {
+  color: var(--tm2);
+  font-size: var(--tx);
+}
+
+@media (max-width: 760px) {
+  .dasti-documents-toolbar__search,
+  .dasti-documents-toolbar .library-tabs,
+  .dasti-template-filter .library-tabs {
+    width: 100%;
+  }
+
+  .library-tabs {
+    justify-content: stretch;
+  }
+
+  .library-tabs button {
+    flex: 1 1 auto;
+  }
+}

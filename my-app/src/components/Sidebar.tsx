@@ -1000,13 +1000,13 @@ export const Sidebar: React.FC = () => {
             label="Documents"
             icon={<FolderTree size={16} strokeWidth={1.5} aria-hidden="true" />}
             active={isDocumentsRoute}
-            href="/proposals"
+            href="/documents"
           />
           <SidebarRailLink
             label="Templates"
             icon={<ImagesSquare size={16} strokeWidth={1.5} aria-hidden="true" />}
             active={isTemplatesRoute}
-            href="/style"
+            href="/templates"
           />
         </nav>
       ) : (
@@ -1070,7 +1070,7 @@ export const Sidebar: React.FC = () => {
           <div className="sb-section" aria-label="Library">
             <div className="sb-section__title">Library</div>
             <Link
-              to="/proposals"
+              to="/documents"
               className={clsx(
                 "sb-section__action",
                 isDocumentsRoute && "sb-section__action--active",
@@ -1083,7 +1083,7 @@ export const Sidebar: React.FC = () => {
               </span>
             </Link>
             <Link
-              to="/style"
+              to="/templates"
               className={clsx(
                 "sb-section__action",
                 isTemplatesRoute && "sb-section__action--active",

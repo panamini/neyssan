@@ -68,7 +68,7 @@ export const APP_COMMANDS: AppCommand[] = [
     label: "Documents",
     shortcut: "G L",
     keywords: ["library", "proposals", "resumes"],
-    action: { type: "navigate", to: "/proposals" },
+    action: { type: "navigate", to: "/documents" },
   },
   {
     id: "templates",
@@ -76,7 +76,7 @@ export const APP_COMMANDS: AppCommand[] = [
     label: "Templates",
     shortcut: "G T",
     keywords: ["style"],
-    action: { type: "navigate", to: "/style" },
+    action: { type: "navigate", to: "/templates" },
   },
   {
     id: "settings",
