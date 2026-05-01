@@ -250,11 +250,10 @@ export function JobDetail({
               </div>
               <button
                 type="button"
-                className="ds-btn ds-btn--md ds-btn--primary dasti-jobs-detail__header-action--proposal"
+                className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--proposal"
                 onClick={() => onCreateProposal(selectedJob.id)}
               >
                 <span>Generate proposal</span>
-                <span className="ds-btn__period" aria-hidden="true">.</span>
               </button>
             </div>
             {selectedJob.isSample ? (

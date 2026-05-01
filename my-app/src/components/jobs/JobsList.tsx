@@ -7,7 +7,6 @@ import {
 } from "@/lib/icons";
 import { LibraryFilterMenu } from "../LibraryFilterMenu";
 import { Menu } from "../ui/menu";
-import { getProposalSourceLabel } from "../../lib/proposal-source-platforms";
 import { formatUiDate } from "../../lib/ui-date";
 
 type JobsListItem = {
@@ -429,7 +428,6 @@ export function JobsList({
               optimisticFavoriteById[job.id] ?? job.isFavorite;
             const matchLabel = resolveMatchTierLabel(job.matchTier);
             const matchTone = resolveMatchTierTone(job.matchTier);
-            const sourceLabel = getProposalSourceLabel(job.sourceType, job.sourceUrl);
 
             return (
               <div key={job.id} className="dasti-jobs-list-item" role="listitem">
@@ -465,11 +463,10 @@ export function JobsList({
                       <span>{company}</span>
                       <span>·</span>
                       <span>{locationLabel}</span>
-                      {sourceLabel ? (
-                        <>
-                          <span>·</span>
-                          <span>{`From ${sourceLabel}`}</span>
-                        </>
+                      {isFavorite ? (
+                        <span className="dasti-jobs-row__meta-favorite" aria-label="Favorite">
+                          <Star size={13} strokeWidth={1.8} weight="fill" aria-hidden="true" />
+                        </span>
                       ) : null}
                     </div>
                     <div className="dasti-jobs-row__meta">
@@ -478,11 +475,6 @@ export function JobsList({
                         <span>{job.linkedDocumentCount}</span>
                       </span>
                       <span>Last activity {lastActivityLabel}</span>
-                      {isFavorite ? (
-                        <span className="dasti-jobs-row__meta-favorite" aria-label="Favorite">
-                          <Star size={13} strokeWidth={1.8} weight="fill" aria-hidden="true" />
-                        </span>
-                      ) : null}
                     </div>
                   </div>
                   <div className="dasti-jobs-row__controls">
