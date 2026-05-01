@@ -103,6 +103,10 @@ type CvRailProps = {
 };
 
 export type CvAddSectionKind =
+  | "summary"
+  | "experience"
+  | "education"
+  | "skills"
   | "projects"
   | "achievements"
   | "certifications"
@@ -124,6 +128,10 @@ export type CvAccentChoice =
   | "ochre";
 
 const ADD_SECTION_ITEMS: Array<{ id: CvAddSectionKind; label: string }> = [
+  { id: "summary", label: "Summary" },
+  { id: "experience", label: "Experience" },
+  { id: "education", label: "Education" },
+  { id: "skills", label: "Skills" },
   { id: "projects", label: "Projects" },
   { id: "achievements", label: "Achievements" },
   { id: "certifications", label: "Certifications" },

@@ -4,9 +4,16 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import { PenLine, Upload, X } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
+import FloatingAiToolbar, {
+  type InlineAiActionId,
+} from "../components/FloatingAiToolbar";
 import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { VerbatiResumePreview } from "../features/verbati/VerbatiResumePreview";
+import type {
+  ActivePaperEditTarget,
+  ResumeInlineEditing,
+} from "../features/verbati/resume/InlineEditableText";
 import { hasRenderableResumeData } from "../features/verbati/cvDocumentToResumeData";
 import type {
   ResumeActiveTarget,
@@ -74,6 +81,13 @@ import {
   createAiInteractionId,
   recordAiInteractionEvent,
 } from "../lib/ai/aiInteractionTelemetry";
+import { normalizeEditorAiTextResult } from "../lib/ai/applyAiSuggestion";
+import {
+  getDomSelectionState,
+  isInlineAiToolbarActiveElement,
+  isPrimaryPointerPressed,
+  type EditorSelectionAnchor,
+} from "../lib/editor-ai-selection";
 
 type CvForgeWorkspaceMode = "edit" | "preview";
 type CvForgeCanonicalJob = {
@@ -81,9 +95,15 @@ type CvForgeCanonicalJob = {
   title: string;
   company: string;
 } | null;
+type InlinePaperSelectionState = {
+  text: string;
+  anchor: EditorSelectionAnchor;
+  editTarget: ActivePaperEditTarget;
+};
 
 const CV_FORGE_WORKSPACE_MODE_STORAGE_KEY = "dasti:cv-forge-workspace-mode:v1";
 const ENTRY_PICKER_PENDING_ROUTE_ID = "__entry-picker-pending-route__";
+const DRAFT_EMPTY_RESPONSIBILITY_BULLET = "__draft_empty_responsibility_bullet__";
 
 function mapDefaultVoicePresetToCvTone(value: unknown): CvToneChoice {
   if (value === "engaging") return "warm";
@@ -395,6 +415,193 @@ function updateFirstTextBlock(section: CvSection, text: string): CvSection {
   };
 }
 
+function normalizeInlinePlainText(text: string): string {
+  return text.replace(/\r\n?/g, "\n");
+}
+
+function readInlinePaperEditTarget(
+  element: Element | null | undefined,
+): ActivePaperEditTarget | null {
+  if (!(element instanceof HTMLElement)) return null;
+  if (element.dataset.inlinePaperEditable !== "true") return null;
+  const sectionId = element.dataset.paperSectionId;
+  const sectionType = element.dataset.paperSectionType;
+  const fieldPath = element.dataset.paperFieldPath;
+  const fieldKind = element.dataset.paperFieldKind;
+  if (!sectionId || !sectionType || !fieldPath || !fieldKind) return null;
+
+  const readNumber = (value: string | undefined) => {
+    if (typeof value !== "string" || value.trim() === "") return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  return {
+    sectionId,
+    sectionType,
+    fieldPath,
+    fieldKind: fieldKind as ActivePaperEditTarget["fieldKind"],
+    itemIndex: readNumber(element.dataset.paperItemIndex),
+    bulletIndex: readNumber(element.dataset.paperBulletIndex),
+    chipIndex: readNumber(element.dataset.paperChipIndex),
+  };
+}
+
+function updateSummaryStructuredText(section: CvSection, text: string): CvSection {
+  const items = getStructuredItems(section);
+  const item = items[0] ?? { id: `summary-${section.id ?? "section"}-0` };
+
+  return {
+    ...section,
+    structuredContent: [
+      { ...item, summary: ensureRemirrorDoc(text) },
+      ...items.slice(1),
+    ] as CvSection["structuredContent"],
+  };
+}
+
+function updateStructuredItemField(
+  section: CvSection,
+  itemId: string,
+  field: string,
+  text: string,
+): CvSection {
+  const items = getStructuredItems(section);
+  const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
+  if (itemIndex < 0) return section;
+  const item = items[itemIndex]!;
+  const richTextFields = new Set(["summary", "description", "responsibilities", "notes"]);
+  const nextItem = {
+    ...item,
+    [field]: richTextFields.has(field) ? ensureRemirrorDoc(text) : text,
+  };
+
+  return {
+    ...section,
+    structuredContent: [
+      ...items.slice(0, itemIndex),
+      nextItem,
+      ...items.slice(itemIndex + 1),
+    ] as CvSection["structuredContent"],
+  };
+}
+
+function updateStructuredItemBullet(
+  section: CvSection,
+  itemId: string,
+  bulletIndex: number,
+  text: string,
+): CvSection {
+  const items = getStructuredItems(section);
+  const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
+  if (itemIndex < 0) return section;
+  const item = items[itemIndex]!;
+  const storedText = text.trim() ? text : DRAFT_EMPTY_RESPONSIBILITY_BULLET;
+
+  if (Array.isArray(item.responsibilityBullets)) {
+    const bullets = [...item.responsibilityBullets].map((entry) =>
+      collectPlainText(entry),
+    );
+    bullets[bulletIndex] = storedText;
+    const draftBulletCount = Math.max(
+      Number((item as Record<string, unknown>).__draftResponsibilityBulletCount ?? 0),
+      bulletIndex + 1,
+    );
+    return {
+      ...section,
+      structuredContent: [
+        ...items.slice(0, itemIndex),
+        {
+          ...item,
+          responsibilityBullets: bullets,
+          __draftResponsibilityBulletCount: draftBulletCount,
+        },
+        ...items.slice(itemIndex + 1),
+      ] as CvSection["structuredContent"],
+    };
+  }
+
+  if (Array.isArray(item.responsibilities)) {
+    const bullets = [...item.responsibilities].map((entry) =>
+      collectPlainText(entry),
+    );
+    bullets[bulletIndex] = storedText;
+    const draftBulletCount = Math.max(
+      Number((item as Record<string, unknown>).__draftResponsibilityBulletCount ?? 0),
+      bulletIndex + 1,
+    );
+    return {
+      ...section,
+      structuredContent: [
+        ...items.slice(0, itemIndex),
+        {
+          ...item,
+          responsibilities: bullets,
+          __draftResponsibilityBulletCount: draftBulletCount,
+        },
+        ...items.slice(itemIndex + 1),
+      ] as CvSection["structuredContent"],
+    };
+  }
+
+  const bullets = splitAiListText(collectPlainText(item.responsibilities));
+  bullets[bulletIndex] = storedText;
+  const draftBulletCount = Math.max(
+    Number((item as Record<string, unknown>).__draftResponsibilityBulletCount ?? 0),
+    bulletIndex + 1,
+  );
+
+  return {
+    ...section,
+    structuredContent: [
+      ...items.slice(0, itemIndex),
+      {
+        ...item,
+        responsibilities: ensureRemirrorDoc(
+          bullets.map((bullet) => `- ${bullet}`).join("\n"),
+        ),
+        __draftResponsibilityBulletCount: draftBulletCount,
+      },
+      ...items.slice(itemIndex + 1),
+    ] as CvSection["structuredContent"],
+  };
+}
+
+function updateProfileStructuredField(
+  section: CvSection,
+  field: string,
+  text: string,
+): CvSection {
+  const items = getStructuredItems(section);
+  const item = items[0] ?? { id: `profile-${section.id ?? "section"}-0` };
+  return {
+    ...section,
+    structuredContent: [
+      { ...item, [field]: text },
+      ...items.slice(1),
+    ] as CvSection["structuredContent"],
+  };
+}
+
+function addProfileDraftContactField(section: CvSection, field: string): CvSection {
+  const items = getStructuredItems(section);
+  const item = items[0] ?? { id: `profile-${section.id ?? "section"}-0` };
+  const existing = Array.isArray(item.__draftContactFields)
+    ? item.__draftContactFields.map((value) => String(value))
+    : [];
+  return {
+    ...section,
+    structuredContent: [
+      {
+        ...item,
+        [field]: String(item[field] ?? ""),
+        __draftContactFields: Array.from(new Set([...existing, field])),
+      },
+      ...items.slice(1),
+    ] as CvSection["structuredContent"],
+  };
+}
+
 function applyAiTextToSection(section: CvSection, text: string): CvSection {
   const cleanText = text.trim();
   if (!cleanText) return section;
@@ -633,6 +840,124 @@ function focusPreviewSection(sectionId: string): void {
   });
 }
 
+function focusInlinePaperEditTarget(target: ActivePaperEditTarget): void {
+  if (typeof document === "undefined") return;
+  window.requestAnimationFrame(() => {
+    const escape = (value: string) =>
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(value)
+        : value.replace(/"/g, '\\"');
+    const editable = document.querySelector<HTMLElement>(
+      `[data-inline-paper-editable="true"][data-paper-section-id="${escape(
+        target.sectionId,
+      )}"][data-paper-field-path="${escape(target.fieldPath)}"]`,
+    );
+    if (!editable) {
+      focusPreviewSection(target.sectionId);
+      return;
+    }
+    editable.focus({ preventScroll: false });
+    const range = document.createRange();
+    range.selectNodeContents(editable);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+}
+
+function getInitialEditTargetForSection(
+  section: CvSection,
+): ActivePaperEditTarget | null {
+  const sectionId = String(section.id ?? "");
+  const firstItem = Array.isArray(section.structuredContent)
+    ? (section.structuredContent[0] as Record<string, unknown> | undefined)
+    : undefined;
+  const itemId = String(firstItem?.id ?? "");
+
+  switch (section.type) {
+    case "profile":
+      return {
+        sectionId,
+        sectionType: "profile",
+        fieldPath: "structuredContent.0.name",
+        fieldKind: "heading",
+      };
+    case "summary":
+      return {
+        sectionId,
+        sectionType: "summary",
+        fieldPath: "structuredContent.0.summary",
+        fieldKind: "paragraph",
+      };
+    case "experience":
+      return {
+        sectionId,
+        sectionType: "experience",
+        fieldPath: `structuredContent.item:${itemId}.position`,
+        fieldKind: "heading",
+      };
+    case "education":
+      return {
+        sectionId,
+        sectionType: "education",
+        fieldPath: `structuredContent.item:${itemId}.degree`,
+        fieldKind: "heading",
+      };
+    case "skills":
+      return {
+        sectionId,
+        sectionType: "skills",
+        fieldPath: `structuredContent.item:${itemId}.name`,
+        fieldKind: "chip",
+        chipIndex: 0,
+      };
+    case "languages":
+      return {
+        sectionId,
+        sectionType: "languages",
+        fieldPath: `structuredContent.item:${itemId}.name`,
+        fieldKind: "chip",
+        chipIndex: 0,
+      };
+    case "projects":
+      return {
+        sectionId,
+        sectionType: "projects",
+        fieldPath: `structuredContent.item:${itemId}.name`,
+        fieldKind: "heading",
+      };
+    case "certifications":
+      return {
+        sectionId,
+        sectionType: "certifications",
+        fieldPath: `structuredContent.item:${itemId}.certificationName`,
+        fieldKind: "paragraph",
+      };
+    case "achievements":
+      return {
+        sectionId,
+        sectionType: "achievements",
+        fieldPath: `structuredContent.item:${itemId}.text`,
+        fieldKind: "paragraph",
+      };
+    case "text":
+      return {
+        sectionId,
+        sectionType:
+          section.title.trim().toLowerCase() === "hobbies" ? "hobbies" : "custom",
+        fieldPath:
+          section.title.trim().toLowerCase() === "hobbies"
+            ? `structuredContent.item:${itemId}.name`
+            : "blocks.0.plainText",
+        fieldKind:
+          section.title.trim().toLowerCase() === "hobbies" ? "chip" : "paragraph",
+      };
+    default:
+      return null;
+  }
+}
+
 function makeTextBlock(title: string, text = "") {
   return {
     id: uuidv4(),
@@ -645,6 +970,101 @@ function makeTextBlock(title: string, text = "") {
 }
 
 function makeDraftSection(sectionKind: CvAddSectionKind): CvSection {
+  if (sectionKind === "summary") {
+    const itemId = uuidv4();
+    return {
+      id: uuidv4(),
+      title: "Summary",
+      type: "summary",
+      blocks: [
+        {
+          ...makeTextBlock("Summary"),
+          content: ensureRemirrorDoc(""),
+          plainText: "",
+          attributes: { linkedStructuredId: itemId },
+        },
+      ],
+      structuredContent: [{ id: itemId, summary: ensureRemirrorDoc("") }],
+      collapsed: false,
+    };
+  }
+
+  if (sectionKind === "experience") {
+    const itemId = uuidv4();
+    return {
+      id: uuidv4(),
+      title: "Experience",
+      type: "experience",
+      blocks: [
+        {
+          ...makeTextBlock("Experience"),
+          plainText: "",
+          attributes: { linkedStructuredId: itemId },
+        },
+      ],
+      structuredContent: [
+        {
+          id: itemId,
+          position: "",
+          company: "",
+          location: "",
+          startDate: "1970-01-01T00:00:00.000Z",
+          endDate: null,
+          isCurrent: false,
+          currentlyWorking: false,
+          responsibilityBullets: [""],
+        },
+      ] as CvSection["structuredContent"],
+      collapsed: false,
+    };
+  }
+
+  if (sectionKind === "education") {
+    const itemId = uuidv4();
+    return {
+      id: uuidv4(),
+      title: "Education",
+      type: "education",
+      blocks: [
+        {
+          ...makeTextBlock("Education"),
+          plainText: "",
+          attributes: { linkedStructuredId: itemId },
+        },
+      ],
+      structuredContent: [
+        {
+          id: itemId,
+          degree: "",
+          institution: "",
+          fieldOfStudy: "",
+          startDate: undefined,
+          endDate: undefined,
+          isCurrent: false,
+        },
+      ] as CvSection["structuredContent"],
+      collapsed: false,
+    };
+  }
+
+  if (sectionKind === "skills") {
+    const itemId = uuidv4();
+    return {
+      id: uuidv4(),
+      title: "Skills",
+      type: "skills",
+      blocks: [],
+      structuredContent: [
+        {
+          id: itemId,
+          name: "",
+          level: "Intermediate",
+        },
+      ] as CvSection["structuredContent"],
+      collapsed: false,
+    };
+  }
+
   if (sectionKind === "projects") {
     const itemId = uuidv4();
     return {
@@ -762,6 +1182,10 @@ function makeDraftSection(sectionKind: CvAddSectionKind): CvSection {
     Exclude<
       CvAddSectionKind,
       | "projects"
+      | "summary"
+      | "experience"
+      | "education"
+      | "skills"
       | "certifications"
       | "achievements"
       | "languages"
@@ -834,12 +1258,18 @@ export function CvForge(): JSX.Element {
     ((api.functions as any)?.runCvSectionAiAction ??
       "functions.runCvSectionAiAction") as any,
   );
+  const transformEditorSelectionAction = useAction(
+    ((api.functions as any)?.transformEditorSelection ??
+      "functions.transformEditorSelection") as any,
+  );
   const defaultProposalSettings = useQuery(
     ((api.proposalSettings as any)?.getCurrent ??
       "proposalSettings.getCurrent") as any,
     isConvexAuthenticated ? {} : "skip",
   ) as { voicePreset?: unknown; savedVoicePreset?: unknown } | undefined;
   const cvImportInputRef = React.useRef<HTMLInputElement | null>(null);
+  const paperStageRef = React.useRef<HTMLDivElement | null>(null);
+  const inlinePaperSelectionDebounceRef = React.useRef<number | null>(null);
   const [workspaceMode, setWorkspaceMode] =
     React.useState<CvForgeWorkspaceMode>(() =>
       readStoredCvForgeWorkspaceMode(),
@@ -860,6 +1290,16 @@ export function CvForge(): JSX.Element {
   const [activeSectionId, setActiveSectionId] = React.useState<string | null>(
     null,
   );
+  const [inlineEditTarget, setInlineEditTarget] =
+    React.useState<ActivePaperEditTarget | null>(null);
+  const [pendingFocusEditTarget, setPendingFocusEditTarget] =
+    React.useState<ActivePaperEditTarget | null>(null);
+  const [inlinePaperSelectionState, setInlinePaperSelectionState] =
+    React.useState<InlinePaperSelectionState | null>(null);
+  const [isApplyingInlinePaperAi, setIsApplyingInlinePaperAi] =
+    React.useState(false);
+  const [pendingInlinePaperAiActionId, setPendingInlinePaperAiActionId] =
+    React.useState<InlineAiActionId | null>(null);
   const [pendingActiveSection, setPendingActiveSection] =
     React.useState<CvSection | null>(null);
   const [sectionEditorOpen, setSectionEditorOpen] = React.useState(false);
@@ -873,6 +1313,7 @@ export function CvForge(): JSX.Element {
 
   const handleResumeLinkIntent = React.useCallback(
     (intent: ResumeLinkIntent) => {
+      setInlineEditTarget(null);
       const matchedSection =
         (intent.sectionId ? findSectionById(currentSections, intent.sectionId) : null) ??
         currentSections.find(
@@ -880,6 +1321,23 @@ export function CvForge(): JSX.Element {
         ) ??
         null;
       const matchedSectionId = matchedSection?.id ? String(matchedSection.id) : null;
+      if (
+        workspaceMode === "edit" &&
+        (intent.source === "preview-panel" || intent.source === "preview-workspace")
+      ) {
+        if (matchedSectionId) {
+          setActiveSectionId(matchedSectionId);
+          focusPreviewSection(matchedSectionId);
+        }
+        setResumeActiveTarget({
+          sectionType: intent.sectionType,
+          previewSectionType: intent.previewSectionType,
+          itemId: intent.itemId,
+          sectionId: matchedSectionId ?? intent.sectionId,
+          source: intent.source,
+        });
+        return;
+      }
       if (matchedSectionId) {
         setActiveSectionId(matchedSectionId);
         setSectionEditorOpen(true);
@@ -893,9 +1351,6 @@ export function CvForge(): JSX.Element {
         sectionId: matchedSectionId ?? intent.sectionId,
         source: intent.source,
       });
-      if (workspaceMode === "preview" && !intent.shouldOpenModal) {
-        setWorkspaceMode("edit");
-      }
     },
     [currentSections, workspaceMode],
   );
@@ -921,11 +1376,16 @@ export function CvForge(): JSX.Element {
   const resumePreviewData = React.useMemo(
     () =>
       filteredPreviewCv
-        ? buildCanonicalResumeRenderModelFromCv(filteredPreviewCv)
+        ? buildCanonicalResumeRenderModelFromCv(filteredPreviewCv, {
+            includeDrafts: workspaceMode === "edit",
+          })
         : null,
-    [filteredPreviewCv],
+    [filteredPreviewCv, workspaceMode],
   );
-  const hasResumePaper = hasRenderableResumeData(resumePreviewData);
+  const hasResumePaper =
+    workspaceMode === "edit" && currentCv
+      ? true
+      : hasRenderableResumeData(resumePreviewData);
   const sanitizedHiddenSectionIds = React.useMemo(
     () => sanitizeHiddenSectionIds(currentCv?.sections ?? [], hiddenSectionIds),
     [currentCv?.sections, hiddenSectionIds],
@@ -1103,6 +1563,18 @@ export function CvForge(): JSX.Element {
   }, [hiddenSectionIds, sanitizedHiddenSectionIds]);
 
   React.useEffect(() => {
+    if (!pendingFocusEditTarget || workspaceMode !== "edit") {
+      return;
+    }
+    focusInlinePaperEditTarget(pendingFocusEditTarget);
+    const timeoutId = window.setTimeout(() => {
+      focusInlinePaperEditTarget(pendingFocusEditTarget);
+      setPendingFocusEditTarget(null);
+    }, 80);
+    return () => window.clearTimeout(timeoutId);
+  }, [pendingFocusEditTarget, resumePreviewData, workspaceMode]);
+
+  React.useEffect(() => {
     writeStoredHiddenSectionIds(
       currentCv?.id ? String(currentCv.id) : null,
       hiddenSectionIds,
@@ -1157,6 +1629,12 @@ export function CvForge(): JSX.Element {
       CV_FORGE_WORKSPACE_MODE_STORAGE_KEY,
       workspaceMode,
     );
+  }, [workspaceMode]);
+
+  React.useEffect(() => {
+    if (workspaceMode === "preview") {
+      setInlineEditTarget(null);
+    }
   }, [workspaceMode]);
 
   const authoritativeResume = React.useMemo(
@@ -1319,6 +1797,7 @@ export function CvForge(): JSX.Element {
 
   const handleSelectSection = React.useCallback(
     (sectionId: string, options?: { openEditor?: boolean }) => {
+      setInlineEditTarget(null);
       const section = findSectionById(currentSections, sectionId);
       setActiveSectionId(sectionId);
       setResumeActiveTarget(getSectionTarget(section));
@@ -1331,6 +1810,7 @@ export function CvForge(): JSX.Element {
   );
 
   const handleAskAiForSection = React.useCallback((sectionId: string) => {
+    setInlineEditTarget(null);
     const section = findSectionById(currentSections, sectionId);
     setCvRailAiSuggestion(null);
     setActiveSectionId(sectionId);
@@ -1395,6 +1875,524 @@ export function CvForge(): JSX.Element {
     [currentCv, importCv],
   );
 
+  const handleInlineSummaryChange = React.useCallback(
+    (text: string) => {
+      const nextText = normalizeInlinePlainText(text);
+      const summarySection = currentSections.find(
+        (section) => getCanonicalSectionType(section) === "summary",
+      );
+      if (!summarySection) return;
+
+      const currentText = collectPlainText(
+        getStructuredItems(summarySection)[0]?.summary,
+      );
+      if (currentText === nextText) return;
+
+      const nextSection = updateSummaryStructuredText(summarySection, nextText);
+      setPendingActiveSection(nextSection);
+      setResumeActiveTarget(getSectionTarget(nextSection));
+      persistSections(
+        currentSections.map((section) =>
+          section === summarySection ? nextSection : section,
+        ),
+      );
+    },
+    [currentSections, persistSections],
+  );
+
+  const handleInlineTextSectionChange = React.useCallback(
+    (sectionId: string, text: string) => {
+      const nextText = normalizeInlinePlainText(text);
+      const textSection = findSectionById(currentSections, sectionId);
+      if (!textSection || getCanonicalSectionType(textSection) === "hobbies") {
+        return;
+      }
+
+      const canonicalType = getCanonicalSectionType(textSection);
+      if (canonicalType !== "additional_information" && canonicalType !== "custom") {
+        return;
+      }
+
+      const currentText = collectPlainText(
+        textSection.blocks[0]?.plainText ?? textSection.blocks[0]?.content,
+      );
+      if (currentText === nextText) return;
+
+      const nextSection = updateFirstTextBlock(textSection, nextText);
+      setPendingActiveSection(nextSection);
+      setResumeActiveTarget(getSectionTarget(nextSection));
+      persistSections(
+        currentSections.map((section, index) =>
+          getCvSectionId(section, index) === sectionId ? nextSection : section,
+        ),
+      );
+    },
+    [currentSections, persistSections],
+  );
+
+  const handleInlineFieldChange = React.useCallback(
+    (target: ActivePaperEditTarget, text: string) => {
+      const nextText = normalizeInlinePlainText(text);
+      const section = findSectionById(currentSections, target.sectionId);
+      if (!section) return;
+
+      let nextSection: CvSection | null = null;
+      if (target.fieldPath === "structuredContent.0.summary") {
+        nextSection = updateSummaryStructuredText(section, nextText);
+      } else if (target.fieldPath === "blocks.0.plainText") {
+        nextSection = updateFirstTextBlock(section, nextText);
+      } else if (target.fieldPath.startsWith("structuredContent.0.")) {
+        const field = target.fieldPath.slice("structuredContent.0.".length);
+        nextSection = updateProfileStructuredField(section, field, nextText);
+      } else {
+        const itemMatch = target.fieldPath.match(
+          /^structuredContent\.item:([^.]*)\.(.+)$/,
+        );
+        if (itemMatch) {
+          const [, itemId, itemFieldPath] = itemMatch;
+          const bulletMatch = itemFieldPath.match(
+            /^responsibilityBullets\.(\d+)$/,
+          );
+          if (bulletMatch) {
+            nextSection = updateStructuredItemBullet(
+              section,
+              itemId,
+              Number(bulletMatch[1]),
+              nextText,
+            );
+          } else {
+            nextSection = updateStructuredItemField(
+              section,
+              itemId,
+              itemFieldPath,
+              nextText,
+            );
+          }
+        }
+      }
+
+      if (!nextSection || JSON.stringify(nextSection) === JSON.stringify(section)) {
+        return;
+      }
+
+      setPendingActiveSection(nextSection);
+      setResumeActiveTarget(getSectionTarget(nextSection));
+      persistSections(
+        currentSections.map((currentSection, index) =>
+          getCvSectionId(currentSection, index) === target.sectionId
+            ? nextSection
+            : currentSection,
+        ),
+      );
+    },
+    [currentSections, persistSections],
+  );
+
+  const handleInlineAddItem = React.useCallback(
+    (request: Parameters<NonNullable<ResumeInlineEditing["onAddItem"]>>[0]) => {
+      const section = findSectionById(currentSections, request.sectionId);
+      if (!section) return;
+
+      const items = getStructuredItems(section);
+      const itemId = uuidv4();
+      let nextSection: CvSection | null = null;
+      let nextTarget: ActivePaperEditTarget | null = null;
+
+      const appendItem = (
+        item: Record<string, unknown>,
+        target: ActivePaperEditTarget,
+      ) => {
+        nextSection = {
+          ...section,
+          structuredContent: [...items, item] as CvSection["structuredContent"],
+        };
+        nextTarget = target;
+      };
+
+      switch (request.itemKind) {
+        case "profile-contact": {
+          const field = request.parentItemId ?? "email";
+          nextSection = addProfileDraftContactField(section, field);
+          nextTarget = {
+            sectionId: request.sectionId,
+            sectionType: "profile",
+            fieldPath: `structuredContent.0.${field}`,
+            fieldKind: "meta",
+          };
+          break;
+        }
+        case "skill":
+          appendItem(
+            { id: itemId, name: "", level: "Intermediate" },
+            {
+              sectionId: request.sectionId,
+              sectionType: "skills",
+              fieldPath: `structuredContent.item:${itemId}.name`,
+              fieldKind: "chip",
+              chipIndex: items.length,
+            },
+          );
+          break;
+        case "language":
+          appendItem(
+            { id: itemId, name: "", level: "" },
+            {
+              sectionId: request.sectionId,
+              sectionType: "languages",
+              fieldPath: `structuredContent.item:${itemId}.name`,
+              fieldKind: "chip",
+              chipIndex: items.length,
+            },
+          );
+          break;
+        case "hobby":
+          appendItem(
+            { id: itemId, name: "" },
+            {
+              sectionId: request.sectionId,
+              sectionType: "hobbies",
+              fieldPath: `structuredContent.item:${itemId}.name`,
+              fieldKind: "chip",
+              chipIndex: items.length,
+            },
+          );
+          break;
+        case "achievement":
+          appendItem(
+            { id: itemId, text: "" },
+            {
+              sectionId: request.sectionId,
+              sectionType: "achievements",
+              fieldPath: `structuredContent.item:${itemId}.text`,
+              fieldKind: "paragraph",
+            },
+          );
+          break;
+        case "certification":
+          appendItem(
+            {
+              id: itemId,
+              certificationName: "",
+              issuingOrganization: "",
+              issueDate: undefined,
+              expirationDate: null,
+              credentialId: "",
+            },
+            {
+              sectionId: request.sectionId,
+              sectionType: "certifications",
+              fieldPath: `structuredContent.item:${itemId}.certificationName`,
+              fieldKind: "paragraph",
+            },
+          );
+          break;
+        case "project":
+          appendItem(
+            { id: itemId, name: "", meta: "", description: "" },
+            {
+              sectionId: request.sectionId,
+              sectionType: "projects",
+              fieldPath: `structuredContent.item:${itemId}.name`,
+              fieldKind: "heading",
+            },
+          );
+          break;
+        case "affiliation":
+          appendItem(
+            {
+              id: itemId,
+              organizationName: "",
+              roleOrMembershipType: "",
+              notes: "",
+            },
+            {
+              sectionId: request.sectionId,
+              sectionType: "affiliations",
+              fieldPath: `structuredContent.item:${itemId}.organizationName`,
+              fieldKind: "paragraph",
+            },
+          );
+          break;
+        case "experience":
+          appendItem(
+            {
+              id: itemId,
+              position: "",
+              company: "",
+              location: "",
+              startDate: "1970-01-01T00:00:00.000Z",
+              endDate: null,
+              isCurrent: false,
+              currentlyWorking: false,
+              responsibilityBullets: [""],
+            },
+            {
+              sectionId: request.sectionId,
+              sectionType: "experience",
+              fieldPath: `structuredContent.item:${itemId}.position`,
+              fieldKind: "heading",
+            },
+          );
+          break;
+        case "education":
+          appendItem(
+            {
+              id: itemId,
+              degree: "",
+              institution: "",
+              fieldOfStudy: "",
+              startDate: undefined,
+              endDate: undefined,
+              isCurrent: false,
+            },
+            {
+              sectionId: request.sectionId,
+              sectionType: "education",
+              fieldPath: `structuredContent.item:${itemId}.degree`,
+              fieldKind: "heading",
+            },
+          );
+          break;
+        case "bullet": {
+          let parentItemId = request.parentItemId;
+          let parent = parentItemId
+            ? items.find(
+                (item) =>
+                  String((item as Record<string, unknown>).id ?? "") === parentItemId,
+              )
+            : undefined;
+          if (!parent && items.length > 0) {
+            parent = items[0];
+            parentItemId = String((parent as Record<string, unknown>).id ?? "");
+          }
+          if (!parentItemId) return;
+          const currentBullets = Array.isArray(parent?.responsibilityBullets)
+            ? (parent.responsibilityBullets as unknown[]).map((entry) =>
+                String(entry ?? ""),
+              )
+            : [];
+          const bulletIndex = currentBullets.length;
+          nextSection = updateStructuredItemBullet(
+            section,
+            parentItemId,
+            bulletIndex,
+            "",
+          );
+          nextTarget = {
+            sectionId: request.sectionId,
+            sectionType: "experience",
+            fieldPath: `structuredContent.item:${parentItemId}.responsibilityBullets.${bulletIndex}`,
+            fieldKind: "bullet",
+            bulletIndex,
+          };
+          break;
+        }
+      }
+
+      const savedSection = nextSection;
+      if (!savedSection || !nextTarget) return;
+      setPendingActiveSection(savedSection);
+      setActiveSectionId(request.sectionId);
+      setResumeActiveTarget(getSectionTarget(savedSection));
+      setSectionEditorOpen(false);
+      setInlineEditTarget(nextTarget);
+      setPendingFocusEditTarget(nextTarget);
+      persistSections(
+        currentSections.map((currentSection, index) =>
+          getCvSectionId(currentSection, index) === request.sectionId
+            ? savedSection
+            : currentSection,
+        ),
+      );
+    },
+    [currentSections, persistSections],
+  );
+
+  const resumeInlineEditing = React.useMemo<ResumeInlineEditing>(
+    () => ({
+      enabled: workspaceMode === "edit",
+      activeTarget: inlineEditTarget,
+      onActivate: (target) => {
+        setInlineEditTarget(target);
+        setActiveSectionId(target.sectionId);
+      },
+      onDeactivate: () => setInlineEditTarget(null),
+      onSummaryChange: handleInlineSummaryChange,
+      onTextSectionChange: handleInlineTextSectionChange,
+      onFieldChange: handleInlineFieldChange,
+      onAddItem: handleInlineAddItem,
+    }),
+    [
+      currentSections,
+      handleInlineAddItem,
+      handleInlineFieldChange,
+      handleInlineSummaryChange,
+      handleInlineTextSectionChange,
+      inlineEditTarget,
+      workspaceMode,
+    ],
+  );
+
+  React.useEffect(() => {
+    return () => {
+      if (inlinePaperSelectionDebounceRef.current !== null) {
+        window.clearTimeout(inlinePaperSelectionDebounceRef.current);
+      }
+    };
+  }, []);
+
+  const runInlinePaperSelectionCheck = React.useCallback(() => {
+    if (workspaceMode !== "edit" || isPrimaryPointerPressed()) {
+      return;
+    }
+
+    const root = paperStageRef.current;
+    const selectionState = getDomSelectionState(root);
+    const selection = typeof window !== "undefined" ? window.getSelection() : null;
+    const focusElement =
+      selection?.focusNode instanceof Element
+        ? selection.focusNode
+        : selection?.focusNode?.parentElement;
+    const editableElement = focusElement?.closest(
+      '[data-inline-paper-editable="true"]',
+    );
+    const editTarget = readInlinePaperEditTarget(editableElement);
+
+    if (!selectionState || !editTarget) {
+      if (isInlineAiToolbarActiveElement()) {
+        return;
+      }
+      setInlinePaperSelectionState(null);
+      return;
+    }
+
+    setInlinePaperSelectionState({
+      ...selectionState,
+      editTarget,
+    });
+  }, [workspaceMode]);
+
+  const scheduleInlinePaperSelectionCheck = React.useCallback(
+    (immediate = false) => {
+      if (inlinePaperSelectionDebounceRef.current !== null) {
+        window.clearTimeout(inlinePaperSelectionDebounceRef.current);
+      }
+
+      if (immediate) {
+        runInlinePaperSelectionCheck();
+        return;
+      }
+
+      inlinePaperSelectionDebounceRef.current = window.setTimeout(() => {
+        inlinePaperSelectionDebounceRef.current = null;
+        runInlinePaperSelectionCheck();
+      }, 90);
+    },
+    [runInlinePaperSelectionCheck],
+  );
+
+  React.useEffect(() => {
+    if (workspaceMode !== "edit") {
+      setInlinePaperSelectionState(null);
+      return undefined;
+    }
+
+    const handleSelectionChange = () => scheduleInlinePaperSelectionCheck();
+    const handlePointerUp = () => scheduleInlinePaperSelectionCheck();
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+    document.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+      document.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [scheduleInlinePaperSelectionCheck, workspaceMode]);
+
+  const handleRunInlinePaperAiAction = React.useCallback(
+    async (actionId: InlineAiActionId, instruction: string) => {
+      if (!inlinePaperSelectionState) return;
+      const selection = typeof window !== "undefined" ? window.getSelection() : null;
+      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        return;
+      }
+
+      const editableElement = (
+        selection.focusNode instanceof Element
+          ? selection.focusNode
+          : selection.focusNode?.parentElement
+      )?.closest('[data-inline-paper-editable="true"]') as HTMLElement | null;
+      if (!editableElement) return;
+
+      const interactionId = createAiInteractionId();
+      recordAiInteractionEvent({
+        name: "ai_started",
+        interactionId,
+        surface: "section_editor",
+        actionId,
+      });
+
+      try {
+        setPendingInlinePaperAiActionId(actionId);
+        setIsApplyingInlinePaperAi(true);
+        const result = await transformEditorSelectionAction({
+          mode: actionId,
+          instruction,
+          selectedText: inlinePaperSelectionState.text,
+        });
+        const normalizedResult = normalizeEditorAiTextResult(result, actionId);
+        if (!normalizedResult) {
+          recordAiInteractionEvent({
+            name: "ai_failed",
+            interactionId,
+            surface: "section_editor",
+            actionId,
+            errorKind: "empty_result",
+          });
+          return;
+        }
+
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const textNode = document.createTextNode(normalizedResult.text);
+        range.insertNode(textNode);
+        range.setStartAfter(textNode);
+        range.setEndAfter(textNode);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        handleInlineFieldChange(
+          inlinePaperSelectionState.editTarget,
+          editableElement.textContent ?? "",
+        );
+        setInlinePaperSelectionState(null);
+        recordAiInteractionEvent({
+          name: "ai_accepted",
+          interactionId,
+          surface: "section_editor",
+          actionId: normalizedResult.actionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: "single_text",
+        });
+      } catch (error) {
+        recordAiInteractionEvent({
+          name: "ai_failed",
+          interactionId,
+          surface: "section_editor",
+          actionId,
+          errorKind: "request_failed",
+        });
+        throw error;
+      } finally {
+        setIsApplyingInlinePaperAi(false);
+        setPendingInlinePaperAiActionId(null);
+      }
+    },
+    [
+      handleInlineFieldChange,
+      inlinePaperSelectionState,
+      transformEditorSelectionAction,
+    ],
+  );
+
   const handleAddSection = React.useCallback(
     (sectionKind: CvAddSectionKind) => {
       if (!currentCv) {
@@ -1409,10 +2407,15 @@ export function CvForge(): JSX.Element {
         sections: [...currentSections, nextSection],
       });
       const nextSectionId = String(nextSection.id);
+      const nextEditTarget = getInitialEditTargetForSection(nextSection);
       setPendingActiveSection(nextSection);
       setActiveSectionId(nextSectionId);
       setResumeActiveTarget(getSectionTarget(nextSection));
-      setSectionEditorOpen(true);
+      setSectionEditorOpen(false);
+      if (nextEditTarget) {
+        setInlineEditTarget(nextEditTarget);
+        setPendingFocusEditTarget(nextEditTarget);
+      }
       window.requestAnimationFrame(() => focusPreviewSection(nextSectionId));
     },
     [currentCv, currentSections, importCv, showToast],
@@ -1811,7 +2814,7 @@ export function CvForge(): JSX.Element {
             surface: "section_editor",
             actionId: "custom",
             applyMode: "preview_required",
-            outputMode: "replace_selection",
+            outputMode: "single_text",
           });
           setCvRailAiSuggestion({
             sectionId,
@@ -1859,7 +2862,7 @@ export function CvForge(): JSX.Element {
           surface: "section_editor",
           actionId: "custom",
           applyMode: "preview_required",
-          outputMode: "replace_selection",
+          outputMode: "single_text",
         });
         setCvRailAiSuggestion({
           sectionId,
@@ -2261,10 +3264,24 @@ export function CvForge(): JSX.Element {
                   </div>
                 ) : (
                   <div
+                    ref={paperStageRef}
                     className={
                       workspaceMode === "preview"
                         ? "dasti-cv-paper-stage dasti-cv-page-preview-stage"
                         : "dasti-cv-paper-stage"
+                    }
+                    data-cv-workspace-mode={workspaceMode}
+                    data-active-paper-edit-section-id={
+                      inlineEditTarget?.sectionId
+                    }
+                    data-active-paper-edit-section-type={
+                      inlineEditTarget?.sectionType
+                    }
+                    data-active-paper-edit-field-path={
+                      inlineEditTarget?.fieldPath
+                    }
+                    data-active-paper-edit-field-kind={
+                      inlineEditTarget?.fieldKind
                     }
                   >
                     <VerbatiResumePreview
@@ -2274,7 +3291,18 @@ export function CvForge(): JSX.Element {
                       scrollMode="natural"
                       activeTarget={resumeActiveTarget}
                       onLinkIntent={handleResumeLinkIntent}
+                      inlineEditing={resumeInlineEditing}
                     />
+                    {inlinePaperSelectionState ? (
+                      <FloatingAiToolbar
+                        open
+                        anchor={inlinePaperSelectionState.anchor}
+                        isLoading={isApplyingInlinePaperAi}
+                        pendingActionId={pendingInlinePaperAiActionId}
+                        onClose={() => setInlinePaperSelectionState(null)}
+                        onRunAction={handleRunInlinePaperAiAction}
+                      />
+                    ) : null}
                   </div>
                 )}
               </div>

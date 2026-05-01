@@ -18,6 +18,7 @@ import type { VerbatiStylePreset } from "../types";
 import { buildVerbatiThemeVars } from "../style";
 import ResumeOneColAtsPage from "./ResumeOneColAtsPage";
 import type { ResumeData } from "./resume.types";
+import type { ResumeInlineEditing } from "./InlineEditableText";
 
 export const WORKSHOP_TEMPLATE_RENDERER_ID = "workshop_resume_onecol_ats";
 export const RESUME_TEMPLATE_PAGE_GAP_PX = 24;
@@ -83,6 +84,7 @@ type ResumeTemplateRendererProps = {
   resumeTemplateId: ResumeTemplateId;
   committedPages?: WorkshopResumeCommittedPage[];
   activeTarget?: ResumeActiveTarget | null;
+  inlineEditing?: ResumeInlineEditing | null;
   stageLayout?: DocumentStageLayout;
   onStablePageCountChange?: ((pageCount: number) => void) | undefined;
 };
@@ -140,6 +142,7 @@ export function ResumeTemplateRenderer({
   resumeTemplateId,
   committedPages,
   activeTarget = null,
+  inlineEditing = null,
   stageLayout,
   onStablePageCountChange,
 }: ResumeTemplateRendererProps) {
@@ -266,6 +269,7 @@ export function ResumeTemplateRenderer({
               page={page}
               template={templateDefinition}
               activeTarget={activeTarget}
+              inlineEditing={inlineEditing}
             />
           </div>
         </div>

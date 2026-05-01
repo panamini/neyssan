@@ -366,7 +366,7 @@ describe("mapCvDocumentToResumeData", () => {
         sectionOrder: 0,
         role: "Operations Lead",
         company: "Northline Studio",
-        period: "Dates not set",
+        period: "",
         location: "Paris",
         description:
           "Owned the operating cadence and introduced a clearer delivery rhythm across the team.",
@@ -573,6 +573,45 @@ describe("mapCvDocumentToResumeData", () => {
     ]);
   });
 
+  it("keeps cached responsibility bullets when an empty responsibilities field is present", () => {
+    const doc: CvDocument = {
+      id: "cv-inline-bullets",
+      title: "Platform Lead",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "experience",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "exp-inline",
+              company: "Northline",
+              position: "Platform Lead",
+              responsibilities: "",
+              responsibilityBullets: ["Kept bullets after editing the title."],
+            },
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.experience[0]).toEqual(
+      expect.objectContaining({
+        id: "exp-inline",
+        role: "Platform Lead",
+        bullets: ["Kept bullets after editing the title."],
+      }),
+    );
+  });
+
   it("keeps paragraph-backed remirror responsibilities in the prose channel", () => {
     const doc: CvDocument = {
       id: "cv-4",
@@ -617,7 +656,7 @@ describe("mapCvDocumentToResumeData", () => {
         role: "Operations Lead",
         company: "Northline",
         period: "2023 — Present",
-        location: "Location not set",
+        location: "",
         description: "Led cross-functional delivery rituals. Reduced export QA churn by 42%.",
         bullets: [],
         responsibilitiesRich: {

@@ -328,6 +328,7 @@ export function SectionEditorSheet({
   const [isSummaryAiLoading, setIsSummaryAiLoading] = React.useState(false);
   const [newPillValue, setNewPillValue] = React.useState("");
   const latestSectionRef = React.useRef(section);
+  const openedSectionRef = React.useRef<CvSection | null>(section);
   const loadedDraftKeyRef = React.useRef<string | null>(null);
   const previousOpenRef = React.useRef(open);
   const pillInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -358,6 +359,7 @@ export function SectionEditorSheet({
 
     if (!wasOpen || loadedDraftKeyRef.current !== sectionDraftKey) {
       loadedDraftKeyRef.current = sectionDraftKey;
+      openedSectionRef.current = latestSectionRef.current;
       setDraftSection(latestSectionRef.current);
       resetAiState();
     }
@@ -377,13 +379,16 @@ export function SectionEditorSheet({
     options?: { preserveAcceptedAi?: boolean },
   ) {
     setDraftSection(nextSection);
+    onSave?.(sanitizeSectionForSave(nextSection));
     if (!options?.preserveAcceptedAi) {
       setAcceptedAiEdit(null);
     }
   }
 
   function closeAndDiscard() {
-    setDraftSection(section);
+    const restoredSection = openedSectionRef.current ?? section;
+    setDraftSection(restoredSection);
+    onSave?.(sanitizeSectionForSave(restoredSection));
     setFieldAiSuggestion(null);
     setSummaryAiSuggestion(null);
     setAcceptedAiEdit(null);
@@ -1556,7 +1561,7 @@ export function SectionEditorSheet({
           onOpenChange(true);
           return;
         }
-        closeAndDiscard();
+        saveAndClose();
       }}
       title={title}
       description={getSectionHelper(section)}
