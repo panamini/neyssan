@@ -601,6 +601,7 @@ function PaperRichInlineEditor(args: {
   editTarget: ActivePaperEditTarget;
   editable: boolean;
   ariaLabel: string;
+  placeholder?: string;
   onActivate?: (target: ActivePaperEditTarget) => void;
   onDeactivate?: (target?: ActivePaperEditTarget) => void;
   onDocChange?: (target: ActivePaperEditTarget, doc: RemirrorJSON) => void;
@@ -680,6 +681,7 @@ function PaperRichInlineEditor(args: {
       data-paper-item-index={args.editTarget.itemIndex}
       data-paper-bullet-index={args.editTarget.bulletIndex}
       data-paper-chip-index={args.editTarget.chipIndex}
+      data-placeholder={args.placeholder}
       className="paper-rich-inline-editor"
       style={args.style}
       onFocusCapture={() => {
@@ -789,48 +791,6 @@ function responsibilitiesRichHasPartialContent(
   });
 }
 
-function responsibilitiesRichNeedsBodyEditor(
-  rich:
-    | WorkshopResponsibilitiesRichContent
-    | WorkshopCommittedResponsibilitiesRichContent,
-) {
-  let hasParagraph = false;
-  let hasBulletList = false;
-  let hasEmptyBodyItem = false;
-  let hasTextMarks = false;
-
-  rich.blocks.forEach((block) => {
-    if (block.kind === "paragraph") {
-      hasParagraph = true;
-      const text = block.runs.map((run) => run.text).join("").trim();
-      if (!text) {
-        hasEmptyBodyItem = true;
-      }
-      hasTextMarks = hasTextMarks || block.runs.some(
-        (run) => run.bold === true || run.italic === true || run.underline === true,
-      );
-      return;
-    }
-
-    hasBulletList = true;
-    block.items.forEach((item) => {
-      const text = item.runs.map((run) => run.text).join("").trim();
-      if (!text) {
-        hasEmptyBodyItem = true;
-      }
-      hasTextMarks = hasTextMarks || item.runs.some(
-        (run) => run.bold === true || run.italic === true || run.underline === true,
-      );
-    });
-  });
-
-  if (hasEmptyBodyItem) {
-    return false;
-  }
-
-  return hasTextMarks || (hasParagraph && hasBulletList);
-}
-
 function renderExperienceContent(args: {
   item: {
     id?: string;
@@ -849,7 +809,6 @@ function renderExperienceContent(args: {
     if (
       rich &&
       rich.blocks.length > 0 &&
-      responsibilitiesRichNeedsBodyEditor(rich) &&
       !args.item.blocks.some((block) => block.partial === true) &&
       !responsibilitiesRichHasPartialContent(rich)
     ) {
@@ -880,6 +839,7 @@ function renderExperienceContent(args: {
           onDeactivate={args.inlineEditing?.onDeactivate}
           onDocChange={args.inlineEditing?.onFieldDocChange}
           ariaLabel="Edit experience responsibilities"
+          placeholder="Type responsibilities..."
           previewAttrs={buildPreviewRegionAttrs({
             sectionType: args.sectionType,
             sectionId: args.sectionId,
