@@ -2,6 +2,7 @@ import { formatByPrecision, formatRangeFromItem } from "../../lib/date-utils";
 import {
   deriveResponsibilityBullets,
   projectResponsibilitiesForWorkshop,
+  projectRichTextForWorkshop,
 } from "../../lib/resumeResponsibilityAuthority";
 import { remirrorJsonToString } from "../../lib/utils";
 import type { RemirrorJSON } from "remirror";
@@ -550,7 +551,15 @@ function mapProjects(
     .map((item, index) => {
       const name = String(item.name ?? item.title ?? "").trim();
       const meta = String(item.meta ?? item.subtitle ?? "").trim();
-      const description = toPlainText(item.description ?? item.summary);
+      const descriptionSource = item.description ?? item.summary;
+      const descriptionProjection = projectRichTextForWorkshop(descriptionSource);
+      const description = [
+        descriptionProjection.prose,
+        ...descriptionProjection.bullets,
+      ]
+        .filter(Boolean)
+        .join("\n") || toPlainText(descriptionSource);
+      const descriptionRich = descriptionProjection.rich;
 
       if (!options.includeDrafts && !name && !description) {
         return null;
@@ -569,6 +578,7 @@ function mapProjects(
         name,
         meta,
         description,
+        ...(descriptionRich.blocks.length > 0 ? { descriptionRich } : {}),
       };
     })
     .filter((item): item is ResumeProjectItem => item !== null);

@@ -14,6 +14,8 @@ export type WorkshopResponsibilityProjection = {
   rich: WorkshopResponsibilitiesRichContent;
 };
 
+export type WorkshopRichTextProjection = WorkshopResponsibilityProjection;
+
 function isRemirrorLike(value: unknown): value is RemirrorJSON {
   return Boolean(
     value &&
@@ -417,9 +419,9 @@ function projectStringResponsibilities(
   return projectionFromRichContent(projectStringToRichContent(value));
 }
 
-export function projectResponsibilitiesForWorkshop(
+export function projectRichTextForWorkshop(
   value: unknown,
-): WorkshopResponsibilityProjection {
+): WorkshopRichTextProjection {
   const source = toResponsibilitySource(value);
 
   if (Array.isArray(source)) {
@@ -439,6 +441,12 @@ export function projectResponsibilitiesForWorkshop(
     bullets: [],
     rich: { blocks: [] },
   };
+}
+
+export function projectResponsibilitiesForWorkshop(
+  value: unknown,
+): WorkshopResponsibilityProjection {
+  return projectRichTextForWorkshop(value);
 }
 
 export function responsibilityValueToPlainText(value: unknown): string {

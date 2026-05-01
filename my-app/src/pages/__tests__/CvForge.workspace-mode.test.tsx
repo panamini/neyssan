@@ -210,11 +210,24 @@ vi.mock("../../lib/buildCanonicalResumeRenderModel", () => ({
         sectionOrder: index,
         text: readMockPlainText(section.blocks?.[0]?.plainText ?? section.blocks?.[0]?.content),
       }));
+    const projectsSection = sections.find((section) => section.type === "projects");
+    const projects = Array.isArray(projectsSection?.structuredContent)
+      ? projectsSection.structuredContent.map((item: Record<string, unknown>) => ({
+          id: String(item.id ?? "project"),
+          sectionId: String(projectsSection?.id ?? "projects-cv_123"),
+          sectionType: "projects",
+          name: String(item.title ?? item.name ?? ""),
+          meta: String(item.meta ?? item.subtitle ?? ""),
+          description: readMockPlainText(item.description ?? item.summary),
+          descriptionRich: item.description,
+        }))
+      : [];
 
     return {
       name: "Ada Lovelace",
       title: "Product Designer",
       summary: readMockPlainText(summaryItem?.summary),
+      summaryRich: summaryItem?.summary,
       summarySectionId: String(summarySection?.id ?? "summary-cv_123"),
       contact,
       metadata: [],
@@ -247,7 +260,7 @@ vi.mock("../../lib/buildCanonicalResumeRenderModel", () => ({
           sectionType: "skills",
         },
       ],
-      projects: [],
+      projects,
       certifications: [
         {
           id: "cert-cv_123",
@@ -303,6 +316,7 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
   }: {
     data?: {
       summary?: string;
+      summaryRich?: any;
       summarySectionId?: string;
       textSections?: Array<{
         id: string;
@@ -320,6 +334,15 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
       }>;
       experience?: Array<{ role: string }>;
       education?: Array<{ degree: string }>;
+      projects?: Array<{
+        id: string;
+        sectionId: string;
+        sectionType: string;
+        name: string;
+        meta: string;
+        description: string;
+        descriptionRich?: any;
+      }>;
       skillItems?: Array<{ name: string }>;
       languages?: Array<{ name: string }>;
       hobbyItems?: Array<{ name: string }>;
@@ -403,6 +426,24 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
       fieldKind: "paragraph" as const,
     };
     const isSummaryEditable = Boolean(inlineEditing?.enabled);
+    const hasMark = (value: unknown, markType: string): boolean => {
+      if (!value || typeof value !== "object") return false;
+      const record = value as Record<string, any>;
+      if (Array.isArray(record.marks) && record.marks.some((mark: any) => mark?.type === markType)) {
+        return true;
+      }
+      return Array.isArray(record.content)
+        ? record.content.some((entry: unknown) => hasMark(entry, markType))
+        : false;
+    };
+    const hasNode = (value: unknown, nodeType: string): boolean => {
+      if (!value || typeof value !== "object") return false;
+      const record = value as Record<string, any>;
+      if (record.type === nodeType) return true;
+      return Array.isArray(record.content)
+        ? record.content.some((entry: unknown) => hasNode(entry, nodeType))
+        : false;
+    };
 
     return (
     <div>
@@ -483,8 +524,31 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
           }
         }
       >
-        {data?.summary ?? ""}
+        {hasMark(data?.summaryRich, "bold") ? (
+          <strong data-testid="paper-summary-rich-bold">{data?.summary ?? ""}</strong>
+        ) : (
+          data?.summary ?? ""
+        )}
       </p>
+      {(data?.projects ?? []).map((project) => (
+        <div key={project.id} data-testid={`paper-project-${project.id}`}>
+          <p>{project.name}</p>
+          <p data-testid={`paper-project-description-${project.id}`}>
+            {hasMark(project.descriptionRich, "bold") ? (
+              <strong data-testid={`paper-project-rich-bold-${project.id}`}>
+                {project.description}
+              </strong>
+            ) : (
+              project.description
+            )}
+          </p>
+          {hasNode(project.descriptionRich, "bulletList") ? (
+            <ul data-testid={`paper-project-rich-bullets-${project.id}`}>
+              <li>{project.description}</li>
+            </ul>
+          ) : null}
+        </div>
+      ))}
       {(data?.textSections ?? []).map((section) => (
         (() => {
           const textEditTarget = {
@@ -957,6 +1021,44 @@ function paragraphDoc(text: string) {
   };
 }
 
+function richParagraphDoc(text: string, markType = "bold") {
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: text
+          ? [{ type: "text", marks: [{ type: markType }], text }]
+          : [],
+      },
+    ],
+  };
+}
+
+function richBulletDoc(text: string, markType = "bold") {
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "bulletList",
+        content: [
+          {
+            type: "listItem",
+            content: [
+              {
+                type: "paragraph",
+                content: text
+                  ? [{ type: "text", marks: [{ type: markType }], text }]
+                  : [],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function mixedResponsibilityDoc(paragraph: string, bullets: string[]) {
   return {
     type: "doc",
@@ -1006,6 +1108,42 @@ function getLastSavedExperienceItem(importCv: ReturnType<typeof vi.fn>) {
     (section: any) => section.id === "experience-cv_123",
   );
   return experienceSection?.structuredContent?.[0] as any;
+}
+
+function getLastSavedSummaryItem(importCv: ReturnType<typeof vi.fn>) {
+  const savedCv = importCv.mock.calls.at(-1)?.[0] as any;
+  const summarySection = savedCv?.sections?.find(
+    (section: any) => section.id === "summary-cv_123",
+  );
+  return summarySection?.structuredContent?.[0] as any;
+}
+
+function getLastSavedProjectItem(importCv: ReturnType<typeof vi.fn>) {
+  const savedCv = importCv.mock.calls.at(-1)?.[0] as any;
+  const projectSection = savedCv?.sections?.find(
+    (section: any) => section.id === "projects-cv_123",
+  );
+  return projectSection?.structuredContent?.[0] as any;
+}
+
+function docHasMark(value: unknown, markType: string): boolean {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, any>;
+  if (Array.isArray(record.marks) && record.marks.some((mark) => mark?.type === markType)) {
+    return true;
+  }
+  return Array.isArray(record.content)
+    ? record.content.some((entry) => docHasMark(entry, markType))
+    : false;
+}
+
+function docHasNode(value: unknown, nodeType: string): boolean {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, any>;
+  if (record.type === nodeType) return true;
+  return Array.isArray(record.content)
+    ? record.content.some((entry) => docHasNode(entry, nodeType))
+    : false;
 }
 
 describe("CvForge workspace mode", () => {
@@ -2325,6 +2463,279 @@ describe("CvForge workspace mode", () => {
     expect(document.querySelector("[data-inline-ai-toolbar='true']")).toBeNull();
   });
 
+  it("renders project descriptions in the drawer Remirror editor without responsibility caches", async () => {
+    const user = userEvent.setup();
+    const state = buildCvLibraryState();
+    const projectItem = {
+      id: "project-item-cv_123",
+      title: "CV Forge",
+      meta: "React",
+      description: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              {
+                type: "text",
+                marks: [{ type: "bold" }],
+                text: "Built a reusable CV forge.",
+              },
+            ],
+          },
+          {
+            type: "bulletList",
+            content: [
+              {
+                type: "listItem",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: "Ships fast." }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+    useCvLibraryMock.mockReturnValue({
+      ...state,
+      currentCv: {
+        ...state.currentCv,
+        sections: [
+          ...state.currentCv.sections,
+          {
+            id: "projects-cv_123",
+            type: "projects",
+            title: "Projects",
+            blocks: [],
+            structuredContent: [projectItem],
+          },
+        ],
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open Projects item editor" }));
+
+    const descriptionEditor = screen.getByTestId("drawer-rich-editor-project-description-0");
+    expect(descriptionEditor.querySelector("textarea")).toBeNull();
+    expect(descriptionEditor.querySelector(".ProseMirror")).toBeTruthy();
+    expect(descriptionEditor).toHaveTextContent("Built a reusable CV forge.");
+    expect(descriptionEditor).toHaveTextContent("Ships fast.");
+    expect(within(descriptionEditor).getByRole("button", { name: "Toggle bold" })).toBeInTheDocument();
+    expect(within(descriptionEditor).getByRole("button", { name: "Toggle italic" })).toBeInTheDocument();
+    expect(within(descriptionEditor).getByRole("button", { name: "Toggle underline" })).toBeInTheDocument();
+    expect(within(descriptionEditor).getByRole("button", { name: "Toggle bullet list" })).toBeInTheDocument();
+    expect(projectItem).not.toHaveProperty("responsibilityBullets");
+  });
+
+  it("flushes Summary drawer rich JSON to the page on click-away", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    const state = buildCvLibraryState({ importCv });
+    const currentCv = {
+      ...state.currentCv,
+      sections: state.currentCv.sections.map((section: any) =>
+        section.id === "summary-cv_123"
+          ? {
+              ...section,
+              structuredContent: [
+                {
+                  id: "summary-item-cv_123",
+                  summary: richParagraphDoc("Focused builder."),
+                },
+              ],
+            }
+          : section,
+      ),
+    };
+    useCvLibraryMock.mockReturnValue({ ...state, currentCv, cvs: [currentCv] });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    expect(screen.getByTestId("drawer-rich-editor-summary")).toHaveTextContent(
+      "Focused builder.",
+    );
+    await user.click(screen.getByLabelText("Close panel"));
+
+    await waitFor(() => expect(importCv).toHaveBeenCalled());
+    const saved = getLastSavedSummaryItem(importCv);
+    expect(saved.summary).toMatchObject({ type: "doc" });
+    expect(docHasMark(saved.summary, "bold")).toBe(true);
+    expect(screen.getByTestId("paper-summary-rich-bold")).toBeInTheDocument();
+  });
+
+  it("flushes Project drawer rich JSON to the page on click-away without responsibility caches", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    const state = buildCvLibraryState({ importCv });
+    const currentCv = {
+      ...state.currentCv,
+      sections: [
+        ...state.currentCv.sections,
+        {
+          id: "projects-cv_123",
+          type: "projects",
+          title: "Projects",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "project-item-cv_123",
+              title: "CV Forge",
+              meta: "React",
+              description: richBulletDoc("Project bullet"),
+            },
+          ],
+        },
+      ],
+    };
+    useCvLibraryMock.mockReturnValue({
+      ...state,
+      currentCv,
+      cvs: [currentCv],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open Projects item editor" }));
+    expect(screen.getByTestId("drawer-rich-editor-project-description-0")).toHaveTextContent(
+      "Project bullet",
+    );
+    await user.click(screen.getByLabelText("Close panel"));
+
+    await waitFor(() => expect(importCv).toHaveBeenCalled());
+    const saved = getLastSavedProjectItem(importCv);
+    expect(saved.description).toMatchObject({ type: "doc" });
+    expect(docHasMark(saved.description, "bold")).toBe(true);
+    expect(docHasNode(saved.description, "bulletList")).toBe(true);
+    expect(saved).not.toHaveProperty("responsibilityBullets");
+    expect(JSON.stringify(saved.description)).not.toMatch(/<\/?[a-z][\s\S]*>/i);
+    expect(screen.getByTestId("paper-project-rich-bold-project-item-cv_123")).toBeInTheDocument();
+    expect(screen.getByTestId("paper-project-rich-bullets-project-item-cv_123")).toBeInTheDocument();
+  });
+
+  it("keeps Experience responsibility drawer click-away behavior intact", async () => {
+    const user = userEvent.setup();
+    const { state, importCv } = buildStateWithExperienceItem({
+      id: "experience-item-cv_123",
+      position: "Lead designer",
+      company: "Studio",
+      responsibilities: richParagraphDoc("Led product design."),
+    });
+    useCvLibraryMock.mockReturnValue(state);
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Experience$/i }));
+    expect(
+      screen.getByTestId("drawer-rich-editor-experience-responsibilities-0"),
+    ).toHaveTextContent("Led product design.");
+    await user.click(screen.getByLabelText("Close panel"));
+
+    await waitFor(() => expect(importCv).toHaveBeenCalled());
+    const saved = getLastSavedExperienceItem(importCv);
+    expect(saved.responsibilities).toMatchObject({ type: "doc" });
+    expect(docHasMark(saved.responsibilities, "bold")).toBe(true);
+  });
+
+  it("flushes Summary and Project rich JSON on explicit Save", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    const state = buildCvLibraryState({ importCv });
+    const currentCv = {
+      ...state.currentCv,
+      sections: [
+        ...state.currentCv.sections.map((section: any) =>
+          section.id === "summary-cv_123"
+            ? {
+                ...section,
+                structuredContent: [
+                  {
+                    id: "summary-item-cv_123",
+                    summary: richParagraphDoc("Saved summary"),
+                  },
+                ],
+              }
+            : section,
+        ),
+        {
+          id: "projects-cv_123",
+          type: "projects",
+          title: "Projects",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "project-item-cv_123",
+              title: "CV Forge",
+              meta: "React",
+              description: richParagraphDoc("Saved project"),
+            },
+          ],
+        },
+      ],
+    };
+    useCvLibraryMock.mockReturnValue({ ...state, currentCv, cvs: [currentCv] });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(importCv).toHaveBeenCalled());
+    expect(docHasMark(getLastSavedSummaryItem(importCv).summary, "bold")).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "Open Projects item editor" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(docHasMark(getLastSavedProjectItem(importCv).description, "bold")).toBe(true),
+    );
+  });
+
+  it("discard still reverts Summary drawer rich edits", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(importCv).toHaveBeenCalled());
+    const saved = getLastSavedSummaryItem(importCv);
+    expect(saved.summary).toBe("Focused builder.");
+  });
+
   it("keeps long typed section edits in the draft before save", async () => {
     const user = userEvent.setup();
     const importCv = vi.fn(async () => undefined);
@@ -2837,7 +3248,7 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: "Accept" }));
 
-    expect(screen.getByLabelText("Description 1")).toHaveValue(
+    expect(screen.getByLabelText("Description 1")).toHaveTextContent(
       "Built a sharper CV forge.",
     );
   });

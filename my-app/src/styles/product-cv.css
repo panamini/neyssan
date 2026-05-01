@@ -2672,6 +2672,16 @@
   margin: 0;
 }
 
+.paper-rich-inline-editor .ProseMirror ul {
+  margin: 0;
+  padding-left: var(--flow-list-indent);
+  list-style: disc outside;
+}
+
+.paper-rich-inline-editor .ProseMirror li {
+  margin: 0;
+}
+
 .dasti-rich--cv-reading-measure .ProseMirror,
 .rich-content--cv-reading-measure .ProseMirror {
   max-inline-size: min(100%, var(--cv-editor-reading-measure-max));

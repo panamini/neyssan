@@ -3,9 +3,11 @@ import { Remirror, useRemirror, EditorComponent } from "@remirror/react";
 import type { RemirrorJSON } from "remirror";
 import {
   BoldExtension,
+  BulletListExtension,
   HardBreakExtension,
   HistoryExtension,
   ItalicExtension,
+  ListItemExtension,
   ParagraphExtension,
   UnderlineExtension,
 } from "remirror/extensions";
@@ -613,6 +615,8 @@ function PaperRichInlineEditor(args: {
       new BoldExtension({}),
       new ItalicExtension({}),
       new UnderlineExtension({}),
+      new BulletListExtension({}),
+      new ListItemExtension({}),
     ],
     [],
   );
@@ -2024,33 +2028,64 @@ function renderFragmentContent(args: {
               })
             ) : null}
           </PreviewItemRegion>
-          {renderInlineField({
-            value: item.description,
-            editable: Boolean(inlineEditing?.enabled),
-            inlineEditing,
-            editTarget: {
-              sectionId: fragment.sectionId ?? "",
-              sectionType: "projects",
-              fieldPath: `structuredContent.item:${item.id}.description`,
-              fieldKind: "paragraph",
-            },
-            ariaLabel: "Edit project description",
-            placeholder: "Type an impact note...",
-            previewAttrs: buildPreviewRegionAttrs({
-              sectionType: "selected_projects",
-              sectionId: fragment.sectionId,
-              sectionTitle: fragment.title ?? "Selected projects",
-              itemId: buildProjectPreviewFieldId(item.id, "description"),
-              activeTarget,
-              surface: "item",
-            }),
-            preservePreviewItemId: true,
-            style: {
-              margin: 0,
-              fontSize: workshopBodyFontSize,
-              lineHeight: "var(--text-body-line)",
-            },
-          })}
+          {item.descriptionRich ? (
+            <PaperRichInlineEditor
+              value={item.description}
+              rich={item.descriptionRich}
+              editable={Boolean(inlineEditing?.enabled)}
+              editTarget={{
+                sectionId: fragment.sectionId ?? "",
+                sectionType: "projects",
+                fieldPath: `structuredContent.item:${item.id}.description`,
+                fieldKind: "paragraph",
+              }}
+              onActivate={(target) => inlineEditing?.onActivate(target)}
+              onDeactivate={inlineEditing?.onDeactivate}
+              onDocChange={inlineEditing?.onFieldDocChange}
+              ariaLabel="Edit project description"
+              previewAttrs={buildPreviewRegionAttrs({
+                sectionType: "selected_projects",
+                sectionId: fragment.sectionId,
+                sectionTitle: fragment.title ?? "Selected projects",
+                itemId: buildProjectPreviewFieldId(item.id, "description"),
+                activeTarget,
+                surface: "item",
+              })}
+              style={{
+                margin: 0,
+                fontSize: workshopBodyFontSize,
+                lineHeight: "var(--text-body-line)",
+              }}
+            />
+          ) : (
+            renderInlineField({
+              value: item.description,
+              editable: Boolean(inlineEditing?.enabled),
+              inlineEditing,
+              editTarget: {
+                sectionId: fragment.sectionId ?? "",
+                sectionType: "projects",
+                fieldPath: `structuredContent.item:${item.id}.description`,
+                fieldKind: "paragraph",
+              },
+              ariaLabel: "Edit project description",
+              placeholder: "Type an impact note...",
+              previewAttrs: buildPreviewRegionAttrs({
+                sectionType: "selected_projects",
+                sectionId: fragment.sectionId,
+                sectionTitle: fragment.title ?? "Selected projects",
+                itemId: buildProjectPreviewFieldId(item.id, "description"),
+                activeTarget,
+                surface: "item",
+              }),
+              preservePreviewItemId: true,
+              style: {
+                margin: 0,
+                fontSize: workshopBodyFontSize,
+                lineHeight: "var(--text-body-line)",
+              },
+            })
+          )}
         </article>
         )),
         <div key={`${fragment.fragmentId}:add-project`}>

@@ -502,6 +502,93 @@ describe("mapCvDocumentToResumeData", () => {
     expect(mapped.summarySectionId).toBeUndefined();
   });
 
+  it("maps project rich descriptions without responsibility caches or HTML", () => {
+    const doc = {
+      id: "cv-project-rich",
+      title: "Project rich",
+      metadata: {
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "projects",
+          title: "Projects",
+          type: "projects",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "project-1",
+              title: "CV Forge",
+              meta: "React",
+              description: {
+                type: "doc",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [
+                      {
+                        type: "text",
+                        marks: [{ type: "bold" }, { type: "underline" }],
+                        text: "Rich project paragraph",
+                      },
+                    ],
+                  },
+                  {
+                    type: "bulletList",
+                    content: [
+                      {
+                        type: "listItem",
+                        content: [
+                          {
+                            type: "paragraph",
+                            content: [
+                              {
+                                type: "text",
+                                marks: [{ type: "italic" }],
+                                text: "Rich project bullet",
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    } as any;
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.projects[0]).toMatchObject({
+      id: "project-1",
+      description: "Rich project paragraph\nRich project bullet",
+      descriptionRich: {
+        blocks: [
+          {
+            kind: "paragraph",
+            runs: [
+              { text: "Rich project paragraph", bold: true, underline: true },
+            ],
+          },
+          {
+            kind: "bullet_list",
+            items: [
+              { runs: [{ text: "Rich project bullet", italic: true }] },
+            ],
+          },
+        ],
+      },
+    });
+    expect(mapped.projects[0]).not.toHaveProperty("responsibilityBullets");
+    expect(JSON.stringify(mapped.projects[0])).not.toMatch(/<\/?[a-z][\s\S]*>/i);
+  });
+
   it("projects remirror responsibilities into separate prose and bullet channels", () => {
     const doc: CvDocument = {
       id: "cv-3",

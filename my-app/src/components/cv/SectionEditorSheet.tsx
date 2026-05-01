@@ -109,6 +109,7 @@ type DrawerRichTextEditorProps = {
   testId: string;
   showLists?: boolean;
   onChangeDoc: (doc: RemirrorJSON) => void;
+  onRegisterFlush?: (key: string, flush: () => boolean) => () => void;
 };
 
 function DrawerRichTextEditor({
@@ -117,6 +118,7 @@ function DrawerRichTextEditor({
   testId,
   showLists = true,
   onChangeDoc,
+  onRegisterFlush,
 }: DrawerRichTextEditorProps) {
   const extensions = React.useMemo(
     () => [
@@ -139,6 +141,7 @@ function DrawerRichTextEditor({
     [],
   );
   const latestDocRef = React.useRef<RemirrorJSON>(initialContent as RemirrorJSON);
+  const lastCommittedDocJsonRef = React.useRef(JSON.stringify(initialContent));
   const lastExternalDocJsonRef = React.useRef(JSON.stringify(initialContent));
   const isFocusedRef = React.useRef(false);
   const { manager, state, onChange } = useRemirror({
@@ -157,6 +160,7 @@ function DrawerRichTextEditor({
     if (nextState && typeof view?.updateState === "function") {
       view.updateState(nextState);
       latestDocRef.current = nextDoc;
+      lastCommittedDocJsonRef.current = nextJson;
     }
   }, [manager, value]);
 
@@ -173,8 +177,18 @@ function DrawerRichTextEditor({
   );
 
   const commitLatestDoc = React.useCallback(() => {
+    const nextJson = JSON.stringify(latestDocRef.current);
+    if (nextJson === lastCommittedDocJsonRef.current) return false;
+    lastCommittedDocJsonRef.current = nextJson;
+    lastExternalDocJsonRef.current = nextJson;
     onChangeDoc(latestDocRef.current);
+    return true;
   }, [onChangeDoc]);
+
+  React.useEffect(() => {
+    if (!onRegisterFlush) return undefined;
+    return onRegisterFlush(testId, commitLatestDoc);
+  }, [commitLatestDoc, onRegisterFlush, testId]);
 
   return (
     <div
@@ -457,12 +471,14 @@ export function SectionEditorSheet({
   const [isSummaryAiLoading, setIsSummaryAiLoading] = React.useState(false);
   const [newPillValue, setNewPillValue] = React.useState("");
   const latestSectionRef = React.useRef(section);
+  const draftSectionRef = React.useRef<CvSection | null>(section);
   const openedSectionRef = React.useRef<CvSection | null>(section);
   const loadedDraftKeyRef = React.useRef<string | null>(null);
   const previousOpenRef = React.useRef(open);
   const pillInputRef = React.useRef<HTMLInputElement | null>(null);
   const autosaveTimerRef = React.useRef<number | null>(null);
   const pendingAutosaveSectionRef = React.useRef<CvSection | null>(null);
+  const richEditorFlushersRef = React.useRef(new Map<string, () => boolean>());
 
   latestSectionRef.current = section;
 
@@ -491,6 +507,24 @@ export function SectionEditorSheet({
     pendingAutosaveSectionRef.current = null;
   }
 
+  const registerDrawerRichEditorFlush = React.useCallback(
+    (key: string, flush: () => boolean) => {
+      richEditorFlushersRef.current.set(key, flush);
+      return () => {
+        if (richEditorFlushersRef.current.get(key) === flush) {
+          richEditorFlushersRef.current.delete(key);
+        }
+      };
+    },
+    [],
+  );
+
+  function flushDrawerRichEditors() {
+    for (const flush of richEditorFlushersRef.current.values()) {
+      flush();
+    }
+  }
+
   React.useEffect(() => () => clearAutosaveTimer(), []);
 
   React.useEffect(() => {
@@ -499,6 +533,7 @@ export function SectionEditorSheet({
 
     if (!open) {
       loadedDraftKeyRef.current = null;
+      draftSectionRef.current = latestSectionRef.current;
       setDraftSection(latestSectionRef.current);
       resetAiState();
       return;
@@ -507,6 +542,7 @@ export function SectionEditorSheet({
     if (!wasOpen || loadedDraftKeyRef.current !== sectionDraftKey) {
       loadedDraftKeyRef.current = sectionDraftKey;
       openedSectionRef.current = latestSectionRef.current;
+      draftSectionRef.current = latestSectionRef.current;
       setDraftSection(latestSectionRef.current);
       resetAiState();
     }
@@ -525,6 +561,7 @@ export function SectionEditorSheet({
     nextSection: CvSection,
     options?: { preserveAcceptedAi?: boolean },
   ) {
+    draftSectionRef.current = nextSection;
     setDraftSection(nextSection);
     pendingAutosaveSectionRef.current = nextSection;
     clearAutosaveTimer();
@@ -543,6 +580,7 @@ export function SectionEditorSheet({
     clearAutosaveTimer();
     pendingAutosaveSectionRef.current = null;
     const restoredSection = openedSectionRef.current ?? section;
+    draftSectionRef.current = restoredSection;
     setDraftSection(restoredSection);
     onSave?.(sanitizeSectionForSave(restoredSection));
     setFieldAiSuggestion(null);
@@ -554,8 +592,15 @@ export function SectionEditorSheet({
   }
 
   function saveAndClose() {
-    flushAutosave();
-    onSave?.(sanitizeSectionForSave(editableSection ?? null));
+    flushDrawerRichEditors();
+    clearAutosaveTimer();
+    const sectionToSave =
+      pendingAutosaveSectionRef.current ??
+      draftSectionRef.current ??
+      editableSection ??
+      null;
+    pendingAutosaveSectionRef.current = null;
+    onSave?.(sanitizeSectionForSave(sectionToSave));
     setSummaryAiSuggestion(null);
     setAcceptedAiEdit(null);
     onOpenChange(false);
@@ -1018,6 +1063,7 @@ export function SectionEditorSheet({
             ariaLabel="Summary body"
             testId="drawer-rich-editor-summary"
             showLists={false}
+            onRegisterFlush={registerDrawerRichEditorFlush}
             value={
               getStructuredItems(editableSection)[0]?.summary ??
               editableSection.blocks[0]?.content ??
@@ -1096,6 +1142,7 @@ export function SectionEditorSheet({
                 key={`${String(item.id ?? index)}:responsibilities`}
                 ariaLabel={`Responsibilities ${index + 1}`}
                 testId={`drawer-rich-editor-experience-responsibilities-${index}`}
+                onRegisterFlush={registerDrawerRichEditorFlush}
                 value={item.responsibilities ?? ""}
                 onChangeDoc={(doc) => {
                   const projection = projectResponsibilitiesForWorkshop(doc);
@@ -1248,23 +1295,23 @@ export function SectionEditorSheet({
                 commitSection(updateStructuredItem(editableSection, index, { meta: value }))
               }
             />
-            <label className="dasti-cv-section-field dasti-cv-section-field--wide">
+            <div className="dasti-cv-section-field dasti-cv-section-field--wide">
               <span>{`Description ${index + 1}`}</span>
-              <textarea
-                className="ds-field ds-field--textarea"
-                value={collectPlainText(item.description ?? item.summary)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") event.stopPropagation();
-                }}
-                onChange={(event) =>
+              <DrawerRichTextEditor
+                key={`${String(item.id ?? index)}:project-description`}
+                ariaLabel={`Description ${index + 1}`}
+                testId={`drawer-rich-editor-project-description-${index}`}
+                onRegisterFlush={registerDrawerRichEditorFlush}
+                value={item.description ?? item.summary}
+                onChangeDoc={(doc) =>
                   commitSection(
                     updateStructuredItem(editableSection, index, {
-                      description: ensureRemirrorDoc(event.currentTarget.value),
+                      description: doc,
                     }),
                   )
                 }
               />
-            </label>
+            </div>
             {fieldAiSuggestion?.key === `projects:${String(item.id ?? index)}` ? (
               <AiSuggestionCard
                 compact
