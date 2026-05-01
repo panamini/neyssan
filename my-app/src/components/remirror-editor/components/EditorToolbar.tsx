@@ -7,8 +7,12 @@ import {
 } from "remirror/extensions";
 import { Bold, Italic, List, Underline } from "@/lib/icons";
 
-export const EditorToolbar: React.FC<{ position?: "top" | "bottom" }> = ({
+export const EditorToolbar: React.FC<{
+  position?: "top" | "bottom";
+  showLists?: boolean;
+}> = ({
   position = "top",
+  showLists = true,
 }) => {
   // Include list fallback command when toggleBulletList is not wired by the manager
   const {
@@ -44,8 +48,20 @@ export const EditorToolbar: React.FC<{ position?: "top" | "bottom" }> = ({
         aria-label="Text formatting"
       >
         <button
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
-            // Focus first so the command applies to the current selection
+            try {
+              if (
+                chain &&
+                typeof chain.focus === "function" &&
+                typeof chain.toggleBold === "function"
+              ) {
+                chain.focus().toggleBold().run();
+                return;
+              }
+            } catch {
+              /* fall through to direct command */
+            }
             focus?.();
             toggleBold?.();
           }}
@@ -57,7 +73,20 @@ export const EditorToolbar: React.FC<{ position?: "top" | "bottom" }> = ({
           <Bold size={16} />
         </button>
         <button
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
+            try {
+              if (
+                chain &&
+                typeof chain.focus === "function" &&
+                typeof chain.toggleItalic === "function"
+              ) {
+                chain.focus().toggleItalic().run();
+                return;
+              }
+            } catch {
+              /* fall through to direct command */
+            }
             focus?.();
             toggleItalic?.();
           }}
@@ -69,7 +98,20 @@ export const EditorToolbar: React.FC<{ position?: "top" | "bottom" }> = ({
           <Italic size={16} />
         </button>
         <button
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
+            try {
+              if (
+                chain &&
+                typeof chain.focus === "function" &&
+                typeof chain.toggleUnderline === "function"
+              ) {
+                chain.focus().toggleUnderline().run();
+                return;
+              }
+            } catch {
+              /* fall through to direct command */
+            }
             focus?.();
             toggleUnderline?.();
           }}
@@ -82,51 +124,55 @@ export const EditorToolbar: React.FC<{ position?: "top" | "bottom" }> = ({
         </button>
       </div>
 
-      {/* Divider */}
-      <span className={dividerStyle} aria-hidden="true" />
+      {showLists ? (
+        <>
+          {/* Divider */}
+          <span className={dividerStyle} aria-hidden="true" />
 
-      {/* Zone 2 — Structure */}
-      <div className="flex items-center" role="group" aria-label="Structure">
-        <button
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            // Prefer chained commands with focus BEFORE toggling
-            try {
-              if (
-                chain &&
-                typeof chain.focus === "function" &&
-                typeof chain.toggleBulletList === "function"
-              ) {
-                chain.focus().toggleBulletList().run();
-                return;
-              }
-            } catch {
-              /* fall through to fallback */
-            }
+          {/* Zone 2 — Structure */}
+          <div className="flex items-center" role="group" aria-label="Structure">
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                // Prefer chained commands with focus BEFORE toggling
+                try {
+                  if (
+                    chain &&
+                    typeof chain.focus === "function" &&
+                    typeof chain.toggleBulletList === "function"
+                  ) {
+                    chain.focus().toggleBulletList().run();
+                    return;
+                  }
+                } catch {
+                  /* fall through to fallback */
+                }
 
-            // Fallback to direct commands if chaining is unavailable
-            try {
-              focus?.();
-              if (typeof toggleBulletList === "function") {
-                toggleBulletList();
-                return;
-              }
-              if (typeof toggleList === "function") {
-                // Some remirror versions expose a generic toggleList({ type: 'bullet' })
-                toggleList({ type: "bullet" });
-              }
-            } catch {
-              /* noop */
-            }
-          }}
-          className={`${buttonStyle} ${typeof active.bulletList === "function" && active.bulletList() ? activeButtonStyle : ""}`}
-          aria-label="Toggle bullet list"
-          title="Bullet list"
-          type="button"
-        >
-          <List size={16} />
-        </button>
-      </div>
+                // Fallback to direct commands if chaining is unavailable
+                try {
+                  focus?.();
+                  if (typeof toggleBulletList === "function") {
+                    toggleBulletList();
+                    return;
+                  }
+                  if (typeof toggleList === "function") {
+                    // Some remirror versions expose a generic toggleList({ type: 'bullet' })
+                    toggleList({ type: "bullet" });
+                  }
+                } catch {
+                  /* noop */
+                }
+              }}
+              className={`${buttonStyle} ${typeof active.bulletList === "function" && active.bulletList() ? activeButtonStyle : ""}`}
+              aria-label="Toggle bullet list"
+              title="Bullet list"
+              type="button"
+            >
+              <List size={16} />
+            </button>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 };
