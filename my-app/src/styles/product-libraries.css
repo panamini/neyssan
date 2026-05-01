@@ -1238,11 +1238,18 @@
 .dasti-documents-page .dasti-stack__title,
 .dasti-templates-page .dasti-stack__title {
   max-width: 12ch;
+  color: var(--ti);
+  font-family: var(--font-body-family);
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 .dasti-documents-page .dasti-stack__subtitle,
 .dasti-templates-page .dasti-stack__subtitle {
-  max-width: 58ch;
+  max-width: 620px;
+  font-size: var(--tb);
+  line-height: 1.45;
 }
 
 .dasti-documents-toolbar,
