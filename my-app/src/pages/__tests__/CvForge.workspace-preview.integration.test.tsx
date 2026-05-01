@@ -1,13 +1,15 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { CvForge } from "../CvForge";
 import { DEFAULT_VERBATI_STYLE } from "../../features/verbati/style";
 
-const { mutationMock } = vi.hoisted(() => ({
+const { mutationMock, transformSelectionMock, importCvMock } = vi.hoisted(() => ({
   mutationMock: vi.fn(async () => undefined),
+  transformSelectionMock: vi.fn(async () => ({ text: "Built better." })),
+  importCvMock: vi.fn(async () => undefined),
 }));
 
 vi.mock("convex/react", () => ({
@@ -28,7 +30,7 @@ vi.mock("convex/react", () => ({
       activeSlot: null,
     };
   }),
-  useAction: vi.fn(() => undefined),
+  useAction: vi.fn(() => transformSelectionMock),
 }));
 
 vi.mock("../../components/ProfileReviewCard", () => ({
@@ -101,7 +103,7 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
     },
     currentCvId: "cv_123",
     createNewCv: vi.fn(async () => undefined),
-    importCv: vi.fn(),
+    importCv: importCvMock,
     cvs: [],
     isLibraryHydrated: true,
     lastLibraryFetchFailed: false,
@@ -175,8 +177,13 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
     hostMode = "panel",
     onLinkIntent,
     activeTarget,
+    inlineEditing,
   }: {
     hostMode?: "panel" | "workspace";
+    inlineEditing?: {
+      enabled: boolean;
+      onActivate?: (target: any) => void;
+    } | null;
     onLinkIntent?: (intent: {
       requestId: string;
       sectionType: "experience";
@@ -195,6 +202,28 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
         data-stage-mode="fit"
       >
         <div data-testid={`verbati-preview-${hostMode}`}>
+          {inlineEditing?.enabled ? (
+            <div
+              role="textbox"
+              tabIndex={0}
+              data-testid="mock-rich-summary"
+              data-inline-paper-editable="true"
+              data-paper-section-id="summary-1"
+              data-paper-section-type="summary"
+              data-paper-field-path="structuredContent.0.summary"
+              data-paper-field-kind="paragraph"
+              onFocus={() =>
+                inlineEditing.onActivate?.({
+                  sectionId: "summary-1",
+                  sectionType: "summary",
+                  fieldPath: "structuredContent.0.summary",
+                  fieldKind: "paragraph",
+                })
+              }
+            >
+              Builder.
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={() =>
@@ -240,6 +269,88 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
 describe("CvForge workspace preview integration", () => {
   beforeEach(() => {
     window.localStorage.removeItem("dasti:cv-forge-workspace-mode:v1");
+    transformSelectionMock.mockClear();
+    transformSelectionMock.mockResolvedValue({ text: "Built better." });
+    importCvMock.mockClear();
+  });
+
+  it("routes floating toolbar summary results through the Ask suggestion flow", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    const summary = await screen.findByTestId("mock-rich-summary");
+    const textNode = summary.firstChild;
+    expect(textNode).toBeTruthy();
+    summary.focus();
+
+    const rect = {
+      left: 100,
+      top: 80,
+      right: 180,
+      bottom: 100,
+      width: 80,
+      height: 20,
+      x: 100,
+      y: 80,
+      toJSON: () => ({}),
+    } as DOMRect;
+    const range = document.createRange();
+    range.setStart(textNode!, 0);
+    range.setEnd(textNode!, "Builder".length);
+    range.getBoundingClientRect = () => rect;
+    range.getClientRects = () => [rect] as unknown as DOMRectList;
+    const paperStage = container.querySelector<HTMLElement>(".dasti-cv-paper-stage");
+    expect(paperStage).toBeTruthy();
+    paperStage!.getBoundingClientRect = () => ({
+      ...rect,
+      left: 0,
+      top: 0,
+      right: 794,
+      bottom: 1123,
+      width: 794,
+      height: 1123,
+      x: 0,
+      y: 0,
+    });
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    fireEvent.selectionChange(document);
+
+    await user.click(await screen.findByRole("button", { name: "Fix" }));
+
+    await waitFor(() =>
+      expect(transformSelectionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mode: "fix_grammar",
+          selectedText: "Builder",
+        }),
+      ),
+    );
+    expect(
+      await screen.findByRole("region", { name: "Suggested edit for Summary" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Built better.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Accept" }));
+
+    await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
+    const importedDoc = importCvMock.mock.calls[0][0];
+    expect(importedDoc.sections[1].structuredContent[0].summary).toEqual(
+      expect.objectContaining({
+        type: "doc",
+        content: expect.arrayContaining([
+          expect.objectContaining({ type: "paragraph" }),
+        ]),
+      }),
+    );
+    expect(JSON.stringify(importedDoc.sections[1].structuredContent[0].summary)).toContain(
+      "Built better.",
+    );
   });
 
   it("routes page preview through the PR4 forge shell and live resume canvas stage", async () => {

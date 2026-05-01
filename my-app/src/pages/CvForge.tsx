@@ -437,6 +437,92 @@ function normalizeInlinePlainText(text: string): string {
   return text.replace(/\r\n?/g, "\n");
 }
 
+function replaceSelectedInlineText(
+  currentText: string,
+  selectedText: string,
+  replacementText: string,
+): string {
+  const normalizedCurrentText = normalizeInlinePlainText(currentText);
+  const normalizedSelectedText = normalizeInlinePlainText(selectedText).trim();
+  const normalizedReplacementText = normalizeInlinePlainText(replacementText).trim();
+  if (!normalizedSelectedText) return normalizedReplacementText;
+  const index = normalizedCurrentText.indexOf(normalizedSelectedText);
+  if (index < 0) return normalizedReplacementText;
+  return `${normalizedCurrentText.slice(0, index)}${normalizedReplacementText}${normalizedCurrentText.slice(
+    index + normalizedSelectedText.length,
+  )}`;
+}
+
+function readInlineFieldCanonicalText(
+  section: CvSection,
+  target: ActivePaperEditTarget,
+): string {
+  if (target.fieldPath === "structuredContent.0.summary") {
+    return collectPlainText(getStructuredItems(section)[0]?.summary);
+  }
+  if (target.fieldPath === "blocks.0.plainText") {
+    return collectPlainText(section.blocks[0]?.plainText ?? section.blocks[0]?.content);
+  }
+  if (target.fieldPath.startsWith("structuredContent.0.")) {
+    const field = target.fieldPath.slice("structuredContent.0.".length);
+    return collectPlainText(getStructuredItems(section)[0]?.[field]);
+  }
+
+  const itemMatch = target.fieldPath.match(/^structuredContent\.item:([^.]*)\.(.+)$/);
+  if (!itemMatch) return "";
+  const [, itemId, itemFieldPath] = itemMatch;
+  const item = getStructuredItemById(section, itemId);
+  if (!item) return "";
+  const bulletMatch = itemFieldPath.match(/^responsibilityBullets\.(\d+)$/);
+  if (bulletMatch) {
+    const bullets = Array.isArray(item.responsibilityBullets)
+      ? item.responsibilityBullets
+      : [];
+    return collectPlainText(bullets[Number(bulletMatch[1])]);
+  }
+  return collectPlainText(item[itemFieldPath]);
+}
+
+function applyInlineAiTextToSectionField(args: {
+  section: CvSection;
+  target: ActivePaperEditTarget;
+  selectedText: string;
+  replacementText: string;
+}): CvSection | null {
+  const nextText = replaceSelectedInlineText(
+    readInlineFieldCanonicalText(args.section, args.target),
+    args.selectedText,
+    args.replacementText,
+  );
+
+  if (args.target.fieldPath === "structuredContent.0.summary") {
+    return updateSummaryStructuredText(args.section, nextText);
+  }
+  if (args.target.fieldPath === "blocks.0.plainText") {
+    return updateFirstTextBlock(args.section, nextText);
+  }
+  if (args.target.fieldPath.startsWith("structuredContent.0.")) {
+    const field = args.target.fieldPath.slice("structuredContent.0.".length);
+    return updateProfileStructuredField(args.section, field, nextText);
+  }
+
+  const itemMatch = args.target.fieldPath.match(
+    /^structuredContent\.item:([^.]*)\.(.+)$/,
+  );
+  if (!itemMatch) return null;
+  const [, itemId, itemFieldPath] = itemMatch;
+  const bulletMatch = itemFieldPath.match(/^responsibilityBullets\.(\d+)$/);
+  if (bulletMatch) {
+    return updateStructuredItemBullet(
+      args.section,
+      itemId,
+      Number(bulletMatch[1]),
+      nextText,
+    );
+  }
+  return updateStructuredItemField(args.section, itemId, itemFieldPath, nextText);
+}
+
 function readInlinePaperEditTarget(
   element: Element | null | undefined,
 ): ActivePaperEditTarget | null {
@@ -3511,6 +3597,9 @@ export function CvForge(): JSX.Element {
 
       const interactionId = createAiInteractionId();
       const requestId = interactionId;
+      const target = inlinePaperSelectionState.editTarget;
+      const section = findSectionById(currentSections, target.sectionId);
+      const sectionLabel = section?.title || "Section";
       activeInlinePaperAiRequestIdRef.current = requestId;
       recordAiInteractionEvent({
         name: "ai_started",
@@ -3522,6 +3611,23 @@ export function CvForge(): JSX.Element {
       try {
         setPendingInlinePaperAiActionId(actionId);
         setIsApplyingInlinePaperAi(true);
+        setCvRailAppliedAiEdit(null);
+        setActiveSectionId(target.sectionId);
+        setResumeActiveTarget(getSectionTarget(section));
+        setCvRailTab("ai");
+        setCvRailAiSuggestion({
+          sectionId: target.sectionId,
+          sectionLabel,
+          beforeText: inlinePaperSelectionState.text,
+          afterText: "",
+          state: "loading",
+          interactionId,
+          inlineTarget: {
+            editTarget: target,
+            selectedText: inlinePaperSelectionState.text,
+            actionId,
+          },
+        });
         const result = await transformEditorSelectionAction({
           mode: actionId,
           instruction,
@@ -3539,26 +3645,42 @@ export function CvForge(): JSX.Element {
             actionId,
             errorKind: "empty_result",
           });
+          setCvRailAiSuggestion((current) =>
+            current?.interactionId === interactionId
+              ? {
+                  ...current,
+                  afterText: "",
+                  state: "error",
+                  errorMessage: "AI returned no usable section text.",
+                }
+              : current,
+          );
           return;
         }
         if (activeInlinePaperAiRequestIdRef.current !== requestId) {
           return;
         }
 
-        const currentText = editableElement.textContent ?? "";
-        const nextText = currentText.includes(inlinePaperSelectionState.text)
-          ? currentText.replace(inlinePaperSelectionState.text, normalizedResult.text)
-          : normalizedResult.text;
-        const handledResponsibilityAi = applyInlineExperienceResponsibilityAiResult({
-          target: inlinePaperSelectionState.editTarget,
-          selectedText: inlinePaperSelectionState.text,
-          resultText: normalizedResult.text,
-          actionId: normalizedResult.actionId,
-        });
-        if (!handledResponsibilityAi) {
-          handleInlineFieldChange(inlinePaperSelectionState.editTarget, nextText);
+        if (
+          pendingInlineFieldChangeRef.current?.target.sectionId === target.sectionId &&
+          pendingInlineFieldChangeRef.current?.target.fieldPath === target.fieldPath
+        ) {
+          pendingInlineFieldChangeRef.current = null;
         }
-        focusInlinePaperEditTarget(inlinePaperSelectionState.editTarget);
+        setCvRailAiSuggestion({
+          sectionId: target.sectionId,
+          sectionLabel,
+          beforeText: inlinePaperSelectionState.text,
+          afterText: normalizedResult.text,
+          state: "ready",
+          interactionId,
+          inlineTarget: {
+            editTarget: target,
+            selectedText: inlinePaperSelectionState.text,
+            actionId: normalizedResult.actionId,
+          },
+        });
+        focusPreviewSection(target.sectionId);
         setInlinePaperSelectionState(null);
         activeInlinePaperAiRequestIdRef.current = null;
         recordAiInteractionEvent({
@@ -3566,7 +3688,7 @@ export function CvForge(): JSX.Element {
           interactionId,
           surface: "section_editor",
           actionId: normalizedResult.actionId,
-          applyMode: normalizedResult.applyMode,
+          applyMode: "preview_required",
           outputMode: "single_text",
         });
       } catch (error) {
@@ -3580,6 +3702,19 @@ export function CvForge(): JSX.Element {
           actionId,
           errorKind: "request_failed",
         });
+        setCvRailAiSuggestion((current) =>
+          current?.interactionId === interactionId
+            ? {
+                ...current,
+                afterText: "",
+                state: "error",
+                errorMessage:
+                  error instanceof Error && error.message
+                    ? error.message
+                    : "AI is unavailable for this selection.",
+              }
+            : current,
+        );
         throw error;
       } finally {
         if (activeInlinePaperAiRequestIdRef.current === requestId) {
@@ -3593,8 +3728,7 @@ export function CvForge(): JSX.Element {
       }
     },
     [
-      applyInlineExperienceResponsibilityAiResult,
-      handleInlineFieldChange,
+      currentSections,
       inlinePaperSelectionState,
       transformEditorSelectionAction,
     ],
@@ -4416,6 +4550,69 @@ export function CvForge(): JSX.Element {
       cvRailAiSuggestion.kind === "list" ||
       cvRailAiSuggestion.state !== "ready"
     ) return;
+
+    const inlineTarget = cvRailAiSuggestion.inlineTarget;
+    if (inlineTarget) {
+      const target = inlineTarget.editTarget;
+      if (
+        pendingInlineFieldChangeRef.current?.target.sectionId === target.sectionId &&
+        pendingInlineFieldChangeRef.current?.target.fieldPath === target.fieldPath
+      ) {
+        pendingInlineFieldChangeRef.current = null;
+      }
+
+      if (
+        applyInlineExperienceResponsibilityAiResult({
+          target,
+          selectedText: inlineTarget.selectedText,
+          resultText: cvRailAiSuggestion.afterText,
+          actionId: inlineTarget.actionId,
+        })
+      ) {
+        recordAiInteractionEvent({
+          name: "ai_accepted",
+          interactionId: cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
+          surface: "section_editor",
+          actionId: inlineTarget.actionId,
+        });
+        setCvRailAiSuggestion(null);
+        setCvRailAppliedAiEdit(null);
+        return;
+      }
+
+      const baseSections =
+        latestInlineSectionsRef.current.length > 0
+          ? latestInlineSectionsRef.current
+          : currentSections;
+      let nextSection: CvSection | null = null;
+      const nextSections = baseSections.map((section, index) => {
+        if (getCvSectionId(section, index) !== target.sectionId) return section;
+        nextSection = applyInlineAiTextToSectionField({
+          section,
+          target,
+          selectedText: inlineTarget.selectedText,
+          replacementText: cvRailAiSuggestion.afterText,
+        });
+        return nextSection ?? section;
+      });
+
+      if (!nextSection) return;
+      latestInlineSectionsRef.current = nextSections;
+      setPendingActiveSection(nextSection);
+      setResumeActiveTarget(getSectionTarget(nextSection));
+      persistSections(nextSections);
+      recordAiInteractionEvent({
+        name: "ai_accepted",
+        interactionId: cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
+        surface: "section_editor",
+        actionId: inlineTarget.actionId,
+      });
+      setCvRailAiSuggestion(null);
+      setCvRailAppliedAiEdit(null);
+      focusPreviewSection(cvRailAiSuggestion.sectionId);
+      return;
+    }
+
     let appliedEdit: CvRailAppliedAiEdit | null = null;
     const nextSections = currentSections.map((section, index) =>
       getCvSectionId(section, index) === cvRailAiSuggestion.sectionId
@@ -4439,7 +4636,12 @@ export function CvForge(): JSX.Element {
     setCvRailAiSuggestion(null);
     setCvRailAppliedAiEdit(appliedEdit);
     focusPreviewSection(cvRailAiSuggestion.sectionId);
-  }, [currentSections, cvRailAiSuggestion, persistSections]);
+  }, [
+    applyInlineExperienceResponsibilityAiResult,
+    currentSections,
+    cvRailAiSuggestion,
+    persistSections,
+  ]);
 
   const handleUndoAiSuggestion = React.useCallback(() => {
     if (!cvRailAppliedAiEdit || !currentCv) return;
@@ -4460,11 +4662,18 @@ export function CvForge(): JSX.Element {
 
   const handleDiscardAiSuggestion = React.useCallback(() => {
     if (cvRailAiSuggestion) {
+      const interactionId = cvRailAiSuggestion.interactionId ?? createAiInteractionId();
+      if (
+        cvRailAiSuggestion.inlineTarget &&
+        activeInlinePaperAiRequestIdRef.current === interactionId
+      ) {
+        activeInlinePaperAiRequestIdRef.current = null;
+      }
       recordAiInteractionEvent({
         name: "ai_discarded",
-        interactionId: cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
+        interactionId,
         surface: "section_editor",
-        actionId: "custom",
+        actionId: cvRailAiSuggestion.inlineTarget?.actionId ?? "custom",
       });
     }
     setCvRailAiSuggestion(null);
