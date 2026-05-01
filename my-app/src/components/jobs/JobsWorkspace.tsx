@@ -961,7 +961,8 @@ function JobsBackendUnavailable(): JSX.Element {
                   .catch(() => {});
               }}
             >
-              Copy: npm run dev:backend
+              <span>Copy: npm run dev:backend</span>
+              <span className="ds-btn__period" aria-hidden="true">.</span>
             </button>
             <button
               type="button"
@@ -1010,12 +1011,13 @@ function matchesListFilters(
   job: JobsPageListItem,
   matchFilter: JobsMatchFilter,
   hasDocsOnly: boolean,
+  noDocsOnly: boolean,
   needsReviewOnly: boolean,
   favoritesOnly: boolean,
-  optimisticReviewState?: string,
+  optimisticOpenedAt?: number,
   optimisticFavorite?: boolean,
 ): boolean {
-  const reviewState = optimisticReviewState ?? job.reviewState;
+  const openedAt = optimisticOpenedAt ?? job.lastOpenedAt;
   const isFavorite = optimisticFavorite ?? job.isFavorite;
   if (
     matchFilter === "worth_plus" &&
@@ -1034,7 +1036,10 @@ function matchesListFilters(
   if (hasDocsOnly && job.linkedDocumentCount === 0) {
     return false;
   }
-  if (needsReviewOnly && reviewState !== "needs_review") {
+  if (noDocsOnly && job.linkedDocumentCount > 0) {
+    return false;
+  }
+  if (needsReviewOnly && openedAt > 0) {
     return false;
   }
   if (favoritesOnly && !isFavorite) {
@@ -1209,6 +1214,7 @@ function JobsPageContent(): JSX.Element {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [matchFilter, setMatchFilter] = React.useState<JobsMatchFilter>("all");
   const [hasDocsOnly, setHasDocsOnly] = React.useState(false);
+  const [noDocsOnly, setNoDocsOnly] = React.useState(false);
   const [needsReviewOnly, setNeedsReviewOnly] = React.useState(false);
   const [favoritesOnly, setFavoritesOnly] = React.useState(false);
   const [remoteOnly, setRemoteOnly] = React.useState(false);
@@ -1401,9 +1407,10 @@ function JobsPageContent(): JSX.Element {
           job,
           matchFilter,
           hasDocsOnly,
+          noDocsOnly,
           needsReviewOnly,
           favoritesOnly,
-          optimisticReviewStateById[job.id],
+          optimisticActivityById[job.id],
           optimisticFavoriteById[job.id],
         );
       })
@@ -1470,9 +1477,9 @@ function JobsPageContent(): JSX.Element {
     jobsView,
     optimisticActivityById,
     optimisticFavoriteById,
-    optimisticReviewStateById,
     favoritesOnly,
     hasDocsOnly,
+    noDocsOnly,
     matchFilter,
     needsReviewOnly,
     remoteOnly,
@@ -2147,27 +2154,31 @@ function JobsPageContent(): JSX.Element {
                 sortOrder={sortOrder}
                 matchFilter={matchFilter}
                 hasDocsOnly={hasDocsOnly}
+                noDocsOnly={noDocsOnly}
                 needsReviewOnly={needsReviewOnly}
                 favoritesOnly={favoritesOnly}
                 remoteOnly={remoteOnly}
                 seniorOnly={seniorOnly}
                 optimisticActivityById={optimisticActivityById}
                 optimisticFavoriteById={optimisticFavoriteById}
-                optimisticReviewStateById={optimisticReviewStateById}
                 confirmingPermanentDeleteJobId={confirmingPermanentDeleteJobId}
                 onSearchQueryChange={setSearchQuery}
                 onSortOrderChange={setSortOrder}
                 onMatchFilterChange={setMatchFilter}
-                onHasDocsOnlyChange={setHasDocsOnly}
+                onHasDocsOnlyChange={(value) => {
+                  setHasDocsOnly(value);
+                  if (value) setNoDocsOnly(false);
+                }}
+                onNoDocsOnlyChange={(value) => {
+                  setNoDocsOnly(value);
+                  if (value) setHasDocsOnly(false);
+                }}
                 onNeedsReviewOnlyChange={setNeedsReviewOnly}
                 onFavoritesOnlyChange={setFavoritesOnly}
                 onRemoteOnlyChange={setRemoteOnly}
                 onSeniorOnlyChange={setSeniorOnly}
                 onViewChange={(view) => void navigate(buildJobsListRoute(view))}
                 onSelectJob={(jobId) => void navigate(buildJobsRoute(jobId))}
-                onSetJobFavorite={(jobId, nextFavorite) => {
-                  void handleSetJobFavorite(jobId, nextFavorite);
-                }}
                 onOpenJobSource={handleOpenJobSource}
                 onArchiveJob={(jobId) => {
                   void handleArchiveJob(jobId);

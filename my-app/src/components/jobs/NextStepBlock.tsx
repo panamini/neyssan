@@ -49,7 +49,10 @@ export function NextStepBlock({
               .join(" ")}
             onClick={() => onSelectAction(action.id)}
           >
-            {action.label}
+            <span>{action.label}</span>
+            {index === 0 ? (
+              <span className="ds-btn__period" aria-hidden="true">.</span>
+            ) : null}
           </button>
         ))}
       </div>

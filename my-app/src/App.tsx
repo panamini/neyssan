@@ -30,7 +30,7 @@ import { Sidebar } from "./components/Sidebar";
 import { CommandPalette } from "./components/CommandPalette";
 import { OnboardingReplay } from "./components/onboarding/OnboardingReplay";
 import { QuickStartFlow } from "./components/onboarding/QuickStartFlow";
-import { Button, IconButton, Pill } from "./components/ui";
+import { IconButton, Pill } from "./components/ui";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 import { installStorageDiagnostics } from "./lib/storage-diagnostics";
 import { useCvLibrary } from "./contexts/CvLibraryContext";
@@ -48,6 +48,7 @@ import {
   clearQuickStartLocationState,
   readQuickStartRouteState,
 } from "./lib/quick-start-routing";
+import { resolveCommandShortcutLabel } from "./lib/app-topbar";
 import { useThemeMode } from "./lib/theme-mode";
 import { User } from "./lib/icons";
 
@@ -248,6 +249,10 @@ function AppTopbar({
   const pageLabel = resolvePageLabel(location.pathname);
   const { isSignedIn } = useAuth();
   const { user } = useUser();
+  const shortcutLabel = React.useMemo(
+    () => resolveCommandShortcutLabel(window.navigator.platform),
+    [],
+  );
   const clerkUserButtonRef = React.useRef<HTMLDivElement | null>(null);
 
   const handleProfile = React.useCallback(() => {
@@ -281,17 +286,15 @@ function AppTopbar({
         ) : null}
       </div>
       <div className="app-topbar__spacer" />
-      <Button
+      <button
         type="button"
-        variant="secondary"
-        size="sm"
         className="app-topbar__cmdk"
         aria-expanded={commandPaletteOpen}
         onClick={onOpenCommandPalette}
       >
         <span>Search or run command</span>
-        <span className="app-topbar__kbd">Cmd/Ctrl K</span>
-      </Button>
+        <span className="app-topbar__kbd">{shortcutLabel}</span>
+      </button>
       <div className="app-theme-switch" role="group" aria-label="Theme">
         <button
           type="button"
