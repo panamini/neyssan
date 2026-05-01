@@ -320,6 +320,14 @@ describe("ProposalForge workbench layout", () => {
       "minmax(0, 1fr) 360px",
     );
     expect(outputShell?.style.width).toBe("100%");
+    const rail = screen.getByLabelText("Proposal rail");
+    expect(rail).toHaveClass("forge__rail");
+    expect(rail).toHaveClass("dasti-proposal-skeleton-rail");
+    expect(
+      Array.from(rail.children).filter((child) =>
+        child.classList.contains("forge__rail-section"),
+      ),
+    ).toHaveLength(7);
 
     act(() => {
       Object.defineProperty(window, "innerWidth", {

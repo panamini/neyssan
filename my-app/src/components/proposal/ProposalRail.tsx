@@ -57,10 +57,10 @@ export function ProposalRail({
   const visibleKeywords = keywords.slice(0, 3);
 
   return (
-    <aside className="dasti-proposal-skeleton-rail" aria-label="Proposal rail">
-      <section className="dasti-proposal-skeleton-rail__section">
-        <div className="dasti-proposal-skeleton-rail__label">Job context</div>
-        <div className="dasti-proposal-skeleton-rail__title">
+    <aside className="forge__rail dasti-proposal-skeleton-rail" aria-label="Proposal rail">
+      <section className="forge__rail-section dasti-proposal-skeleton-rail__section">
+        <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Job context</div>
+        <div className="forge__rail-title dasti-proposal-skeleton-rail__title">
           {jobTitle || "Untitled role"}
         </div>
         <div className="dasti-proposal-skeleton-rail__meta">
@@ -81,8 +81,8 @@ export function ProposalRail({
         ) : null}
       </section>
 
-      <section className="dasti-proposal-skeleton-rail__section">
-        <div className="dasti-proposal-skeleton-rail__label">Source CV</div>
+      <section className="forge__rail-section dasti-proposal-skeleton-rail__section">
+        <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Source CV</div>
         <Button
           type="button"
           variant="secondary"
@@ -127,19 +127,19 @@ export function ProposalRail({
         </details>
       </section>
 
-      <section className="dasti-proposal-skeleton-rail__section">
+      <section className="forge__rail-section dasti-proposal-skeleton-rail__section">
         {aiStream}
       </section>
 
-      <section className="dasti-proposal-skeleton-rail__section">
-        <div className="dasti-proposal-skeleton-rail__label">Tone</div>
+      <section className="forge__rail-section dasti-proposal-skeleton-rail__section">
+        <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Tone</div>
         <div className="dasti-proposal-skeleton-rail__pills">
           <ToneBadge tone={toneValue}>{toneLabel}</ToneBadge>
         </div>
       </section>
 
-      <section className="dasti-proposal-skeleton-rail__section">
-        <div className="dasti-proposal-skeleton-rail__label">Variables</div>
+      <section className="forge__rail-section dasti-proposal-skeleton-rail__section">
+        <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Variables</div>
         {hasProposalContent ? (
           <div className="dasti-proposal-skeleton-rail__variables">
             {variableFields.map((field) => (
@@ -175,16 +175,16 @@ export function ProposalRail({
         )}
       </section>
 
-      <section className="dasti-proposal-skeleton-rail__section">
-        <div className="dasti-proposal-skeleton-rail__label">Ask AI</div>
+      <section className="forge__rail-section dasti-proposal-skeleton-rail__section">
+        <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Ask AI</div>
         <div className="dasti-proposal-skeleton-rail__hint">
           Select text in the paper for sentence-level rewrite, shorten, fix, or
           ask actions.
         </div>
       </section>
 
-      <section className="dasti-proposal-skeleton-rail__section">
-        <div className="dasti-proposal-skeleton-rail__label">Settings</div>
+      <section className="forge__rail-section dasti-proposal-skeleton-rail__section">
+        <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Settings</div>
         <dl className="dasti-proposal-skeleton-rail__settings">
           <div>
             <dt>Length</dt>

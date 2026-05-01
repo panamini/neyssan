@@ -327,7 +327,7 @@ export function ProposalDocumentStage({
       className="dasti-proposal-skeleton-stage"
       aria-label="Proposal document stage"
     >
-      <div className="dasti-proposal-skeleton-stage__bar">
+      <div className="forge__stage-bar dasti-proposal-skeleton-stage__bar">
         <Pill tone="accent" className="dasti-proposal-skeleton-stage__status">
           {statusLabel}
         </Pill>
