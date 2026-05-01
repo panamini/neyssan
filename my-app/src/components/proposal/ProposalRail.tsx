@@ -1,6 +1,16 @@
 import React from "react";
 import { Button, Pill, ToneBadge } from "../ui";
 
+type ProposalRailVariableField = {
+  id: string;
+  label: string;
+  value: string;
+  placeholder?: string;
+  multiline?: boolean;
+  onChange: (value: string) => void;
+  onBlur?: () => void;
+};
+
 type ProposalRailProps = {
   jobTitle: string;
   company: string | null;
@@ -14,8 +24,12 @@ type ProposalRailProps = {
   lengthLabel: string;
   styleLabel: string;
   aiStream: React.ReactNode;
-  toolbar: React.ReactNode;
-  composePanel: React.ReactNode;
+  variableFields: ProposalRailVariableField[];
+  hasProposalContent: boolean;
+  generateLabel: string;
+  generateDisabled: boolean;
+  generateState: "idle" | "loading" | "success" | "error";
+  onGenerateDraft: () => void;
   onOpenCvPicker: () => void;
 };
 
@@ -32,8 +46,12 @@ export function ProposalRail({
   lengthLabel,
   styleLabel,
   aiStream,
-  toolbar,
-  composePanel,
+  variableFields,
+  hasProposalContent,
+  generateLabel,
+  generateDisabled,
+  generateState,
+  onGenerateDraft,
   onOpenCvPicker,
 }: ProposalRailProps): JSX.Element {
   const visibleKeywords = keywords.slice(0, 3);
@@ -78,11 +96,35 @@ export function ProposalRail({
             <small>{sourceCvMeta || "Attach one to personalize the draft."}</small>
           </span>
         </Button>
-        {toolbar ? (
-          <div className="dasti-proposal-skeleton-rail__toolbar">
-            {toolbar}
+        <details className="dasti-proposal-skeleton-rail__draft-setup">
+          <summary>Draft setup</summary>
+          <div className="dasti-proposal-skeleton-rail__draft-setup-body">
+            <dl className="dasti-proposal-skeleton-rail__settings">
+              <div>
+                <dt>Role</dt>
+                <dd>{jobTitle || "Untitled role"}</dd>
+              </div>
+              <div>
+                <dt>CV</dt>
+                <dd>{sourceCvTitle || "Not attached"}</dd>
+              </div>
+              <div>
+                <dt>Tone</dt>
+                <dd>{toneLabel}</dd>
+              </div>
+            </dl>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              disabled={generateDisabled}
+              data-state={generateState}
+              onClick={onGenerateDraft}
+            >
+              {generateLabel}
+            </Button>
           </div>
-        ) : null}
+        </details>
       </section>
 
       <section className="dasti-proposal-skeleton-rail__section">
@@ -93,26 +135,48 @@ export function ProposalRail({
         <div className="dasti-proposal-skeleton-rail__label">Tone</div>
         <div className="dasti-proposal-skeleton-rail__pills">
           <ToneBadge tone={toneValue}>{toneLabel}</ToneBadge>
-          <ToneBadge tone="formal">Formal</ToneBadge>
-          <ToneBadge tone="natural">Natural</ToneBadge>
         </div>
       </section>
 
       <section className="dasti-proposal-skeleton-rail__section">
         <div className="dasti-proposal-skeleton-rail__label">Variables</div>
-        {composePanel}
+        {hasProposalContent ? (
+          <div className="dasti-proposal-skeleton-rail__variables">
+            {variableFields.map((field) => (
+              <label
+                key={field.id}
+                className="dasti-proposal-skeleton-rail__variable-field"
+              >
+                <span>{field.label}</span>
+                {field.multiline ? (
+                  <textarea
+                    className="ds-field ds-field--textarea"
+                    value={field.value}
+                    placeholder={field.placeholder}
+                    onChange={(event) => field.onChange(event.target.value)}
+                    onBlur={field.onBlur}
+                  />
+                ) : (
+                  <input
+                    className="ds-field"
+                    value={field.value}
+                    placeholder={field.placeholder}
+                    onChange={(event) => field.onChange(event.target.value)}
+                    onBlur={field.onBlur}
+                  />
+                )}
+              </label>
+            ))}
+          </div>
+        ) : (
+          <p className="dasti-proposal-skeleton-rail__hint">
+            Generate a draft to edit document variables here.
+          </p>
+        )}
       </section>
 
       <section className="dasti-proposal-skeleton-rail__section">
         <div className="dasti-proposal-skeleton-rail__label">Ask AI</div>
-        <textarea
-          className="ds-field ds-field--textarea dasti-proposal-skeleton-rail__ask"
-          placeholder="Ask for a whole-proposal revision."
-          aria-label="Ask AI about the whole proposal"
-        />
-        <Button type="button" variant="primary" size="md">
-          Send
-        </Button>
         <div className="dasti-proposal-skeleton-rail__hint">
           Select text in the paper for sentence-level rewrite, shorten, fix, or
           ask actions.
