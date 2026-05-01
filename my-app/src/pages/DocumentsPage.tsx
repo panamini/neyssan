@@ -14,7 +14,6 @@ import {
 } from "../lib/proposal-workspace-state";
 import { readStoredProposalOutputDraft } from "../lib/proposal-output-draft";
 import { clearActiveLocalCvId } from "../lib/proposal-personalization";
-import { formatUiDate } from "../lib/ui-date";
 import type { CvDocument } from "../types/cvDocument";
 
 const DOCUMENT_TABS = ["all", "proposals", "cvs", "drafts"] as const;
@@ -72,6 +71,36 @@ function proposalTone(value: unknown): "warm" | "formal" | "natural" {
   if (value === "engaging" || value === "storyteller") return "warm";
   if (value === "expert") return "formal";
   return "natural";
+}
+
+function formatUpdatedLabel(value: number): string {
+  if (!value || !Number.isFinite(value)) return "Updated recently";
+  const elapsedMs = Math.max(0, Date.now() - value);
+  const hourMs = 60 * 60 * 1000;
+  const dayMs = 24 * hourMs;
+  const weekMs = 7 * dayMs;
+  const monthMs = 30 * dayMs;
+  if (elapsedMs < hourMs) return "Updated just now";
+  if (elapsedMs < dayMs) {
+    const hours = Math.max(1, Math.floor(elapsedMs / hourMs));
+    return `Updated ${hours}h ago`;
+  }
+  if (elapsedMs < weekMs) {
+    const days = Math.max(1, Math.floor(elapsedMs / dayMs));
+    return `Updated ${days} ${days === 1 ? "day" : "days"} ago`;
+  }
+  if (elapsedMs < monthMs) {
+    const weeks = Math.max(1, Math.floor(elapsedMs / weekMs));
+    return `Updated ${weeks} ${weeks === 1 ? "week" : "weeks"} ago`;
+  }
+  if (elapsedMs < 12 * monthMs) {
+    const months = Math.max(1, Math.floor(elapsedMs / monthMs));
+    return `Updated ${months} ${months === 1 ? "month" : "months"} ago`;
+  }
+  return `Updated ${new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+  })}`;
 }
 
 export function DocumentsPage(): JSX.Element {
@@ -246,12 +275,12 @@ export function DocumentsPage(): JSX.Element {
                   className="dasti-documents-card__surface"
                   onClick={item.onOpen}
                 >
-                  <span className="ds-card__eyebrow">{item.eyebrow}</span>
-                  <CardTitle>{item.title}</CardTitle>
-                  <CardBody>{item.body}</CardBody>
+                  <span className="ds-card__eyebrow dasti-library-card__eyebrow">{item.eyebrow}</span>
+                  <CardTitle className="dasti-library-card__title">{item.title}</CardTitle>
+                  <CardBody className="dasti-library-card__body">{item.body}</CardBody>
                 </button>
-                <CardFooter>
-                  <span>{item.updatedAt ? formatUiDate(item.updatedAt) : "Updated recently"}</span>
+                <CardFooter className="dasti-library-card__footer">
+                  <span>{formatUpdatedLabel(item.updatedAt)}</span>
                   {item.kind === "proposal" ? (
                     <ToneBadge tone={proposalTone((proposals ?? []).find((proposal) => String(proposal._id) === item.id)?.metadata?.voicePreset)}>
                       {item.status}

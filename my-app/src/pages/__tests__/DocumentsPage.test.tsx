@@ -100,6 +100,7 @@ describe("DocumentsPage", () => {
     expect(screen.getByText("Senior Frontend Engineer · Linear")).toBeInTheDocument();
     expect(screen.getByText("Frontend Engineer · Editorial v3")).toBeInTheDocument();
     expect(screen.getByText("Draft product designer")).toBeInTheDocument();
+    expect(screen.getAllByText(/Updated/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/76%/)).not.toBeInTheDocument();
   });
 
