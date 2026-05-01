@@ -2148,6 +2148,15 @@ describe("CvForge workspace mode", () => {
     expect(source).toContain("if (!handledResponsibilityAi)");
   });
 
+  it("keeps the page Experience responsibilities wand routed to the page AI action", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/pages/CvForge.tsx"), "utf8");
+
+    expect(source).toContain("handleRunPageWandForSection");
+    expect(source).toContain("improve_experience_responsibilities");
+    expect(source).toContain("outputShape: getResponsibilitySourceShape(source)");
+    expect(source).toContain("updateStructuredItemResponsibilities");
+  });
+
   it("keeps paper contact order stable without Website and Portfolio duplication", async () => {
     const user = userEvent.setup();
     const baseState = buildCvLibraryState();
@@ -2275,7 +2284,10 @@ describe("CvForge workspace mode", () => {
     expect(summaryEditor).toBeInTheDocument();
     expect(summaryEditor.querySelector("textarea")).toBeNull();
     expect(summaryEditor).toHaveTextContent("Focused builder.");
-    expect(within(summaryEditor).getByRole("button", { name: "Toggle bullet list" })).toBeInTheDocument();
+    expect(within(summaryEditor).getByRole("button", { name: "Toggle bold" })).toBeInTheDocument();
+    expect(within(summaryEditor).getByRole("button", { name: "Toggle italic" })).toBeInTheDocument();
+    expect(within(summaryEditor).getByRole("button", { name: "Toggle underline" })).toBeInTheDocument();
+    expect(within(summaryEditor).queryByRole("button", { name: "Toggle bullet list" })).toBeNull();
   });
 
   it("renders experience responsibilities in the drawer Remirror editor while simple fields stay plain inputs", async () => {
@@ -2299,6 +2311,9 @@ describe("CvForge workspace mode", () => {
     expect(responsibilitiesEditor.querySelector("textarea")).toBeNull();
     expect(responsibilitiesEditor.querySelector(".ProseMirror")).toBeTruthy();
     expect(responsibilitiesEditor).toHaveTextContent("Led product design.");
+    expect(within(responsibilitiesEditor).getByRole("button", { name: "Toggle bold" })).toBeInTheDocument();
+    expect(within(responsibilitiesEditor).getByRole("button", { name: "Toggle italic" })).toBeInTheDocument();
+    expect(within(responsibilitiesEditor).getByRole("button", { name: "Toggle underline" })).toBeInTheDocument();
     expect(
       within(responsibilitiesEditor).getByRole("button", {
         name: "Toggle bullet list",
