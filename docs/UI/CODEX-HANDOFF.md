@@ -10,6 +10,20 @@
 - PR3 keeps the backend extraction readiness fix in scope when it is required for Jobs detail-pane acceptance. Language localization stays follow-up work.
 - Current CV Forge checkpoint lives in `docs/plans/2026-04-30-cv-forge-pr4-remaining-tasks.md`. Read it before continuing PR4, because it records post-implementation drift that is newer than the static skeleton briefs.
 - Current `/proposal` PR4 checkpoint lives in `docs/plans/2026-05-01-proposal-forge-pr4-checkpoint.md`. It records completed P0/P1 Proposal Forge work and deferred P2/send-surface items.
+- Current `/jobs` PR3 checkpoint lives in `docs/audits/2026-05-01-jobs-forge-pr3-split-view-audit.md`. It records completed Jobs P0/P1 split-view shell work and the deferred default-filter decision.
+
+---
+
+## Jobs PR3 checkpoint
+
+Completed on branch `codex-ui-refactor-pr4-secure`:
+
+- P0 skeleton aliases: active `/jobs` split-view exposes `jobs`, `jobs__list`, `jobs__detail`, and `jobs__match`.
+- P1 shell/breakpoint: Jobs shell is full-height aligned and list/detail collapse moved to `<1024px`.
+- P1 visual-density slice: list rows and match panel were lightened toward the skeleton surface while preserving active controls.
+- Current default match filter remains `all`; PR3/skeleton `Worth+ a shot` default is deferred for a later product decision slice.
+
+Do not rebuild Jobs split-view P0/P1. Next Jobs work should be P2 polish or the explicit default-filter decision.
 
 ---
 
