@@ -259,8 +259,9 @@ function AppTopbar({
   const topbarDocumentTitle = useTopbarDocumentTitle();
   const forgeContext = useForgeContextLine(topbarDocumentTitle);
   const pageLabel = resolvePageLabel(location.pathname);
-  const { isSignedIn } = useAuth();
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
+  const isAccountReady = isAuthLoaded !== false;
   const shortcutLabel = React.useMemo(
     () => resolveCommandShortcutLabel(window.navigator.platform),
     [],
@@ -274,10 +275,13 @@ function AppTopbar({
       clerkTrigger.click();
       return;
     }
+    if (!isAccountReady) {
+      return;
+    }
     if (!isSignedIn) {
       void navigate("/sign-in");
     }
-  }, [isSignedIn, navigate]);
+  }, [isAccountReady, isSignedIn, navigate]);
 
   return (
     <header className="app-topbar">
@@ -328,13 +332,14 @@ function AppTopbar({
         </button>
       </div>
       <IconButton
-        label={isSignedIn ? "Open account menu" : "Sign in"}
+        label={!isAccountReady ? "Account loading" : isSignedIn ? "Open account menu" : "Sign in"}
         onClick={handleProfile}
+        disabled={!isAccountReady}
       >
         <User size={16} aria-hidden="true" />
       </IconButton>
       <span className="app-topbar__profile-name" aria-hidden="true">
-        {isSignedIn ? user?.firstName ?? user?.username ?? "Profile" : "Sign in"}
+        {!isAccountReady ? "Account" : isSignedIn ? user?.firstName ?? user?.username ?? "Profile" : "Sign in"}
       </span>
       {isSignedIn ? (
         <div ref={clerkUserButtonRef} className="app-topbar__clerk-button">

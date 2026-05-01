@@ -7,6 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "../SettingsPage";
 
@@ -44,9 +45,22 @@ vi.mock("convex/react", () => ({
 
 vi.mock("../../../convex/_generated/api", () => ({ api }));
 
+vi.mock("@clerk/clerk-react", () => ({
+  useAuth: () => ({ isLoaded: true, isSignedIn: false }),
+  useUser: () => ({ user: null }),
+}));
+
 vi.mock("../../components/ProposalColorPickerPopover", () => ({
   ProposalColorPickerPopover: () => null,
 }));
+
+function renderSettings(initialEntry = "/settings") {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <SettingsPage />
+    </MemoryRouter>,
+  );
+}
 
 describe("SettingsPage preview controls", () => {
   beforeEach(() => {
@@ -81,9 +95,25 @@ describe("SettingsPage preview controls", () => {
     });
   });
 
+  it("opens the account tab from the settings query param and returns to document style", async () => {
+    const user = userEvent.setup();
+    renderSettings("/settings?tab=account");
+
+    expect(screen.getByRole("heading", { name: "Sign-in and sync" })).toBeInTheDocument();
+    expect(screen.getByText("You are signed out")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Review document style" }));
+
+    expect(screen.getByRole("heading", { name: "Style profiles" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Document style/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
   it("updates the live preview when selecting a different font pair", async () => {
     const user = userEvent.setup();
-    const { container } = render(<SettingsPage />);
+    const { container } = renderSettings();
 
     const activePair = container.querySelector(
       ".dasti-settings-font-pair-card--active",
@@ -121,7 +151,7 @@ describe("SettingsPage preview controls", () => {
   });
 
   it("renders all curated font pairs in the typography grid", () => {
-    const { container } = render(<SettingsPage />);
+    const { container } = renderSettings();
     const grid = screen.getByRole("group", { name: "Font pair" });
     const optionButtons = within(grid).getAllByRole("button");
 
@@ -136,7 +166,7 @@ describe("SettingsPage preview controls", () => {
 
   it("saves an explicit signature font on the current preset", async () => {
     const user = userEvent.setup();
-    render(<SettingsPage />);
+    renderSettings();
 
     const signatureGroup = screen.getByRole("group", { name: "Signature" });
     await user.click(
@@ -163,7 +193,7 @@ describe("SettingsPage preview controls", () => {
   });
 
   it("shows only auto and workshop style cards", () => {
-    const { container } = render(<SettingsPage />);
+    const { container } = renderSettings();
     const previewBadge = () =>
       container.querySelector(".dasti-settings-hero-preview__style-badge");
     const styleCardLabels = Array.from(
@@ -177,7 +207,7 @@ describe("SettingsPage preview controls", () => {
 
   it("saves workshop as canonical verbatiStyle on the preset slot", async () => {
     const user = userEvent.setup();
-    const { container } = render(<SettingsPage />);
+    const { container } = renderSettings();
     const workshopStyleButton = screen
       .getAllByRole("button", { name: /Workshop/ })
       .find((element) =>
@@ -211,7 +241,7 @@ describe("SettingsPage preview controls", () => {
   });
 
   it("renders the layout style cards for the available presets", () => {
-    const { container } = render(<SettingsPage />);
+    const { container } = renderSettings();
 
     expect(
       Array.from(
@@ -221,7 +251,7 @@ describe("SettingsPage preview controls", () => {
   });
 
   it("updates the hero preview tilt when the pointer moves", async () => {
-    const { container } = render(<SettingsPage />);
+    const { container } = renderSettings();
     const previewCard = container.querySelector<HTMLElement>(
       ".dasti-settings-hero-preview",
     );

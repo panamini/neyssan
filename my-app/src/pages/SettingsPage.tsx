@@ -1,5 +1,7 @@
 import React, { useRef, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useAuth, useUser } from "@clerk/clerk-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import {
   Check,
@@ -887,7 +889,36 @@ function SignatureSelector({
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
+type SettingsTab = "docstyle" | "account";
+
+const SETTINGS_TABS: Array<{
+  id: SettingsTab;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "docstyle",
+    label: "Document style",
+    description: "Tone, typography, signature, layout, and color presets.",
+  },
+  {
+    id: "account",
+    label: "Account",
+    description: "Sign-in state and sync status.",
+  },
+];
+
+function normalizeSettingsTab(value: string | null): SettingsTab {
+  return value === "account" ? "account" : "docstyle";
+}
+
 export function SettingsPage(): JSX.Element {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = normalizeSettingsTab(searchParams.get("tab"));
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
+  const isAuthReady = isAuthLoaded !== false;
   const presetsQuery = useQuery(api.proposalSettings.getPresets);
   const savePreset = useMutation(api.proposalSettings.savePreset);
   const setActivePreset = useMutation(api.proposalSettings.setActivePreset);
@@ -1014,6 +1045,12 @@ export function SettingsPage(): JSX.Element {
     ? PROPOSAL_PALETTE_OPTIONS.find((p) => p.id === currentPreset.paletteOverride) ?? null
     : null;
 
+  const selectSettingsTab = (tab: SettingsTab) => {
+    setSearchParams(tab === "docstyle" ? { tab: "docstyle" } : { tab: "account" });
+  };
+
+  const accountDisplayName = user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? user?.username ?? "Your account";
+
   return (
     <div className="dasti-page-scroll" style={{ minWidth: 0 }}>
       <div
@@ -1026,6 +1063,29 @@ export function SettingsPage(): JSX.Element {
           } as React.CSSProperties
         }
       >
+        <div className="dasti-settings-layout">
+          <nav className="dasti-settings-nav" aria-label="Settings sections">
+            <p className="dasti-settings-nav__eyebrow">Settings</p>
+            {SETTINGS_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={[
+                  "dasti-settings-nav__item",
+                  activeTab === tab.id ? "dasti-settings-nav__item--active" : "",
+                ].filter(Boolean).join(" ")}
+                aria-current={activeTab === tab.id ? "page" : undefined}
+                onClick={() => selectSettingsTab(tab.id)}
+              >
+                <span>{tab.label}</span>
+                <small>{tab.description}</small>
+              </button>
+            ))}
+          </nav>
+
+          <div className="dasti-settings-layout__content">
+            {activeTab === "docstyle" ? (
+              <>
         {/* ── Header ── */}
         <div className="dasti-settings-builder-header">
           <div>
@@ -1263,6 +1323,75 @@ export function SettingsPage(): JSX.Element {
                 <Check size={12} strokeWidth={2.4} aria-hidden="true" />
                 Set as default
               </button>
+            )}
+          </div>
+        </div>
+              </>
+            ) : (
+              <section className="dasti-settings-account" aria-labelledby="settings-account-title">
+                <div className="dasti-settings-account__header">
+                  <p className="dasti-settings-page__subtitle">Account</p>
+                  <h1 id="settings-account-title" className="dasti-settings-page__title">
+                    Sign-in and sync
+                  </h1>
+                  <p className="dasti-settings-page__subtitle">
+                    Keep resumes, jobs, style profiles, and proposals available across sessions.
+                  </p>
+                </div>
+
+                <div className="dasti-settings-account__card">
+                  <div>
+                    <p className="dasti-settings-account__kicker">Current status</p>
+                    <h2 className="dasti-settings-account__title">
+                      {!isAuthReady
+                        ? "Checking account"
+                        : isSignedIn
+                          ? accountDisplayName
+                          : "You are signed out"}
+                    </h2>
+                    <p className="dasti-settings-account__copy">
+                      {isSignedIn
+                        ? "Cloud sync is enabled for authenticated workspace data."
+                        : "Sign in to sync drafts and libraries instead of keeping them local to this browser."}
+                    </p>
+                  </div>
+                  <span
+                    className={[
+                      "dasti-settings-account__badge",
+                      isSignedIn ? "dasti-settings-account__badge--signed-in" : "",
+                    ].filter(Boolean).join(" ")}
+                  >
+                    {isSignedIn ? "Signed in" : "Signed out"}
+                  </span>
+                </div>
+
+                <div className="dasti-settings-account__actions">
+                  {isSignedIn ? (
+                    <button
+                      type="button"
+                      className="dasti-button dasti-button--secondary dasti-button--sm"
+                      onClick={() => navigate("/sign-out")}
+                    >
+                      Sign out
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="dasti-button dasti-button--sm"
+                      onClick={() => navigate("/sign-in")}
+                    >
+                      Sign in
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="dasti-button dasti-button--secondary dasti-button--sm"
+                    onClick={() => selectSettingsTab("docstyle")}
+                  >
+                    Review document style
+                  </button>
+                </div>
+              </section>
             )}
           </div>
         </div>
