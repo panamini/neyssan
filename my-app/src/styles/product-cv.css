@@ -2658,6 +2658,20 @@
   max-inline-size: min(100%, var(--cv-editor-reading-measure-max));
 }
 
+.paper-rich-inline-editor .ProseMirror {
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  line-height: inherit;
+  color: inherit;
+  outline: none;
+  white-space: pre-wrap;
+}
+
+.paper-rich-inline-editor .ProseMirror p {
+  margin: 0;
+}
+
 .dasti-rich--cv-reading-measure .ProseMirror,
 .rich-content--cv-reading-measure .ProseMirror {
   max-inline-size: min(100%, var(--cv-editor-reading-measure-max));

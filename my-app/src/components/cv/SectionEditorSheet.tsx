@@ -138,7 +138,9 @@ function DrawerRichTextEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
-  const lastDocJsonRef = React.useRef(JSON.stringify(initialContent));
+  const latestDocRef = React.useRef<RemirrorJSON>(initialContent as RemirrorJSON);
+  const lastExternalDocJsonRef = React.useRef(JSON.stringify(initialContent));
+  const isFocusedRef = React.useRef(false);
   const { manager, state, onChange } = useRemirror({
     extensions: () => extensions as any,
     content: initialContent as any,
@@ -147,12 +149,14 @@ function DrawerRichTextEditor({
   React.useEffect(() => {
     const nextDoc = ensureRemirrorDoc(value as RemirrorJSON | string | undefined | null);
     const nextJson = JSON.stringify(nextDoc);
-    if (nextJson === lastDocJsonRef.current) return;
+    if (nextJson === lastExternalDocJsonRef.current) return;
+    lastExternalDocJsonRef.current = nextJson;
+    if (isFocusedRef.current) return;
     const nextState = (manager as any)?.createState?.({ content: nextDoc as any });
     const view = (manager as any)?.view;
     if (nextState && typeof view?.updateState === "function") {
       view.updateState(nextState);
-      lastDocJsonRef.current = nextJson;
+      latestDocRef.current = nextDoc;
     }
   }, [manager, value]);
 
@@ -163,11 +167,14 @@ function DrawerRichTextEditor({
         ((manager as any)?.view?.state?.doc?.toJSON?.() as RemirrorJSON | undefined) ??
         ensureRemirrorDoc(undefined as any);
       const nextDoc = ensureRemirrorDoc(doc as any);
-      lastDocJsonRef.current = JSON.stringify(nextDoc);
-      onChangeDoc(nextDoc);
+      latestDocRef.current = nextDoc;
     },
-    [manager, onChange, onChangeDoc],
+    [manager, onChange],
   );
+
+  const commitLatestDoc = React.useCallback(() => {
+    onChangeDoc(latestDocRef.current);
+  }, [onChangeDoc]);
 
   return (
     <div
@@ -175,6 +182,16 @@ function DrawerRichTextEditor({
       data-cv-drawer-rich-editor="true"
       data-testid={testId}
       aria-label={ariaLabel}
+      onFocusCapture={() => {
+        isFocusedRef.current = true;
+      }}
+      onBlurCapture={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          return;
+        }
+        isFocusedRef.current = false;
+        commitLatestDoc();
+      }}
     >
       <Remirror manager={manager} initialContent={state} onChange={handleChange}>
         <div className="rich-content">
