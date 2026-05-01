@@ -455,7 +455,8 @@ function AppShell(): JSX.Element {
         <OnboardingReplay
           open={onboardingReplayOpen}
           onClose={() => setOnboardingReplayOpen(false)}
-          onNavigate={(to) => navigate(to)}
+          onNavigate={(to, options) => navigate(to, options)}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         />
       </div>
     </CvLibraryProvider>
