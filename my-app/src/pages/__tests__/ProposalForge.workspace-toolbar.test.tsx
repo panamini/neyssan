@@ -1,5 +1,5 @@
 import React from "react";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -339,7 +339,30 @@ describe("ProposalForge workbench layout", () => {
     expect(screen.getByTestId("proposal-input-form").closest("[hidden]")).toBeTruthy();
   });
 
-  it("keeps the hidden compose runtime wired to rail CV and tone state", () => {
+  it("keeps the hidden compose runtime wired to the rail CV menu and tone state", async () => {
+    window.localStorage.setItem(
+      "cvDocuments",
+      JSON.stringify([
+        {
+          id: "cv_editorial",
+          title: "Editorial v3",
+          metadata: {
+            createdAt: "2026-04-28T00:00:00.000Z",
+            updatedAt: "2026-04-28T00:00:00.000Z",
+            version: 1,
+          },
+          sections: [
+            {
+              id: "profile",
+              type: "profile",
+              title: "Profile",
+              content: "Frontend Engineer",
+            },
+          ],
+        },
+      ]),
+    );
+
     renderProposalForge();
 
     let lastInputCall =
@@ -370,14 +393,18 @@ describe("ProposalForge workbench layout", () => {
         name: "Choose a CV Attach one to personalize the draft.",
       }),
     );
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Editorial v3" }));
 
-    lastInputCall =
-      proposalInputFormSpy.mock.calls[proposalInputFormSpy.mock.calls.length - 1]?.[0];
-    expect(lastInputCall).toMatchObject({
-      cvPickerOpen: true,
-      externalVoicePreset: "expert",
+    await waitFor(() => {
+      lastInputCall =
+        proposalInputFormSpy.mock.calls[proposalInputFormSpy.mock.calls.length - 1]?.[0];
+      expect(lastInputCall).toMatchObject({
+        activeCvId: "cv_editorial",
+        cvPickerOpen: false,
+        externalVoicePreset: "expert",
+      });
     });
-    expect(screen.queryByRole("button", { name: /pick cv/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Choose resume" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Balanced" })).not.toBeInTheDocument();
   });
 

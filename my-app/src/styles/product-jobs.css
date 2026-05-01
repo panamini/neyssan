@@ -376,6 +376,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
+  width: 100%;
   color: var(--tm2);
   font-size: var(--ts);
   line-height: 1.35;
@@ -424,6 +425,7 @@
 }
 
 .dasti-jobs-row__meta-favorite {
+  margin-inline-start: auto;
   color: var(--ac);
   font-size: var(--tx);
   font-weight: var(--font-label-weight);

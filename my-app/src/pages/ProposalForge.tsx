@@ -5644,10 +5644,22 @@ export function ProposalForge(): JSX.Element {
   );
 
   const isSavedView = requestedView === "saved";
-  const hasLocalResumes = React.useMemo(
-    () => listLocalCvPickerOptions(attachedCvId).length > 0,
+  const sourceCvOptions = React.useMemo(
+    () =>
+      listLocalCvPickerOptions(attachedCvId).map((option) => ({
+        id: option.id,
+        title: option.title,
+        description:
+          option.desiredPosition ||
+          option.profileName ||
+          option.updatedAt ||
+          option.createdAt ||
+          null,
+        selected: option.id === attachedCvId || option.isActive,
+      })),
     [attachedCvId],
   );
+  const hasLocalResumes = sourceCvOptions.length > 0;
   const attachedCvDisplayTitle = React.useMemo(() => {
     if (!attachedCvId) return null;
     return (
@@ -6823,7 +6835,9 @@ export function ProposalForge(): JSX.Element {
                           statusMessage={statusMessage}
                         />
                       }
-                      onOpenCvPicker={handleToolbarCvPickerToggle}
+                      cvOptions={sourceCvOptions}
+                      onSelectCv={handleAttachedCvChange}
+                      onClearCv={() => handleAttachedCvChange(null)}
                       hasProposalContent={Boolean(proposalContent)}
                       generateLabel={composeGenerateControl.label}
                       generateDisabled={composeGenerateControl.disabled || loading || isLoadingHandoff}
