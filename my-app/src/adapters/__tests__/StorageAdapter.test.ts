@@ -4,6 +4,102 @@ import {
   ConvexStorageAdapter,
   mapPersistedProfileToCvDocument,
 } from "../StorageAdapter";
+import {
+  encodeCvDocumentForConvex,
+  getMaxNestingDepth,
+  isPersistedRemirrorJson,
+} from "../cvDocumentPersistence";
+import { mapCvDocumentToResumeData } from "../../features/verbati/cvDocumentToResumeData";
+
+const richResponsibilitiesDoc = {
+  type: "doc",
+  content: [
+    {
+      type: "paragraph",
+      content: [{ type: "text", text: "Led delivery", marks: [{ type: "bold" }] }],
+    },
+    {
+      type: "bullet_list",
+      content: [
+        {
+          type: "list_item",
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                { type: "text", text: "Shipped resilient workflows", marks: [{ type: "bold" }] },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+function buildRichCv() {
+  const cv = generateCvTemplateV1("Rich Persistence CV");
+  cv.sections = [
+    {
+      id: "summary-rich",
+      type: "summary",
+      title: "Summary",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "summary-item",
+          summary: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "Bold summary", marks: [{ type: "bold" }] }],
+              },
+            ],
+          },
+        },
+      ],
+    } as any,
+    {
+      id: "experience-rich",
+      type: "experience",
+      title: "Experience",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "exp-rich",
+          company: "Acme",
+          position: "Lead",
+          startDate: "2024-01-01",
+          endDate: null,
+          responsibilities: richResponsibilitiesDoc,
+        },
+      ],
+    } as any,
+    {
+      id: "project-rich",
+      type: "projects",
+      title: "Projects",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "project-item",
+          name: "Project Atlas",
+          description: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "Project detail", marks: [{ type: "italic" }] }],
+              },
+            ],
+          },
+        },
+      ],
+    } as any,
+  ];
+  return cv;
+}
 
 describe("StorageAdapter persistence", () => {
   beforeEach(() => {
@@ -29,6 +125,63 @@ describe("StorageAdapter persistence", () => {
         }),
       }),
     );
+  });
+
+  it("encodes rich Remirror docs into Convex-safe shallow fields on save", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = buildRichCv();
+
+    await adapter.save(cv);
+
+    const payload = patchMutation.mock.calls[0][0].patch;
+    const summary = payload.cvDocument.sections[0].structuredContent[0].summary;
+    const responsibilities = payload.cvDocument.sections[1].structuredContent[0].responsibilities;
+    const projectDescription = payload.cvDocument.sections[2].structuredContent[0].description;
+
+    expect(isPersistedRemirrorJson(summary)).toBe(true);
+    expect(isPersistedRemirrorJson(responsibilities)).toBe(true);
+    expect(isPersistedRemirrorJson(projectDescription)).toBe(true);
+    expect(responsibilities.json).toContain("bullet_list");
+    expect(responsibilities.json).toContain("bold");
+    expect(JSON.stringify(payload.cvDocument)).not.toContain('"type":"doc"');
+    expect(JSON.stringify(payload.cvDocument)).not.toContain("<p");
+    expect(getMaxNestingDepth(payload)).toBeLessThanOrEqual(16);
+  });
+
+  it("decodes persisted rich fields and still accepts old raw Remirror docs", () => {
+    const cv = buildRichCv();
+    const encoded = encodeCvDocumentForConvex(cv);
+
+    const restored = mapPersistedProfileToCvDocument(
+      { profileId: cv.id, cvDocument: encoded },
+      cv.id,
+    );
+    const oldRawRestored = mapPersistedProfileToCvDocument(
+      { profileId: cv.id, cvDocument: cv },
+      cv.id,
+    );
+
+    expect(restored?.sections[1].structuredContent?.[0].responsibilities).toEqual(
+      richResponsibilitiesDoc,
+    );
+    expect(oldRawRestored?.sections[1].structuredContent?.[0].responsibilities).toEqual(
+      richResponsibilitiesDoc,
+    );
+  });
+
+  it("renders rich summary, project description, and responsibility bullets after save/load", () => {
+    const cv = buildRichCv();
+    const restored = mapPersistedProfileToCvDocument(
+      { profileId: cv.id, cvDocument: encodeCvDocumentForConvex(cv) },
+      cv.id,
+    );
+
+    expect(restored).not.toBeNull();
+    const resumeData = mapCvDocumentToResumeData(restored! as any);
+    expect(resumeData.summary).toContain("Bold summary");
+    expect(JSON.stringify(resumeData.experience)).toContain("Shipped resilient workflows");
+    expect(JSON.stringify(resumeData.projects)).toContain("Project detail");
   });
 
   it("does not duplicate the CV sections beside the embedded cvDocument payload", async () => {
