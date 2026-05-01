@@ -42,6 +42,7 @@ vi.mock('uuid', () => {
 
 // Key used by the provider
 const LOCAL_STORAGE_KEY = 'cvDocuments';
+const ACTIVE_CV_STORAGE_KEY = 'dasti:cv-library-current-id:v1';
 
 function TestConsumer({ setCtx }: { setCtx: (c: any) => void }) {
   const ctx = useCvLibrary();
@@ -263,6 +264,73 @@ describe('CvLibraryContext', () => {
     expect(ctx.cvs.length).toBe(1);
     expect(ctx.cvs[0].id).toBe('cv-123');
     expect(ctx.cvs[0].title).toBe('Stored CV');
+  });
+
+  it('restores the active CV id from the tiny persisted selection key', async () => {
+    const now = '2026-04-17T12:00:00.000Z';
+    const storedCv = {
+      id: 'cv-active',
+      title: 'Restored CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: [
+        {
+          id: 'profile-cv-active',
+          title: 'Profile',
+          type: 'profile',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'profile-item-cv-active',
+              name: 'Ada Lovelace',
+            },
+          ],
+        },
+      ],
+    };
+    const newerCv = {
+      ...storedCv,
+      id: 'cv-newer',
+      title: 'Newer but inactive CV',
+      metadata: {
+        ...storedCv.metadata,
+        updatedAt: '2026-04-18T12:00:00.000Z',
+      },
+    };
+    mockLocalStorage.setItem(
+      LOCAL_STORAGE_KEY,
+      JSON.stringify([
+        {
+          id: newerCv.id,
+          title: newerCv.title,
+          metadata: newerCv.metadata,
+          profilePreview: { name: 'Grace Hopper' },
+        },
+        {
+          id: storedCv.id,
+          title: storedCv.title,
+          metadata: storedCv.metadata,
+          profilePreview: { name: 'Ada Lovelace' },
+        },
+      ]),
+    );
+    mockLocalStorage.setItem(`cv:${storedCv.id}`, JSON.stringify(storedCv));
+    mockLocalStorage.setItem(`cv:${newerCv.id}`, JSON.stringify(newerCv));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, storedCv.id);
+    window.history.pushState({}, '', '/cv');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv-active'));
+    expect(ctx.currentCv.title).toBe('Restored CV');
   });
 
   it('createNewCv adds a CV, sets it current and persists to localStorage', async () => {
@@ -756,7 +824,36 @@ describe('CvLibraryContext', () => {
     expect(mockLocalStorage.getItem('cvActiveId')).toBe('cv_beta');
   });
 
-  it('does not clear the stored active cv id during a failed restore', async () => {
+  it('falls back to the most recently updated local cv when the stored active cv id is stale', async () => {
+    const beta = {
+      id: 'cv_beta',
+      title: 'Beta CV',
+      metadata: {
+        createdAt: '2026-04-29T00:00:00.000Z',
+        updatedAt: '2026-04-30T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([beta]));
+    mockLocalStorage.setItem('cv:cv_beta', JSON.stringify(beta));
+    mockLocalStorage.setItem('cvActiveId', 'cv_missing');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_beta'));
+    expect(ctx.currentCv?.title).toBe('Beta CV');
+    expect(mockLocalStorage.getItem('cvActiveId')).toBe('cv_beta');
+  });
+
+  it('clears the stored active cv id when no restorable cv exists', async () => {
     mockLocalStorage.setItem('cvActiveId', 'cv_missing');
 
     let ctx: any;
@@ -769,7 +866,7 @@ describe('CvLibraryContext', () => {
     await waitFor(() => expect(ctx).toBeDefined());
     await waitFor(() => expect(ctx.isLoading).toBe(false));
     expect(ctx.currentCvId).toBeNull();
-    expect(mockLocalStorage.getItem('cvActiveId')).toBe('cv_missing');
+    await waitFor(() => expect(mockLocalStorage.getItem('cvActiveId')).toBeNull());
   });
 
   it('migrates legacy library and doc cache keys into the current storage keys on mount', async () => {

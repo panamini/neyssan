@@ -316,6 +316,7 @@ export async function runEditorSelectionTransform(args: {
       "You are editing a user's text selection in place. Return only the replacement text. Do not add explanations, code fences, or surrounding quotes.",
     prompt,
     maxOutputTokens: 500,
+    providerPreference: "default",
   });
 
   return {

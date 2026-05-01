@@ -46,7 +46,10 @@ import { collectResumeFontDebugSnapshot } from "../../lib/resume-font-debug";
 import type { VerbatiLayoutPreset, VerbatiStylePreset } from "./types";
 import { getResumeTemplateDefinition } from "../../lib/layout/resumeTemplates";
 import type { ResumePreviewMetrics } from "./resume/ResumePage";
-import type { ResumeSectionActions } from "./resume/ResumeOneColAtsPage";
+import type {
+  ResumePaperAiState,
+  ResumeSectionActions,
+} from "./resume/ResumeOneColAtsPage";
 
 type VerbatiResumePreviewProps = {
   data: ResumeData;
@@ -63,6 +66,7 @@ type VerbatiResumePreviewProps = {
   onLinkIntent?: (intent: ResumeLinkIntent) => void;
   inlineEditing?: ResumeInlineEditing | null;
   sectionActions?: ResumeSectionActions | null;
+  paperAi?: ResumePaperAiState | null;
   onRemoveSection?:
     | ((section: {
         sectionId: string;
@@ -243,6 +247,7 @@ export function VerbatiResumePreview({
   onLinkIntent,
   inlineEditing = null,
   sectionActions = null,
+  paperAi = null,
   onRemoveSection,
 }: VerbatiResumePreviewProps): JSX.Element {
   const previewRootRef = React.useRef<HTMLDivElement | null>(null);
@@ -850,6 +855,7 @@ export function VerbatiResumePreview({
               activeTarget={activeTarget}
               inlineEditing={inlineEditing}
               sectionActions={sectionActions}
+              paperAi={paperAi}
               onStablePageCountChange={setStableWorkshopPageCount}
             />
           ) : (
