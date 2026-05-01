@@ -814,6 +814,12 @@
   justify-self: stretch;
 }
 
+.dasti-job-match-panel .dasti-match-read__details {
+  width: 100%;
+  justify-self: stretch;
+  padding: 0;
+}
+
 .dasti-jobs-detail__actions {
   display: flex;
   flex-wrap: wrap;

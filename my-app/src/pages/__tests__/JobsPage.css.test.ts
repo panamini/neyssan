@@ -128,6 +128,9 @@ describe("JobsPage CSS contracts", () => {
       /\.dasti-job-match-panel__breakdown\s*\{[\s\S]*width:\s*100%;/,
     );
     expect(productCss).toMatch(
+      /\.dasti-job-match-panel \.dasti-match-read__details\s*\{[\s\S]*width:\s*100%;[\s\S]*justify-self:\s*stretch;[\s\S]*padding:\s*0;/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-jobs-match-chip,\s*\.dasti-jobs-row__meta-pill\s*\{[\s\S]*min-height:\s*28px;[\s\S]*background:\s*var\(--sf2\);[\s\S]*line-height:\s*1;[\s\S]*letter-spacing:\s*0;/,
     );
     expect(productCss).toMatch(
