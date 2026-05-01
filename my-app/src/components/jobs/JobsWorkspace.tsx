@@ -2135,6 +2135,7 @@ function JobsPageContent(): JSX.Element {
           <div
             className={[
               "dasti-jobs-layout",
+              "jobs",
               isMobileJobsLayout && selectedJobId
                 ? "dasti-jobs-layout--mobile-detail"
                 : null,
@@ -2193,7 +2194,7 @@ function JobsPageContent(): JSX.Element {
 
             {shouldShowDetailPane ? (
               <section
-                className="dasti-jobs-detail-pane"
+                className="dasti-jobs-detail-pane jobs__detail"
                 aria-label="Job detail"
               >
                 {renderSelectedJobDetail()}

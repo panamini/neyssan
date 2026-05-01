@@ -129,7 +129,7 @@ export function JobMatchPanel({
   return (
     <section
       id="job-match"
-      className="dasti-proposal-sheet dasti-match-read dasti-job-match-panel"
+      className="dasti-proposal-sheet dasti-match-read dasti-job-match-panel jobs__match"
       aria-label="Match"
       data-expanded={isExpanded ? "true" : "false"}
     >
