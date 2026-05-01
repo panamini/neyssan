@@ -1365,9 +1365,16 @@
     width: 240px;
     height: 32px;
     padding: 0 var(--s2);
+    border: 1px solid transparent;
     border-radius: var(--radius-1);
     background: var(--sf2);
+    outline: 2px solid transparent;
+    outline-offset: 2px;
     transition: width var(--motion-duration-medium) var(--motion-ease-emphasized);
+  }
+
+  .ds-ask-ai:focus-within {
+    outline-color: var(--fr);
   }
 
   .ds-ask-ai__input {
@@ -1381,6 +1388,7 @@
     font: inherit;
     font-size: var(--ts);
     outline: none;
+    box-shadow: none !important;
   }
 
   .ds-ask-ai__input::placeholder {
@@ -1389,6 +1397,31 @@
 
   .ds-ask-ai[data-loading="true"] .ds-ask-ai__input {
     color: var(--tm2);
+  }
+
+  .ds-ask-ai__send {
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-1);
+    background: transparent;
+    color: var(--ti);
+    cursor: pointer;
+  }
+
+  .ds-ask-ai__send:hover:not(:disabled),
+  .ds-ask-ai__send:focus-visible {
+    background: var(--sf3);
+  }
+
+  .ds-ask-ai__send:disabled {
+    color: var(--tg2);
+    cursor: not-allowed;
+    opacity: 0.54;
   }
 
   .ds-sidebar__item--active {

@@ -172,22 +172,7 @@ describe("mapCvDocumentToResumeData", () => {
       achievements: ["achievements"],
       hobbies: ["hobbies"],
     });
-    expect(mapped.metadata).toEqual([
-      {
-        label: "Location",
-        value: "Paris, FR",
-        itemId: "location",
-        sectionId: "profile",
-        sectionType: "profile",
-      },
-      {
-        label: "Portfolio",
-        value: "elenamarlowe.design",
-        itemId: "website",
-        sectionId: "profile",
-        sectionType: "profile",
-      },
-    ]);
+    expect(mapped.metadata).toEqual([]);
     expect(mapped.contact).toEqual([
       {
         label: "Email",
@@ -204,9 +189,9 @@ describe("mapCvDocumentToResumeData", () => {
         sectionType: "profile",
       },
       {
-        label: "Web",
-        value: "elenamarlowe.design",
-        itemId: "website",
+        label: "Location",
+        value: "Paris, FR",
+        itemId: "location",
         sectionId: "profile",
         sectionType: "profile",
       },
@@ -214,6 +199,13 @@ describe("mapCvDocumentToResumeData", () => {
         label: "LinkedIn",
         value: "linkedin.com/in/elenamarlowe",
         itemId: "linkedin",
+        sectionId: "profile",
+        sectionType: "profile",
+      },
+      {
+        label: "Website",
+        value: "elenamarlowe.design",
+        itemId: "website",
         sectionId: "profile",
         sectionType: "profile",
       },
@@ -420,6 +412,46 @@ describe("mapCvDocumentToResumeData", () => {
     expect(mapped.title).toBe("");
     expect(mapped.title).not.toBe(doc.title);
     expect(mapped.title).not.toBe(mapped.name);
+  });
+
+  it("maps legacy portfolio profile data into canonical Website contact without duplication", () => {
+    const doc: CvDocument = {
+      id: "cv-portfolio",
+      title: "Portfolio alias",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "profile",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-1",
+              name: "Elena Marlowe",
+              portfolio: "elenamarlowe.design",
+            } as Record<string, unknown>,
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.contact).toEqual([
+      {
+        label: "Website",
+        value: "elenamarlowe.design",
+        itemId: "website",
+        sectionId: "profile",
+        sectionType: "profile",
+      },
+    ]);
+    expect(mapped.contact.some((item) => item.label === "Portfolio")).toBe(false);
   });
 
   it("returns no synthetic preview summary when the summary section is absent", () => {
