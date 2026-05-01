@@ -43,6 +43,24 @@ describe("JobsPage CSS contracts", () => {
     );
   });
 
+  it("keeps Jobs list rows and match panel visually light for the skeleton surface", () => {
+    expect(productCss).toMatch(
+      /\.dasti-jobs-list\s*\{[\s\S]*gap:\s*2px;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row\s*\{[\s\S]*border:\s*1px solid transparent;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row:hover,\s*\.dasti-jobs-row:focus-visible\s*\{[\s\S]*background:\s*var\(--sf2\);[\s\S]*box-shadow:\s*none;[\s\S]*transform:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row--active\s*\{[\s\S]*border-color:\s*var\(--border-strong\);[\s\S]*background:\s*var\(--sfr\);[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-job-match-panel\s*\{[\s\S]*border:\s*1px solid var\(--border-soft\);[\s\S]*background:\s*var\(--sf1\);[\s\S]*box-shadow:\s*none;[\s\S]*padding:\s*var\(--space-4\);/,
+    );
+  });
+
   it("anchors the resume picker drawer to the resume control with the shared surface gap token", () => {
     expect(productCss).toMatch(
       /\.dasti-jobs-detail__header-actions\s*\{[\s\S]*display:\s*inline-flex;[\s\S]*align-items:\s*center;[\s\S]*gap:\s*var\(--space-1\);/,
