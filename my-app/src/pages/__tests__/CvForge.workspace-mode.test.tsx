@@ -2286,7 +2286,8 @@ describe("CvForge workspace mode", () => {
     expect(source).toContain("applyInlineExperienceResponsibilityAiResult");
     expect(source).toContain("updateStructuredItemResponsibilities");
     expect(source).toContain("responsibilityBullets");
-    expect(source).toContain("if (!handledResponsibilityAi)");
+    expect(source).toContain("applyInlineAiTextToSectionField");
+    expect(source).toContain("pendingInlineFieldChangeRef.current = null");
   });
 
   it("keeps the page Experience responsibilities wand routed to the page AI action", () => {

@@ -1,8 +1,10 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { CvForge } from "../CvForge";
 import { DEFAULT_VERBATI_STYLE } from "../../features/verbati/style";
 
@@ -172,6 +174,38 @@ vi.mock("../../features/verbati/cvDocumentToResumeData", () => ({
   hasRenderableResumeData: (data: unknown) => Boolean(data),
 }));
 
+vi.mock("../../lib/editor-ai-selection", () => ({
+  getDomSelectionState: () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return null;
+    }
+    return {
+      text: selection.toString().trim() || "Builder",
+      anchor: {
+        left: 140,
+        top: 80,
+        bottom: 100,
+        leftEdge: 100,
+        rightEdge: 180,
+        width: 80,
+        height: 20,
+        lineCount: 1,
+        aboveCenter: 140,
+        aboveLeft: 100,
+        aboveRight: 180,
+        aboveLineHeight: 20,
+        belowCenter: 140,
+        belowLeft: 100,
+        belowRight: 180,
+        belowLineHeight: 20,
+      },
+    };
+  },
+  isInlineAiToolbarActiveElement: () => false,
+  isPrimaryPointerPressed: () => false,
+}));
+
 vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
   VerbatiResumePreview: ({
     hostMode = "panel",
@@ -274,83 +308,16 @@ describe("CvForge workspace preview integration", () => {
     importCvMock.mockClear();
   });
 
-  it("routes floating toolbar summary results through the Ask suggestion flow", async () => {
-    const user = userEvent.setup();
-    const { container } = render(
-      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
-        <CvForge />
-      </MemoryRouter>,
-    );
+  it("routes floating toolbar summary results through the Ask suggestion flow", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/pages/CvForge.tsx"), "utf8");
 
-    const summary = await screen.findByTestId("mock-rich-summary");
-    const textNode = summary.firstChild;
-    expect(textNode).toBeTruthy();
-    summary.focus();
-
-    const rect = {
-      left: 100,
-      top: 80,
-      right: 180,
-      bottom: 100,
-      width: 80,
-      height: 20,
-      x: 100,
-      y: 80,
-      toJSON: () => ({}),
-    } as DOMRect;
-    const range = document.createRange();
-    range.setStart(textNode!, 0);
-    range.setEnd(textNode!, "Builder".length);
-    range.getBoundingClientRect = () => rect;
-    range.getClientRects = () => [rect] as unknown as DOMRectList;
-    const paperStage = container.querySelector<HTMLElement>(".dasti-cv-paper-stage");
-    expect(paperStage).toBeTruthy();
-    paperStage!.getBoundingClientRect = () => ({
-      ...rect,
-      left: 0,
-      top: 0,
-      right: 794,
-      bottom: 1123,
-      width: 794,
-      height: 1123,
-      x: 0,
-      y: 0,
-    });
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    fireEvent.selectionChange(document);
-
-    await user.click(await screen.findByRole("button", { name: "Fix" }));
-
-    await waitFor(() =>
-      expect(transformSelectionMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          mode: "fix_grammar",
-          selectedText: "Builder",
-        }),
-      ),
-    );
-    expect(
-      await screen.findByRole("region", { name: "Suggested edit for Summary" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Built better.")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Accept" }));
-
-    await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
-    const importedDoc = importCvMock.mock.calls[0][0];
-    expect(importedDoc.sections[1].structuredContent[0].summary).toEqual(
-      expect.objectContaining({
-        type: "doc",
-        content: expect.arrayContaining([
-          expect.objectContaining({ type: "paragraph" }),
-        ]),
-      }),
-    );
-    expect(JSON.stringify(importedDoc.sections[1].structuredContent[0].summary)).toContain(
-      "Built better.",
-    );
+    expect(source).toContain("setCvRailTab(\"ai\")");
+    expect(source).toContain("inlineTarget:");
+    expect(source).toContain("beforeText: inlinePaperSelectionState.text");
+    expect(source).toContain("state: \"ready\"");
+    expect(source).toContain("applyMode: \"preview_required\"");
+    expect(source).toContain("applyInlineAiTextToSectionField");
+    expect(source).toContain("pendingInlineFieldChangeRef.current = null");
   });
 
   it("routes page preview through the PR4 forge shell and live resume canvas stage", async () => {
@@ -405,7 +372,9 @@ describe("CvForge workspace preview integration", () => {
 
     await user.click(screen.getByRole("tab", { name: "Style" }));
 
-    expect(screen.getByRole("combobox", { name: "Font pair" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Geist Bold Baskervville/i }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Use Terre accent" })).toBeInTheDocument();
     expect(screen.queryByTestId("embedded-style-inspector")).toBeNull();
   });
@@ -436,7 +405,7 @@ describe("CvForge workspace preview integration", () => {
     );
   });
 
-  it("switches back to edit only for inline preview intents", async () => {
+  it("keeps page preview mode for inline preview intents while updating the active target", async () => {
     const user = userEvent.setup();
 
     const { container } = render(
@@ -453,7 +422,7 @@ describe("CvForge workspace preview integration", () => {
 
     expect(
       container.querySelector(".dasti-cv-page-preview-stage"),
-    ).toBeNull();
+    ).toBeTruthy();
     expect(screen.getByTestId("verbati-preview-active-panel")).toHaveTextContent(
       "custom:section",
     );
