@@ -134,8 +134,8 @@ export function DashboardPage(): JSX.Element {
                 state="active"
                 number="3"
                 title="Capture jobs"
-                description="Install the extension or paste a URL in Jobs."
-                action="Browse"
+                description="Install the extension or pick an existing job in Jobs."
+                action="Open jobs"
                 onAction={() => navigate("/jobs")}
               />
               <QuickStartStep
