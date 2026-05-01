@@ -393,6 +393,18 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
         },
         text: string,
       ) => void;
+      onFieldDocChange?: (
+        target: {
+          sectionId: string;
+          sectionType: string;
+          fieldPath: string;
+          fieldKind: "paragraph" | "heading" | "bullet" | "chip" | "date" | "meta";
+          itemIndex?: number;
+          bulletIndex?: number;
+          chipIndex?: number;
+        },
+        doc: any,
+      ) => void;
       onAddItem?: (request: {
         sectionId: string;
         sectionType: string;
@@ -714,6 +726,44 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
             }
           >
             Test blur second bullet
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onFieldDocChange?.(
+                {
+                  sectionId: "experience-cv_123",
+                  sectionType: "experience",
+                  fieldPath: "structuredContent.item:experience-item-cv_123.responsibilities",
+                  fieldKind: "paragraph",
+                },
+                {
+                  type: "doc",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [{ type: "text", text: "Edited paragraph." }],
+                    },
+                    {
+                      type: "bulletList",
+                      content: [
+                        {
+                          type: "listItem",
+                          content: [
+                            {
+                              type: "paragraph",
+                              content: [{ type: "text", text: "Edited bullet." }],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              )
+            }
+          >
+            Test edit rich responsibilities doc
           </button>
         </>
       ) : null}
@@ -1229,6 +1279,34 @@ describe("CvForge workspace mode", () => {
     expect(saved.responsibilities.content[1].content).toHaveLength(1);
     expect(readSavedPlainText(saved.responsibilities.content[1])).toBe("Typed bullet.");
     expect(saved.responsibilityBullets).toEqual(["Typed bullet."]);
+  });
+
+  it("saves rich responsibility body edits without dropping paragraph or bullets", async () => {
+    const user = userEvent.setup();
+    const { state, importCv } = buildStateWithExperienceItem({
+      id: "experience-item-cv_123",
+      position: "Lead designer",
+      company: "Studio",
+      responsibilities: mixedResponsibilityDoc("Original paragraph.", ["Original bullet."]),
+    });
+    useCvLibraryMock.mockReturnValue(state);
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Test edit rich responsibilities doc" }));
+
+    await waitFor(() => expect(importCv).toHaveBeenCalled());
+    const saved = getLastSavedExperienceItem(importCv);
+    expect(readSavedPlainText(saved.responsibilities.content[0])).toBe(
+      "Edited paragraph.",
+    );
+    expect(saved.responsibilities.content[1].type).toBe("bulletList");
+    expect(readSavedPlainText(saved.responsibilities.content[1])).toBe("Edited bullet.");
+    expect(saved.responsibilityBullets).toEqual(["Edited bullet."]);
   });
 
   it("clicking add bullet twice creates exactly two canonical bullets", async () => {
@@ -1758,7 +1836,7 @@ describe("CvForge workspace mode", () => {
       ["Lead designer", "experience-cv_123", "structuredContent.item:experience-item-cv_123.position", "heading"],
       ["Studio", "experience-cv_123", "structuredContent.item:experience-item-cv_123.company", "meta"],
       ["Remote", "experience-cv_123", "structuredContent.item:experience-item-cv_123.location", "meta"],
-      ["Led product design.", "experience-cv_123", "structuredContent.item:experience-item-cv_123.responsibilityBullets.0", "bullet"],
+      ["Led product design.", "experience-cv_123", "structuredContent.item:experience-item-cv_123.responsibilities", "paragraph"],
       ["MFA", "education-cv_123", "structuredContent.item:education-item-cv_123.degree", "heading"],
       ["Interaction design", "education-cv_123", "structuredContent.item:education-item-cv_123.fieldOfStudy", "heading"],
       ["Design School", "education-cv_123", "structuredContent.item:education-item-cv_123.institution", "meta"],
@@ -1780,7 +1858,8 @@ describe("CvForge workspace mode", () => {
     ] as const;
 
     for (const [text, sectionId, fieldPath, fieldKind] of editableExpectations) {
-      const field = screen.getByText(text);
+      const textNode = screen.getByText(text);
+      const field = textNode.closest<HTMLElement>("[data-inline-paper-editable='true']") ?? textNode;
       const isRichMultilineField =
         sectionId === "summary-cv_123" || fieldPath.endsWith(".responsibilities");
       if (isRichMultilineField && field.tagName === "TEXTAREA") {
@@ -1852,18 +1931,20 @@ describe("CvForge workspace mode", () => {
     );
 
     const bulletDisplay = screen.getByText("Led product design.");
-    await user.click(bulletDisplay);
-    const bulletField = screen.getByRole("textbox", { name: "Edit experience bullet" });
-    bulletField.textContent = "Led product strategy.";
-    fireEvent.input(bulletField);
-    expect(onFieldChange).toHaveBeenCalledWith(
+    const responsibilitiesField = bulletDisplay.closest<HTMLElement>(
+      '[data-paper-field-path="structuredContent.item:experience-item-cv_123.responsibilities"]',
+    );
+    expect(responsibilitiesField).not.toBeNull();
+    fireEvent.focus(responsibilitiesField!);
+    expect(onActivate).toHaveBeenCalledWith(
       expect.objectContaining({
         sectionId: "experience-cv_123",
-        fieldPath: "structuredContent.item:experience-item-cv_123.responsibilityBullets.0",
-        bulletIndex: 0,
+        fieldPath: "structuredContent.item:experience-item-cv_123.responsibilities",
       }),
-      "Led product strategy.",
     );
+    expect(
+      screen.queryByRole("textbox", { name: "Edit experience bullet" }),
+    ).not.toBeInTheDocument();
 
     const skillField = screen.getByText("TypeScript");
     skillField.textContent = "React";
@@ -2051,8 +2132,8 @@ describe("CvForge workspace mode", () => {
       ["structuredContent.item:experience-item-cv_123.company", "Company"],
       ["structuredContent.item:experience-item-cv_123.location", "Location"],
       [
-        "structuredContent.item:experience-item-cv_123.responsibilityBullets.0",
-        "Type an impact bullet...",
+        "structuredContent.item:experience-item-cv_123.responsibilities",
+        "Type responsibilities...",
       ],
       ["structuredContent.item:education-item-cv_123.degree", "Degree"],
       ["structuredContent.item:education-item-cv_123.fieldOfStudy", "Field"],
