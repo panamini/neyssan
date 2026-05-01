@@ -393,6 +393,11 @@ describe("ProposalForge workbench layout", () => {
         name: "Choose a CV Attach one to personalize the draft.",
       }),
     );
+    const sourceCvMenu = await screen.findByRole("menu", { name: "Source CV" });
+    const menuItems = within(sourceCvMenu).getAllByRole("menuitem");
+    expect(menuItems[0]).toHaveTextContent("Create new CV");
+    expect(menuItems[1]).toHaveTextContent("Import new CV");
+    expect(sourceCvMenu.querySelector(".ds-menu__separator")).not.toBeNull();
     fireEvent.click(await screen.findByRole("menuitemradio", { name: "Editorial v3" }));
 
     await waitFor(() => {
