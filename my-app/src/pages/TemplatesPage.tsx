@@ -131,8 +131,8 @@ export function TemplatesPage(): JSX.Element {
       <div className="dasti-page-shell dasti-templates-page">
         <div className="dasti-page-header dasti-templates-page__head">
           <div className="dasti-stack">
-            <h1 className="dasti-stack__title">Templates</h1>
-            <p className="dasti-stack__subtitle">
+            <h1 className="dasti-stack__title page-head__title">Templates</h1>
+            <p className="dasti-stack__subtitle page-head__sub">
               Pick a starting point. Customize fonts and accent in document style.
             </p>
           </div>

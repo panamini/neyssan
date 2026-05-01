@@ -67,10 +67,10 @@ export function DashboardPage(): JSX.Element {
       <div className="dashboard-page__inner">
         <header className="dashboard-head">
           <div>
-            <h1 id="dashboard-title" className="dashboard-head__title">
+            <h1 id="dashboard-title" className="dashboard-head__title page-head__title">
               Dashboard<span className="brand-period">.</span>
             </h1>
-            <p className="dashboard-head__sub">
+            <p className="dashboard-head__sub page-head__sub">
               Review the next application task and keep the CV-to-proposal flow moving.
             </p>
           </div>

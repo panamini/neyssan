@@ -514,6 +514,25 @@
   color: var(--color-text-muted);
 }
 
+/* Skeleton page header token from docs/UI/APP-SKELETON.html. */
+.page-head__title {
+  margin: 0;
+  color: var(--ti);
+  font-family: var(--font-body-family);
+  font-size: var(--tx2);
+  line-height: var(--lx2);
+  font-weight: var(--font-heading-weight);
+  letter-spacing: var(--tracking-display);
+}
+
+.page-head__sub {
+  margin: var(--s1) 0 0;
+  color: var(--tm2);
+  font-family: var(--font-body-family);
+  font-size: var(--ts);
+  line-height: var(--ls);
+}
+
 /* ============================================================
    SEMANTIC SELECTION CARDS
    ============================================================ */
