@@ -490,11 +490,16 @@ function renderExperienceBlocks(args: {
   return nodes;
 }
 
+function cleanDraftExperienceText(value: unknown): string {
+  const text = String(value ?? "");
+  return text === DRAFT_EMPTY_EXPERIENCE_DESCRIPTION ? "" : text;
+}
+
 function renderResponsibilityRun(
   run: WorkshopResponsibilityTextRun,
   key: string,
 ) {
-  let content: React.ReactNode = run.text;
+  let content: React.ReactNode = cleanDraftExperienceText(run.text);
 
   if (run.underline) {
     content = <u>{content}</u>;
@@ -521,7 +526,7 @@ function remirrorMarksFromRun(run: WorkshopResponsibilityTextRun) {
 
 function remirrorInlineFromRuns(runs: WorkshopResponsibilityTextRun[]) {
   return runs.flatMap((run): RemirrorJSON[] => {
-    const parts = String(run.text ?? "").split("\n");
+    const parts = cleanDraftExperienceText(run.text).split("\n");
     return parts.flatMap((part, index) => {
       const nodes: RemirrorJSON[] = [];
       if (index > 0) {
@@ -552,7 +557,9 @@ function remirrorDocFromRichContent(
       content: [
         {
           type: "paragraph",
-          content: fallbackText ? [{ type: "text", text: fallbackText }] : [],
+          content: cleanDraftExperienceText(fallbackText)
+            ? [{ type: "text", text: cleanDraftExperienceText(fallbackText) }]
+            : [],
         },
       ],
     } as RemirrorJSON;
