@@ -644,6 +644,64 @@ describe("mapCvDocumentToResumeData", () => {
     );
   });
 
+  it("shows empty draft bullets in edit-mode rich responsibilities without preview/export leakage", () => {
+    const doc: CvDocument = {
+      id: "cv-draft-bullet",
+      title: "Operations Lead",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "experience",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "exp-draft-bullet",
+              company: "Northline",
+              position: "Operations Lead",
+              responsibilities: ensureRemirrorDoc("Led cross-functional delivery."),
+              responsibilityBullets: ["__draft_empty_responsibility_bullet__"],
+              __draftResponsibilityBulletCount: 1,
+            } as any,
+          ],
+        },
+      ],
+    };
+
+    const editMapped = mapCvDocumentToResumeData(doc, { includeDrafts: true });
+    expect(editMapped.experience[0]?.description).toBe(
+      "Led cross-functional delivery.",
+    );
+    expect(editMapped.experience[0]?.bullets).toEqual([""]);
+    expect(editMapped.experience[0]?.responsibilitiesRich?.blocks).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "Led cross-functional delivery." }],
+      },
+      {
+        kind: "bullet_list",
+        items: [{ runs: [{ text: "" }] }],
+      },
+    ]);
+
+    const previewMapped = mapCvDocumentToResumeData(doc);
+    expect(previewMapped.experience[0]?.description).toBe(
+      "Led cross-functional delivery.",
+    );
+    expect(previewMapped.experience[0]?.bullets).toEqual([]);
+    expect(previewMapped.experience[0]?.responsibilitiesRich?.blocks).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "Led cross-functional delivery." }],
+      },
+    ]);
+  });
+
   it("keeps paragraph-backed remirror responsibilities in the prose channel", () => {
     const doc: CvDocument = {
       id: "cv-4",

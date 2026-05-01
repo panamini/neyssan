@@ -345,6 +345,57 @@ describe("ResumeOneColAtsPage", () => {
     expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
   });
 
+  it("renders an editable empty draft bullet after an existing rich paragraph", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: "Led product design.",
+          bullets: [""],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: "Led product design." }],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [{ runs: [{ text: "" }] }],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    expect(screen.getByText("Led product design.")).toBeInTheDocument();
+    const bullet = screen.getByRole("textbox", { name: "Edit experience bullet" });
+    expect(bullet).toHaveAttribute("data-paper-field-path", expect.stringContaining("responsibilityBullets.0"));
+    expect(bullet).toHaveTextContent("");
+    expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
+  });
+
   it("keeps Add paragraph available for an experience entry without a paragraph", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const data = {
