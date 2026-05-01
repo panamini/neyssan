@@ -173,6 +173,50 @@ describe("ProposalForge workbench layout", () => {
     expect(proposalComposeToolbarSpy).not.toHaveBeenCalled();
   });
 
+  it("consolidates share, export, and safe-send risk checks in the stage menu", async () => {
+    renderProposalForge();
+
+    const stage = screen.getByLabelText("Proposal document stage");
+    fireEvent.click(within(stage).getByRole("button", { name: /share/i }));
+
+    const menu = await screen.findByRole("menu", { name: "Share proposal" });
+    expect(
+      within(menu).getByRole("menuitem", { name: "Safe-send checklist…" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Send by email" }),
+    ).toBeDisabled();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Export PDF" }),
+    ).toBeDisabled();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Copy as text" }),
+    ).toBeDisabled();
+
+    fireEvent.click(
+      within(menu).getByRole("menuitem", { name: "Safe-send checklist…" }),
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Safe-send checklist",
+    });
+    expect(within(dialog).getByText("Source job linked")).toBeInTheDocument();
+    expect(within(dialog).getByText("Match review not accepted")).toBeInTheDocument();
+    expect(within(dialog).getByText("Unsupported claim")).toBeInTheDocument();
+    expect(
+      within(dialog).getAllByText("Detection pending", { selector: "span" })
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      within(dialog).getByRole("button", { name: "Continue to send" }),
+    ).toBeDisabled();
+
+    const sourceJobRow = within(dialog)
+      .getByText("Source job linked")
+      .closest(".dasti-proposal-safe-send__row");
+    expect(sourceJobRow).toHaveAttribute("data-state", "clear");
+  });
+
   it("renders the skeleton rail with lightweight setup and no visible legacy compose controls", () => {
     const { container } = renderProposalForge();
 

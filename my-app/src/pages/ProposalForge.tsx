@@ -6904,6 +6904,26 @@ export function ProposalForge(): JSX.Element {
                         mode={proposalOutputMode}
                         exporting={proposalExportingFormat !== null}
                         hasProposalContent={Boolean(proposalContent)}
+                        sourceJobLinked={Boolean(
+                          composePreviewValues?.jobTitle?.trim() ||
+                            composePreviewValues?.jobDescription?.trim(),
+                        )}
+                        sourceCvSelected={Boolean(attachedCvId)}
+                        proposalLinked={Boolean(proposalContent)}
+                        hasPlaceholderText={/(\[[^\]]+\]|\blorem\b|\{\{[^}]+\}\})/i.test(
+                          [
+                            proposalContent,
+                            proposalRecipientDetails,
+                            proposalSalutationValue,
+                            proposalApplicantName,
+                            proposalContactLine,
+                          ]
+                            .filter(Boolean)
+                            .join("\n"),
+                        )}
+                        finalExportReviewed={Boolean(
+                          proposalContent && proposalOutputMode === "preview",
+                        )}
                         onModeChange={setProposalOutputMode}
                         onCopyText={() => {
                           void handleCopyOutput();
