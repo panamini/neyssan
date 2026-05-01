@@ -499,6 +499,54 @@ function renderResponsibilityRun(
   return <React.Fragment key={key}>{content}</React.Fragment>;
 }
 
+function renderRichTextInlineValue(
+  rich:
+    | WorkshopResponsibilitiesRichContent
+    | WorkshopCommittedResponsibilitiesRichContent
+    | undefined,
+  keyPrefix: string,
+): React.ReactNode | undefined {
+  if (!rich || rich.blocks.length === 0) {
+    return undefined;
+  }
+
+  const nodes: React.ReactNode[] = [];
+  rich.blocks.forEach((block, blockIndex) => {
+    if (blockIndex > 0) {
+      nodes.push("\n");
+    }
+
+    if (block.kind === "paragraph") {
+      block.runs.forEach((run, runIndex) => {
+        nodes.push(
+          renderResponsibilityRun(
+            run,
+            `${keyPrefix}-paragraph-${blockIndex}-run-${runIndex}`,
+          ),
+        );
+      });
+      return;
+    }
+
+    block.items.forEach((item, itemIndex) => {
+      if (itemIndex > 0) {
+        nodes.push("\n");
+      }
+      nodes.push("• ");
+      item.runs.forEach((run, runIndex) => {
+        nodes.push(
+          renderResponsibilityRun(
+            run,
+            `${keyPrefix}-bullet-${blockIndex}-${itemIndex}-run-${runIndex}`,
+          ),
+        );
+      });
+    });
+  });
+
+  return nodes;
+}
+
 function renderResponsibilitiesRich(args: {
   rich:
     | WorkshopResponsibilitiesRichContent
@@ -600,6 +648,18 @@ function renderExperienceContent(args: {
       )
       .filter((text) => text.length > 0)
       .join("\n");
+    const richParagraphs =
+      args.item.responsibilitiesRich?.blocks.filter(
+        (block) => block.kind === "paragraph",
+      ) ?? [];
+    const renderedParagraphValue = renderRichTextInlineValue(
+      richParagraphs.length > 0 ? { blocks: richParagraphs } : undefined,
+      `${args.item.id ?? "experience"}-paragraph`,
+    );
+    const richBulletItems =
+      args.item.responsibilitiesRich?.blocks.flatMap((block) =>
+        block.kind === "bullet_list" ? block.items : [],
+      ) ?? [];
 
     const nodes: React.ReactNode[] = [];
     if (hasParagraphBlock) {
@@ -615,6 +675,7 @@ function renderExperienceContent(args: {
           as="div"
           key="editable-experience-text"
           value={paragraphText}
+          renderedValue={renderedParagraphValue}
           editable
           editTarget={editTarget}
           onActivate={(target) => args.inlineEditing?.onActivate(target)}
@@ -665,6 +726,21 @@ function renderExperienceContent(args: {
               <InlineEditableText
                 as="span"
                 value={block.text}
+                renderedValue={
+                  richBulletItems[currentBulletIndex]
+                    ? renderRichTextInlineValue(
+                        {
+                          blocks: [
+                            {
+                              kind: "paragraph",
+                              runs: richBulletItems[currentBulletIndex]!.runs,
+                            },
+                          ],
+                        },
+                        `${args.item.id ?? "experience"}-bullet-${currentBulletIndex}`,
+                      )
+                    : undefined
+                }
                 editable
                 editTarget={editTarget}
                 onActivate={(target) => args.inlineEditing?.onActivate(target)}
@@ -1171,6 +1247,7 @@ function renderFragmentContent(args: {
         <InlineEditableText
           key={fragment.fragmentId}
           value={fragment.text}
+          renderedValue={renderRichTextInlineValue(fragment.summaryRich, "summary")}
           editable={Boolean(inlineEditing?.enabled)}
           editTarget={editTarget}
           onActivate={(target) => inlineEditing?.onActivate(target)}

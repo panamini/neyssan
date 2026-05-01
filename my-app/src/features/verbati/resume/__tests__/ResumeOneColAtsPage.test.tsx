@@ -271,6 +271,49 @@ describe("ResumeOneColAtsPage", () => {
     expect(summaryStyle).not.toContain("text-overflow: ellipsis");
   });
 
+  it("hydrates rich summary marks in editable workshop display mode", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      summary: "Bold summary",
+      summaryRich: {
+        blocks: [
+          {
+            kind: "paragraph" as const,
+            runs: [{ text: "Bold summary", bold: true }],
+          },
+        ],
+      },
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const summaryItem = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.0.summary"]',
+    );
+    expect(summaryItem).toHaveAttribute("role", "textbox");
+    expect(summaryItem).not.toHaveAttribute("contenteditable");
+    expect(container.querySelector("strong")?.textContent).toBe("Bold summary");
+  });
+
   it("preserves multiline summary whitespace in the editable workshop paper field", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const data = {
@@ -1055,6 +1098,53 @@ describe("ResumeOneColAtsPage", () => {
     expect(continuedListItems).toEqual([continuedBullets[3]]);
     expect(directParagraphs).toEqual([trailingParagraph]);
     expect(experienceItem?.innerHTML.indexOf("</ul><p")).toBeGreaterThan(-1);
+  });
+
+  it("hydrates responsibilitiesRich marks in editable workshop display mode", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: "Italic paragraph",
+          bullets: [],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: "Italic paragraph", italic: true }],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const experienceText = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.item:exp-1.responsibilities"]',
+    );
+    expect(experienceText).toHaveAttribute("role", "textbox");
+    expect(container.querySelector("em")?.textContent).toBe("Italic paragraph");
   });
 
   it("renders responsibilitiesRich for full non-continued experience items", () => {

@@ -348,14 +348,24 @@ function mapProfile(
   return readStructured<IProfileItem>(profileContext?.section)[0];
 }
 
-function mapSummary(summaryContext?: SectionContext, doc?: CvDocument): string {
+function readSummarySource(
+  summaryContext?: SectionContext,
+  doc?: CvDocument,
+): unknown {
   const summaryItem = readStructured<ISummaryItem>(summaryContext?.section)[0];
+  return summaryItem?.summary ?? doc?.summary ?? summaryContext?.section?.blocks[0]?.content;
+}
 
+function mapSummary(summaryContext?: SectionContext, doc?: CvDocument): string {
   return (
-    toPlainText(summaryItem?.summary) ||
-    toPlainText(doc?.summary) ||
+    toPlainText(readSummarySource(summaryContext, doc)) ||
     fallbackSectionText(summaryContext?.section)
   );
+}
+
+function mapRichTextContent(value: unknown): WorkshopResponsibilitiesRichContent | undefined {
+  const rich = projectResponsibilitiesForWorkshop(value).rich;
+  return rich.blocks.length > 0 ? rich : undefined;
 }
 
 function isSectionDraftEmpty(section: CvSection): boolean {
@@ -1109,7 +1119,9 @@ export function mapCvDocumentToResumeData(
   );
 
   const profile = mapProfile(profileContext);
+  const summarySource = readSummarySource(summaryContext, doc);
   const summary = mapSummary(summaryContext, doc);
+  const summaryRich = mapRichTextContent(summarySource);
   const { skills, skillItems } = mapSkills(skillsContext, options);
   const languages = mapLanguages(languagesContext, options);
   const experience = mapExperience(experienceContext, options);
@@ -1182,6 +1194,7 @@ export function mapCvDocumentToResumeData(
     name: profileName || (!profileContext ? doc.title || "Candidate name" : ""),
     title: String(profile?.desiredPosition ?? "").trim(),
     summary,
+    ...(summaryRich ? { summaryRich } : {}),
     photoUrl: String(profile?.photoUrl ?? "").trim() || undefined,
     metadata,
     contact,

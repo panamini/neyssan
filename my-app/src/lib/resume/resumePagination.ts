@@ -117,6 +117,7 @@ export type WorkshopPlannerEntry =
       kind: "summary";
       estimatedHeight: number;
       text: string;
+      summaryRich?: WorkshopResponsibilitiesRichContent;
     }
   | WorkshopPlannerExperienceEntry
   | {
@@ -225,6 +226,7 @@ type WorkshopCommittedSummaryFragment = {
   title?: string;
   continued: boolean;
   text: string;
+  summaryRich?: WorkshopResponsibilitiesRichContent;
 };
 
 type WorkshopCommittedExperienceItem = {
@@ -1915,6 +1917,7 @@ function buildPlannerSections(
               metrics.bodyLineHeightMm,
             ),
           text: data.summary,
+          ...(data.summaryRich ? { summaryRich: data.summaryRich } : {}),
         },
       ],
     });
@@ -2527,6 +2530,9 @@ function buildCommittedFragment(args: {
           args.section.entries[0]?.kind === "summary"
             ? args.section.entries[0].text
             : "",
+        ...(args.section.entries[0]?.kind === "summary" && args.section.entries[0].summaryRich
+          ? { summaryRich: args.section.entries[0].summaryRich }
+          : {}),
       };
     case "experience":
       return {
