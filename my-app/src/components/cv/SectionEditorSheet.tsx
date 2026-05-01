@@ -107,6 +107,7 @@ type DrawerRichTextEditorProps = {
   value: unknown;
   ariaLabel: string;
   testId: string;
+  showLists?: boolean;
   onChangeDoc: (doc: RemirrorJSON) => void;
 };
 
@@ -114,6 +115,7 @@ function DrawerRichTextEditor({
   value,
   ariaLabel,
   testId,
+  showLists = true,
   onChangeDoc,
 }: DrawerRichTextEditorProps) {
   const extensions = React.useMemo(
@@ -176,7 +178,7 @@ function DrawerRichTextEditor({
     >
       <Remirror manager={manager} initialContent={state} onChange={handleChange}>
         <div className="rich-content">
-          <EditorToolbar position="top" />
+          <EditorToolbar position="top" showLists={showLists} />
           <EditorComponent />
         </div>
       </Remirror>
@@ -998,6 +1000,7 @@ export function SectionEditorSheet({
             key={`${String(editableSection.id ?? "summary")}:summary`}
             ariaLabel="Summary body"
             testId="drawer-rich-editor-summary"
+            showLists={false}
             value={
               getStructuredItems(editableSection)[0]?.summary ??
               editableSection.blocks[0]?.content ??
