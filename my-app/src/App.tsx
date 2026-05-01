@@ -18,7 +18,9 @@ import { CvsLibrary } from "./pages/CvsLibrary";
 import { ProposalForge } from "./pages/ProposalForge";
 import { JobsPage } from "./pages/JobsPage";
 import { ProposalsLibrary } from "./pages/ProposalsLibrary";
+import { DocumentsPage } from "./pages/DocumentsPage";
 import { StyleForge } from "./pages/StyleForge";
+import { TemplatesPage } from "./pages/TemplatesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignInPage } from "./pages/SignInPage";
 import { SignOutPage } from "./pages/SignOutPage";
@@ -100,7 +102,7 @@ function useTopbarDocumentTitle(): string | null {
       return normalizeTitle(currentCv?.title) || null;
     }
 
-    if (pathname === "/cvs") {
+    if (pathname === "/cvs" || pathname === "/documents") {
       return cvCount > 0 ? `All resumes (${cvCount})` : "All resumes";
     }
 
@@ -130,6 +132,10 @@ function useTopbarDocumentTitle(): string | null {
       return savedProposalCount > 0
         ? `All cover letters (${savedProposalCount})`
         : "All cover letters";
+    }
+
+    if (pathname === "/templates") {
+      return "Document templates";
     }
 
     if (pathname === "/settings") {
@@ -173,6 +179,10 @@ function useBrowserTitle(topbarDocumentTitle: string | null): void {
       pageTitle = topbarDocumentTitle
         ? `${topbarDocumentTitle} · two weeks`
         : "All cover letters · two weeks";
+    } else if (pathname === "/documents") {
+      pageTitle = "Documents · two weeks";
+    } else if (pathname === "/templates") {
+      pageTitle = "Templates · two weeks";
     } else if (pathname === "/settings") {
       pageTitle = topbarDocumentTitle
         ? `${topbarDocumentTitle} · two weeks`
@@ -199,7 +209,9 @@ function resolvePageLabel(pathname: string): string {
   if (pathname.startsWith("/proposal")) return "Proposal forge";
   if (pathname.startsWith("/cv")) return "CV forge";
   if (pathname.startsWith("/cvs")) return "CV library";
+  if (pathname.startsWith("/documents")) return "Documents";
   if (pathname.startsWith("/proposals")) return "Documents";
+  if (pathname.startsWith("/templates")) return "Templates";
   if (pathname.startsWith("/style")) return "Templates";
   if (pathname.startsWith("/settings")) return "Settings";
   return "Dashboard";
@@ -422,9 +434,9 @@ function AppShell(): JSX.Element {
                 <Route path="/jobs" element={<JobsPage />} />
                 <Route path="/jobs/:jobId" element={<JobsPage />} />
                 <Route path="/proposals" element={<ProposalsLibrary />} />
+                <Route path="/documents" element={<DocumentsPage />} />
                 <Route path="/style" element={<StyleForge />} />
-                <Route path="/templates" element={<Navigate to="/style" replace />} />
-                <Route path="/documents" element={<Navigate to="/proposals" replace />} />
+                <Route path="/templates" element={<TemplatesPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/sign-in/*" element={<SignInPage />} />
                 <Route path="/sign-out" element={<SignOutPage />} />
