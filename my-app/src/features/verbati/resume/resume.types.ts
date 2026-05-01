@@ -6,6 +6,7 @@ export type ResumeMetaItem = {
   itemId?: string;
   sectionId?: string;
   sectionType?: ResumeCanonicalSectionType;
+  draftFieldKey?: string;
 };
 
 export type ResumeLinkedItemBase = {
@@ -155,6 +156,7 @@ export type ResumeData = {
   profileSectionId?: string;
   summarySectionId?: string;
   sectionIdsByType?: Partial<Record<ResumeCanonicalSectionType, string[]>>;
+  draftSectionIds?: string[];
 };
 
 export type ResumeLayoutVariantId =

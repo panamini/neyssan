@@ -293,6 +293,8 @@ type WorkshopCommittedNamedItem = {
 
 type WorkshopCommittedTextSectionItem = {
   id: string;
+  sectionId?: string;
+  sectionType?: ResumePreviewSectionType;
   sectionTitle: string;
   text: string;
 };
@@ -928,9 +930,6 @@ function projectExperienceRichContentToPlannerBlocks(args: {
     block.items.forEach((item, sourceItemIndex) => {
       const runs = trimResponsibilityRuns(item.runs);
       const text = responsibilityRunsToPlainText(runs).trim();
-      if (!text) {
-        return;
-      }
 
       blocks.push(
         buildPlannerExperienceBlock({
@@ -968,7 +967,6 @@ function buildFallbackResponsibilitiesRichContent(
 
   const bulletItems = item.bullets
     .map((bullet) => bullet.trim())
-    .filter(Boolean)
     .map((text) => ({
       runs: [{ text }],
     }));
@@ -1893,7 +1891,10 @@ function buildPlannerSections(
     ],
   });
 
-  if (data.summary.trim()) {
+  if (
+    data.summary.trim() ||
+    (data.summarySectionId && data.draftSectionIds?.includes(data.summarySectionId))
+  ) {
     sections.push({
       key: "summary",
       kind: "summary",
@@ -2669,6 +2670,8 @@ function buildCommittedFragment(args: {
           .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "additional_information" }> => entry.kind === "additional_information")
           .map((entry) => ({
             id: entry.item.id,
+            sectionId: entry.item.sectionId,
+            sectionType: entry.item.sectionType as ResumePreviewSectionType,
             sectionTitle: entry.item.sectionTitle,
             text: entry.item.text,
           })),

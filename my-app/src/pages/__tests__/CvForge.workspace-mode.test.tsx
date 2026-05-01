@@ -145,21 +145,121 @@ vi.mock("../../../convex/_generated/api", () => ({
 }));
 
 vi.mock("../../lib/buildCanonicalResumeRenderModel", () => ({
-  buildCanonicalResumeRenderModelFromCv: () => ({
-    name: "Ada Lovelace",
-    title: "Product Designer",
-    summary: "Structured resume summary.",
-    contact: [],
-    metadata: [],
-    experience: [],
-    education: [],
-    skills: [{ label: "TypeScript" }],
-    projects: [],
-    certifications: [],
-    languages: [],
-    affiliations: [],
-    textSections: [],
-  }),
+  buildCanonicalResumeRenderModelFromCv: (cv: {
+    sections?: Array<Record<string, any>>;
+  }) => {
+    function readMockPlainText(value: unknown): string {
+      if (typeof value === "string") return value;
+      if (!value || typeof value !== "object") return "";
+      const record = value as Record<string, unknown>;
+      if (Array.isArray(record.content)) {
+        return record.content
+          .map((entry) => readMockPlainText(entry))
+          .filter(Boolean)
+          .join("\n");
+      }
+      if (typeof record.text === "string") return record.text;
+      return "";
+    }
+
+    const sections = cv.sections ?? [];
+    const summarySection = sections.find((section) => section.type === "summary");
+    const summaryItem = Array.isArray(summarySection?.structuredContent)
+      ? summarySection.structuredContent[0]
+      : null;
+    const textSections = sections
+      .filter(
+        (section) =>
+          section.type === "text" &&
+          String(section.title ?? "").toLowerCase() !== "hobbies",
+      )
+      .map((section, index) => ({
+        id: `text-section-${section.id ?? index}`,
+        sectionId: String(section.id),
+        sectionType:
+          String(section.title ?? "").toLowerCase() === "additional information"
+            ? "additional_information"
+            : "custom",
+        sectionTitle: String(section.title ?? "Custom section"),
+        sectionOrder: index,
+        text: readMockPlainText(section.blocks?.[0]?.plainText ?? section.blocks?.[0]?.content),
+      }));
+
+    return {
+      name: "Ada Lovelace",
+      title: "Product Designer",
+      summary: readMockPlainText(summaryItem?.summary),
+      summarySectionId: String(summarySection?.id ?? "summary-cv_123"),
+      contact: [],
+      metadata: [],
+      experience: [
+        {
+          id: "experience-item-cv_123",
+          sectionId: "experience-cv_123",
+          role: "Lead designer",
+          company: "Studio",
+          period: "2022 - 2026",
+          location: "",
+          bullets: ["Led product design."],
+        },
+      ],
+      education: [
+        {
+          id: "education-item-cv_123",
+          sectionId: "education-cv_123",
+          degree: "MFA",
+          school: "Design School",
+          period: "",
+        },
+      ],
+      skills: ["TypeScript"],
+      skillItems: [
+        {
+          id: "skill-cv_123",
+          name: "TypeScript",
+          sectionId: "skills-cv_123",
+          sectionType: "skills",
+        },
+      ],
+      projects: [],
+      certifications: [
+        {
+          id: "cert-cv_123",
+          name: "UX cert",
+          sectionId: "certifications-cv_123",
+          sectionType: "certifications",
+        },
+      ],
+      languages: [
+        {
+          id: "language-cv_123",
+          name: "English",
+          level: "Intermediate",
+          sectionId: "languages-cv_123",
+          sectionType: "languages",
+        },
+      ],
+      affiliations: [],
+      achievementItems: [
+        {
+          id: "achievement-cv_123",
+          text: "Shipped PR4.",
+          sectionId: "achievements-cv_123",
+          sectionType: "achievements",
+        },
+      ],
+      hobbies: ["Photography"],
+      hobbyItems: [
+        {
+          id: "hobby-cv_123",
+          name: "Photography",
+          sectionId: "hobbies-cv_123",
+          sectionType: "hobbies",
+        },
+      ],
+      textSections,
+    };
+  },
 }));
 
 vi.mock("../../features/verbati/cvDocumentToResumeData", () => ({
@@ -168,16 +268,64 @@ vi.mock("../../features/verbati/cvDocumentToResumeData", () => ({
 
 vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
   VerbatiResumePreview: ({
+    data,
     activeTarget,
     hostMode,
+    inlineEditing,
     onLinkIntent,
     stylePreset,
   }: {
+    data?: {
+      summary?: string;
+      summarySectionId?: string;
+      textSections?: Array<{
+        id: string;
+        sectionId: string;
+        sectionType: "additional_information" | "custom";
+        sectionTitle: string;
+        text: string;
+      }>;
+      experience?: Array<{ role: string }>;
+      education?: Array<{ degree: string }>;
+      skillItems?: Array<{ name: string }>;
+      languages?: Array<{ name: string }>;
+      hobbyItems?: Array<{ name: string }>;
+      achievementItems?: Array<{ text: string }>;
+    };
     activeTarget?: { sectionId?: string | null } | null;
     hostMode?: "panel" | "workspace";
+    inlineEditing?: {
+      enabled: boolean;
+      activeTarget: {
+        sectionId: string;
+        sectionType: string;
+        fieldPath: string;
+        fieldKind: "paragraph" | "heading" | "bullet" | "chip" | "date" | "meta";
+        itemIndex?: number;
+        bulletIndex?: number;
+        chipIndex?: number;
+      } | null;
+      onActivate: (target: {
+        sectionId: string;
+        sectionType: string;
+        fieldPath: string;
+        fieldKind: "paragraph" | "heading" | "bullet" | "chip" | "date" | "meta";
+        itemIndex?: number;
+        bulletIndex?: number;
+        chipIndex?: number;
+      }) => void;
+      onDeactivate: () => void;
+      onSummaryChange: (text: string) => void;
+      onTextSectionChange: (sectionId: string, text: string) => void;
+    };
     onLinkIntent?: (intent: {
       requestId: string;
-      sectionType: "experience" | "education";
+      sectionType:
+        | "summary"
+        | "experience"
+        | "education"
+        | "additional_information"
+        | "custom";
       sectionId: string;
       source: "preview-panel";
       shouldOpenModal: boolean;
@@ -188,11 +336,134 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
       typography?: string | null;
       palette?: string | null;
     };
-  }) => (
+  }) => {
+    const summaryEditTarget = {
+      sectionId: data?.summarySectionId ?? "summary-cv_123",
+      sectionType: "summary",
+      fieldPath: "structuredContent.0.summary",
+      fieldKind: "paragraph" as const,
+    };
+    const isSummaryEditable = Boolean(inlineEditing?.enabled);
+
+    return (
     <div>
       Preview host: {hostMode ?? "panel"}
       <div data-testid="preview-active-section">
         {activeTarget?.sectionId ?? "none"}
+      </div>
+      <p
+        aria-label="Paper Summary paragraph"
+        data-testid="paper-summary-paragraph"
+        contentEditable={isSummaryEditable ? "plaintext-only" : undefined}
+        suppressContentEditableWarning={isSummaryEditable}
+        role={isSummaryEditable ? "textbox" : undefined}
+        tabIndex={isSummaryEditable ? 0 : undefined}
+        data-inline-paper-editable={isSummaryEditable ? "true" : undefined}
+        data-paper-section-id={summaryEditTarget.sectionId}
+        data-paper-section-type={summaryEditTarget.sectionType}
+        data-paper-field-path={summaryEditTarget.fieldPath}
+        data-paper-field-kind={summaryEditTarget.fieldKind}
+        onFocus={() => inlineEditing?.onActivate(summaryEditTarget)}
+        onClick={(event) => {
+          if (inlineEditing?.enabled) {
+            event.stopPropagation();
+            inlineEditing.onActivate(summaryEditTarget);
+            return;
+          }
+          onLinkIntent?.({
+            requestId: "paper-summary",
+            sectionType: "summary",
+            sectionId: data?.summarySectionId ?? "summary-cv_123",
+            source: "preview-panel",
+            shouldOpenModal: false,
+          });
+        }}
+        onInput={(event) =>
+          {
+            inlineEditing?.onActivate(summaryEditTarget);
+            inlineEditing?.onSummaryChange(event.currentTarget.textContent ?? "");
+          }
+        }
+      >
+        {data?.summary ?? ""}
+      </p>
+      {(data?.textSections ?? []).map((section) => (
+        (() => {
+          const textEditTarget = {
+            sectionId: section.sectionId,
+            sectionType: section.sectionType,
+            fieldPath: "blocks.0.plainText",
+            fieldKind: "paragraph" as const,
+          };
+          const isTextSectionEditable = Boolean(inlineEditing?.enabled);
+
+          return (
+            <p
+              key={section.id}
+              aria-label={`Paper ${section.sectionTitle} paragraph`}
+              data-testid={`paper-text-section-${section.sectionId}`}
+              contentEditable={
+                isTextSectionEditable ? "plaintext-only" : undefined
+              }
+              suppressContentEditableWarning={isTextSectionEditable}
+              role={isTextSectionEditable ? "textbox" : undefined}
+              tabIndex={isTextSectionEditable ? 0 : undefined}
+              data-inline-paper-editable={
+                isTextSectionEditable ? "true" : undefined
+              }
+              data-paper-section-id={textEditTarget.sectionId}
+              data-paper-section-type={textEditTarget.sectionType}
+              data-paper-field-path={textEditTarget.fieldPath}
+              data-paper-field-kind={textEditTarget.fieldKind}
+              onFocus={() => inlineEditing?.onActivate(textEditTarget)}
+              onClick={(event) => {
+                if (inlineEditing?.enabled) {
+                  event.stopPropagation();
+                  inlineEditing.onActivate(textEditTarget);
+                  return;
+                }
+                onLinkIntent?.({
+                  requestId: `paper-${section.sectionId}`,
+                  sectionType: section.sectionType,
+                  sectionId: section.sectionId,
+                  source: "preview-panel",
+                  shouldOpenModal: false,
+                });
+              }}
+              onInput={(event) =>
+                {
+                  inlineEditing?.onActivate(textEditTarget);
+                  inlineEditing?.onTextSectionChange(
+                    section.sectionId,
+                    event.currentTarget.textContent ?? "",
+                  );
+                }
+              }
+            >
+              {section.text}
+            </p>
+          );
+        })()
+      ))}
+      <div data-testid="paper-structured-sections">
+        {(data?.experience ?? []).map((item) => (
+          <p key={item.role}>{item.role}</p>
+        ))}
+        {(data?.education ?? []).map((item) => (
+          <p key={item.degree}>{item.degree}</p>
+        ))}
+        {(data?.skillItems ?? []).map((item) => (
+          <span key={item.name}>{item.name}</span>
+        ))}
+        {(data?.languages ?? []).map((item) => (
+          <span key={item.name}>{item.name}</span>
+        ))}
+        {(data?.hobbyItems ?? []).map((item) => (
+          <span key={item.name}>{item.name}</span>
+        ))}
+        {(data?.achievementItems ?? []).map((item) => (
+          <p key={item.text}>{item.text}</p>
+        ))}
       </div>
       <button
         type="button"
@@ -228,7 +499,8 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
         {stylePreset?.accentHex ?? "none"}
       </div>
     </div>
-  ),
+    );
+  },
 }));
 
 vi.mock("../../components/useStructuredMistralImport", () => ({
@@ -344,6 +616,13 @@ function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
         structuredContent: null,
       },
       {
+        id: "custom-cv_123",
+        type: "text",
+        title: "Community",
+        blocks: [{ id: "custom-block-cv_123", type: "text", plainText: "Mentors operators." }],
+        structuredContent: null,
+      },
+      {
         id: "hobbies-cv_123",
         type: "text",
         title: "Hobbies",
@@ -364,6 +643,146 @@ function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
     loadCv: vi.fn(() => true),
     ...overrides,
   };
+}
+
+function buildResumePreviewData() {
+  return {
+    name: "Ada Lovelace",
+    title: "Product Designer",
+    summary: "Focused builder.",
+    summarySectionId: "summary-cv_123",
+    profileSectionId: "profile-cv_123",
+    contact: [
+      {
+        label: "Email",
+        value: "ada@example.com",
+        sectionId: "profile-cv_123",
+        sectionType: "profile",
+      },
+    ],
+    metadata: [
+      {
+        label: "Location",
+        value: "Paris",
+        sectionId: "profile-cv_123",
+        sectionType: "profile",
+      },
+    ],
+    experience: [
+      {
+        id: "experience-item-cv_123",
+        sectionId: "experience-cv_123",
+        role: "Lead designer",
+        company: "Studio",
+        period: "2022 - 2026",
+        location: "Remote",
+        bullets: ["Led product design."],
+      },
+    ],
+    education: [
+      {
+        id: "education-item-cv_123",
+        sectionId: "education-cv_123",
+        degree: "MFA",
+        fieldOfStudy: "Interaction design",
+        school: "Design School",
+        period: "",
+      },
+    ],
+    skills: ["TypeScript"],
+    skillItems: [
+      {
+        id: "skill-cv_123",
+        name: "TypeScript",
+        sectionId: "skills-cv_123",
+        sectionType: "skills",
+      },
+    ],
+    projects: [
+      {
+        id: "project-cv_123",
+        sectionId: "projects-cv_123",
+        sectionType: "projects",
+        name: "Paper editor",
+        meta: "Case study",
+        description: "Structured inline editing.",
+      },
+    ],
+    certifications: [
+      {
+        id: "cert-cv_123",
+        name: "UX cert",
+        issuer: "NNG",
+        sectionId: "certifications-cv_123",
+        sectionType: "certifications",
+      },
+    ],
+    languages: [
+      {
+        id: "language-cv_123",
+        name: "English",
+        level: "Intermediate",
+        sectionId: "languages-cv_123",
+        sectionType: "languages",
+      },
+    ],
+    affiliations: [
+      {
+        id: "affiliation-cv_123",
+        organizationName: "AIGA",
+        roleOrMembershipType: "Member",
+        notes: "Mentors students.",
+        sectionId: "affiliations-cv_123",
+        sectionType: "affiliations",
+      },
+    ],
+    achievementItems: [
+      {
+        id: "achievement-cv_123",
+        text: "Shipped PR4.",
+        sectionId: "achievements-cv_123",
+        sectionType: "achievements",
+      },
+    ],
+    hobbies: ["Photography"],
+    hobbyItems: [
+      {
+        id: "hobby-cv_123",
+        name: "Photography",
+        sectionId: "hobbies-cv_123",
+        sectionType: "hobbies",
+      },
+    ],
+    textSections: [
+      {
+        id: "text-section-additional-cv_123",
+        sectionId: "additional-cv_123",
+        sectionType: "additional_information",
+        sectionTitle: "Additional information",
+        sectionOrder: 0,
+        text: "Open to remote.",
+      },
+      {
+        id: "text-section-custom-cv_123",
+        sectionId: "custom-cv_123",
+        sectionType: "custom",
+        sectionTitle: "Community",
+        sectionOrder: 1,
+        text: "Mentors operators.",
+      },
+    ],
+  };
+}
+
+function readSavedPlainText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  if (Array.isArray(record.content)) {
+    return record.content.map(readSavedPlainText).filter(Boolean).join("\n");
+  }
+  if (typeof record.text === "string") return record.text;
+  return "";
 }
 
 describe("CvForge workspace mode", () => {
@@ -506,7 +925,7 @@ describe("CvForge workspace mode", () => {
     ).toHaveAttribute("href", "/settings");
   });
 
-  it("opens a non-empty section editor from the paper and highlights the rail row", async () => {
+  it("opens a non-empty section editor from the paper in preview mode and highlights the rail row", async () => {
     const user = userEvent.setup();
 
     const { container } = render(
@@ -515,6 +934,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
     await user.click(screen.getByRole("button", { name: "Paper Experience" }));
 
     expect(screen.getByRole("dialog", { name: "Experience" })).toBeInTheDocument();
@@ -525,6 +945,505 @@ describe("CvForge workspace mode", () => {
     expect(
       container.querySelector('.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title'),
     ).toHaveTextContent("Experience");
+  });
+
+  it("keeps edit mode paper body clicks from opening the drawer", async () => {
+    const user = userEvent.setup();
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Paper Experience" }));
+
+    expect(screen.queryByRole("dialog", { name: "Experience" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
+      "experience-cv_123",
+    );
+    expect(
+      container.querySelector('.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title'),
+    ).toHaveTextContent("Experience");
+  });
+
+  it("edits the rendered Summary paragraph inline in edit mode", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    const summaryParagraph = screen.getByTestId("paper-summary-paragraph");
+    expect(summaryParagraph).toHaveAttribute("contenteditable", "plaintext-only");
+    expect(summaryParagraph).toHaveAttribute(
+      "data-inline-paper-editable",
+      "true",
+    );
+    expect(summaryParagraph).toHaveAttribute(
+      "data-paper-field-path",
+      "structuredContent.0.summary",
+    );
+
+    await user.click(summaryParagraph);
+    expect(document.activeElement).toBe(summaryParagraph);
+    expect(screen.queryByRole("dialog", { name: "Summary" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: /Paper Summary/i })).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        container.querySelector('.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title'),
+      ).toHaveTextContent("Summary"),
+    );
+    expect(
+      container
+        .querySelector(".dasti-cv-paper-stage")
+        ?.getAttribute("data-active-paper-edit-field-path"),
+    ).toBe("structuredContent.0.summary");
+
+    summaryParagraph.textContent = "Inline summary rewrite.";
+    fireEvent.input(summaryParagraph);
+
+    await waitFor(() => expect(importCv).toHaveBeenCalled());
+    const summarySection = importCv.mock.lastCall?.[0].sections.find(
+      (section: { id: string }) => section.id === "summary-cv_123",
+    );
+    expect(
+      readSavedPlainText(summarySection.structuredContent[0].summary),
+    ).toBe("Inline summary rewrite.");
+  });
+
+  it("keeps Summary paper clicks as drawer focus in preview mode", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    const summaryParagraph = screen.getByTestId("paper-summary-paragraph");
+    expect(summaryParagraph).not.toHaveAttribute("contenteditable");
+
+    await user.click(summaryParagraph);
+
+    expect(screen.getByRole("dialog", { name: "Summary" })).toBeInTheDocument();
+    expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
+      "summary-cv_123",
+    );
+    expect(summaryParagraph).not.toHaveAttribute("contenteditable");
+  });
+
+  it("routes inline paper clicks away from drawers in edit mode but keeps preview drawer routing", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    const summaryParagraph = screen.getByTestId("paper-summary-paragraph");
+    expect(summaryParagraph).toHaveAttribute("data-inline-paper-editable", "true");
+
+    await user.click(summaryParagraph);
+
+    expect(screen.queryByRole("dialog", { name: "Summary" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    expect(summaryParagraph).not.toHaveAttribute("data-inline-paper-editable");
+
+    await user.click(summaryParagraph);
+
+    expect(screen.getByRole("dialog", { name: "Summary" })).toBeInTheDocument();
+  });
+
+  it("edits the rendered custom text paragraph inline in edit mode", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    const customParagraph = screen.getByTestId("paper-text-section-custom-cv_123");
+    expect(customParagraph).toHaveAttribute("contenteditable", "plaintext-only");
+    expect(customParagraph).toHaveAttribute("data-inline-paper-editable", "true");
+    expect(customParagraph).toHaveAttribute(
+      "data-paper-field-path",
+      "blocks.0.plainText",
+    );
+
+    await user.click(customParagraph);
+    expect(document.activeElement).toBe(customParagraph);
+    expect(screen.queryByRole("dialog", { name: "Community" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: /Paper Custom section/i }),
+    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        container.querySelector('.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title'),
+      ).toHaveTextContent("Community"),
+    );
+    expect(
+      container
+        .querySelector(".dasti-cv-paper-stage")
+        ?.getAttribute("data-active-paper-edit-section-id"),
+    ).toBe("custom-cv_123");
+
+    customParagraph.textContent = "Inline community rewrite.";
+    fireEvent.input(customParagraph);
+
+    await waitFor(() => expect(importCv).toHaveBeenCalled());
+    const customSection = importCv.mock.lastCall?.[0].sections.find(
+      (section: { id: string }) => section.id === "custom-cv_123",
+    );
+    expect(customSection.blocks[0].plainText).toBe("Inline community rewrite.");
+    expect(customSection.title).toBe("Community");
+  });
+
+  it("renders actual workshop paper fields editable before first click", async () => {
+    const user = userEvent.setup();
+    const { VerbatiResumePreview } = await vi.importActual<
+      typeof import("../../features/verbati/VerbatiResumePreview")
+    >("../../features/verbati/VerbatiResumePreview");
+    const onLinkIntent = vi.fn();
+    const onActivate = vi.fn();
+    const onSummaryChange = vi.fn();
+    const onTextSectionChange = vi.fn();
+    const onFieldChange = vi.fn();
+    const data = buildResumePreviewData();
+
+    const { container } = render(
+      <div className="dasti-cv-paper-stage" data-cv-workspace-mode="edit">
+        <VerbatiResumePreview
+          data={data as any}
+          stylePreset={{
+            layout: "workshop",
+            familyId: "workshop",
+            typography: "quiet-editorial",
+            palette: "sauge",
+          }}
+          hostMode="panel"
+          scrollMode="natural"
+          activeTarget={null}
+          onLinkIntent={onLinkIntent}
+          inlineEditing={{
+            enabled: true,
+            activeTarget: null,
+            onActivate,
+            onDeactivate: vi.fn(),
+            onSummaryChange,
+            onTextSectionChange,
+            onFieldChange,
+          }}
+        />
+      </div>,
+    );
+
+    const editableExpectations = [
+      ["Ada Lovelace", "profile-cv_123", "structuredContent.0.name", "heading"],
+      ["Product Designer", "profile-cv_123", "structuredContent.0.desiredPosition", "meta"],
+      ["ada@example.com", "profile-cv_123", "structuredContent.0.email", "meta"],
+      ["Paris", "profile-cv_123", "structuredContent.0.location", "meta"],
+      ["Focused builder.", "summary-cv_123", "structuredContent.0.summary", "paragraph"],
+      ["Lead designer", "experience-cv_123", "structuredContent.item:experience-item-cv_123.position", "heading"],
+      ["Studio", "experience-cv_123", "structuredContent.item:experience-item-cv_123.company", "meta"],
+      ["Remote", "experience-cv_123", "structuredContent.item:experience-item-cv_123.location", "meta"],
+      ["Led product design.", "experience-cv_123", "structuredContent.item:experience-item-cv_123.responsibilityBullets.0", "bullet"],
+      ["MFA", "education-cv_123", "structuredContent.item:education-item-cv_123.degree", "heading"],
+      ["Interaction design", "education-cv_123", "structuredContent.item:education-item-cv_123.fieldOfStudy", "heading"],
+      ["Design School", "education-cv_123", "structuredContent.item:education-item-cv_123.institution", "meta"],
+      ["TypeScript", "skills-cv_123", "structuredContent.item:skill-cv_123.name", "chip"],
+      ["Paper editor", "projects-cv_123", "structuredContent.item:project-cv_123.name", "heading"],
+      ["Case study", "projects-cv_123", "structuredContent.item:project-cv_123.meta", "meta"],
+      ["Structured inline editing.", "projects-cv_123", "structuredContent.item:project-cv_123.description", "paragraph"],
+      ["English", "languages-cv_123", "structuredContent.item:language-cv_123.name", "chip"],
+      ["Intermediate", "languages-cv_123", "structuredContent.item:language-cv_123.level", "meta"],
+      ["UX cert", "certifications-cv_123", "structuredContent.item:cert-cv_123.certificationName", "paragraph"],
+      ["NNG", "certifications-cv_123", "structuredContent.item:cert-cv_123.issuingOrganization", "meta"],
+      ["Shipped PR4.", "achievements-cv_123", "structuredContent.item:achievement-cv_123.text", "paragraph"],
+      ["AIGA", "affiliations-cv_123", "structuredContent.item:affiliation-cv_123.organizationName", "paragraph"],
+      ["Member", "affiliations-cv_123", "structuredContent.item:affiliation-cv_123.roleOrMembershipType", "meta"],
+      ["Mentors students.", "affiliations-cv_123", "structuredContent.item:affiliation-cv_123.notes", "paragraph"],
+      ["Photography", "hobbies-cv_123", "structuredContent.item:hobby-cv_123.name", "chip"],
+      ["Open to remote.", "additional-cv_123", "blocks.0.plainText", "paragraph"],
+      ["Mentors operators.", "custom-cv_123", "blocks.0.plainText", "paragraph"],
+    ] as const;
+
+    for (const [text, sectionId, fieldPath, fieldKind] of editableExpectations) {
+      const field = screen.getByText(text);
+      expect(field).toHaveAttribute("contenteditable", "plaintext-only");
+      expect(field).toHaveAttribute("data-inline-paper-editable", "true");
+      expect(field).toHaveAttribute("data-paper-section-id", sectionId);
+      expect(field).toHaveAttribute("data-paper-field-path", fieldPath);
+      expect(field).toHaveAttribute("data-paper-field-kind", fieldKind);
+    }
+
+    expect(container.querySelector("[data-paper-field-kind='date']")).toBeNull();
+    expect(
+      container.querySelector("[data-paper-field-path*='startDate']"),
+    ).toBeNull();
+
+    expect(
+      container.querySelector(".dasti-document-stage__canvas"),
+    ).not.toHaveAttribute("contenteditable");
+    expect(container.querySelector(".dasti-cv-paper-stage")).not.toHaveAttribute(
+      "contenteditable",
+    );
+
+    const summaryParagraph = screen.getByText("Focused builder.");
+    await user.click(summaryParagraph);
+
+    expect(document.activeElement).toBe(summaryParagraph);
+    expect(onActivate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionId: "summary-cv_123",
+        fieldPath: "structuredContent.0.summary",
+      }),
+    );
+    expect(onLinkIntent).not.toHaveBeenCalled();
+
+    summaryParagraph.textContent = "Actual workshop summary edit.";
+    fireEvent.input(summaryParagraph);
+
+    expect(onFieldChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionId: "summary-cv_123",
+        fieldPath: "structuredContent.0.summary",
+      }),
+      "Actual workshop summary edit.",
+    );
+
+    const roleField = screen.getByText("Lead designer");
+    await user.click(roleField);
+    expect(document.activeElement).toBe(roleField);
+    expect(onActivate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionId: "experience-cv_123",
+        fieldPath: "structuredContent.item:experience-item-cv_123.position",
+      }),
+    );
+    roleField.textContent = "Principal designer";
+    fireEvent.input(roleField);
+    expect(onFieldChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionId: "experience-cv_123",
+        fieldPath: "structuredContent.item:experience-item-cv_123.position",
+      }),
+      "Principal designer",
+    );
+
+    const bulletField = screen.getByText("Led product design.");
+    bulletField.textContent = "Led product strategy.";
+    fireEvent.input(bulletField);
+    expect(onFieldChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionId: "experience-cv_123",
+        fieldPath: "structuredContent.item:experience-item-cv_123.responsibilityBullets.0",
+        bulletIndex: 0,
+      }),
+      "Led product strategy.",
+    );
+
+    const skillField = screen.getByText("TypeScript");
+    skillField.textContent = "React";
+    fireEvent.input(skillField);
+    expect(onFieldChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionId: "skills-cv_123",
+        fieldPath: "structuredContent.item:skill-cv_123.name",
+        chipIndex: 0,
+      }),
+      "React",
+    );
+
+    const customParagraph = screen.getByText("Mentors operators.");
+    await user.click(customParagraph);
+    expect(document.activeElement).toBe(customParagraph);
+    expect(onActivate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionId: "custom-cv_123",
+        fieldPath: "blocks.0.plainText",
+      }),
+    );
+    expect(onLinkIntent).not.toHaveBeenCalled();
+
+    customParagraph.textContent = "Actual workshop custom edit.";
+    fireEvent.input(customParagraph);
+
+    expect(onFieldChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionId: "custom-cv_123",
+        fieldPath: "blocks.0.plainText",
+      }),
+      "Actual workshop custom edit.",
+    );
+  });
+
+  it("renders actual workshop inline add pills without routing to the drawer", async () => {
+    const user = userEvent.setup();
+    const { VerbatiResumePreview } = await vi.importActual<
+      typeof import("../../features/verbati/VerbatiResumePreview")
+    >("../../features/verbati/VerbatiResumePreview");
+    const onLinkIntent = vi.fn();
+    const onAddItem = vi.fn();
+
+    render(
+      <div className="dasti-cv-paper-stage" data-cv-workspace-mode="edit">
+        <VerbatiResumePreview
+          data={buildResumePreviewData() as any}
+          stylePreset={{
+            layout: "workshop",
+            familyId: "workshop",
+            typography: "quiet-editorial",
+            palette: "sauge",
+          }}
+          hostMode="panel"
+          scrollMode="natural"
+          activeTarget={null}
+          onLinkIntent={onLinkIntent}
+          inlineEditing={{
+            enabled: true,
+            activeTarget: null,
+            onActivate: vi.fn(),
+            onDeactivate: vi.fn(),
+            onSummaryChange: vi.fn(),
+            onTextSectionChange: vi.fn(),
+            onFieldChange: vi.fn(),
+            onAddItem,
+          }}
+        />
+      </div>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /\+ Add skill/i }));
+    await user.click(screen.getByRole("button", { name: /\+ Add bullet/i }));
+    await user.click(screen.getByRole("button", { name: /\+ Add experience/i }));
+    await user.click(screen.getByRole("button", { name: /\+ LinkedIn/i }));
+
+    expect(onLinkIntent).not.toHaveBeenCalled();
+    expect(onAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionId: "skills-cv_123",
+        sectionType: "skills",
+        itemKind: "skill",
+      }),
+    );
+    expect(onAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionId: "experience-cv_123",
+        sectionType: "experience",
+        itemKind: "bullet",
+        parentItemId: "experience-item-cv_123",
+      }),
+    );
+    expect(onAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionId: "experience-cv_123",
+        sectionType: "experience",
+        itemKind: "experience",
+      }),
+    );
+    expect(onAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionId: "profile-cv_123",
+        sectionType: "profile",
+        itemKind: "profile-contact",
+        parentItemId: "linkedin",
+      }),
+    );
+  });
+
+  it("keeps the actual workshop paper non-editable and routed in preview mode", async () => {
+    const user = userEvent.setup();
+    const { VerbatiResumePreview } = await vi.importActual<
+      typeof import("../../features/verbati/VerbatiResumePreview")
+    >("../../features/verbati/VerbatiResumePreview");
+    const onLinkIntent = vi.fn();
+
+    render(
+      <div className="dasti-cv-paper-stage" data-cv-workspace-mode="preview">
+        <VerbatiResumePreview
+          data={buildResumePreviewData() as any}
+          stylePreset={{
+            layout: "workshop",
+            familyId: "workshop",
+            typography: "quiet-editorial",
+            palette: "sauge",
+          }}
+          hostMode="panel"
+          scrollMode="natural"
+          activeTarget={null}
+          onLinkIntent={onLinkIntent}
+          inlineEditing={{
+            enabled: false,
+            activeTarget: null,
+            onActivate: vi.fn(),
+            onDeactivate: vi.fn(),
+            onSummaryChange: vi.fn(),
+            onTextSectionChange: vi.fn(),
+            onFieldChange: vi.fn(),
+          }}
+        />
+      </div>,
+    );
+
+    const summaryParagraph = screen.getByText("Focused builder.");
+    expect(summaryParagraph).not.toHaveAttribute("contenteditable");
+    expect(summaryParagraph).not.toHaveAttribute("data-inline-paper-editable");
+    expect(screen.queryByText("Lead designer")).not.toHaveAttribute(
+      "contenteditable",
+    );
+    expect(screen.queryByText("TypeScript")).not.toHaveAttribute(
+      "contenteditable",
+    );
+    expect(document.querySelector("[data-inline-paper-editable='true']")).toBeNull();
+    expect(screen.queryByRole("button", { name: /\+ Add skill/i })).toBeNull();
+
+    await user.click(summaryParagraph);
+
+    expect(onLinkIntent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionType: "summary",
+        sectionId: "summary-cv_123",
+        source: "preview-panel",
+      }),
+    );
+  });
+
+  it("keeps structured rendered sections out of raw inline editing", async () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(container.querySelector(".dasti-cv-paper-stage")).not.toHaveAttribute(
+      "contenteditable",
+    );
+    expect(container.querySelectorAll("[data-inline-paper-editable='true']")).toHaveLength(3);
+
+    for (const text of [
+      "Lead designer",
+      "MFA",
+      "TypeScript",
+      "English",
+      "Photography",
+      "Shipped PR4.",
+    ]) {
+      expect(screen.getByText(text).closest("[contenteditable]")).toBeNull();
+    }
+
+    expect(screen.getByRole("button", { name: "Paper Experience" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Education$/i })).toBeInTheDocument();
   });
 
   it("opens a non-empty section editor from the rail and focuses the preview section", async () => {
@@ -570,7 +1489,7 @@ describe("CvForge workspace mode", () => {
     );
   });
 
-  it("writes common section fields back to draft state", async () => {
+  it("autosaves common section fields while editing the sheet", async () => {
     const user = userEvent.setup();
     const importCv = vi.fn(async () => undefined);
     useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
@@ -584,16 +1503,13 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByRole("button", { name: /^Profile$/i }));
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "Grace Hopper");
-    expect(importCv).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Save" }));
-
     await waitFor(() => expect(importCv).toHaveBeenCalled());
     expect(importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name).toBe(
       "Grace Hopper",
     );
   });
 
-  it("discards section sheet edits when canceling", async () => {
+  it("reverts autosaved section sheet edits when explicitly canceling", async () => {
     const user = userEvent.setup();
     const importCv = vi.fn(async () => undefined);
     useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
@@ -607,9 +1523,18 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByRole("button", { name: /^Profile$/i }));
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "Unsaved Name");
+    await waitFor(() =>
+      expect(importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name).toBe(
+        "Unsaved Name",
+      ),
+    );
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
-    expect(importCv).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name).toBe(
+        "Ada Lovelace",
+      ),
+    );
     await user.click(screen.getByRole("button", { name: /^Profile$/i }));
     expect(screen.getByLabelText("Name")).toHaveValue("Ada Lovelace");
   });
@@ -654,8 +1579,6 @@ describe("CvForge workspace mode", () => {
     await user.type(summaryInput, "Alpha Beta ");
 
     expect(summaryInput).toHaveValue("Alpha Beta ");
-    expect(importCv).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(importCv).toHaveBeenCalled());
     expect(
       importCv.mock.lastCall?.[0].sections.find(
@@ -681,9 +1604,6 @@ describe("CvForge workspace mode", () => {
     await user.type(roleInput, "Senior product designer");
 
     expect(roleInput).toHaveValue("Senior product designer");
-    expect(importCv).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Save" }));
-
     await waitFor(() => expect(importCv).toHaveBeenCalled());
     expect(
       importCv.mock.lastCall?.[0].sections.find(
@@ -1228,6 +2148,7 @@ describe("CvForge workspace mode", () => {
       "certifications-cv_123",
       "achievements-cv_123",
       "additional-cv_123",
+      "custom-cv_123",
       "hobbies-cv_123",
     ]);
   });
@@ -1311,7 +2232,13 @@ describe("CvForge workspace mode", () => {
         (section: { title?: string }) => section.title === "Projects",
       ),
     ).toBe(true);
-    expect(screen.getByRole("dialog", { name: "Projects" })).toBeInTheDocument();
+    const addedProjectSection = importCv.mock.lastCall?.[0].sections.find(
+      (section: { title?: string }) => section.title === "Projects",
+    );
+    expect(screen.queryByRole("dialog", { name: "Projects" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
+      addedProjectSection.id,
+    );
   });
 
   it("routes rail import pdf through the hidden file input", async () => {

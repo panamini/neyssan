@@ -13,6 +13,7 @@ import ResumeTemplateRenderer, {
   WORKSHOP_TEMPLATE_RENDERER_ID,
   getResumeTemplateCanvasHeight,
 } from "./resume/ResumeTemplateRenderer";
+import type { ResumeInlineEditing } from "./resume/InlineEditableText";
 import {
   buildVerbatiThemeVars,
   getResumeTemplateId,
@@ -59,6 +60,7 @@ type VerbatiResumePreviewProps = {
     | undefined;
   activeTarget?: ResumeActiveTarget | null;
   onLinkIntent?: (intent: ResumeLinkIntent) => void;
+  inlineEditing?: ResumeInlineEditing | null;
   onRemoveSection?:
     | ((section: {
         sectionId: string;
@@ -237,6 +239,7 @@ export function VerbatiResumePreview({
   onSelectComparisonLayout,
   activeTarget = null,
   onLinkIntent,
+  inlineEditing = null,
   onRemoveSection,
 }: VerbatiResumePreviewProps): JSX.Element {
   const previewRootRef = React.useRef<HTMLDivElement | null>(null);
@@ -548,7 +551,10 @@ export function VerbatiResumePreview({
     );
   }
 
-  const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:single:${dataSignature}`;
+  const fitTokenDataSignature = inlineEditing?.enabled
+    ? "inline-editing"
+    : dataSignature;
+  const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:single:${fitTokenDataSignature}`;
 
   const workspaceZoomControls = isWorkspaceMode ? (
     <div
@@ -633,7 +639,14 @@ export function VerbatiResumePreview({
   const handlePreviewCanvasClick = React.useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!onLinkIntent) return;
-      const target = e.target as HTMLElement;
+      const target =
+        e.target instanceof HTMLElement
+          ? e.target
+          : ((e.target as Node).parentElement as HTMLElement | null);
+      if (!target) return;
+      if (inlineEditing?.enabled) {
+        return;
+      }
       const sectionEl = target.closest(
         "[data-preview-section]",
       ) as HTMLElement | null;
@@ -685,7 +698,7 @@ export function VerbatiResumePreview({
             : undefined,
       });
     },
-    [hostMode, onLinkIntent],
+    [hostMode, inlineEditing?.enabled, onLinkIntent],
   );
 
   const handlePreviewWheel = React.useCallback(
@@ -832,6 +845,7 @@ export function VerbatiResumePreview({
               resumeTemplateId={resolvedResumeTemplateId}
               stageLayout={stageLayout}
               activeTarget={activeTarget}
+              inlineEditing={inlineEditing}
               onStablePageCountChange={setStableWorkshopPageCount}
             />
           ) : (
@@ -843,6 +857,7 @@ export function VerbatiResumePreview({
               userZoom={userZoom}
               stageLayout={stageLayout}
               activeTarget={activeTarget}
+              inlineEditing={inlineEditing}
               onRemoveSection={onRemoveSection}
               onPreviewMetricsChange={handlePreviewMetricsChange}
             />
