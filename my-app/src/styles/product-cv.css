@@ -159,6 +159,56 @@
   text-decoration: underline;
 }
 
+.dasti-cv-paper-section-controls {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 1mm;
+  padding: 0.7mm;
+  border: 1px solid color-mix(in srgb, var(--color-accent, #556d60) 22%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--paper, #fff) 94%, transparent);
+  box-shadow: 0 1mm 3mm rgb(20 20 20 / 8%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition:
+    opacity var(--dur-2, 140ms) var(--ease-standard, ease),
+    box-shadow var(--dur-2, 140ms) var(--ease-standard, ease);
+}
+
+.dasti-cv-paper-section-heading:hover .dasti-cv-paper-section-controls,
+.dasti-cv-paper-section-heading:focus-within .dasti-cv-paper-section-controls,
+.dasti-cv-paper-section-controls:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.dasti-cv-paper-section-control {
+  display: inline-grid;
+  place-items: center;
+  width: 5.4mm;
+  height: 5.4mm;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-accent, #556d60);
+  cursor: pointer;
+}
+
+.dasti-cv-paper-section-control:hover,
+.dasti-cv-paper-section-control:focus-visible {
+  background: var(--color-accent-soft, rgb(85 109 96 / 12%));
+  outline: none;
+}
+
+.dasti-cv-paper-section-control[data-tone="danger"] {
+  color: #9f2f2f;
+}
+
 .dasti-cv-paper-stage [data-inline-paper-editable="true"]:hover {
   box-shadow: 0 1px 0 color-mix(in srgb, var(--ac, #a84e2e) 24%, transparent);
 }

@@ -33,6 +33,7 @@ import {
   formatSectionDisplayTitle,
   getSectionOrganizationControlPolicy,
 } from "../../lib/cv-section-organization";
+import { getCanonicalSectionType } from "../../features/verbati/resumeLinking";
 import type { VerbatiStylePreset } from "../../features/verbati/types";
 import {
   getVerbatiFontPairOption,
@@ -228,6 +229,7 @@ type SortableSectionRowProps = {
 };
 
 type CvAddSectionMenuProps = {
+  sections: CvSection[];
   onAddSection: (sectionKind: CvAddSectionKind) => void;
 };
 
@@ -292,7 +294,47 @@ function SortableSectionRow({
   );
 }
 
-function CvAddSectionMenu({ onAddSection }: CvAddSectionMenuProps): JSX.Element {
+const SINGLETON_ADD_SECTION_KINDS = new Set<CvAddSectionKind>([
+  "summary",
+  "experience",
+  "education",
+  "skills",
+  "projects",
+  "achievements",
+  "certifications",
+  "languages",
+  "hobbies",
+]);
+
+const ADD_SECTION_KIND_BY_CANONICAL_TYPE: Partial<
+  Record<NonNullable<ReturnType<typeof getCanonicalSectionType>>, CvAddSectionKind>
+> = {
+  summary: "summary",
+  experience: "experience",
+  education: "education",
+  skills: "skills",
+  projects: "projects",
+  achievements: "achievements",
+  certifications: "certifications",
+  languages: "languages",
+  hobbies: "hobbies",
+};
+
+function CvAddSectionMenu({
+  sections,
+  onAddSection,
+}: CvAddSectionMenuProps): JSX.Element {
+  const presentKinds = new Set(
+    sections
+      .map((section) => {
+        const canonicalType = getCanonicalSectionType(section);
+        return canonicalType ? ADD_SECTION_KIND_BY_CANONICAL_TYPE[canonicalType] : null;
+      })
+      .filter((kind): kind is CvAddSectionKind => Boolean(kind)),
+  );
+  const addableItems = ADD_SECTION_ITEMS.filter(
+    (item) => !SINGLETON_ADD_SECTION_KINDS.has(item.id) || !presentKinds.has(item.id),
+  );
   return (
     <Menu
       ariaLabel="Add a section"
@@ -302,7 +344,7 @@ function CvAddSectionMenu({ onAddSection }: CvAddSectionMenuProps): JSX.Element 
       sections={[
         {
           label: "Add a section",
-          items: ADD_SECTION_ITEMS.map((item) => ({
+          items: addableItems.map((item) => ({
             id: item.id,
             label: item.label,
             onSelect: () => onAddSection(item.id),
@@ -654,7 +696,7 @@ export function CvRail({
               </SortableContext>
             </DndContext>
           )}
-          <CvAddSectionMenu onAddSection={onAddSection} />
+          <CvAddSectionMenu sections={sections} onAddSection={onAddSection} />
           <div className="dasti-cv-rail-hint">
             Click a section row to edit its items. Each section opens its own
             editor.
