@@ -4,6 +4,8 @@ import { normalizeResumePreviewTokens } from "../../layout/documentTokenNormaliz
 import { ptToMm } from "../../layout/documentTokens";
 import { planWorkshopResumePages } from "../resumePagination";
 import { resumeMock } from "../../../features/verbati/resume/resume.mock";
+import { buildCanonicalResumeRenderModelFromCv } from "../../buildCanonicalResumeRenderModel";
+import type { CvDocument } from "../../../types/cvDocument";
 import {
   getResumeTemplateDefinition,
   resolveWorkshopPreviewLayoutContract,
@@ -1025,6 +1027,91 @@ describe("resumePagination", () => {
     expect(result.pages.some((page) => page.sections.some((section) => section.continued))).toBe(
       true,
     );
+  });
+
+  it("plans blank-CV-created filled sections through the canonical render model onto page 2", () => {
+    const doc: CvDocument = {
+      id: "blank-overflow",
+      title: "Blank overflow",
+      metadata: {
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "profile",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-1",
+              name: "Ada Lovelace",
+              desiredPosition: "Engineer",
+              email: "ada@example.com",
+            },
+          ],
+        },
+        {
+          id: "summary",
+          title: "Summary",
+          type: "summary",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "summary-1",
+              summary: makeTextBlock("blank-summary", 16),
+            },
+          ],
+        },
+        {
+          id: "experience",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: Array.from({ length: 6 }, (_, index) => ({
+            id: `exp-${index + 1}`,
+            position: `Role ${index + 1}`,
+            company: `Company ${index + 1}`,
+            startDate: "2020",
+            endDate: "2026",
+            responsibilities: Array.from({ length: 4 }, (__, bulletIndex) =>
+              `Blank-created responsibility ${index + 1}.${bulletIndex + 1} with enough detail to consume workshop page height.`,
+            ),
+          })),
+        },
+        {
+          id: "projects",
+          title: "Projects",
+          type: "projects",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "project-1",
+              name: "Overflow project",
+              description: "Project added from a blank CV after the first page is full.",
+            },
+          ],
+        },
+      ],
+    };
+
+    const data = buildCanonicalResumeRenderModelFromCv(doc, { includeDrafts: true });
+    const result = planWorkshopResumePages({ data, template: workshopTemplate });
+
+    expect(result.committedPages.length).toBeGreaterThan(1);
+    expect(
+      result.committedPages
+        .slice(1)
+        .some((page) =>
+          page.fragments.some(
+            (fragment) =>
+              fragment.kind === "selected_projects" &&
+              fragment.items.some((item) => item.id === "project-1"),
+          ),
+        ),
+    ).toBe(true);
   });
 
   it("preserves paragraph-only responsibilitiesRich in planner and committed experience fragments", () => {

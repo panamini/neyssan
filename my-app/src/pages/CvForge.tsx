@@ -99,6 +99,7 @@ type InlinePaperSelectionState = {
   text: string;
   anchor: EditorSelectionAnchor;
   editTarget: ActivePaperEditTarget;
+  range: Range | null;
 };
 
 const CV_FORGE_WORKSPACE_MODE_STORAGE_KEY = "dasti:cv-forge-workspace-mode:v1";
@@ -544,7 +545,7 @@ function updateStructuredItemBullet(
     };
   }
 
-  const bullets = splitAiListText(collectPlainText(item.responsibilities));
+  const bullets = splitAiListText(collectPlainText(item.responsibilityBullets ?? item.responsibilities));
   bullets[bulletIndex] = storedText;
   const draftBulletCount = Math.max(
     Number((item as Record<string, unknown>).__draftResponsibilityBulletCount ?? 0),
@@ -557,11 +558,47 @@ function updateStructuredItemBullet(
       ...items.slice(0, itemIndex),
       {
         ...item,
-        responsibilities: ensureRemirrorDoc(
-          bullets.map((bullet) => `- ${bullet}`).join("\n"),
-        ),
+        responsibilityBullets: bullets,
         __draftResponsibilityBulletCount: draftBulletCount,
       },
+      ...items.slice(itemIndex + 1),
+    ] as CvSection["structuredContent"],
+  };
+}
+
+function removeStructuredItemBullet(
+  section: CvSection,
+  itemId: string,
+  bulletIndex: number,
+): CvSection {
+  const items = getStructuredItems(section);
+  const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
+  if (itemIndex < 0) return section;
+  const item = items[itemIndex]!;
+  const removeAt = (entries: unknown[]) =>
+    entries
+      .map((entry) => collectPlainText(entry))
+      .filter((_, index) => index !== bulletIndex)
+      .filter((entry) => entry.trim() && entry !== DRAFT_EMPTY_RESPONSIBILITY_BULLET);
+  const currentBullets = Array.isArray(item.responsibilityBullets)
+    ? item.responsibilityBullets
+    : Array.isArray(item.responsibilities)
+      ? item.responsibilities
+      : splitAiListText(collectPlainText(item.responsibilityBullets ?? item.responsibilities));
+  const nextBullets = removeAt(currentBullets);
+  const nextItem = {
+    ...item,
+    responsibilityBullets: nextBullets,
+    __draftResponsibilityBulletCount: 0,
+  };
+  if (Array.isArray(item.responsibilities) && !Array.isArray(item.responsibilityBullets)) {
+    delete (nextItem as Record<string, unknown>).responsibilities;
+  }
+  return {
+    ...section,
+    structuredContent: [
+      ...items.slice(0, itemIndex),
+      nextItem,
       ...items.slice(itemIndex + 1),
     ] as CvSection["structuredContent"],
   };
@@ -600,6 +637,69 @@ function addProfileDraftContactField(section: CvSection, field: string): CvSecti
       ...items.slice(1),
     ] as CvSection["structuredContent"],
   };
+}
+
+const OPTIONAL_PROFILE_CONTACT_FIELDS = new Set([
+  "email",
+  "phone",
+  "location",
+  "linkedin",
+  "website",
+]);
+
+function readOptionalProfileContactField(
+  target: ActivePaperEditTarget | null | undefined,
+): string | null {
+  if (target?.sectionType !== "profile") return null;
+  const match = target.fieldPath.match(/^structuredContent\.0\.([^.]*)$/);
+  const field = match?.[1];
+  return field && OPTIONAL_PROFILE_CONTACT_FIELDS.has(field) ? field : null;
+}
+
+function removeProfileDraftContactField(section: CvSection, field: string): CvSection {
+  const items = getStructuredItems(section);
+  const item = items[0];
+  if (!item) return section;
+  const nextItem = { ...item } as Record<string, unknown>;
+  const nextDraftFields = Array.isArray(item.__draftContactFields)
+    ? item.__draftContactFields
+        .map((value) => String(value))
+        .filter((value) => value && value !== field)
+    : [];
+  nextItem[field] = "";
+  if (nextDraftFields.length > 0) {
+    nextItem.__draftContactFields = Array.from(new Set(nextDraftFields));
+  } else {
+    delete nextItem.__draftContactFields;
+  }
+  return {
+    ...section,
+    structuredContent: [nextItem, ...items.slice(1)] as CvSection["structuredContent"],
+  };
+}
+
+const INLINE_PAPER_AI_HIGHLIGHT_NAME = "cv-inline-ai-selection";
+
+type InlinePaperHighlightRegistry = {
+  set: (name: string, highlight: unknown) => void;
+  delete: (name: string) => void;
+};
+
+function getCssHighlights(): InlinePaperHighlightRegistry | null {
+  if (typeof CSS === "undefined") return null;
+  const highlights = (CSS as typeof CSS & { highlights?: InlinePaperHighlightRegistry })
+    .highlights;
+  return highlights ?? null;
+}
+
+function clearInlinePaperAiSelectionHighlight(): void {
+  getCssHighlights()?.delete(INLINE_PAPER_AI_HIGHLIGHT_NAME);
+  if (typeof document === "undefined") return;
+  document
+    .querySelectorAll<HTMLElement>("[data-inline-ai-selection-active='true']")
+    .forEach((element) => {
+      element.removeAttribute("data-inline-ai-selection-active");
+    });
 }
 
 function applyAiTextToSection(section: CvSection, text: string): CvSection {
@@ -814,6 +914,7 @@ function focusPreviewSection(sectionId: string): void {
   if (typeof document === "undefined") return;
 
   window.requestAnimationFrame(() => {
+    if (isSectionEditorSheetFocusOwner()) return;
     const escapedSectionId =
       typeof CSS !== "undefined" && typeof CSS.escape === "function"
         ? CSS.escape(sectionId)
@@ -843,6 +944,7 @@ function focusPreviewSection(sectionId: string): void {
 function focusInlinePaperEditTarget(target: ActivePaperEditTarget): void {
   if (typeof document === "undefined") return;
   window.requestAnimationFrame(() => {
+    if (isSectionEditorSheetFocusOwner()) return;
     const escape = (value: string) =>
       typeof CSS !== "undefined" && typeof CSS.escape === "function"
         ? CSS.escape(value)
@@ -864,6 +966,38 @@ function focusInlinePaperEditTarget(target: ActivePaperEditTarget): void {
     selection?.removeAllRanges();
     selection?.addRange(range);
   });
+}
+
+function isSectionEditorSheetFocusOwner(): boolean {
+  if (typeof document === "undefined") return false;
+  const activeElement = document.activeElement;
+  return activeElement instanceof Element
+    ? Boolean(activeElement.closest(".dasti-cv-section-sheet-panel"))
+    : false;
+}
+
+function getSectionRailAiMode(section: CvSection): "none" | "rail" | "editor" {
+  if (section.type === "profile" || section.type === "contact") return "none";
+  if (
+    section.type === "summary" ||
+    section.type === "skills" ||
+    section.type === "languages" ||
+    String(section.type) === "hobbies" ||
+    section.title.trim().toLowerCase() === "hobbies" ||
+    section.type === "text"
+  ) {
+    return "rail";
+  }
+  return "editor";
+}
+
+function sectionUsesStructuredSuggestions(section: CvSection): boolean {
+  return (
+    section.type === "skills" ||
+    section.type === "languages" ||
+    String(section.type) === "hobbies" ||
+    section.title.trim().toLowerCase() === "hobbies"
+  );
 }
 
 function getInitialEditTargetForSection(
@@ -1294,14 +1428,26 @@ export function CvForge(): JSX.Element {
     React.useState<ActivePaperEditTarget | null>(null);
   const [pendingFocusEditTarget, setPendingFocusEditTarget] =
     React.useState<ActivePaperEditTarget | null>(null);
+  const pendingInlineFieldChangeRef = React.useRef<{
+    target: ActivePaperEditTarget;
+    text: string;
+  } | null>(null);
+  const inlineFieldChangeTimerRef = React.useRef<number | null>(null);
+  const latestInlineSectionsRef = React.useRef<CvSection[]>([]);
   const [inlinePaperSelectionState, setInlinePaperSelectionState] =
     React.useState<InlinePaperSelectionState | null>(null);
+  const activeInlinePaperAiRequestIdRef = React.useRef<string | null>(null);
   const [isApplyingInlinePaperAi, setIsApplyingInlinePaperAi] =
     React.useState(false);
   const [pendingInlinePaperAiActionId, setPendingInlinePaperAiActionId] =
     React.useState<InlineAiActionId | null>(null);
   const [pendingActiveSection, setPendingActiveSection] =
     React.useState<CvSection | null>(null);
+  const sectionActionHandlersRef = React.useRef<{
+    ask?: (sectionId: string) => void;
+    toggleHidden?: (sectionId: string) => void;
+    delete?: (sectionId: string) => void;
+  }>({});
   const [sectionEditorOpen, setSectionEditorOpen] = React.useState(false);
   const [importReviewOpen, setImportReviewOpen] = React.useState(false);
   const [dismissedImportReviewCvIds, setDismissedImportReviewCvIds] =
@@ -1310,6 +1456,37 @@ export function CvForge(): JSX.Element {
     () => ((currentCv?.sections ?? []) as CvSection[]),
     [currentCv?.sections],
   );
+  const optimisticSections = React.useMemo<CvSection[]>(() => {
+    const pendingSectionId = pendingActiveSection?.id
+      ? String(pendingActiveSection.id)
+      : null;
+    if (!pendingActiveSection || !pendingSectionId) {
+      return currentSections;
+    }
+    const found = currentSections.some(
+      (section, index) => getCvSectionId(section, index) === pendingSectionId,
+    );
+    if (!found) {
+      return currentSections;
+    }
+    return currentSections.map((section, index) =>
+      getCvSectionId(section, index) === pendingSectionId
+        ? pendingActiveSection
+        : section,
+    );
+  }, [currentSections, pendingActiveSection]);
+  React.useEffect(() => {
+    latestInlineSectionsRef.current = optimisticSections;
+  }, [optimisticSections]);
+  const optimisticCv = React.useMemo<CvDocument | null>(() => {
+    if (!currentCv || optimisticSections === currentSections) {
+      return currentCv ?? null;
+    }
+    return {
+      ...currentCv,
+      sections: optimisticSections,
+    } as CvDocument;
+  }, [currentCv, currentSections, optimisticSections]);
 
   const handleResumeLinkIntent = React.useCallback(
     (intent: ResumeLinkIntent) => {
@@ -1370,8 +1547,8 @@ export function CvForge(): JSX.Element {
     logPrefix: "[CvForge]",
   });
   const filteredPreviewCv = React.useMemo(
-    () => applyHiddenSectionsToCvDocument(currentCv, hiddenSectionIds),
-    [currentCv, hiddenSectionIds],
+    () => applyHiddenSectionsToCvDocument(optimisticCv, hiddenSectionIds),
+    [hiddenSectionIds, optimisticCv],
   );
   const resumePreviewData = React.useMemo(
     () =>
@@ -1566,13 +1743,19 @@ export function CvForge(): JSX.Element {
     if (!pendingFocusEditTarget || workspaceMode !== "edit") {
       return;
     }
+    if (sectionEditorOpen && isSectionEditorSheetFocusOwner()) {
+      return;
+    }
     focusInlinePaperEditTarget(pendingFocusEditTarget);
     const timeoutId = window.setTimeout(() => {
+      if (sectionEditorOpen && isSectionEditorSheetFocusOwner()) {
+        return;
+      }
       focusInlinePaperEditTarget(pendingFocusEditTarget);
       setPendingFocusEditTarget(null);
     }, 80);
     return () => window.clearTimeout(timeoutId);
-  }, [pendingFocusEditTarget, resumePreviewData, workspaceMode]);
+  }, [pendingFocusEditTarget, resumePreviewData, sectionEditorOpen, workspaceMode]);
 
   React.useEffect(() => {
     writeStoredHiddenSectionIds(
@@ -1930,10 +2113,19 @@ export function CvForge(): JSX.Element {
     [currentSections, persistSections],
   );
 
-  const handleInlineFieldChange = React.useCallback(
+  const applyInlineFieldChange = React.useCallback(
     (target: ActivePaperEditTarget, text: string) => {
       const nextText = normalizeInlinePlainText(text);
-      const section = findSectionById(currentSections, target.sectionId);
+      const focusedEditable =
+        typeof document !== "undefined" && document.activeElement instanceof Element
+          ? document.activeElement.closest('[data-inline-paper-editable="true"]')
+          : null;
+      const focusedTarget = readInlinePaperEditTarget(focusedEditable);
+      const baseSections =
+        latestInlineSectionsRef.current.length > 0
+          ? latestInlineSectionsRef.current
+          : currentSections;
+      const section = findSectionById(baseSections, target.sectionId);
       if (!section) return;
 
       let nextSection: CvSection | null = null;
@@ -1977,20 +2169,64 @@ export function CvForge(): JSX.Element {
 
       setPendingActiveSection(nextSection);
       setResumeActiveTarget(getSectionTarget(nextSection));
-      persistSections(
-        currentSections.map((currentSection, index) =>
-          getCvSectionId(currentSection, index) === target.sectionId
-            ? nextSection
-            : currentSection,
-        ),
+      const nextSections = baseSections.map((currentSection, index) =>
+        getCvSectionId(currentSection, index) === target.sectionId
+          ? nextSection
+          : currentSection,
       );
+      latestInlineSectionsRef.current = nextSections;
+      persistSections(nextSections);
+      if (focusedTarget && focusedTarget.fieldPath !== target.fieldPath) {
+        window.requestAnimationFrame(() => {
+          focusInlinePaperEditTarget(focusedTarget);
+        });
+      }
     },
     [currentSections, persistSections],
   );
 
+  const flushPendingInlineFieldChange = React.useCallback(() => {
+    if (inlineFieldChangeTimerRef.current !== null) {
+      window.clearTimeout(inlineFieldChangeTimerRef.current);
+      inlineFieldChangeTimerRef.current = null;
+    }
+
+    const pending = pendingInlineFieldChangeRef.current;
+    pendingInlineFieldChangeRef.current = null;
+    if (!pending) return;
+
+    applyInlineFieldChange(pending.target, pending.text);
+  }, [applyInlineFieldChange]);
+
+  const handleInlineFieldChange = React.useCallback(
+    (target: ActivePaperEditTarget, text: string) => {
+      if (inlineFieldChangeTimerRef.current !== null) {
+        window.clearTimeout(inlineFieldChangeTimerRef.current);
+        inlineFieldChangeTimerRef.current = null;
+      }
+      pendingInlineFieldChangeRef.current = null;
+      applyInlineFieldChange(target, text);
+    },
+    [applyInlineFieldChange],
+  );
+
+  React.useEffect(
+    () => () => {
+      if (inlineFieldChangeTimerRef.current !== null) {
+        window.clearTimeout(inlineFieldChangeTimerRef.current);
+      }
+    },
+    [],
+  );
+
   const handleInlineAddItem = React.useCallback(
     (request: Parameters<NonNullable<ResumeInlineEditing["onAddItem"]>>[0]) => {
-      const section = findSectionById(currentSections, request.sectionId);
+      flushPendingInlineFieldChange();
+      const baseSections =
+        latestInlineSectionsRef.current.length > 0
+          ? latestInlineSectionsRef.current
+          : currentSections;
+      const section = findSectionById(baseSections, request.sectionId);
       if (!section) return;
 
       const items = getStructuredItems(section);
@@ -2197,15 +2433,15 @@ export function CvForge(): JSX.Element {
       setSectionEditorOpen(false);
       setInlineEditTarget(nextTarget);
       setPendingFocusEditTarget(nextTarget);
-      persistSections(
-        currentSections.map((currentSection, index) =>
-          getCvSectionId(currentSection, index) === request.sectionId
-            ? savedSection
-            : currentSection,
-        ),
+      const nextSections = baseSections.map((currentSection, index) =>
+        getCvSectionId(currentSection, index) === request.sectionId
+          ? savedSection
+          : currentSection,
       );
+      latestInlineSectionsRef.current = nextSections;
+      persistSections(nextSections);
     },
-    [currentSections, persistSections],
+    [currentSections, flushPendingInlineFieldChange, persistSections],
   );
 
   const resumeInlineEditing = React.useMemo<ResumeInlineEditing>(
@@ -2216,7 +2452,105 @@ export function CvForge(): JSX.Element {
         setInlineEditTarget(target);
         setActiveSectionId(target.sectionId);
       },
-      onDeactivate: () => setInlineEditTarget(null),
+      onDeactivate: (target) => {
+        const pending = pendingInlineFieldChangeRef.current;
+        const pendingMatches =
+          Boolean(target && pending) &&
+          pending?.target.sectionId === target?.sectionId &&
+          pending?.target.fieldPath === target?.fieldPath;
+        const escape = (value: string) =>
+          typeof CSS !== "undefined" && typeof CSS.escape === "function"
+            ? CSS.escape(value)
+            : value.replace(/"/g, '\\"');
+        const currentNode =
+          target && typeof document !== "undefined"
+            ? document.querySelector<HTMLElement>(
+                `[data-inline-paper-editable="true"][data-paper-section-id="${escape(
+                  target.sectionId,
+                )}"][data-paper-field-path="${escape(target.fieldPath)}"]`,
+              )
+            : null;
+        const currentText = pendingMatches
+          ? pending?.text ?? ""
+          : (currentNode?.textContent ?? "").trim()
+            ? currentNode?.textContent ?? ""
+            : "";
+        const optionalProfileContactField = readOptionalProfileContactField(target);
+
+        if (target && optionalProfileContactField && !currentText.trim()) {
+          pendingInlineFieldChangeRef.current = null;
+          if (inlineFieldChangeTimerRef.current !== null) {
+            window.clearTimeout(inlineFieldChangeTimerRef.current);
+            inlineFieldChangeTimerRef.current = null;
+          }
+
+          const baseSections =
+            latestInlineSectionsRef.current.length > 0
+              ? latestInlineSectionsRef.current
+              : currentSections;
+          const section = findSectionById(baseSections, target.sectionId);
+          if (section) {
+            const nextSection = removeProfileDraftContactField(
+              section,
+              optionalProfileContactField,
+            );
+            const nextSections = baseSections.map((currentSection, index) =>
+              getCvSectionId(currentSection, index) === target.sectionId
+                ? nextSection
+                : currentSection,
+            );
+            latestInlineSectionsRef.current = nextSections;
+            setPendingActiveSection(nextSection);
+            setResumeActiveTarget(getSectionTarget(nextSection));
+            persistSections(nextSections);
+          }
+          setInlineEditTarget(null);
+          return;
+        }
+
+        if (target?.fieldKind === "bullet") {
+          if (!currentText.trim()) {
+            pendingInlineFieldChangeRef.current = null;
+            if (inlineFieldChangeTimerRef.current !== null) {
+              window.clearTimeout(inlineFieldChangeTimerRef.current);
+              inlineFieldChangeTimerRef.current = null;
+            }
+
+            const itemMatch = target.fieldPath.match(
+              /^structuredContent\.item:([^.]*)\.responsibilityBullets\.(\d+)$/,
+            );
+            if (itemMatch) {
+              const [, itemId, bulletIndex] = itemMatch;
+              const baseSections =
+                latestInlineSectionsRef.current.length > 0
+                  ? latestInlineSectionsRef.current
+                  : currentSections;
+              const section = findSectionById(baseSections, target.sectionId);
+              if (section) {
+                const nextSection = removeStructuredItemBullet(
+                  section,
+                  itemId,
+                  Number(bulletIndex),
+                );
+                const nextSections = baseSections.map((currentSection, index) =>
+                  getCvSectionId(currentSection, index) === target.sectionId
+                    ? nextSection
+                    : currentSection,
+                );
+                latestInlineSectionsRef.current = nextSections;
+                setPendingActiveSection(nextSection);
+                setResumeActiveTarget(getSectionTarget(nextSection));
+                persistSections(nextSections);
+              }
+            }
+          } else {
+            flushPendingInlineFieldChange();
+          }
+        } else {
+          flushPendingInlineFieldChange();
+        }
+        setInlineEditTarget(null);
+      },
       onSummaryChange: handleInlineSummaryChange,
       onTextSectionChange: handleInlineTextSectionChange,
       onFieldChange: handleInlineFieldChange,
@@ -2224,11 +2558,13 @@ export function CvForge(): JSX.Element {
     }),
     [
       currentSections,
+      flushPendingInlineFieldChange,
       handleInlineAddItem,
       handleInlineFieldChange,
       handleInlineSummaryChange,
       handleInlineTextSectionChange,
       inlineEditTarget,
+      persistSections,
       workspaceMode,
     ],
   );
@@ -2269,6 +2605,10 @@ export function CvForge(): JSX.Element {
     setInlinePaperSelectionState({
       ...selectionState,
       editTarget,
+      range:
+        selection && selection.rangeCount > 0
+          ? selection.getRangeAt(0).cloneRange()
+          : null,
     });
   }, [workspaceMode]);
 
@@ -2308,22 +2648,65 @@ export function CvForge(): JSX.Element {
     };
   }, [scheduleInlinePaperSelectionCheck, workspaceMode]);
 
+  React.useEffect(() => {
+    if (workspaceMode !== "edit" || !inlinePaperSelectionState) {
+      clearInlinePaperAiSelectionHighlight();
+      return undefined;
+    }
+
+    clearInlinePaperAiSelectionHighlight();
+    const escape = (value: string) =>
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(value)
+        : value.replace(/"/g, '\\"');
+    const editableElement =
+      typeof document !== "undefined"
+        ? document.querySelector<HTMLElement>(
+            `[data-inline-paper-editable="true"][data-paper-section-id="${escape(
+              inlinePaperSelectionState.editTarget.sectionId,
+            )}"][data-paper-field-path="${escape(
+              inlinePaperSelectionState.editTarget.fieldPath,
+            )}"]`,
+          )
+        : null;
+
+    editableElement?.setAttribute("data-inline-ai-selection-active", "true");
+    const HighlightCtor =
+      typeof window !== "undefined"
+        ? (window as typeof window & {
+            Highlight?: new (...ranges: Range[]) => unknown;
+          }).Highlight
+        : undefined;
+    const highlights = getCssHighlights();
+    if (highlights && HighlightCtor && inlinePaperSelectionState.range) {
+      highlights.set(
+        INLINE_PAPER_AI_HIGHLIGHT_NAME,
+        new HighlightCtor(inlinePaperSelectionState.range),
+      );
+    }
+
+    return clearInlinePaperAiSelectionHighlight;
+  }, [inlinePaperSelectionState, workspaceMode]);
+
   const handleRunInlinePaperAiAction = React.useCallback(
     async (actionId: InlineAiActionId, instruction: string) => {
       if (!inlinePaperSelectionState) return;
-      const selection = typeof window !== "undefined" ? window.getSelection() : null;
-      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-        return;
-      }
-
-      const editableElement = (
-        selection.focusNode instanceof Element
-          ? selection.focusNode
-          : selection.focusNode?.parentElement
-      )?.closest('[data-inline-paper-editable="true"]') as HTMLElement | null;
+      const escape = (value: string) =>
+        typeof CSS !== "undefined" && typeof CSS.escape === "function"
+          ? CSS.escape(value)
+          : value.replace(/"/g, '\\"');
+      const editableElement = document.querySelector<HTMLElement>(
+        `[data-inline-paper-editable="true"][data-paper-section-id="${escape(
+          inlinePaperSelectionState.editTarget.sectionId,
+        )}"][data-paper-field-path="${escape(
+          inlinePaperSelectionState.editTarget.fieldPath,
+        )}"]`,
+      );
       if (!editableElement) return;
 
       const interactionId = createAiInteractionId();
+      const requestId = interactionId;
+      activeInlinePaperAiRequestIdRef.current = requestId;
       recordAiInteractionEvent({
         name: "ai_started",
         interactionId,
@@ -2341,6 +2724,9 @@ export function CvForge(): JSX.Element {
         });
         const normalizedResult = normalizeEditorAiTextResult(result, actionId);
         if (!normalizedResult) {
+          if (activeInlinePaperAiRequestIdRef.current !== requestId) {
+            return;
+          }
           recordAiInteractionEvent({
             name: "ai_failed",
             interactionId,
@@ -2350,22 +2736,20 @@ export function CvForge(): JSX.Element {
           });
           return;
         }
+        if (activeInlinePaperAiRequestIdRef.current !== requestId) {
+          return;
+        }
 
-        const range = selection.getRangeAt(0);
-        range.deleteContents();
-        const textNode = document.createTextNode(normalizedResult.text);
-        range.insertNode(textNode);
-        range.setStartAfter(textNode);
-        range.setEndAfter(textNode);
-        selection.removeAllRanges();
-        selection.addRange(range);
-        handleInlineFieldChange(
-          inlinePaperSelectionState.editTarget,
-          editableElement.textContent ?? "",
-        );
+        const currentText = editableElement.textContent ?? "";
+        const nextText = currentText.includes(inlinePaperSelectionState.text)
+          ? currentText.replace(inlinePaperSelectionState.text, normalizedResult.text)
+          : normalizedResult.text;
+        handleInlineFieldChange(inlinePaperSelectionState.editTarget, nextText);
+        focusInlinePaperEditTarget(inlinePaperSelectionState.editTarget);
         setInlinePaperSelectionState(null);
+        activeInlinePaperAiRequestIdRef.current = null;
         recordAiInteractionEvent({
-          name: "ai_accepted",
+          name: "ai_completed",
           interactionId,
           surface: "section_editor",
           actionId: normalizedResult.actionId,
@@ -2373,6 +2757,9 @@ export function CvForge(): JSX.Element {
           outputMode: "single_text",
         });
       } catch (error) {
+        if (activeInlinePaperAiRequestIdRef.current !== requestId) {
+          return;
+        }
         recordAiInteractionEvent({
           name: "ai_failed",
           interactionId,
@@ -2382,8 +2769,10 @@ export function CvForge(): JSX.Element {
         });
         throw error;
       } finally {
-        setIsApplyingInlinePaperAi(false);
-        setPendingInlinePaperAiActionId(null);
+        if (activeInlinePaperAiRequestIdRef.current === requestId) {
+          setIsApplyingInlinePaperAi(false);
+          setPendingInlinePaperAiActionId(null);
+        }
       }
     },
     [
@@ -2897,6 +3286,42 @@ export function CvForge(): JSX.Element {
     },
     [currentCv, currentSections, runCvSectionAiAction, showToast],
   );
+
+  const handleRunPageWandForSection = React.useCallback(
+    (sectionId: string) => {
+      const section = findSectionById(currentSections, sectionId);
+      if (!section) return;
+      const railAiMode = getSectionRailAiMode(section);
+      if (railAiMode === "none") return;
+
+      if (sectionUsesStructuredSuggestions(section)) {
+        handleSelectSection(sectionId, { openEditor: true });
+        void handleRunAskAiForSection({ sectionId, prompt: "", tone: cvTone });
+        return;
+      }
+
+      if (railAiMode === "rail") {
+        handleAskAiForSection(sectionId);
+        void handleRunAskAiForSection({ sectionId, prompt: "", tone: cvTone });
+        return;
+      }
+
+      handleSelectSection(sectionId, { openEditor: true });
+    },
+    [
+      currentSections,
+      cvTone,
+      handleAskAiForSection,
+      handleRunAskAiForSection,
+      handleSelectSection,
+    ],
+  );
+
+  sectionActionHandlersRef.current = {
+    ask: handleRunPageWandForSection,
+    toggleHidden: handleToggleHiddenSection,
+    delete: handleDeleteSection,
+  };
 
   const handleAcceptAiSuggestion = React.useCallback(() => {
     if (

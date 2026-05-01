@@ -1,4 +1,6 @@
 import React from "react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach } from "vitest";
@@ -163,6 +165,30 @@ vi.mock("../../lib/buildCanonicalResumeRenderModel", () => ({
     }
 
     const sections = cv.sections ?? [];
+    const profileSection = sections.find((section) => section.type === "profile");
+    const profileItem = Array.isArray(profileSection?.structuredContent)
+      ? profileSection.structuredContent[0] ?? {}
+      : {};
+    const contact = [
+      ["Email", "email"],
+      ["Phone", "phone"],
+      ["Location", "location"],
+      ["LinkedIn", "linkedin"],
+      ["Website", "website"],
+    ]
+      .map(([label, key]) => {
+        const value = String(profileItem?.[key] ?? "").trim();
+        return value
+          ? {
+              label,
+              value,
+              itemId: key,
+              sectionId: String(profileSection?.id ?? "profile-cv_123"),
+              sectionType: "profile",
+            }
+          : null;
+      })
+      .filter(Boolean);
     const summarySection = sections.find((section) => section.type === "summary");
     const summaryItem = Array.isArray(summarySection?.structuredContent)
       ? summarySection.structuredContent[0]
@@ -190,7 +216,7 @@ vi.mock("../../lib/buildCanonicalResumeRenderModel", () => ({
       title: "Product Designer",
       summary: readMockPlainText(summaryItem?.summary),
       summarySectionId: String(summarySection?.id ?? "summary-cv_123"),
-      contact: [],
+      contact,
       metadata: [],
       experience: [
         {
@@ -285,6 +311,13 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
         sectionTitle: string;
         text: string;
       }>;
+      contact?: Array<{
+        label: string;
+        value: string;
+        itemId: string;
+        sectionId: string;
+        sectionType: string;
+      }>;
       experience?: Array<{ role: string }>;
       education?: Array<{ degree: string }>;
       skillItems?: Array<{ name: string }>;
@@ -314,9 +347,29 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
         bulletIndex?: number;
         chipIndex?: number;
       }) => void;
-      onDeactivate: () => void;
+      onDeactivate: (target?: {
+        sectionId: string;
+        sectionType: string;
+        fieldPath: string;
+        fieldKind: "paragraph" | "heading" | "bullet" | "chip" | "date" | "meta";
+        itemIndex?: number;
+        bulletIndex?: number;
+        chipIndex?: number;
+      }) => void;
       onSummaryChange: (text: string) => void;
       onTextSectionChange: (sectionId: string, text: string) => void;
+      onFieldChange?: (
+        target: {
+          sectionId: string;
+          sectionType: string;
+          fieldPath: string;
+          fieldKind: "paragraph" | "heading" | "bullet" | "chip" | "date" | "meta";
+          itemIndex?: number;
+          bulletIndex?: number;
+          chipIndex?: number;
+        },
+        text: string,
+      ) => void;
     };
     onLinkIntent?: (intent: {
       requestId: string;
@@ -350,6 +403,45 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
       Preview host: {hostMode ?? "panel"}
       <div data-testid="preview-active-section">
         {activeTarget?.sectionId ?? "none"}
+      </div>
+      <div data-testid="paper-contact-row">
+        {(data?.contact ?? []).map((item) => {
+          const editTarget = {
+            sectionId: item.sectionId,
+            sectionType: "profile",
+            fieldPath: `structuredContent.0.${item.itemId}`,
+            fieldKind: "meta" as const,
+          };
+          const isContactEditable = Boolean(inlineEditing?.enabled);
+
+          return (
+            <span
+              key={item.itemId}
+              aria-label={`Paper ${item.label}`}
+              data-testid={`paper-contact-${item.itemId}`}
+              contentEditable={isContactEditable ? "plaintext-only" : undefined}
+              suppressContentEditableWarning={isContactEditable}
+              role={isContactEditable ? "textbox" : undefined}
+              tabIndex={isContactEditable ? 0 : undefined}
+              data-inline-paper-editable={isContactEditable ? "true" : undefined}
+              data-paper-section-id={editTarget.sectionId}
+              data-paper-section-type={editTarget.sectionType}
+              data-paper-field-path={editTarget.fieldPath}
+              data-paper-field-kind={editTarget.fieldKind}
+              onFocus={() => inlineEditing?.onActivate(editTarget)}
+              onInput={(event) => {
+                inlineEditing?.onActivate(editTarget);
+                inlineEditing?.onFieldChange?.(
+                  editTarget,
+                  event.currentTarget.textContent ?? "",
+                );
+              }}
+              onBlur={() => inlineEditing?.onDeactivate(editTarget)}
+            >
+              {item.value}
+            </span>
+          );
+        })}
       </div>
       <p
         aria-label="Paper Summary paragraph"
@@ -890,7 +982,7 @@ describe("CvForge workspace mode", () => {
   it("renders the PR4 skeleton stage and section-scoped CV rail tabs", async () => {
     const user = userEvent.setup();
 
-    render(
+    const { container } = render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
         <CvForge />
       </MemoryRouter>,
@@ -919,9 +1011,11 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("tab", { name: "Style" }));
 
-    expect(screen.getByText(/CV style/i)).toBeInTheDocument();
+    expect(container.querySelector(".dasti-cv-style-note")).toHaveTextContent(
+      /^Default settings → Document style\.$/,
+    );
     expect(
-      screen.getByRole("link", { name: "Settings → Document style" }),
+      screen.getByRole("link", { name: "→ Document style" }),
     ).toHaveAttribute("href", "/settings");
   });
 
@@ -1362,6 +1456,114 @@ describe("CvForge workspace mode", () => {
     );
   });
 
+  it("renders actual workshop blank CV placeholders before any click", async () => {
+    const { VerbatiResumePreview } = await vi.importActual<
+      typeof import("../../features/verbati/VerbatiResumePreview")
+    >("../../features/verbati/VerbatiResumePreview");
+    const blankData = {
+      ...buildResumePreviewData(),
+      name: "",
+      title: "",
+      summary: "",
+      contact: [],
+      metadata: [],
+      experience: [
+        {
+          id: "experience-item-cv_123",
+          sectionId: "experience-cv_123",
+          role: "",
+          company: "",
+          period: "",
+          location: "",
+          bullets: [""],
+        },
+      ],
+      education: [
+        {
+          id: "education-item-cv_123",
+          sectionId: "education-cv_123",
+          degree: "",
+          fieldOfStudy: "",
+          school: "",
+          period: "",
+        },
+      ],
+      skills: [],
+      skillItems: [
+        {
+          id: "skill-cv_123",
+          name: "",
+          sectionId: "skills-cv_123",
+          sectionType: "skills",
+        },
+      ],
+    };
+
+    const { container } = render(
+      <div className="dasti-cv-paper-stage" data-cv-workspace-mode="edit">
+        <VerbatiResumePreview
+          data={blankData as any}
+          stylePreset={{
+            layout: "workshop",
+            familyId: "workshop",
+            typography: "quiet-editorial",
+            palette: "sauge",
+          }}
+          hostMode="panel"
+          scrollMode="natural"
+          activeTarget={null}
+          inlineEditing={{
+            enabled: true,
+            activeTarget: null,
+            onActivate: vi.fn(),
+            onDeactivate: vi.fn(),
+            onSummaryChange: vi.fn(),
+            onTextSectionChange: vi.fn(),
+            onFieldChange: vi.fn(),
+            onAddItem: vi.fn(),
+          }}
+        />
+      </div>,
+    );
+
+    const placeholders = [
+      ["structuredContent.0.name", "Name"],
+      ["structuredContent.0.desiredPosition", "Target title"],
+      ["structuredContent.item:experience-item-cv_123.position", "Job title"],
+      ["structuredContent.item:experience-item-cv_123.company", "Company"],
+      ["structuredContent.item:experience-item-cv_123.location", "Location"],
+      [
+        "structuredContent.item:experience-item-cv_123.responsibilityBullets.0",
+        "Type an impact bullet...",
+      ],
+      ["structuredContent.item:education-item-cv_123.degree", "Degree"],
+      ["structuredContent.item:education-item-cv_123.fieldOfStudy", "Field"],
+      ["structuredContent.item:education-item-cv_123.institution", "School"],
+    ] as const;
+
+    for (const [fieldPath, placeholder] of placeholders) {
+      const field = container.querySelector(
+        `[data-paper-field-path="${fieldPath}"][data-placeholder="${placeholder}"]`,
+      );
+      expect(
+        field,
+        `missing ${fieldPath}; found ${Array.from(
+          container.querySelectorAll("[data-paper-field-path]"),
+        )
+          .map(
+            (element) =>
+              `${element.getAttribute("data-paper-field-path")}=${element.getAttribute(
+                "data-placeholder",
+              )}`,
+          )
+          .join(", ")}`,
+      ).not.toBeNull();
+      expect(field).toHaveAttribute("data-inline-paper-editable", "true");
+      expect(field).toHaveAttribute("data-placeholder", placeholder);
+    }
+    expect(screen.getByRole("button", { name: /\+ Add skill/i })).toBeInTheDocument();
+  });
+
   it("keeps the actual workshop paper non-editable and routed in preview mode", async () => {
     const user = userEvent.setup();
     const { VerbatiResumePreview } = await vi.importActual<
@@ -1507,6 +1709,104 @@ describe("CvForge workspace mode", () => {
     expect(importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name).toBe(
       "Grace Hopper",
     );
+  });
+
+  it("updates the paper contact row immediately from drawer Location and Website edits", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Profile$/i }));
+    await user.type(screen.getByLabelText("Location"), "Paris");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("paper-contact-location")).toHaveTextContent("Paris"),
+    );
+
+    await user.type(screen.getByLabelText("Website"), "ada.example");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("paper-contact-website")).toHaveTextContent(
+        "ada.example",
+      ),
+    );
+    expect(screen.queryByText(/Portfolio/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps selected paper text visibly highlighted while the Ask AI prompt is active", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/pages/CvForge.tsx"), "utf8");
+    const styles = readFileSync(resolve(process.cwd(), "src/styles/product-cv.css"), "utf8");
+
+    expect(source).toContain("data-inline-ai-selection-active");
+    expect(source).toContain("cv-inline-ai-selection");
+    expect(source).toContain("isInlineAiToolbarActiveElement");
+    expect(styles).toContain("data-inline-ai-selection-active");
+    expect(styles).toContain("::highlight(cv-inline-ai-selection)");
+  });
+
+  it("keeps paper contact order stable without Website and Portfolio duplication", async () => {
+    const user = userEvent.setup();
+    const baseState = buildCvLibraryState();
+    const currentCv = {
+      ...baseState.currentCv,
+      sections: baseState.currentCv.sections.map((section) =>
+        section.id === "profile-cv_123"
+          ? {
+              ...section,
+              structuredContent: [
+                {
+                  ...section.structuredContent[0],
+                  email: "ada@example.com",
+                  phone: "+33 6 00 00 00 00",
+                  location: "Paris",
+                  linkedin: "linkedin.com/in/ada",
+                  website: "ada.example",
+                },
+              ],
+            }
+          : section,
+      ),
+    };
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({ currentCv, cvs: [currentCv] }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    const readOrder = () =>
+      Array.from(screen.getByTestId("paper-contact-row").children).map(
+        (element) => element.getAttribute("data-testid"),
+      );
+
+    expect(readOrder()).toEqual([
+      "paper-contact-email",
+      "paper-contact-phone",
+      "paper-contact-location",
+      "paper-contact-linkedin",
+      "paper-contact-website",
+    ]);
+
+    await user.click(screen.getByTestId("paper-contact-location"));
+    fireEvent.blur(screen.getByTestId("paper-contact-location"));
+
+    expect(readOrder()).toEqual([
+      "paper-contact-email",
+      "paper-contact-phone",
+      "paper-contact-location",
+      "paper-contact-linkedin",
+      "paper-contact-website",
+    ]);
+    expect(screen.queryByText(/Portfolio/i)).not.toBeInTheDocument();
   });
 
   it("reverts autosaved section sheet edits when explicitly canceling", async () => {
