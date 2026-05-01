@@ -674,15 +674,12 @@ export function CvRail({
               ? activeAiMode === "rail"
                 ? "Editing the section selected in the paper or rail."
                 : activeAiMode === "editor"
-                  ? "This section uses item-level controls in the typed editor."
+                  ? "Edit the entry."
                   : "Profile fields use direct field editing."
               : "Pick a section in the paper or rail to start."}
           </div>
           {activeAiMode === "editor" ? (
             <>
-              <div className="dasti-cv-rail-hint">
-                Use the item wands in the typed editor for exact entries.
-              </div>
               <Button
                 type="button"
                 variant="primary"
@@ -857,20 +854,20 @@ export function CvRail({
               </button>
             </div>
           ) : null}
-          <div className="dasti-cv-rail-hint">
-            {activeAiMode === "editor"
-              ? "Use the item wands in the section editor for exact entries."
-              : "CVs are edited section-by-section. To rewrite multiple sections, run them one at a time."}
-          </div>
+          {activeAiMode !== "editor" ? (
+            <div className="dasti-cv-rail-hint">
+              CVs are edited section-by-section. To rewrite multiple sections, run them one at a time.
+            </div>
+          ) : null}
         </div>
       ) : null}
 
       {activeTab === "style" ? (
         <div className="dasti-cv-rail-pane" data-rail-pane="style">
           <div className="dasti-cv-style-note">
-            CV style. Defaults:{" "}
+            Default settings{" "}
             <a className="dasti-cv-rail-link" href="/settings">
-              Settings → Document style
+              → Document style
             </a>
             .
           </div>

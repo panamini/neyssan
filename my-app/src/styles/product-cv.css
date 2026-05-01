@@ -113,18 +113,31 @@
 .dasti-cv-paper-stage [data-inline-paper-editable="true"] {
   min-height: 1em;
   cursor: text;
-  border-radius: 3px;
-  outline: 1px solid transparent;
-  outline-offset: 2px;
+  border-radius: 2px;
+  outline: none;
+  box-shadow: 0 0 0 0 transparent;
   pointer-events: auto;
   user-select: text;
   -webkit-user-select: text;
+  transition:
+    background-color var(--dur-2, 140ms) var(--ease-standard, ease),
+    box-shadow var(--dur-2, 140ms) var(--ease-standard, ease);
 }
 
 .dasti-cv-paper-stage [data-inline-paper-editable="true"]:empty::before {
   content: attr(data-placeholder);
   color: color-mix(in srgb, var(--color-text-muted, #655c50) 68%, transparent);
   white-space: pre;
+}
+
+.dasti-cv-paper-stage [data-inline-ai-selection-active="true"] {
+  background: color-mix(in srgb, var(--am-soft, #f4d6c8) 62%, transparent);
+  border-radius: 2px;
+}
+
+::highlight(cv-inline-ai-selection) {
+  background: color-mix(in srgb, var(--am-soft, #f4d6c8) 72%, transparent);
+  color: inherit;
 }
 
 .dasti-cv-paper-inline-add {
@@ -146,9 +159,17 @@
   text-decoration: underline;
 }
 
-.dasti-cv-paper-stage [data-inline-paper-editable="true"]:focus {
-  outline-color: color-mix(in srgb, var(--ac, #2a78d6) 72%, transparent);
-  background: color-mix(in srgb, var(--ac, #2a78d6) 7%, transparent);
+.dasti-cv-paper-stage [data-inline-paper-editable="true"]:hover {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--ac, #a84e2e) 24%, transparent);
+}
+
+.dasti-cv-paper-stage [data-inline-paper-editable="true"]:focus,
+.dasti-cv-paper-stage
+  [data-inline-paper-editable="true"][data-inline-edit-state="focus"] {
+  background: transparent;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--ac, #a84e2e) 70%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--am-soft, #f4d6c8) 76%, transparent);
 }
 
 .dasti-cv-paper-stage[data-cv-workspace-mode="edit"]

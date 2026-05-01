@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { BodyPortal } from "@/components/ui/body-portal";
+import { SendHorizontal } from "@/lib/icons";
 import {
   VISIBLE_TOOLBAR_AI_ACTIONS,
   type AiActionDefinition,
@@ -195,6 +196,7 @@ export function FloatingAiToolbar({
   const promptShellRef = React.useRef<HTMLDivElement | null>(null);
   const askInputRef = React.useRef<HTMLInputElement | null>(null);
   const lastAnchorRef = React.useRef<EditorSelectionAnchor | null>(anchor);
+  const lastPositionRef = React.useRef<typeof position>(position);
 
   const isAskOpen = activeActionId === "custom";
   const isPromptLoading = isLoading && pendingActionId === "custom";
@@ -374,7 +376,10 @@ export function FloatingAiToolbar({
     });
 
     top = clamp(top, verticalMin, maxTop);
-    const left = clamp(desiredLeft, horizontalMin, maxLeft);
+    const left =
+      isAskOpen && lastPositionRef.current
+        ? clamp(lastPositionRef.current.left, horizontalMin, maxLeft)
+        : clamp(desiredLeft, horizontalMin, maxLeft);
     const pointerOffset = clamp(
       preferredCenter - left,
       compactGap * 2,
@@ -383,6 +388,10 @@ export function FloatingAiToolbar({
 
     setPosition({ left, top, placement, pointerOffset });
   }, [anchor, isAskOpen]);
+
+  React.useEffect(() => {
+    lastPositionRef.current = position;
+  }, [position]);
 
   React.useEffect(() => {
     if (anchor) {
@@ -443,6 +452,7 @@ export function FloatingAiToolbar({
     };
 
     update();
+    const frame = window.requestAnimationFrame(update);
 
     const resizeObserver =
       typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
@@ -458,6 +468,7 @@ export function FloatingAiToolbar({
     window.addEventListener("scroll", update, true);
 
     return () => {
+      window.cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
@@ -503,10 +514,15 @@ export function FloatingAiToolbar({
     [onRunAction],
   );
 
+  const submitCustomInstruction = React.useCallback(() => {
+    const trimmedInstruction = customInstruction.trim();
+    if (!trimmedInstruction || isLoading) return;
+    onRunAction("custom", trimmedInstruction);
+  }, [customInstruction, isLoading, onRunAction]);
+
   const renderAnchor = open && anchor ? anchor : lastAnchorRef.current;
   const shouldRenderToolbar = isToolbarMounted && renderAnchor !== null;
-  const isPositionReady =
-    open && anchor !== null && position !== null && metrics.panelWidth > 0;
+  const isPositionReady = open && anchor !== null && position !== null;
 
   React.useEffect(() => {
     if (!isAskOpen || !isPositionReady || isPromptLoading) return;
@@ -618,7 +634,7 @@ export function FloatingAiToolbar({
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && customInstruction.trim()) {
                       event.preventDefault();
-                      onRunAction("custom", customInstruction.trim());
+                      submitCustomInstruction();
                     } else if (event.key === "Enter") {
                       event.preventDefault();
                     } else if (event.key === "Escape") {
@@ -632,6 +648,18 @@ export function FloatingAiToolbar({
                   disabled={isLoading}
                 />
               </label>
+              <button
+                type="button"
+                className="ds-ask-ai__send"
+                aria-label="Send"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                }}
+                onClick={submitCustomInstruction}
+                disabled={!customInstruction.trim() || isLoading}
+              >
+                <SendHorizontal size={14} aria-hidden="true" />
+              </button>
             </div>
           ) : null}
         </motion.div>

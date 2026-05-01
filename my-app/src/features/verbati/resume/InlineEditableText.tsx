@@ -14,7 +14,7 @@ export type ResumeInlineEditing = {
   enabled: boolean;
   activeTarget: ActivePaperEditTarget | null;
   onActivate: (target: ActivePaperEditTarget) => void;
-  onDeactivate: () => void;
+  onDeactivate: (target?: ActivePaperEditTarget) => void;
   onSummaryChange: (text: string) => void;
   onTextSectionChange: (sectionId: string, text: string) => void;
   onFieldChange?: (target: ActivePaperEditTarget, text: string) => void;
@@ -48,7 +48,7 @@ type InlineEditableTextProps = Omit<
   editable: boolean;
   editTarget: ActivePaperEditTarget;
   onActivate: (target: ActivePaperEditTarget) => void;
-  onDeactivate?: (() => void) | undefined;
+  onDeactivate?: ((target?: ActivePaperEditTarget) => void) | undefined;
   ariaLabel: string;
   onPlainTextChange: (text: string) => void;
 };
@@ -87,6 +87,7 @@ export function InlineEditableText({
 }: InlineEditableTextProps) {
   const ref = React.useRef<HTMLElement | null>(null);
   const isFocusedRef = React.useRef(false);
+  const [editState, setEditState] = React.useState<"idle" | "focus">("idle");
 
   React.useLayoutEffect(() => {
     const node = ref.current;
@@ -131,6 +132,7 @@ export function InlineEditableText({
     (event: React.MouseEvent<HTMLElement>) => {
       if (editable) {
         event.stopPropagation();
+        event.currentTarget.focus({ preventScroll: true });
       }
       onMouseDown?.(event);
     },
@@ -141,6 +143,7 @@ export function InlineEditableText({
     (event: React.PointerEvent<HTMLElement>) => {
       if (editable) {
         event.stopPropagation();
+        event.currentTarget.focus({ preventScroll: true });
       }
       onPointerDown?.(event);
     },
@@ -186,6 +189,7 @@ export function InlineEditableText({
       aria-label={ariaLabel}
       data-resume-inline-editable="true"
       data-inline-paper-editable="true"
+      data-inline-edit-state={editState}
       data-paper-section-id={editTarget.sectionId}
       data-paper-section-type={editTarget.sectionType}
       data-paper-field-path={editTarget.fieldPath}
@@ -195,6 +199,7 @@ export function InlineEditableText({
       data-paper-chip-index={editTarget.chipIndex}
       onFocus={() => {
         isFocusedRef.current = true;
+        setEditState("focus");
         onActivate(editTarget);
         if (ref.current && ref.current.textContent !== value) {
           ref.current.textContent = value;
@@ -202,7 +207,8 @@ export function InlineEditableText({
       }}
       onBlur={() => {
         isFocusedRef.current = false;
-        onDeactivate?.();
+        setEditState("idle");
+        onDeactivate?.(editTarget);
       }}
       onInput={handleInput}
       onPaste={handlePaste}

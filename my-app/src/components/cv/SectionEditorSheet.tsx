@@ -332,6 +332,8 @@ export function SectionEditorSheet({
   const loadedDraftKeyRef = React.useRef<string | null>(null);
   const previousOpenRef = React.useRef(open);
   const pillInputRef = React.useRef<HTMLInputElement | null>(null);
+  const autosaveTimerRef = React.useRef<number | null>(null);
+  const pendingAutosaveSectionRef = React.useRef<CvSection | null>(null);
 
   latestSectionRef.current = section;
 
@@ -345,6 +347,22 @@ export function SectionEditorSheet({
     setIsSummaryAiLoading(false);
     setNewPillValue("");
   }
+
+  function clearAutosaveTimer() {
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+  }
+
+  function flushAutosave() {
+    clearAutosaveTimer();
+    if (!pendingAutosaveSectionRef.current) return;
+    onSave?.(sanitizeSectionForSave(pendingAutosaveSectionRef.current));
+    pendingAutosaveSectionRef.current = null;
+  }
+
+  React.useEffect(() => () => clearAutosaveTimer(), []);
 
   React.useEffect(() => {
     const wasOpen = previousOpenRef.current;
@@ -379,13 +397,22 @@ export function SectionEditorSheet({
     options?: { preserveAcceptedAi?: boolean },
   ) {
     setDraftSection(nextSection);
-    onSave?.(sanitizeSectionForSave(nextSection));
+    pendingAutosaveSectionRef.current = nextSection;
+    clearAutosaveTimer();
+    autosaveTimerRef.current = window.setTimeout(() => {
+      autosaveTimerRef.current = null;
+      if (!pendingAutosaveSectionRef.current) return;
+      onSave?.(sanitizeSectionForSave(pendingAutosaveSectionRef.current));
+      pendingAutosaveSectionRef.current = null;
+    }, 350);
     if (!options?.preserveAcceptedAi) {
       setAcceptedAiEdit(null);
     }
   }
 
   function closeAndDiscard() {
+    clearAutosaveTimer();
+    pendingAutosaveSectionRef.current = null;
     const restoredSection = openedSectionRef.current ?? section;
     setDraftSection(restoredSection);
     onSave?.(sanitizeSectionForSave(restoredSection));
@@ -398,6 +425,7 @@ export function SectionEditorSheet({
   }
 
   function saveAndClose() {
+    flushAutosave();
     onSave?.(sanitizeSectionForSave(editableSection ?? null));
     setSummaryAiSuggestion(null);
     setAcceptedAiEdit(null);
@@ -859,6 +887,9 @@ export function SectionEditorSheet({
           <textarea
             className="ds-field ds-field--textarea"
             value={readSectionText(editableSection)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.stopPropagation();
+            }}
             onChange={(event) => {
               const value = event.currentTarget.value;
               const nextSection = updateStructuredItem(editableSection, 0, {
@@ -932,6 +963,9 @@ export function SectionEditorSheet({
               <textarea
                 className="ds-field ds-field--textarea"
                 value={collectPlainText(item.responsibilities)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.stopPropagation();
+                }}
                 onChange={(event) =>
                   commitSection(
                     updateStructuredItem(editableSection, index, {
@@ -1084,6 +1118,9 @@ export function SectionEditorSheet({
               <textarea
                 className="ds-field ds-field--textarea"
                 value={collectPlainText(item.description ?? item.summary)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.stopPropagation();
+                }}
                 onChange={(event) =>
                   commitSection(
                     updateStructuredItem(editableSection, index, {
@@ -1499,6 +1536,9 @@ export function SectionEditorSheet({
           <textarea
             className="ds-field ds-field--textarea"
             value={readSectionText(editableSection)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.stopPropagation();
+            }}
             onChange={(event) =>
               commitSection(updateTextBlock(editableSection, event.currentTarget.value))
             }

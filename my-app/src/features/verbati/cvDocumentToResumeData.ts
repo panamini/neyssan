@@ -43,7 +43,6 @@ type ResumeDataMappingOptions = {
 };
 
 const DRAFT_EMPTY_RESPONSIBILITY_BULLET = "__draft_empty_responsibility_bullet__";
-
 type SectionContext = {
   section: CvSection;
   sectionId: string;
@@ -285,6 +284,18 @@ function toDraftableMetaItem(
   };
 }
 
+function readProfileWebsite(profile: IProfileItem | null | undefined): string | undefined {
+  const canonical = String(profile?.website ?? "").trim();
+  if (canonical) return canonical;
+  const profileRecord = profile as Record<string, unknown> | null | undefined;
+  const legacyAliases = ["portfolio", "web", "site"] as const;
+  for (const alias of legacyAliases) {
+    const value = String(profileRecord?.[alias] ?? "").trim();
+    if (value) return value;
+  }
+  return undefined;
+}
+
 function mapProfile(
   profileContext?: SectionContext,
 ): IProfileItem | undefined {
@@ -370,7 +381,11 @@ function mapExperience(
             : fallbackBullets;
       const visibleBullets = options.includeDrafts
         ? bullets
-        : bullets.filter((bullet) => bullet !== DRAFT_EMPTY_RESPONSIBILITY_BULLET);
+        : bullets.filter(
+            (bullet) =>
+              bullet !== DRAFT_EMPTY_RESPONSIBILITY_BULLET &&
+              String(bullet ?? "").trim(),
+          );
       const description = [
         toPlainText(item.description),
         responsibilitiesProjection.prose,
@@ -1063,16 +1078,7 @@ export function mapCvDocumentToResumeData(
         )
       : new Set<string>();
 
-  const metadata = [
-    toDraftableMetaItem(
-      "Location",
-      profile?.location,
-      profileContext,
-      "location",
-      draftContactFields,
-    ),
-    toMetaItem("Portfolio", profile?.website, profileContext, "website"),
-  ].filter((item): item is ResumeMetaItem => item !== null);
+  const metadata: ResumeMetaItem[] = [];
 
   const contact = [
     toDraftableMetaItem(
@@ -1090,10 +1096,10 @@ export function mapCvDocumentToResumeData(
       draftContactFields,
     ),
     toDraftableMetaItem(
-      "Web",
-      profile?.website,
+      "Location",
+      profile?.location,
       profileContext,
-      "website",
+      "location",
       draftContactFields,
     ),
     toDraftableMetaItem(
@@ -1101,6 +1107,13 @@ export function mapCvDocumentToResumeData(
       profile?.linkedin,
       profileContext,
       "linkedin",
+      draftContactFields,
+    ),
+    toDraftableMetaItem(
+      "Website",
+      readProfileWebsite(profile),
+      profileContext,
+      "website",
       draftContactFields,
     ),
   ].filter((item): item is ResumeMetaItem => item !== null);

@@ -320,6 +320,7 @@ function renderExperienceContent(args: {
   sectionId?: string;
   sectionType?: string;
   sectionTitle?: string;
+  itemIndex?: number;
   listGapMm: number;
   inlineEditing?: ResumeInlineEditing | null;
 }) {
@@ -338,6 +339,7 @@ function renderExperienceContent(args: {
           ...baseTarget,
           fieldPath: `structuredContent.item:${args.item.id ?? ""}.responsibilityBullets.${currentBulletIndex}`,
           fieldKind: "bullet" as const,
+          itemIndex: args.itemIndex,
           bulletIndex: currentBulletIndex,
         };
 
@@ -365,6 +367,23 @@ function renderExperienceContent(args: {
                 onPlainTextChange={(text) =>
                   args.inlineEditing?.onFieldChange?.(editTarget, text)
                 }
+                onKeyDown={(event) => {
+                  if (
+                    event.key === "Enter" &&
+                    !event.shiftKey &&
+                    !event.metaKey &&
+                    !event.ctrlKey &&
+                    !event.altKey
+                  ) {
+                    event.preventDefault();
+                    args.inlineEditing?.onAddItem?.({
+                      sectionId: args.sectionId ?? "",
+                      sectionType: args.sectionType ?? "experience",
+                      itemKind: "bullet",
+                      parentItemId: args.item.id,
+                    });
+                  }
+                }}
                 data-preview-section={args.sectionType}
                 data-preview-section-id={args.sectionId}
                 data-preview-section-title={args.sectionTitle}
@@ -382,8 +401,9 @@ function renderExperienceContent(args: {
 
       const editTarget = {
         ...baseTarget,
-        fieldPath: `structuredContent.item:${args.item.id ?? ""}.responsibilities`,
+        fieldPath: `structuredContent.item:${args.item.id ?? ""}.description`,
         fieldKind: "paragraph" as const,
+        itemIndex: args.itemIndex,
       };
 
       return (
@@ -395,7 +415,7 @@ function renderExperienceContent(args: {
           onActivate={(target) => args.inlineEditing?.onActivate(target)}
           onDeactivate={args.inlineEditing?.onDeactivate}
           ariaLabel="Edit experience text"
-          data-placeholder="Type an impact bullet..."
+          data-placeholder="Type responsibilities..."
           onPlainTextChange={(text) =>
             args.inlineEditing?.onFieldChange?.(editTarget, text)
           }
@@ -559,10 +579,13 @@ function renderProfileFragment(args: {
   const optionalContactFields = [
     { key: "email", label: "email" },
     { key: "phone", label: "phone" },
+    { key: "location", label: "location" },
     { key: "linkedin", label: "LinkedIn" },
     { key: "website", label: "website" },
-    { key: "location", label: "location" },
-  ].filter((item) => !populatedProfileFieldKeys.has(item.key));
+  ].filter((item, index, items) => {
+    if (populatedProfileFieldKeys.has(item.key)) return false;
+    return items.findIndex((candidate) => candidate.key === item.key) === index;
+  });
 
   return (
     <header
@@ -656,7 +679,7 @@ function renderProfileFragment(args: {
               editTarget: {
                 sectionId: item.sectionId ?? profileSectionId,
                 sectionType: "profile",
-                fieldPath: `structuredContent.0.${item.itemId ?? item.label.toLowerCase()}`,
+                fieldPath: `structuredContent.0.${item.draftFieldKey ?? item.itemId ?? item.label.toLowerCase()}`,
                 fieldKind: "meta",
               },
               ariaLabel: `Edit ${item.label}`,
@@ -730,7 +753,7 @@ function renderProfileFragment(args: {
                   editTarget: {
                     sectionId: item.sectionId ?? profileSectionId,
                     sectionType: "profile",
-                    fieldPath: `structuredContent.0.${item.itemId ?? item.label.toLowerCase()}`,
+                    fieldPath: `structuredContent.0.${item.draftFieldKey ?? item.itemId ?? item.label.toLowerCase()}`,
                     fieldKind: "meta",
                   },
                   ariaLabel: `Edit ${item.label}`,
@@ -846,7 +869,7 @@ function renderFragmentContent(args: {
       }
     case "experience":
       return [
-        ...fragment.items.map((item) => {
+        ...fragment.items.map((item, itemIndex) => {
         const itemFieldPath = (field: string) =>
           `structuredContent.item:${item.id}.${field}`;
         return (
@@ -889,6 +912,7 @@ function renderFragmentContent(args: {
                     sectionType: "experience",
                     fieldPath: itemFieldPath("position"),
                     fieldKind: "heading",
+                    itemIndex,
                   },
                   ariaLabel: "Edit experience title",
                   placeholder: "Job title",
@@ -939,6 +963,7 @@ function renderFragmentContent(args: {
                     sectionType: "experience",
                     fieldPath: itemFieldPath("company"),
                     fieldKind: "meta",
+                    itemIndex,
                   },
                   ariaLabel: "Edit company",
                   placeholder: "Company",
@@ -963,6 +988,7 @@ function renderFragmentContent(args: {
                         sectionType: "experience",
                         fieldPath: itemFieldPath("location"),
                         fieldKind: "meta",
+                        itemIndex,
                       },
                       ariaLabel: "Edit location",
                       placeholder: "Location",
@@ -985,6 +1011,7 @@ function renderFragmentContent(args: {
               sectionId: fragment.sectionId,
               sectionType: "experience",
               sectionTitle: fragment.title ?? "Experience",
+              itemIndex,
               listGapMm: workshopLayout.listGapMm,
               inlineEditing,
             })}
@@ -1007,6 +1034,7 @@ function renderFragmentContent(args: {
         const educationDisplay = buildResumeEducationDisplay(item);
         const itemFieldPath = (field: string) =>
           `structuredContent.item:${item.id}.${field}`;
+        const editable = Boolean(inlineEditing?.enabled);
         return (
           <PreviewItemRegion
             as="article"
@@ -1033,15 +1061,15 @@ function renderFragmentContent(args: {
             >
               {renderInlineField({
                 as: "span",
-                value: item.degree || educationDisplay.title,
-                editable: Boolean(inlineEditing?.enabled),
+                value: item.degree || (editable ? "" : educationDisplay.title),
+                editable,
                 inlineEditing,
                 editTarget: {
                   sectionId: fragment.sectionId ?? "",
                   sectionType: "education",
                   fieldPath: itemFieldPath("degree"),
                   fieldKind: "heading",
-                  },
+                },
                 ariaLabel: "Edit education degree",
                 placeholder: "Degree",
                 previewAttrs: buildPreviewRegionAttrs({
@@ -1053,12 +1081,12 @@ function renderFragmentContent(args: {
                   surface: "item",
                 }),
               })}
-              {item.fieldOfStudy ? ", " : null}
-              {item.fieldOfStudy
+              {item.fieldOfStudy || editable ? ", " : null}
+              {item.fieldOfStudy || editable
                 ? renderInlineField({
                     as: "span",
-                    value: item.fieldOfStudy,
-                    editable: Boolean(inlineEditing?.enabled),
+                    value: item.fieldOfStudy ?? "",
+                    editable,
                     inlineEditing,
                     editTarget: {
                       sectionId: fragment.sectionId ?? "",
@@ -1067,7 +1095,7 @@ function renderFragmentContent(args: {
                       fieldKind: "heading",
                     },
                     ariaLabel: "Edit field of study",
-                    placeholder: "Field of study",
+                    placeholder: "Field",
                     previewAttrs: buildPreviewRegionAttrs({
                       sectionType: "education",
                       sectionId: fragment.sectionId,
