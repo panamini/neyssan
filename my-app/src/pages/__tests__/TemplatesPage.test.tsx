@@ -22,7 +22,7 @@ describe("TemplatesPage", () => {
     navigateMock.mockClear();
   });
 
-  it("renders the PR5 template gallery with the skeleton template set", () => {
+  it("renders cover-letter templates with skeleton labels by default", () => {
     render(
       <MemoryRouter initialEntries={["/templates"]}>
         <TemplatesPage />
@@ -30,12 +30,15 @@ describe("TemplatesPage", () => {
     );
 
     expect(screen.getByRole("heading", { name: "Templates" })).toBeInTheDocument();
-    for (const name of ["Editorial", "Minimal", "Bold", "Classic", "Compact", "Letterpress"]) {
-      expect(screen.getAllByText(name).length).toBeGreaterThan(0);
-    }
+    expect(screen.getByRole("tab", { name: "Cover letters" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Resume" })).toBeInTheDocument();
+    expect(screen.getByText("Minimal")).toBeInTheDocument();
+    expect(screen.getByText("Bold")).toBeInTheDocument();
+    expect(screen.queryByText("Editorial")).toBeNull();
+    expect(screen.queryByRole("tab", { name: "CVs" })).toBeNull();
   });
 
-  it("filters by document type and links style customization to settings", async () => {
+  it("filters to resume templates and links style customization to settings", async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/templates"]}>
@@ -43,8 +46,9 @@ describe("TemplatesPage", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("tab", { name: "CVs" }));
-    expect(screen.getAllByText("Classic").length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("tab", { name: "Resume" }));
+    expect(screen.getByText("Two-column")).toBeInTheDocument();
+    expect(screen.getByText("Classic")).toBeInTheDocument();
     expect(screen.queryByText("Letterpress")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Customize style" }));
