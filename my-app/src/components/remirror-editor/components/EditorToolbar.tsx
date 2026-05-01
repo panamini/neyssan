@@ -1,5 +1,10 @@
 import React from "react";
-import { useCommands, useActive, useChainedCommands } from "@remirror/react";
+import {
+  useCommands,
+  useActive,
+  useChainedCommands,
+  useEditorView,
+} from "@remirror/react";
 import {
   BoldExtension,
   ItalicExtension,
@@ -25,6 +30,62 @@ export const EditorToolbar: React.FC<{
   } = useCommands() as any;
   const chain = useChainedCommands() as any;
   const active = useActive();
+  const editorView = useEditorView() as any;
+  const latestSelectionRef = React.useRef<any>(null);
+
+  const rememberEditorSelection = React.useCallback(() => {
+    latestSelectionRef.current = editorView?.state?.selection ?? null;
+  }, [editorView]);
+
+  const preventToolbarMouseDown = React.useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      rememberEditorSelection();
+      event.preventDefault();
+    },
+    [rememberEditorSelection],
+  );
+
+  const restoreEditorSelection = React.useCallback(() => {
+    const selection = latestSelectionRef.current;
+    if (!editorView || !selection) return;
+
+    try {
+      const transaction = editorView.state?.tr?.setSelection?.(selection);
+      if (transaction) {
+        editorView.dispatch(transaction);
+      }
+    } catch {
+      // Ignore stale selections; the command fallback below will use current state.
+    }
+  }, [editorView]);
+
+  const runMarkCommand = React.useCallback(
+    (commandName: "toggleBold" | "toggleItalic" | "toggleUnderline", fallback?: () => void) => {
+      restoreEditorSelection();
+      try {
+        editorView?.focus?.();
+      } catch {
+        // noop
+      }
+
+      try {
+        if (
+          chain &&
+          typeof chain.focus === "function" &&
+          typeof chain[commandName] === "function"
+        ) {
+          chain.focus()[commandName]().run();
+          return;
+        }
+      } catch {
+        /* fall through to direct command */
+      }
+
+      focus?.();
+      fallback?.();
+    },
+    [chain, editorView, focus, restoreEditorSelection],
+  );
 
   const buttonStyle =
     "inline-flex items-center justify-center p-2 rounded-[var(--radius-control)] [color:var(--tm2)] transition-colors hover:[background:var(--sf2)] hover:[color:var(--ti)]";
@@ -48,23 +109,9 @@ export const EditorToolbar: React.FC<{
         aria-label="Text formatting"
       >
         <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => {
-            try {
-              if (
-                chain &&
-                typeof chain.focus === "function" &&
-                typeof chain.toggleBold === "function"
-              ) {
-                chain.focus().toggleBold().run();
-                return;
-              }
-            } catch {
-              /* fall through to direct command */
-            }
-            focus?.();
-            toggleBold?.();
-          }}
+          onMouseDown={preventToolbarMouseDown}
+          onPointerDown={preventToolbarMouseDown as any}
+          onClick={() => runMarkCommand("toggleBold", toggleBold)}
           className={`${buttonStyle} ${typeof active.bold === "function" && active.bold() ? activeButtonStyle : ""}`}
           aria-label="Toggle bold"
           title="Bold"
@@ -73,23 +120,9 @@ export const EditorToolbar: React.FC<{
           <Bold size={16} />
         </button>
         <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => {
-            try {
-              if (
-                chain &&
-                typeof chain.focus === "function" &&
-                typeof chain.toggleItalic === "function"
-              ) {
-                chain.focus().toggleItalic().run();
-                return;
-              }
-            } catch {
-              /* fall through to direct command */
-            }
-            focus?.();
-            toggleItalic?.();
-          }}
+          onMouseDown={preventToolbarMouseDown}
+          onPointerDown={preventToolbarMouseDown as any}
+          onClick={() => runMarkCommand("toggleItalic", toggleItalic)}
           className={`${buttonStyle} ${typeof active.italic === "function" && active.italic() ? activeButtonStyle : ""}`}
           aria-label="Toggle italic"
           title="Italic"
@@ -98,23 +131,9 @@ export const EditorToolbar: React.FC<{
           <Italic size={16} />
         </button>
         <button
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => {
-            try {
-              if (
-                chain &&
-                typeof chain.focus === "function" &&
-                typeof chain.toggleUnderline === "function"
-              ) {
-                chain.focus().toggleUnderline().run();
-                return;
-              }
-            } catch {
-              /* fall through to direct command */
-            }
-            focus?.();
-            toggleUnderline?.();
-          }}
+          onMouseDown={preventToolbarMouseDown}
+          onPointerDown={preventToolbarMouseDown as any}
+          onClick={() => runMarkCommand("toggleUnderline", toggleUnderline)}
           className={`${buttonStyle} ${typeof active.underline === "function" && active.underline() ? activeButtonStyle : ""}`}
           aria-label="Toggle underline"
           title="Underline"

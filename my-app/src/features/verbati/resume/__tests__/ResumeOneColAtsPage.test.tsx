@@ -1156,6 +1156,66 @@ describe("ResumeOneColAtsPage", () => {
     expect(projectDescription?.querySelector("li")?.textContent).toBe("Bullet win");
   });
 
+  it("uses the rich body editor for editable experience paragraphs plus bullets", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: "Owned onboarding.",
+          bullets: ["Launched activation checklist."],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: "Owned onboarding." }],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [{ runs: [{ text: "Launched activation checklist." }] }],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const experienceBody = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.item:exp-1.responsibilities"]',
+    );
+    expect(experienceBody).toHaveAttribute("role", "textbox");
+    expect(experienceBody).toHaveClass("paper-rich-inline-editor");
+    expect(experienceBody?.querySelector("textarea")).toBeNull();
+    expect(experienceBody?.querySelector(".ProseMirror")).toBeTruthy();
+    expect(experienceBody?.querySelector("p")?.textContent).toBe("Owned onboarding.");
+    expect(experienceBody?.querySelector("li")?.textContent).toBe(
+      "Launched activation checklist.",
+    );
+    expect(
+      screen.queryByRole("textbox", { name: "Edit experience bullet" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("hydrates responsibilitiesRich marks in editable workshop display mode", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const data = {

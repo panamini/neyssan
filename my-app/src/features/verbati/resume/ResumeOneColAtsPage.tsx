@@ -717,54 +717,6 @@ function PaperRichInlineEditor(args: {
   );
 }
 
-function renderRichTextInlineValue(
-  rich:
-    | WorkshopResponsibilitiesRichContent
-    | WorkshopCommittedResponsibilitiesRichContent
-    | undefined,
-  keyPrefix: string,
-): React.ReactNode | undefined {
-  if (!rich || rich.blocks.length === 0) {
-    return undefined;
-  }
-
-  const nodes: React.ReactNode[] = [];
-  rich.blocks.forEach((block, blockIndex) => {
-    if (blockIndex > 0) {
-      nodes.push("\n");
-    }
-
-    if (block.kind === "paragraph") {
-      block.runs.forEach((run, runIndex) => {
-        nodes.push(
-          renderResponsibilityRun(
-            run,
-            `${keyPrefix}-paragraph-${blockIndex}-run-${runIndex}`,
-          ),
-        );
-      });
-      return;
-    }
-
-    block.items.forEach((item, itemIndex) => {
-      if (itemIndex > 0) {
-        nodes.push("\n");
-      }
-      nodes.push("• ");
-      item.runs.forEach((run, runIndex) => {
-        nodes.push(
-          renderResponsibilityRun(
-            run,
-            `${keyPrefix}-bullet-${blockIndex}-${itemIndex}-run-${runIndex}`,
-          ),
-        );
-      });
-    });
-  });
-
-  return nodes;
-}
-
 function renderResponsibilitiesRich(args: {
   rich:
     | WorkshopResponsibilitiesRichContent
@@ -837,6 +789,48 @@ function responsibilitiesRichHasPartialContent(
   });
 }
 
+function responsibilitiesRichNeedsBodyEditor(
+  rich:
+    | WorkshopResponsibilitiesRichContent
+    | WorkshopCommittedResponsibilitiesRichContent,
+) {
+  let hasParagraph = false;
+  let hasBulletList = false;
+  let hasEmptyBodyItem = false;
+  let hasTextMarks = false;
+
+  rich.blocks.forEach((block) => {
+    if (block.kind === "paragraph") {
+      hasParagraph = true;
+      const text = block.runs.map((run) => run.text).join("").trim();
+      if (!text) {
+        hasEmptyBodyItem = true;
+      }
+      hasTextMarks = hasTextMarks || block.runs.some(
+        (run) => run.bold === true || run.italic === true || run.underline === true,
+      );
+      return;
+    }
+
+    hasBulletList = true;
+    block.items.forEach((item) => {
+      const text = item.runs.map((run) => run.text).join("").trim();
+      if (!text) {
+        hasEmptyBodyItem = true;
+      }
+      hasTextMarks = hasTextMarks || item.runs.some(
+        (run) => run.bold === true || run.italic === true || run.underline === true,
+      );
+    });
+  });
+
+  if (hasEmptyBodyItem) {
+    return false;
+  }
+
+  return hasTextMarks || (hasParagraph && hasBulletList);
+}
+
 function renderExperienceContent(args: {
   item: {
     id?: string;
@@ -851,6 +845,80 @@ function renderExperienceContent(args: {
   inlineEditing?: ResumeInlineEditing | null;
 }) {
   if (args.inlineEditing?.enabled) {
+    const rich = args.item.responsibilitiesRich;
+    if (
+      rich &&
+      rich.blocks.length > 0 &&
+      responsibilitiesRichNeedsBodyEditor(rich) &&
+      !args.item.blocks.some((block) => block.partial === true) &&
+      !responsibilitiesRichHasPartialContent(rich)
+    ) {
+      const editTarget = {
+        sectionId: args.sectionId ?? "",
+        sectionType: args.sectionType ?? "experience",
+        fieldPath: `structuredContent.item:${args.item.id ?? ""}.responsibilities`,
+        fieldKind: "paragraph" as const,
+        itemIndex: args.itemIndex,
+      };
+      const fallbackText = args.item.blocks
+        .map((block) =>
+          block.text === DRAFT_EMPTY_EXPERIENCE_DESCRIPTION ? "" : block.text,
+        )
+        .filter((text) => text.length > 0)
+        .join("\n");
+
+      const hasRichParagraph = rich.blocks.some((block) => block.kind === "paragraph");
+
+      return [
+        <PaperRichInlineEditor
+          key="editable-experience-rich-body"
+          value={fallbackText}
+          rich={rich}
+          editable
+          editTarget={editTarget}
+          onActivate={(target) => args.inlineEditing?.onActivate(target)}
+          onDeactivate={args.inlineEditing?.onDeactivate}
+          onDocChange={args.inlineEditing?.onFieldDocChange}
+          ariaLabel="Edit experience responsibilities"
+          previewAttrs={buildPreviewRegionAttrs({
+            sectionType: args.sectionType,
+            sectionId: args.sectionId,
+            sectionTitle: args.sectionTitle,
+            itemId: `${args.item.id ?? "experience"}-responsibilities`,
+            surface: "item",
+          })}
+          style={{
+            margin: 0,
+            fontSize: workshopBodyFontSize,
+            lineHeight: "var(--text-body-line)",
+            ...experienceWrapStyle,
+          }}
+        />,
+        !hasRichParagraph ? (
+          <div key="editable-add-paragraph">
+            {renderInlineAddButton({
+              inlineEditing: args.inlineEditing,
+              sectionId: args.sectionId,
+              sectionType: args.sectionType ?? "experience",
+              itemKind: "paragraph",
+              parentItemId: args.item.id,
+              label: "Add paragraph",
+            })}
+          </div>
+        ) : null,
+        <div key="editable-add-bullet">
+          {renderInlineAddButton({
+            inlineEditing: args.inlineEditing,
+            sectionId: args.sectionId,
+            sectionType: args.sectionType ?? "experience",
+            itemKind: "bullet",
+            parentItemId: args.item.id,
+            label: "Add bullet",
+          })}
+        </div>,
+      ];
+    }
+
     let bulletIndex = 0;
     const hasParagraphBlock = args.item.blocks.some(
       (block) => block.kind !== "bullet",
@@ -866,19 +934,6 @@ function renderExperienceContent(args: {
       )
       .filter((text) => text.length > 0)
       .join("\n");
-    const richParagraphs =
-      args.item.responsibilitiesRich?.blocks.filter(
-        (block) => block.kind === "paragraph",
-      ) ?? [];
-    const renderedParagraphValue = renderRichTextInlineValue(
-      richParagraphs.length > 0 ? { blocks: richParagraphs } : undefined,
-      `${args.item.id ?? "experience"}-paragraph`,
-    );
-    const richBulletItems =
-      args.item.responsibilitiesRich?.blocks.flatMap((block) =>
-        block.kind === "bullet_list" ? block.items : [],
-      ) ?? [];
-
     const nodes: React.ReactNode[] = [];
     if (hasParagraphBlock) {
       const editTarget = {
@@ -893,7 +948,6 @@ function renderExperienceContent(args: {
           as="div"
           key="editable-experience-text"
           value={paragraphText}
-          renderedValue={renderedParagraphValue}
           editable
           editTarget={editTarget}
           onActivate={(target) => args.inlineEditing?.onActivate(target)}
@@ -944,21 +998,6 @@ function renderExperienceContent(args: {
               <InlineEditableText
                 as="span"
                 value={block.text}
-                renderedValue={
-                  richBulletItems[currentBulletIndex]
-                    ? renderRichTextInlineValue(
-                        {
-                          blocks: [
-                            {
-                              kind: "paragraph",
-                              runs: richBulletItems[currentBulletIndex]!.runs,
-                            },
-                          ],
-                        },
-                        `${args.item.id ?? "experience"}-bullet-${currentBulletIndex}`,
-                      )
-                    : undefined
-                }
                 editable
                 editTarget={editTarget}
                 onActivate={(target) => args.inlineEditing?.onActivate(target)}
