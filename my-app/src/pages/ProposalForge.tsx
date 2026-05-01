@@ -2,24 +2,11 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { v4 as uuidv4 } from "uuid";
-import {
-  Check,
-  ChevronDown,
-  ClipboardText,
-  FloppyDisk,
-  PenNib,
-  RotateCcw,
-  ShareFat,
-  TrashSimple,
-  X,
-} from "@/lib/icons";
+import { ClipboardText, ShareFat } from "@/lib/icons";
 import ProposalExportActions from "../components/ProposalExportActions";
 import ProposalInputForm, {
   type ProposalGenerateControl,
 } from "../components/ProposalInputForm";
-import EmbeddedStyleInspector from "../components/EmbeddedStyleInspector";
-import { ProposalComposeToolbar } from "../components/ProposalComposeToolbar";
-import { ProposalBriefCard } from "../components/ProposalBriefCard";
 import ProposalAIStream from "../components/proposal/ProposalAIStream";
 import ProposalDocumentStage from "../components/proposal/ProposalDocumentStage";
 import ProposalRail from "../components/proposal/ProposalRail";
@@ -6619,49 +6606,6 @@ export function ProposalForge(): JSX.Element {
     showBriefCard,
   ]);
 
-  const proposalWorkbenchToolbar =
-    shouldRenderColdStartInlineOnly ? null : shouldShowCollapsedComposeToolbar ? (
-      <ProposalComposeToolbar
-        value={composeToolbarVoicePreset}
-        resolvedValue={proposalVoicePreset ?? null}
-        onChange={handleToolbarVoicePresetChange}
-        onToggleCvPicker={handleToolbarCvPickerToggle}
-        onClearCv={() => handleAttachedCvChange(null)}
-        cvTitle={attachedCvDisplayTitle}
-        isCvPickerOpen={isCvPickerOpen}
-        disabled={loading || isLoadingHandoff}
-        collapsed
-        transitionState={toolbarTransitionState ?? undefined}
-        onRestoreCompose={handleRestoreCompose}
-        onGenerateFromBrief={handleGenerateFromCollapsedToolbar}
-        generateLabel={composeGenerateControl.label}
-        generateDisabled={composeGenerateControl.disabled}
-        generateState={composeGenerateControl.state}
-        styleStatusLabel={proposalStyleStatusLabel}
-        saveStatus={composeSaveStatus}
-        jobHref={proposalJobHref}
-      />
-    ) : showComposePanel ? (
-      <ProposalComposeToolbar
-        value={composeToolbarVoicePreset}
-        resolvedValue={proposalVoicePreset ?? null}
-        onChange={handleToolbarVoicePresetChange}
-        onToggleCvPicker={handleToolbarCvPickerToggle}
-        onClearCv={() => handleAttachedCvChange(null)}
-        cvTitle={attachedCvDisplayTitle}
-        isCvPickerOpen={isCvPickerOpen}
-        disabled={loading || isLoadingHandoff}
-        compact={isCompactComposeLayout}
-        transitionState={toolbarTransitionState ?? undefined}
-        onCollapseCompose={
-          canCollapseComposePanel ? handleCollapseCompose : undefined
-        }
-        styleStatusLabel={proposalStyleStatusLabel}
-        saveStatus={composeSaveStatus}
-        jobHref={proposalJobHref}
-      />
-    ) : null;
-
   return (
     <div
       className="dasti-page-scroll"
@@ -6840,175 +6784,117 @@ export function ProposalForge(): JSX.Element {
                           statusMessage={statusMessage}
                         />
                       }
-                      toolbar={
-                        proposalWorkbenchToolbar ? (
-                          <div
-                            className="dasti-forge-compose-toolbar-slot"
-                            data-testid="proposal-workbench-toolbar-slot"
-                          >
-                            {proposalWorkbenchToolbar}
-                          </div>
-                        ) : null
-                      }
                       onOpenCvPicker={handleToolbarCvPickerToggle}
-                      composePanel={
-                        <div
-                          className={[
-                            "dasti-flow",
-                            "dasti-forge-left-col",
-                            !showComposeGridColumn && !isCompactComposeLayout
-                              ? "dasti-forge-left-col--hidden"
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                        >
-                      <div
-                        style={composeColumnShellWidthStyle}
-                        className="dasti-proposal-compose-column dasti-proposal-compose-column--workspace"
-                      >
-                        {shouldRenderBriefCard ? (
-                          <div
-                            className={[
-                              "dasti-proposal-brief-stage",
-                              briefCardMotionClass,
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                          >
-                            <ProposalBriefCard
-                              sourceJobTitle={briefJobTitle}
-                              outputDocumentTitle={
-                                proposalDocumentTitle || "Generated proposal"
-                              }
-                              jobId={canonicalJobId}
-                              jobDescription={briefJobDescription}
-                              summaryText={briefSummaryText}
-                              parseStatus={
-                                canonicalJobRecord?.parseStatus ?? null
-                              }
-                              trustState={briefTrustState}
-                              linkedDocumentCount={briefLinkedDocumentCount}
-                              linkedProposals={briefLinkedProposals}
-                              reviewItems={briefReviewItems}
-                              onApproveReviewItem={
-                                canonicalJobRecord
-                                  ? async (item) => {
-                                      await approveJobReviewItem({
-                                        jobId: canonicalJobRecord.id,
-                                        reviewItemId: item.id,
-                                      });
-                                    }
-                                  : undefined
-                              }
-                              onSaveReviewItem={
-                                canonicalJobRecord
-                                  ? async (item, nextValue) => {
-                                      await updateJobField({
-                                        jobId: canonicalJobRecord.id,
-                                        fieldKey: item.fieldKey,
-                                        value: nextValue,
-                                      });
-                                    }
-                                  : undefined
-                              }
-                              focusMode={showBriefCard}
-                              onToggleBrief={handleOpenComposeBrief}
-                              variant={
-                                shouldShowDesktopBriefCapsule
-                                  ? "compact"
-                                  : "card"
-                              }
-                              hideRawSource={showBriefCard}
-                              sourceUrl={briefSourceUrl}
-                              sourcePlatform={briefSourcePlatform}
-                            />
-                          </div>
-                        ) : null}
-                        <div
-                          className={[
-                            "dasti-proposal-compose-panel-stage",
-                            composeShellMotionClass,
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                          style={
-                            shouldHideComposeShell
-                              ? { display: "none" }
-                              : undefined
-                          }
-                        >
-                          {isLoadingHandoff ? (
-                            <div style={{ paddingTop: "var(--s2)" }}>
-                              <p className="dasti-hint">
-                                Loading saved job brief…
-                              </p>
-                            </div>
-                          ) : (
-                            <ProposalInputForm
-                              key={composeFormInstanceKey}
-                              onStart={handleProposalStart}
-                              onStop={handleProposalStop}
-                              onSubmit={handleProposalSubmit}
-                              onError={handleProposalError}
-                              onValuesChange={handleProposalFormValuesChange}
-                              onActiveCvChange={handleAttachedCvChange}
-                              activeCvId={attachedCvId}
-                              prefill={prefill}
-                              cvPickerOpen={isCvPickerOpen}
-                              onCvPickerOpenChange={setIsCvPickerOpen}
-                              cvPickerRequestKey={cvPickerRequestKey}
-                              suppressCvPicker
-                              externalVoicePreset={composeToolbarVoicePreset}
-                              headerLabel={null}
-                              initialComposeDraft={composeDraftInitialSeed}
-                              sourceUrl={briefSourceUrl}
-                              sourcePlatform={briefSourcePlatform}
-                              canonicalJobId={canonicalJobId}
-                              onGenerateControlChange={
-                                handleComposeGenerateControlChange
-                              }
-                              headerAction={
-                                hasBriefContent ? (
-                                  <button
-                                    type="button"
-                                    className="dasti-icon-button dasti-proposal-compose-shell__toggle"
-                                    onClick={handleToggleComposeBrief}
-                                    aria-label={
-                                      isBriefExpanded ? "Collapse" : "Expand"
-                                    }
-                                  >
-                                    {isBriefExpanded ? (
-                                      <X
-                                        size={14}
-                                        strokeWidth={1.9}
-                                        aria-hidden="true"
-                                      />
-                                    ) : (
-                                      <ChevronDown
-                                        size={14}
-                                        strokeWidth={1.7}
-                                        aria-hidden="true"
-                                      />
-                                    )}
-                                  </button>
-                                ) : null
-                              }
-                            />
-                          )}
-                          <input
-                            ref={coverLetterInlineFileInputRef}
-                            type="file"
-                            accept={TRUSTED_MISTRAL_FILE_INPUT_ACCEPT}
-                            onChange={handleCoverLetterInlineImportChange}
-                            style={{ display: "none" }}
-                            aria-hidden="true"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                      }
+                      hasProposalContent={Boolean(proposalContent)}
+                      generateLabel={composeGenerateControl.label}
+                      generateDisabled={composeGenerateControl.disabled || loading || isLoadingHandoff}
+                      generateState={composeGenerateControl.state}
+                      onGenerateDraft={handleGenerateFromCollapsedToolbar}
+                      variableFields={[
+                        {
+                          id: "applicant-name",
+                          label: "Applicant name",
+                          value: proposalApplicantName,
+                          placeholder: "Your name",
+                          onChange: setProposalApplicantName,
+                          onBlur: () => {
+                            void handleProposalDocumentCommit();
+                          },
+                        },
+                        {
+                          id: "applicant-role",
+                          label: "Applicant role",
+                          value: proposalApplicantRole,
+                          placeholder: "Target role or headline",
+                          onChange: setProposalApplicantRole,
+                          onBlur: () => {
+                            void handleProposalDocumentCommit();
+                          },
+                        },
+                        {
+                          id: "contact-line",
+                          label: "Contact line",
+                          value: proposalContactLine,
+                          placeholder: "Email · phone · location",
+                          onChange: handleProposalContactLineChange,
+                          onBlur: () => {
+                            handleProposalContactLineCommit();
+                            void handleProposalDocumentCommit();
+                          },
+                        },
+                        {
+                          id: "letter-date",
+                          label: "Date line",
+                          value: proposalLetterDate,
+                          placeholder: "Paris, 1 May 2026",
+                          onChange: setProposalLetterDate,
+                          onBlur: () => {
+                            void handleProposalDocumentCommit();
+                          },
+                        },
+                        {
+                          id: "recipient-details",
+                          label: "Recipient details",
+                          value: proposalRecipientDetails,
+                          placeholder: "Hiring team\nCompany",
+                          multiline: true,
+                          onChange: setProposalRecipientDetails,
+                          onBlur: () => {
+                            void handleProposalDocumentCommit();
+                          },
+                        },
+                        {
+                          id: "salutation",
+                          label: "Salutation",
+                          value: proposalSalutationValue,
+                          placeholder: proposalSalutationPlaceholder,
+                          onChange: handleProposalSalutationChange,
+                          onBlur: () => {
+                            void handleProposalDocumentCommit();
+                          },
+                        },
+                      ]}
                     />
+
+                    <div
+                      className="dasti-proposal-hidden-implementation"
+                      hidden
+                      aria-hidden="true"
+                    >
+                      {isLoadingHandoff ? null : (
+                        <ProposalInputForm
+                          key={composeFormInstanceKey}
+                          onStart={handleProposalStart}
+                          onStop={handleProposalStop}
+                          onSubmit={handleProposalSubmit}
+                          onError={handleProposalError}
+                          onValuesChange={handleProposalFormValuesChange}
+                          onActiveCvChange={handleAttachedCvChange}
+                          activeCvId={attachedCvId}
+                          prefill={prefill}
+                          cvPickerOpen={isCvPickerOpen}
+                          onCvPickerOpenChange={setIsCvPickerOpen}
+                          cvPickerRequestKey={cvPickerRequestKey}
+                          suppressCvPicker
+                          externalVoicePreset={composeToolbarVoicePreset}
+                          headerLabel={null}
+                          initialComposeDraft={composeDraftInitialSeed}
+                          sourceUrl={briefSourceUrl}
+                          sourcePlatform={briefSourcePlatform}
+                          canonicalJobId={canonicalJobId}
+                          onGenerateControlChange={handleComposeGenerateControlChange}
+                          headerAction={null}
+                        />
+                      )}
+                      <input
+                        ref={coverLetterInlineFileInputRef}
+                        type="file"
+                        accept={TRUSTED_MISTRAL_FILE_INPUT_ACCEPT}
+                        onChange={handleCoverLetterInlineImportChange}
+                        style={{ display: "none" }}
+                        aria-hidden="true"
+                      />
+                    </div>
 
                     <div className="dasti-flow dasti-proposal-skeleton-forge__stage">
                       <ProposalDocumentStage
@@ -7128,183 +7014,18 @@ export function ProposalForge(): JSX.Element {
                           characterLimitAdvisory={
                             activeCharacterLimitSelection.advisory
                           }
-                          showModeToggle
-                          showZoomControls
+                          showModeToggle={false}
+                          showZoomControls={false}
                           showPreviewParagraphActions={false}
                           zoomStorageKey={null}
                           previewAnchor="top"
                           size="default"
-                          documentHeaderMode="actions-only"
-                          railStartAddon={
-                            proposalContent &&
-                            proposalOutputMode === "preview" ? (
-                              <EmbeddedStyleInspector
-                                stylePreset={
-                                  effectiveProposalStylePresetWithPalette
-                                }
-                                templateId={
-                                  proposalRenderMetadata?.templateId ??
-                                  effectiveProposalTemplateId ??
-                                  fallbackProposalTemplateId
-                                }
-                                copyMode="title-only"
-                                controlMode="direct"
-                                showCustomizeControl={false}
-                                showPromptControl={false}
-                                onSelectBundle={() => {}}
-                                onSelectLayout={(layout) =>
-                                  applyProposalDirectStyle(
-                                    resolveVerbatiStyle({
-                                      ...effectiveProposalStylePresetWithPalette,
-                                      layout,
-                                    }),
-                                  )
-                                }
-                                onSelectTypography={(typography) =>
-                                  applyProposalDirectStyle({
-                                    ...effectiveProposalStylePresetWithPalette,
-                                    typography,
-                                  })
-                                }
-                                onSelectPalette={(palette) =>
-                                  applyProposalDirectStyle({
-                                    ...effectiveProposalStylePresetWithPalette,
-                                    palette,
-                                    accentHex: undefined,
-                                  })
-                                }
-                                onSelectCustomAccent={(accentHex) =>
-                                  applyProposalDirectStyle({
-                                    ...effectiveProposalStylePresetWithPalette,
-                                    palette: "custom",
-                                    accentHex,
-                                  })
-                                }
-                              />
-                            ) : null
-                          }
-                          onCopy={
-                            proposalOutputMode === "edit"
-                              ? () => {
-                                  void handleCopyOutput();
-                                }
-                              : undefined
-                          }
+                          documentHeaderMode="hidden"
                           copyFeedback={copyFeedback}
                           onContentChange={handleProposalContentChange}
                           onContentCommit={() => {
                             void handleProposalDocumentCommit();
                           }}
-                          actions={
-                            proposalContent && !loading && !error ? (
-                              <span className="dasti-icon-cluster dasti-icon-cluster--tight">
-                                <button
-                                  type="button"
-                                  className="dasti-icon-button"
-                                  aria-label="Choose signature"
-                                  data-toolbar-tooltip="Choose signature"
-                                  onClick={() => {
-                                    handleChooseSignature();
-                                  }}
-                                  disabled={!proposalApplicantName.trim()}
-                                >
-                                  <PenNib
-                                    size={16}
-                                    strokeWidth={1.7}
-                                    aria-hidden="true"
-                                  />
-                                </button>
-                                {proposalOutputMode === "edit" ? (
-                                  <>
-                                    <div className="dasti-icon-cluster__divider" />
-                                    <ProposalExportActions
-                                      disabled={
-                                        proposalExportingFormat !== null
-                                      }
-                                      onExportPdf={(mode) => {
-                                        void handleExportProposalFile({
-                                          target: "compose",
-                                          format: "pdf",
-                                          mode,
-                                        });
-                                      }}
-                                      onExportDocx={() => {
-                                        void handleExportProposalFile({
-                                          target: "compose",
-                                          format: "docx",
-                                        });
-                                      }}
-                                    />
-                                    <div className="dasti-icon-cluster__divider" />
-                                  </>
-                                ) : null}
-                                {proposalOutputMode === "edit" ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      className="dasti-icon-button"
-                                      aria-label="Save proposal to library"
-                                      data-toolbar-tooltip={
-                                        isSavingOutputToLibrary
-                                          ? "Saving"
-                                          : "Save"
-                                      }
-                                      onClick={() => {
-                                        handleOpenSaveDialog();
-                                      }}
-                                      disabled={isSavingOutputToLibrary}
-                                      style={{
-                                        opacity: isSavingOutputToLibrary
-                                          ? 0.55
-                                          : 1,
-                                      }}
-                                    >
-                                      <FloppyDisk size={16} strokeWidth={1.7} />
-                                    </button>
-                                    <div className="dasti-icon-cluster__divider" />
-                                    {isConfirmingGeneratedDelete ? (
-                                      <button
-                                        type="button"
-                                        className="dasti-icon-button dasti-icon-button--confirm"
-                                        data-toolbar-tooltip="Confirm delete"
-                                        onClick={() => {
-                                          void handleDeleteOutput();
-                                        }}
-                                      >
-                                        <Check size={14} strokeWidth={2.5} />
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        className="dasti-icon-button"
-                                        data-toolbar-tooltip="Delete"
-                                        onClick={() =>
-                                          setIsConfirmingGeneratedDelete(true)
-                                        }
-                                      >
-                                        <TrashSimple
-                                          size={16}
-                                          strokeWidth={1.5}
-                                        />
-                                      </button>
-                                    )}
-                                    {isConfirmingGeneratedDelete ? (
-                                      <button
-                                        type="button"
-                                        className="dasti-icon-button"
-                                        data-toolbar-tooltip="Cancel"
-                                        onClick={() =>
-                                          setIsConfirmingGeneratedDelete(false)
-                                        }
-                                      >
-                                        <X size={16} strokeWidth={1.8} />
-                                      </button>
-                                    ) : null}
-                                  </>
-                                ) : null}
-                              </span>
-                            ) : undefined
-                          }
                         />
                       </div>
                       </ProposalDocumentStage>
