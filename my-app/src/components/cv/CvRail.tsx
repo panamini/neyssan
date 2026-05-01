@@ -29,6 +29,8 @@ import {
 import { Button, Menu } from "../ui";
 import AiSuggestionCard from "../ai/AiSuggestionCard";
 import type { CvSection } from "../../types/cvDocument";
+import type { ActivePaperEditTarget } from
+  "../../features/verbati/resume/InlineEditableText";
 import {
   formatSectionDisplayTitle,
   getSectionOrganizationControlPolicy,
@@ -52,6 +54,11 @@ export type CvRailAiSuggestion = {
   state: "loading" | "ready" | "error";
   errorMessage?: string;
   interactionId?: string;
+  inlineTarget?: {
+    editTarget: ActivePaperEditTarget;
+    selectedText: string;
+    actionId: string;
+  };
 } | {
   kind: "list";
   sectionId: string;
