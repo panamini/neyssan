@@ -859,7 +859,12 @@ function renderInlineAddButton(args: {
           parentItemId: args.parentItemId,
         });
       }}
-      onMouseDown={(event) => event.stopPropagation()}
+      onMouseDown={(event) => {
+        event.stopPropagation();
+        if (args.itemKind === "bullet") {
+          event.preventDefault();
+        }
+      }}
       onPointerDown={(event) => event.stopPropagation()}
     >
       + {args.label}

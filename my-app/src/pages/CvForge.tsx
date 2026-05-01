@@ -2,6 +2,7 @@ import React from "react";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
+import type { RemirrorJSON } from "remirror";
 import { PenLine, Upload, X } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import FloatingAiToolbar, {
@@ -488,10 +489,22 @@ function updateStructuredItemField(
   if (itemIndex < 0) return section;
   const item = items[itemIndex]!;
   const richTextFields = new Set(["summary", "description", "responsibilities", "notes"]);
-  const nextItem = {
+  const nextItem: Record<string, unknown> = {
     ...item,
     [field]: richTextFields.has(field) ? ensurePlainTextRemirrorDoc(text) : text,
   };
+
+  if (field === "responsibilities") {
+    const nextDoc = updateResponsibilityParagraphDoc(item.responsibilities, text);
+    const bullets = responsibilityBulletCacheFromDoc(nextDoc);
+    nextItem.responsibilities = nextDoc;
+    nextItem.__draftResponsibilityBulletCount = bullets.length;
+    if (bullets.length > 0) {
+      nextItem.responsibilityBullets = bullets;
+    } else {
+      delete nextItem.responsibilityBullets;
+    }
+  }
 
   return {
     ...section,
@@ -522,6 +535,311 @@ function addStructuredItemDraftDescription(
   };
 }
 
+type MutableRemirrorNode = RemirrorJSON & {
+  content?: MutableRemirrorNode[];
+  marks?: Array<{ type: string }>;
+};
+
+function isRemirrorNode(value: unknown): value is MutableRemirrorNode {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as { type?: unknown }).type === "string",
+  );
+}
+
+function isResponsibilityListNode(node: MutableRemirrorNode): boolean {
+  return (
+    node.type === "bulletList" ||
+    node.type === "orderedList" ||
+    node.type === "bullet_list" ||
+    node.type === "ordered_list"
+  );
+}
+
+function isResponsibilityListItemNode(node: MutableRemirrorNode): boolean {
+  return node.type === "listItem" || node.type === "list_item";
+}
+
+function remirrorTextNodesFromPlainText(text: string): MutableRemirrorNode[] {
+  const normalized = text.replace(/\r\n?/g, "\n");
+  const nodes: MutableRemirrorNode[] = [];
+  normalized.split("\n").forEach((line, index) => {
+    if (index > 0) {
+      nodes.push({ type: "hardBreak" } as MutableRemirrorNode);
+    }
+    if (line) {
+      nodes.push({ type: "text", text: line } as MutableRemirrorNode);
+    }
+  });
+  return nodes;
+}
+
+function remirrorInlinePlainText(node: MutableRemirrorNode): string {
+  if (node.type === "text" && typeof node.text === "string") return node.text;
+  if (node.type === "hardBreak") return "\n";
+  return (node.content ?? []).map(remirrorInlinePlainText).join("");
+}
+
+function remirrorParagraphFromPlainText(text: string): MutableRemirrorNode {
+  return {
+    type: "paragraph",
+    content: remirrorTextNodesFromPlainText(text),
+  } as MutableRemirrorNode;
+}
+
+function remirrorListItemFromPlainText(text: string): MutableRemirrorNode {
+  return {
+    type: "listItem",
+    content: [remirrorParagraphFromPlainText(text)],
+  } as MutableRemirrorNode;
+}
+
+function cloneRemirrorNode(node: MutableRemirrorNode): MutableRemirrorNode {
+  return {
+    ...node,
+    ...(node.marks ? { marks: node.marks.map((mark) => ({ ...mark })) } : {}),
+    ...(node.content ? { content: node.content.map(cloneRemirrorNode) } : {}),
+  };
+}
+
+function remirrorMarksFromRun(run: {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+}): MutableRemirrorNode["marks"] | undefined {
+  const marks = [
+    run.bold ? { type: "bold" } : null,
+    run.italic ? { type: "italic" } : null,
+    run.underline ? { type: "underline" } : null,
+  ].filter((mark): mark is { type: string } => mark !== null);
+  return marks.length > 0 ? marks : undefined;
+}
+
+function remirrorInlineNodesFromRuns(
+  runs: Array<{
+    text?: unknown;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+  }>,
+): MutableRemirrorNode[] {
+  const nodes: MutableRemirrorNode[] = [];
+  runs.forEach((run) => {
+    const text = typeof run.text === "string" ? run.text : "";
+    text.replace(/\r\n?/g, "\n").split("\n").forEach((line, index) => {
+      if (index > 0) {
+        nodes.push({ type: "hardBreak" } as MutableRemirrorNode);
+      }
+      if (!line) return;
+      nodes.push({
+        type: "text",
+        text: line,
+        ...(remirrorMarksFromRun(run) ? { marks: remirrorMarksFromRun(run) } : {}),
+      } as MutableRemirrorNode);
+    });
+  });
+  return nodes;
+}
+
+function responsibilitiesSourceToRemirrorDoc(source: unknown): RemirrorJSON {
+  if (isRemirrorNode(source)) {
+    return cloneRemirrorNode(source);
+  }
+
+  const projection = projectResponsibilitiesForWorkshop(source);
+  const content = projection.rich.blocks.map((block) => {
+    if (block.kind === "paragraph") {
+      return {
+        type: "paragraph",
+        content: remirrorInlineNodesFromRuns(block.runs),
+      } as MutableRemirrorNode;
+    }
+
+    return {
+      type: "bulletList",
+      content: block.items.map((item) => ({
+        type: "listItem",
+        content: [
+          {
+            type: "paragraph",
+            content: remirrorInlineNodesFromRuns(item.runs),
+          } as MutableRemirrorNode,
+        ],
+      })) as MutableRemirrorNode[],
+    } as MutableRemirrorNode;
+  });
+
+  return {
+    type: "doc",
+    content: content.length > 0 ? content : [{ type: "paragraph", content: [] }],
+  } as RemirrorJSON;
+}
+
+function updateResponsibilityParagraphDoc(
+  source: unknown,
+  text: string,
+): RemirrorJSON {
+  const doc = responsibilitiesSourceToRemirrorDoc(source) as MutableRemirrorNode;
+  const nextDoc = cloneRemirrorNode(doc);
+  const paragraph = remirrorParagraphFromPlainText(text);
+  const content = nextDoc.content ?? [];
+  const firstParagraphIndex = content.findIndex((node) => node.type === "paragraph");
+  const withoutParagraphs = content.filter((node) => node.type !== "paragraph");
+
+  if (text.trim()) {
+    const insertAt = firstParagraphIndex >= 0 ? firstParagraphIndex : 0;
+    nextDoc.content = [
+      ...withoutParagraphs.slice(0, insertAt),
+      paragraph,
+      ...withoutParagraphs.slice(insertAt),
+    ];
+  } else {
+    nextDoc.content = withoutParagraphs.length > 0
+      ? withoutParagraphs
+      : [{ type: "paragraph", content: [] } as MutableRemirrorNode];
+  }
+
+  return nextDoc as RemirrorJSON;
+}
+
+function updateResponsibilityBulletDoc(
+  source: unknown,
+  bulletIndex: number,
+  text: string,
+): RemirrorJSON {
+  const doc = responsibilitiesSourceToRemirrorDoc(source) as MutableRemirrorNode;
+  const nextDoc = cloneRemirrorNode(doc);
+  let cursor = 0;
+  let updated = false;
+  let lastListNode: MutableRemirrorNode | null = null;
+
+  const visit = (node: MutableRemirrorNode) => {
+    if (isResponsibilityListNode(node)) {
+      lastListNode = node;
+      node.content = (node.content ?? []).map((child) => {
+        if (!isResponsibilityListItemNode(child)) {
+          visit(child);
+          return child;
+        }
+        if (cursor === bulletIndex) {
+          updated = true;
+          cursor += 1;
+          return remirrorListItemFromPlainText(text);
+        }
+        cursor += 1;
+        return child;
+      });
+      return;
+    }
+
+    (node.content ?? []).forEach(visit);
+  };
+
+  visit(nextDoc);
+
+  if (!updated) {
+    const nextItem = remirrorListItemFromPlainText(text);
+    if (lastListNode) {
+      lastListNode.content = [...(lastListNode.content ?? []), nextItem];
+    } else {
+      nextDoc.content = [
+        ...(nextDoc.content ?? []),
+        { type: "bulletList", content: [nextItem] } as MutableRemirrorNode,
+      ];
+    }
+  }
+
+  return nextDoc as RemirrorJSON;
+}
+
+function removeResponsibilityBulletDoc(
+  source: unknown,
+  bulletIndex: number,
+): RemirrorJSON {
+  const doc = responsibilitiesSourceToRemirrorDoc(source) as MutableRemirrorNode;
+  const nextDoc = cloneRemirrorNode(doc);
+  let cursor = 0;
+
+  const prune = (node: MutableRemirrorNode): MutableRemirrorNode | null => {
+    if (isResponsibilityListNode(node)) {
+      const nextContent = (node.content ?? []).flatMap((child) => {
+        if (!isResponsibilityListItemNode(child)) {
+          const prunedChild = prune(child);
+          return prunedChild ? [prunedChild] : [];
+        }
+
+        const currentIndex = cursor;
+        cursor += 1;
+        const isTarget = currentIndex === bulletIndex;
+        const isEmpty = !remirrorInlinePlainText(child).trim();
+        if (isTarget && isEmpty) {
+          return [];
+        }
+        return [child];
+      });
+
+      return nextContent.length > 0
+        ? ({ ...node, content: nextContent } as MutableRemirrorNode)
+        : null;
+    }
+
+    if (!node.content) {
+      return node;
+    }
+
+    const nextContent = node.content.flatMap((child) => {
+      const prunedChild = prune(child);
+      return prunedChild ? [prunedChild] : [];
+    });
+
+    return { ...node, content: nextContent } as MutableRemirrorNode;
+  };
+
+  const prunedDoc = prune(nextDoc) ?? ({ type: "doc", content: [] } as MutableRemirrorNode);
+  if (prunedDoc.type === "doc" && (!prunedDoc.content || prunedDoc.content.length === 0)) {
+    prunedDoc.content = [{ type: "paragraph", content: [] } as MutableRemirrorNode];
+  }
+  return prunedDoc as RemirrorJSON;
+}
+
+function responsibilityBulletCacheFromDoc(doc: unknown): string[] {
+  if (!isRemirrorNode(doc)) return [];
+  const bullets: string[] = [];
+
+  const visit = (node: MutableRemirrorNode) => {
+    if (isResponsibilityListNode(node)) {
+      (node.content ?? []).forEach((child) => {
+        if (!isResponsibilityListItemNode(child)) {
+          visit(child);
+          return;
+        }
+        const text = remirrorInlinePlainText(child).trim();
+        bullets.push(text || DRAFT_EMPTY_RESPONSIBILITY_BULLET);
+      });
+      return;
+    }
+
+    (node.content ?? []).forEach(visit);
+  };
+
+  visit(doc);
+  return bullets;
+}
+
+function countCanonicalResponsibilityBullets(item: Record<string, unknown>): number {
+  if (typeof item.responsibilities !== "undefined") {
+    if (isRemirrorNode(item.responsibilities)) {
+      return responsibilityBulletCacheFromDoc(item.responsibilities).length;
+    }
+    return projectResponsibilitiesForWorkshop(item.responsibilities).bullets.length;
+  }
+
+  return Array.isArray(item.responsibilityBullets)
+    ? item.responsibilityBullets.length
+    : 0;
+}
+
 function updateStructuredItemBullet(
   section: CvSection,
   itemId: string,
@@ -533,6 +851,29 @@ function updateStructuredItemBullet(
   if (itemIndex < 0) return section;
   const item = items[itemIndex]!;
   const storedText = text.trim() ? text : DRAFT_EMPTY_RESPONSIBILITY_BULLET;
+
+  if (typeof item.responsibilities !== "undefined") {
+    const nextDoc = updateResponsibilityBulletDoc(
+      item.responsibilities,
+      bulletIndex,
+      text.trim() ? text : "",
+    );
+    const bullets = responsibilityBulletCacheFromDoc(nextDoc);
+    const draftBulletCount = bullets.length;
+    return {
+      ...section,
+      structuredContent: [
+        ...items.slice(0, itemIndex),
+        {
+          ...item,
+          responsibilities: nextDoc,
+          responsibilityBullets: bullets.length > 0 ? bullets : undefined,
+          __draftResponsibilityBulletCount: draftBulletCount,
+        },
+        ...items.slice(itemIndex + 1),
+      ] as CvSection["structuredContent"],
+    };
+  }
 
   if (Array.isArray(item.responsibilityBullets)) {
     const bullets = [...item.responsibilityBullets].map((entry) =>
@@ -550,29 +891,6 @@ function updateStructuredItemBullet(
         {
           ...item,
           responsibilityBullets: bullets,
-          __draftResponsibilityBulletCount: draftBulletCount,
-        },
-        ...items.slice(itemIndex + 1),
-      ] as CvSection["structuredContent"],
-    };
-  }
-
-  if (Array.isArray(item.responsibilities)) {
-    const bullets = [...item.responsibilities].map((entry) =>
-      collectPlainText(entry),
-    );
-    bullets[bulletIndex] = storedText;
-    const draftBulletCount = Math.max(
-      Number((item as Record<string, unknown>).__draftResponsibilityBulletCount ?? 0),
-      bulletIndex + 1,
-    );
-    return {
-      ...section,
-      structuredContent: [
-        ...items.slice(0, itemIndex),
-        {
-          ...item,
-          responsibilities: bullets,
           __draftResponsibilityBulletCount: draftBulletCount,
         },
         ...items.slice(itemIndex + 1),
@@ -749,6 +1067,30 @@ function removeStructuredItemBullet(
   const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
   if (itemIndex < 0) return section;
   const item = items[itemIndex]!;
+  if (typeof item.responsibilities !== "undefined") {
+    const nextDoc = removeResponsibilityBulletDoc(item.responsibilities, bulletIndex);
+    const nextBullets = responsibilityBulletCacheFromDoc(nextDoc);
+    const nextItem: Record<string, unknown> = {
+      ...item,
+      responsibilities: nextDoc,
+      __draftResponsibilityBulletCount: nextBullets.length,
+    };
+    if (nextBullets.length > 0) {
+      nextItem.responsibilityBullets = nextBullets;
+    } else {
+      delete nextItem.responsibilityBullets;
+    }
+
+    return {
+      ...section,
+      structuredContent: [
+        ...items.slice(0, itemIndex),
+        nextItem,
+        ...items.slice(itemIndex + 1),
+      ] as CvSection["structuredContent"],
+    };
+  }
+
   const removeAt = (entries: unknown[]) =>
     entries
       .map((entry) => collectPlainText(entry))
@@ -756,18 +1098,13 @@ function removeStructuredItemBullet(
       .filter((entry) => entry.trim() && entry !== DRAFT_EMPTY_RESPONSIBILITY_BULLET);
   const currentBullets = Array.isArray(item.responsibilityBullets)
     ? item.responsibilityBullets
-    : Array.isArray(item.responsibilities)
-      ? item.responsibilities
-      : splitAiListText(collectPlainText(item.responsibilityBullets ?? item.responsibilities));
+    : splitAiListText(collectPlainText(item.responsibilityBullets));
   const nextBullets = removeAt(currentBullets);
   const nextItem = {
     ...item,
     responsibilityBullets: nextBullets,
-    __draftResponsibilityBulletCount: 0,
+    __draftResponsibilityBulletCount: nextBullets.length,
   };
-  if (Array.isArray(item.responsibilities) && !Array.isArray(item.responsibilityBullets)) {
-    delete (nextItem as Record<string, unknown>).responsibilities;
-  }
   return {
     ...section,
     structuredContent: [
@@ -1185,6 +1522,11 @@ function focusInlinePaperEditTarget(target: ActivePaperEditTarget): void {
       return;
     }
     editable.focus({ preventScroll: false });
+    if (editable instanceof HTMLTextAreaElement) {
+      const caretPosition = editable.value.length;
+      editable.setSelectionRange(caretPosition, caretPosition);
+      return;
+    }
     const range = document.createRange();
     range.selectNodeContents(editable);
     range.collapse(false);
@@ -2658,12 +3000,9 @@ export function CvForge(): JSX.Element {
             parentItemId = String((parent as Record<string, unknown>).id ?? "");
           }
           if (!parentItemId) return;
-          const currentBullets = Array.isArray(parent?.responsibilityBullets)
-            ? (parent.responsibilityBullets as unknown[]).map((entry) =>
-                String(entry ?? ""),
-              )
-            : [];
-          const bulletIndex = currentBullets.length;
+          const bulletIndex = parent
+            ? countCanonicalResponsibilityBullets(parent)
+            : 0;
           nextSection = updateStructuredItemBullet(
             section,
             parentItemId,
