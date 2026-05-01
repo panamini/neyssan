@@ -85,6 +85,7 @@ export type ResumeProjectItem = {
   name: string;
   meta: string;
   description: string;
+  descriptionRich?: WorkshopResponsibilitiesRichContent;
 };
 
 export type ResumeEducationItem = {

@@ -260,6 +260,7 @@ type WorkshopCommittedProjectItem = {
   name: string;
   meta: string;
   description: string;
+  descriptionRich?: WorkshopResponsibilitiesRichContent;
 };
 
 type WorkshopCommittedLanguageItem = {
@@ -2599,6 +2600,9 @@ function buildCommittedFragment(args: {
             name: entry.item.name,
             meta: entry.item.meta,
             description: entry.item.description,
+            ...(entry.item.descriptionRich
+              ? { descriptionRich: entry.item.descriptionRich }
+              : {}),
           })),
       };
     case "languages":
