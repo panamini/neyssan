@@ -269,14 +269,14 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 2px;
   min-height: 0;
   overflow-y: auto;
 }
 
 .dasti-jobs-list-item {
   display: grid;
-  gap: var(--space-2);
+  gap: 2px;
   min-width: 0;
 }
 
@@ -287,15 +287,10 @@
   gap: var(--space-3);
   align-items: stretch;
   padding: var(--space-3);
-  border: 1px solid var(--border-soft);
-  border-radius: calc(var(--radius-card) - 2px);
-  background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--sf1) 92%, transparent),
-      transparent 78%
-    ),
-    color-mix(in srgb, var(--sf1) 82%, var(--bg) 18%);
-  box-shadow: var(--shadow-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  box-shadow: none;
   transition:
     background var(--duration-fast) var(--ease-standard),
     border-color var(--duration-fast) var(--ease-standard),
@@ -306,40 +301,25 @@
 
 .dasti-jobs-row:hover,
 .dasti-jobs-row:focus-visible {
-  border-color: var(--color-border-contrast);
-  background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--color-surface-raised) 96%, transparent),
-      transparent 78%
-    ),
-    color-mix(in srgb, var(--color-surface-raised) 88%, var(--color-canvas) 12%);
-  box-shadow: var(--shadow-frost, var(--shadow-sm));
-  transform: translateY(-1px);
+  border-color: transparent;
+  background: var(--sf2);
+  box-shadow: none;
+  transform: none;
   outline: none;
 }
 
 .dasti-jobs-row--active {
-  border-color: var(--color-border-selected);
-  background: color-mix(
-    in srgb,
-    var(--color-accent-pale) 28%,
-    var(--color-surface-raised) 72%
-  );
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--color-accent-pale) 36%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--color-border-selected) 26%, transparent);
-  transform: scale(0.995);
+  border-color: var(--border-strong);
+  background: var(--sfr);
+  box-shadow: none;
+  transform: none;
 }
 
 .dasti-jobs-row--active:hover,
 .dasti-jobs-row--active:focus-visible {
-  border-color: var(--color-border-selected);
-  background: color-mix(
-    in srgb,
-    var(--color-accent-pale) 34%,
-    var(--color-surface-raised) 66%
-  );
-  transform: scale(0.995);
+  border-color: var(--border-strong);
+  background: var(--sfr);
+  transform: none;
 }
 
 .dasti-jobs-row--menu-open {
@@ -720,6 +700,11 @@
 .dasti-job-match-panel {
   display: grid;
   gap: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: var(--sf1);
+  box-shadow: none;
+  padding: var(--space-4);
 }
 
 .dasti-job-match-panel__verdict {
