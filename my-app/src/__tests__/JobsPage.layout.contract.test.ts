@@ -18,6 +18,10 @@ const jobDetailSource = readFileSync(
   resolve(process.cwd(), "src/components/jobs/JobDetail.tsx"),
   "utf8",
 );
+const jobMatchPanelSource = readFileSync(
+  resolve(process.cwd(), "src/components/jobs/JobMatchPanel.tsx"),
+  "utf8",
+);
 const productCssPaths = [
   "src/styles/product.css",
   "src/styles/product-proposal.css",
@@ -51,10 +55,19 @@ describe("JobsPage collapsed layout contract", () => {
     );
     expect(jobsWorkspaceSource).not.toContain("shouldRenderInlineDetailPane");
     expect(jobsListSource).not.toContain("dasti-jobs-inline-detail");
-    expect(jobsWorkspaceSource).toContain(
-      'className="dasti-jobs-detail-pane"',
-    );
+    expect(jobsWorkspaceSource).toContain("dasti-jobs-detail-pane");
     expect(jobsWorkspaceSource).toContain('aria-label="Job detail"');
+  });
+
+  it("exposes APP skeleton aliases on the active split-view surfaces", () => {
+    expect(jobsWorkspaceSource).toMatch(
+      /className=\{\[[\s\S]*"dasti-jobs-layout",[\s\S]*"jobs",/,
+    );
+    expect(jobsListSource).toContain("dasti-jobs-list-pane jobs__list");
+    expect(jobsWorkspaceSource).toContain("dasti-jobs-detail-pane jobs__detail");
+    expect(jobMatchPanelSource).toContain(
+      "dasti-proposal-sheet dasti-match-read dasti-job-match-panel jobs__match",
+    );
   });
 
   it("keeps jobs controls compact and left-anchored inside the list pane", () => {

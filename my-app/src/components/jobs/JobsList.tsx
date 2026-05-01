@@ -204,7 +204,7 @@ export function JobsList({
   onImportFirstJob,
 }: JobsListProps): JSX.Element {
   return (
-    <section className="dasti-jobs-list-pane" aria-label="Jobs list">
+    <section className="dasti-jobs-list-pane jobs__list" aria-label="Jobs list">
       <div className="dasti-jobs-toolbar">
         <label className="dasti-jobs-toolbar__search">
           <span className="sr-only">Search jobs</span>
