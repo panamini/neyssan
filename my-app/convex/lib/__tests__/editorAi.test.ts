@@ -130,6 +130,22 @@ describe("editor AI transform contract", () => {
     expect(result.variants).toEqual([]);
   });
 
+  it("uses quality-model routing for inline selection writing transforms", async () => {
+    vi.stubEnv("MISTRAL_CV_INLINE_MODEL", "ministral-fast-test");
+    const { runTextPrompt } = await runTransform("rewrite");
+
+    expect(runTextPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerPreference: "default",
+      }),
+    );
+    expect(runTextPrompt).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerPreference: "mistral",
+      }),
+    );
+  });
+
   it("rejects invalid actions before calling the model", async () => {
     const runTextPrompt = vi.fn();
 

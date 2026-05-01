@@ -1,6 +1,6 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import { ResumeOneColAtsPage } from "../ResumeOneColAtsPage";
 import { resumeMock } from "../resume.mock";
@@ -33,6 +33,19 @@ function buildRendererData() {
     hobbyItems: [],
     hobbies: [],
     textSections: [],
+  };
+}
+
+function makeInlineEditing() {
+  return {
+    enabled: true,
+    activeTarget: null,
+    onActivate: () => {},
+    onDeactivate: () => {},
+    onSummaryChange: () => {},
+    onTextSectionChange: () => {},
+    onFieldChange: () => {},
+    onAddItem: () => {},
   };
 }
 
@@ -256,6 +269,289 @@ describe("ResumeOneColAtsPage", () => {
     expect(summaryStyle).not.toContain("-webkit-line-clamp");
     expect(summaryStyle).not.toContain("overflow: hidden");
     expect(summaryStyle).not.toContain("text-overflow: ellipsis");
+  });
+
+  it("preserves multiline summary whitespace in the editable workshop paper field", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      summary: "First line\nSecond line",
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const summaryItem = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.0.summary"]',
+    );
+
+    expect(summaryItem).toHaveValue("First line\nSecond line");
+    expect(summaryItem).toHaveAttribute("aria-multiline", "true");
+    expect(summaryItem?.getAttribute("style")).toContain("white-space: pre-wrap;");
+  });
+
+  it("hides Add paragraph for an experience entry that already has a paragraph", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: "Owned the discovery narrative before the bullet outcomes.",
+          bullets: ["Reduced delivery time by 28%."],
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /\+ Add paragraph/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
+  });
+
+  it("keeps Add paragraph available for an experience entry without a paragraph", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: undefined,
+          bullets: ["Reduced delivery time by 28%."],
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /\+ Add paragraph/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
+  });
+
+  it("routes the experience entry wand through the item action instead of the section action", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 2),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+    const onAsk = vi.fn();
+    const onAskItem = vi.fn();
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        sectionActions={{
+          hiddenSectionIds: [],
+          onAsk,
+          onAskItem,
+          onToggleHidden: () => {},
+          onDelete: () => {},
+        }}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: /Improve responsibilities for/i })[1]!,
+    );
+
+    expect(onAsk).not.toHaveBeenCalled();
+    expect(onAskItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionType: "experience",
+        itemId: data.experience[1]!.id,
+        itemIndex: 1,
+        field: "responsibilities",
+      }),
+    );
+  });
+
+  it("renders experience AI proposals inline with save, discard, and undo controls", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+    const onAccept = vi.fn();
+    const onDiscard = vi.fn();
+    const suggestionKey = "request-1:exp-1";
+
+    const { rerender } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        paperAi={{
+          textSuggestion: {
+            key: suggestionKey,
+            sectionId: "experience-1",
+            sectionType: "experience",
+            itemId: data.experience[0]!.id,
+            beforeText: "Old responsibility",
+            afterText: "Improved responsibility",
+            state: "ready",
+          },
+          onAcceptTextSuggestion: onAccept,
+          onDiscardTextSuggestion: onDiscard,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Old responsibility")).toBeInTheDocument();
+    expect(screen.getByText("Improved responsibility")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onAccept).toHaveBeenCalledWith(suggestionKey);
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(onDiscard).toHaveBeenCalledWith(suggestionKey);
+
+    const onUndo = vi.fn();
+    rerender(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        paperAi={{
+          textSuggestion: {
+            key: suggestionKey,
+            sectionId: "experience-1",
+            sectionType: "experience",
+            itemId: data.experience[0]!.id,
+            beforeText: "Old responsibility",
+            afterText: "Improved responsibility",
+            state: "accepted",
+          },
+          onUndoTextSuggestion: onUndo,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(onUndo).toHaveBeenCalledWith(suggestionKey);
+  });
+
+  it("renders skill AI suggestions inside the skills section", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+    const onAccept = vi.fn();
+    const onDismiss = vi.fn();
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        paperAi={{
+          listSuggestion: {
+            sectionId: "skills-1",
+            sectionType: "skills",
+            items: ["Stakeholder mapping"],
+            state: "ready",
+          },
+          onAcceptListSuggestion: onAccept,
+          onDismissListSuggestion: onDismiss,
+        }}
+      />,
+    );
+
+    const suggestion = screen.getByText("Stakeholder mapping").closest(
+      "[data-paper-ai-suggestion='list']",
+    );
+    expect(suggestion).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onAccept).toHaveBeenCalledWith("Stakeholder mapping");
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(onDismiss).toHaveBeenCalledWith("Stakeholder mapping");
   });
 
   it("pins the workshop page grid to the top instead of stretching rows across the full A4 shell", () => {

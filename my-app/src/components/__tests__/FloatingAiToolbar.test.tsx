@@ -261,6 +261,14 @@ describe("FloatingAiToolbar", () => {
       "Asking.",
     );
     expect(screen.getByRole("button", { name: "Shorten" })).toBeDisabled();
+
+    rerender(<FloatingAiToolbar {...props} isLoading={false} pendingActionId={null} />);
+
+    expect(screen.getByRole("textbox", { name: "Ask AI" })).not.toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Ask AI" })).not.toHaveAttribute(
+      "placeholder",
+      "Asking.",
+    );
   });
 
   it("shows the targeted preset action busy state while AI is running", () => {

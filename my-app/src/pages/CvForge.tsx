@@ -14,6 +14,7 @@ import type {
   ActivePaperEditTarget,
   ResumeInlineEditing,
 } from "../features/verbati/resume/InlineEditableText";
+import type { ResumePaperAiState } from "../features/verbati/resume/ResumeOneColAtsPage";
 import { hasRenderableResumeData } from "../features/verbati/cvDocumentToResumeData";
 import type {
   ResumeActiveTarget,
@@ -24,7 +25,11 @@ import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvSty
 import { resolveVerbatiStyle } from "../features/verbati/style";
 import type { VerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
-import { ensureRemirrorDoc } from "../components/remirror-editor/utils/conversion";
+import {
+  ensurePlainTextRemirrorDoc,
+  ensureRemirrorDoc,
+} from "../components/remirror-editor/utils/conversion";
+import { normalizeResponsibilityAiResultForSource } from "../components/structured-blocks/ExperienceEducationModal";
 import { useToast } from "../components/ui/toast";
 import {
   buildAuthoritativeResumeDebugSnapshot,
@@ -88,6 +93,11 @@ import {
   isPrimaryPointerPressed,
   type EditorSelectionAnchor,
 } from "../lib/editor-ai-selection";
+import {
+  deriveResponsibilityBullets,
+  projectResponsibilitiesForWorkshop,
+  responsibilityValueToDisplayLines,
+} from "../lib/resumeResponsibilityAuthority";
 
 type CvForgeWorkspaceMode = "edit" | "preview";
 type CvForgeCanonicalJob = {
@@ -100,6 +110,12 @@ type InlinePaperSelectionState = {
   anchor: EditorSelectionAnchor;
   editTarget: ActivePaperEditTarget;
   range: Range | null;
+};
+type PaperTextAiSuggestion = NonNullable<ResumePaperAiState["textSuggestion"]> & {
+  afterDoc?: unknown;
+  responsibilityBullets?: string[];
+  previousSection?: CvSection;
+  interactionId?: string;
 };
 
 const CV_FORGE_WORKSPACE_MODE_STORAGE_KEY = "dasti:cv-forge-workspace-mode:v1";
@@ -408,7 +424,7 @@ function updateFirstTextBlock(section: CvSection, text: string): CvSection {
           title: section.title,
           attributes: {},
         }),
-        content: ensureRemirrorDoc(text),
+        content: ensurePlainTextRemirrorDoc(text),
         plainText: text,
       },
       ...section.blocks.slice(1),
@@ -455,7 +471,7 @@ function updateSummaryStructuredText(section: CvSection, text: string): CvSectio
   return {
     ...section,
     structuredContent: [
-      { ...item, summary: ensureRemirrorDoc(text) },
+      { ...item, summary: ensurePlainTextRemirrorDoc(text) },
       ...items.slice(1),
     ] as CvSection["structuredContent"],
   };
@@ -474,7 +490,7 @@ function updateStructuredItemField(
   const richTextFields = new Set(["summary", "description", "responsibilities", "notes"]);
   const nextItem = {
     ...item,
-    [field]: richTextFields.has(field) ? ensureRemirrorDoc(text) : text,
+    [field]: richTextFields.has(field) ? ensurePlainTextRemirrorDoc(text) : text,
   };
 
   return {
@@ -500,7 +516,7 @@ function addStructuredItemDraftDescription(
     ...section,
     structuredContent: [
       ...items.slice(0, itemIndex),
-      { ...item, description: ensureRemirrorDoc(""), __draftDescription: true },
+      { ...item, responsibilities: ensureRemirrorDoc(""), __draftDescription: true },
       ...items.slice(itemIndex + 1),
     ] as CvSection["structuredContent"],
   };
@@ -580,6 +596,145 @@ function updateStructuredItemBullet(
         responsibilityBullets: bullets,
         __draftResponsibilityBulletCount: draftBulletCount,
       },
+      ...items.slice(itemIndex + 1),
+    ] as CvSection["structuredContent"],
+  };
+}
+
+function getStructuredItemById(section: CvSection, itemId: string) {
+  return getStructuredItems(section).find((item) => String(item.id ?? "") === itemId);
+}
+
+function getResponsibilitySource(item: Record<string, unknown>) {
+  if (typeof item.responsibilities !== "undefined") return item.responsibilities;
+  if (typeof item.responsibilityBullets !== "undefined") {
+    return item.responsibilityBullets;
+  }
+  return item.description;
+}
+
+function plainResponsibilityRunsText(
+  runs: Array<{ text?: unknown }>,
+): string {
+  return runs
+    .map((run) => (typeof run.text === "string" ? run.text : ""))
+    .join("")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+}
+
+function getResponsibilityReplacementItems(result: {
+  doc: unknown;
+  responsibilityBullets?: string[];
+}): string[] {
+  if (Array.isArray(result.responsibilityBullets)) {
+    return result.responsibilityBullets.map((item) => String(item ?? "").trim()).filter(Boolean);
+  }
+  return responsibilityValueToDisplayLines(result.doc);
+}
+
+function getResponsibilitySourceShape(source: unknown): "empty" | "paragraph" | "list" | "mixed" {
+  const blocks = projectResponsibilitiesForWorkshop(source).rich.blocks;
+  const hasParagraph = blocks.some((block) => block.kind === "paragraph");
+  const hasList = blocks.some((block) => block.kind === "bullet_list");
+  if (hasParagraph && hasList) return "mixed";
+  if (hasList) return "list";
+  if (hasParagraph) return "paragraph";
+  return "empty";
+}
+
+function readResponsibilityAiSourceText(source: unknown): string {
+  const projection = projectResponsibilitiesForWorkshop(source);
+  const blocks = projection.rich.blocks
+    .map((block) => {
+      if (block.kind === "paragraph") {
+        return plainResponsibilityRunsText(block.runs);
+      }
+      const items = block.items
+        .map((item) => plainResponsibilityRunsText(item.runs))
+        .filter(Boolean);
+      return items.length > 0 ? items.map((item) => `• ${item}`).join("\n") : "";
+    })
+    .filter(Boolean);
+
+  if (blocks.length > 0) {
+    return blocks.join("\n\n");
+  }
+
+  return responsibilityValueToDisplayLines(source).join("\n").trim();
+}
+
+function buildResponsibilityTextWithBulletReplacement(args: {
+  item: Record<string, unknown>;
+  bulletIndex: number;
+  replacementItems: string[];
+}): string {
+  const source = getResponsibilitySource(args.item);
+  const projection = projectResponsibilitiesForWorkshop(source);
+  const lines: string[] = [];
+  let cursor = 0;
+
+  projection.rich.blocks.forEach((block) => {
+    if (block.kind === "paragraph") {
+      const text = plainResponsibilityRunsText(block.runs);
+      if (text) lines.push(text);
+      return;
+    }
+
+    block.items.forEach((item) => {
+      if (cursor === args.bulletIndex) {
+        args.replacementItems.forEach((replacement) => {
+          if (replacement.trim()) lines.push(`• ${replacement.trim()}`);
+        });
+      } else {
+        const text = plainResponsibilityRunsText(item.runs);
+        if (text) lines.push(`• ${text}`);
+      }
+      cursor += 1;
+    });
+  });
+
+  if (lines.length > 0) {
+    return lines.join("\n");
+  }
+
+  const fallbackBullets = deriveResponsibilityBullets({
+    responsibilities: args.item.responsibilities,
+    hasResponsibilitiesField: typeof args.item.responsibilities !== "undefined",
+    responsibilityBullets: args.item.responsibilityBullets,
+  });
+  const nextBullets = [...fallbackBullets];
+  nextBullets.splice(args.bulletIndex, 1, ...args.replacementItems);
+  return nextBullets.map((item) => `• ${item}`).join("\n");
+}
+
+function updateStructuredItemResponsibilities(
+  section: CvSection,
+  itemId: string,
+  responsibilities: unknown,
+  responsibilityBullets?: string[],
+): CvSection {
+  const items = getStructuredItems(section);
+  const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
+  if (itemIndex < 0) return section;
+  const item = items[itemIndex]!;
+  const nextItem: Record<string, unknown> = {
+    ...item,
+    responsibilities,
+    __draftResponsibilityBulletCount: 0,
+  };
+  if (responsibilityBullets && responsibilityBullets.length > 0) {
+    nextItem.responsibilityBullets = responsibilityBullets;
+  } else {
+    delete nextItem.responsibilityBullets;
+  }
+
+  return {
+    ...section,
+    structuredContent: [
+      ...items.slice(0, itemIndex),
+      nextItem,
       ...items.slice(itemIndex + 1),
     ] as CvSection["structuredContent"],
   };
@@ -1454,6 +1609,9 @@ export function CvForge(): JSX.Element {
     currentCvId,
     createNewCv,
     importCv,
+    isLoading: isCvLibraryLoading,
+    isLibraryHydrated,
+    lastLibraryFetchFailed,
     loadCv,
   } = useCvLibrary();
   const { importFile: importStructuredCvFile } = useStructuredMistralImport({
@@ -1492,6 +1650,8 @@ export function CvForge(): JSX.Element {
     React.useState<CvRailAiSuggestion | null>(null);
   const [cvRailAppliedAiEdit, setCvRailAppliedAiEdit] =
     React.useState<CvRailAppliedAiEdit | null>(null);
+  const [paperTextAiSuggestion, setPaperTextAiSuggestion] =
+    React.useState<PaperTextAiSuggestion | null>(null);
   const [activeSectionId, setActiveSectionId] = React.useState<string | null>(
     null,
   );
@@ -1634,6 +1794,16 @@ export function CvForge(): JSX.Element {
     workspaceMode === "edit" && currentCv
       ? true
       : hasRenderableResumeData(resumePreviewData);
+  const shouldShowEmptyCvChoice =
+    !currentCv &&
+    !hasResumePaper &&
+    isLibraryHydrated &&
+    !isCvLibraryLoading &&
+    !lastLibraryFetchFailed;
+  const shouldShowCvRestorePending =
+    !currentCv &&
+    !hasResumePaper &&
+    (isCvLibraryLoading || !isLibraryHydrated || lastLibraryFetchFailed);
   const sanitizedHiddenSectionIds = React.useMemo(
     () => sanitizeHiddenSectionIds(currentCv?.sections ?? [], hiddenSectionIds),
     [currentCv?.sections, hiddenSectionIds],
@@ -1708,6 +1878,11 @@ export function CvForge(): JSX.Element {
   React.useEffect(() => {
     setCvRailAiSuggestion(null);
     setCvRailAppliedAiEdit(null);
+    setPaperTextAiSuggestion(null);
+    activeInlinePaperAiRequestIdRef.current = null;
+    setIsApplyingInlinePaperAi(false);
+    setPendingInlinePaperAiActionId(null);
+    setInlinePaperSelectionState(null);
   }, [currentCv?.id]);
 
   React.useEffect(() => {
@@ -2281,6 +2456,10 @@ export function CvForge(): JSX.Element {
         window.clearTimeout(inlineFieldChangeTimerRef.current);
         inlineFieldChangeTimerRef.current = null;
       }
+      if (target.fieldKind === "paragraph") {
+        pendingInlineFieldChangeRef.current = { target, text };
+        return;
+      }
       pendingInlineFieldChangeRef.current = null;
       applyInlineFieldChange(target, text);
     },
@@ -2520,7 +2699,7 @@ export function CvForge(): JSX.Element {
           nextTarget = {
             sectionId: request.sectionId,
             sectionType: "experience",
-            fieldPath: `structuredContent.item:${parentItemId}.description`,
+            fieldPath: `structuredContent.item:${parentItemId}.responsibilities`,
             fieldKind: "paragraph",
           };
           break;
@@ -2574,7 +2753,9 @@ export function CvForge(): JSX.Element {
             : null;
         const currentText = pendingMatches
           ? pending?.text ?? ""
-          : (currentNode?.textContent ?? "").trim()
+          : currentNode instanceof HTMLTextAreaElement
+            ? currentNode.value
+            : (currentNode?.textContent ?? "").trim()
             ? currentNode?.textContent ?? ""
             : "";
         const optionalProfileContactField = readOptionalProfileContactField(target);
@@ -2825,6 +3006,97 @@ export function CvForge(): JSX.Element {
     return clearInlinePaperAiSelectionHighlight;
   }, [inlinePaperSelectionState, workspaceMode]);
 
+  const applyInlineExperienceResponsibilityAiResult = React.useCallback(
+    (args: {
+      target: ActivePaperEditTarget;
+      selectedText: string;
+      resultText: string;
+      actionId: string;
+    }): boolean => {
+      if (args.target.sectionType !== "experience") return false;
+
+      const itemMatch = args.target.fieldPath.match(
+        /^structuredContent\.item:([^.]*)\.(.+)$/,
+      );
+      if (!itemMatch) return false;
+
+      const [, itemId, itemFieldPath] = itemMatch;
+      const bulletMatch = itemFieldPath.match(/^responsibilityBullets\.(\d+)$/);
+      if (!bulletMatch && itemFieldPath !== "responsibilities") return false;
+
+      const baseSections =
+        latestInlineSectionsRef.current.length > 0
+          ? latestInlineSectionsRef.current
+          : currentSections;
+      const section = findSectionById(baseSections, args.target.sectionId);
+      const item = section ? getStructuredItemById(section, itemId) : undefined;
+      if (!section || !item) return false;
+
+      const source = bulletMatch
+        ? [args.selectedText]
+        : getResponsibilitySource(item);
+      const normalized = normalizeResponsibilityAiResultForSource({
+        source,
+        rawText: args.resultText,
+        requestedActionId: args.actionId,
+      });
+      if (!normalized.ok) {
+        showToast(
+          normalized.reason === "incomplete_output"
+            ? "AI returned incomplete responsibilities."
+            : "AI returned unusable responsibilities.",
+          { variant: "warning" },
+        );
+        return true;
+      }
+
+      let nextSection: CvSection;
+      if (bulletMatch) {
+        const replacementItems = getResponsibilityReplacementItems(normalized);
+        const mergedText = buildResponsibilityTextWithBulletReplacement({
+          item,
+          bulletIndex: Number(bulletMatch[1]),
+          replacementItems,
+        });
+        const merged = normalizeResponsibilityAiResultForSource({
+          source: getResponsibilitySource(item),
+          rawText: mergedText,
+          requestedActionId: args.actionId,
+        });
+        if (!merged.ok) {
+          showToast("AI returned unusable responsibilities.", { variant: "warning" });
+          return true;
+        }
+        nextSection = updateStructuredItemResponsibilities(
+          section,
+          itemId,
+          merged.doc,
+          merged.responsibilityBullets,
+        );
+      } else {
+        nextSection = updateStructuredItemResponsibilities(
+          section,
+          itemId,
+          normalized.doc,
+          normalized.responsibilityBullets,
+        );
+      }
+
+      setPendingActiveSection(nextSection);
+      setResumeActiveTarget(getSectionTarget(nextSection));
+      const nextSections = baseSections.map((currentSection, index) =>
+        getCvSectionId(currentSection, index) === args.target.sectionId
+          ? nextSection
+          : currentSection,
+      );
+      latestInlineSectionsRef.current = nextSections;
+      persistSections(nextSections);
+      focusInlinePaperEditTarget(args.target);
+      return true;
+    },
+    [currentSections, persistSections, showToast],
+  );
+
   const handleRunInlinePaperAiAction = React.useCallback(
     async (actionId: InlineAiActionId, instruction: string) => {
       if (!inlinePaperSelectionState) return;
@@ -2881,7 +3153,15 @@ export function CvForge(): JSX.Element {
         const nextText = currentText.includes(inlinePaperSelectionState.text)
           ? currentText.replace(inlinePaperSelectionState.text, normalizedResult.text)
           : normalizedResult.text;
-        handleInlineFieldChange(inlinePaperSelectionState.editTarget, nextText);
+        const handledResponsibilityAi = applyInlineExperienceResponsibilityAiResult({
+          target: inlinePaperSelectionState.editTarget,
+          selectedText: inlinePaperSelectionState.text,
+          resultText: normalizedResult.text,
+          actionId: normalizedResult.actionId,
+        });
+        if (!handledResponsibilityAi) {
+          handleInlineFieldChange(inlinePaperSelectionState.editTarget, nextText);
+        }
         focusInlinePaperEditTarget(inlinePaperSelectionState.editTarget);
         setInlinePaperSelectionState(null);
         activeInlinePaperAiRequestIdRef.current = null;
@@ -2907,12 +3187,17 @@ export function CvForge(): JSX.Element {
         throw error;
       } finally {
         if (activeInlinePaperAiRequestIdRef.current === requestId) {
+          activeInlinePaperAiRequestIdRef.current = null;
+          setIsApplyingInlinePaperAi(false);
+          setPendingInlinePaperAiActionId(null);
+        } else if (activeInlinePaperAiRequestIdRef.current === null) {
           setIsApplyingInlinePaperAi(false);
           setPendingInlinePaperAiActionId(null);
         }
       }
     },
     [
+      applyInlineExperienceResponsibilityAiResult,
       handleInlineFieldChange,
       inlinePaperSelectionState,
       transformEditorSelectionAction,
@@ -3432,7 +3717,7 @@ export function CvForge(): JSX.Element {
       if (railAiMode === "none") return;
 
       if (sectionUsesStructuredSuggestions(section)) {
-        handleSelectSection(sectionId, { openEditor: true });
+        handleAskAiForSection(sectionId);
         void handleRunAskAiForSection({ sectionId, prompt: "", tone: cvTone });
         return;
       }
@@ -3454,6 +3739,254 @@ export function CvForge(): JSX.Element {
     ],
   );
 
+  const handleRunPageWandForItem = React.useCallback(
+    async (request: {
+      sectionId: string;
+      sectionType: string;
+      itemId: string;
+      itemIndex?: number;
+      field: "responsibilities" | "achievement" | "education";
+    }) => {
+      if (request.sectionType !== "experience" || request.field !== "responsibilities") {
+        return;
+      }
+      const baseSections =
+        latestInlineSectionsRef.current.length > 0
+          ? latestInlineSectionsRef.current
+          : currentSections;
+      const section = findSectionById(baseSections, request.sectionId);
+      const item = section ? getStructuredItemById(section, request.itemId) : undefined;
+      if (!section || !item) return;
+
+      const source = getResponsibilitySource(item);
+      const beforeText = readResponsibilityAiSourceText(source);
+      if (!beforeText.trim()) {
+        showToast("This experience has no responsibilities for AI to improve.", {
+          variant: "warning",
+        });
+        return;
+      }
+
+      const interactionId = createAiInteractionId();
+      const key = `${interactionId}:${request.sectionId}:${request.itemId}:responsibilities`;
+      recordAiInteractionEvent({
+        name: "ai_started",
+        interactionId,
+        surface: "section_editor",
+        actionId: "improve_experience_responsibilities",
+      });
+      setCvRailAiSuggestion(null);
+      setCvRailAppliedAiEdit(null);
+      setPaperTextAiSuggestion({
+        key,
+        sectionId: request.sectionId,
+        sectionType: "experience",
+        itemId: request.itemId,
+        beforeText,
+        afterText: "",
+        state: "loading",
+        previousSection: section,
+        interactionId,
+      });
+
+      try {
+        if (typeof runCvSectionAiAction !== "function") {
+          throw new Error("CV AI action is unavailable.");
+        }
+        const result = await runCvSectionAiAction({
+          action: "improve_experience_responsibilities",
+          existingText: beforeText,
+          outputShape: getResponsibilitySourceShape(source),
+        });
+        const normalized = normalizeResponsibilityAiResultForSource({
+          source,
+          rawItems:
+            result?.kind === "list" && Array.isArray(result.items)
+              ? result.items
+              : undefined,
+          rawText: result?.kind === "text" ? result.text : readAiResultText(result),
+          requestedActionId: "improve_experience_responsibilities",
+        });
+
+        if (!normalized.ok) {
+          recordAiInteractionEvent({
+            name: "ai_failed",
+            interactionId,
+            surface: "section_editor",
+            actionId: "improve_experience_responsibilities",
+            errorKind: normalized.reason,
+          });
+          setPaperTextAiSuggestion((current) =>
+            current?.key === key
+              ? {
+                  ...current,
+                  state: "error",
+                  errorMessage:
+                    normalized.reason === "incomplete_output"
+                      ? "AI returned incomplete responsibilities."
+                      : "AI returned unusable responsibilities.",
+                }
+              : current,
+          );
+          return;
+        }
+
+        const afterText = readResponsibilityAiSourceText(normalized.doc);
+        if (!afterText.trim()) {
+          recordAiInteractionEvent({
+            name: "ai_failed",
+            interactionId,
+            surface: "section_editor",
+            actionId: "improve_experience_responsibilities",
+            errorKind: "empty_result",
+          });
+          setPaperTextAiSuggestion((current) =>
+            current?.key === key
+              ? {
+                  ...current,
+                  state: "error",
+                  errorMessage: "AI returned no usable responsibility text.",
+                }
+              : current,
+          );
+          return;
+        }
+
+        recordAiInteractionEvent({
+          name: "ai_completed",
+          interactionId,
+          surface: "section_editor",
+          actionId: "improve_experience_responsibilities",
+          applyMode: "preview_required",
+        });
+        setPaperTextAiSuggestion((current) =>
+          current?.key === key
+            ? {
+                ...current,
+                afterText,
+                state: "ready",
+                afterDoc: normalized.doc,
+                responsibilityBullets: normalized.responsibilityBullets,
+              }
+            : current,
+        );
+      } catch (error) {
+        recordAiInteractionEvent({
+          name: "ai_failed",
+          interactionId,
+          surface: "section_editor",
+          actionId: "improve_experience_responsibilities",
+          errorKind: "request_failed",
+        });
+        setPaperTextAiSuggestion((current) =>
+          current?.key === key
+            ? {
+                ...current,
+                state: "error",
+                errorMessage:
+                  error instanceof Error && error.message
+                    ? error.message
+                    : "AI is unavailable for this item.",
+              }
+            : current,
+        );
+        showToast("AI unavailable.", { variant: "error" });
+      }
+    },
+    [currentSections, runCvSectionAiAction, showToast],
+  );
+
+  const handleAcceptPaperTextAiSuggestion = React.useCallback(
+    (key: string) => {
+      const suggestion = paperTextAiSuggestion;
+      if (
+        !suggestion ||
+        suggestion.key !== key ||
+        suggestion.state !== "ready" ||
+        suggestion.sectionType !== "experience" ||
+        !suggestion.afterDoc
+      ) {
+        return;
+      }
+
+      const baseSections =
+        latestInlineSectionsRef.current.length > 0
+          ? latestInlineSectionsRef.current
+          : currentSections;
+      const section = findSectionById(baseSections, suggestion.sectionId);
+      if (!section) return;
+      const nextSection = updateStructuredItemResponsibilities(
+        section,
+        suggestion.itemId,
+        suggestion.afterDoc,
+        suggestion.responsibilityBullets,
+      );
+      const nextSections = baseSections.map((currentSection, index) =>
+        getCvSectionId(currentSection, index) === suggestion.sectionId
+          ? nextSection
+          : currentSection,
+      );
+      latestInlineSectionsRef.current = nextSections;
+      setPendingActiveSection(nextSection);
+      setResumeActiveTarget(getSectionTarget(nextSection));
+      persistSections(nextSections);
+      recordAiInteractionEvent({
+        name: "ai_accepted",
+        interactionId: suggestion.interactionId ?? createAiInteractionId(),
+        surface: "section_editor",
+        actionId: "improve_experience_responsibilities",
+      });
+      setPaperTextAiSuggestion({
+        ...suggestion,
+        state: "accepted",
+        previousSection: section,
+      });
+      focusPreviewSection(suggestion.sectionId);
+    },
+    [currentSections, paperTextAiSuggestion, persistSections],
+  );
+
+  const handleDiscardPaperTextAiSuggestion = React.useCallback(
+    (key: string) => {
+      setPaperTextAiSuggestion((current) => {
+        if (!current || current.key !== key) return current;
+        recordAiInteractionEvent({
+          name: "ai_discarded",
+          interactionId: current.interactionId ?? createAiInteractionId(),
+          surface: "section_editor",
+          actionId: "improve_experience_responsibilities",
+        });
+        return null;
+      });
+    },
+    [],
+  );
+
+  const handleUndoPaperTextAiSuggestion = React.useCallback(
+    (key: string) => {
+      const suggestion = paperTextAiSuggestion;
+      if (!suggestion || suggestion.key !== key || !suggestion.previousSection) {
+        return;
+      }
+      const baseSections =
+        latestInlineSectionsRef.current.length > 0
+          ? latestInlineSectionsRef.current
+          : currentSections;
+      const nextSections = baseSections.map((section, index) =>
+        getCvSectionId(section, index) === suggestion.sectionId
+          ? suggestion.previousSection!
+          : section,
+      );
+      latestInlineSectionsRef.current = nextSections;
+      setPendingActiveSection(suggestion.previousSection);
+      setResumeActiveTarget(getSectionTarget(suggestion.previousSection));
+      persistSections(nextSections);
+      setPaperTextAiSuggestion(null);
+      focusPreviewSection(suggestion.sectionId);
+    },
+    [currentSections, paperTextAiSuggestion, persistSections],
+  );
+
   sectionActionHandlersRef.current = {
     ask: handleRunPageWandForSection,
     toggleHidden: handleToggleHiddenSection,
@@ -3466,12 +3999,14 @@ export function CvForge(): JSX.Element {
         ? {
             hiddenSectionIds,
             onAsk: handleRunPageWandForSection,
+            onAskItem: handleRunPageWandForItem,
             onToggleHidden: handleToggleHiddenSection,
             onDelete: handleDeleteSection,
           }
         : null,
     [
       handleDeleteSection,
+      handleRunPageWandForItem,
       handleRunPageWandForSection,
       handleToggleHiddenSection,
       hiddenSectionIds,
@@ -3585,6 +4120,45 @@ export function CvForge(): JSX.Element {
       };
     });
   }, []);
+
+  const resumePaperAiState = React.useMemo<ResumePaperAiState | null>(() => {
+    if (workspaceMode !== "edit") return null;
+    const listSuggestion =
+      cvRailAiSuggestion?.kind === "list"
+        ? {
+            sectionId: cvRailAiSuggestion.sectionId,
+            sectionType:
+              findSectionById(currentSections, cvRailAiSuggestion.sectionId)?.type ??
+              "skills",
+            items: cvRailAiSuggestion.items,
+            state: cvRailAiSuggestion.state,
+            errorMessage: cvRailAiSuggestion.errorMessage,
+          }
+        : null;
+
+    return {
+      textSuggestion: paperTextAiSuggestion,
+      listSuggestion:
+        listSuggestion && listSuggestion.sectionType === "skills"
+          ? listSuggestion
+          : null,
+      onAcceptTextSuggestion: handleAcceptPaperTextAiSuggestion,
+      onDiscardTextSuggestion: handleDiscardPaperTextAiSuggestion,
+      onUndoTextSuggestion: handleUndoPaperTextAiSuggestion,
+      onAcceptListSuggestion: handleAcceptListAiSuggestion,
+      onDismissListSuggestion: handleDismissListAiSuggestion,
+    };
+  }, [
+    currentSections,
+    cvRailAiSuggestion,
+    handleAcceptListAiSuggestion,
+    handleAcceptPaperTextAiSuggestion,
+    handleDiscardPaperTextAiSuggestion,
+    handleDismissListAiSuggestion,
+    handleUndoPaperTextAiSuggestion,
+    paperTextAiSuggestion,
+    workspaceMode,
+  ]);
 
   const handleRunListAiSuggestion = React.useCallback(
     (sectionId: string) => {
@@ -3810,7 +4384,19 @@ export function CvForge(): JSX.Element {
                     </div>
                   </div>
                 ) : null}
-                {!resumePreviewData || !hasResumePaper ? (
+                {shouldShowCvRestorePending ? (
+                  <div
+                    className="dasti-cv-import-card"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <p className="dasti-hint">
+                      {lastLibraryFetchFailed
+                        ? "CV library unavailable. Retrying restore."
+                        : "Loading CV."}
+                    </p>
+                  </div>
+                ) : shouldShowEmptyCvChoice ? (
                   <div className="dasti-cv-import-card">
                     <button
                       type="button"
@@ -3874,6 +4460,7 @@ export function CvForge(): JSX.Element {
                       onLinkIntent={handleResumeLinkIntent}
                       inlineEditing={resumeInlineEditing}
                       sectionActions={resumeSectionActions}
+                      paperAi={resumePaperAiState}
                     />
                     {inlinePaperSelectionState ? (
                       <FloatingAiToolbar

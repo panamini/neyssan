@@ -17,6 +17,7 @@ import type { ResumeActiveTarget } from "../resumeLinking";
 import type { VerbatiStylePreset } from "../types";
 import { buildVerbatiThemeVars } from "../style";
 import ResumeOneColAtsPage, {
+  type ResumePaperAiState,
   type ResumeSectionActions,
 } from "./ResumeOneColAtsPage";
 import type { ResumeData } from "./resume.types";
@@ -88,6 +89,7 @@ type ResumeTemplateRendererProps = {
   activeTarget?: ResumeActiveTarget | null;
   inlineEditing?: ResumeInlineEditing | null;
   sectionActions?: ResumeSectionActions | null;
+  paperAi?: ResumePaperAiState | null;
   stageLayout?: DocumentStageLayout;
   onStablePageCountChange?: ((pageCount: number) => void) | undefined;
 };
@@ -147,6 +149,7 @@ export function ResumeTemplateRenderer({
   activeTarget = null,
   inlineEditing = null,
   sectionActions = null,
+  paperAi = null,
   stageLayout,
   onStablePageCountChange,
 }: ResumeTemplateRendererProps) {
@@ -275,6 +278,7 @@ export function ResumeTemplateRenderer({
               activeTarget={activeTarget}
               inlineEditing={inlineEditing}
               sectionActions={sectionActions}
+              paperAi={paperAi}
             />
           </div>
         </div>
