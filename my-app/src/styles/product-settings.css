@@ -1662,6 +1662,157 @@
   color: var(--tm2);
 }
 
+.dasti-settings-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  gap: var(--s5);
+  align-items: start;
+}
+
+.dasti-settings-layout__content {
+  min-width: 0;
+}
+
+.dasti-settings-nav {
+  position: sticky;
+  top: calc(var(--header-height, 52px) + var(--s4));
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: var(--sf1);
+}
+
+.dasti-settings-nav__eyebrow {
+  margin: 0 0 var(--s1);
+  color: var(--tm2);
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.dasti-settings-nav__item {
+  display: grid;
+  gap: var(--s1);
+  width: 100%;
+  padding: var(--s3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ti);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.dasti-settings-nav__item:hover,
+.dasti-settings-nav__item:focus-visible {
+  border-color: var(--border-soft);
+  outline: none;
+  background: var(--sfr);
+}
+
+.dasti-settings-nav__item--active {
+  border-color: var(--ac);
+  background: var(--sfr);
+  box-shadow: var(--focus-shadow-soft);
+}
+
+.dasti-settings-nav__item span {
+  font-size: var(--ts);
+  font-weight: var(--font-label-weight);
+  line-height: var(--ls);
+}
+
+.dasti-settings-nav__item small {
+  color: var(--tm2);
+  font-size: var(--tx);
+  line-height: var(--lx);
+}
+
+.dasti-settings-account {
+  display: grid;
+  gap: var(--s4);
+}
+
+.dasti-settings-account__header {
+  display: grid;
+  gap: var(--s1);
+}
+
+.dasti-settings-account__card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: var(--sfr);
+  box-shadow: var(--sha);
+}
+
+.dasti-settings-account__kicker {
+  margin: 0 0 var(--s1);
+  color: var(--tm2);
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.dasti-settings-account__title {
+  margin: 0;
+  color: var(--ti);
+  font-size: var(--tm);
+  line-height: var(--lm);
+}
+
+.dasti-settings-account__copy {
+  max-width: 54ch;
+  margin: var(--s2) 0 0;
+  color: var(--tm2);
+  font-size: var(--ts);
+  line-height: var(--ls);
+}
+
+.dasti-settings-account__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--hs);
+  padding: 0 var(--s2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  color: var(--tm2);
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  white-space: nowrap;
+}
+
+.dasti-settings-account__badge--signed-in {
+  border-color: color-mix(in srgb, var(--ac) 34%, transparent);
+  color: var(--ac);
+  background: var(--ap);
+}
+
+.dasti-settings-account__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+@media (max-width: 920px) {
+  .dasti-settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dasti-settings-nav {
+    position: static;
+  }
+}
+
 .dasti-settings-builder-header {
   display: flex;
   align-items: flex-start;
