@@ -370,6 +370,12 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
         },
         text: string,
       ) => void;
+      onAddItem?: (request: {
+        sectionId: string;
+        sectionType: string;
+        itemKind: "bullet";
+        parentItemId?: string;
+      }) => void;
     };
     onLinkIntent?: (intent: {
       requestId: string;
@@ -585,6 +591,68 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
       >
         Paper Education
       </button>
+      {inlineEditing?.enabled ? (
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onAddItem?.({
+                sectionId: "experience-cv_123",
+                sectionType: "experience",
+                itemKind: "bullet",
+                parentItemId: "experience-item-cv_123",
+              })
+            }
+          >
+            + Add bullet
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onFieldChange?.(
+                {
+                  sectionId: "experience-cv_123",
+                  sectionType: "experience",
+                  fieldPath: "structuredContent.item:experience-item-cv_123.responsibilityBullets.0",
+                  fieldKind: "bullet",
+                  bulletIndex: 0,
+                },
+                "Typed bullet.",
+              )
+            }
+          >
+            Test type first bullet
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onDeactivate({
+                sectionId: "experience-cv_123",
+                sectionType: "experience",
+                fieldPath: "structuredContent.item:experience-item-cv_123.responsibilityBullets.0",
+                fieldKind: "bullet",
+                bulletIndex: 0,
+              })
+            }
+          >
+            Test blur first bullet
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onDeactivate({
+                sectionId: "experience-cv_123",
+                sectionType: "experience",
+                fieldPath: "structuredContent.item:experience-item-cv_123.responsibilityBullets.1",
+                fieldKind: "bullet",
+                bulletIndex: 1,
+              })
+            }
+          >
+            Test blur second bullet
+          </button>
+        </>
+      ) : null}
       <div>
         Preview style: {stylePreset?.layout ?? "none"}|
         {stylePreset?.typography ?? "none"}|{stylePreset?.palette ?? "none"}|
@@ -877,6 +945,69 @@ function readSavedPlainText(value: unknown): string {
   return "";
 }
 
+function paragraphDoc(text: string) {
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: text ? [{ type: "text", text }] : [],
+      },
+    ],
+  };
+}
+
+function mixedResponsibilityDoc(paragraph: string, bullets: string[]) {
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: paragraph }],
+      },
+      {
+        type: "bulletList",
+        content: bullets.map((bullet) => ({
+          type: "listItem",
+          content: [
+            {
+              type: "paragraph",
+              content: bullet ? [{ type: "text", text: bullet }] : [],
+            },
+          ],
+        })),
+      },
+    ],
+  };
+}
+
+function buildStateWithExperienceItem(
+  item: Record<string, unknown>,
+  importCv = vi.fn(async () => undefined),
+) {
+  const baseState = buildCvLibraryState();
+  const currentCv = {
+    ...baseState.currentCv,
+    sections: baseState.currentCv.sections.map((section: any) =>
+      section.id === "experience-cv_123"
+        ? { ...section, structuredContent: [item] }
+        : section,
+    ),
+  };
+  return {
+    state: buildCvLibraryState({ currentCv, cvs: [currentCv], importCv }),
+    importCv,
+  };
+}
+
+function getLastSavedExperienceItem(importCv: ReturnType<typeof vi.fn>) {
+  const savedCv = importCv.mock.calls.at(-1)?.[0] as any;
+  const experienceSection = savedCv?.sections?.find(
+    (section: any) => section.id === "experience-cv_123",
+  );
+  return experienceSection?.structuredContent?.[0] as any;
+}
+
 describe("CvForge workspace mode", () => {
   beforeEach(() => {
     window.localStorage.removeItem("dasti:cv-forge-workspace-mode:v1");
@@ -897,6 +1028,170 @@ describe("CvForge workspace mode", () => {
     importFileMock.mockReset();
     useCvLibraryMock.mockReset();
     useCvLibraryMock.mockReturnValue(buildCvLibraryState());
+  });
+
+  it("appends one draft bullet to canonical rich responsibilities while preserving paragraph text", async () => {
+    const user = userEvent.setup();
+    const { state, importCv } = buildStateWithExperienceItem({
+      id: "experience-item-cv_123",
+      position: "Lead designer",
+      company: "Studio",
+      responsibilities: paragraphDoc("Led product design."),
+    });
+    useCvLibraryMock.mockReturnValue(state);
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /\+ Add bullet/i }));
+
+    await waitFor(() => expect(importCv).toHaveBeenCalled());
+    const saved = getLastSavedExperienceItem(importCv);
+    expect(saved.responsibilities.content.map((node: any) => node.type)).toEqual([
+      "paragraph",
+      "bulletList",
+    ]);
+    expect(readSavedPlainText(saved.responsibilities.content[0])).toBe(
+      "Led product design.",
+    );
+    expect(saved.responsibilities.content[1].content).toHaveLength(1);
+    expect(saved.responsibilityBullets).toEqual([
+      "__draft_empty_responsibility_bullet__",
+    ]);
+  });
+
+  it("saves typed added bullets into the canonical Remirror responsibilities doc", async () => {
+    const user = userEvent.setup();
+    const { state, importCv } = buildStateWithExperienceItem({
+      id: "experience-item-cv_123",
+      position: "Lead designer",
+      company: "Studio",
+      responsibilities: paragraphDoc("Led product design."),
+    });
+    useCvLibraryMock.mockReturnValue(state);
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /\+ Add bullet/i }));
+    await user.click(screen.getByRole("button", { name: "Test type first bullet" }));
+
+    await waitFor(() => expect(importCv).toHaveBeenCalledTimes(2));
+    const saved = getLastSavedExperienceItem(importCv);
+    expect(saved.responsibilities.content.map((node: any) => node.type)).toEqual([
+      "paragraph",
+      "bulletList",
+    ]);
+    expect(saved.responsibilities.content[1].content).toHaveLength(1);
+    expect(readSavedPlainText(saved.responsibilities.content[1])).toBe("Typed bullet.");
+    expect(saved.responsibilityBullets).toEqual(["Typed bullet."]);
+  });
+
+  it("clicking add bullet twice creates exactly two canonical bullets", async () => {
+    const user = userEvent.setup();
+    const { state, importCv } = buildStateWithExperienceItem({
+      id: "experience-item-cv_123",
+      position: "Lead designer",
+      company: "Studio",
+      responsibilities: paragraphDoc("Led product design."),
+    });
+    useCvLibraryMock.mockReturnValue(state);
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /\+ Add bullet/i }));
+    await user.click(screen.getByRole("button", { name: /\+ Add bullet/i }));
+
+    await waitFor(() => expect(importCv).toHaveBeenCalledTimes(2));
+    const saved = getLastSavedExperienceItem(importCv);
+    expect(saved.responsibilities.content[1].type).toBe("bulletList");
+    expect(saved.responsibilities.content[1].content).toHaveLength(2);
+    expect(saved.responsibilityBullets).toEqual([
+      "__draft_empty_responsibility_bullet__",
+      "__draft_empty_responsibility_bullet__",
+    ]);
+  });
+
+  it("removes an empty draft bullet on blur without deleting paragraph text", async () => {
+    const user = userEvent.setup();
+    const { state, importCv } = buildStateWithExperienceItem({
+      id: "experience-item-cv_123",
+      position: "Lead designer",
+      company: "Studio",
+      responsibilities: paragraphDoc("Led product design."),
+    });
+    useCvLibraryMock.mockReturnValue(state);
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /\+ Add bullet/i }));
+    await user.click(screen.getByRole("button", { name: "Test blur first bullet" }));
+
+    await waitFor(() => expect(importCv).toHaveBeenCalledTimes(2));
+    const saved = getLastSavedExperienceItem(importCv);
+    expect(saved.responsibilities.content.map((node: any) => node.type)).toEqual([
+      "paragraph",
+    ]);
+    expect(readSavedPlainText(saved.responsibilities.content[0])).toBe(
+      "Led product design.",
+    );
+    expect(saved.responsibilityBullets).toBeUndefined();
+  });
+
+  it("empty bullet cleanup preserves filled bullets and paragraph text", async () => {
+    const user = userEvent.setup();
+    const { state, importCv } = buildStateWithExperienceItem({
+      id: "experience-item-cv_123",
+      position: "Lead designer",
+      company: "Studio",
+      responsibilities: mixedResponsibilityDoc("Led product design.", [
+        "Shipped design systems.",
+        "",
+      ]),
+      responsibilityBullets: [
+        "Shipped design systems.",
+        "__draft_empty_responsibility_bullet__",
+      ],
+      __draftResponsibilityBulletCount: 2,
+    });
+    useCvLibraryMock.mockReturnValue(state);
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Test blur second bullet" }));
+
+    await waitFor(() => expect(importCv).toHaveBeenCalled());
+    const saved = getLastSavedExperienceItem(importCv);
+    expect(saved.responsibilities.content.map((node: any) => node.type)).toEqual([
+      "paragraph",
+      "bulletList",
+    ]);
+    expect(readSavedPlainText(saved.responsibilities.content[0])).toBe(
+      "Led product design.",
+    );
+    expect(saved.responsibilities.content[1].content).toHaveLength(1);
+    expect(readSavedPlainText(saved.responsibilities.content[1])).toBe(
+      "Shipped design systems.",
+    );
+    expect(saved.responsibilityBullets).toEqual(["Shipped design systems."]);
   });
 
   it("switches between edit and preview workbench modes and persists the choice", async () => {

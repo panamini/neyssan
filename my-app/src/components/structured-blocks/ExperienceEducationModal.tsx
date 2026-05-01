@@ -1054,6 +1054,30 @@ const RichEditor = forwardRef<
     setInlineAiSuggestion(null);
   }, [inlineAiSuggestion]);
 
+  const handleEditorKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== "Enter" || event.defaultPrevented) {
+        return;
+      }
+
+      const view = (manager as any)?.view;
+      const hardBreak = view?.state?.schema?.nodes?.hardBreak;
+      if (!view || !hardBreak) {
+        return;
+      }
+
+      event.preventDefault();
+      const tr = view.state.tr.replaceSelectionWith(hardBreak.create()).scrollIntoView();
+      view.dispatch(tr);
+      view.focus();
+      const doc = ensureRemirrorDoc(view.state.doc.toJSON() as any);
+      editorChangedRef.current = true;
+      onChangeDoc(doc);
+      scheduleSelectionCheck();
+    },
+    [manager, onChangeDoc, scheduleSelectionCheck],
+  );
+
   return (
     <div className="dasti-rich dasti-rich--cv-reading-measure">
       {inlineSelectionState ? (
@@ -1088,6 +1112,7 @@ const RichEditor = forwardRef<
         <div
           className="rich-content"
           onPointerUp={() => scheduleSelectionCheck()}
+          onKeyDown={handleEditorKeyDown}
           onKeyUp={() => scheduleSelectionCheck()}
         >
           <EditorToolbar position="top" />

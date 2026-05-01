@@ -6,7 +6,10 @@ import { Button, Sheet } from "../ui";
 import AiSuggestionCard from "../ai/AiSuggestionCard";
 import type { CvSection } from "../../types/cvDocument";
 import { formatSectionDisplayTitle } from "../../lib/cv-section-organization";
-import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
+import {
+  ensurePlainTextRemirrorDoc,
+  ensureRemirrorDoc,
+} from "../remirror-editor/utils/conversion";
 import { useToast } from "../ui/toast";
 import type { CvRailAiSuggestion } from "./CvRail";
 
@@ -98,9 +101,14 @@ function collectPlainText(value: unknown): string {
   if (Array.isArray(value)) return value.map(collectPlainText).filter(Boolean).join("\n");
   if (!value || typeof value !== "object") return "";
   const record = value as Record<string, unknown>;
+  if (record.type === "hardBreak") return "\n";
   if (typeof record.text === "string") return record.text;
   if (Array.isArray(record.content)) {
-    return record.content.map(collectPlainText).filter(Boolean).join("\n");
+    const separator =
+      record.type === "doc" || record.type === "bulletList" || record.type === "listItem"
+        ? "\n"
+        : "";
+    return record.content.map(collectPlainText).filter(Boolean).join(separator);
   }
   return Object.entries(record)
     .filter(([key]) => !["type", "attrs", "id"].includes(key))
@@ -363,6 +371,31 @@ export function SectionEditorSheet({
   }
 
   React.useEffect(() => () => clearAutosaveTimer(), []);
+
+  React.useEffect(() => {
+    if (!open) return undefined;
+
+    const handleResponsibilitiesTextareaEnter = (event: KeyboardEvent) => {
+      if (event.key !== "Enter") return;
+      const target = event.target;
+      if (!(target instanceof HTMLTextAreaElement)) return;
+      if (target.dataset.cvResponsibilitiesTextarea !== "true") return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      const start = target.selectionStart ?? target.value.length;
+      const end = target.selectionEnd ?? target.value.length;
+      target.value = `${target.value.slice(0, start)}\n${target.value.slice(end)}`;
+      target.selectionStart = start + 1;
+      target.selectionEnd = start + 1;
+      target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertLineBreak" }));
+    };
+
+    window.addEventListener("keydown", handleResponsibilitiesTextareaEnter, true);
+    return () => {
+      window.removeEventListener("keydown", handleResponsibilitiesTextareaEnter, true);
+    };
+  }, [open]);
 
   React.useEffect(() => {
     const wasOpen = previousOpenRef.current;
@@ -962,14 +995,33 @@ export function SectionEditorSheet({
               <span>{`Responsibilities ${index + 1}`}</span>
               <textarea
                 className="ds-field ds-field--textarea"
+                data-cv-responsibilities-textarea="true"
                 value={collectPlainText(item.responsibilities)}
+                onKeyDownCapture={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.stopPropagation();
+                  event.preventDefault();
+                  const target = event.currentTarget;
+                  const start = target.selectionStart ?? target.value.length;
+                  const end = target.selectionEnd ?? target.value.length;
+                  const nextValue = `${target.value.slice(0, start)}\n${target.value.slice(end)}`;
+                  commitSection(
+                    updateStructuredItem(editableSection, index, {
+                      responsibilities: ensurePlainTextRemirrorDoc(nextValue),
+                    }),
+                  );
+                  window.requestAnimationFrame(() => {
+                    target.selectionStart = start + 1;
+                    target.selectionEnd = start + 1;
+                  });
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") event.stopPropagation();
                 }}
                 onChange={(event) =>
                   commitSection(
                     updateStructuredItem(editableSection, index, {
-                      responsibilities: ensureRemirrorDoc(event.currentTarget.value),
+                      responsibilities: ensurePlainTextRemirrorDoc(event.currentTarget.value),
                     }),
                   )
                 }

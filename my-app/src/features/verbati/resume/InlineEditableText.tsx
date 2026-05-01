@@ -83,9 +83,6 @@ function readEditablePlainText(node: HTMLElement | null): string {
 }
 
 function insertLineBreakAtSelection(): boolean {
-  if (typeof document.execCommand === "function") {
-    return document.execCommand("insertHTML", false, "<br>\u200B");
-  }
   return insertPlainTextAtSelection("\n");
 }
 

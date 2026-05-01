@@ -36,6 +36,7 @@ import type {
   ResumeSkillItem,
   ResumeTextListItem,
   ResumeTextSection,
+  WorkshopResponsibilitiesRichContent,
 } from "./resume/resume.types";
 
 type ResumeDataMappingOptions = {
@@ -45,6 +46,49 @@ type ResumeDataMappingOptions = {
 const DRAFT_EMPTY_RESPONSIBILITY_BULLET = "__draft_empty_responsibility_bullet__";
 const DRAFT_EMPTY_EXPERIENCE_DESCRIPTION =
   "__draft_empty_experience_description__";
+
+type ResponsibilityProjection = ReturnType<typeof projectResponsibilitiesForWorkshop>;
+
+function isDraftResponsibilityBullet(value: unknown): boolean {
+  const text = String(value ?? "");
+  return text === DRAFT_EMPTY_RESPONSIBILITY_BULLET || !text.trim();
+}
+
+function richWithDraftResponsibilityBullets(args: {
+  projection: ResponsibilityProjection;
+  draftBullets: string[] | null;
+  includeDrafts?: boolean;
+}): WorkshopResponsibilitiesRichContent {
+  const rich = { blocks: [...args.projection.rich.blocks] };
+  if (!args.includeDrafts || !args.draftBullets || args.draftBullets.length === 0) {
+    return rich;
+  }
+
+  const canonicalBulletCount = args.projection.bullets.length;
+  const missingDrafts = args.draftBullets
+    .slice(canonicalBulletCount)
+    .filter(isDraftResponsibilityBullet);
+  if (missingDrafts.length === 0) {
+    return rich;
+  }
+
+  const draftItems = missingDrafts.map(() => ({ runs: [{ text: "" }] }));
+  const lastBlock = rich.blocks[rich.blocks.length - 1];
+  if (lastBlock?.kind === "bullet_list") {
+    rich.blocks[rich.blocks.length - 1] = {
+      ...lastBlock,
+      items: [...lastBlock.items, ...draftItems],
+    };
+    return rich;
+  }
+
+  rich.blocks.push({
+    kind: "bullet_list",
+    items: draftItems,
+  });
+  return rich;
+}
+
 type SectionContext = {
   section: CvSection;
   sectionId: string;
@@ -373,6 +417,11 @@ function mapExperience(
           draftResponsibilityBullets.push("");
         }
       }
+      const responsibilitiesRich = richWithDraftResponsibilityBullets({
+        projection: responsibilitiesProjection,
+        draftBullets: draftResponsibilityBullets,
+        includeDrafts: options.includeDrafts,
+      });
       const bullets =
         draftResponsibilityBullets && draftResponsibilityBullets.length > 0
           ? draftResponsibilityBullets
@@ -428,8 +477,8 @@ function mapExperience(
         location,
         ...(visibleDescription ? { description: visibleDescription } : {}),
         bullets: visibleBullets.length > 0 || !includeDraftItem ? visibleBullets : [""],
-        ...(responsibilitiesProjection.rich.blocks.length > 0
-          ? { responsibilitiesRich: responsibilitiesProjection.rich }
+        ...(responsibilitiesRich.blocks.length > 0
+          ? { responsibilitiesRich }
           : {}),
       };
     })
