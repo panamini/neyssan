@@ -2260,10 +2260,8 @@ describe("CvForge workspace mode", () => {
     );
   });
 
-  it("preserves spaces while editing summary text in the section sheet", async () => {
+  it("renders summary text in the section sheet with the drawer Remirror editor", async () => {
     const user = userEvent.setup();
-    const importCv = vi.fn(async () => undefined);
-    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
 
     render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
@@ -2272,17 +2270,41 @@ describe("CvForge workspace mode", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /^Summary$/i }));
-    const summaryInput = screen.getByLabelText("Body");
-    await user.clear(summaryInput);
-    await user.type(summaryInput, "Alpha Beta ");
 
-    expect(summaryInput).toHaveValue("Alpha Beta ");
-    await waitFor(() => expect(importCv).toHaveBeenCalled());
+    const summaryEditor = screen.getByTestId("drawer-rich-editor-summary");
+    expect(summaryEditor).toBeInTheDocument();
+    expect(summaryEditor.querySelector("textarea")).toBeNull();
+    expect(summaryEditor).toHaveTextContent("Focused builder.");
+    expect(within(summaryEditor).getByRole("button", { name: "Toggle bullet list" })).toBeInTheDocument();
+  });
+
+  it("renders experience responsibilities in the drawer Remirror editor while simple fields stay plain inputs", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Experience$/i }));
+
+    const roleInput = screen.getByLabelText("Role 1");
+    expect(roleInput.tagName).toBe("INPUT");
+
+    const responsibilitiesEditor = screen.getByTestId(
+      "drawer-rich-editor-experience-responsibilities-0",
+    );
+    expect(responsibilitiesEditor).toBeInTheDocument();
+    expect(responsibilitiesEditor.querySelector("textarea")).toBeNull();
+    expect(responsibilitiesEditor.querySelector(".ProseMirror")).toBeTruthy();
+    expect(responsibilitiesEditor).toHaveTextContent("Led product design.");
     expect(
-      importCv.mock.lastCall?.[0].sections.find(
-        (section: { id: string }) => section.id === "summary-cv_123",
-      ).structuredContent[0].summary,
-    ).toBe("Alpha Beta ");
+      within(responsibilitiesEditor).getByRole("button", {
+        name: "Toggle bullet list",
+      }),
+    ).toBeInTheDocument();
+    expect(document.querySelector("[data-inline-ai-toolbar='true']")).toBeNull();
   });
 
   it("keeps long typed section edits in the draft before save", async () => {
@@ -2359,10 +2381,14 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByRole("button", { name: "Accept" }));
 
     expect(screen.getByRole("status", { name: "Applied. Undo" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Body")).toHaveValue("Evidence-backed summary.");
+    expect(screen.getByTestId("drawer-rich-editor-summary")).toHaveTextContent(
+      "Evidence-backed summary.",
+    );
 
     await user.click(screen.getByRole("button", { name: "Undo" }));
-    expect(screen.getByLabelText("Body")).toHaveValue("Focused builder.");
+    expect(screen.getByTestId("drawer-rich-editor-summary")).toHaveTextContent(
+      "Focused builder.",
+    );
   });
 
   it("launches structured skill suggestions directly from the skills wand", async () => {

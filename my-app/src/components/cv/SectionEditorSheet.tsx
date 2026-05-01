@@ -1,15 +1,28 @@
 import React from "react";
 import { useAction } from "convex/react";
 import { Plus, Wand2 } from "@/lib/icons";
+import { Remirror, useRemirror, EditorComponent } from "@remirror/react";
+import {
+  BoldExtension,
+  BulletListExtension,
+  HardBreakExtension,
+  HistoryExtension,
+  ItalicExtension,
+  ListItemExtension,
+  OrderedListExtension,
+  ParagraphExtension,
+  UnderlineExtension,
+} from "remirror/extensions";
+import type { RemirrorJSON } from "remirror";
 import { api } from "../../../convex/_generated/api";
 import { Button, Sheet } from "../ui";
 import AiSuggestionCard from "../ai/AiSuggestionCard";
 import type { CvSection } from "../../types/cvDocument";
 import { formatSectionDisplayTitle } from "../../lib/cv-section-organization";
-import {
-  ensurePlainTextRemirrorDoc,
-  ensureRemirrorDoc,
-} from "../remirror-editor/utils/conversion";
+import { projectResponsibilitiesForWorkshop } from "../../lib/resumeResponsibilityAuthority";
+import { remirrorJsonToString } from "../../lib/utils";
+import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
+import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
 import { useToast } from "../ui/toast";
 import type { CvRailAiSuggestion } from "./CvRail";
 
@@ -90,6 +103,87 @@ type AcceptedAiEdit = {
   beforeSection: CvSection;
 };
 
+type DrawerRichTextEditorProps = {
+  value: unknown;
+  ariaLabel: string;
+  testId: string;
+  onChangeDoc: (doc: RemirrorJSON) => void;
+};
+
+function DrawerRichTextEditor({
+  value,
+  ariaLabel,
+  testId,
+  onChangeDoc,
+}: DrawerRichTextEditorProps) {
+  const extensions = React.useMemo(
+    () => [
+      new ParagraphExtension(),
+      new HistoryExtension({}),
+      new HardBreakExtension({}),
+      new BoldExtension({}),
+      new ItalicExtension({}),
+      new UnderlineExtension({}),
+      new BulletListExtension({}),
+      new OrderedListExtension({}),
+      new ListItemExtension({}),
+    ],
+    [],
+  );
+  const initialContent = React.useMemo(
+    () => ensureRemirrorDoc(value as RemirrorJSON | string | undefined | null),
+    // Remirror owns subsequent direct edits; external AI/undo updates are synced below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const lastDocJsonRef = React.useRef(JSON.stringify(initialContent));
+  const { manager, state, onChange } = useRemirror({
+    extensions: () => extensions as any,
+    content: initialContent as any,
+  });
+
+  React.useEffect(() => {
+    const nextDoc = ensureRemirrorDoc(value as RemirrorJSON | string | undefined | null);
+    const nextJson = JSON.stringify(nextDoc);
+    if (nextJson === lastDocJsonRef.current) return;
+    const nextState = (manager as any)?.createState?.({ content: nextDoc as any });
+    const view = (manager as any)?.view;
+    if (nextState && typeof view?.updateState === "function") {
+      view.updateState(nextState);
+      lastDocJsonRef.current = nextJson;
+    }
+  }, [manager, value]);
+
+  const handleChange = React.useCallback(
+    (param: any) => {
+      onChange(param);
+      const doc =
+        ((manager as any)?.view?.state?.doc?.toJSON?.() as RemirrorJSON | undefined) ??
+        ensureRemirrorDoc(undefined as any);
+      const nextDoc = ensureRemirrorDoc(doc as any);
+      lastDocJsonRef.current = JSON.stringify(nextDoc);
+      onChangeDoc(nextDoc);
+    },
+    [manager, onChange, onChangeDoc],
+  );
+
+  return (
+    <div
+      className="dasti-rich dasti-rich--cv-reading-measure"
+      data-cv-drawer-rich-editor="true"
+      data-testid={testId}
+      aria-label={ariaLabel}
+    >
+      <Remirror manager={manager} initialContent={state} onChange={handleChange}>
+        <div className="rich-content">
+          <EditorToolbar position="top" />
+          <EditorComponent />
+        </div>
+      </Remirror>
+    </div>
+  );
+}
+
 function getSectionDraftKey(section: CvSection | null): string | null {
   if (!section) return null;
   if (section.id) return String(section.id);
@@ -138,6 +232,14 @@ function updateStructuredItem(
 }
 
 function updateTextBlock(section: CvSection, value: string): CvSection {
+  return updateTextBlockDoc(section, ensureRemirrorDoc(value), value);
+}
+
+function updateTextBlockDoc(
+  section: CvSection,
+  doc: RemirrorJSON,
+  plainText = remirrorJsonToString(doc),
+): CvSection {
   const firstBlock = section.blocks[0];
   return {
     ...section,
@@ -149,8 +251,8 @@ function updateTextBlock(section: CvSection, value: string): CvSection {
           title: section.title,
           attributes: {},
         }),
-        content: ensureRemirrorDoc(value),
-        plainText: value,
+        content: doc,
+        plainText,
       },
       ...section.blocks.slice(1),
     ],
@@ -371,31 +473,6 @@ export function SectionEditorSheet({
   }
 
   React.useEffect(() => () => clearAutosaveTimer(), []);
-
-  React.useEffect(() => {
-    if (!open) return undefined;
-
-    const handleResponsibilitiesTextareaEnter = (event: KeyboardEvent) => {
-      if (event.key !== "Enter") return;
-      const target = event.target;
-      if (!(target instanceof HTMLTextAreaElement)) return;
-      if (target.dataset.cvResponsibilitiesTextarea !== "true") return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      const start = target.selectionStart ?? target.value.length;
-      const end = target.selectionEnd ?? target.value.length;
-      target.value = `${target.value.slice(0, start)}\n${target.value.slice(end)}`;
-      target.selectionStart = start + 1;
-      target.selectionEnd = start + 1;
-      target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertLineBreak" }));
-    };
-
-    window.addEventListener("keydown", handleResponsibilitiesTextareaEnter, true);
-    return () => {
-      window.removeEventListener("keydown", handleResponsibilitiesTextareaEnter, true);
-    };
-  }, [open]);
 
   React.useEffect(() => {
     const wasOpen = previousOpenRef.current;
@@ -915,23 +992,25 @@ export function SectionEditorSheet({
             {isSummaryAiLoading ? "Rewriting" : "Rewrite summary"}
           </Button>
         </div>
-        <label className="dasti-cv-section-field dasti-cv-section-field--wide">
+        <div className="dasti-cv-section-field dasti-cv-section-field--wide">
           <span>{textInputLabel(title, "body")}</span>
-          <textarea
-            className="ds-field ds-field--textarea"
-            value={readSectionText(editableSection)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.stopPropagation();
-            }}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
+          <DrawerRichTextEditor
+            key={`${String(editableSection.id ?? "summary")}:summary`}
+            ariaLabel="Summary body"
+            testId="drawer-rich-editor-summary"
+            value={
+              getStructuredItems(editableSection)[0]?.summary ??
+              editableSection.blocks[0]?.content ??
+              readSectionText(editableSection)
+            }
+            onChangeDoc={(doc) => {
               const nextSection = updateStructuredItem(editableSection, 0, {
-                summary: value,
+                summary: doc,
               });
-              commitSection(updateTextBlock(nextSection, value));
+              commitSection(updateTextBlockDoc(nextSection, doc));
             }}
           />
-        </label>
+        </div>
         {summaryAiSuggestion ? (
           <AiSuggestionCard
             compact
@@ -991,42 +1070,26 @@ export function SectionEditorSheet({
               readOnly
               onChange={() => {}}
             />
-            <label className="dasti-cv-section-field dasti-cv-section-field--wide">
+            <div className="dasti-cv-section-field dasti-cv-section-field--wide">
               <span>{`Responsibilities ${index + 1}`}</span>
-              <textarea
-                className="ds-field ds-field--textarea"
-                data-cv-responsibilities-textarea="true"
-                value={collectPlainText(item.responsibilities)}
-                onKeyDownCapture={(event) => {
-                  if (event.key !== "Enter") return;
-                  event.stopPropagation();
-                  event.preventDefault();
-                  const target = event.currentTarget;
-                  const start = target.selectionStart ?? target.value.length;
-                  const end = target.selectionEnd ?? target.value.length;
-                  const nextValue = `${target.value.slice(0, start)}\n${target.value.slice(end)}`;
+              <DrawerRichTextEditor
+                key={`${String(item.id ?? index)}:responsibilities`}
+                ariaLabel={`Responsibilities ${index + 1}`}
+                testId={`drawer-rich-editor-experience-responsibilities-${index}`}
+                value={item.responsibilities ?? ""}
+                onChangeDoc={(doc) => {
+                  const projection = projectResponsibilitiesForWorkshop(doc);
                   commitSection(
                     updateStructuredItem(editableSection, index, {
-                      responsibilities: ensurePlainTextRemirrorDoc(nextValue),
+                      responsibilities: doc,
+                      responsibilityBullets:
+                        projection.bullets.length > 0 ? projection.bullets : undefined,
+                      achievements: [],
                     }),
                   );
-                  window.requestAnimationFrame(() => {
-                    target.selectionStart = start + 1;
-                    target.selectionEnd = start + 1;
-                  });
                 }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") event.stopPropagation();
-                }}
-                onChange={(event) =>
-                  commitSection(
-                    updateStructuredItem(editableSection, index, {
-                      responsibilities: ensurePlainTextRemirrorDoc(event.currentTarget.value),
-                    }),
-                  )
-                }
               />
-            </label>
+            </div>
             {fieldAiSuggestion?.key === `experience:${String(item.id ?? index)}` ? (
               <AiSuggestionCard
                 compact
