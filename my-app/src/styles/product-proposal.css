@@ -7385,9 +7385,15 @@
 }
 
 .dasti-proposal-skeleton-rail__cv-button {
+  width: 100%;
   justify-content: flex-start;
   gap: var(--space-2);
   text-align: left;
+}
+
+.dasti-proposal-skeleton-rail__cv-button > span:nth-child(2) {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .dasti-proposal-skeleton-rail__cv-button strong,
@@ -7402,9 +7408,23 @@
   font-weight: 400;
 }
 
+.dasti-proposal-skeleton-rail__cv-caret {
+  margin-inline-start: auto;
+  color: var(--tg3);
+}
+
 .dasti-proposal-skeleton-rail__cv-thumb {
   width: 24px;
   height: 32px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: var(--sha);
+}
+
+.dasti-proposal-skeleton-rail__cv-menu-thumb {
+  width: 20px;
+  height: 26px;
   flex: 0 0 auto;
   border-radius: 3px;
   background: var(--paper);

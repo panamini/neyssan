@@ -1,5 +1,6 @@
 import React from "react";
 import { Button, Pill, ToneBadge } from "../ui";
+import { Menu, type MenuSection } from "../ui/menu";
 
 type ProposalRailVariableField = {
   id: string;
@@ -9,6 +10,13 @@ type ProposalRailVariableField = {
   multiline?: boolean;
   onChange: (value: string) => void;
   onBlur?: () => void;
+};
+
+type ProposalRailCvOption = {
+  id: string;
+  title: string;
+  description: string | null;
+  selected: boolean;
 };
 
 type ProposalRailProps = {
@@ -30,7 +38,9 @@ type ProposalRailProps = {
   generateDisabled: boolean;
   generateState: "idle" | "loading" | "success" | "error";
   onGenerateDraft: () => void;
-  onOpenCvPicker: () => void;
+  cvOptions: ProposalRailCvOption[];
+  onSelectCv: (cvId: string) => void;
+  onClearCv: () => void;
 };
 
 export function ProposalRail({
@@ -52,9 +62,52 @@ export function ProposalRail({
   generateDisabled,
   generateState,
   onGenerateDraft,
-  onOpenCvPicker,
+  cvOptions,
+  onSelectCv,
+  onClearCv,
 }: ProposalRailProps): JSX.Element {
   const visibleKeywords = keywords.slice(0, 3);
+  const cvMenuSections = React.useMemo<MenuSection[]>(() => {
+    const cvItems = cvOptions.map((option) => ({
+      id: option.id,
+      role: "menuitemradio" as const,
+      selected: option.selected,
+      label: option.title,
+      description: option.description ?? "Saved CV.",
+      icon: <span className="dasti-proposal-skeleton-rail__cv-menu-thumb" />,
+      onSelect: () => onSelectCv(option.id),
+    }));
+
+    return [
+      {
+        label: "Pick a CV",
+        items:
+          cvItems.length > 0
+            ? cvItems
+            : [
+                {
+                  id: "no-cvs",
+                  label: "No CVs available",
+                  description: "Create or import a CV first.",
+                  disabled: true,
+                },
+              ],
+      },
+      ...(sourceCvTitle
+        ? [
+            {
+              items: [
+                {
+                  id: "detach-cv",
+                  label: "Remove attached CV",
+                  onSelect: onClearCv,
+                },
+              ],
+            },
+          ]
+        : []),
+    ];
+  }, [cvOptions, onClearCv, onSelectCv, sourceCvTitle]);
 
   return (
     <aside className="forge__rail dasti-proposal-skeleton-rail" aria-label="Proposal rail">
@@ -83,19 +136,28 @@ export function ProposalRail({
 
       <section className="forge__rail-section dasti-proposal-skeleton-rail__section">
         <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Source CV</div>
-        <Button
-          type="button"
-          variant="secondary"
-          size="md"
-          className="dasti-proposal-skeleton-rail__cv-button"
-          onClick={onOpenCvPicker}
-        >
-          <span className="dasti-proposal-skeleton-rail__cv-thumb" />
-          <span>
-            <strong>{sourceCvTitle ? "Selected CV" : "Choose a CV"}</strong>
-            <small>{sourceCvMeta || "Attach one to personalize the draft."}</small>
-          </span>
-        </Button>
+        <Menu
+          ariaLabel="Source CV"
+          align="start"
+          side="bottom"
+          matchTriggerWidth
+          sections={cvMenuSections}
+          trigger={
+            <button
+              type="button"
+              className="ds-btn ds-btn--md ds-btn--secondary dasti-proposal-skeleton-rail__cv-button"
+            >
+              <span className="dasti-proposal-skeleton-rail__cv-thumb" />
+              <span>
+                <strong>{sourceCvTitle ? "Selected CV" : "Choose a CV"}</strong>
+                <small>{sourceCvMeta || "Attach one to personalize the draft."}</small>
+              </span>
+              <span className="dasti-proposal-skeleton-rail__cv-caret" aria-hidden="true">
+                ▾
+              </span>
+            </button>
+          }
+        />
         <details className="dasti-proposal-skeleton-rail__draft-setup">
           <summary>Draft setup</summary>
           <div className="dasti-proposal-skeleton-rail__draft-setup-body">

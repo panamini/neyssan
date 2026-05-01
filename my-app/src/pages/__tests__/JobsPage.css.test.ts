@@ -101,7 +101,10 @@ describe("JobsPage CSS contracts", () => {
       /\.dasti-jobs-row__title\s*\{[\s\S]*justify-content:\s*space-between;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-jobs-row__meta-favorite\s*\{[\s\S]*color:\s*var\(--ac\);/,
+      /\.dasti-jobs-row__company\s*\{[\s\S]*width:\s*100%;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row__meta-favorite\s*\{[\s\S]*margin-inline-start:\s*auto;[\s\S]*color:\s*var\(--ac\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-jobs-detail__meta-favorite-action\s*\{[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--ac\);/,

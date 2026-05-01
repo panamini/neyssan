@@ -1446,12 +1446,13 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
 
   return (
     <div className={styles.container}>
-      <Dialog
-        open={resolvedCvPickerOpen}
-        onClose={handleCloseCvPicker}
-        title="Choose resume"
-      >
-        <DialogContent className="space-y-3">
+      {!suppressCvPicker ? (
+        <Dialog
+          open={resolvedCvPickerOpen}
+          onClose={handleCloseCvPicker}
+          title="Choose resume"
+        >
+          <DialogContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Pick a resume to personalize the letter.
           </p>
@@ -1529,8 +1530,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
               <span>Use resume</span>
             </button>
           </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      ) : null}
       <form
         autoComplete="off"
         onSubmit={(e) => {
