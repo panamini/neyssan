@@ -35,6 +35,10 @@ export function remirrorJsonToString(doc: RemirrorJSON | string | undefined | nu
       if (node.type === "text" && typeof node.text === "string") {
         text += node.text;
       }
+
+      if (node.type === "hardBreak") {
+        text += "\n";
+      }
       
       if (node.content) {
         traverse(node.content);

@@ -979,6 +979,51 @@ describe("CvForge workspace mode", () => {
     expect(container.querySelector(".dasti-preview-toolbar")).toBeNull();
   });
 
+  it("does not show the create or import choice while the CV library is restoring", () => {
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv: null,
+        currentCvId: null,
+        cvs: [],
+        isLoading: true,
+        isLibraryHydrated: false,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText("Start blank")).not.toBeInTheDocument();
+    expect(screen.queryByText("Upload PDF")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/Loading CV/i);
+  });
+
+  it("shows the create or import choice after restore finishes without a current CV", () => {
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv: null,
+        currentCvId: null,
+        cvs: [{ id: "cv_stale", title: "Stale index entry", sections: [] }],
+        isLoading: false,
+        isLibraryHydrated: true,
+        lastLibraryFetchFailed: false,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText(/Loading CV/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Start blank")).toBeInTheDocument();
+    expect(screen.getByText("Upload PDF")).toBeInTheDocument();
+  });
+
   it("switches to preview when workspace mode storage quota is unavailable", async () => {
     const user = userEvent.setup();
     const quotaError = new DOMException("quota exceeded", "QuotaExceededError");
@@ -1127,7 +1172,7 @@ describe("CvForge workspace mode", () => {
         ?.getAttribute("data-active-paper-edit-field-path"),
     ).toBe("structuredContent.0.summary");
 
-    summaryParagraph.textContent = "Inline summary rewrite.";
+    summaryParagraph.textContent = "Inline summary rewrite.\nSecond line.";
     fireEvent.input(summaryParagraph);
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
@@ -1136,7 +1181,7 @@ describe("CvForge workspace mode", () => {
     );
     expect(
       readSavedPlainText(summarySection.structuredContent[0].summary),
-    ).toBe("Inline summary rewrite.");
+    ).toBe("Inline summary rewrite.\nSecond line.");
   });
 
   it("keeps Summary paper clicks as drawer focus in preview mode", async () => {
@@ -1303,7 +1348,14 @@ describe("CvForge workspace mode", () => {
 
     for (const [text, sectionId, fieldPath, fieldKind] of editableExpectations) {
       const field = screen.getByText(text);
-      expect(field).toHaveAttribute("contenteditable", "plaintext-only");
+      const isRichMultilineField =
+        sectionId === "summary-cv_123" || fieldPath.endsWith(".responsibilities");
+      if (isRichMultilineField) {
+        expect(field.tagName).toBe("TEXTAREA");
+        expect(field).not.toHaveAttribute("contenteditable");
+      } else {
+        expect(field).toHaveAttribute("contenteditable", "plaintext-only");
+      }
       expect(field).toHaveAttribute("data-inline-paper-editable", "true");
       expect(field).toHaveAttribute("data-paper-section-id", sectionId);
       expect(field).toHaveAttribute("data-paper-field-path", fieldPath);
@@ -1334,8 +1386,9 @@ describe("CvForge workspace mode", () => {
     );
     expect(onLinkIntent).not.toHaveBeenCalled();
 
-    summaryParagraph.textContent = "Actual workshop summary edit.";
-    fireEvent.input(summaryParagraph);
+    fireEvent.change(summaryParagraph, {
+      target: { value: "Actual workshop summary edit." },
+    });
 
     expect(onFieldChange).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1777,6 +1830,27 @@ describe("CvForge workspace mode", () => {
     expect(source).toContain("isInlineAiToolbarActiveElement");
     expect(styles).toContain("data-inline-ai-selection-active");
     expect(styles).toContain("::highlight(cv-inline-ai-selection)");
+  });
+
+  it("clears inline paper Ask AI loading after a completed request closes the toolbar", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/pages/CvForge.tsx"), "utf8");
+
+    expect(source).toContain("activeInlinePaperAiRequestIdRef.current = null");
+    expect(source).toContain(
+      "else if (activeInlinePaperAiRequestIdRef.current === null)",
+    );
+    expect(source).toContain("setIsApplyingInlinePaperAi(false)");
+    expect(source).toContain("setPendingInlinePaperAiActionId(null)");
+  });
+
+  it("routes inline paper Experience responsibility AI through the shape-aware normalizer", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/pages/CvForge.tsx"), "utf8");
+
+    expect(source).toContain("normalizeResponsibilityAiResultForSource");
+    expect(source).toContain("applyInlineExperienceResponsibilityAiResult");
+    expect(source).toContain("updateStructuredItemResponsibilities");
+    expect(source).toContain("responsibilityBullets");
+    expect(source).toContain("if (!handledResponsibilityAi)");
   });
 
   it("keeps paper contact order stable without Website and Portfolio duplication", async () => {
@@ -2772,6 +2846,9 @@ describe("CvForge workspace mode", () => {
       buildCvLibraryState({
         currentCv: null,
         currentCvId: null,
+        cvs: [],
+        isLibraryHydrated: true,
+        isLoading: false,
       }),
     );
 

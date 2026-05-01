@@ -42,7 +42,7 @@ export type InlineEditableTag = "p" | "span" | "h1" | "h2" | "h3" | "div";
 
 type InlineEditableTextProps = Omit<
   React.HTMLAttributes<HTMLElement>,
-  "children" | "contentEditable" | "onInput" | "onPaste"
+  "children" | "contentEditable" | "onBeforeInput" | "onInput" | "onPaste"
 > & {
   as?: InlineEditableTag;
   value: string;
@@ -52,6 +52,7 @@ type InlineEditableTextProps = Omit<
   onDeactivate?: ((target?: ActivePaperEditTarget) => void) | undefined;
   ariaLabel: string;
   onPlainTextChange: (text: string) => void;
+  onBeforeInput?: React.FormEventHandler<HTMLElement>;
 };
 
 function insertPlainTextAtSelection(text: string): boolean {
@@ -64,11 +65,28 @@ function insertPlainTextAtSelection(text: string): boolean {
   const range = selection.getRangeAt(0);
   const textNode = document.createTextNode(text);
   range.insertNode(textNode);
-  range.setStartAfter(textNode);
-  range.setEndAfter(textNode);
+  const caretNode = document.createTextNode("");
+  textNode.parentNode?.insertBefore(caretNode, textNode.nextSibling);
+  range.setStart(caretNode, 0);
+  range.setEnd(caretNode, 0);
   selection.removeAllRanges();
   selection.addRange(range);
   return true;
+}
+
+function readEditablePlainText(node: HTMLElement | null): string {
+  if (!node) return "";
+  if (typeof node.innerText === "string") {
+    return node.innerText.replace(/\u200B/g, "").replace(/\r/g, "\n");
+  }
+  return (node.textContent ?? "").replace(/\u200B/g, "");
+}
+
+function insertLineBreakAtSelection(): boolean {
+  if (typeof document.execCommand === "function") {
+    return document.execCommand("insertHTML", false, "<br>\u200B");
+  }
+  return insertPlainTextAtSelection("\n");
 }
 
 export function InlineEditableText({
@@ -83,16 +101,35 @@ export function InlineEditableText({
   onClick,
   onMouseDown,
   onPointerDown,
+  onBeforeInput,
   onKeyDown,
+  style,
   ...props
 }: InlineEditableTextProps) {
   const ref = React.useRef<HTMLElement | null>(null);
   const isFocusedRef = React.useRef(false);
   const [editState, setEditState] = React.useState<"idle" | "focus">("idle");
+  const [draftValue, setDraftValue] = React.useState(value);
+  const preservesLineBreaks =
+    editTarget.fieldKind === "paragraph" &&
+    (editTarget.sectionType === "summary" ||
+      editTarget.fieldPath.endsWith(".responsibilities"));
+  const mergedStyle = preservesLineBreaks
+    ? ({ whiteSpace: "pre-wrap", ...style } satisfies React.CSSProperties)
+    : style;
 
   React.useLayoutEffect(() => {
     const node = ref.current;
     if (!node || (editable && isFocusedRef.current)) {
+      return;
+    }
+
+    if (node instanceof HTMLTextAreaElement) {
+      if (node.value !== value) {
+        node.value = value;
+      }
+      node.style.height = "auto";
+      node.style.height = `${node.scrollHeight}px`;
       return;
     }
 
@@ -101,9 +138,15 @@ export function InlineEditableText({
     }
   }, [editable, value]);
 
+  React.useEffect(() => {
+    if (!isFocusedRef.current) {
+      setDraftValue(value);
+    }
+  }, [value]);
+
   const handleInput = React.useCallback(() => {
     onActivate(editTarget);
-    onPlainTextChange(ref.current?.textContent ?? "");
+    onPlainTextChange(readEditablePlainText(ref.current));
   }, [editTarget, onActivate, onPlainTextChange]);
 
   const handlePaste = React.useCallback(
@@ -113,9 +156,35 @@ export function InlineEditableText({
       if (!insertPlainTextAtSelection(text)) {
         ref.current?.append(document.createTextNode(text));
       }
-      onPlainTextChange(ref.current?.textContent ?? "");
+      onPlainTextChange(readEditablePlainText(ref.current));
     },
     [onPlainTextChange],
+  );
+
+  const insertEditableLineBreak = React.useCallback(() => {
+    if (!insertLineBreakAtSelection()) {
+      insertPlainTextAtSelection("\n");
+    }
+    onActivate(editTarget);
+  }, [editTarget, onActivate]);
+
+  const handleBeforeInput = React.useCallback(
+    (event: React.FormEvent<HTMLElement>) => {
+      const inputType = (
+        event.nativeEvent as InputEvent | undefined
+      )?.inputType;
+      if (
+        editable &&
+        preservesLineBreaks &&
+        (inputType === "insertParagraph" || inputType === "insertLineBreak")
+      ) {
+        event.preventDefault();
+        insertEditableLineBreak();
+        return;
+      }
+      onBeforeInput?.(event);
+    },
+    [editable, insertEditableLineBreak, onBeforeInput, preservesLineBreaks],
   );
 
   const handleClick = React.useCallback(
@@ -156,13 +225,29 @@ export function InlineEditableText({
       if (editable && event.key === "Escape") {
         event.currentTarget.blur();
       }
+      if (
+        editable &&
+        preservesLineBreaks &&
+        event.key === "Enter" &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey
+      ) {
+        event.preventDefault();
+        insertEditableLineBreak();
+        return;
+      }
       onKeyDown?.(event);
     },
-    [editable, onKeyDown],
+    [editable, insertEditableLineBreak, onKeyDown, preservesLineBreaks],
   );
 
   const Component = as as React.ElementType<any>;
   const componentRef = ref as React.Ref<any>;
+  const resizeTextArea = React.useCallback((node: HTMLTextAreaElement) => {
+    node.style.height = "auto";
+    node.style.height = `${node.scrollHeight}px`;
+  }, []);
 
   if (!editable) {
     return (
@@ -170,12 +255,85 @@ export function InlineEditableText({
         {...props}
         ref={componentRef}
         tabIndex={props.tabIndex}
+        style={mergedStyle}
         onClick={handleClick}
         onMouseDown={handleMouseDown}
         onPointerDown={handlePointerDown}
       >
         {value}
       </Component>
+    );
+  }
+
+  if (preservesLineBreaks) {
+    const textareaValue = editState === "focus" ? draftValue : value;
+    return (
+      <textarea
+        {...(props as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
+        ref={ref as React.Ref<HTMLTextAreaElement>}
+        value={textareaValue}
+        rows={1}
+        role="textbox"
+        aria-label={ariaLabel}
+        aria-multiline
+        data-resume-inline-editable="true"
+        data-inline-paper-editable="true"
+        data-inline-edit-state={editState}
+        data-paper-section-id={editTarget.sectionId}
+        data-paper-section-type={editTarget.sectionType}
+        data-paper-field-path={editTarget.fieldPath}
+        data-paper-field-kind={editTarget.fieldKind}
+        data-paper-item-index={editTarget.itemIndex}
+        data-paper-bullet-index={editTarget.bulletIndex}
+        data-paper-chip-index={editTarget.chipIndex}
+        onFocus={(event) => {
+          isFocusedRef.current = true;
+          setDraftValue(event.currentTarget.value || value);
+          setEditState("focus");
+          onActivate(editTarget);
+          resizeTextArea(event.currentTarget);
+        }}
+        onBlur={(event) => {
+          isFocusedRef.current = false;
+          const nextText = event.currentTarget.value;
+          setDraftValue(nextText);
+          onPlainTextChange(nextText);
+          if (!event.currentTarget.value.trim()) {
+            event.currentTarget.value = "";
+          }
+          setEditState("idle");
+          onDeactivate?.(editTarget);
+        }}
+        onChange={(event) => {
+          const nextText = event.currentTarget.value;
+          setDraftValue(nextText);
+          onActivate(editTarget);
+          resizeTextArea(event.currentTarget);
+          onPlainTextChange(nextText);
+        }}
+        onClick={handleClick as React.MouseEventHandler<HTMLTextAreaElement>}
+        onMouseDown={handleMouseDown as React.MouseEventHandler<HTMLTextAreaElement>}
+        onPointerDown={handlePointerDown as React.PointerEventHandler<HTMLTextAreaElement>}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.currentTarget.blur();
+          }
+          onKeyDown?.(event as unknown as React.KeyboardEvent<HTMLElement>);
+        }}
+        style={{
+          ...mergedStyle,
+          width: "100%",
+          minWidth: 0,
+          padding: 0,
+          border: 0,
+          outline: 0,
+          resize: "none",
+          overflow: "hidden",
+          background: "transparent",
+          color: "inherit",
+          font: "inherit",
+        }}
+      />
     );
   }
 
@@ -188,6 +346,7 @@ export function InlineEditableText({
       role="textbox"
       tabIndex={0}
       aria-label={ariaLabel}
+      aria-multiline={preservesLineBreaks ? true : undefined}
       data-resume-inline-editable="true"
       data-inline-paper-editable="true"
       data-inline-edit-state={editState}
@@ -208,18 +367,22 @@ export function InlineEditableText({
       }}
       onBlur={() => {
         isFocusedRef.current = false;
-        if (ref.current && !ref.current.textContent?.trim()) {
+        const text = readEditablePlainText(ref.current);
+        onPlainTextChange(text);
+        if (ref.current && !text.trim()) {
           ref.current.textContent = "";
         }
         setEditState("idle");
         onDeactivate?.(editTarget);
       }}
+      onBeforeInput={handleBeforeInput}
       onInput={handleInput}
       onPaste={handlePaste}
       onClick={handleClick}
       onMouseDown={handleMouseDown}
       onPointerDown={handlePointerDown}
       onKeyDown={handleKeyDown}
+      style={mergedStyle}
     />
   );
 }

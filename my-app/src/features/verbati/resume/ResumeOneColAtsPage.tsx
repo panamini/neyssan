@@ -39,13 +39,46 @@ type ResumeOneColAtsPageProps = {
   activeTarget?: ResumeActiveTarget | null;
   inlineEditing?: ResumeInlineEditing | null;
   sectionActions?: ResumeSectionActions | null;
+  paperAi?: ResumePaperAiState | null;
 };
 
 export type ResumeSectionActions = {
   hiddenSectionIds: readonly string[];
   onAsk: (sectionId: string) => void;
+  onAskItem?: (request: {
+    sectionId: string;
+    sectionType: string;
+    itemId: string;
+    itemIndex?: number;
+    field: "responsibilities" | "achievement" | "education";
+  }) => void;
   onToggleHidden: (sectionId: string) => void;
   onDelete: (sectionId: string) => void;
+};
+
+export type ResumePaperAiState = {
+  textSuggestion?: {
+    key: string;
+    sectionId: string;
+    sectionType: string;
+    itemId: string;
+    beforeText: string;
+    afterText: string;
+    state: "loading" | "ready" | "error" | "accepted";
+    errorMessage?: string;
+  } | null;
+  listSuggestion?: {
+    sectionId: string;
+    sectionType: string;
+    items: string[];
+    state: "loading" | "ready" | "error";
+    errorMessage?: string;
+  } | null;
+  onAcceptTextSuggestion?: (key: string) => void;
+  onDiscardTextSuggestion?: (key: string) => void;
+  onUndoTextSuggestion?: (key: string) => void;
+  onAcceptListSuggestion?: (value: string) => void;
+  onDismissListSuggestion?: (value: string) => void;
 };
 
 const experienceWrapStyle = {
@@ -67,6 +100,163 @@ const workshopVisibleListStyle = {
   listStyleType: "disc" as const,
   listStylePosition: "outside" as const,
 };
+
+const paperAiSuggestionBoxStyle = {
+  display: "grid",
+  gap: "1.4mm",
+  padding: "2mm",
+  border: "0.25mm solid var(--color-border-strong)",
+  borderRadius: "2mm",
+  background: "var(--paper)",
+  fontSize: "var(--text-body-sm-size)",
+  lineHeight: "var(--text-body-sm-line)",
+  color: "var(--color-text)",
+} satisfies React.CSSProperties;
+
+const paperAiButtonRowStyle = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "1.4mm",
+} satisfies React.CSSProperties;
+
+const paperAiButtonStyle = {
+  border: "0.25mm solid var(--color-border-strong)",
+  borderRadius: "999px",
+  background: "var(--paper)",
+  color: "var(--color-text)",
+  font: "inherit",
+  padding: "0.8mm 1.8mm",
+  cursor: "pointer",
+} satisfies React.CSSProperties;
+
+const paperAiPrimaryButtonStyle = {
+  ...paperAiButtonStyle,
+  background: "var(--color-accent)",
+  color: "var(--color-on-accent)",
+  border: "0.25mm solid var(--color-accent)",
+} satisfies React.CSSProperties;
+
+function renderPaperAiTextSuggestion(args: {
+  suggestion: NonNullable<ResumePaperAiState["textSuggestion"]>;
+  onAccept?: (key: string) => void;
+  onDiscard?: (key: string) => void;
+  onUndo?: (key: string) => void;
+}) {
+  const { suggestion } = args;
+
+  if (suggestion.state === "loading") {
+    return (
+      <div style={paperAiSuggestionBoxStyle} role="status" aria-live="polite">
+        Generating suggestion…
+      </div>
+    );
+  }
+
+  if (suggestion.state === "error") {
+    return (
+      <div style={paperAiSuggestionBoxStyle} role="status" aria-live="polite">
+        {suggestion.errorMessage ?? "AI suggestion unavailable."}
+      </div>
+    );
+  }
+
+  if (suggestion.state === "accepted") {
+    return (
+      <div style={paperAiSuggestionBoxStyle} role="status" aria-live="polite">
+        <span>Applied</span>
+        <div style={paperAiButtonRowStyle}>
+          <button
+            type="button"
+            style={paperAiButtonStyle}
+            onClick={() => args.onUndo?.(suggestion.key)}
+          >
+            Undo
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={paperAiSuggestionBoxStyle} data-paper-ai-suggestion="text">
+      <div style={{ display: "grid", gap: "1mm" }}>
+        <del style={{ color: "var(--color-text-muted)", whiteSpace: "pre-wrap" }}>
+          {suggestion.beforeText}
+        </del>
+        <span style={{ whiteSpace: "pre-wrap" }}>{suggestion.afterText}</span>
+      </div>
+      <div style={paperAiButtonRowStyle}>
+        <button
+          type="button"
+          style={paperAiPrimaryButtonStyle}
+          onClick={() => args.onAccept?.(suggestion.key)}
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          style={paperAiButtonStyle}
+          onClick={() => args.onDiscard?.(suggestion.key)}
+        >
+          Discard
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function renderPaperAiListSuggestion(args: {
+  suggestion: NonNullable<ResumePaperAiState["listSuggestion"]>;
+  onAccept?: (value: string) => void;
+  onDismiss?: (value: string) => void;
+}) {
+  const { suggestion } = args;
+
+  if (suggestion.state === "loading") {
+    return (
+      <span style={paperAiSuggestionBoxStyle} role="status" aria-live="polite">
+        Generating suggestions…
+      </span>
+    );
+  }
+
+  if (suggestion.state === "error") {
+    return (
+      <span style={paperAiSuggestionBoxStyle} role="status" aria-live="polite">
+        {suggestion.errorMessage ?? "AI suggestions unavailable."}
+      </span>
+    );
+  }
+
+  return suggestion.items.map((item) => (
+    <span
+      key={`paper-ai-list-suggestion:${item}`}
+      style={{
+        ...paperAiSuggestionBoxStyle,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "1.4mm",
+      }}
+      data-paper-ai-suggestion="list"
+    >
+      <span>{item}</span>
+      <button
+        type="button"
+        style={paperAiPrimaryButtonStyle}
+        onClick={() => args.onAccept?.(item)}
+      >
+        Save
+      </button>
+      <button
+        type="button"
+        style={paperAiButtonStyle}
+        onClick={() => args.onDismiss?.(item)}
+      >
+        Discard
+      </button>
+    </span>
+  ));
+}
 
 function formatMillimeters(value: number) {
   return `${value}mm`;
@@ -396,12 +586,59 @@ function renderExperienceContent(args: {
 }) {
   if (args.inlineEditing?.enabled) {
     let bulletIndex = 0;
+    const hasParagraphBlock = args.item.blocks.some(
+      (block) => block.kind !== "bullet",
+    );
+    const baseTarget = {
+      sectionId: args.sectionId ?? "",
+      sectionType: args.sectionType ?? "experience",
+    };
+    const paragraphText = args.item.blocks
+      .filter((block) => block.kind !== "bullet")
+      .map((block) =>
+        block.text === DRAFT_EMPTY_EXPERIENCE_DESCRIPTION ? "" : block.text,
+      )
+      .filter((text) => text.length > 0)
+      .join("\n");
 
-    const nodes = args.item.blocks.map((block, blockIndex) => {
-      const baseTarget = {
-        sectionId: args.sectionId ?? "",
-        sectionType: args.sectionType ?? "experience",
+    const nodes: React.ReactNode[] = [];
+    if (hasParagraphBlock) {
+      const editTarget = {
+        ...baseTarget,
+        fieldPath: `structuredContent.item:${args.item.id ?? ""}.responsibilities`,
+        fieldKind: "paragraph" as const,
+        itemIndex: args.itemIndex,
       };
+
+      nodes.push(
+        <InlineEditableText
+          as="div"
+          key="editable-experience-text"
+          value={paragraphText}
+          editable
+          editTarget={editTarget}
+          onActivate={(target) => args.inlineEditing?.onActivate(target)}
+          onDeactivate={args.inlineEditing?.onDeactivate}
+          ariaLabel="Edit experience text"
+          data-placeholder="Type responsibilities..."
+          onPlainTextChange={(text) =>
+            args.inlineEditing?.onFieldChange?.(editTarget, text)
+          }
+          data-preview-section={args.sectionType}
+          data-preview-section-id={args.sectionId}
+          data-preview-section-title={args.sectionTitle}
+          data-preview-item-id={`${args.item.id ?? "experience"}-text`}
+          style={{
+            margin: 0,
+            fontSize: workshopBodyFontSize,
+            lineHeight: "var(--text-body-line)",
+            ...experienceWrapStyle,
+          }}
+        />,
+      );
+    }
+
+    args.item.blocks.forEach((block, blockIndex) => {
       if (block.kind === "bullet") {
         const currentBulletIndex = bulletIndex;
         bulletIndex += 1;
@@ -413,7 +650,7 @@ function renderExperienceContent(args: {
           bulletIndex: currentBulletIndex,
         };
 
-        return (
+        nodes.push(
           <ul
             key={`editable-bullet-list-${blockIndex}`}
             style={{
@@ -465,57 +702,27 @@ function renderExperienceContent(args: {
                 }}
               />
             </li>
-          </ul>
+          </ul>,
         );
       }
-
-      const editTarget = {
-        ...baseTarget,
-        fieldPath: `structuredContent.item:${args.item.id ?? ""}.description`,
-        fieldKind: "paragraph" as const,
-        itemIndex: args.itemIndex,
-      };
-
-      return (
-        <InlineEditableText
-          key={`editable-experience-text-${blockIndex}`}
-          value={
-            block.text === DRAFT_EMPTY_EXPERIENCE_DESCRIPTION ? "" : block.text
-          }
-          editable
-          editTarget={editTarget}
-          onActivate={(target) => args.inlineEditing?.onActivate(target)}
-          onDeactivate={args.inlineEditing?.onDeactivate}
-          ariaLabel="Edit experience text"
-          data-placeholder="Type responsibilities..."
-          onPlainTextChange={(text) =>
-            args.inlineEditing?.onFieldChange?.(editTarget, text)
-          }
-          data-preview-section={args.sectionType}
-          data-preview-section-id={args.sectionId}
-          data-preview-section-title={args.sectionTitle}
-          data-preview-item-id={`${args.item.id ?? "experience"}-text-${blockIndex}`}
-          style={{
-            margin: 0,
-            fontSize: workshopBodyFontSize,
-            lineHeight: "var(--text-body-line)",
-            ...experienceWrapStyle,
-          }}
-        />
-      );
     });
 
+    if (!hasParagraphBlock) {
+      nodes.push(
+        <div key="editable-add-paragraph">
+          {renderInlineAddButton({
+            inlineEditing: args.inlineEditing,
+            sectionId: args.sectionId,
+            sectionType: args.sectionType ?? "experience",
+            itemKind: "paragraph",
+            parentItemId: args.item.id,
+            label: "Add paragraph",
+          })}
+        </div>,
+      );
+    }
+
     nodes.push(
-      <div key="editable-add-paragraph">
-        {renderInlineAddButton({
-          inlineEditing: args.inlineEditing,
-          sectionId: args.sectionId,
-          sectionType: args.sectionType ?? "experience",
-          itemKind: "paragraph",
-          parentItemId: args.item.id,
-          label: "Add paragraph",
-        })}
-      </div>,
       <div key="editable-add-bullet">
         {renderInlineAddButton({
           inlineEditing: args.inlineEditing,
@@ -938,8 +1145,10 @@ function renderFragmentContent(args: {
   activeTarget?: ResumeActiveTarget | null;
   template: ResumeTemplateDefinition;
   inlineEditing?: ResumeInlineEditing | null;
+  sectionActions?: ResumeSectionActions | null;
+  paperAi?: ResumePaperAiState | null;
 }) {
-  const { fragment, data, activeTarget, inlineEditing } = args;
+  const { fragment, data, activeTarget, inlineEditing, sectionActions, paperAi } = args;
   const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
 
   switch (fragment.kind) {
@@ -991,6 +1200,13 @@ function renderFragmentContent(args: {
         ...fragment.items.map((item, itemIndex) => {
         const itemFieldPath = (field: string) =>
           `structuredContent.item:${item.id}.${field}`;
+        const textSuggestion =
+          paperAi?.textSuggestion &&
+          paperAi.textSuggestion.sectionId === fragment.sectionId &&
+          paperAi.textSuggestion.sectionType === "experience" &&
+          paperAi.textSuggestion.itemId === item.id
+            ? paperAi.textSuggestion
+            : null;
         return (
           <PreviewItemRegion
             as="article"
@@ -1002,11 +1218,49 @@ function renderFragmentContent(args: {
             activeTarget={activeTarget}
             surface="item"
             style={{
+              position: "relative",
               display: "grid",
               gap: formatMillimeters(workshopLayout.experienceBlockGapMm),
             }}
             data-preview-row-id={item.id}
           >
+            {inlineEditing?.enabled && sectionActions?.onAskItem ? (
+              <button
+                type="button"
+                aria-label={`Improve responsibilities for ${item.role || "experience entry"}`}
+                title="Improve responsibilities with AI"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  sectionActions.onAskItem?.({
+                    sectionId: fragment.sectionId ?? "",
+                    sectionType: "experience",
+                    itemId: item.id,
+                    itemIndex,
+                    field: "responsibilities",
+                  });
+                }}
+                onMouseDown={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+                style={{
+                  position: "absolute",
+                  top: "-1mm",
+                  right: "-7mm",
+                  width: "5mm",
+                  height: "5mm",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "999px",
+                  border: "0.25mm solid var(--color-border-strong)",
+                  background: "var(--paper)",
+                  color: "var(--color-accent)",
+                  cursor: "pointer",
+                }}
+              >
+                <Wand2 size={12} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            ) : null}
             <div
               style={{
                 display: "grid",
@@ -1134,6 +1388,14 @@ function renderFragmentContent(args: {
               listGapMm: workshopLayout.listGapMm,
               inlineEditing,
             })}
+            {textSuggestion
+              ? renderPaperAiTextSuggestion({
+                  suggestion: textSuggestion,
+                  onAccept: paperAi?.onAcceptTextSuggestion,
+                  onDiscard: paperAi?.onDiscardTextSuggestion,
+                  onUndo: paperAi?.onUndoTextSuggestion,
+                })
+              : null}
           </PreviewItemRegion>
         );
         }),
@@ -1283,6 +1545,13 @@ function renderFragmentContent(args: {
         </div>,
       ];
     case "skills":
+      {
+        const listSuggestion =
+          paperAi?.listSuggestion &&
+          paperAi.listSuggestion.sectionId === fragment.sectionId &&
+          paperAi.listSuggestion.sectionType === "skills"
+            ? paperAi.listSuggestion
+            : null;
       return [
         ...fragment.items
           .filter((item) => hasVisibleText(item.name) || isActiveItemEditTarget(inlineEditing, item.id))
@@ -1332,7 +1601,17 @@ function renderFragmentContent(args: {
             label: "Add skill",
           })}
         </React.Fragment>,
+        listSuggestion ? (
+          <React.Fragment key={`${fragment.fragmentId}:paper-ai-skills`}>
+            {renderPaperAiListSuggestion({
+              suggestion: listSuggestion,
+              onAccept: paperAi?.onAcceptListSuggestion,
+              onDismiss: paperAi?.onDismissListSuggestion,
+            })}
+          </React.Fragment>
+        ) : null,
       ];
+      }
     case "selected_projects":
       return [
         ...fragment.items
@@ -1891,8 +2170,9 @@ function renderSectionFragment(args: {
   template: ResumeTemplateDefinition;
   inlineEditing?: ResumeInlineEditing | null;
   sectionActions?: ResumeSectionActions | null;
+  paperAi?: ResumePaperAiState | null;
 }) {
-  const { fragment, data, activeTarget, inlineEditing, sectionActions } = args;
+  const { fragment, data, activeTarget, inlineEditing, sectionActions, paperAi } = args;
   const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
   if (!fragment.title) {
     return renderFragmentContent({
@@ -1901,6 +2181,8 @@ function renderSectionFragment(args: {
       activeTarget,
       template: args.template,
       inlineEditing,
+      sectionActions,
+      paperAi,
     });
   }
 
@@ -1919,6 +2201,8 @@ function renderSectionFragment(args: {
           activeTarget,
           template: args.template,
           inlineEditing,
+          sectionActions,
+          paperAi,
         })}
       </div>
     ) : fragment.kind === "languages" ||
@@ -1941,6 +2225,8 @@ function renderSectionFragment(args: {
           activeTarget,
           template: args.template,
           inlineEditing,
+          sectionActions,
+          paperAi,
         })}
       </ul>
     ) : (
@@ -1956,6 +2242,8 @@ function renderSectionFragment(args: {
           activeTarget,
           template: args.template,
           inlineEditing,
+          sectionActions,
+          paperAi,
         })}
       </div>
     );
@@ -1991,6 +2279,7 @@ export function ResumeOneColAtsPage({
   activeTarget = null,
   inlineEditing = null,
   sectionActions = null,
+  paperAi = null,
 }: ResumeOneColAtsPageProps) {
   return (
     <div
@@ -2019,6 +2308,7 @@ export function ResumeOneColAtsPage({
             template,
             inlineEditing,
             sectionActions,
+            paperAi,
           })}
         </React.Fragment>
       ))}

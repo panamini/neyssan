@@ -142,7 +142,7 @@ function limitWords(value: string, maxWords: number): string {
 }
 
 function buildCvResponsibilityResponseFormat(
-  outputShape: "paragraph" | "list" | "mixed" | undefined,
+  outputShape: "paragraph" | "list" | "mixed" | "empty" | undefined,
 ) {
   if (outputShape === "paragraph") {
     return {
@@ -184,7 +184,7 @@ function buildCvResponsibilityResponseFormat(
 
 function parseExperienceResponsibilityResult(
   raw: string,
-  outputShape: "paragraph" | "list" | "mixed" | undefined,
+  outputShape: "paragraph" | "list" | "mixed" | "empty" | undefined,
 ) {
   const jsonObject = extractJsonObject(raw);
   let parsed: { paragraph?: unknown; bullets?: unknown } | null = null;
@@ -626,17 +626,10 @@ export const runCvSectionAiAction = action({
     })();
 
     const shouldUseCvMistralModel =
-      args.action === "rewrite_summary_from_profile" ||
-      args.action === "improve_summary_text" ||
       args.action === "generate_skills_suggestions" ||
       args.action === "generate_skills_from_experience" ||
       args.action === "generate_language_suggestions" ||
-      args.action === "generate_hobby_suggestions" ||
-      args.action === "improve_experience_responsibilities" ||
-      args.action === "improve_project_description" ||
-      args.action === "fix_education_entry" ||
-      args.action === "improve_achievement_line" ||
-      args.action === "improve_custom_text";
+      args.action === "generate_hobby_suggestions";
     const isSuggestionAction =
       args.action === "generate_skills_suggestions" ||
       args.action === "generate_skills_from_experience" ||
