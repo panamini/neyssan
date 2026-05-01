@@ -979,6 +979,35 @@ describe("CvForge workspace mode", () => {
     expect(container.querySelector(".dasti-preview-toolbar")).toBeNull();
   });
 
+  it("switches to preview when workspace mode storage quota is unavailable", async () => {
+    const user = userEvent.setup();
+    const quotaError = new DOMException("quota exceeded", "QuotaExceededError");
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw quotaError;
+      });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+
+    expect(container.querySelector(".dasti-cv-page-preview-stage")).toBeTruthy();
+    expect(screen.getByText("Preview host: panel")).toBeInTheDocument();
+    expect(setItemSpy).toHaveBeenCalledWith(
+      "dasti:cv-forge-workspace-mode:v1",
+      expect.stringMatching(/^(edit|preview)$/),
+    );
+
+    warnSpy.mockRestore();
+    setItemSpy.mockRestore();
+  });
+
   it("renders the PR4 skeleton stage and section-scoped CV rail tabs", async () => {
     const user = userEvent.setup();
 
@@ -2499,7 +2528,7 @@ describe("CvForge workspace mode", () => {
     expect(transformEditorSelectionMock).not.toHaveBeenCalled();
   });
 
-  it("adds PR4 section menu choices to draft state", async () => {
+  it("filters already-present singleton sections from the add section menu", async () => {
     const user = userEvent.setup();
     const importCv = vi.fn(async () => undefined);
     useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
@@ -2513,11 +2542,15 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByRole("button", { name: "Add section" }));
     expect(document.body.querySelector(".dasti-cv-add-section-menu")).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Projects" })).toBeEnabled();
-    expect(screen.getByRole("menuitem", { name: "Achievements" })).toBeEnabled();
-    expect(screen.getByRole("menuitem", { name: "Certifications" })).toBeEnabled();
-    expect(screen.getByRole("menuitem", { name: "Languages" })).toBeEnabled();
-    expect(screen.getByRole("menuitem", { name: "Hobbies" })).toBeEnabled();
     expect(screen.getByRole("menuitem", { name: "Custom section" })).toBeEnabled();
+    expect(screen.queryByRole("menuitem", { name: "Summary" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Experience" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Education" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Skills" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Achievements" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Certifications" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Languages" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Hobbies" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Publications" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Awards" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Volunteer" })).toBeNull();

@@ -487,6 +487,25 @@ function updateStructuredItemField(
   };
 }
 
+function addStructuredItemDraftDescription(
+  section: CvSection,
+  itemId: string,
+): CvSection {
+  const items = getStructuredItems(section);
+  const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
+  if (itemIndex < 0) return section;
+  const item = items[itemIndex]!;
+
+  return {
+    ...section,
+    structuredContent: [
+      ...items.slice(0, itemIndex),
+      { ...item, description: ensureRemirrorDoc(""), __draftDescription: true },
+      ...items.slice(itemIndex + 1),
+    ] as CvSection["structuredContent"],
+  };
+}
+
 function updateStructuredItemBullet(
   section: CvSection,
   itemId: string,
@@ -602,6 +621,54 @@ function removeStructuredItemBullet(
       ...items.slice(itemIndex + 1),
     ] as CvSection["structuredContent"],
   };
+}
+
+function removeStructuredItem(section: CvSection, itemId: string): CvSection {
+  const items = getStructuredItems(section);
+  return {
+    ...section,
+    structuredContent: items.filter((item) => String(item.id ?? "") !== itemId) as CvSection["structuredContent"],
+  };
+}
+
+function isStructuredItemEmptyAfterFieldChange(
+  section: CvSection,
+  itemId: string,
+  field: string,
+  text: string,
+): boolean {
+  const item = getStructuredItems(section).find(
+    (entry) => String(entry.id ?? "") === itemId,
+  );
+  if (!item) return false;
+
+  const nextItem = { ...item, [field]: text };
+  const fieldsBySectionType: Record<string, string[]> = {
+    skills: ["name"],
+    languages: ["name", "level"],
+    hobbies: ["name", "text"],
+    achievements: ["text"],
+    certifications: [
+      "certificationName",
+      "issuingOrganization",
+      "issueDate",
+      "expirationDate",
+      "credentialId",
+      "licenseNumber",
+    ],
+    projects: ["name", "title", "meta", "subtitle", "description", "summary"],
+    affiliations: [
+      "organizationName",
+      "roleOrMembershipType",
+      "dateRange",
+      "notes",
+    ],
+  };
+  const canonicalType = getCanonicalSectionType(section) ?? section.type;
+  const fields = fieldsBySectionType[canonicalType] ?? [];
+  if (fields.length === 0) return false;
+
+  return fields.every((candidate) => !collectPlainText(nextItem[candidate]).trim());
 }
 
 function updateProfileStructuredField(
@@ -849,10 +916,14 @@ function readStoredCvForgeWorkspaceMode(): CvForgeWorkspaceMode {
     return "edit";
   }
 
-  return window.localStorage.getItem(CV_FORGE_WORKSPACE_MODE_STORAGE_KEY) ===
-    "preview"
-    ? "preview"
-    : "edit";
+  try {
+    return window.localStorage.getItem(CV_FORGE_WORKSPACE_MODE_STORAGE_KEY) ===
+      "preview"
+      ? "preview"
+      : "edit";
+  } catch {
+    return "edit";
+  }
 }
 
 function readImportRecoverySession(
@@ -1808,10 +1879,16 @@ export function CvForge(): JSX.Element {
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
-    window.localStorage.setItem(
-      CV_FORGE_WORKSPACE_MODE_STORAGE_KEY,
-      workspaceMode,
-    );
+    try {
+      window.localStorage.setItem(
+        CV_FORGE_WORKSPACE_MODE_STORAGE_KEY,
+        workspaceMode === "preview" ? "preview" : "edit",
+      );
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn("[CvForge] workspace mode storage unavailable", error);
+      }
+    }
   }, [workspaceMode]);
 
   React.useEffect(() => {
@@ -2423,6 +2500,31 @@ export function CvForge(): JSX.Element {
           };
           break;
         }
+        case "paragraph": {
+          let parentItemId = request.parentItemId;
+          let parent = parentItemId
+            ? items.find(
+                (item) =>
+                  String((item as Record<string, unknown>).id ?? "") === parentItemId,
+              )
+            : undefined;
+          if (!parent && items.length > 0) {
+            parent = items[0];
+            parentItemId = String((parent as Record<string, unknown>).id ?? "");
+          }
+          if (!parentItemId) return;
+          nextSection = addStructuredItemDraftDescription(
+            section,
+            parentItemId,
+          );
+          nextTarget = {
+            sectionId: request.sectionId,
+            sectionType: "experience",
+            fieldPath: `structuredContent.item:${parentItemId}.description`,
+            fieldKind: "paragraph",
+          };
+          break;
+        }
       }
 
       const savedSection = nextSection;
@@ -2543,6 +2645,41 @@ export function CvForge(): JSX.Element {
                 persistSections(nextSections);
               }
             }
+          } else {
+          flushPendingInlineFieldChange();
+        }
+        } else if (!currentText.trim()) {
+          const itemMatch = target?.fieldPath.match(
+            /^structuredContent\.item:([^.]*)\.([^.]+)$/,
+          );
+          const baseSections =
+            latestInlineSectionsRef.current.length > 0
+              ? latestInlineSectionsRef.current
+              : currentSections;
+          const section = target ? findSectionById(baseSections, target.sectionId) : null;
+          if (
+            target &&
+            section &&
+            itemMatch &&
+            getStructuredItems(section).length > 1 &&
+            isStructuredItemEmptyAfterFieldChange(section, itemMatch[1], itemMatch[2], "")
+          ) {
+            pendingInlineFieldChangeRef.current = null;
+            if (inlineFieldChangeTimerRef.current !== null) {
+              window.clearTimeout(inlineFieldChangeTimerRef.current);
+              inlineFieldChangeTimerRef.current = null;
+            }
+
+            const nextSection = removeStructuredItem(section, itemMatch[1]);
+            const nextSections = baseSections.map((currentSection, index) =>
+              getCvSectionId(currentSection, index) === target.sectionId
+                ? nextSection
+                : currentSection,
+            );
+            latestInlineSectionsRef.current = nextSections;
+            setPendingActiveSection(nextSection);
+            setResumeActiveTarget(getSectionTarget(nextSection));
+            persistSections(nextSections);
           } else {
             flushPendingInlineFieldChange();
           }
@@ -3323,6 +3460,25 @@ export function CvForge(): JSX.Element {
     delete: handleDeleteSection,
   };
 
+  const resumeSectionActions = React.useMemo(
+    () =>
+      workspaceMode === "edit"
+        ? {
+            hiddenSectionIds,
+            onAsk: handleRunPageWandForSection,
+            onToggleHidden: handleToggleHiddenSection,
+            onDelete: handleDeleteSection,
+          }
+        : null,
+    [
+      handleDeleteSection,
+      handleRunPageWandForSection,
+      handleToggleHiddenSection,
+      hiddenSectionIds,
+      workspaceMode,
+    ],
+  );
+
   const handleAcceptAiSuggestion = React.useCallback(() => {
     if (
       !cvRailAiSuggestion ||
@@ -3717,6 +3873,7 @@ export function CvForge(): JSX.Element {
                       activeTarget={resumeActiveTarget}
                       onLinkIntent={handleResumeLinkIntent}
                       inlineEditing={resumeInlineEditing}
+                      sectionActions={resumeSectionActions}
                     />
                     {inlinePaperSelectionState ? (
                       <FloatingAiToolbar
