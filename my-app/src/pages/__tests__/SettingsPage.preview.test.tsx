@@ -54,7 +54,7 @@ vi.mock("../../components/ProposalColorPickerPopover", () => ({
   ProposalColorPickerPopover: () => null,
 }));
 
-function renderSettings(initialEntry = "/settings") {
+function renderSettings(initialEntry = "/settings?tab=docstyle") {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <SettingsPage />
@@ -95,17 +95,26 @@ describe("SettingsPage preview controls", () => {
     });
   });
 
-  it("opens the account tab from the settings query param and returns to document style", async () => {
+  it("renders skeleton settings navigation and opens account by default", async () => {
     const user = userEvent.setup();
-    renderSettings("/settings?tab=account");
+    renderSettings("/settings");
 
-    expect(screen.getByRole("heading", { name: "Sign-in and sync" })).toBeInTheDocument();
-    expect(screen.getByText("You are signed out")).toBeInTheDocument();
+    expect(screen.getAllByRole("button").slice(0, 7).map((button) => button.textContent)).toEqual([
+      "Account",
+      "Preferences",
+      "Document style",
+      "Voice & tone",
+      "Billing",
+      "Team",
+      "Danger zone",
+    ]);
+    expect(screen.getByText("Profile")).toBeInTheDocument();
+    expect(screen.getByText("Connected accounts")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Review document style" }));
+    await user.click(screen.getByRole("button", { name: "Document style" }));
 
     expect(screen.getByRole("heading", { name: "Style profiles" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Document style/ })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Document style" })).toHaveAttribute(
       "aria-current",
       "page",
     );

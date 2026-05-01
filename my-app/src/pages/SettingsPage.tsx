@@ -889,27 +889,29 @@ function SignatureSelector({
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-type SettingsTab = "docstyle" | "account";
+type SettingsTab =
+  | "account"
+  | "preferences"
+  | "docstyle"
+  | "voice"
+  | "billing"
+  | "team"
+  | "danger";
 
-const SETTINGS_TABS: Array<{
-  id: SettingsTab;
-  label: string;
-  description: string;
-}> = [
-  {
-    id: "docstyle",
-    label: "Document style",
-    description: "Tone, typography, signature, layout, and color presets.",
-  },
-  {
-    id: "account",
-    label: "Account",
-    description: "Sign-in state and sync status.",
-  },
+const SETTINGS_TABS: Array<{ id: SettingsTab; label: string }> = [
+  { id: "account", label: "Account" },
+  { id: "preferences", label: "Preferences" },
+  { id: "docstyle", label: "Document style" },
+  { id: "voice", label: "Voice & tone" },
+  { id: "billing", label: "Billing" },
+  { id: "team", label: "Team" },
+  { id: "danger", label: "Danger zone" },
 ];
 
 function normalizeSettingsTab(value: string | null): SettingsTab {
-  return value === "account" ? "account" : "docstyle";
+  return SETTINGS_TABS.some((tab) => tab.id === value)
+    ? (value as SettingsTab)
+    : "account";
 }
 
 export function SettingsPage(): JSX.Element {
@@ -1046,10 +1048,11 @@ export function SettingsPage(): JSX.Element {
     : null;
 
   const selectSettingsTab = (tab: SettingsTab) => {
-    setSearchParams(tab === "docstyle" ? { tab: "docstyle" } : { tab: "account" });
+    setSearchParams({ tab });
   };
 
   const accountDisplayName = user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? user?.username ?? "Your account";
+  const accountEmail = user?.primaryEmailAddress?.emailAddress ?? "Not connected";
 
   return (
     <div className="dasti-page-scroll" style={{ minWidth: 0 }}>
@@ -1063,29 +1066,25 @@ export function SettingsPage(): JSX.Element {
           } as React.CSSProperties
         }
       >
-        <div className="dasti-settings-layout">
-          <nav className="dasti-settings-nav" aria-label="Settings sections">
-            <p className="dasti-settings-nav__eyebrow">Settings</p>
+        <div className="dasti-settings-layout settings">
+          <nav className="settings__nav" aria-label="Settings sections">
             {SETTINGS_TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
-                className={[
-                  "dasti-settings-nav__item",
-                  activeTab === tab.id ? "dasti-settings-nav__item--active" : "",
-                ].filter(Boolean).join(" ")}
+                className="settings__nav-item"
+                data-active={activeTab === tab.id ? "true" : "false"}
                 aria-current={activeTab === tab.id ? "page" : undefined}
                 onClick={() => selectSettingsTab(tab.id)}
               >
-                <span>{tab.label}</span>
-                <small>{tab.description}</small>
+                {tab.label}
               </button>
             ))}
           </nav>
 
-          <div className="dasti-settings-layout__content">
+          <div className="settings__content">
             {activeTab === "docstyle" ? (
-              <>
+              <div className="settings__pane" data-pane="docstyle" data-active="true">
         {/* ── Header ── */}
         <div className="dasti-settings-builder-header">
           <div>
@@ -1326,72 +1325,127 @@ export function SettingsPage(): JSX.Element {
             )}
           </div>
         </div>
-              </>
-            ) : (
-              <section className="dasti-settings-account" aria-labelledby="settings-account-title">
-                <div className="dasti-settings-account__header">
-                  <p className="dasti-settings-page__subtitle">Account</p>
-                  <h1 id="settings-account-title" className="dasti-settings-page__title">
-                    Sign-in and sync
-                  </h1>
-                  <p className="dasti-settings-page__subtitle">
-                    Keep resumes, jobs, style profiles, and proposals available across sessions.
-                  </p>
-                </div>
-
-                <div className="dasti-settings-account__card">
-                  <div>
-                    <p className="dasti-settings-account__kicker">Current status</p>
-                    <h2 className="dasti-settings-account__title">
-                      {!isAuthReady
-                        ? "Checking account"
-                        : isSignedIn
-                          ? accountDisplayName
-                          : "You are signed out"}
-                    </h2>
-                    <p className="dasti-settings-account__copy">
-                      {isSignedIn
-                        ? "Cloud sync is enabled for authenticated workspace data."
-                        : "Sign in to sync drafts and libraries instead of keeping them local to this browser."}
-                    </p>
+              </div>
+            ) : activeTab === "account" ? (
+              <div className="settings__pane" data-pane="account" data-active="true">
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Profile</div>
+                    <div className="settings__group-desc">Information shown on every document you generate.</div>
                   </div>
-                  <span
-                    className={[
-                      "dasti-settings-account__badge",
-                      isSignedIn ? "dasti-settings-account__badge--signed-in" : "",
-                    ].filter(Boolean).join(" ")}
-                  >
-                    {isSignedIn ? "Signed in" : "Signed out"}
-                  </span>
+                  <div className="ds-field-group">
+                    <label className="ds-field-label" htmlFor="settings-full-name">Full name</label>
+                    <input id="settings-full-name" className="ds-field" value={isAuthReady ? accountDisplayName : "Checking account"} readOnly />
+                  </div>
+                  <div className="ds-field-group">
+                    <label className="ds-field-label" htmlFor="settings-email">Email</label>
+                    <input id="settings-email" className="ds-field" type="email" value={accountEmail} readOnly />
+                  </div>
+                  <div className="ds-field-group">
+                    <label className="ds-field-label" htmlFor="settings-headline">Headline</label>
+                    <input id="settings-headline" className="ds-field" value="Frontend engineer building craft-first product UIs." readOnly />
+                  </div>
                 </div>
-
-                <div className="dasti-settings-account__actions">
-                  {isSignedIn ? (
-                    <button
-                      type="button"
-                      className="dasti-button dasti-button--secondary dasti-button--sm"
-                      onClick={() => navigate("/sign-out")}
-                    >
-                      Sign out
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="dasti-button dasti-button--sm"
-                      onClick={() => navigate("/sign-in")}
-                    >
-                      Sign in
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="dasti-button dasti-button--secondary dasti-button--sm"
-                    onClick={() => selectSettingsTab("docstyle")}
-                  >
-                    Review document style
-                  </button>
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Connected accounts</div>
+                  </div>
+                  <div className="settings__row">
+                    <div>
+                      <div className="settings__row-label">Google</div>
+                      <div className="settings__row-desc">Used to sign in.</div>
+                    </div>
+                    {isSignedIn ? (
+                      <button type="button" className="ds-btn ds-btn--sm ds-btn--secondary" onClick={() => navigate("/sign-out")}>Disconnect</button>
+                    ) : (
+                      <button type="button" className="ds-btn ds-btn--sm ds-btn--accent" onClick={() => navigate("/sign-in")}>Connect</button>
+                    )}
+                  </div>
+                  <div className="settings__row">
+                    <div>
+                      <div className="settings__row-label">LinkedIn</div>
+                      <div className="settings__row-desc">Imports profile and applications.</div>
+                    </div>
+                    <button type="button" className="ds-btn ds-btn--sm ds-btn--accent">Connect</button>
+                  </div>
                 </div>
-              </section>
+              </div>
+            ) : activeTab === "preferences" ? (
+              <div className="settings__pane" data-pane="preferences" data-active="true">
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Appearance</div>
+                  </div>
+                  <div className="settings__row">
+                    <div>
+                      <div className="settings__row-label">Theme</div>
+                      <div className="settings__row-desc">Light, dark, or follow system.</div>
+                    </div>
+                    <div className="theme-switch">
+                      <button type="button" aria-pressed="true">Light</button>
+                      <button type="button" aria-pressed="false">Dark</button>
+                      <button type="button" aria-pressed="false">System</button>
+                    </div>
+                  </div>
+                  <div className="settings__row">
+                    <div>
+                      <div className="settings__row-label">Reduce motion</div>
+                      <div className="settings__row-desc">Disable animations and transitions.</div>
+                    </div>
+                    <input type="checkbox" aria-label="Reduce motion" readOnly />
+                  </div>
+                </div>
+              </div>
+            ) : activeTab === "voice" ? (
+              <div className="settings__pane" data-pane="voice" data-active="true">
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Default tone</div>
+                    <div className="settings__group-desc">Used when generating new proposals. You can override per document.</div>
+                  </div>
+                  <div className="row">
+                    <span className="ds-tone ds-tone--warm">Warm</span>
+                    <span className="ds-tone ds-tone--formal">Formal</span>
+                    <span className="ds-tone ds-tone--natural">Natural</span>
+                  </div>
+                </div>
+              </div>
+            ) : activeTab === "billing" ? (
+              <div className="settings__pane" data-pane="billing" data-active="true">
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Plan</div>
+                  </div>
+                  <div className="settings__row">
+                    <div>
+                      <div className="settings__row-label">Pro · €12/mo</div>
+                      <div className="settings__row-desc">Renews on May 28.</div>
+                    </div>
+                    <button type="button" className="ds-btn ds-btn--sm ds-btn--secondary">Manage</button>
+                  </div>
+                </div>
+              </div>
+            ) : activeTab === "team" ? (
+              <div className="settings__pane" data-pane="team" data-active="true">
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Members</div>
+                  </div>
+                  <div className="settings__placeholder">Solo workspace. Invite teammates from the dashboard.</div>
+                </div>
+              </div>
+            ) : (
+              <div className="settings__pane" data-pane="danger" data-active="true">
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Delete account</div>
+                    <div className="settings__group-desc">Removes all proposals, CVs, and account data. Cannot be undone.</div>
+                  </div>
+                  <div>
+                    <button type="button" className="ds-btn ds-btn--md ds-btn--danger">Delete account</button>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
