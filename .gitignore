@@ -62,6 +62,10 @@ __pycache__/
 # --- Secrets / Env (garder .env.example) -------------------------
 .env
 .env.*
+my-app/.env
+my-app/.env.local
+**/clerk-chrome/.env
+**/clerk-chrome/.env.local
 !.env.example
 !.env.local.example
 !**/.env.example
