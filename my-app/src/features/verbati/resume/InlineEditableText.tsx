@@ -54,7 +54,6 @@ type InlineEditableTextProps = Omit<
   onDeactivate?: ((target?: ActivePaperEditTarget) => void) | undefined;
   ariaLabel: string;
   onPlainTextChange: (text: string) => void;
-  renderedValue?: React.ReactNode;
   onBeforeInput?: React.FormEventHandler<HTMLElement>;
 };
 
@@ -98,7 +97,6 @@ export function InlineEditableText({
   onDeactivate,
   ariaLabel,
   onPlainTextChange,
-  renderedValue,
   onClick,
   onMouseDown,
   onPointerDown,
@@ -276,21 +274,6 @@ export function InlineEditableText({
     }
   }, [editable, editState, resizeTextArea, value]);
 
-  const beginRichDisplayEdit = React.useCallback(
-    (event?: React.SyntheticEvent<HTMLElement>) => {
-      const selection = window.getSelection();
-      if (selection && selection.toString().trim()) {
-        return;
-      }
-      isFocusedRef.current = true;
-      setDraftValue(value);
-      setEditState("focus");
-      onActivate(editTarget);
-      event?.stopPropagation();
-    },
-    [editTarget, onActivate, value],
-  );
-
   if (!editable) {
     return (
       <Component
@@ -302,58 +285,7 @@ export function InlineEditableText({
         onMouseDown={handleMouseDown}
         onPointerDown={handlePointerDown}
       >
-        {renderedValue ?? value}
-      </Component>
-    );
-  }
-
-  if (renderedValue && editState !== "focus") {
-    return (
-      <Component
-        {...props}
-        ref={componentRef}
-        role="textbox"
-        tabIndex={0}
-        aria-label={ariaLabel}
-        aria-multiline={preservesLineBreaks ? true : undefined}
-        data-resume-inline-editable="true"
-        data-inline-paper-editable="true"
-        data-inline-edit-state={editState}
-        data-paper-section-id={editTarget.sectionId}
-        data-paper-section-type={editTarget.sectionType}
-        data-paper-field-path={editTarget.fieldPath}
-        data-paper-field-kind={editTarget.fieldKind}
-        data-paper-item-index={editTarget.itemIndex}
-        data-paper-bullet-index={editTarget.bulletIndex}
-        data-paper-chip-index={editTarget.chipIndex}
-        onFocus={beginRichDisplayEdit}
-        onClick={(event: React.MouseEvent<HTMLElement>) => {
-          onClick?.(event);
-          beginRichDisplayEdit(event);
-        }}
-        onMouseDown={(event: React.MouseEvent<HTMLElement>) => {
-          if (editable) {
-            event.stopPropagation();
-          }
-          onMouseDown?.(event);
-        }}
-        onPointerDown={(event: React.PointerEvent<HTMLElement>) => {
-          if (editable) {
-            event.stopPropagation();
-          }
-          onPointerDown?.(event);
-        }}
-        onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            beginRichDisplayEdit(event);
-            return;
-          }
-          onKeyDown?.(event);
-        }}
-        style={mergedStyle}
-      >
-        {renderedValue}
+        {value}
       </Component>
     );
   }
