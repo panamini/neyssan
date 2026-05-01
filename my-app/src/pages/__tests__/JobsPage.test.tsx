@@ -539,9 +539,13 @@ describe("JobsPage", () => {
       name: "Generate proposal",
     });
     expect(generateProposalAction).toBeInTheDocument();
-    expect(generateProposalAction).toHaveClass("ds-btn", "ds-btn--md", "ds-btn--primary");
+    expect(generateProposalAction).toHaveClass(
+      "dasti-jobs-detail__header-action",
+      "dasti-jobs-detail__header-action--proposal",
+    );
+    expect(generateProposalAction).not.toHaveClass("ds-btn");
     expect(generateProposalAction.querySelector("svg")).toBeNull();
-    expect(generateProposalAction.querySelector(".ds-btn__period")).not.toBeNull();
+    expect(generateProposalAction.querySelector(".ds-btn__period")).toBeNull();
     expect(screen.queryByText("Common next steps")).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Next step" })).toBeNull();
     expect(
