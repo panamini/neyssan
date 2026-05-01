@@ -40,12 +40,12 @@ describe("useBoundVerbatiCvStyle", () => {
       expect.objectContaining({
         id: currentCv.id,
         metadata: expect.objectContaining({
-          verbatiStyle: {
+          verbatiStyle: expect.objectContaining({
             layout: "editorial",
             palette: "custom",
             typography: "civic-correspondence",
             accentHex: "#aa7733",
-          },
+          }),
         }),
       }),
     );

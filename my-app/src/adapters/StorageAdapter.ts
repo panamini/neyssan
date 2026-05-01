@@ -90,6 +90,21 @@ function isUnauthorizedProfileAccessError(error: unknown): boolean {
   return /not authorized to access this profile/i.test(message);
 }
 
+function stripLargeBackendOnlyMetadata<T extends CvDocument>(cv: T): T {
+  if (!cv.metadata || typeof cv.metadata !== "object") {
+    return cv;
+  }
+
+  const metadata = { ...(cv.metadata as Record<string, unknown>) };
+  delete metadata.importRecoverySession;
+  delete metadata.authoritativeResume;
+
+  return {
+    ...cv,
+    metadata,
+  };
+}
+
 function sanitizeBackendVerbatiStyle(
   value: unknown,
 ): {
@@ -181,7 +196,9 @@ export class ConvexStorageAdapter {
       // Keep other allowed keys (source, importedAt, confidence, filename)
       backendPayload.metadata = md;
     }
-    backendPayload.cvDocument = encodeCvDocumentForConvex(cv);
+    backendPayload.cvDocument = encodeCvDocumentForConvex(
+      stripLargeBackendOnlyMetadata(cv),
+    );
 
     // Instrument: record metadata keys and short stack to in-app debug stream before mutation
     try {
