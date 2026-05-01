@@ -1365,11 +1365,16 @@ textarea.dasti-field {
 .dasti-rich .ProseMirror {
   min-height: 120px;
   padding: var(--s3) var(--s4);
-  font-family: "Source Serif 4", serif;
+  font-family: var(--font-body-family);
   font-size: var(--ts);
   line-height: 1.75;
+  font-weight: var(--font-body-weight);
   color: var(--ti);
   outline: none;
+}
+
+.dasti-rich .ProseMirror strong {
+  font-weight: var(--font-strong-weight);
 }
 
 .dasti-rich .ProseMirror:focus,
