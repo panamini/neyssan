@@ -2820,10 +2820,33 @@ export function CvForge(): JSX.Element {
           ? latestInlineSectionsRef.current
           : currentSections;
       const section = findSectionById(baseSections, target.sectionId);
-      if (!section || target.fieldPath !== "structuredContent.0.summary") {
+      if (!section) {
         return;
       }
-      const nextSection = updateSummaryStructuredDoc(section, doc);
+      let nextSection: CvSection | null = null;
+      if (target.fieldPath === "structuredContent.0.summary") {
+        nextSection = updateSummaryStructuredDoc(section, doc);
+      } else {
+        const itemMatch = target.fieldPath.match(
+          /^structuredContent\.item:([^.]*)\.description$/,
+        );
+        if (itemMatch && target.sectionType === "projects") {
+          const itemId = itemMatch[1] ?? "";
+          const items = getStructuredItems(section);
+          const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
+          if (itemIndex >= 0) {
+            nextSection = {
+              ...section,
+              structuredContent: items.map((item, index) =>
+                index === itemIndex ? { ...item, description: doc } : item,
+              ) as CvSection["structuredContent"],
+            };
+          }
+        }
+      }
+      if (!nextSection) {
+        return;
+      }
       if (JSON.stringify(nextSection) === JSON.stringify(section)) {
         return;
       }

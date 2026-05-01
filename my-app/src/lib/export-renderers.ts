@@ -1643,7 +1643,9 @@ function renderWorkshopFragment(args: {
                   <h3 class="entry-title">${escapeHtml(item.name)}</h3>
                   <p class="entry-meta">${escapeHtml(item.meta)}</p>
                 </div>
-                <p class="entry-summary">${escapeHtml(item.description)}</p>
+                ${item.descriptionRich
+                  ? renderWorkshopRichContent(item.descriptionRich)
+                  : `<p class="entry-summary">${escapeHtml(item.description)}</p>`}
               </div>
             </article>`,
           )

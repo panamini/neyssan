@@ -1100,6 +1100,62 @@ describe("ResumeOneColAtsPage", () => {
     expect(experienceItem?.innerHTML.indexOf("</ul><p")).toBeGreaterThan(-1);
   });
 
+  it("renders project rich descriptions with paragraphs, bullets, and marks", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [],
+      projects: [
+        {
+          ...resumeMock.projects[0]!,
+          description: "Rich project\nBullet win",
+          descriptionRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [
+                  { text: "Rich ", bold: true },
+                  { text: "project", italic: true, underline: true },
+                ],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [{ runs: [{ text: "Bullet win", bold: true }] }],
+              },
+            ],
+          },
+        },
+      ],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const projectDescription = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.item:project-1.description"]',
+    );
+    expect(projectDescription).toHaveAttribute("role", "textbox");
+    expect(projectDescription?.querySelector("strong")?.textContent).toContain("Rich");
+    expect(projectDescription?.querySelector("em")?.textContent).toBe("project");
+    expect(projectDescription?.querySelector("u")?.textContent).toBe("project");
+    expect(projectDescription?.querySelector("li")?.textContent).toBe("Bullet win");
+  });
+
   it("hydrates responsibilitiesRich marks in editable workshop display mode", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const data = {
