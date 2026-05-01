@@ -14,7 +14,10 @@ import {
 } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import { buildResumeEducationDisplay } from "../features/verbati/resume/resumeEducation";
-import type { WorkshopResponsibilityTextRun } from "../features/verbati/resume/resume.types";
+import type {
+  WorkshopResponsibilitiesRichContent,
+  WorkshopResponsibilityTextRun,
+} from "../features/verbati/resume/resume.types";
 import {
   type ProposalTemplateId,
 } from "../../convex/lib/proposals/renderTemplates";
@@ -1510,8 +1513,10 @@ function renderWorkshopExperienceBlocksFallback(
   return blockMarkup.join("");
 }
 
-function renderWorkshopExperienceRichContent(
-  rich: NonNullable<WorkshopCommittedExperienceItem["responsibilitiesRich"]>,
+function renderWorkshopRichContent(
+  rich:
+    | WorkshopResponsibilitiesRichContent
+    | NonNullable<WorkshopCommittedExperienceItem["responsibilitiesRich"]>,
 ): string {
   return rich.blocks
     .map((block) => {
@@ -1547,7 +1552,7 @@ function renderWorkshopExperienceContent(
     return renderWorkshopExperienceBlocksFallback(item.blocks);
   }
 
-  return renderWorkshopExperienceRichContent(rich);
+  return renderWorkshopRichContent(rich);
 }
 
 function renderWorkshopFragment(args: {
@@ -1562,7 +1567,9 @@ function renderWorkshopFragment(args: {
     case "summary":
       return renderSection({
         block: "summary",
-        content: `<p class="entry-summary">${escapeHtml(fragment.text)}</p>`,
+        content: fragment.summaryRich
+          ? renderWorkshopRichContent(fragment.summaryRich)
+          : `<p class="entry-summary">${escapeHtml(fragment.text)}</p>`,
         locale,
         titleKey: "summary",
       });

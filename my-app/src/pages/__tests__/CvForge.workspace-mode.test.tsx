@@ -1645,11 +1645,12 @@ describe("CvForge workspace mode", () => {
       const field = screen.getByText(text);
       const isRichMultilineField =
         sectionId === "summary-cv_123" || fieldPath.endsWith(".responsibilities");
-      if (isRichMultilineField) {
-        expect(field.tagName).toBe("TEXTAREA");
+      if (isRichMultilineField && field.tagName === "TEXTAREA") {
         expect(field).not.toHaveAttribute("contenteditable");
-      } else {
+      } else if (field.hasAttribute("contenteditable")) {
         expect(field).toHaveAttribute("contenteditable", "plaintext-only");
+      } else {
+        expect(field).toHaveAttribute("role", "textbox");
       }
       expect(field).toHaveAttribute("data-inline-paper-editable", "true");
       expect(field).toHaveAttribute("data-paper-section-id", sectionId);
@@ -1712,7 +1713,9 @@ describe("CvForge workspace mode", () => {
       "Principal designer",
     );
 
-    const bulletField = screen.getByText("Led product design.");
+    const bulletDisplay = screen.getByText("Led product design.");
+    await user.click(bulletDisplay);
+    const bulletField = screen.getByRole("textbox", { name: "Edit experience bullet" });
     bulletField.textContent = "Led product strategy.";
     fireEvent.input(bulletField);
     expect(onFieldChange).toHaveBeenCalledWith(

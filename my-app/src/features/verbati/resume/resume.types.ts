@@ -137,6 +137,7 @@ export type ResumeData = {
   name: string;
   title: string;
   summary: string;
+  summaryRich?: WorkshopResponsibilitiesRichContent;
   photoUrl?: string;
   metadata: ResumeMetaItem[];
   contact: ResumeMetaItem[];

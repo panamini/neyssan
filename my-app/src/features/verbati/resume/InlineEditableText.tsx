@@ -52,6 +52,7 @@ type InlineEditableTextProps = Omit<
   onDeactivate?: ((target?: ActivePaperEditTarget) => void) | undefined;
   ariaLabel: string;
   onPlainTextChange: (text: string) => void;
+  renderedValue?: React.ReactNode;
   onBeforeInput?: React.FormEventHandler<HTMLElement>;
 };
 
@@ -95,6 +96,7 @@ export function InlineEditableText({
   onDeactivate,
   ariaLabel,
   onPlainTextChange,
+  renderedValue,
   onClick,
   onMouseDown,
   onPointerDown,
@@ -246,6 +248,47 @@ export function InlineEditableText({
     node.style.height = `${node.scrollHeight}px`;
   }, []);
 
+  React.useLayoutEffect(() => {
+    if (!editable || editState !== "focus") return;
+    const node = ref.current;
+    if (!node) return;
+    if (!(node instanceof HTMLTextAreaElement) && node.textContent !== value) {
+      node.textContent = value;
+    }
+    if (document.activeElement !== node) {
+      node.focus({ preventScroll: true });
+    }
+    if (node instanceof HTMLTextAreaElement) {
+      const length = node.value.length;
+      node.setSelectionRange(length, length);
+      resizeTextArea(node);
+      return;
+    }
+    const selection = window.getSelection();
+    if (selection && node.childNodes.length > 0) {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  }, [editable, editState, resizeTextArea, value]);
+
+  const beginRichDisplayEdit = React.useCallback(
+    (event?: React.SyntheticEvent<HTMLElement>) => {
+      const selection = window.getSelection();
+      if (selection && selection.toString().trim()) {
+        return;
+      }
+      isFocusedRef.current = true;
+      setDraftValue(value);
+      setEditState("focus");
+      onActivate(editTarget);
+      event?.stopPropagation();
+    },
+    [editTarget, onActivate, value],
+  );
+
   if (!editable) {
     return (
       <Component
@@ -257,7 +300,58 @@ export function InlineEditableText({
         onMouseDown={handleMouseDown}
         onPointerDown={handlePointerDown}
       >
-        {value}
+        {renderedValue ?? value}
+      </Component>
+    );
+  }
+
+  if (renderedValue && editState !== "focus") {
+    return (
+      <Component
+        {...props}
+        ref={componentRef}
+        role="textbox"
+        tabIndex={0}
+        aria-label={ariaLabel}
+        aria-multiline={preservesLineBreaks ? true : undefined}
+        data-resume-inline-editable="true"
+        data-inline-paper-editable="true"
+        data-inline-edit-state={editState}
+        data-paper-section-id={editTarget.sectionId}
+        data-paper-section-type={editTarget.sectionType}
+        data-paper-field-path={editTarget.fieldPath}
+        data-paper-field-kind={editTarget.fieldKind}
+        data-paper-item-index={editTarget.itemIndex}
+        data-paper-bullet-index={editTarget.bulletIndex}
+        data-paper-chip-index={editTarget.chipIndex}
+        onFocus={beginRichDisplayEdit}
+        onClick={(event: React.MouseEvent<HTMLElement>) => {
+          onClick?.(event);
+          beginRichDisplayEdit(event);
+        }}
+        onMouseDown={(event: React.MouseEvent<HTMLElement>) => {
+          if (editable) {
+            event.stopPropagation();
+          }
+          onMouseDown?.(event);
+        }}
+        onPointerDown={(event: React.PointerEvent<HTMLElement>) => {
+          if (editable) {
+            event.stopPropagation();
+          }
+          onPointerDown?.(event);
+        }}
+        onKeyDown={(event: React.KeyboardEvent<HTMLElement>) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            beginRichDisplayEdit(event);
+            return;
+          }
+          onKeyDown?.(event);
+        }}
+        style={mergedStyle}
+      >
+        {renderedValue}
       </Component>
     );
   }
@@ -294,7 +388,9 @@ export function InlineEditableText({
           isFocusedRef.current = false;
           const nextText = event.currentTarget.value;
           setDraftValue(nextText);
-          onPlainTextChange(nextText);
+          if (nextText !== value) {
+            onPlainTextChange(nextText);
+          }
           if (!event.currentTarget.value.trim()) {
             event.currentTarget.value = "";
           }
@@ -365,7 +461,9 @@ export function InlineEditableText({
       onBlur={() => {
         isFocusedRef.current = false;
         const text = readEditablePlainText(ref.current);
-        onPlainTextChange(text);
+        if (text !== value) {
+          onPlainTextChange(text);
+        }
         if (ref.current && !text.trim()) {
           ref.current.textContent = "";
         }
