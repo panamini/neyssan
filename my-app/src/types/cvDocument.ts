@@ -82,6 +82,7 @@ export interface IExperienceItem {
   location?: string;
   responsibilities?: RemirrorJSON | string | string[];
   responsibilityBullets?: string[];
+  __draftResponsibilityBulletCount?: number;
   /** Optional free-form description for experience (v1 modal) */
   description?: RemirrorJSON | string;
   achievements?: string[];
@@ -119,6 +120,7 @@ export interface IProfileItem {
   website?: string;
   desiredPosition?: string;
   location?: string;
+  __draftContactFields?: string[];
 }
 
 /** Summary (free-text) */

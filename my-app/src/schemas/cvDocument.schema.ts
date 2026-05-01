@@ -112,6 +112,7 @@ const _IExperienceItemBase = z.object({
   location: z.string().optional(),
   responsibilities: z.union([RemirrorJSONSchema, z.string(), z.array(z.string())]).optional(),
   responsibilityBullets: z.array(z.string()).optional(),
+  __draftResponsibilityBulletCount: z.number().optional(),
   achievements: z.array(z.string()).optional(),
 });
 export const IExperienceItemSchema = _IExperienceItemBase.passthrough();
@@ -171,6 +172,7 @@ export const ProfileItemSchema = z
     website: z.string().optional(),
     desiredPosition: z.string().optional(),
     location: z.string().optional(),
+    __draftContactFields: z.array(z.string()).optional(),
   })
   .passthrough();
 export const ProfileItemSchemaStrict = ProfileItemSchema.strict();

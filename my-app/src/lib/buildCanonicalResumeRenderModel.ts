@@ -17,8 +17,9 @@ function isNotNull<T>(value: T | null): value is T {
 
 export function buildCanonicalResumeRenderModelFromCv(
   document: CvDocument,
+  options?: { includeDrafts?: boolean },
 ): ResumeData {
-  return mapCvDocumentToResumeData(document);
+  return mapCvDocumentToResumeData(document, options);
 }
 
 export function buildCanonicalResumeRenderModelFromAuthoritative(
