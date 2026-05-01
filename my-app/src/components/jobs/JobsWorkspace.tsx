@@ -229,6 +229,8 @@ type JobsPageDetail = {
   reviewItems: JobsPageReviewItem[];
 } | null;
 
+const JOBS_SPLIT_VIEW_COLLAPSE_WIDTH = 1024;
+
 type JobsSortOrder = "recent" | "oldest" | "title" | "company";
 type JobsMatchFilter =
   | "worth_plus"
@@ -1479,7 +1481,7 @@ function JobsPageContent(): JSX.Element {
     sortOrder,
   ]);
 
-  const isMobileJobsLayout = viewportWidth < 760;
+  const isMobileJobsLayout = viewportWidth < JOBS_SPLIT_VIEW_COLLAPSE_WIDTH;
 
   React.useEffect(() => {
     if (
