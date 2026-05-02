@@ -5,7 +5,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import {
   Check,
-  ColorWheel,
   Feather,
   FileImage,
   Pen,
@@ -26,7 +25,6 @@ import {
   type ProposalPaletteId,
 } from "../lib/proposal-style-display";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
-import { ProposalColorPickerPopover } from "../components/ProposalColorPickerPopover";
 import {
   VERBATI_FONT_PAIR_OPTIONS,
   type VerbatiFontPairId,
@@ -40,6 +38,8 @@ import type {
   StyleFamilyId,
   VerbatiStylePreset,
 } from "../features/verbati/types";
+import { useMotionPreference } from "../lib/motion-preference";
+import { useThemeMode, type ThemePreference } from "../lib/theme-mode";
 import {
   DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
   PROPOSAL_SIGNATURE_FONT_OPTIONS,
@@ -51,6 +51,15 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SlotIndex = 1 | 2 | 3;
+
+type SettingsAccentOption = {
+  id: string;
+  label: string;
+  swatch: string;
+  paletteOverride: ProposalPaletteId | null;
+  accentHex: string | null;
+};
+
 type StoredVerbatiStyle = Omit<VerbatiStylePreset, "accentHex"> & {
   accentHex?: string | null;
 };
@@ -86,6 +95,21 @@ const EMPTY_PRESET: PresetSlot = {
   voicePreset: null,
   signatureSettings: DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
 };
+
+const SETTINGS_THEME_OPTIONS: Array<{ id: ThemePreference; label: string }> = [
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+  { id: "system", label: "System" },
+];
+
+const SETTINGS_ACCENT_OPTIONS: SettingsAccentOption[] = [
+  { id: "terre", label: "Terre", swatch: "#A84E2E", paletteOverride: null, accentHex: "#A84E2E" },
+  { id: "ink", label: "Ink", swatch: "#0F0C08", paletteOverride: null, accentHex: "#0F0C08" },
+  { id: "cobalt", label: "Cobalt", swatch: "#2A78D6", paletteOverride: null, accentHex: "#2A78D6" },
+  { id: "sauge", label: "Sage", swatch: "#3B6E4E", paletteOverride: "sauge", accentHex: null },
+  { id: "plum", label: "Plum", swatch: "#7A4FA0", paletteOverride: null, accentHex: "#7A4FA0" },
+  { id: "ochre", label: "Ochre", swatch: "#B8843A", paletteOverride: "ocre", accentHex: null },
+];
 
 // ─── Tone options ──────────────────────────────────────────────────────────────
 
@@ -244,7 +268,7 @@ function StyleMiniPreview({ styleId }: { styleId: StyleOption["id"] }) {
 
 const ZONE_INDICES = Array.from({ length: 25 }, (_, i) => i + 1);
 
-function StyleTiltCard({
+function SettingsLayoutCard({
   option,
   active,
   onSelect,
@@ -254,46 +278,45 @@ function StyleTiltCard({
   onSelect: () => void;
 }) {
   return (
-    <div className="dasti-style-scene">
-      {/* 25 invisible hotspot zones — siblings of the card for CSS :has() */}
-      {/* Ghost sizer — invisible, stays in flow, gives the scene its height */}
-      <div className="dasti-style-sizer" aria-hidden="true">
-        <span className="dasti-settings-style-card__top">
-          <span className="dasti-settings-style-card__label">{option.label}</span>
-        </span>
-        <span className="dasti-settings-style-card__description">{option.description}</span>
-      </div>
-
-      {/* Zone overlay — sits above card, drives CSS :has() tilt */}
-      <div className="dasti-style-zones" aria-hidden="true" onClick={onSelect}>
-        {ZONE_INDICES.map((n) => (
-          <span key={n} className={`dasti-style-zone dasti-style-zone-${n}`} />
-        ))}
-      </div>
-
-      {/* Actual card — absolute, never affects layout */}
-      <button
-        type="button"
-        className={[
-          "dasti-settings-style-card",
-          active ? "dasti-settings-style-card--active" : "",
-        ].filter(Boolean).join(" ")}
-        aria-pressed={active}
-        onClick={onSelect}
-      >
-        <span className="dasti-settings-style-card__top">
-          <span className="dasti-settings-style-card__label">{option.label}</span>
-          {active && (
-            <span className="dasti-settings-style-card__indicator" aria-hidden="true">
-              <Check size={10} strokeWidth={2.6} />
+    <button
+      type="button"
+      className="layout-card"
+      data-selected={active ? "true" : "false"}
+      aria-pressed={active}
+      onClick={onSelect}
+    >
+      <span className="layout-card__preview" data-layout={option.id} aria-hidden="true">
+        {option.id === "workshop" ? (
+          <>
+            <span className="layout-card__column">
+              <span className="layout-card__line layout-card__line--title" />
+              <span className="layout-card__line layout-card__line--short" />
+              <span className="layout-card__line" />
+              <span className="layout-card__line layout-card__line--med" />
             </span>
-          )}
-        </span>
-        <span className="dasti-settings-style-card__description">
-          {option.description}
-        </span>
-      </button>
-    </div>
+            <span className="layout-card__column layout-card__column--wide">
+              <span className="layout-card__line layout-card__line--med" />
+              <span className="layout-card__line" />
+              <span className="layout-card__line layout-card__line--short" />
+              <span className="layout-card__line" />
+              <span className="layout-card__line layout-card__line--med" />
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="layout-card__line layout-card__line--title layout-card__line--med" />
+            <span className="layout-card__line layout-card__line--short" />
+            <span className="layout-card__line layout-card__line--accent" />
+            <span className="layout-card__line" />
+            <span className="layout-card__line layout-card__line--short" />
+            <span className="layout-card__line layout-card__line--accent" />
+            <span className="layout-card__line" />
+            <span className="layout-card__line layout-card__line--med" />
+          </>
+        )}
+      </span>
+      <span className="layout-card__name">{option.label}</span>
+    </button>
   );
 }
 
@@ -765,23 +788,21 @@ function SignatureSelector({
 
   return (
     <div className="dasti-settings-signature" role="group" aria-label="Signature">
-      <div className="dasti-settings-signature-grid">
+      <div className="sig-grid">
         <button
           type="button"
-          className={[
-            "dasti-settings-signature-card",
-            settings.mode === "auto" ? "dasti-settings-signature-card--active" : "",
-          ].filter(Boolean).join(" ")}
+          className="sig-card"
+          data-selected={settings.mode === "auto" ? "true" : "false"}
           aria-pressed={settings.mode === "auto"}
           onClick={() => onChange(DEFAULT_PROPOSAL_SIGNATURE_SETTINGS)}
         >
-          <span className="dasti-settings-signature-card__label">Auto</span>
           <span
-            className="dasti-settings-signature-card__sample"
+            className="sig-card__sig sig-card__sig--auto"
             style={{ fontFamily: bodyFontFamily }}
           >
             {SIGNATURE_SAMPLE_NAME}
           </span>
+          <span className="sig-card__name">Auto — generated from your name</span>
         </button>
 
         {PROPOSAL_SIGNATURE_FONT_OPTIONS.map((option) => {
@@ -790,10 +811,8 @@ function SignatureSelector({
             <button
               key={option.id}
               type="button"
-              className={[
-                "dasti-settings-signature-card",
-                active ? "dasti-settings-signature-card--active" : "",
-              ].filter(Boolean).join(" ")}
+              className="sig-card"
+              data-selected={active ? "true" : "false"}
               aria-label={`${option.label} signature`}
               aria-pressed={active}
               onClick={() =>
@@ -804,15 +823,13 @@ function SignatureSelector({
                 })
               }
             >
-              <span className="dasti-settings-signature-card__label">
-                {option.label}
-              </span>
               <span
-                className="dasti-settings-signature-card__sample"
+                className="sig-card__sig sig-card__sig--font"
                 style={{ fontFamily: option.fontFamily }}
               >
                 {SIGNATURE_SAMPLE_NAME}
               </span>
+              <span className="sig-card__name">{option.label} — signature font</span>
             </button>
           );
         })}
@@ -918,6 +935,11 @@ export function SettingsPage(): JSX.Element {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = normalizeSettingsTab(searchParams.get("tab"));
+  const { preference: themePreference, setPreference: setThemePreference } = useThemeMode();
+  const {
+    preference: motionPreference,
+    setPreference: setMotionPreference,
+  } = useMotionPreference();
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const isAuthReady = isAuthLoaded !== false;
@@ -934,8 +956,6 @@ export function SettingsPage(): JSX.Element {
   });
   const [activeSlot, setActiveSlot] = React.useState<SlotIndex>(1);
   const [savedTick, setSavedTick] = React.useState(false);
-  const [isColorPickerOpen, setIsColorPickerOpen] = React.useState(false);
-  const colorPickerAnchorRef = React.useRef<HTMLButtonElement>(null);
   const savedTickTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydrated = React.useRef(false);
@@ -1043,10 +1063,6 @@ export function SettingsPage(): JSX.Element {
     VERBATI_FONT_PAIR_OPTIONS.find((fontPair) => fontPair.id === currentPreset.fontPairId) ??
     DEFAULT_FONT_PAIR_OPTION;
 
-  const selectedPaletteOption = currentPreset.paletteOverride
-    ? PROPOSAL_PALETTE_OPTIONS.find((p) => p.id === currentPreset.paletteOverride) ?? null
-    : null;
-
   const selectSettingsTab = (tab: SettingsTab) => {
     setSearchParams({ tab });
   };
@@ -1104,29 +1120,8 @@ export function SettingsPage(): JSX.Element {
         {/* ── 2-column builder ── */}
         <div className="dasti-settings-builder">
 
-          {/* Left — slot rail + ingredient panel */}
+          {/* Left — ingredient panel */}
           <div className="dasti-settings-builder__left">
-
-            {/* Slot rail */}
-            <div
-              className="dasti-settings-slot-rail"
-              role="group"
-              aria-label="Style preset slots"
-            >
-              {([1, 2, 3] as SlotIndex[]).map((slot) => (
-                <SlotCard
-                  key={slot}
-                  slotIndex={slot}
-                  preset={localPresets[slot]}
-                  isEditing={editingSlot === slot}
-                  isActive={activeSlot === slot}
-                  onSelect={() => setEditingSlot(slot)}
-                  onSetActive={(e) => { e.stopPropagation(); void handleSetActive(slot); }}
-                />
-              ))}
-            </div>
-
-            {/* Ingredient panel */}
             <div className="dasti-settings-appearance-toolbar dasti-toolbar-drawer-surface">
 
               {/* Typography */}
@@ -1157,13 +1152,9 @@ export function SettingsPage(): JSX.Element {
               {/* Layout */}
               <div className="dasti-settings-appearance-group">
                 <div className="dasti-settings-appearance-label">Layout</div>
-                <div
-                  className="dasti-settings-style-grid"
-                  role="group"
-                  aria-label="Layout"
-                >
+                <div className="layout-grid" role="group" aria-label="Layout">
                   {STYLE_OPTIONS.map((option) => (
-                    <StyleTiltCard
+                    <SettingsLayoutCard
                       key={option.id}
                       option={option}
                       active={resolvePresetLayoutSelection(currentPreset) === option.id}
@@ -1191,69 +1182,31 @@ export function SettingsPage(): JSX.Element {
               {/* Color */}
               <div className="dasti-settings-appearance-group">
                 <div className="dasti-settings-appearance-label">Color</div>
-                <div
-                  className="dasti-settings-section__row dasti-settings-section__row--palette"
-                  role="group"
-                  aria-label="Color"
-                >
-                  <button
-                    type="button"
-                    className={[
-                      "dasti-settings-swatch dasti-settings-swatch--auto",
-                      !currentPreset.paletteOverride && !currentPreset.accentHex
-                        ? "dasti-settings-swatch--active"
-                        : "",
-                    ].filter(Boolean).join(" ")}
-                    aria-pressed={!currentPreset.paletteOverride && !currentPreset.accentHex}
-                    onClick={() => updatePreset({ paletteOverride: null, accentHex: null })}
-                    title="Auto. Follows the style."
-                    aria-label="Automatic palette"
-                  >
-                    <Wand2 size={14} strokeWidth={1.9} aria-hidden="true" />
-                  </button>
+                <div className="style-swatches" role="group" aria-label="Color">
+                  {SETTINGS_ACCENT_OPTIONS.map((option) => {
+                    const active = option.accentHex
+                      ? currentPreset.accentHex === option.accentHex
+                      : currentPreset.paletteOverride === option.paletteOverride;
 
-                  {PROPOSAL_PALETTE_OPTIONS.map((pal) => {
-                    const active = currentPreset.paletteOverride === pal.id;
                     return (
                       <button
-                        key={pal.id}
+                        key={option.id}
                         type="button"
-                        className={[
-                          "dasti-settings-swatch",
-                          active ? "dasti-settings-swatch--active" : "",
-                        ].filter(Boolean).join(" ")}
+                        className="style-swatch"
+                        data-selected={active ? "true" : "false"}
+                        aria-label={option.label}
                         aria-pressed={active}
-                        onClick={() => updatePreset({ paletteOverride: pal.id as ProposalPaletteId, accentHex: null })}
-                        title={pal.label}
-                        aria-label={pal.label}
-                        style={{ "--swatch-color": pal.color } as React.CSSProperties}
+                        onClick={() =>
+                          updatePreset({
+                            paletteOverride: option.paletteOverride,
+                            accentHex: option.accentHex,
+                          })
+                        }
+                        title={option.label}
+                        style={{ "--swatch-color": option.swatch } as React.CSSProperties}
                       />
                     );
                   })}
-
-                  <button
-                    ref={colorPickerAnchorRef}
-                    type="button"
-                    className={[
-                      "dasti-settings-swatch",
-                      "dasti-settings-swatch--custom",
-                      currentPreset.accentHex ? "" : "dasti-settings-swatch--icon",
-                      currentPreset.accentHex ? "dasti-settings-swatch--active" : "",
-                    ].filter(Boolean).join(" ")}
-                    aria-pressed={currentPreset.accentHex !== null}
-                    onClick={() => setIsColorPickerOpen(true)}
-                    title={currentPreset.accentHex ?? "Custom color"}
-                    aria-label="Custom accent color"
-                    style={
-                      currentPreset.accentHex
-                        ? ({ "--swatch-color": currentPreset.accentHex } as React.CSSProperties)
-                        : undefined
-                    }
-                  >
-                    {!currentPreset.accentHex ? (
-                      <ColorWheel size={16} className="dasti-settings-swatch__wheel" aria-hidden="true" />
-                    ) : null}
-                  </button>
                 </div>
               </div>
 
@@ -1297,8 +1250,25 @@ export function SettingsPage(): JSX.Element {
             </div>
           </div>
 
-          {/* Right — sticky hero preview */}
+          {/* Right — sticky preset rail + hero preview */}
           <div className="dasti-settings-builder__right" aria-live="polite" aria-atomic="true">
+            <div
+              className="dasti-settings-slot-rail"
+              role="group"
+              aria-label="Style preset slots"
+            >
+              {([1, 2, 3] as SlotIndex[]).map((slot) => (
+                <SlotCard
+                  key={slot}
+                  slotIndex={slot}
+                  preset={localPresets[slot]}
+                  isEditing={editingSlot === slot}
+                  isActive={activeSlot === slot}
+                  onSelect={() => setEditingSlot(slot)}
+                  onSetActive={(e) => { e.stopPropagation(); void handleSetActive(slot); }}
+                />
+              ))}
+            </div>
             <div className="dasti-settings-builder__preview-label">
               {localPresets[editingSlot].name || DEFAULT_SLOT_NAMES[editingSlot]}
               {activeSlot === editingSlot && (
@@ -1381,10 +1351,17 @@ export function SettingsPage(): JSX.Element {
                       <div className="settings__row-label">Theme</div>
                       <div className="settings__row-desc">Light, dark, or follow system.</div>
                     </div>
-                    <div className="theme-switch">
-                      <button type="button" aria-pressed="true">Light</button>
-                      <button type="button" aria-pressed="false">Dark</button>
-                      <button type="button" aria-pressed="false">System</button>
+                    <div className="theme-switch" role="group" aria-label="Theme">
+                      {SETTINGS_THEME_OPTIONS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          aria-pressed={themePreference === option.id}
+                          onClick={() => setThemePreference(option.id)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
                   <div className="settings__row">
@@ -1392,7 +1369,14 @@ export function SettingsPage(): JSX.Element {
                       <div className="settings__row-label">Reduce motion</div>
                       <div className="settings__row-desc">Disable animations and transitions.</div>
                     </div>
-                    <input type="checkbox" aria-label="Reduce motion" readOnly />
+                    <input
+                      type="checkbox"
+                      aria-label="Reduce motion"
+                      checked={motionPreference === "reduced"}
+                      onChange={(event) =>
+                        setMotionPreference(event.currentTarget.checked ? "reduced" : "system")
+                      }
+                    />
                   </div>
                 </div>
               </div>
@@ -1403,7 +1387,7 @@ export function SettingsPage(): JSX.Element {
                     <div className="settings__group-title">Default tone</div>
                     <div className="settings__group-desc">Used when generating new proposals. You can override per document.</div>
                   </div>
-                  <div className="row">
+                  <div className="settings__tone-row">
                     <span className="ds-tone ds-tone--warm">Warm</span>
                     <span className="ds-tone ds-tone--formal">Formal</span>
                     <span className="ds-tone ds-tone--natural">Natural</span>
@@ -1451,20 +1435,6 @@ export function SettingsPage(): JSX.Element {
         </div>
       </div>
 
-      <ProposalColorPickerPopover
-        currentHex={currentPreset.accentHex}
-        onHexChange={(hex) => {
-          updatePreset({ accentHex: hex, paletteOverride: hex ? null : currentPreset.paletteOverride });
-        }}
-        anchorRef={colorPickerAnchorRef}
-        isOpen={isColorPickerOpen}
-        onClose={() => setIsColorPickerOpen(false)}
-        onClear={
-          currentPreset.accentHex !== null
-            ? () => updatePreset({ accentHex: null })
-            : undefined
-        }
-      />
     </div>
   );
 }

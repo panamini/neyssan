@@ -51,6 +51,10 @@ import {
   readQuickStartRouteState,
 } from "./lib/quick-start-routing";
 import { resolveCommandShortcutLabel } from "./lib/app-topbar";
+import {
+  applyMotionPreference,
+  readStoredMotionPreference,
+} from "./lib/motion-preference";
 import { useThemeMode } from "./lib/theme-mode";
 import { User } from "./lib/icons";
 
@@ -367,6 +371,10 @@ function AppShell(): JSX.Element {
   const [commandPaletteOpen, setCommandPaletteOpen] = React.useState(false);
   const [onboardingReplayOpen, setOnboardingReplayOpen] = React.useState(false);
   const { mode: themeMode, toggle: toggleTheme } = useThemeMode();
+
+  React.useEffect(() => {
+    applyMotionPreference(readStoredMotionPreference());
+  }, []);
 
   React.useEffect(() => {
     if (!import.meta.env.DEV) {
