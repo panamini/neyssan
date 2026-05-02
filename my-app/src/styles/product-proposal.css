@@ -7656,12 +7656,17 @@
   }
 
   .dasti-proposal-skeleton-rail {
+    order: 1;
     position: static;
     width: 100%;
     max-height: none;
     overflow: visible;
     border: 1px solid var(--border-soft);
     padding: var(--space-4);
+  }
+
+  .dasti-proposal-skeleton-forge__stage {
+    order: 2;
   }
 
   .dasti-proposal-skeleton-stage__bar {
