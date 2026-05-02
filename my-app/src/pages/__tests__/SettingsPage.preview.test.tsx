@@ -66,6 +66,9 @@ describe("SettingsPage preview controls", () => {
   beforeEach(() => {
     savePresetMock.mockClear();
     setActivePresetMock.mockClear();
+    window.localStorage.clear();
+    document.documentElement.dataset.theme = "light";
+    document.documentElement.dataset.reduceMotion = "false";
     presetsQueryMock.mockReturnValue({
       activeSlot: 1,
       preset1: {
@@ -118,6 +121,28 @@ describe("SettingsPage preview controls", () => {
       "aria-current",
       "page",
     );
+  });
+
+  it("activates theme and reduce-motion preferences from preferences", async () => {
+    const user = userEvent.setup();
+    renderSettings("/settings?tab=preferences");
+
+    await user.click(screen.getByRole("button", { name: "Dark" }));
+    expect(screen.getByRole("button", { name: "Dark" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(document.documentElement.dataset.theme).toBe("dark");
+
+    await user.click(screen.getByRole("button", { name: "System" }));
+    expect(screen.getByRole("button", { name: "System" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: "Reduce motion" }));
+    expect(screen.getByRole("checkbox", { name: "Reduce motion" })).toBeChecked();
+    expect(document.documentElement.dataset.reduceMotion).toBe("true");
   });
 
   it("updates the live preview when selecting a different font pair", async () => {
@@ -206,7 +231,7 @@ describe("SettingsPage preview controls", () => {
     const previewBadge = () =>
       container.querySelector(".dasti-settings-hero-preview__style-badge");
     const styleCardLabels = Array.from(
-      container.querySelectorAll(".dasti-settings-style-card__label"),
+      container.querySelectorAll(".layout-card__name"),
     ).map((element) => element.textContent);
     const uniqueStyleCardLabels = Array.from(new Set(styleCardLabels));
 
@@ -219,9 +244,7 @@ describe("SettingsPage preview controls", () => {
     const { container } = renderSettings();
     const workshopStyleButton = screen
       .getAllByRole("button", { name: /Workshop/ })
-      .find((element) =>
-        element.className.includes("dasti-settings-style-card"),
-      );
+      .find((element) => element.className.includes("layout-card"));
     const previewBadge = () =>
       container.querySelector(".dasti-settings-hero-preview__style-badge");
 
@@ -253,10 +276,10 @@ describe("SettingsPage preview controls", () => {
     const { container } = renderSettings();
 
     expect(
-      Array.from(
-        container.querySelectorAll(".dasti-settings-style-card__label"),
-      ).map((element) => element.textContent),
-    ).toEqual(["Auto", "Auto", "Workshop", "Workshop"]);
+      Array.from(container.querySelectorAll(".layout-card__name")).map(
+        (element) => element.textContent,
+      ),
+    ).toEqual(["Auto", "Workshop"]);
   });
 
   it("updates the hero preview tilt when the pointer moves", async () => {
