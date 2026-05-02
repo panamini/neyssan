@@ -1776,6 +1776,11 @@
   outline: none;
 }
 
+.app-topbar__cmdk-icon {
+  display: none;
+  flex: 0 0 auto;
+}
+
 .app-topbar__kbd {
   padding: 2px 6px;
   border-radius: var(--radius-inline);
@@ -2482,17 +2487,25 @@
   font-weight: 650;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1023px) {
   .app-topbar {
     gap: var(--space-2);
   }
 
   .app-topbar__cmdk {
-    flex-basis: auto;
+    flex: 0 0 var(--control-sm);
+    inline-size: var(--control-sm);
     min-width: 0;
+    justify-content: center;
+    padding-inline: 0;
   }
 
-  .app-topbar__cmdk span:first-child,
+  .app-topbar__cmdk-icon {
+    display: block;
+  }
+
+  .app-topbar__cmdk-label,
+  .app-topbar__kbd,
   .app-theme-switch {
     display: none;
   }

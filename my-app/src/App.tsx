@@ -55,7 +55,7 @@ import {
   applyMotionPreference,
   readStoredMotionPreference,
 } from "./lib/motion-preference";
-import { User } from "./lib/icons";
+import { MagnifyingGlass, User } from "./lib/icons";
 import { useThemeMode } from "./lib/theme-mode";
 
 function normalizeTitle(value: unknown): string {
@@ -305,10 +305,12 @@ function AppTopbar({
       <button
         type="button"
         className="app-topbar__cmdk"
+        aria-label="Open command palette"
         aria-expanded={commandPaletteOpen}
         onClick={onOpenCommandPalette}
       >
-        <span>Search or run command</span>
+        <MagnifyingGlass className="app-topbar__cmdk-icon" size={15} aria-hidden="true" />
+        <span className="app-topbar__cmdk-label">Search or run command</span>
         <span className="app-topbar__kbd">{shortcutLabel}</span>
       </button>
       <IconButton
