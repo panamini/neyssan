@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
+import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   Check,
   Feather,
@@ -47,6 +48,10 @@ import {
   sanitizeProposalSignatureSettings,
   type ProposalSignatureSettings,
 } from "../lib/proposal-signature-settings";
+import {
+  getLocalPersonalizationSourceByCvId,
+  getProposalApplicantHeaderData,
+} from "../lib/proposal-personalization";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +80,72 @@ type PresetSlot = {
   name?: string;
 };
 
+type ProposalContactSettings = {
+  proposalDefaultContactEmail?: string | null;
+  proposalDefaultContactPhone?: string | null;
+  proposalDefaultContactLinkedin?: string | null;
+  proposalDefaultContactWebsite?: string | null;
+  proposalDefaultContactLocation?: string | null;
+};
+
+type ProposalContactField = keyof ProposalContactSettings;
+
+const PROPOSAL_CONTACT_FIELDS: Array<{
+  id: ProposalContactField;
+  label: string;
+  type: React.HTMLInputTypeAttribute;
+  placeholder: string;
+  fallbackKey: "email" | "phone" | "location" | "linkedin" | "website";
+}> = [
+  {
+    id: "proposalDefaultContactEmail",
+    label: "Email",
+    type: "email",
+    placeholder: "name@example.com",
+    fallbackKey: "email",
+  },
+  {
+    id: "proposalDefaultContactPhone",
+    label: "Phone",
+    type: "tel",
+    placeholder: "+33 6 00 00 00 00",
+    fallbackKey: "phone",
+  },
+  {
+    id: "proposalDefaultContactLocation",
+    label: "Location",
+    type: "text",
+    placeholder: "Paris, France",
+    fallbackKey: "location",
+  },
+  {
+    id: "proposalDefaultContactLinkedin",
+    label: "LinkedIn",
+    type: "url",
+    placeholder: "https://linkedin.com/in/name",
+    fallbackKey: "linkedin",
+  },
+  {
+    id: "proposalDefaultContactWebsite",
+    label: "Website",
+    type: "url",
+    placeholder: "https://example.com",
+    fallbackKey: "website",
+  },
+];
+
+const EMPTY_PROPOSAL_CONTACT_FIELDS: Record<ProposalContactField, string> = {
+  proposalDefaultContactEmail: "",
+  proposalDefaultContactPhone: "",
+  proposalDefaultContactLinkedin: "",
+  proposalDefaultContactWebsite: "",
+  proposalDefaultContactLocation: "",
+};
+
+function cleanSettingsInput(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 const DEFAULT_SLOT_NAMES: Record<SlotIndex, string> = {
   1: "Style 1",
   2: "Style 2",
@@ -99,7 +170,6 @@ const EMPTY_PRESET: PresetSlot = {
 const SETTINGS_THEME_OPTIONS: Array<{ id: ThemePreference; label: string }> = [
   { id: "light", label: "Light" },
   { id: "dark", label: "Dark" },
-  { id: "system", label: "System" },
 ];
 
 const SETTINGS_ACCENT_OPTIONS: SettingsAccentOption[] = [
@@ -230,19 +300,15 @@ function buildDefaultPresetSlot(slot: SlotIndex): PresetSlot {
   const preset: PresetSlot = {
     ...EMPTY_PRESET,
     fontPairId: fontPairIdBySlot[slot],
-    styleChoice: "balanced",
+    styleChoice: "auto",
     paletteOverride: null,
-    accentHex: "#0F0C08",
+    accentHex: null,
+    signatureSettings: DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
+    verbatiStyle: null,
     name: DEFAULT_SLOT_NAMES[slot],
   };
 
-  return {
-    ...preset,
-    verbatiStyle: buildVerbatiStyleForLayout({
-      layoutId: "workshop",
-      preset,
-    }),
-  };
+  return preset;
 }
 
 function buildPresetSavePayload(
@@ -959,6 +1025,7 @@ export function SettingsPage(): JSX.Element {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = normalizeSettingsTab(searchParams.get("tab"));
+  const { currentCvId } = useCvLibrary();
   const { preference: themePreference, setPreference: setThemePreference } = useThemeMode();
   const {
     preference: motionPreference,
@@ -968,8 +1035,13 @@ export function SettingsPage(): JSX.Element {
   const { user } = useUser();
   const isAuthReady = isAuthLoaded !== false;
   const presetsQuery = useQuery(api.proposalSettings.getPresets);
+  const currentProposalSettings = useQuery(
+    api.proposalSettings.getCurrent,
+    isSignedIn ? {} : "skip",
+  ) as ProposalContactSettings | undefined;
   const savePreset = useMutation(api.proposalSettings.savePreset);
   const setActivePreset = useMutation(api.proposalSettings.setActivePreset);
+  const setCurrentProposalSettings = useMutation(api.proposalSettings.setCurrent);
 
   // Local state
   const [editingSlot, setEditingSlot] = React.useState<SlotIndex>(1);
@@ -980,9 +1052,13 @@ export function SettingsPage(): JSX.Element {
   });
   const [activeSlot, setActiveSlot] = React.useState<SlotIndex>(1);
   const [savedTick, setSavedTick] = React.useState(false);
+  const [contactFields, setContactFields] = React.useState<
+    Record<ProposalContactField, string>
+  >(EMPTY_PROPOSAL_CONTACT_FIELDS);
   const savedTickTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydrated = React.useRef(false);
+  const contactHydrated = React.useRef(false);
 
   // Sync from server once
   React.useEffect(() => {
@@ -1039,6 +1115,26 @@ export function SettingsPage(): JSX.Element {
     };
   }, []);
 
+  React.useEffect(() => {
+    if (currentProposalSettings === undefined || contactHydrated.current) {
+      return;
+    }
+
+    contactHydrated.current = true;
+    setContactFields({
+      proposalDefaultContactEmail:
+        currentProposalSettings.proposalDefaultContactEmail ?? "",
+      proposalDefaultContactPhone:
+        currentProposalSettings.proposalDefaultContactPhone ?? "",
+      proposalDefaultContactLinkedin:
+        currentProposalSettings.proposalDefaultContactLinkedin ?? "",
+      proposalDefaultContactWebsite:
+        currentProposalSettings.proposalDefaultContactWebsite ?? "",
+      proposalDefaultContactLocation:
+        currentProposalSettings.proposalDefaultContactLocation ?? "",
+    });
+  }, [currentProposalSettings]);
+
   // Update a field on the currently editing preset and debounce-save
   const updatePreset = React.useCallback(
     (patch: Partial<PresetSlot>) => {
@@ -1089,6 +1185,29 @@ export function SettingsPage(): JSX.Element {
   const currentFontPair =
     VERBATI_FONT_PAIR_OPTIONS.find((fontPair) => fontPair.id === currentPreset.fontPairId) ??
     DEFAULT_FONT_PAIR_OPTION;
+  const activeCvContactDefaults = React.useMemo(
+    () =>
+      getProposalApplicantHeaderData(
+        getLocalPersonalizationSourceByCvId(currentCvId),
+      ),
+    [currentCvId],
+  );
+
+  const persistContactField = React.useCallback(
+    (field: ProposalContactField, value: string) => {
+      const cleanedValue = cleanSettingsInput(value);
+      setContactFields((current) => ({
+        ...current,
+        [field]: cleanedValue,
+      }));
+      void setCurrentProposalSettings({
+        [field]: cleanedValue || null,
+      } as Partial<Record<ProposalContactField, string | null>>).then(() =>
+        flashSaved(),
+      );
+    },
+    [flashSaved, setCurrentProposalSettings],
+  );
 
   const selectSettingsTab = (tab: SettingsTab) => {
     setSearchParams({ tab });
@@ -1324,25 +1443,55 @@ export function SettingsPage(): JSX.Element {
         </div>
               </div>
             ) : activeTab === "account" ? (
-              <div className="settings__pane" data-pane="account" data-active="true">
-                <div className="settings__group">
-                  <div className="settings__group-head">
-                    <div className="settings__group-title">Profile</div>
-                    <div className="settings__group-desc">Information shown on every document you generate.</div>
-                  </div>
-                  <div className="ds-field-group">
-                    <label className="ds-field-label" htmlFor="settings-full-name">Full name</label>
-                    <input id="settings-full-name" className="ds-field" value={isAuthReady ? accountDisplayName : "Checking account"} readOnly />
-                  </div>
-                  <div className="ds-field-group">
-                    <label className="ds-field-label" htmlFor="settings-email">Email</label>
-                    <input id="settings-email" className="ds-field" type="email" value={accountEmail} readOnly />
-                  </div>
-                  <div className="ds-field-group">
-                    <label className="ds-field-label" htmlFor="settings-headline">Headline</label>
-                    <input id="settings-headline" className="ds-field" value="Frontend engineer building craft-first product UIs." readOnly />
-                  </div>
-                </div>
+	              <div className="settings__pane" data-pane="account" data-active="true">
+	                <div className="settings__group">
+	                  <div className="settings__group-head">
+	                    <div className="settings__group-title">Profile</div>
+	                    <div className="settings__group-desc">
+	                      Defaults come from your active CV profile. Add an override only when Proposal Forge should use something different.
+	                    </div>
+	                  </div>
+	                  <div className="ds-field-group">
+	                    <label className="ds-field-label" htmlFor="settings-full-name">Full name</label>
+	                    <input id="settings-full-name" className="ds-field" value={isAuthReady ? accountDisplayName : "Checking account"} readOnly />
+	                  </div>
+	                  <div className="settings-contact-grid">
+	                    {PROPOSAL_CONTACT_FIELDS.map((field) => {
+	                      const fallbackValue =
+	                        activeCvContactDefaults[field.fallbackKey] ??
+	                        (field.id === "proposalDefaultContactEmail" ? accountEmail : null);
+	                      const placeholder = fallbackValue || field.placeholder;
+	
+	                      return (
+	                        <div className="ds-field-group" key={field.id}>
+	                          <label className="ds-field-label" htmlFor={`settings-${field.fallbackKey}`}>
+	                            {field.label}
+	                          </label>
+	                          <input
+	                            id={`settings-${field.fallbackKey}`}
+	                            className="ds-field settings-contact-field"
+	                            type={field.type}
+	                            value={contactFields[field.id]}
+	                            placeholder={placeholder}
+	                            onChange={(event) => {
+	                              const nextValue = event.currentTarget.value;
+	                              setContactFields((current) => ({
+	                                ...current,
+	                                [field.id]: nextValue,
+	                              }));
+	                            }}
+	                            onBlur={(event) =>
+	                              persistContactField(field.id, event.currentTarget.value)
+	                            }
+	                          />
+	                          <span className="settings-contact-default">
+	                            CV default: {fallbackValue || "empty"}
+	                          </span>
+	                        </div>
+	                      );
+	                    })}
+	                  </div>
+	                </div>
                 <div className="settings__group">
                   <div className="settings__group-head">
                     <div className="settings__group-title">Connected accounts</div>
@@ -1373,11 +1522,11 @@ export function SettingsPage(): JSX.Element {
                   <div className="settings__group-head">
                     <div className="settings__group-title">Appearance</div>
                   </div>
-                  <div className="settings__row">
-                    <div>
-                      <div className="settings__row-label">Theme</div>
-                      <div className="settings__row-desc">Light, dark, or follow system.</div>
-                    </div>
+	                  <div className="settings__row">
+	                    <div>
+	                      <div className="settings__row-label">Theme</div>
+	                      <div className="settings__row-desc">Light or dark.</div>
+	                    </div>
                     <div className="theme-switch" role="group" aria-label="Theme">
                       {SETTINGS_THEME_OPTIONS.map((option) => (
                         <button

@@ -149,6 +149,11 @@ type CurrentProposalSettings = {
   verbatiStyle?: Partial<ReturnType<typeof resolveVerbatiStyle>> | null;
   sourceMode?: ProposalStyleLinkMode;
   signatureSettings?: ProposalSignatureSettings | null;
+  proposalDefaultContactEmail?: string | null;
+  proposalDefaultContactPhone?: string | null;
+  proposalDefaultContactLinkedin?: string | null;
+  proposalDefaultContactWebsite?: string | null;
+  proposalDefaultContactLocation?: string | null;
 };
 import {
   logProposalStyleTrace,
@@ -312,6 +317,48 @@ function normalizeProposalContactLine(
 
 function getDefaultProposalLetterDate(location?: string | null): string {
   return buildProposalLetterDateLine({ location });
+}
+
+function cleanProposalContactOverride(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+function applyProposalContactOverrides<
+  T extends {
+    title: string | null;
+    personalizationContext: unknown;
+    richness?: unknown;
+    email?: string | null;
+    phone?: string | null;
+    linkedin?: string | null;
+    website?: string | null;
+    location?: string | null;
+  },
+>(source: T, settings: CurrentProposalSettings | undefined): T {
+  const overrides = {
+    email: cleanProposalContactOverride(settings?.proposalDefaultContactEmail),
+    phone: cleanProposalContactOverride(settings?.proposalDefaultContactPhone),
+    linkedin: cleanProposalContactOverride(settings?.proposalDefaultContactLinkedin),
+    website: cleanProposalContactOverride(settings?.proposalDefaultContactWebsite),
+    location: cleanProposalContactOverride(settings?.proposalDefaultContactLocation),
+  };
+
+  if (
+    !overrides.email &&
+    !overrides.phone &&
+    !overrides.linkedin &&
+    !overrides.website &&
+    !overrides.location
+  ) {
+    return source;
+  }
+
+  return {
+    ...source,
+    ...overrides,
+  };
 }
 
 function normalizeComposeToolbarVoicePreset(
@@ -916,17 +963,33 @@ export function ProposalForge(): JSX.Element {
       ),
     [activeCvProposalStylePreset, storedOutputStylePreset],
   );
+  const {
+    isLoading: isConvexAuthLoading,
+    isAuthenticated: isConvexAuthenticated,
+  } = useConvexAuth();
+  const currentProposalSettings = useQuery(
+    api.proposalSettings.getCurrent,
+    isConvexAuthenticated ? {} : "skip",
+  ) as CurrentProposalSettings | undefined;
   const activePersonalizationSource = React.useMemo(
     () => getLocalPersonalizationSourceByCvId(attachedCvId),
     [attachedCvId],
   );
+  const effectivePersonalizationSource = React.useMemo(
+    () =>
+      applyProposalContactOverrides(
+        activePersonalizationSource,
+        currentProposalSettings,
+      ),
+    [activePersonalizationSource, currentProposalSettings],
+  );
   const initialApplicantIdentity = React.useMemo(
-    () => getProposalApplicantIdentity(activePersonalizationSource),
-    [activePersonalizationSource],
+    () => getProposalApplicantIdentity(effectivePersonalizationSource),
+    [effectivePersonalizationSource],
   );
   const activeApplicantHeader = React.useMemo(
-    () => getProposalApplicantHeaderData(activePersonalizationSource),
-    [activePersonalizationSource],
+    () => getProposalApplicantHeaderData(effectivePersonalizationSource),
+    [effectivePersonalizationSource],
   );
   const defaultPreviewApplicantHeader = React.useMemo(
     () =>
@@ -1000,10 +1063,6 @@ export function ProposalForge(): JSX.Element {
     proposalWorkspaceResetToken,
     requestedView,
   ]);
-  const {
-    isLoading: isConvexAuthLoading,
-    isAuthenticated: isConvexAuthenticated,
-  } = useConvexAuth();
   const generateProposalAction = useAction(api.functions.generateProposal);
   const updateProposal = useMutation(api.updateProposalPublic.default);
   const approveJobReviewItem = useMutation(
@@ -1050,10 +1109,6 @@ export function ProposalForge(): JSX.Element {
     },
     [canonicalJobId],
   );
-  const currentProposalSettings = useQuery(
-    api.proposalSettings.getCurrent,
-    isConvexAuthenticated ? {} : "skip",
-  ) as CurrentProposalSettings | undefined;
   const proposalSignatureSettings = React.useMemo(
     () =>
       sanitizeProposalSignatureSettings(
@@ -4588,7 +4643,7 @@ export function ProposalForge(): JSX.Element {
     (values: FormValues) => {
       cancelPendingComposeDraftSync();
       setComposePreviewValues(buildStoredProposalComposeDraftSnapshot(values));
-      const personalizationSource = activePersonalizationSource;
+      const personalizationSource = effectivePersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
         personalizationSource,
       );
@@ -4632,7 +4687,7 @@ export function ProposalForge(): JSX.Element {
       setFallbackInfo(null);
     },
     [
-      activePersonalizationSource,
+      effectivePersonalizationSource,
       buildStoredProposalComposeDraftSnapshot,
       cancelPendingComposeDraftSync,
       formatProposalTypeLabel,
@@ -4648,7 +4703,7 @@ export function ProposalForge(): JSX.Element {
       nextProposalId?: Id<"proposals">,
     ) => {
       cancelPendingComposeDraftSync();
-      const personalizationSource = activePersonalizationSource;
+      const personalizationSource = effectivePersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
         personalizationSource,
       );
@@ -4758,7 +4813,7 @@ export function ProposalForge(): JSX.Element {
       setLoading(false);
     },
     [
-      activePersonalizationSource,
+      effectivePersonalizationSource,
       cancelPendingComposeDraftSync,
       effectiveProposalStylePresetWithPalette,
       effectiveProposalTemplateId,
@@ -4782,7 +4837,7 @@ export function ProposalForge(): JSX.Element {
     (message: string, values: FormValues, rawReason?: string | null) => {
       cancelPendingComposeDraftSync();
       setComposePreviewValues(buildStoredProposalComposeDraftSnapshot(values));
-      const personalizationSource = activePersonalizationSource;
+      const personalizationSource = effectivePersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
         personalizationSource,
       );
@@ -4823,7 +4878,7 @@ export function ProposalForge(): JSX.Element {
       setFallbackInfo(null);
     },
     [
-      activePersonalizationSource,
+      effectivePersonalizationSource,
       buildStoredProposalComposeDraftSnapshot,
       cancelPendingComposeDraftSync,
       formatProposalTypeLabel,
@@ -5682,10 +5737,7 @@ export function ProposalForge(): JSX.Element {
       null
     );
   }, [attachedCvId, attachedCvTitle]);
-  const proposalTwoPaneMinViewportWidth = Math.max(
-    readCssPixelValue("--container-xl", 1280),
-    1440,
-  );
+  const proposalTwoPaneMinViewportWidth = 1024;
   const proposalBaseWorkspaceOutputShellInlineSize =
     "calc(var(--document-sheet-inline-size) + (var(--s2) * 2) + 2px)";
   const proposalWorkspaceShellBlockSize =
