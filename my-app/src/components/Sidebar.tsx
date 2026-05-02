@@ -1057,7 +1057,6 @@ export const Sidebar: React.FC = () => {
           <section className="sb-recents" aria-label="Recent">
             <div className="sb-recents__head">
               <span>Recent</span>
-              <span>Cmd/Ctrl K</span>
             </div>
             <ul className="sb-recents__list" role="list">
               {mixedRecentItems.map((item) => (

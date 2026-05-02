@@ -4984,17 +4984,15 @@ export function CvForge(): JSX.Element {
         style={
           {
             "--page-shell-max-width": "100%",
-            "--page-shell-gap": "var(--space-2)",
-            "--page-shell-pad-top":
-              workspaceMode === "preview" ? "var(--space-2)" : "var(--space-2)",
-            "--page-shell-pad-inline": "var(--space-4)",
-            "--page-shell-pad-bottom": "var(--space-1)",
+            "--page-shell-gap": "0px",
+            "--page-shell-pad-top": "0px",
+            "--page-shell-pad-inline": "0px",
+            "--page-shell-pad-bottom": "0px",
             "--cv-preview-toolbar-inset":
               workspaceMode === "preview" ? "0px" : undefined,
-            "--page-shell-pad-top-mobile":
-              workspaceMode === "preview" ? "var(--space-2)" : "var(--space-2)",
-            "--page-shell-pad-inline-mobile": "var(--space-4)",
-            "--page-shell-pad-bottom-mobile": "var(--space-1)",
+            "--page-shell-pad-top-mobile": "0px",
+            "--page-shell-pad-inline-mobile": "0px",
+            "--page-shell-pad-bottom-mobile": "0px",
           } as React.CSSProperties
         }
       >
