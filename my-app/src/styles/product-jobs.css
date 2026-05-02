@@ -286,7 +286,7 @@
 .dasti-jobs-row {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   align-items: stretch;
   padding: var(--space-3);
@@ -340,6 +340,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  width: 100%;
   color: var(--ti);
   font-size: var(--tx);
   font-weight: 600;
@@ -351,6 +352,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -392,6 +394,15 @@
   line-height: 1.35;
 }
 
+.dasti-jobs-row__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+}
+
 .dasti-jobs-match-chip,
 .dasti-jobs-row__meta-pill {
   display: inline-flex;
@@ -410,22 +421,30 @@
   white-space: nowrap;
 }
 
+.dasti-jobs-match-chip {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
 .dasti-jobs-row__open {
   justify-self: end;
 }
 
 .dasti-jobs-row__controls {
-  display: grid;
+  display: inline-flex;
   gap: var(--space-1);
-  align-self: stretch;
   align-items: center;
-  align-content: space-between;
-  justify-items: end;
-  justify-self: end;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  margin-inline-start: auto;
 }
 
-.dasti-jobs-row__meta-favorite {
-  margin-inline-start: auto;
+.dasti-jobs-row__favorite-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
   color: var(--ac);
   font-size: var(--tx);
   font-weight: var(--font-label-weight);
@@ -494,7 +513,7 @@
 
 .dasti-jobs-detail__match {
   position: sticky;
-  top: var(--space-4);
+  top: 0;
   min-width: 0;
 }
 
@@ -509,6 +528,14 @@
 .dasti-jobs-detail__identity {
   display: grid;
   gap: var(--space-1);
+}
+
+.dasti-jobs-detail__action-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .dasti-jobs-detail__topline-actions {

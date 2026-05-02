@@ -358,7 +358,7 @@ describe("Sidebar proposal navigation", () => {
     expect(screen.getByRole("link", { name: /Jobs/ })).toHaveClass(
       "sb-section__action",
     );
-    expect(screen.getByText("Workspace")).toBeInTheDocument();
+    expect(screen.queryByText("Workspace")).not.toBeInTheDocument();
     expect(screen.queryByText(/Onboarding \(preview\)/i)).not.toBeInTheDocument();
   });
 

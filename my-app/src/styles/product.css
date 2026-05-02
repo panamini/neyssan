@@ -100,6 +100,10 @@
   gap: calc(var(--space-1) + 2px);
 }
 
+.sb-section--pin {
+  margin-top: auto;
+}
+
 .sb-section__title {
   padding: 0 var(--space-2);
   font-size: var(--app-sidebar-section-size);
@@ -467,9 +471,21 @@
 }
 
 .sb-rail-button--active {
-  background: linear-gradient(90deg, var(--ap), transparent);
-  box-shadow: inset 2px 0 0 var(--ac);
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, var(--ap) 0%, transparent 70%);
   color: var(--ti);
+}
+
+.sb-rail-button--active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: var(--ac);
+  border-radius: 2px;
 }
 
 .sb-utility-link {
@@ -583,6 +599,10 @@
 .sb-toggle__period {
   color: var(--color-accent);
   font-weight: var(--font-strong-weight);
+}
+
+.sb-toggle__period--active {
+  animation: tw-breathe 950ms var(--motion-ease-breathe) 1;
 }
 
 .sb-nav-item {
@@ -1237,6 +1257,43 @@
   flex-direction: column-reverse;
   justify-content: center;
   margin-left: 0;
+}
+
+.sb-footer--collapsed .sb-section__action {
+  width: calc(var(--app-sidebar-width-collapsed) - (var(--space-1) * 2));
+  min-height: var(--app-sidebar-item-height);
+  display: grid;
+  place-items: center;
+  gap: 0;
+  padding: 0;
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+}
+
+.sb-footer--collapsed .sb-section__action > svg {
+  margin: 0;
+  justify-self: center;
+  align-self: center;
+}
+
+.sb--forced-collapsed .sb-footer--collapsed .sb-section__action {
+  width: calc(var(--app-sidebar-width-collapsed-mobile) - (var(--space-1) * 2));
+  min-height: 32px;
+  border-radius: var(--radius-inline);
+}
+
+.sb-footer--collapsed .sb-section__action--active {
+  overflow: hidden;
+  background: linear-gradient(90deg, var(--ap) 0%, transparent 70%);
+  color: var(--ti);
+}
+
+.sb-footer--collapsed .sb-section__action--active::before {
+  inset-block: auto;
+  top: 10px;
+  bottom: 10px;
+  opacity: 1;
+  transform: none;
 }
 
 .sb--collapsed .sb-footer__tool-label,
