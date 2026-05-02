@@ -1369,14 +1369,24 @@ export function SettingsPage(): JSX.Element {
                       <div className="settings__row-label">Reduce motion</div>
                       <div className="settings__row-desc">Disable animations and transitions.</div>
                     </div>
-                    <input
-                      type="checkbox"
+                    <button
+                      type="button"
+                      className="settings-motion-toggle"
+                      aria-pressed={motionPreference === "reduced"}
                       aria-label="Reduce motion"
-                      checked={motionPreference === "reduced"}
-                      onChange={(event) =>
-                        setMotionPreference(event.currentTarget.checked ? "reduced" : "system")
+                      onClick={() =>
+                        setMotionPreference(
+                          motionPreference === "reduced" ? "system" : "reduced",
+                        )
                       }
-                    />
+                    >
+                      <span className="settings-motion-toggle__check" aria-hidden="true">
+                        {motionPreference === "reduced" ? (
+                          <Check size={12} strokeWidth={2.4} />
+                        ) : null}
+                      </span>
+                      Use reduce motion
+                    </button>
                   </div>
                 </div>
               </div>

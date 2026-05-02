@@ -140,8 +140,11 @@ describe("SettingsPage preview controls", () => {
       "true",
     );
 
-    await user.click(screen.getByRole("checkbox", { name: "Reduce motion" }));
-    expect(screen.getByRole("checkbox", { name: "Reduce motion" })).toBeChecked();
+    await user.click(screen.getByRole("button", { name: "Reduce motion" }));
+    expect(screen.getByRole("button", { name: "Reduce motion" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(document.documentElement.dataset.reduceMotion).toBe("true");
   });
 
