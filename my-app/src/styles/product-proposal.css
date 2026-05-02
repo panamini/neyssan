@@ -7309,6 +7309,35 @@
 .dasti-proposal-skeleton-stage__mode {
   height: 28px;
   flex-shrink: 0;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(96px, 1fr));
+  gap: 2px;
+  align-items: center;
+  justify-items: stretch;
+  padding: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--sf1);
+}
+
+.dasti-proposal-skeleton-stage__mode button {
+  min-height: 22px;
+  width: 100%;
+  padding-inline: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--tm2);
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.dasti-proposal-skeleton-stage__mode button[data-selected="true"] {
+  background: var(--sf0);
+  color: var(--ti);
+  box-shadow: var(--shadow-sm);
 }
 
 .dasti-proposal-skeleton-stage__paper {
