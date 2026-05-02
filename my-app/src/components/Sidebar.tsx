@@ -14,11 +14,10 @@ import {
   PinOff,
   SquaresFour,
   Sun,
-  User,
 } from "@/lib/icons";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { useAuth, useUser, UserButton } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
@@ -39,29 +38,6 @@ import { useThemeMode } from "../lib/theme-mode";
 const MAX_RECENT_ITEMS = 3;
 const MAX_MIXED_RECENT_ITEMS = 4;
 const SIDEBAR_CONTENT_SWAP_DELAY_MS = 320;
-
-const clerkAppearance = {
-  elements: {
-    avatarBox: {
-      width: "26px",
-      height: "26px",
-      borderRadius: "var(--radius-control)",
-    },
-    userButtonAvatarBox: {
-      width: "26px",
-      height: "26px",
-      borderRadius: "var(--radius-control)",
-    },
-    userButtonTrigger: {
-      boxShadow: "none",
-      outline: "none",
-    },
-  },
-  variables: {
-    colorPrimary: "var(--color-accent)",
-    borderRadius: "var(--radius-control)",
-  },
-} as const;
 
 type ProposalRecord = {
   _id: Id<"proposals">;
@@ -270,15 +246,13 @@ export const Sidebar: React.FC = () => {
   const location = useLocation();
   const { pathname, search } = location;
   const { mode: themeMode, toggle: toggleTheme } = useThemeMode();
-  const { user } = useUser();
-  const { isLoaded, isSignedIn } = useAuth();
   const {
     isAuthenticated: isConvexAuthenticated,
     isLoading: isConvexAuthLoading,
   } = useConvexAuth();
+  const { isLoaded, isSignedIn } = useAuth();
   const { cvs, currentCv, currentCvId, loadCv, createNewCv, deleteCv } =
     useCvLibrary();
-  const clerkUserButtonRef = React.useRef<HTMLDivElement | null>(null);
   const [sidebarPinned, setSidebarPinned] = React.useState(false);
   const [sidebarHovered, setSidebarHovered] = React.useState(false);
   const [viewportWidth, setViewportWidth] = React.useState(() =>
@@ -381,12 +355,12 @@ export const Sidebar: React.FC = () => {
 
   const proposals = useQuery(
     proposalsQueryReference,
-    isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
+    isLoaded && isSignedIn && isConvexAuthenticated && !isConvexAuthLoading ? {} : "skip",
   );
 
   const proposalCount = useQuery(
     proposalCountQueryReference,
-    isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
+    isLoaded && isSignedIn && isConvexAuthenticated && !isConvexAuthLoading ? {} : "skip",
   );
   const deleteProposal = useMutation(api.deleteProposalPublic.default);
 
@@ -394,20 +368,6 @@ export const Sidebar: React.FC = () => {
     (base: string) => pathname === base || pathname.startsWith(`${base}/`),
     [pathname],
   );
-  const handleAccountClick = React.useCallback(() => {
-    const clerkTrigger =
-      clerkUserButtonRef.current?.querySelector<HTMLButtonElement>("button");
-
-    if (clerkTrigger) {
-      clerkTrigger.click();
-      return;
-    }
-
-    if (!isSignedIn) {
-      void navigate("/sign-in");
-    }
-  }, [isSignedIn, navigate]);
-
   const forcedCollapsed = viewportWidth < 768;
   const hideSidebar = viewportWidth < 480;
   const sidebarCollapsed = forcedCollapsed || (!sidebarPinned && !sidebarHovered);
@@ -1122,18 +1082,7 @@ export const Sidebar: React.FC = () => {
             </ul>
           </section>
 
-          <div className="sb-section" aria-label="System">
-            <div className="sb-section__title">System</div>
-            <Link
-              to="/settings"
-              className={clsx(
-                "sb-section__action",
-                matchesRoute("/settings") && "sb-section__action--active",
-              )}
-            >
-              <Gear size={15} strokeWidth={1.5} aria-hidden="true" />
-              <span>Settings</span>
-            </Link>
+          <div className="sb-section">
             <button
               type="button"
               className="sb-section__action"
@@ -1156,75 +1105,33 @@ export const Sidebar: React.FC = () => {
           sidebarCollapsed && "sb-footer--collapsed",
         )}
       >
-        <div className="sb-footer__avatar">
-          <button
-            type="button"
-            className="sb-footer__account-button"
-            onClick={handleAccountClick}
-            aria-label={isSignedIn ? "Open account menu" : "Sign In"}
-            title={isSignedIn ? "Account" : "Sign In"}
-          >
-            <User size={18} strokeWidth={1.8} aria-hidden="true" />
-          </button>
-          {isSignedIn ? (
-            <div
-              ref={clerkUserButtonRef}
-              className="sb-footer__clerk-user-button"
-              aria-hidden="true"
-            >
-              <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
-            </div>
-          ) : null}
-        </div>
-        {!sidebarCollapsed ? (
-          <div className="sb-footer__account">
-            <div className="sb-footer__title">
-              {isSignedIn
-                ? (user?.username ??
-                    user?.firstName ??
-                    "you"
-                  ).toLowerCase()
-                : "sign in"}
-            </div>
-            <div className="sb-footer__subtitle">
-              {isSignedIn && isConvexAuthLoading
-                ? "Loading"
-                : isSignedIn
-                  ? null
-                  : "Save draft"}
-            </div>
-          </div>
-        ) : null}
         <div className="sb-footer__tools">
           <Link
             to="/settings"
             className={clsx(
-              "sb-footer__tool-btn",
-              matchesRoute("/settings") && "sb-footer__tool-btn--active",
+              "sb-section__action",
+              matchesRoute("/settings") && "sb-section__action--active",
             )}
             title="Settings"
             aria-label="Settings"
           >
             <Gear size={14} strokeWidth={1.6} aria-hidden="true" />
+            <span className="sb-footer__tool-label">Settings</span>
           </Link>
-          <div className="sb-theme-toggle">
-            <button
-              type="button"
-              className="sb-theme-toggle__single"
-              onClick={toggleTheme}
-              aria-pressed={themeMode === "dark"}
-              aria-label={
-                themeMode === "dark" ? "Light mode" : "Dark mode"
-              }
-              title={themeMode === "dark" ? "Light mode" : "Dark mode"}
-            >
-              {themeMode === "dark" ? (
-                <Sun size={14} strokeWidth={1.6} aria-hidden="true" />
-              ) : (
-                <Moon size={14} strokeWidth={1.6} aria-hidden="true" />
-              )}
-            </button>
-          </div>
+          <button
+            type="button"
+            className="sb-theme-toggle__single"
+            onClick={toggleTheme}
+            aria-pressed={themeMode === "dark"}
+            aria-label={themeMode === "dark" ? "Light mode" : "Dark mode"}
+            title={themeMode === "dark" ? "Light mode" : "Dark mode"}
+          >
+            {themeMode === "dark" ? (
+              <Sun size={14} strokeWidth={1.8} aria-hidden="true" />
+            ) : (
+              <Moon size={14} strokeWidth={1.8} aria-hidden="true" />
+            )}
+          </button>
         </div>
       </div>
     </aside>

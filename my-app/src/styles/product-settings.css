@@ -1663,6 +1663,13 @@
 }
 
 .settings {
+  --r-inline: var(--radius-inline, 8px);
+  --r-control: var(--radius-control, 12px);
+  --r-card: var(--radius-card, 16px);
+  --r-surface: var(--radius-surface, 20px);
+  --r-pill: var(--radius-pill, 999px);
+  --r-paper: 4px;
+
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: var(--s5);
@@ -1790,6 +1797,37 @@
   margin-top: 2px;
   color: var(--tm2);
   font-size: var(--tx);
+}
+
+.settings .ds-field {
+  border-radius: var(--r-control);
+  box-shadow: none;
+}
+
+.settings .ds-btn {
+  border-radius: var(--r-control);
+}
+
+.settings .ds-btn--pill {
+  border-radius: var(--r-pill);
+}
+
+.settings-contact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3);
+}
+
+.settings-contact-field {
+  background: var(--sf2);
+}
+
+.settings-contact-default {
+  display: block;
+  margin-top: var(--s1);
+  color: var(--tm2);
+  font-size: var(--tx);
+  line-height: 1.4;
 }
 
 .theme-switch {
@@ -2183,6 +2221,10 @@ html[data-reduce-motion="true"] *::after {
 
   .settings__nav {
     position: static;
+  }
+
+  .settings-contact-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

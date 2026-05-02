@@ -1219,7 +1219,16 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  margin-left: auto;
+  width: 100%;
+  margin-left: 0;
+}
+
+.sb-footer__tool-label {
+  font-size: var(--app-sidebar-label-size);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sb-footer--collapsed .sb-footer__tools {
@@ -1228,6 +1237,11 @@
   flex-direction: column-reverse;
   justify-content: center;
   margin-left: 0;
+}
+
+.sb--collapsed .sb-footer__tool-label,
+.sb--forced-collapsed .sb-footer__tool-label {
+  display: none;
 }
 
 .sb-footer--collapsed .sb-footer__avatar {
@@ -1314,35 +1328,6 @@
   min-width: 0;
   display: flex;
   justify-content: flex-start;
-}
-
-/* ─── Sidebar settings gear ───────────────────────────────────────────────── */
-
-.sb-footer__tool-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-control);
-  color: var(--tm2);
-  text-decoration: none;
-  transition:
-    background var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard);
-}
-
-.sb-footer__tool-btn:hover,
-.sb-footer__tool-btn:focus-visible {
-  background: color-mix(in srgb, var(--sfr) 80%, transparent);
-  color: var(--ti);
-  outline: none;
-}
-
-.sb-footer__tool-btn--active {
-  background: linear-gradient(90deg, var(--ap), transparent);
-  box-shadow: inset 2px 0 0 var(--ac);
-  color: var(--ti);
 }
 
 /* ─── Settings page ───────────────────────────────────────────────────────── */
@@ -1803,18 +1788,19 @@
 .app-theme-switch {
   display: inline-flex;
   align-items: center;
-  padding: 2px;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-pill);
-  background: var(--sf2);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   flex-shrink: 0;
 }
 
 .app-theme-switch button {
-  min-height: 26px;
-  padding: 0 var(--space-2);
-  border: none;
+  min-height: 30px;
+  width: 30px;
+  padding: 0;
   border-radius: var(--radius-pill);
+  border: none;
   background: transparent;
   color: var(--color-text-subtle);
   font: inherit;

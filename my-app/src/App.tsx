@@ -55,8 +55,8 @@ import {
   applyMotionPreference,
   readStoredMotionPreference,
 } from "./lib/motion-preference";
-import { useThemeMode } from "./lib/theme-mode";
 import { User } from "./lib/icons";
+import { useThemeMode } from "./lib/theme-mode";
 
 function normalizeTitle(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -250,13 +250,9 @@ function useForgeContextLine(topbarDocumentTitle: string | null): {
 function AppTopbar({
   commandPaletteOpen,
   onOpenCommandPalette,
-  onToggleTheme,
-  themeMode,
 }: {
   commandPaletteOpen: boolean;
   onOpenCommandPalette: () => void;
-  onToggleTheme: () => void;
-  themeMode: "light" | "dark";
 }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -315,26 +311,6 @@ function AppTopbar({
         <span>Search or run command</span>
         <span className="app-topbar__kbd">{shortcutLabel}</span>
       </button>
-      <div className="app-theme-switch" role="group" aria-label="Theme">
-        <button
-          type="button"
-          aria-pressed={themeMode === "light"}
-          onClick={() => {
-            if (themeMode === "dark") onToggleTheme();
-          }}
-        >
-          Light
-        </button>
-        <button
-          type="button"
-          aria-pressed={themeMode === "dark"}
-          onClick={() => {
-            if (themeMode === "light") onToggleTheme();
-          }}
-        >
-          Dark
-        </button>
-      </div>
       <IconButton
         label={!isAccountReady ? "Account loading" : isSignedIn ? "Open account menu" : "Sign in"}
         onClick={handleProfile}
@@ -370,7 +346,7 @@ function AppShell(): JSX.Element {
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = React.useState(false);
   const [onboardingReplayOpen, setOnboardingReplayOpen] = React.useState(false);
-  const { mode: themeMode, toggle: toggleTheme } = useThemeMode();
+  const { toggle: toggleTheme } = useThemeMode();
 
   React.useEffect(() => {
     applyMotionPreference(readStoredMotionPreference());
@@ -425,8 +401,6 @@ function AppShell(): JSX.Element {
           <AppTopbar
             commandPaletteOpen={commandPaletteOpen}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-            onToggleTheme={toggleTheme}
-            themeMode={themeMode}
           />
 
           <div className="app-pages">

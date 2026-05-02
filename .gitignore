@@ -59,16 +59,23 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 
-# --- Secrets / Env (garder .env.example) -------------------------
+# --- Secrets / Env -----------------------------------------------
 .env
 .env.*
+.env.example
+.env.local
+.env.chrome
+.env-clerk-chrome.zip
 my-app/.env
+my-app/.env\ copy.private
 my-app/.env.local
+my-app/.env.local.example
+my-app/.env.production
+my-app/.envlocal-myapp.md
+my-app/.envlocalDEV.md
+my-app/.envproduction-myapp.md
 **/clerk-chrome/.env
 **/clerk-chrome/.env.local
-!.env.example
-!.env.local.example
-!**/.env.example
 *.bk
 *.envlocal*
 *.envlocalDEV*
