@@ -148,6 +148,29 @@ describe("SettingsPage preview controls", () => {
     expect(document.documentElement.dataset.reduceMotion).toBe("true");
   });
 
+  it("hydrates default style slots from the onboarding document style set", () => {
+    presetsQueryMock.mockReturnValue({
+      activeSlot: 1,
+      preset1: null,
+      preset2: null,
+      preset3: null,
+    });
+
+    const { container } = renderSettings();
+
+    expect(container.querySelector(".dasti-settings-hero-preview__chip")).toHaveTextContent(
+      "Fraunces Bold / Syne Regular",
+    );
+
+    const cards = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+    );
+
+    expect(cards[0]).toHaveTextContent("Style 1");
+    expect(cards[1]).toHaveTextContent("Style 2");
+    expect(cards[2]).toHaveTextContent("Style 3");
+  });
+
   it("updates the live preview when selecting a different font pair", async () => {
     const user = userEvent.setup();
     const { container } = renderSettings();

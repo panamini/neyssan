@@ -1872,6 +1872,91 @@ html[data-reduce-motion="true"] *::after {
   animation-iteration-count: 1 !important;
 }
 
+.onb-replay__pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s2);
+}
+
+.onb-replay__choice {
+  display: grid;
+  gap: var(--s2);
+  justify-items: center;
+}
+
+.onb-replay__choice-title,
+.onb-replay__choice-desc {
+  display: block;
+}
+
+.onb-replay__choice-title {
+  color: var(--ti);
+  font-size: var(--ts);
+  font-weight: 600;
+  line-height: var(--ls);
+}
+
+.onb-replay__choice-desc {
+  color: var(--tm2);
+  font-size: var(--tx);
+  font-weight: 500;
+  line-height: var(--lx);
+}
+
+.onb-replay__choice-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--hs);
+}
+
+.onb-replay__style-preview {
+  display: grid;
+  gap: var(--s1);
+  width: min(100%, 132px);
+  aspect-ratio: 8.5 / 11;
+  padding: var(--s3);
+  border-radius: var(--r-paper);
+  background: var(--paper);
+  box-shadow: var(--sh-paper);
+  color: var(--ti);
+}
+
+.onb-replay__style-preview--style-1 {
+  font-family: "Fraunces", Georgia, serif;
+}
+
+.onb-replay__style-preview--style-2 {
+  font-family: "Geist", system-ui, sans-serif;
+}
+
+.onb-replay__style-preview--style-3 {
+  font-family: "Special Elite", "Courier Prime", monospace;
+}
+
+.onb-replay__style-preview-title {
+  color: var(--ti);
+  font-size: var(--tx);
+  font-weight: 700;
+  line-height: var(--lx);
+}
+
+.onb-replay__style-preview-line {
+  display: block;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--ti) 16%, transparent);
+}
+
+.onb-replay__style-preview-line--short {
+  width: 50%;
+}
+
+.onb-replay__style-preview-line--mid {
+  width: 70%;
+}
+
 .settings-motion-toggle {
   display: inline-flex;
   align-items: center;

@@ -221,6 +221,30 @@ function buildVerbatiStyleForLayout(args: {
   });
 }
 
+function buildDefaultPresetSlot(slot: SlotIndex): PresetSlot {
+  const fontPairIdBySlot: Record<SlotIndex, VerbatiFontPairId> = {
+    1: "quiet-editorial",
+    2: "geist-baskervville",
+    3: "ledger-sans",
+  };
+  const preset: PresetSlot = {
+    ...EMPTY_PRESET,
+    fontPairId: fontPairIdBySlot[slot],
+    styleChoice: "balanced",
+    paletteOverride: null,
+    accentHex: "#0F0C08",
+    name: DEFAULT_SLOT_NAMES[slot],
+  };
+
+  return {
+    ...preset,
+    verbatiStyle: buildVerbatiStyleForLayout({
+      layoutId: "workshop",
+      preset,
+    }),
+  };
+}
+
 function buildPresetSavePayload(
   preset: PresetSlot,
 ): PresetSlot {
@@ -950,9 +974,9 @@ export function SettingsPage(): JSX.Element {
   // Local state
   const [editingSlot, setEditingSlot] = React.useState<SlotIndex>(1);
   const [localPresets, setLocalPresets] = React.useState<Record<SlotIndex, PresetSlot>>({
-    1: { ...EMPTY_PRESET },
-    2: { ...EMPTY_PRESET, styleChoice: "balanced" },
-    3: { ...EMPTY_PRESET, styleChoice: "warm" },
+    1: buildDefaultPresetSlot(1),
+    2: buildDefaultPresetSlot(2),
+    3: buildDefaultPresetSlot(3),
   });
   const [activeSlot, setActiveSlot] = React.useState<SlotIndex>(1);
   const [savedTick, setSavedTick] = React.useState(false);
@@ -965,7 +989,8 @@ export function SettingsPage(): JSX.Element {
     if (!presetsQuery || hydrated.current) return;
     hydrated.current = true;
 
-    const serverPreset = (raw: typeof presetsQuery.preset1): PresetSlot => {
+    const serverPreset = (slot: SlotIndex, raw: typeof presetsQuery.preset1): PresetSlot => {
+      const defaults = buildDefaultPresetSlot(slot);
       const rawRecord = raw as
         | (typeof raw & { signatureSettings?: unknown })
         | null
@@ -973,25 +998,27 @@ export function SettingsPage(): JSX.Element {
 
       return {
         fontPairId:
-          (raw?.fontPairId as VerbatiFontPairId | null) ?? DEFAULT_FONT_PAIR_ID,
-        styleChoice: (raw?.styleChoice as ProposalStyleChoice) ?? "auto",
-        paletteOverride: (raw?.paletteOverride as ProposalPaletteId | null) ?? null,
-        accentHex: raw?.accentHex ?? null,
-        verbatiStyle: sanitizePersistedVerbatiStyle(
-          raw?.verbatiStyle as Partial<VerbatiStylePreset> | null | undefined,
-        ) as StoredVerbatiStyle | null,
-        voicePreset: (raw?.voicePreset as ToneId) ?? null,
+          (raw?.fontPairId as VerbatiFontPairId | null) ?? defaults.fontPairId,
+        styleChoice: (raw?.styleChoice as ProposalStyleChoice) ?? defaults.styleChoice,
+        paletteOverride:
+          (raw?.paletteOverride as ProposalPaletteId | null) ?? defaults.paletteOverride,
+        accentHex: raw?.accentHex ?? defaults.accentHex,
+        verbatiStyle:
+          (sanitizePersistedVerbatiStyle(
+            raw?.verbatiStyle as Partial<VerbatiStylePreset> | null | undefined,
+          ) as StoredVerbatiStyle | null) ?? defaults.verbatiStyle,
+        voicePreset: (raw?.voicePreset as ToneId) ?? defaults.voicePreset,
         signatureSettings: sanitizeProposalSignatureSettings(
-          rawRecord?.signatureSettings,
+          rawRecord?.signatureSettings ?? defaults.signatureSettings,
         ),
-        name: raw?.name,
+        name: raw?.name ?? defaults.name,
       };
     };
 
     setLocalPresets({
-      1: serverPreset(presetsQuery.preset1),
-      2: serverPreset(presetsQuery.preset2),
-      3: serverPreset(presetsQuery.preset3),
+      1: serverPreset(1, presetsQuery.preset1),
+      2: serverPreset(2, presetsQuery.preset2),
+      3: serverPreset(3, presetsQuery.preset3),
     });
     setActiveSlot((presetsQuery.activeSlot as SlotIndex | null) ?? 1);
   }, [presetsQuery]);
