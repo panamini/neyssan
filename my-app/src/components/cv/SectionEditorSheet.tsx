@@ -223,6 +223,21 @@ function getSectionDraftKey(section: CvSection | null): string | null {
   return `${section.type}:${section.title}`;
 }
 
+function getSectionDraftSignature(section: CvSection | null): string | null {
+  if (!section) return null;
+  try {
+    return JSON.stringify({
+      id: section.id ?? null,
+      type: section.type,
+      title: section.title,
+      blocks: section.blocks ?? [],
+      structuredContent: section.structuredContent ?? [],
+    });
+  } catch {
+    return `${section.id ?? ""}:${section.type}:${section.title}`;
+  }
+}
+
 function collectPlainText(value: unknown): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return value.map(collectPlainText).filter(Boolean).join("\n");
@@ -474,6 +489,9 @@ export function SectionEditorSheet({
   const draftSectionRef = React.useRef<CvSection | null>(section);
   const openedSectionRef = React.useRef<CvSection | null>(section);
   const loadedDraftKeyRef = React.useRef<string | null>(null);
+  const loadedDraftSignatureRef = React.useRef<string | null>(
+    getSectionDraftSignature(section),
+  );
   const previousOpenRef = React.useRef(open);
   const pillInputRef = React.useRef<HTMLInputElement | null>(null);
   const autosaveTimerRef = React.useRef<number | null>(null);
@@ -483,6 +501,7 @@ export function SectionEditorSheet({
   latestSectionRef.current = section;
 
   const sectionDraftKey = getSectionDraftKey(section);
+  const sectionDraftSignature = getSectionDraftSignature(section);
 
   function resetAiState() {
     setFieldAiLoadingKey(null);
@@ -533,20 +552,28 @@ export function SectionEditorSheet({
 
     if (!open) {
       loadedDraftKeyRef.current = null;
+      loadedDraftSignatureRef.current = sectionDraftSignature;
       draftSectionRef.current = latestSectionRef.current;
       setDraftSection(latestSectionRef.current);
       resetAiState();
       return;
     }
 
-    if (!wasOpen || loadedDraftKeyRef.current !== sectionDraftKey) {
+    const sourceSectionChanged =
+      loadedDraftSignatureRef.current !== sectionDraftSignature;
+    if (
+      !wasOpen ||
+      loadedDraftKeyRef.current !== sectionDraftKey ||
+      (sourceSectionChanged && !pendingAutosaveSectionRef.current)
+    ) {
       loadedDraftKeyRef.current = sectionDraftKey;
+      loadedDraftSignatureRef.current = sectionDraftSignature;
       openedSectionRef.current = latestSectionRef.current;
       draftSectionRef.current = latestSectionRef.current;
       setDraftSection(latestSectionRef.current);
       resetAiState();
     }
-  }, [open, sectionDraftKey]);
+  }, [open, sectionDraftKey, sectionDraftSignature]);
 
   const editableSection = draftSection ?? section;
   const title = formatSectionDisplayTitle(editableSection, {

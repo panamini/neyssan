@@ -114,10 +114,13 @@ describe("JobsPage collapsed layout contract", () => {
       /\.dasti-jobs-filter-chips\s+\.dasti-proposal-library-filter-menu__drawer\s*\{[\s\S]*inset-inline-start:\s*0;[\s\S]*inset-inline-end:\s*auto;[\s\S]*inline-size:\s*max-content;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-jobs-row__controls\s*\{[\s\S]*align-self:\s*stretch;[\s\S]*align-content:\s*space-between;/,
+      /\.dasti-jobs-row__footer\s*\{[\s\S]*display:\s*flex;[\s\S]*align-items:\s*center;[\s\S]*justify-content:\s*space-between;[\s\S]*gap:\s*var\(--space-2\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-jobs-row__favorite-slot\s*\{[\s\S]*justify-content:\s*flex-end;/,
+      /\.dasti-jobs-row__controls\s*\{[\s\S]*display:\s*inline-flex;[\s\S]*align-items:\s*center;[\s\S]*justify-content:\s*flex-end;[\s\S]*margin-inline-start:\s*auto;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row__favorite-slot\s*\{[\s\S]*justify-content:\s*center;[\s\S]*color:\s*var\(--ac\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-jobs-row__menu-surface\s*\{[\s\S]*inline-size:\s*max-content;[\s\S]*min-inline-size:\s*100%;/,
