@@ -240,8 +240,11 @@
 
 .dasti-cv-stage-bar {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: var(--document-viewer-toolbar-block-size);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
@@ -1283,7 +1286,7 @@
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 900px) {
   .dasti-cv-skeleton-forge {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1303,6 +1306,13 @@
     overflow-x: visible;
   }
 
+  .dasti-cv-import-card,
+  .dasti-cv-compare-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
   .dasti-cv-import-card,
   .dasti-cv-compare-grid {
     grid-template-columns: minmax(0, 1fr);
