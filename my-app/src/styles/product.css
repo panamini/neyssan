@@ -2135,7 +2135,6 @@
   background:
     linear-gradient(135deg, var(--ap), transparent),
     var(--sfr);
-  box-shadow: inset 2px 0 0 var(--ac);
 }
 
 .dash-next-action__label {
