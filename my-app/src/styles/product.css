@@ -1930,7 +1930,7 @@
 .dashboard-page__inner {
   width: min(1120px, 100%);
   margin: 0 auto;
-  padding: clamp(var(--space-4), 4vw, var(--space-8));
+  padding: var(--space-6) var(--space-5) var(--space-8);
   display: grid;
   gap: var(--space-5);
 }

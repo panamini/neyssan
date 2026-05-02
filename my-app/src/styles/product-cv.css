@@ -13,7 +13,7 @@
   width: 100%;
   min-width: 0;
   min-height: calc(100dvh - var(--header-height) - var(--space-4));
-  padding: var(--space-5);
+  padding: var(--space-4) var(--space-5);
   border-radius: var(--r-surface, var(--radius-card));
   background: var(--sf1);
   overflow: clip;

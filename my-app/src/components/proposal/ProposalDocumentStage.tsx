@@ -6,7 +6,6 @@ import {
   FileText,
   Link,
   PaperPlaneRight,
-  RotateCcw,
   ShareFat,
 } from "@/lib/icons";
 
@@ -160,17 +159,17 @@ function buildSafeSendRows({
     matchReviewAccepted === null
       ? detectionPendingRow(
           "match-review",
-          "Match review not accepted",
+          "Match review accepted",
           "Match-review acceptance is not connected on this proposal surface yet.",
         )
       : {
           id: "match-review",
-          title: "Match review not accepted",
+          title: "Match review accepted",
           meta: matchReviewAccepted
-            ? "Match review has been accepted for this draft."
-            : "Review watch-outs before sending.",
+            ? "Source job has been viewed for this draft."
+            : "Open the source job before sending.",
           state: matchReviewAccepted ? "clear" : "warn",
-          label: matchReviewAccepted ? "Accepted" : "Review",
+          label: matchReviewAccepted ? "Viewed" : "Unviewed",
         };
 
   const unsupportedClaimRow: SafeSendRow =
@@ -357,7 +356,6 @@ export function ProposalDocumentStage({
           type="button"
           size="sm"
           variant="ghost"
-          iconLeft={<RotateCcw size={14} strokeWidth={1.8} />}
           onClick={() => runBrowserCommand("undo")}
         >
           Undo
@@ -366,7 +364,6 @@ export function ProposalDocumentStage({
           type="button"
           size="sm"
           variant="ghost"
-          iconLeft={<RotateCcw size={14} strokeWidth={1.8} />}
           onClick={() => runBrowserCommand("redo")}
         >
           Redo
