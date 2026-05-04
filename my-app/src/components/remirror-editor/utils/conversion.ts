@@ -915,6 +915,39 @@ const emptyDoc: RemirrorJSON = {
   content: [{ type: 'paragraph', content: [] }],
 };
 
+export function ensurePlainTextRemirrorDoc(
+  content: string | RemirrorJSON | undefined | null,
+): RemirrorJSON {
+  if (typeof content !== 'string') {
+    return ensureRemirrorDoc(content as any);
+  }
+
+  const normalized = content.replace(/\r\n?/g, '\n');
+  if (!normalized) {
+    return ensureRemirrorDoc(undefined as any);
+  }
+
+  const inlineNodes: RemirrorJSON[] = [];
+  normalized.split('\n').forEach((line, index) => {
+    if (index > 0) {
+      inlineNodes.push({ type: 'hardBreak' } as RemirrorJSON);
+    }
+    if (line) {
+      inlineNodes.push({ type: 'text', text: line } as RemirrorJSON);
+    }
+  });
+
+  return {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: inlineNodes,
+      } as RemirrorJSON,
+    ],
+  } as RemirrorJSON;
+}
+
 export function sectionToRemirrorDoc(section: Section): RemirrorJSON {
   const raw = (section as any).content ?? (section.blocks && section.blocks[0] ? (section.blocks[0].content as any) : undefined);
   return ensureRemirrorDoc(raw);

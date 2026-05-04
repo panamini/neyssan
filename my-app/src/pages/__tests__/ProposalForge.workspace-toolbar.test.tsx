@@ -1,5 +1,5 @@
 import React from "react";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -39,7 +39,7 @@ vi.mock("../../components/ui/toast", () => ({
 }));
 
 vi.mock("../../components/ProposalInputForm", () => ({
-  default: (props: Record<string, unknown>) => {
+  default: (props: Record<string, any>) => {
     proposalInputFormSpy(props);
     const submitFromBrief = React.useCallback(
       () =>
@@ -79,10 +79,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
       <div data-testid="proposal-input-form">
         Mock compose shell
         {props.headerAction as React.ReactNode}
-        <button
-          type="button"
-          onClick={submitFromBrief}
-        >
+        <button type="button" onClick={submitFromBrief}>
           Generate sample proposal
         </button>
         <button
@@ -113,38 +110,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
 vi.mock("../../components/ProposalComposeToolbar", () => ({
   ProposalComposeToolbar: (props: Record<string, any>) => {
     proposalComposeToolbarSpy(props);
-    return (
-      <div
-        data-testid="proposal-compose-toolbar"
-        data-collapsed={props.collapsed ? "true" : "false"}
-        data-transition-state={props.transitionState ?? "idle"}
-      >
-        <div data-testid="proposal-toolbar-actions">
-          {props.rightActions as React.ReactNode}
-        </div>
-        <button
-          type="button"
-          onClick={() => props.onToggleCvPicker?.()}
-        >
-          Toggle toolbar CV picker
-        </button>
-        {props.onCollapseCompose ? (
-          <button type="button" onClick={() => props.onCollapseCompose?.()}>
-            Collapse compose
-          </button>
-        ) : null}
-        {props.onRestoreCompose ? (
-          <button type="button" onClick={() => props.onRestoreCompose?.()}>
-            Restore compose
-          </button>
-        ) : null}
-        {props.onGenerateFromBrief ? (
-          <button type="button" onClick={() => props.onGenerateFromBrief?.()}>
-            {props.generateLabel ?? "Generate"}
-          </button>
-        ) : null}
-      </div>
-    );
+    return <div data-testid="proposal-compose-toolbar" />;
   },
 }));
 
@@ -160,6 +126,13 @@ vi.mock("../../components/ProposalDisplay", () => ({
 vi.mock("../../components/ProposalsList", () => ({
   default: () => <div>Saved proposals</div>,
 }));
+
+const renderProposalForge = (entry = "/proposal") =>
+  render(
+    <MemoryRouter initialEntries={[entry]}>
+      <ProposalForge />
+    </MemoryRouter>,
+  );
 
 describe("ProposalForge workbench layout", () => {
   beforeEach(() => {
@@ -185,39 +158,152 @@ describe("ProposalForge workbench layout", () => {
     window.dispatchEvent(new Event("resize"));
   });
 
-  it("anchors the live proposal workspace preview to the top of the document stage", () => {
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
+  it("anchors the proposal document in a single stage toolbar surface", () => {
+    renderProposalForge();
 
     const lastCall =
       proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
     expect(lastCall).toMatchObject({
       previewAnchor: "top",
-      documentHeaderMode: "actions-only",
+      documentHeaderMode: "hidden",
+      showModeToggle: false,
+      showZoomControls: false,
     });
+    expect(lastCall.actions).toBeUndefined();
+    expect(proposalComposeToolbarSpy).not.toHaveBeenCalled();
   });
 
-  it("renders the PR2 proposal stage, rail order, and Safe-send sheet from Share", () => {
-    const { container } = render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
+  it("consolidates share, export, and safe-send risk checks in the stage menu", async () => {
+    renderProposalForge();
+
+    const stage = screen.getByLabelText("Proposal document stage");
+    fireEvent.click(within(stage).getByRole("button", { name: /share/i }));
+
+    const menu = await screen.findByRole("menu", { name: "Share proposal" });
+    expect(
+      within(menu).getByRole("menuitem", { name: "Safe-send checklist…" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Send by email" }),
+    ).toBeDisabled();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Export PDF" }),
+    ).toBeDisabled();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Copy as text" }),
+    ).toBeDisabled();
+
+    fireEvent.click(
+      within(menu).getByRole("menuitem", { name: "Safe-send checklist…" }),
     );
 
-    const skeletonGrid = container.querySelector(
-      ".dasti-proposal-skeleton-forge",
-    ) as HTMLElement | null;
+    const dialog = await screen.findByRole("dialog", {
+      name: "Safe-send checklist",
+    });
+    expect(within(dialog).getByText("Source job linked")).toBeInTheDocument();
+    expect(within(dialog).getByText("Match review not accepted")).toBeInTheDocument();
+    expect(within(dialog).getByText("Unsupported claim")).toBeInTheDocument();
+    expect(
+      within(dialog).getAllByText("Detection pending", { selector: "span" })
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      within(dialog).getByRole("button", { name: "Continue to send" }),
+    ).toBeDisabled();
+
+    const sourceJobRow = within(dialog)
+      .getByText("Source job linked")
+      .closest(".dasti-proposal-safe-send__row");
+    expect(sourceJobRow).toHaveAttribute("data-state", "clear");
+  });
+
+  it("wires active job review and CV import recovery signals into Safe-send", async () => {
+    useQueryMock.mockImplementation((query: unknown, args: unknown) => {
+      if (query === "jobsPublic.getById" && args && args !== "skip") {
+        return {
+          id: "job_safe_send",
+          title: "Game UI Artist",
+          company: "Studio",
+          sourceUrl: "https://example.com/job",
+          sourceDomain: "example.com",
+          sourceType: "manual",
+          applicationUrl: "https://example.com/apply",
+          parseStatus: "parsed",
+          reviewState: "ready",
+          summary: "Game UI role.",
+          rawDescription:
+            "Detailed role description for the proposal brief capsule tests.",
+          responsibilities: [],
+          keywords: [],
+          mustHaves: [],
+          toneCues: [],
+          contacts: [],
+          status: "active",
+          resumeId: "cv_pending_recovery",
+          resumeName: "Recovered CV",
+          linkedProposalCount: 0,
+          linkedProposals: [],
+          reviewItems: [],
+        };
+      }
+      return null;
+    });
+    window.localStorage.setItem(
+      "cv:cv_pending_recovery",
+      JSON.stringify({
+        id: "cv_pending_recovery",
+        title: "Recovered CV",
+        metadata: {
+          createdAt: "2026-05-01T00:00:00.000Z",
+          updatedAt: "2026-05-01T00:00:00.000Z",
+          version: 1,
+          importRecoverySession: {
+            status: "pending",
+            updatedAt: "2026-05-01T00:00:00.000Z",
+            items: [{ blockId: "recovery-1", reviewStatus: "pending" }],
+            overflowCount: 0,
+            reviewLimit: 3,
+          },
+        },
+        sections: [],
+      }),
+    );
+
+    renderProposalForge("/proposal?jobId=job_safe_send");
+
+    const stage = await screen.findByLabelText("Proposal document stage");
+    fireEvent.click(within(stage).getByRole("button", { name: /share/i }));
+    const menu = await screen.findByRole("menu", { name: "Share proposal" });
+    fireEvent.click(
+      within(menu).getByRole("menuitem", { name: "Safe-send checklist…" }),
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Safe-send checklist",
+    });
+    const matchReviewRow = within(dialog)
+      .getByText("Match review not accepted")
+      .closest(".dasti-proposal-safe-send__row");
+    expect(matchReviewRow).toHaveAttribute("data-state", "clear");
+    expect(
+      within(matchReviewRow as HTMLElement).getByText("Accepted"),
+    ).toBeInTheDocument();
+
+    const importIssueRow = within(dialog)
+      .getByText("Unresolved import issues")
+      .closest(".dasti-proposal-safe-send__row");
+    expect(importIssueRow).toHaveAttribute("data-state", "warn");
+    expect(within(importIssueRow as HTMLElement).getByText("Resolve")).toBeInTheDocument();
+  });
+
+  it("renders the skeleton rail with lightweight setup and no visible legacy compose controls", () => {
+    const { container } = renderProposalForge();
+
     const rail = screen.getByLabelText("Proposal rail");
-    const railLabels = within(rail)
-      .getAllByText(/Job context|Source CV|Tone|Variables|Ask AI|Settings/)
-      .map((label) => label.textContent);
+    const railLabels = Array.from(
+      rail.querySelectorAll(".dasti-proposal-skeleton-rail__label"),
+    ).map((label) => label.textContent);
 
-    expect(skeletonGrid?.style.getPropertyValue("--grid-columns")).toBe(
-      "minmax(0, 1fr) 360px",
-    );
     expect(railLabels).toEqual([
       "Job context",
       "Source CV",
@@ -226,28 +312,58 @@ describe("ProposalForge workbench layout", () => {
       "Ask AI",
       "Settings",
     ]);
-
-    fireEvent.click(screen.getByRole("button", { name: "Share" }));
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: "Safe-send checklist" }),
-    );
-
+    expect(within(rail).getByText("Draft setup")).toBeInTheDocument();
+    expect(within(rail).getByText("Role")).toBeInTheDocument();
+    expect(within(rail).getByText("CV")).toBeInTheDocument();
+    expect(within(rail).getAllByText("Tone").length).toBeGreaterThan(0);
+    expect(within(rail).getByRole("button", { name: "Generate" })).toBeInTheDocument();
     expect(
-      screen.getByRole("dialog", { name: "Safe-send checklist" }),
+      within(rail).getByText("Generate a draft to edit document variables here."),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Continue to send" }),
-    ).toBeDisabled();
+    expect(within(rail).queryByRole("textbox", { name: /ask ai/i })).toBeNull();
+    expect(within(rail).queryByRole("button", { name: "Send" })).toBeNull();
+    expect(screen.queryByTestId("proposal-compose-toolbar")).toBeNull();
+    expect(container.querySelector(".dasti-proposal-compose-panel-stage")).toBeNull();
   });
 
-  it("routes the live workbench toolbar through the compose form's external CV and tone controls", () => {
-    const { container } = render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
+  it("keeps generation behavior behind the lightweight Draft setup boundary", async () => {
+    const { container } = renderProposalForge();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    expect(await screen.findByLabelText("Applicant name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Contact line")).toBeInTheDocument();
+    expect(
+      container.querySelector(".dasti-proposal-skeleton-rail__variables"),
+    ).toBeTruthy();
+    expect(screen.getByTestId("proposal-input-form").closest("[hidden]")).toBeTruthy();
+  });
+
+  it("keeps the hidden compose runtime wired to the rail CV menu and tone state", async () => {
+    window.localStorage.setItem(
+      "cvDocuments",
+      JSON.stringify([
+        {
+          id: "cv_editorial",
+          title: "Editorial v3",
+          metadata: {
+            createdAt: "2026-04-28T00:00:00.000Z",
+            updatedAt: "2026-04-28T00:00:00.000Z",
+            version: 1,
+          },
+          sections: [
+            {
+              id: "profile",
+              type: "profile",
+              title: "Profile",
+              content: "Frontend Engineer",
+            },
+          ],
+        },
+      ]),
     );
 
-    expect(screen.getByTestId("proposal-compose-toolbar")).toBeInTheDocument();
+    renderProposalForge();
 
     let lastInputCall =
       proposalInputFormSpy.mock.calls[proposalInputFormSpy.mock.calls.length - 1]?.[0];
@@ -256,105 +372,73 @@ describe("ProposalForge workbench layout", () => {
       cvPickerOpen: false,
       externalVoicePreset: null,
     });
-    expect(lastInputCall?.suppressToneControls).toBeFalsy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Set bottom tone" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: "Toggle toolbar CV picker" }),
-    );
-
-    lastInputCall =
-      proposalInputFormSpy.mock.calls[proposalInputFormSpy.mock.calls.length - 1]?.[0];
-    expect(lastInputCall).toMatchObject({
-      cvPickerOpen: true,
-      externalVoicePreset: "expert",
+    act(() => {
+      lastInputCall.onValuesChange?.({
+        jobTitle: "Game UI Artist",
+        jobDescription:
+          "Detailed role description for the proposal brief capsule tests.",
+        proposalType: "cover_letter",
+        voicePreset: "expert",
+        formalityLevel: "formal",
+        creativity: "low",
+        toneTuning: null,
+        characterLimitMode: "none",
+        characterLimitValue: 1500,
+        modelType: "chatgpt",
+      });
     });
-    const toolbarSlot = container.querySelector(
-      '[data-testid="proposal-workbench-toolbar-slot"]',
-    ) as HTMLElement | null;
-    expect(toolbarSlot).toBeTruthy();
-    expect(
-      toolbarSlot?.closest(".dasti-proposal-compose-column"),
-    ).toBeNull();
-    expect(
-      toolbarSlot?.closest(".dasti-proposal-skeleton-rail"),
-    ).toBeTruthy();
-    const pageShell = container.querySelector(".dasti-page-shell") as
-      | HTMLElement
-      | null;
-    const workbenchFrame = container.querySelector(".dasti-flow") as
-      | HTMLElement
-      | null;
-    const skeletonGrid = container.querySelector(".dasti-proposal-skeleton-forge") as
-      | HTMLElement
-      | null;
-    const outputShell = container.querySelector(".dasti-proposal-output-shell") as
-      | HTMLElement
-      | null;
-    expect(
-      pageShell?.style.getPropertyValue("--page-shell-gap"),
-    ).toBe("var(--space-2)");
-    expect(workbenchFrame?.style.maxWidth).toBe(
-      "calc(var(--proposal-workspace-output-shell-inline-size) + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Choose a CV Attach one to personalize the draft.",
+      }),
     );
-    expect(
-      workbenchFrame?.style.getPropertyValue(
-        "--proposal-workspace-output-shell-inline-size",
-      ),
-    ).toBe("calc(var(--document-sheet-inline-size) + (var(--s2) * 2) + 2px)");
-    expect(
-      skeletonGrid?.style.getPropertyValue("--grid-columns"),
-    ).toBe("minmax(0, 1fr) 360px");
-    expect(outputShell?.style.width).toBe("100%");
-    expect(
-      outputShell?.style.getPropertyValue("--document-viewer-shell-inline-size"),
-    ).toBe("var(--proposal-workspace-output-shell-inline-size)");
-    expect(screen.queryByRole("button", { name: /pick cv/i })).not.toBeInTheDocument();
+    const sourceCvMenu = await screen.findByRole("menu", { name: "Source CV" });
+    const menuItems = within(sourceCvMenu).getAllByRole("menuitem");
+    expect(menuItems[0]).toHaveTextContent("Create new CV");
+    expect(menuItems[1]).toHaveTextContent("Import new CV");
+    expect(sourceCvMenu.querySelector(".ds-menu__separator")).not.toBeNull();
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "Editorial v3" }));
+
+    await waitFor(() => {
+      lastInputCall =
+        proposalInputFormSpy.mock.calls[proposalInputFormSpy.mock.calls.length - 1]?.[0];
+      expect(lastInputCall).toMatchObject({
+        activeCvId: "cv_editorial",
+        cvPickerOpen: false,
+        externalVoicePreset: "expert",
+      });
+    });
+    expect(screen.queryByRole("dialog", { name: "Choose resume" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Balanced" })).not.toBeInTheDocument();
   });
 
-  it("stacks the live workbench before the expanded sidebar forces the compose shell to shrink", () => {
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      value: 1279,
-      writable: true,
-    });
-    window.dispatchEvent(new Event("resize"));
+  it("keeps the skeleton workbench constrained on desktop and compact widths", () => {
+    const { container } = renderProposalForge();
 
-    const { container } = render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    const workbenchFrame = container.querySelector(".dasti-flow") as
-      | HTMLElement
-      | null;
-    const skeletonGrid = container.querySelector(".dasti-proposal-skeleton-forge") as
-      | HTMLElement
-      | null;
-
-    expect(workbenchFrame?.style.maxWidth).toBe("560px");
-    expect(workbenchFrame?.style.marginInline).toBe("0");
-    expect(
-      skeletonGrid?.style.getPropertyValue("--grid-columns"),
-    ).toBe("minmax(0, 1fr)");
-  });
-
-  it("keeps the compose shell width contract stable when the workbench drops from desktop to compact", () => {
-    const { container } = render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    const composeColumn = container.querySelector(
-      ".dasti-proposal-compose-column--workspace",
+    const workbenchFrame = container.querySelector(".dasti-flow") as HTMLElement | null;
+    const skeletonGrid = container.querySelector(
+      ".dasti-proposal-skeleton-forge",
+    ) as HTMLElement | null;
+    const outputShell = container.querySelector(
+      ".dasti-proposal-output-shell",
     ) as HTMLElement | null;
 
+    expect(workbenchFrame?.style.maxWidth).toBe(
+      "calc(var(--proposal-workspace-output-shell-inline-size) + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
+    );
+    expect(skeletonGrid?.style.getPropertyValue("--grid-columns")).toBe(
+      "minmax(0, 1fr) 360px",
+    );
+    expect(outputShell?.style.width).toBe("100%");
+    const rail = screen.getByLabelText("Proposal rail");
+    expect(rail).toHaveClass("forge__rail");
+    expect(rail).toHaveClass("dasti-proposal-skeleton-rail");
     expect(
-      composeColumn?.style.getPropertyValue("--document-viewer-shell-inline-size"),
-    ).toBe("var(--proposal-workspace-output-shell-inline-size)");
+      Array.from(rail.children).filter((child) =>
+        child.classList.contains("forge__rail-section"),
+      ),
+    ).toHaveLength(7);
 
     act(() => {
       Object.defineProperty(window, "innerWidth", {
@@ -365,299 +449,13 @@ describe("ProposalForge workbench layout", () => {
       window.dispatchEvent(new Event("resize"));
     });
 
-    const workbenchFrame = container.querySelector(".dasti-flow") as
-      | HTMLElement
-      | null;
-    const skeletonGrid = container.querySelector(".dasti-proposal-skeleton-forge") as
-      | HTMLElement
-      | null;
-
-    expect(
-      composeColumn?.style.getPropertyValue("--document-viewer-shell-inline-size"),
-    ).toBe("var(--proposal-workspace-output-shell-inline-size)");
     expect(workbenchFrame?.style.maxWidth).toBe("560px");
-    expect(
-      skeletonGrid?.style.getPropertyValue("--grid-columns"),
-    ).toBe("minmax(0, 1fr)");
-  });
-
-  it("normalizes unsupported saved toolbar tones back to auto", () => {
-    useQueryMock.mockImplementation((query: string) => {
-      if (query === "proposalSettings.getCurrent") {
-        return {
-          savedVoicePreset: "direct",
-          templateId: null,
-        };
-      }
-      return null;
-    });
-
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    const lastInputCall =
-      proposalInputFormSpy.mock.calls[proposalInputFormSpy.mock.calls.length - 1]?.[0];
-    expect(lastInputCall).toMatchObject({
-      externalVoicePreset: null,
-    });
-  });
-
-  it("restores the donor desktop collapse and restore controls for the compose column", () => {
-    const { container } = render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    const composeShell = screen.getByTestId("proposal-input-form");
-    expect(composeShell.parentElement).not.toHaveStyle({ display: "none" });
-
-    let lastToolbarCall =
-      proposalComposeToolbarSpy.mock.calls[
-        proposalComposeToolbarSpy.mock.calls.length - 1
-      ]?.[0];
-    expect(lastToolbarCall.onCollapseCompose).toEqual(expect.any(Function));
-    expect(lastToolbarCall.collapsed).not.toBe(true);
-
-    fireEvent.click(screen.getByRole("button", { name: "Collapse compose" }));
-
-    lastToolbarCall =
-      proposalComposeToolbarSpy.mock.calls[
-        proposalComposeToolbarSpy.mock.calls.length - 1
-      ]?.[0];
-    expect(lastToolbarCall).toMatchObject({ collapsed: true });
-    expect(screen.getByTestId("proposal-compose-toolbar")).toHaveAttribute(
-      "data-transition-state",
-      "entering",
-    );
-    expect(lastToolbarCall.onRestoreCompose).toEqual(expect.any(Function));
-    expect(lastToolbarCall.onGenerateFromBrief).toEqual(expect.any(Function));
-    expect(composeShell.parentElement).toHaveStyle({ display: "none" });
-    const gridSplitAfterCollapse = container.querySelector(
-      ".dasti-proposal-skeleton-forge",
-    ) as HTMLElement | null;
-    const workbenchFrameAfterCollapse = container.querySelector(
-      ".dasti-flow",
-    ) as HTMLElement | null;
-    expect(
-      gridSplitAfterCollapse?.style.getPropertyValue("--grid-justify"),
-    ).toBe("center");
-    expect(workbenchFrameAfterCollapse?.style.maxWidth).toBe("860px");
-    expect(
-      container.querySelector(".dasti-proposal-skeleton-rail"),
-    ).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Restore compose" }));
-
-    lastToolbarCall =
-      proposalComposeToolbarSpy.mock.calls[
-        proposalComposeToolbarSpy.mock.calls.length - 1
-      ]?.[0];
-    expect(lastToolbarCall.collapsed).not.toBe(true);
-    expect(screen.getByTestId("proposal-compose-toolbar")).toHaveAttribute(
-      "data-transition-state",
-      "entering",
-    );
-    expect(lastToolbarCall.onCollapseCompose).toEqual(expect.any(Function));
-    expect(composeShell.parentElement).not.toHaveStyle({ display: "none" });
-    expect(
-      container.querySelector(".dasti-proposal-skeleton-rail"),
-    ).toBeTruthy();
-  });
-
-  it("keeps the generated brief card and toolbar inside the proposal rail", () => {
-    vi.useFakeTimers();
-    const { container } = render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Generate sample proposal" }));
-
-    const briefCapsule = container.querySelector(
-      ".dasti-brief-focus-strip",
-    ) as HTMLElement | null;
-    const toolbarSlot = container.querySelector(
-      '[data-testid="proposal-workbench-toolbar-slot"]',
-    ) as HTMLElement | null;
-    const leftColumn = container.querySelector(".dasti-forge-left-col") as
-      | HTMLElement
-      | null;
-    expect(briefCapsule).toBeTruthy();
-    expect(
-      briefCapsule?.closest(".dasti-proposal-compose-column"),
-    ).toBeTruthy();
-    expect(
-      briefCapsule?.closest(".dasti-workbench-top-left-slot--proposal"),
-    ).toBeNull();
-    expect(toolbarSlot).toBeTruthy();
-    expect(
-      toolbarSlot?.closest(".dasti-proposal-skeleton-rail"),
-    ).toBeTruthy();
-    expect(
-      toolbarSlot?.closest(".dasti-proposal-compose-column"),
-    ).toBeNull();
-    expect(toolbarSlot?.contains(briefCapsule ?? null)).toBe(false);
-    expect(
-      container.querySelector(".dasti-proposal-skeleton-rail"),
-    ).toBeTruthy();
-    const workbenchFrame = container.querySelector(".dasti-flow") as
-      | HTMLElement
-      | null;
-    const skeletonGrid = container.querySelector(".dasti-proposal-skeleton-forge") as
-      | HTMLElement
-      | null;
-    const outputShell = container.querySelector(
-      ".dasti-proposal-output-shell",
-    ) as HTMLElement | null;
-    expect(leftColumn?.classList.contains("dasti-forge-left-col--hidden")).toBe(false);
-    expect(workbenchFrame?.style.marginInline).toBe("0");
-    expect(
-      skeletonGrid?.style.getPropertyValue("--grid-columns"),
-    ).toBe("minmax(0, 1fr) 360px");
-    expect(skeletonGrid?.style.getPropertyValue("--grid-justify")).toBe("start");
-    expect(outputShell?.style.width).toBe("100%");
-    expect(
-      outputShell?.closest(".dasti-workbench-top-left-slot--proposal"),
-    ).toBeNull();
-    expect(
-      outputShell?.closest(".dasti-proposal-skeleton-forge"),
-    ).toBe(skeletonGrid);
-    const expandButton = screen.getByRole("button", { name: "Expand" });
-    expect(expandButton).not.toHaveAttribute("data-toolbar-tooltip");
-
-    fireEvent.click(expandButton);
-    const composeStage = container.querySelector(
-      ".dasti-proposal-compose-panel-stage",
-    ) as HTMLElement | null;
-    expect(composeStage?.style.display).toBe("none");
-    expect(container.querySelector(".dasti-brief-focus-strip")).toBeTruthy();
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
-
-    expect(
-      container.querySelector(".dasti-brief-focus-strip"),
-    ).toBeNull();
-    expect(screen.getByTestId("proposal-input-form")).toBeInTheDocument();
-    vi.useRealTimers();
-  });
-
-  it("keeps the compact brief focus strip inside the compose column on compact widths", () => {
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      value: 1000,
-      writable: true,
-    });
-    window.dispatchEvent(new Event("resize"));
-
-    const { container } = render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Generate sample proposal" }));
-
-    expect(
-      container.querySelector(
-        ".dasti-proposal-compose-column .dasti-brief-focus-strip",
-      ),
-    ).toBeTruthy();
-  });
-
-  it("collapses the compose shell to the brief focus strip from the inline X control before generation", () => {
-    vi.useFakeTimers();
-    useQueryMock.mockImplementation((query: string) => {
-      if (query === "proposalHandoffs.get") {
-        return {
-          handoffId: "handoff_123",
-          jobTitle: "Imported Product Ops Lead",
-          jobDescription:
-            "Detailed role description for the proposal brief capsule tests.",
-          sourceUrl: "https://www.linkedin.com/jobs/view/123456",
-          platform: "linkedin",
-        };
-      }
-      return null;
-    });
-
-    const { container } = render(
-      <MemoryRouter initialEntries={["/proposal?handoffId=handoff_123"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    const composeStage = container.querySelector(
-      ".dasti-proposal-compose-panel-stage",
-    ) as HTMLElement | null;
-    expect(composeStage?.style.display).not.toBe("none");
-
-    fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
-
-    act(() => {
-      vi.advanceTimersByTime(200);
-    });
-
-    expect(composeStage?.style.display).toBe("none");
-    expect(container.querySelector(".dasti-brief-focus-strip")).toBeTruthy();
-    expect(
-      screen.getByRole("link", { name: "Open original job offer on LinkedIn" }),
-    ).toHaveAttribute("href", "https://www.linkedin.com/jobs/view/123456");
-    vi.useRealTimers();
-  });
-
-  it("keeps the compact compose and output cards constrained inside the active page shell", () => {
-    Object.defineProperty(window, "innerWidth", {
-      configurable: true,
-      value: 700,
-      writable: true,
-    });
-    window.dispatchEvent(new Event("resize"));
-
-    const { container } = render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    const pageShell = container.querySelector(".dasti-page-shell") as
-      | HTMLElement
-      | null;
-    const workbenchFrame = container.querySelector(".dasti-flow") as
-      | HTMLElement
-      | null;
-    const skeletonGrid = container.querySelector(".dasti-proposal-skeleton-forge") as
-      | HTMLElement
-      | null;
-    const composeShell = screen.getByTestId("proposal-input-form").parentElement
-      ?.parentElement as HTMLElement | null;
-    const outputShell = container.querySelector(
-      ".dasti-proposal-output-shell",
-    ) as HTMLElement | null;
-
-    expect(pageShell).toBeTruthy();
-    expect(
-      pageShell?.style.getPropertyValue("--page-shell-max-width"),
-    ).toBe("100%");
-    expect(workbenchFrame?.style.maxWidth).toBe("560px");
-    expect(skeletonGrid).toBeTruthy();
-    expect(
-      skeletonGrid?.style.getPropertyValue("--grid-columns"),
-    ).toBe("minmax(0, 1fr)");
-    expect(composeShell?.style.width).toBe(
-      "min(100%, var(--proposal-workspace-output-shell-inline-size))",
-    );
-    expect(outputShell?.style.width).toBe(
-      "min(100%, var(--proposal-workspace-output-shell-inline-size))",
+    expect(skeletonGrid?.style.getPropertyValue("--grid-columns")).toBe(
+      "minmax(0, 1fr)",
     );
   });
 
-  it("keeps preview compose output actions empty", () => {
+  it("keeps ProposalDisplay output actions out of the legacy output toolbar in preview mode", () => {
     window.localStorage.setItem(
       "dasti:proposal-output-draft:v1",
       JSON.stringify({
@@ -685,32 +483,20 @@ describe("ProposalForge workbench layout", () => {
       }),
     );
 
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
+    renderProposalForge();
 
     const lastCall =
       proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
-    const { container } = render(
-      <div>
-        {proposalComposeToolbarSpy.mock.calls[
-          proposalComposeToolbarSpy.mock.calls.length - 1
-        ]?.[0]?.rightActions as React.ReactNode}
-        {lastCall.actions as React.ReactNode}
-      </div>,
-    );
-
-    const buttonLabels = within(container).queryAllByRole("button").map(
-      (button) =>
-        button.getAttribute("aria-label") ??
-        button.getAttribute("data-toolbar-tooltip"),
-    );
-    expect(buttonLabels).toEqual(["Choose signature"]);
+    expect(lastCall).toMatchObject({
+      documentHeaderMode: "hidden",
+      showModeToggle: false,
+      showZoomControls: false,
+    });
+    expect(lastCall.actions).toBeUndefined();
+    expect(proposalComposeToolbarSpy).not.toHaveBeenCalled();
   });
 
-  it("moves edit-only reset and export controls into the proposal display toolbar", () => {
+  it("keeps ProposalDisplay output/header controls out of the legacy output toolbar in edit mode", () => {
     window.localStorage.setItem(
       "dasti:proposal-output-draft:v1",
       JSON.stringify({
@@ -738,68 +524,16 @@ describe("ProposalForge workbench layout", () => {
       }),
     );
 
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
+    renderProposalForge();
 
     const lastCall =
       proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
-    const { container } = render(<div>{lastCall.actions as React.ReactNode}</div>);
-
-    const buttonLabels = within(container).getAllByRole("button").map(
-      (button) =>
-        button.getAttribute("aria-label") ??
-        button.getAttribute("data-toolbar-tooltip"),
-    );
-    expect(buttonLabels).toEqual([
-      "Choose signature",
-      "Export proposal",
-      "Save proposal to library",
-      "Delete",
-    ]);
-  });
-
-  it("restores the expanded compose bar once the layout leaves true desktop two-pane mode", () => {
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    let lastToolbarCall =
-      proposalComposeToolbarSpy.mock.calls[
-        proposalComposeToolbarSpy.mock.calls.length - 1
-      ]?.[0];
-    expect(lastToolbarCall.onCollapseCompose).toEqual(expect.any(Function));
-
-    fireEvent.click(screen.getByRole("button", { name: "Collapse compose" }));
-
-    lastToolbarCall =
-      proposalComposeToolbarSpy.mock.calls[
-      proposalComposeToolbarSpy.mock.calls.length - 1
-      ]?.[0];
-    expect(lastToolbarCall).toMatchObject({ collapsed: true });
-    expect(lastToolbarCall.onRestoreCompose).toEqual(expect.any(Function));
-
-    act(() => {
-      Object.defineProperty(window, "innerWidth", {
-        configurable: true,
-        value: 1000,
-        writable: true,
-      });
-      window.dispatchEvent(new Event("resize"));
+    expect(lastCall).toMatchObject({
+      documentHeaderMode: "hidden",
+      showModeToggle: false,
+      showZoomControls: false,
     });
-
-    lastToolbarCall =
-      proposalComposeToolbarSpy.mock.calls[
-        proposalComposeToolbarSpy.mock.calls.length - 1
-      ]?.[0];
-    expect(lastToolbarCall.collapsed).not.toBe(true);
-    expect(lastToolbarCall.onCollapseCompose).toBeUndefined();
-    expect(lastToolbarCall.onRestoreCompose).toBeUndefined();
-    expect(screen.queryByRole("button", { name: "Restore compose" })).toBeNull();
-    expect(screen.getByTestId("proposal-input-form")).toBeInTheDocument();
+    expect(lastCall.actions).toBeUndefined();
+    expect(proposalComposeToolbarSpy).not.toHaveBeenCalled();
   });
 });

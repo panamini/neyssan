@@ -1,5 +1,5 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Authenticated, Unauthenticated } from "convex/react";
 import { SignIn } from "@clerk/clerk-react";
 
@@ -118,6 +118,9 @@ export function SignInPage(): JSX.Element {
         <section className="dasti-auth-page" aria-labelledby="dasti-auth-title">
           <div className="dasti-auth-card">
             <div className="dasti-auth-card__header">
+              <Link to="/dashboard" className="dasti-auth-card__back">
+                Back to dashboard
+              </Link>
               <p className="dasti-auth-card__eyebrow">two weeks account</p>
               <h1 id="dasti-auth-title" className="dasti-auth-card__title">
                 Sign in
@@ -125,6 +128,11 @@ export function SignInPage(): JSX.Element {
               <p className="dasti-auth-card__subtitle">
                 Save drafts, resumes, jobs, and cover letters across sessions.
               </p>
+              <ul className="dasti-auth-card__list" aria-label="Account benefits">
+                <li>Sync document libraries</li>
+                <li>Recover work across browsers</li>
+                <li>Keep extension captures attached to your workspace</li>
+              </ul>
             </div>
 
             <SignIn

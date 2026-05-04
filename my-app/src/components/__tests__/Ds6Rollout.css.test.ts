@@ -99,6 +99,13 @@ describe("DS-6 rollout contracts", () => {
       /\.dasti-rich\s*\{[\s\S]*border:\s*2px solid transparent;[\s\S]*background:\s*var\(--sf2\);/,
     );
     expect(primitivesCss).toMatch(
+      /\.dasti-rich \.ProseMirror\s*\{[\s\S]*font-family:\s*var\(--font-body-family\);[\s\S]*font-weight:\s*var\(--font-body-weight\);/,
+    );
+    expect(primitivesCss).toMatch(
+      /\.dasti-rich \.ProseMirror strong\s*\{[\s\S]*font-weight:\s*var\(--font-strong-weight\);/,
+    );
+    expect(primitivesCss).not.toContain('font-family: "Source Serif 4", serif;');
+    expect(primitivesCss).toMatch(
       /\.dasti-rich:focus-within\s*\{[\s\S]*border-color:\s*var\(--ti\);[\s\S]*box-shadow:\s*var\(--field-focus-shadow\) !important;/,
     );
     expect(primitivesCss).toMatch(

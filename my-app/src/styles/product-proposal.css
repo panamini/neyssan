@@ -5223,10 +5223,49 @@
   gap: 12px;
 }
 
+.dasti-brief-card__section-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dasti-brief-card__section-status {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--ac);
+}
+
+.dasti-brief-card__section-status--uncertain {
+  background: var(--danger);
+}
+
+.dasti-brief-card__section-status--edited {
+  background: var(--ac);
+}
+
 .dasti-brief-card__review-label {
   font-size: var(--ts);
   font-weight: 700;
+  color: var(--ac);
+}
+
+.dasti-brief-card__section-edit {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tg2);
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: var(--font-label-weight);
+  cursor: pointer;
+}
+
+.dasti-brief-card__section-edit:hover,
+.dasti-brief-card__section-edit:focus-visible {
   color: var(--ti);
+  outline: none;
 }
 
 .dasti-brief-card__review-state {
@@ -7251,6 +7290,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex-wrap: wrap;
   padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
   border: 1px solid var(--proposal-chrome-toolbar-border);
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
@@ -7269,6 +7309,35 @@
 .dasti-proposal-skeleton-stage__mode {
   height: 28px;
   flex-shrink: 0;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(96px, 1fr));
+  gap: 2px;
+  align-items: center;
+  justify-items: stretch;
+  padding: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--sf1);
+}
+
+.dasti-proposal-skeleton-stage__mode button {
+  min-height: 22px;
+  width: 100%;
+  padding-inline: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--tm2);
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.dasti-proposal-skeleton-stage__mode button[data-selected="true"] {
+  background: var(--sf0);
+  color: var(--ti);
+  box-shadow: var(--shadow-sm);
 }
 
 .dasti-proposal-skeleton-stage__paper {
@@ -7278,19 +7347,31 @@
 .dasti-proposal-skeleton-rail {
   grid-column: 2;
   order: 2;
+  position: sticky;
+  top: var(--space-4);
   width: 360px;
   max-width: 100%;
   min-width: 0;
-  max-height: calc(100dvh - var(--header-height) - (var(--space-4) * 2));
+  box-sizing: border-box;
+  max-height: calc(100dvh - var(--header-height, 0px) - (var(--space-4) * 2));
   overflow: auto;
-  border-left: 1px solid var(--border-soft);
-  padding-inline-start: var(--space-3);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-surface, var(--radius-card));
+  background: var(--sfr);
+  box-shadow: var(--shadow-sm);
 }
 
 .dasti-proposal-skeleton-rail__section {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-2);
-  padding-block: var(--space-3);
+  padding-block: 0 var(--space-4);
   border-bottom: 1px solid var(--border-soft);
 }
 
@@ -7304,9 +7385,11 @@
 }
 
 .dasti-proposal-skeleton-rail__label {
-  font-size: var(--tx);
+  font-size: 10px;
   line-height: var(--lx);
-  color: var(--tm2);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--am, var(--tm2));
   font-weight: var(--font-label-weight);
 }
 
@@ -7331,9 +7414,15 @@
 }
 
 .dasti-proposal-skeleton-rail__cv-button {
+  width: 100%;
   justify-content: flex-start;
   gap: var(--space-2);
   text-align: left;
+}
+
+.dasti-proposal-skeleton-rail__cv-button > span:nth-child(2) {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .dasti-proposal-skeleton-rail__cv-button strong,
@@ -7348,6 +7437,11 @@
   font-weight: 400;
 }
 
+.dasti-proposal-skeleton-rail__cv-caret {
+  margin-inline-start: auto;
+  color: var(--tg3);
+}
+
 .dasti-proposal-skeleton-rail__cv-thumb {
   width: 24px;
   height: 32px;
@@ -7357,30 +7451,66 @@
   box-shadow: var(--sha);
 }
 
-.dasti-proposal-skeleton-rail__toolbar {
-  min-width: 0;
+.dasti-proposal-skeleton-rail__cv-menu-thumb {
+  width: 20px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: var(--sha);
 }
 
-.dasti-proposal-skeleton-rail__toolbar .dasti-cv-workbench-bar,
-.dasti-proposal-skeleton-rail__toolbar .dasti-compose-toolbar {
+.dasti-proposal-hidden-implementation {
+  display: none !important;
+}
+
+.dasti-proposal-skeleton-rail__draft-setup {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: var(--sf1);
+  overflow: hidden;
+}
+
+.dasti-proposal-skeleton-rail__draft-setup summary {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  color: var(--ti);
+  font-size: var(--tx);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.dasti-proposal-skeleton-rail__draft-setup-body {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) var(--space-2);
+}
+
+.dasti-proposal-skeleton-rail__draft-setup-body .ds-btn {
   width: 100%;
-  max-width: 100%;
+  justify-content: center;
 }
 
-.dasti-proposal-skeleton-rail .dasti-forge-left-col {
-  max-width: 100%;
+.dasti-proposal-skeleton-rail__variables {
+  display: grid;
+  gap: var(--space-2);
 }
 
-.dasti-proposal-skeleton-rail .dasti-proposal-compose-column {
-  width: 100%;
-  max-width: 100%;
+.dasti-proposal-skeleton-rail__variable-field {
+  display: grid;
+  gap: 4px;
 }
 
-.dasti-proposal-skeleton-rail .dasti-proposal-sheet--composer {
-  width: 100%;
-  max-width: 100%;
-  aspect-ratio: auto;
-  min-height: 0;
+.dasti-proposal-skeleton-rail__variable-field > span {
+  color: var(--tm2);
+  font-size: var(--tx);
+  font-weight: 650;
+}
+
+.dasti-proposal-skeleton-rail__variable-field textarea {
+  min-height: 76px;
 }
 
 .dasti-proposal-skeleton-rail__ask {
@@ -7526,12 +7656,17 @@
   }
 
   .dasti-proposal-skeleton-rail {
+    order: 1;
+    position: static;
     width: 100%;
     max-height: none;
-    border-left: 0;
-    border-top: 1px solid var(--border-soft);
-    padding-inline-start: 0;
-    padding-block-start: var(--space-3);
+    overflow: visible;
+    border: 1px solid var(--border-soft);
+    padding: var(--space-4);
+  }
+
+  .dasti-proposal-skeleton-forge__stage {
+    order: 2;
   }
 
   .dasti-proposal-skeleton-stage__bar {

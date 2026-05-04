@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -31,6 +31,10 @@ vi.mock("convex/react", () => ({
 
 vi.mock("@clerk/clerk-react", () => ({
   SignInButton: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  UserButton: () => <button type="button">User menu</button>,
+  useAuth: () => ({ isSignedIn: false }),
+  useUser: () => ({ user: null }),
+  useClerk: () => ({ signOut: vi.fn() }),
 }));
 
 vi.mock("../components/ConvexStatusBanner", () => ({
@@ -167,7 +171,9 @@ describe("App Quick Start pane", () => {
     expect(screen.getByText("Sidebar")).toBeInTheDocument();
     expect(screen.getByText("Convex banner")).toBeInTheDocument();
     expect(screen.getByTestId("quick-start-pane")).toBeInTheDocument();
-    expect(screen.queryByText("Proposal forge")).not.toBeInTheDocument();
+    expect(
+      within(document.querySelector(".app-pages") as HTMLElement).queryByText("Proposal forge"),
+    ).not.toBeInTheDocument();
     expect(document.querySelector(".dasti-dialog-root")).toBeNull();
     expect(document.querySelector(".dasti-dialog-overlay")).toBeNull();
   });
@@ -179,7 +185,9 @@ describe("App Quick Start pane", () => {
 
     await waitFor(() => {
       expect(window.location.pathname).toBe("/proposal");
-      expect(screen.getByText("Proposal forge")).toBeInTheDocument();
+      expect(
+        within(document.querySelector(".app-pages") as HTMLElement).getByText("Proposal forge"),
+      ).toBeInTheDocument();
     });
 
     expect(screen.queryByTestId("quick-start-pane")).not.toBeInTheDocument();
@@ -205,7 +213,9 @@ describe("App Quick Start pane", () => {
     await userEvent.click(screen.getByLabelText("Close"));
 
     await waitFor(() => {
-      expect(screen.getByText("Proposal forge")).toBeInTheDocument();
+      expect(
+        within(document.querySelector(".app-pages") as HTMLElement).getByText("Proposal forge"),
+      ).toBeInTheDocument();
     });
     expect(window.history.state.usr).toEqual({
       proposalWorkspaceResetToken: "reset-1",
@@ -237,7 +247,9 @@ describe("App Quick Start pane", () => {
 
     expect(screen.getByLabelText("Close")).toBeDisabled();
     expect(screen.getByTestId("quick-start-pane")).toBeInTheDocument();
-    expect(screen.queryByText("Proposal forge")).not.toBeInTheDocument();
+    expect(
+      within(document.querySelector(".app-pages") as HTMLElement).queryByText("Proposal forge"),
+    ).not.toBeInTheDocument();
     expect(window.location.pathname).toBe("/proposal");
   });
 });

@@ -4,6 +4,102 @@ import {
   ConvexStorageAdapter,
   mapPersistedProfileToCvDocument,
 } from "../StorageAdapter";
+import {
+  encodeCvDocumentForConvex,
+  getMaxNestingDepth,
+  isPersistedRemirrorJson,
+} from "../cvDocumentPersistence";
+import { mapCvDocumentToResumeData } from "../../features/verbati/cvDocumentToResumeData";
+
+const richResponsibilitiesDoc = {
+  type: "doc",
+  content: [
+    {
+      type: "paragraph",
+      content: [{ type: "text", text: "Led delivery", marks: [{ type: "bold" }] }],
+    },
+    {
+      type: "bullet_list",
+      content: [
+        {
+          type: "list_item",
+          content: [
+            {
+              type: "paragraph",
+              content: [
+                { type: "text", text: "Shipped resilient workflows", marks: [{ type: "bold" }] },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+function buildRichCv() {
+  const cv = generateCvTemplateV1("Rich Persistence CV");
+  cv.sections = [
+    {
+      id: "summary-rich",
+      type: "summary",
+      title: "Summary",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "summary-item",
+          summary: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "Bold summary", marks: [{ type: "bold" }] }],
+              },
+            ],
+          },
+        },
+      ],
+    } as any,
+    {
+      id: "experience-rich",
+      type: "experience",
+      title: "Experience",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "exp-rich",
+          company: "Acme",
+          position: "Lead",
+          startDate: "2024-01-01",
+          endDate: null,
+          responsibilities: richResponsibilitiesDoc,
+        },
+      ],
+    } as any,
+    {
+      id: "project-rich",
+      type: "projects",
+      title: "Projects",
+      blocks: [],
+      structuredContent: [
+        {
+          id: "project-item",
+          name: "Project Atlas",
+          description: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "Project detail", marks: [{ type: "italic" }] }],
+              },
+            ],
+          },
+        },
+      ],
+    } as any,
+  ];
+  return cv;
+}
 
 describe("StorageAdapter persistence", () => {
   beforeEach(() => {
@@ -31,7 +127,79 @@ describe("StorageAdapter persistence", () => {
     );
   });
 
-  it("keeps import recovery session only in the embedded cvDocument payload", async () => {
+  it("encodes rich Remirror docs into Convex-safe shallow fields on save", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = buildRichCv();
+
+    await adapter.save(cv);
+
+    const payload = patchMutation.mock.calls[0][0].patch;
+    const summary = payload.cvDocument.sections[0].structuredContent[0].summary;
+    const responsibilities = payload.cvDocument.sections[1].structuredContent[0].responsibilities;
+    const projectDescription = payload.cvDocument.sections[2].structuredContent[0].description;
+
+    expect(isPersistedRemirrorJson(summary)).toBe(true);
+    expect(isPersistedRemirrorJson(responsibilities)).toBe(true);
+    expect(isPersistedRemirrorJson(projectDescription)).toBe(true);
+    expect(responsibilities.json).toContain("bullet_list");
+    expect(responsibilities.json).toContain("bold");
+    expect(JSON.stringify(payload.cvDocument)).not.toContain('"type":"doc"');
+    expect(JSON.stringify(payload.cvDocument)).not.toContain("<p");
+    expect(getMaxNestingDepth(payload)).toBeLessThanOrEqual(16);
+  });
+
+  it("decodes persisted rich fields and still accepts old raw Remirror docs", () => {
+    const cv = buildRichCv();
+    const encoded = encodeCvDocumentForConvex(cv);
+
+    const restored = mapPersistedProfileToCvDocument(
+      { profileId: cv.id, cvDocument: encoded },
+      cv.id,
+    );
+    const oldRawRestored = mapPersistedProfileToCvDocument(
+      { profileId: cv.id, cvDocument: cv },
+      cv.id,
+    );
+
+    expect(restored?.sections[1].structuredContent?.[0].responsibilities).toEqual(
+      richResponsibilitiesDoc,
+    );
+    expect(oldRawRestored?.sections[1].structuredContent?.[0].responsibilities).toEqual(
+      richResponsibilitiesDoc,
+    );
+  });
+
+  it("renders rich summary, project description, and responsibility bullets after save/load", () => {
+    const cv = buildRichCv();
+    const restored = mapPersistedProfileToCvDocument(
+      { profileId: cv.id, cvDocument: encodeCvDocumentForConvex(cv) },
+      cv.id,
+    );
+
+    expect(restored).not.toBeNull();
+    const resumeData = mapCvDocumentToResumeData(restored! as any);
+    expect(resumeData.summary).toContain("Bold summary");
+    expect(JSON.stringify(resumeData.experience)).toContain("Shipped resilient workflows");
+    expect(JSON.stringify(resumeData.projects)).toContain("Project detail");
+  });
+
+  it("does not duplicate the CV sections beside the embedded cvDocument payload", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Payload Size Guard CV");
+
+    await adapter.save(cv);
+
+    expect(patchMutation).toHaveBeenCalledTimes(1);
+    const payload = patchMutation.mock.calls[0][0].patch;
+    expect(payload.cvDocument.sections).toHaveLength(cv.sections.length);
+    expect(payload.sections).toBeUndefined();
+    expect(payload.title).toBeUndefined();
+    expect(payload.id).toBeUndefined();
+  });
+
+  it("strips import recovery session from backend payloads while keeping the local runtime snapshot", async () => {
     const patchMutation = vi.fn().mockResolvedValue(undefined);
     const adapter = new ConvexStorageAdapter(patchMutation);
     const cv = generateCvTemplateV1("Recovery Persistence CV");
@@ -63,12 +231,17 @@ describe("StorageAdapter persistence", () => {
     expect(patchMutation).toHaveBeenCalledTimes(1);
     const payload = patchMutation.mock.calls[0][0].patch;
     expect(payload.metadata.importRecoverySession).toBeUndefined();
-    expect(payload.cvDocument.metadata.importRecoverySession).toEqual(
+    expect(payload.cvDocument.metadata.importRecoverySession).toBeUndefined();
+
+    const cachedDocument = JSON.parse(
+      window.localStorage.getItem(`cv:${cv.id}`) as string,
+    );
+    expect(cachedDocument.metadata.importRecoverySession).toEqual(
       expect.objectContaining({ status: "completed" }),
     );
   });
 
-  it("strips authoritativeResume from backend metadata but keeps it in the runtime snapshot", async () => {
+  it("strips authoritativeResume from backend payloads but keeps it in the runtime snapshot", async () => {
     const patchMutation = vi.fn().mockResolvedValue(undefined);
     const adapter = new ConvexStorageAdapter(patchMutation);
     const cv = generateCvTemplateV1("Trusted Runtime CV");
@@ -84,14 +257,7 @@ describe("StorageAdapter persistence", () => {
     expect(patchMutation).toHaveBeenCalledTimes(1);
     const payload = patchMutation.mock.calls[0][0].patch;
     expect(payload.metadata.authoritativeResume).toBeUndefined();
-    expect(payload.cvDocument.metadata.authoritativeResume).toEqual(
-      expect.objectContaining({
-        source: "mistral_v3",
-        trusted: false,
-        fallbackToLegacy: true,
-        normalized: null,
-      }),
-    );
+    expect(payload.cvDocument.metadata.authoritativeResume).toBeUndefined();
 
     const cachedDocument = JSON.parse(
       window.localStorage.getItem(`cv:${cv.id}`) as string,
@@ -155,6 +321,82 @@ describe("StorageAdapter persistence", () => {
     expect(
       restored?.sections.some((section) => section.type === "summary"),
     ).toBe(true);
+  });
+
+  it("keeps style-only backend payloads small even when runtime metadata has large import artifacts", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Oversized Style Save CV");
+    const largeText = "x".repeat(650_000);
+    cv.metadata.verbatiStyle = {
+      layout: "workshop",
+      palette: "bordeaux",
+      typography: "soft-serif",
+      accentHex: "#9a2d45",
+    };
+    cv.metadata.authoritativeResume = {
+      source: "mistral_v3",
+      trusted: true,
+      fallbackToLegacy: false,
+      normalized: { raw: largeText },
+    } as any;
+    cv.metadata.importRecoverySession = {
+      status: "completed",
+      updatedAt: new Date().toISOString(),
+      overflowCount: 0,
+      reviewLimit: 12,
+      items: [],
+      baseSectionsSnapshot: [
+        {
+          id: "large-snapshot",
+          type: "text",
+          title: "Large Snapshot",
+          blocks: [
+            {
+              id: "large-block",
+              type: "text",
+              content: {
+                type: "doc",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: largeText }],
+                  },
+                ],
+              },
+            },
+          ],
+          structuredContent: null,
+        },
+      ],
+    } as any;
+
+    await expect(adapter.save(cv)).resolves.toBeUndefined();
+
+    const payload = patchMutation.mock.calls[0][0].patch;
+    const serializedPayload = JSON.stringify(payload);
+    expect(payload.metadata.authoritativeResume).toBeUndefined();
+    expect(payload.metadata.importRecoverySession).toBeUndefined();
+    expect(payload.cvDocument.metadata.authoritativeResume).toBeUndefined();
+    expect(payload.cvDocument.metadata.importRecoverySession).toBeUndefined();
+    expect(serializedPayload.length).toBeLessThan(250_000);
+    expect(payload.metadata.verbatiStyle).toEqual({
+      layout: "workshop",
+      palette: "bordeaux",
+      typography: "soft-serif",
+      accentHex: "#9a2d45",
+    });
+
+    const cachedDocument = JSON.parse(
+      window.localStorage.getItem(`cv:${cv.id}`) as string,
+    );
+    expect(cachedDocument.metadata.authoritativeResume.normalized.raw).toHaveLength(
+      650_000,
+    );
+    expect(
+      cachedDocument.metadata.importRecoverySession.baseSectionsSnapshot[0]
+        .blocks[0].content.content[0].content[0].text,
+    ).toHaveLength(650_000);
   });
 
   it("sends metadata.verbatiStyle through patch metadata and keeps it in cvDocument", async () => {

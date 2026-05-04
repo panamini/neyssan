@@ -2,7 +2,6 @@ import React from "react";
 import {
   ArrowLeft,
   ArrowSquareOut,
-  ClipboardText,
   Paperclip,
   Star,
 } from "@/lib/icons";
@@ -43,7 +42,24 @@ type JobDetailProps = {
 
 function resolveLocationModeLabel(value: string): string {
   const normalizedValue = String(value ?? "").trim();
-  return normalizedValue || "Location unavailable";
+  if (!normalizedValue) {
+    return "Location unavailable";
+  }
+  const locationParts = normalizedValue
+    .split(/\s*·\s*/)
+    .map((part) => part.trim())
+    .filter(
+      (part) =>
+        part &&
+        !/\b\d+\s+(?:second|minute|hour|day|week|month|year)s?\s+ago\b/i.test(part) &&
+        !/\b\d+\s+people\s+clicked\s+apply\b/i.test(part) &&
+        !/\b\d+\s+applicants?\b/i.test(part),
+    );
+  return locationParts.join(" · ") || normalizedValue;
+}
+
+function formatJobTitle(value: string): string {
+  return String(value ?? "").trim().replace(/[:\s]+$/, "") || "Untitled job";
 }
 
 function resolveMatchTierLabel(tier: string | null | undefined): string {
@@ -120,6 +136,7 @@ export function JobDetail({
     );
   }
 
+  const selectedJobTitle = formatJobTitle(selectedJob.title);
   const selectedJobResolvedMatchTier =
     selectedJobMatchTier ?? selectedJob.matchTier;
   const selectedJobVerdictLabel = resolveMatchTierLabel(
@@ -146,54 +163,11 @@ export function JobDetail({
       <div className="dasti-jobs-detail__topline">
         <div className="dasti-jobs-detail__identity">
           <div className="dasti-jobs-detail__title">
-            <span>{selectedJob.title || "Untitled job"}</span>
+            <span>{selectedJobTitle}</span>
             <div
               className="dasti-jobs-detail__header-actions"
               aria-label="Job actions"
             >
-              <button
-                type="button"
-                className="dasti-icon-button dasti-jobs-detail__favorite-action"
-                aria-pressed={selectedJobIsFavorite}
-                aria-label="Favorite"
-                title="Favorite"
-                onClick={() => {
-                  onSetJobFavorite(selectedJob.id, !selectedJobIsFavorite);
-                }}
-              >
-                <Star
-                  size={16}
-                  strokeWidth={1.8}
-                  weight={selectedJobIsFavorite ? "fill" : "regular"}
-                  aria-hidden="true"
-                />
-              </button>
-              <button
-                type="button"
-                className="dasti-jobs-detail__header-action"
-                onClick={() => {
-                  onSetJobFavorite(selectedJob.id, true);
-                }}
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                className="dasti-jobs-detail__header-action"
-                disabled={!selectedJob.sourceUrl}
-                onClick={() => onOpenJobSource(selectedJob.sourceUrl)}
-              >
-                <ArrowSquareOut
-                  size={14}
-                  strokeWidth={1.8}
-                  aria-hidden="true"
-                />
-                <span>
-                  {selectedSourceLabel
-                    ? `View on ${selectedSourceLabel}`
-                    : "View source"}
-                </span>
-              </button>
               <div
                 ref={resumePickerRef}
                 className="dasti-jobs-detail__resume-picker dasti-jobs-detail__header-resume"
@@ -279,11 +253,6 @@ export function JobDetail({
                 className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--proposal"
                 onClick={() => onCreateProposal(selectedJob.id)}
               >
-                <ClipboardText
-                  size={14}
-                  strokeWidth={1.8}
-                  aria-hidden="true"
-                />
                 <span>Generate proposal</span>
               </button>
             </div>
@@ -292,6 +261,24 @@ export function JobDetail({
             ) : null}
           </div>
           <div className="dasti-jobs-detail__meta">
+            <button
+              type="button"
+              className="dasti-jobs-detail__meta-favorite-action"
+              aria-pressed={selectedJobIsFavorite}
+              aria-label="Favorite"
+              title="Favorite"
+              onClick={() => {
+                onSetJobFavorite(selectedJob.id, !selectedJobIsFavorite);
+              }}
+            >
+              <Star
+                size={13}
+                strokeWidth={1.8}
+                weight={selectedJobIsFavorite ? "fill" : "regular"}
+                aria-hidden="true"
+              />
+            </button>
+            <span>·</span>
             <span>{selectedJob.company || "Unknown company"}</span>
             <span>·</span>
             <span>{resolveLocationModeLabel(selectedJob.location)}</span>
@@ -332,7 +319,7 @@ export function JobDetail({
       <div className="dasti-jobs-detail__body">
         <div className="dasti-jobs-detail__content">
           <ProposalBriefCard
-            sourceJobTitle={selectedJob.title}
+            sourceJobTitle={selectedJobTitle}
             outputDocumentTitle={null}
             jobDescription={selectedJob.rawDescription}
             showHeader={false}

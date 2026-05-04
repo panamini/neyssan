@@ -2,7 +2,6 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowSquareOut, ChevronDown } from "@/lib/icons";
 import { getProposalSourceLabel } from "../lib/proposal-source-platforms";
-import { StatusBadge } from "./ui/status-badge";
 
 type ProposalBriefReviewItem = {
   id: string;
@@ -102,7 +101,7 @@ function resolveTrustLabel(args: {
   }
 
   if (args.trustState === "needs_review") {
-    return "Check fields";
+    return "Ready";
   }
 
   if (args.parseStatus === "parsed") {
@@ -135,6 +134,67 @@ function resolveReviewItemAnchorId(fieldKey: string): string | undefined {
     return "job-keywords";
   }
   return undefined;
+}
+
+function resolveSectionStatus(
+  reviewStatus: string | null | undefined,
+  isEdited: boolean,
+): "validated" | "uncertain" | "edited" {
+  if (isEdited) return "edited";
+  const normalized = String(reviewStatus ?? "").toLowerCase();
+  if (
+    normalized.includes("low") ||
+    normalized.includes("confidence") ||
+    normalized.includes("uncertain") ||
+    normalized.includes("warning")
+  ) {
+    return "uncertain";
+  }
+  return "validated";
+}
+
+function SectionHeader({
+  label,
+  status,
+  isEditing,
+  canEdit,
+  onToggleEdit,
+}: {
+  label: string;
+  status: "validated" | "uncertain" | "edited";
+  isEditing: boolean;
+  canEdit: boolean;
+  onToggleEdit: () => void;
+}): JSX.Element {
+  const statusLabel =
+    status === "uncertain"
+      ? "Needs your eyes"
+      : status === "edited"
+        ? "Edited"
+        : "Validated";
+
+  return (
+    <div className="dasti-brief-card__section-header">
+      <span
+        className={`dasti-brief-card__section-status dasti-brief-card__section-status--${status}`}
+        title={statusLabel}
+        aria-label={statusLabel}
+      />
+      <div className="ds-card__eyebrow dasti-brief-card__review-label">
+        {label}
+      </div>
+      {canEdit ? (
+        <button
+          type="button"
+          className="dasti-brief-card__section-edit"
+          aria-label={isEditing ? `Close ${label} editor` : `Edit ${label}`}
+          onClick={onToggleEdit}
+        >
+          {isEditing ? "Close" : "Edit"}
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 export function resolveProposalBriefCardTitle(args: {
@@ -401,40 +461,22 @@ export function ProposalBriefCard({
               ) : null}
               {shouldRenderExtractedSummary ? (
                 <div className="ds-card dasti-brief-card__review-item" id="job-summary">
-                  <div className="dasti-brief-card__review-head">
-                    <div>
-                      <div className="ds-card__eyebrow dasti-brief-card__review-label">
-                        Extracted summary
-                      </div>
-                    </div>
-                    {onSaveField ? (
-                      <div className="dasti-brief-card__review-actions">
-                        <button
-                          type="button"
-                          className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
-                          aria-label={
-                            isSummaryEditing
-                              ? "Close summary editor"
-                              : "Edit summary"
-                          }
-                          onClick={() => {
-                            setEditingItemId((current) =>
-                              current === SUMMARY_EDITOR_ID
-                                ? null
-                                : SUMMARY_EDITOR_ID,
-                            );
-                            setDraftValues((current) => ({
-                              ...current,
-                              [SUMMARY_EDITOR_ID]:
-                                current[SUMMARY_EDITOR_ID] ?? summaryValue,
-                            }));
-                          }}
-                        >
-                          {isSummaryEditing ? "Close" : "Edit"}
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
+                  <SectionHeader
+                    label="Summary"
+                    status={resolveSectionStatus("approved", false)}
+                    isEditing={isSummaryEditing}
+                    canEdit={Boolean(onSaveField)}
+                    onToggleEdit={() => {
+                      setEditingItemId((current) =>
+                        current === SUMMARY_EDITOR_ID ? null : SUMMARY_EDITOR_ID,
+                      );
+                      setDraftValues((current) => ({
+                        ...current,
+                        [SUMMARY_EDITOR_ID]:
+                          current[SUMMARY_EDITOR_ID] ?? summaryValue,
+                      }));
+                    }}
+                  />
                   {isSummaryEditing ? (
                     <div className="dasti-brief-card__editor">
                       <textarea
@@ -478,7 +520,11 @@ export function ProposalBriefCard({
                       item.approvedValue ?? item.suggestedValue,
                     );
                     const draftValue = draftValues[item.id] ?? currentValue;
-                    const isApproved = item.reviewStatus === "approved";
+                    const isEdited = resolvedItems[item.id]?.reviewStatus === "approved";
+                    const sectionStatus = resolveSectionStatus(
+                      item.reviewStatus,
+                      isEdited,
+                    );
                     const fieldKey = String(item.fieldKey ?? "");
 
                     return (
@@ -486,68 +532,23 @@ export function ProposalBriefCard({
                         key={item.id}
                         id={resolveReviewItemAnchorId(fieldKey)}
                         className="ds-card dasti-brief-card__review-item"
-                        data-state={isApproved ? "success" : "warning"}
+                        data-state={sectionStatus}
                       >
-                        <div className="dasti-brief-card__review-head">
-                          <div>
-                            <div className="ds-card__eyebrow dasti-brief-card__review-label">
-                              {item.label}
-                            </div>
-                            <StatusBadge
-                              tone={isApproved ? "neutral" : "warning"}
-                              className={[
-                                "dasti-brief-card__review-state",
-                                isApproved
-                                  ? "dasti-brief-card__review-state--approved"
-                                  : "dasti-brief-card__review-state--pending",
-                              ].join(" ")}
-                            >
-                              {isApproved ? "Saved" : "Check"}
-                            </StatusBadge>
-                          </div>
-                          <div className="dasti-brief-card__review-actions">
-                            {!isApproved ? (
-                              <button
-                                type="button"
-                                className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--accent"
-                                onClick={() => {
-                                  setResolvedItems((current) => ({
-                                    ...current,
-                                    [item.id]: {
-                                      reviewStatus: "approved",
-                                      approvedValue:
-                                        item.approvedValue ??
-                                        item.suggestedValue,
-                                    },
-                                  }));
-                                  void onApproveReviewItem?.(item);
-                                }}
-                              >
-                                Keep
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="dasti-brief-card__action dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
-                              aria-label={
-                                isEditing
-                                  ? `Close ${item.label} editor`
-                                  : `Edit ${item.label}`
-                              }
-                              onClick={() => {
-                                setEditingItemId((current) =>
-                                  current === item.id ? null : item.id,
-                                );
-                                setDraftValues((current) => ({
-                                  ...current,
-                                  [item.id]: current[item.id] ?? currentValue,
-                                }));
-                              }}
-                            >
-                              {isEditing ? "Close" : "Edit"}
-                            </button>
-                          </div>
-                        </div>
+                        <SectionHeader
+                          label={item.label}
+                          status={sectionStatus}
+                          isEditing={isEditing}
+                          canEdit={true}
+                          onToggleEdit={() => {
+                            setEditingItemId((current) =>
+                              current === item.id ? null : item.id,
+                            );
+                            setDraftValues((current) => ({
+                              ...current,
+                              [item.id]: current[item.id] ?? currentValue,
+                            }));
+                          }}
+                        />
                         {isEditing ? (
                           <div className="dasti-brief-card__editor">
                             <textarea

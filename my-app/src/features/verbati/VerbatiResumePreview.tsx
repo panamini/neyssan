@@ -9,9 +9,11 @@ import { useDocumentStageLayout } from "../../hooks/use-document-stage-layout";
 import { useDocumentViewportCentering } from "../../hooks/use-document-viewport-centering";
 import ResumePage from "./resume/ResumePage";
 import ResumeTemplateRenderer, {
+  RESUME_TEMPLATE_PAGE_GAP_PX,
   WORKSHOP_TEMPLATE_RENDERER_ID,
   getResumeTemplateCanvasHeight,
 } from "./resume/ResumeTemplateRenderer";
+import type { ResumeInlineEditing } from "./resume/InlineEditableText";
 import {
   buildVerbatiThemeVars,
   getResumeTemplateId,
@@ -44,12 +46,17 @@ import { collectResumeFontDebugSnapshot } from "../../lib/resume-font-debug";
 import type { VerbatiLayoutPreset, VerbatiStylePreset } from "./types";
 import { getResumeTemplateDefinition } from "../../lib/layout/resumeTemplates";
 import type { ResumePreviewMetrics } from "./resume/ResumePage";
+import type {
+  ResumePaperAiState,
+  ResumeSectionActions,
+} from "./resume/ResumeOneColAtsPage";
 
 type VerbatiResumePreviewProps = {
   data: ResumeData;
   stylePreset: VerbatiStylePreset;
   compareLayouts?: boolean;
   hostMode?: "panel" | "workspace";
+  scrollMode?: "contained" | "natural";
   railLeadControl?: React.ReactNode;
   railStartAddon?: React.ReactNode;
   onSelectComparisonLayout?:
@@ -57,6 +64,9 @@ type VerbatiResumePreviewProps = {
     | undefined;
   activeTarget?: ResumeActiveTarget | null;
   onLinkIntent?: (intent: ResumeLinkIntent) => void;
+  inlineEditing?: ResumeInlineEditing | null;
+  sectionActions?: ResumeSectionActions | null;
+  paperAi?: ResumePaperAiState | null;
   onRemoveSection?:
     | ((section: {
         sectionId: string;
@@ -229,11 +239,15 @@ export function VerbatiResumePreview({
   stylePreset,
   compareLayouts = false,
   hostMode = "panel",
+  scrollMode = "contained",
   railLeadControl = null,
   railStartAddon = null,
   onSelectComparisonLayout,
   activeTarget = null,
   onLinkIntent,
+  inlineEditing = null,
+  sectionActions = null,
+  paperAi = null,
   onRemoveSection,
 }: VerbatiResumePreviewProps): JSX.Element {
   const previewRootRef = React.useRef<HTMLDivElement | null>(null);
@@ -275,6 +289,7 @@ export function VerbatiResumePreview({
     React.useState<ResumePreviewMetrics>(DEFAULT_RESUME_PREVIEW_METRICS);
   const stageMeasureRef = React.useRef<HTMLDivElement | null>(null);
   const isWorkspaceMode = hostMode === "workspace";
+  const usesNaturalPageScroll = scrollMode === "natural";
   const handlePreviewMetricsChange = React.useCallback(
     (nextMetrics: ResumePreviewMetrics) => {
       setResumePreviewMetrics((current) =>
@@ -345,6 +360,28 @@ export function VerbatiResumePreview({
   const effectivePageCount = usesWorkshopTemplateRenderer
     ? visiblePageCount
     : resumePreviewMetrics.pageCount;
+  const pageBreakMarkers = React.useMemo(() => {
+    if (effectivePageCount <= 1) {
+      return [];
+    }
+    const pageGapPx = usesWorkshopTemplateRenderer
+      ? RESUME_TEMPLATE_PAGE_GAP_PX
+      : resumePreviewMetrics.pageGapPx * previewScale;
+
+    return Array.from({ length: effectivePageCount - 1 }, (_, index) => {
+      const pageIndex = index + 1;
+      return {
+        pageNumber: pageIndex + 1,
+        topPx: pageIndex * (stageLayout.pageHeight + pageGapPx) - pageGapPx / 2,
+      };
+    });
+  }, [
+    effectivePageCount,
+    previewScale,
+    resumePreviewMetrics.pageGapPx,
+    stageLayout.pageHeight,
+    usesWorkshopTemplateRenderer,
+  ]);
   const stageMode =
     stageLayout.overflowX ||
     stageLayout.overflowY ||
@@ -522,7 +559,10 @@ export function VerbatiResumePreview({
     );
   }
 
-  const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:single:${dataSignature}`;
+  const fitTokenDataSignature = inlineEditing?.enabled
+    ? "inline-editing"
+    : dataSignature;
+  const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:single:${fitTokenDataSignature}`;
 
   const workspaceZoomControls = isWorkspaceMode ? (
     <div
@@ -607,7 +647,14 @@ export function VerbatiResumePreview({
   const handlePreviewCanvasClick = React.useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!onLinkIntent) return;
-      const target = e.target as HTMLElement;
+      const target =
+        e.target instanceof HTMLElement
+          ? e.target
+          : ((e.target as Node).parentElement as HTMLElement | null);
+      if (!target) return;
+      if (inlineEditing?.enabled) {
+        return;
+      }
       const sectionEl = target.closest(
         "[data-preview-section]",
       ) as HTMLElement | null;
@@ -659,12 +706,15 @@ export function VerbatiResumePreview({
             : undefined,
       });
     },
-    [hostMode, onLinkIntent],
+    [hostMode, inlineEditing?.enabled, onLinkIntent],
   );
 
   const handlePreviewWheel = React.useCallback(
     (event: WheelEvent) => {
       if (compareLayouts || event.ctrlKey) {
+        return;
+      }
+      if (usesNaturalPageScroll) {
         return;
       }
 
@@ -717,7 +767,7 @@ export function VerbatiResumePreview({
         event.preventDefault();
       }
     },
-    [compareLayouts, isWorkspaceMode, workspaceViewMode],
+    [compareLayouts, isWorkspaceMode, usesNaturalPageScroll, workspaceViewMode],
   );
 
   React.useEffect(() => {
@@ -759,9 +809,10 @@ export function VerbatiResumePreview({
             : "false"
         }
         data-document-stage="true"
+        data-scroll-mode={scrollMode}
         style={{
           width: `${stageLayout.stageWidth}px`,
-          height: `${stageLayout.stageHeight}px`,
+          height: `${usesNaturalPageScroll ? canvasHeightPx : stageLayout.stageHeight}px`,
         }}
         {...viewportPanProps}
       >
@@ -777,6 +828,24 @@ export function VerbatiResumePreview({
           }}
           onClick={onLinkIntent ? handlePreviewCanvasClick : undefined}
         >
+          {pageBreakMarkers.length > 0 ? (
+            <div className="dasti-document-page-markers" aria-hidden="true">
+              {pageBreakMarkers.map((marker) => (
+                <div
+                  key={`resume-page-marker-${marker.pageNumber}`}
+                  className="dasti-document-page-marker"
+                  style={{
+                    "--page-marker-top": `${roundPx(marker.topPx)}px`,
+                  } as React.CSSProperties}
+                >
+                  <span className="dasti-document-page-marker__label">
+                    Page {marker.pageNumber}
+                  </span>
+                  <span className="dasti-document-page-marker__line" />
+                </div>
+              ))}
+            </div>
+          ) : null}
           {usesWorkshopTemplateRenderer ? (
             <ResumeTemplateRenderer
               data={data}
@@ -784,6 +853,9 @@ export function VerbatiResumePreview({
               resumeTemplateId={resolvedResumeTemplateId}
               stageLayout={stageLayout}
               activeTarget={activeTarget}
+              inlineEditing={inlineEditing}
+              sectionActions={sectionActions}
+              paperAi={paperAi}
               onStablePageCountChange={setStableWorkshopPageCount}
             />
           ) : (
@@ -795,6 +867,7 @@ export function VerbatiResumePreview({
               userZoom={userZoom}
               stageLayout={stageLayout}
               activeTarget={activeTarget}
+              inlineEditing={inlineEditing}
               onRemoveSection={onRemoveSection}
               onPreviewMetricsChange={handlePreviewMetricsChange}
             />
@@ -825,6 +898,12 @@ export function VerbatiResumePreview({
             </div>
           ) : null}
           {documentStage}
+          <span
+            className="dasti-doc-page-count dasti-doc-page-count--resume-panel"
+            aria-label="Page count"
+          >
+            {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
+          </span>
         </div>
       </div>
     );

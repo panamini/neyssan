@@ -3,6 +3,7 @@
 import React from "react";
 import clsx from "clsx";
 import { BodyPortal } from "@/components/ui/body-portal";
+import { Check } from "@/lib/icons";
 
 export type MenuItemTone = "neutral" | "danger";
 
@@ -31,6 +32,8 @@ export interface MenuProps {
   align?: "start" | "end";
   side?: "top" | "bottom";
   ariaLabel?: string;
+  menuClassName?: string;
+  matchTriggerWidth?: boolean;
 }
 
 const MENU_EXIT_DURATION = 140;
@@ -71,6 +74,8 @@ export function Menu({
   align = "start",
   side = "bottom",
   ariaLabel,
+  menuClassName,
+  matchTriggerWidth = false,
 }: MenuProps): JSX.Element {
   const menuId = React.useId();
   const triggerRef = React.useRef<HTMLElement | null>(null);
@@ -84,7 +89,12 @@ export function Menu({
     "closed",
   );
   const [highlightedIndex, setHighlightedIndex] = React.useState(0);
-  const [position, setPosition] = React.useState({ top: 0, left: 0 });
+  const [position, setPosition] = React.useState<{
+    top: number;
+    left: number;
+    width?: number;
+    maxHeight?: number;
+  }>({ top: 0, left: 0 });
   const enabledIndexes = React.useMemo(
     () => enabledItemIndexes(sections),
     [sections],
@@ -109,9 +119,17 @@ export function Menu({
     const triggerRect = triggerNode.getBoundingClientRect();
     const menuRect = menuNode.getBoundingClientRect();
     const gap = 8;
+    const viewportInset = 8;
+    const availableTop = Math.max(0, triggerRect.top - gap - viewportInset);
+    const availableBottom = Math.max(
+      0,
+      window.innerHeight - triggerRect.bottom - gap - viewportInset,
+    );
+    const maxHeight = side === "top" ? availableTop : availableBottom;
+    const menuHeight = Math.min(menuRect.height, maxHeight || menuRect.height);
     const nextTop =
       side === "top"
-        ? triggerRect.top - menuRect.height - gap
+        ? triggerRect.top - menuHeight - gap
         : triggerRect.bottom + gap;
     const nextLeft =
       align === "end"
@@ -119,10 +137,18 @@ export function Menu({
         : triggerRect.left;
 
     setPosition({
-      top: Math.max(8, Math.min(nextTop, window.innerHeight - menuRect.height - 8)),
-      left: Math.max(8, Math.min(nextLeft, window.innerWidth - menuRect.width - 8)),
+      top: Math.max(
+        viewportInset,
+        Math.min(nextTop, window.innerHeight - menuHeight - viewportInset),
+      ),
+      left: Math.max(
+        viewportInset,
+        Math.min(nextLeft, window.innerWidth - menuRect.width - viewportInset),
+      ),
+      width: matchTriggerWidth ? triggerRect.width : undefined,
+      maxHeight,
     });
-  }, [align, side]);
+  }, [align, matchTriggerWidth, side]);
 
   React.useEffect(() => {
     if (open) {
@@ -131,6 +157,7 @@ export function Menu({
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
       setVisible(true);
       setMenuState("closed");
+      setPosition((current) => ({ ...current, maxHeight: undefined }));
       requestAnimationFrame(() => {
         updatePosition();
         setMenuState("open");
@@ -179,14 +206,14 @@ export function Menu({
     if (!item || item.disabled) return;
     item.onSelect?.();
     closeMenu();
-    triggerRef.current?.focus();
+    triggerRef.current?.focus({ preventScroll: true });
   }
 
   function handleMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape" || event.key === "Tab") {
       event.preventDefault();
       closeMenu();
-      triggerRef.current?.focus();
+      triggerRef.current?.focus({ preventScroll: true });
       return;
     }
     if (event.key === "ArrowDown") {
@@ -238,7 +265,7 @@ export function Menu({
           <div
             id={menuId}
             ref={menuRef}
-            className="ds-menu"
+            className={clsx("ds-menu", menuClassName)}
             data-state={menuState}
             role="menu"
             aria-label={ariaLabel}
@@ -252,7 +279,12 @@ export function Menu({
                 : undefined
             }
             tabIndex={-1}
-            style={{ top: position.top, left: position.left }}
+            style={{
+              top: position.top,
+              left: position.left,
+              width: position.width,
+              maxHeight: position.maxHeight,
+            }}
             onKeyDown={handleMenuKeyDown}
           >
             {sections.map((section, sectionIndex) => (
@@ -295,7 +327,7 @@ export function Menu({
                       onClick={() => {
                         item.onSelect?.();
                         closeMenu();
-                        triggerRef.current?.focus();
+                        triggerRef.current?.focus({ preventScroll: true });
                       }}
                     >
                       {item.icon ? (
@@ -315,6 +347,11 @@ export function Menu({
                       </span>
                       {item.shortcut ? (
                         <span className="ds-menu__shortcut">{item.shortcut}</span>
+                      ) : null}
+                      {item.selected ? (
+                        <span className="ds-menu__selected" aria-hidden="true">
+                          <Check size={14} strokeWidth={1.9} />
+                        </span>
                       ) : null}
                     </button>
                   );

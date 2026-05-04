@@ -67,10 +67,10 @@ export function DashboardPage(): JSX.Element {
       <div className="dashboard-page__inner">
         <header className="dashboard-head">
           <div>
-            <h1 id="dashboard-title" className="dashboard-head__title">
-              Dashboard<span className="brand-period">.</span>
+            <h1 id="dashboard-title" className="dashboard-head__title page-head__title">
+              Dashboard
             </h1>
-            <p className="dashboard-head__sub">
+            <p className="dashboard-head__sub page-head__sub">
               Review the next application task and keep the CV-to-proposal flow moving.
             </p>
           </div>
@@ -134,8 +134,8 @@ export function DashboardPage(): JSX.Element {
                 state="active"
                 number="3"
                 title="Capture jobs"
-                description="Install the extension or paste a URL in Jobs."
-                action="Browse"
+                description="Install the extension or pick an existing job in Jobs."
+                action="Open jobs"
                 onAction={() => navigate("/jobs")}
               />
               <QuickStartStep

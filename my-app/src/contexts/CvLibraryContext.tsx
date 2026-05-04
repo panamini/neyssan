@@ -50,8 +50,10 @@ import {
   type ActiveCvSnapshot,
 } from "../lib/proposal-personalization";
 import {
+  ACTIVE_CV_STORAGE_KEY,
   getLegacyLocalCvDocumentStorageKey,
   getLocalCvDocumentStorageKey,
+  LEGACY_ACTIVE_CV_STORAGE_KEY,
   LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
   LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY,
   LOCAL_CV_LIBRARY_STORAGE_KEY,
@@ -74,6 +76,13 @@ function applyAutoTitleIfPlaceholder(doc: CvDocument): CvDocument {
   const derived = deriveCvTitleCandidateFromSections(doc.sections);
   if (!derived || derived === doc.title) return doc;
   return { ...doc, title: derived };
+}
+
+function readUpdatedAtMs(doc: CvDocument | null | undefined): number | null {
+  const value = doc?.metadata?.updatedAt;
+  if (typeof value !== "string") return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function collectTextContent(value: unknown, sink: string[]): void {
@@ -528,9 +537,6 @@ export interface ICvLibraryContext {
   redo?: () => void;
 }
 
-/* Local storage keys (kept intentionally simple) */
-const ACTIVE_CV_STORAGE_KEY = "cvActiveId";
-
 function readRequestedCvIdFromWindowLocation(): string | null {
   if (typeof window === "undefined" || !window.location) {
     return null;
@@ -547,6 +553,42 @@ function readRequestedCvIdFromWindowLocation(): string | null {
     return requestedId || null;
   } catch {
     return null;
+  }
+}
+
+function readStoredActiveCvId(): string {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) {
+      return "";
+    }
+    return String(
+      window.localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_ACTIVE_CV_STORAGE_KEY) ??
+        "",
+    ).trim();
+  } catch {
+    return "";
+  }
+}
+
+function writeStoredActiveCvId(id: string | null): void {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) {
+      return;
+    }
+
+    const cleanId = String(id ?? "").trim();
+    if (!cleanId) {
+      window.localStorage.removeItem(ACTIVE_CV_STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_ACTIVE_CV_STORAGE_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(ACTIVE_CV_STORAGE_KEY, cleanId);
+    window.localStorage.setItem(LEGACY_ACTIVE_CV_STORAGE_KEY, cleanId);
+  } catch {
+    // Active selection is a best-effort preference; storage failures must not
+    // block editor rendering or document edits.
   }
 }
 
@@ -727,6 +769,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   // as "new user empty library" by consumers making onboarding decisions.
   const [lastLibraryFetchFailed, setLastLibraryFetchFailed] = useState(false);
   const pendingActiveRestoreIdRef = useRef<string | null>(null);
+  const failedActiveRestoreIdsRef = useRef<Set<string>>(new Set());
   const cvsRef = useRef<CvDocument[]>(cvs);
   const currentCvRef = useRef<CvDocument | null>(null);
   const pendingSwitchTargetRef = useRef<string | null>(null);
@@ -1042,6 +1085,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
      * Attempt to preserve object identity for unchanged nested objects (sections/blocks)
      * so React does not remount large subtrees unnecessarily.
      */
+    if (next?.id) {
+      writeStoredActiveCvId(String(next.id));
+    }
     currentCvRef.current = next;
     setCurrentCv((prev) => {
       if (deepEqual(prev, next)) {
@@ -1732,6 +1778,24 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     if (deepEqual(stripMetadata(freshestLocal), stripMetadata(remoteDoc)))
       return true;
 
+    const localUpdatedAtMs = readUpdatedAtMs(freshestLocal);
+    const remoteUpdatedAtMs = readUpdatedAtMs(remoteDoc);
+    if (
+      localUpdatedAtMs !== null &&
+      remoteUpdatedAtMs !== null &&
+      localUpdatedAtMs > remoteUpdatedAtMs
+    ) {
+      dbg(
+        "[CvLibraryContext] background refresh skipped: local snapshot is newer than remote",
+        {
+          targetId,
+          localUpdatedAt: freshestLocal.metadata?.updatedAt,
+          remoteUpdatedAt: remoteDoc.metadata?.updatedAt,
+        },
+      );
+      return false;
+    }
+
     const localMetrics = getDocumentCompletenessMetrics(freshestLocal);
     const remoteMetrics = getDocumentCompletenessMetrics(remoteDoc);
     const materiallyWeaker =
@@ -2395,6 +2459,20 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                 }
               }
 
+              const pendingRestoreTarget = pendingActiveRestoreIdRef.current;
+              if (
+                pendingRestoreTarget &&
+                String(pendingRestoreTarget) !== targetId
+              ) {
+                return;
+              }
+              const activeLoadedId = currentCvRef.current
+                ? String(currentCvRef.current.id)
+                : null;
+              if (activeLoadedId && activeLoadedId !== targetId) {
+                return;
+              }
+
               if (remoteDoc) {
                 const docV1 = normalizeToV1Document(remoteDoc as CvDocument);
                 const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
@@ -2498,11 +2576,19 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         return;
       }
 
-      const activeId = String(
-        window.localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ?? "",
-      ).trim();
+      const activeId = readStoredActiveCvId();
       const requestedRouteCvId = readRequestedCvIdFromWindowLocation();
-      const restoreId = requestedRouteCvId || activeId;
+      let restoreId = requestedRouteCvId || activeId;
+      if (!restoreId) {
+        restoreId =
+          [...cvs]
+            .sort(
+              (a, b) =>
+                (readUpdatedAtMs(b) ?? 0) - (readUpdatedAtMs(a) ?? 0),
+            )
+            .find((doc) => doc?.id)?.id ?? "";
+        restoreId = String(restoreId).trim();
+      }
 
       if (!restoreId) {
         hasHydratedActiveCvRef.current = true;
@@ -2558,15 +2644,42 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     const pendingId = pendingActiveRestoreIdRef.current;
     if (!pendingId) return;
     if (currentCv && String(currentCv.id) === String(pendingId)) {
+      failedActiveRestoreIdsRef.current.clear();
       pendingActiveRestoreIdRef.current = null;
       hasHydratedActiveCvRef.current = true;
       return;
     }
     if (!isLoading) {
+      failedActiveRestoreIdsRef.current.add(String(pendingId));
+      const fallbackId =
+        [...cvs]
+          .filter(
+            (doc) =>
+              doc?.id &&
+              !failedActiveRestoreIdsRef.current.has(String(doc.id)),
+          )
+          .sort(
+            (a, b) =>
+              (readUpdatedAtMs(b) ?? 0) - (readUpdatedAtMs(a) ?? 0),
+          )
+          .find((doc) => doc?.id)?.id ?? "";
+      const cleanFallbackId = String(fallbackId).trim();
+      if (cleanFallbackId) {
+        pendingActiveRestoreIdRef.current = cleanFallbackId;
+        const restoredImmediately = loadCv(cleanFallbackId);
+        if (restoredImmediately) {
+          failedActiveRestoreIdsRef.current.clear();
+          pendingActiveRestoreIdRef.current = null;
+          hasHydratedActiveCvRef.current = true;
+        }
+        return;
+      }
+
+      writeStoredActiveCvId(null);
       pendingActiveRestoreIdRef.current = null;
       hasHydratedActiveCvRef.current = true;
     }
-  }, [currentCv, isLoading]);
+  }, [currentCv, cvs, isLoading, loadCv]);
 
   /**
    * Create a CvDocument from an ICvState snapshot and set it as the current CV.
@@ -3524,9 +3637,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       if (!hasHydratedActiveCvRef.current || pendingActiveRestoreIdRef.current)
         return;
       if (currentCvId) {
-        window.localStorage.setItem(ACTIVE_CV_STORAGE_KEY, currentCvId);
-      } else {
-        window.localStorage.removeItem(ACTIVE_CV_STORAGE_KEY);
+        writeStoredActiveCvId(currentCvId);
       }
     } catch {
       /* best-effort */
@@ -3607,6 +3718,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   function deleteCvCtx(id: string): void {
     try {
       if (typeof window !== "undefined" && (window as any).localStorage) {
+        if (
+          readStoredActiveCvId() ===
+          String(id)
+        ) {
+          writeStoredActiveCvId(null);
+        }
         (window as any).localStorage.removeItem(
           getLocalCvDocumentStorageKey(id),
         );
