@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>dasti DS v2 — Visual Skeleton</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Baskervville:ital@0;1&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   TOKENS — dasti v5 (Terre/Clay default, Baskervville document, SF/Geist mono)
+   ============================================================================ */
+:root, [data-theme="light"] {
+  color-scheme: light;
+  --bg:#F8F7F3; --sf1:#FAF9F5; --sf2:#F0EEE6; --sf3:#F5F4EF; --sfr:#FAF9F5; --paper:#FAF9F5;
+  --ti:#0F0C08; --ti-soft:#2F2D29; --text-body:#484643;
+  --tm2:rgba(15,12,8,0.64); --tg2:rgba(15,12,8,0.60); --tg3:#7E7D79; --tg4:#A4A39F;
+  --border-soft:rgba(15,12,8,0.08); --border-field:rgba(15,12,8,0.06); --border-strong:#CFCFCB; --border-stronger:#B6B5B1;
+  --ac:#A84E2E; --am:#D97757; --am-soft:#EBBCAF; --ap:rgba(168,78,46,0.10); --as:rgba(168,78,46,0.16); --fr:#D97757; --op:#FAF9F5;
+  --btn-dark-bg:#191915; --btn-dark-fg:#FAF9F5;
+  --link:#2A78D6; --link-hover:#5391DD; --info-bg:#B0D3FA;
+  --success:hsl(150,22%,30%); --success-soft:hsl(150,16%,92%); --success-ink:hsl(150,22%,22%);
+  --danger: hsl(10,36%,42%);  --danger-soft: hsl(10,28%,93%);  --danger-ink: hsl(10,36%,32%);
+  --warning:hsl(32,40%,34%);  --warning-soft:hsl(32,32%,93%);  --warning-ink:hsl(32,40%,26%);
+  --sha:0 1px 2px hsla(30,15%,10%,0.04), 0 0 0 1px hsla(30,15%,10%,0.02);
+  --shb:0 4px 12px hsla(30,15%,10%,0.06), 0 1px 2px hsla(30,15%,10%,0.04);
+  --shc:0 12px 32px hsla(30,15%,10%,0.10), 0 4px 8px hsla(30,15%,10%,0.06);
+  --sh-paper:0 4px 24px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.12);
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:40px; --s8:64px; --s9:80px;
+  --r-inline:8px; --r-control:12px; --r-card:16px; --r-surface:20px; --r-pill:999px; --r-paper:4px;
+  --hs:32px; --hm:40px; --hb:44px; --hdr:54px;
+  --tx:12px; --ts:14px; --tb:16px; --tm:20px; --tl:26px; --tx2:32px;
+  --lx:16px; --ls:20px; --lb:24px; --ll:30px; --lx2:40px;
+  --font-body:"Geist","Geist Variable",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+  --font-heading:var(--font-body);
+  --font-serif:"Baskervville","Iowan Old Style","Palatino",Georgia,serif;
+  --font-mono:"SF Mono","SFMono-Regular",ui-monospace,"Geist Mono",Menlo,Monaco,Consolas,monospace;
+  --tracking-display:-0.02em; --tracking-tight:-0.01em; --tracking-wide:0.14em;
+  --dur-1:80ms; --dur-2:160ms; --dur-3:240ms; --dur-4:320ms; --dur-5:480ms;
+  --ease-standard:cubic-bezier(0.2,0.6,0.2,1);
+  --ease-enter:cubic-bezier(0,0,0.2,1);
+  --ease-exit:cubic-bezier(0.3,0,1,1);
+  --ease-emphasized:cubic-bezier(0.2,0,0,1);
+  --ease-breathe:cubic-bezier(0.4,0,0.6,1);
+  --motion-duration-brand:2400ms;
+  --z-popover:400; --z-modal:800; --z-toast:900;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg:#0D0D0D; --sf1:#0E0E0E; --sf2:#1A1918; --sf3:#161616; --sfr:#222120; --paper:#E8E5DB;
+  --ti:#DAD9D3; --ti-soft:#B8B7AE; --text-body:#B8B7AE;
+  --tm2:#95948D; --tg2:#95948D; --tg3:#6E6D69; --tg4:#504F4C;
+  --border-soft:rgba(218,217,211,0.08); --border-field:rgba(218,217,211,0.06); --border-strong:#504F4C; --border-stronger:#6E6D69;
+  --ac:#A15A42; --am:#D47554; --am-soft:rgba(212,117,84,0.20); --ap:rgba(212,117,84,0.14); --as:rgba(212,117,84,0.20); --fr:#D47554; --op:#DCD9CF;
+  --btn-dark-bg:#DAD9D3; --btn-dark-fg:#0E0E0E;
+  --link:#2B99FF; --link-hover:#237FCF; --info-bg:rgba(43,153,255,0.16);
+  --success:hsl(150,22%,56%); --success-soft:hsl(150,14%,14%); --success-ink:hsl(150,22%,70%);
+  --danger: hsl(10,34%,58%);  --danger-soft: hsl(10,20%,16%);  --danger-ink: hsl(10,34%,72%);
+  --warning:hsl(34,30%,62%);  --warning-soft:hsl(34,14%,14%);  --warning-ink:hsl(34,30%,74%);
+  --sha:0 1px 2px rgba(0,0,0,0.50), inset 0 0 0 1px rgba(255,255,255,0.04);
+  --shb:0 4px 14px rgba(0,0,0,0.60), inset 0 0 0 1px rgba(255,255,255,0.06);
+  --shc:0 20px 48px rgba(0,0,0,0.75), inset 0 0 0 1px rgba(255,255,255,0.08);
+  --sh-paper:0 4px 24px rgba(0,0,0,0.40), 0 1px 2px rgba(0,0,0,0.80);
+}
+
+/* ============================================================================
+   PAGE SHELL
+   ============================================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: var(--bg); color: var(--ti);
+  font-family: var(--font-body); font-size: var(--tb); line-height: var(--lb);
+  accent-color: var(--ac);
+  transition: background-color var(--dur-3) var(--ease-standard), color var(--dur-3) var(--ease-standard);
+}
+body { padding-bottom: var(--s9); }
+.shell { max-width: 1120px; margin: 0 auto; padding: var(--s5); display: grid; gap: var(--s7); }
+
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: saturate(140%) blur(16px);
+  border-bottom: 1px solid var(--border-soft);
+  padding: var(--s3) var(--s5);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.brand { display: flex; align-items: baseline; gap: var(--s2); font-size: var(--ts); font-weight: 600; letter-spacing: var(--tracking-tight); }
+.brand-mark { color: var(--ti); }
+.brand-period { color: var(--ac); animation: tw-breathe var(--motion-duration-brand) var(--ease-breathe) infinite; }
+.brand-sub { color: var(--tg2); font-weight: 400; font-size: var(--tx); }
+@keyframes tw-breathe { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+.section { display: grid; gap: var(--s4); }
+.section-head { display: grid; gap: var(--s1); padding-bottom: var(--s2); border-bottom: 1px solid var(--border-soft); }
+.section-title { font-size: var(--tm); line-height: var(--ll); font-weight: 600; letter-spacing: var(--tracking-tight); }
+.section-desc { font-size: var(--ts); color: var(--tg2); }
+.overline { font-size: 10px; letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--am); font-weight: 600; }
+.row { display: flex; gap: var(--s2); flex-wrap: wrap; align-items: center; }
+.col { display: grid; gap: var(--s3); }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); }
+.grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: var(--s4); }
+@media (max-width: 720px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+.theme-switch {
+  display: inline-flex; align-items: center; gap: var(--s1);
+  height: 32px; padding: 2px; border: 1px solid var(--border-soft); border-radius: var(--r-pill);
+  background: var(--sf2);
+}
+.theme-switch button {
+  border: none; cursor: pointer; height: 28px; padding: 0 var(--s3);
+  border-radius: var(--r-pill); background: transparent; color: var(--tg2);
+  font: inherit; font-size: var(--tx); font-weight: 600;
+  transition: background-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard);
+}
+.theme-switch button[aria-pressed="true"] { background: var(--sfr); color: var(--ti); box-shadow: var(--sha); }
+
+/* ============================================================================
+   01 · BUTTON
+   ============================================================================ */
+.ds-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid transparent; border-radius: var(--r-control);
+  font-family: inherit; font-weight: 600; cursor: pointer;
+  white-space: nowrap; line-height: 1; user-select: none;
+  transition: background-color var(--dur-2) var(--ease-standard), border-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard), box-shadow var(--dur-2) var(--ease-standard), opacity var(--dur-2) var(--ease-standard);
+}
+.ds-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.ds-btn:active:not(:disabled) { transform: scale(0.96); transition-duration: var(--dur-1); }
+.ds-btn:focus-visible { outline: 2px solid var(--fr); outline-offset: 2px; }
+.ds-btn:disabled { opacity: 0.42; cursor: not-allowed; transform: none !important; }
+.ds-btn--sm { height: var(--hs); padding: 0 var(--s3); font-size: var(--tx); }
+.ds-btn--md { height: var(--hm); padding: 0 var(--s4); font-size: var(--ts); }
+.ds-btn--lg { height: var(--hb); padding: 0 var(--s5); font-size: var(--tb); }
+.ds-btn--primary   { background: var(--ac); color: var(--op); box-shadow: var(--sha); }
+.ds-btn--primary:hover:not(:disabled) { background: var(--am); box-shadow: var(--shb); }
+.ds-btn--secondary { background: var(--sfr); color: var(--ti); border-color: var(--border-strong); box-shadow: var(--sha); }
+.ds-btn--secondary:hover:not(:disabled) { background: var(--sf2); }
+.ds-btn--ghost { background: transparent; color: var(--tm2); }
+.ds-btn--ghost:hover:not(:disabled) { background: var(--sf2); color: var(--ti); }
+.ds-btn--accent { background: var(--ap); color: var(--ti); }
+.ds-btn--accent:hover:not(:disabled) { background: var(--as); }
+.ds-btn--danger { background: var(--danger-soft); color: var(--danger-ink); }
+.ds-btn--danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+.ds-btn--success { background: var(--success-soft); color: var(--success-ink); }
+.ds-btn--success:hover:not(:disabled) { background: var(--success); color: #fff; }
+.ds-btn--dark { background: var(--btn-dark-bg); color: var(--btn-dark-fg); }
+.ds-btn--pill { border-radius: var(--r-pill); }
+.ds-btn__period { display: inline-block; margin-left: 1px; animation: ds-period 1800ms cubic-bezier(0.45,0,0.55,1) infinite; }
+@keyframes ds-period { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.2; transform: scale(0.6); } }
+
+.ds-icon-btn {
+  width: var(--hs); height: var(--hs);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-soft); border-radius: var(--r-control);
+  background: var(--sfr); color: var(--tg2); cursor: pointer; box-shadow: var(--sha);
+  transition: background-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard), border-color var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard);
+}
+.ds-icon-btn:hover { background: var(--sf2); border-color: var(--border-strong); color: var(--ti); transform: translateY(-1px); }
+.ds-icon-btn:active { transform: scale(0.94); }
+.ds-icon-btn svg { width: 16px; height: 16px; pointer-events: none; }
+
+/* ============================================================================
+   02 · INPUT — subtle-fill (dasti hallmark, no focus glow)
+   ============================================================================ */
+.ds-field-group { display: grid; gap: 6px; }
+.ds-field-label { font-size: var(--ts); font-weight: 600; color: var(--ti); }
+.ds-field-meta  { font-size: var(--tx); color: var(--tg2); }
+.ds-field-error { font-size: var(--tx); color: var(--danger); }
+
+.ds-field {
+  width: 100%; height: var(--hm); padding: 0 var(--s3);
+  background: var(--sf2); color: var(--ti);
+  border: 2px solid transparent; border-radius: var(--r-control);
+  font-family: inherit; font-size: var(--ts); line-height: var(--ls); outline: none;
+  transition: border-color var(--dur-2) var(--ease-standard), background-color var(--dur-2) var(--ease-standard);
+}
+.ds-field::placeholder { color: var(--tg2); }
+.ds-field:hover:not(:focus):not(:disabled) { background: var(--sf3); }
+.ds-field:focus { border-color: var(--ti); }
+.ds-field--error { border-color: var(--danger); background: color-mix(in srgb, var(--danger-soft) 35%, var(--sf2)); }
+.ds-field:disabled { opacity: 0.5; cursor: not-allowed; }
+.ds-field--textarea { height: auto; min-height: 88px; padding: var(--s2) var(--s3); resize: vertical; }
+
+.ds-field-row {
+  display: flex; flex-wrap: wrap; gap: var(--s5); align-items: center;
+  padding: var(--s3) var(--s4); background: var(--sf2); border-radius: var(--r-inline);
+}
+.ds-field-row label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ti); }
+.ds-field-row .sep { width: 1px; align-self: stretch; background: var(--border-soft); }
+input[type="range"] { width: 140px; }
+
+/* ============================================================================
+   03 · CARD (with inline loading state)
+   ============================================================================ */
+.ds-card {
+  border: 1px solid var(--border-soft); border-radius: var(--r-card);
+  background: var(--sfr); padding: var(--s4); box-shadow: var(--sha);
+  display: grid; gap: var(--s2);
+  transition: border-color var(--dur-2) var(--ease-standard), box-shadow var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard);
+}
+.ds-card[data-interactive="true"]:hover { transform: translateY(-1px); box-shadow: var(--shb); border-color: var(--border-strong); }
+.ds-card--muted    { background: var(--sf1); }
+.ds-card--elevated { box-shadow: var(--shb); }
+.ds-card__eyebrow { font-size: 10px; letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--am); font-weight: 600; }
+.ds-card__title { font-size: var(--ts); font-weight: 600; color: var(--ti); }
+.ds-card__body  { font-size: 13px; color: var(--tm2); line-height: var(--ls); }
+.ds-card__footer{ display: flex; align-items: center; justify-content: space-between; padding-top: var(--s1); font-size: var(--tx); color: var(--tg2); }
+.ds-card[data-state="loading"] { pointer-events: none; }
+
+/* skeleton band for card placeholders */
+.ds-skel {
+  background: linear-gradient(90deg, var(--sf2) 0%, var(--sf3) 50%, var(--sf2) 100%);
+  background-size: 200% 100%;
+  animation: ds-skel 1400ms linear infinite;
+  border-radius: var(--r-inline);
+  display: block;
+}
+@keyframes ds-skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* ============================================================================
+   04 · PILLS · TONE BADGES · STATUS
+   ============================================================================ */
+.ds-pill {
+  display: inline-flex; align-items: center; height: 28px; padding: 0 var(--s3);
+  border-radius: var(--r-pill); font-size: var(--tx); font-weight: 600; white-space: nowrap;
+  border: 1px solid transparent;
+}
+.ds-pill--neutral { background: var(--sf2); color: var(--tg3); }
+.ds-pill--accent  { background: var(--am-soft); color: var(--ac); }
+.ds-pill--info    { background: var(--info-bg); color: var(--link); }
+.ds-pill--success { background: var(--success-soft); color: var(--success-ink); }
+.ds-pill--warning { background: var(--warning-soft); color: var(--warning-ink); }
+.ds-pill--danger  { background: var(--danger-soft); color: var(--danger-ink); }
+
+/* tone badges — voice / tone of writing (Warm / Formal / Natural) */
+.ds-tone {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 var(--s3); border-radius: var(--r-pill);
+  font-size: var(--tx); font-weight: 600; border: 1px solid;
+}
+.ds-tone--warm    { background: hsl(30,40%,93%);  color: hsl(28,40%,32%);  border-color: hsl(28,30%,80%); }
+.ds-tone--formal  { background: hsl(220,16%,93%); color: hsl(220,18%,32%); border-color: hsl(220,12%,80%); }
+.ds-tone--natural { background: hsl(150,16%,92%); color: hsl(150,22%,28%); border-color: hsl(150,18%,78%); }
+[data-theme="dark"] .ds-tone--warm    { background: hsl(30,18%,16%);  color: hsl(28,30%,72%);  border-color: hsl(28,16%,28%); }
+[data-theme="dark"] .ds-tone--formal  { background: hsl(220,12%,16%); color: hsl(220,18%,72%); border-color: hsl(220,10%,28%); }
+[data-theme="dark"] .ds-tone--natural { background: hsl(150,12%,14%); color: hsl(150,22%,68%); border-color: hsl(150,12%,26%); }
+
+.ds-status {
+  display: inline-flex; align-items: center; gap: var(--s2); height: var(--hs); padding: 0 var(--s3);
+  border-radius: var(--r-inline); font-size: 13px; font-weight: 600;
+}
+.ds-status__dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.ds-status--accent { background: var(--am-soft); color: var(--ac); }
+.ds-status--accent .ds-status__dot { background: var(--ac); animation: tw-breathe var(--motion-duration-brand) var(--ease-breathe) infinite; }
+.ds-status--success { background: var(--success-soft); color: var(--success-ink); }
+.ds-status--success .ds-status__dot { background: var(--success); }
+.ds-status--danger { background: var(--danger-soft); color: var(--danger-ink); }
+.ds-status--danger .ds-status__dot { background: var(--danger); }
+.ds-status--neutral { background: var(--sf2); color: var(--tg3); }
+.ds-status--neutral .ds-status__dot { background: var(--tg3); }
+
+/* ============================================================================
+   05 · TOAST
+   ============================================================================ */
+.ds-toast {
+  display: inline-flex; align-items: flex-start; gap: var(--s3);
+  padding: var(--s3) var(--s4); border-radius: var(--r-card);
+  border: 1px solid var(--border-strong); background: var(--sfr); color: var(--ti);
+  box-shadow: var(--shb); min-width: 220px; max-width: 360px;
+}
+.ds-toast__icon { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+.ds-toast__body { display: grid; gap: 1px; }
+.ds-toast__title { font-size: var(--ts); font-weight: 600; line-height: var(--ls); }
+.ds-toast__desc  { font-size: var(--tx); color: var(--tm2); line-height: 18px; }
+.ds-toast__action { background: none; border: none; cursor: pointer; color: var(--ac); font: inherit; font-size: var(--tx); font-weight: 600; padding: 0; margin-top: var(--s1); }
+.ds-toast--neutral .ds-toast__icon { background: var(--sf2); color: var(--tg2); }
+.ds-toast--success { background: var(--success-soft); border-color: color-mix(in srgb, var(--success) 26%, transparent); }
+.ds-toast--success .ds-toast__icon { background: var(--success); color: #fff; }
+.ds-toast--success .ds-toast__title { color: var(--success-ink); }
+.ds-toast--success .ds-toast__desc  { color: var(--success-ink); }
+.ds-toast--danger { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 26%, transparent); }
+.ds-toast--danger .ds-toast__icon { background: var(--danger); color: #fff; }
+.ds-toast--danger .ds-toast__title { color: var(--danger-ink); }
+.ds-toast--danger .ds-toast__desc  { color: var(--danger-ink); }
+
+/* ============================================================================
+   06 · DIALOG (preview)
+   ============================================================================ */
+.ds-dialog-preview {
+  width: min(560px,100%); padding: var(--s5);
+  border: 1px solid var(--border-soft); border-radius: var(--r-surface);
+  background: var(--sfr); box-shadow: var(--shc);
+}
+.ds-dialog__title { font-size: var(--tm); line-height: var(--ll); font-weight: 600; letter-spacing: var(--tracking-tight); }
+.ds-dialog__body  { margin-top: var(--s3); font-size: var(--ts); color: var(--tm2); line-height: var(--ls); }
+.ds-dialog__footer{ display: flex; gap: var(--s2); justify-content: flex-end; margin-top: var(--s5); }
+
+/* ============================================================================
+   06b · SHEET / DRAWER  (right-side panel + bottom-sheet variant)
+   ============================================================================ */
+.ds-sheet-preview {
+  position: relative;
+  width: 100%;
+  height: 360px;
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--r-surface);
+  background: var(--bg);
+  overflow: hidden;
+}
+.ds-sheet__overlay {
+  position: absolute; inset: 0;
+  background: color-mix(in srgb, var(--ink) 35%, transparent);
+  backdrop-filter: blur(6px) saturate(140%);
+  -webkit-backdrop-filter: blur(6px) saturate(140%);
+}
+.ds-sheet {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: min(420px, 100%);
+  background: var(--sfr);
+  border-left: 1px solid var(--border-soft);
+  box-shadow: var(--shc);
+  display: flex; flex-direction: column;
+  transform: translateX(0);
+  transition: transform var(--motion-duration-panel) var(--motion-ease-emphasized);
+}
+.ds-sheet[data-state="closed"] { transform: translateX(100%); }
+.ds-sheet__header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s4) var(--s5);
+  border-bottom: 1px solid var(--border-soft);
+}
+.ds-sheet__title {
+  font-size: var(--tm);
+  line-height: var(--ll);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+}
+.ds-sheet__close {
+  width: 32px; height: 32px;
+  border: none; background: transparent;
+  color: var(--tm2);
+  border-radius: var(--r-control);
+  cursor: pointer;
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+.ds-sheet__close:hover { background: var(--sf2); color: var(--ti); }
+.ds-sheet__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--s5);
+  display: flex; flex-direction: column; gap: var(--s4);
+}
+.ds-sheet__footer {
+  display: flex; gap: var(--s2); justify-content: flex-end;
+  padding: var(--s4) var(--s5);
+  border-top: 1px solid var(--border-soft);
+  background: var(--sf1);
+}
+
+/* Bottom-sheet variant — slides from bottom, mobile-first */
+.ds-bottom-sheet {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  max-height: 75%;
+  background: var(--sfr);
+  border-top: 1px solid var(--border-soft);
+  border-top-left-radius: var(--r-surface);
+  border-top-right-radius: var(--r-surface);
+  box-shadow: var(--shc);
+  display: flex; flex-direction: column;
+  transform: translateY(0);
+  transition: transform var(--motion-duration-panel) var(--motion-ease-emphasized);
+}
+.ds-bottom-sheet[data-state="closed"] { transform: translateY(100%); }
+.ds-bottom-sheet__handle {
+  align-self: center;
+  width: 36px; height: 4px;
+  margin-top: var(--s2);
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+.ds-bottom-sheet__header,
+.ds-bottom-sheet__body,
+.ds-bottom-sheet__footer { padding: var(--s4) var(--s5); }
+.ds-bottom-sheet__body { flex: 1; overflow-y: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-sheet, .ds-bottom-sheet { transition: none; }
+}
+
+/* ============================================================================
+   06c · MENU (dropdown / popover anchored to a trigger)
+   ============================================================================ */
+.ds-menu-preview {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.ds-menu {
+  min-width: 200px;
+  padding: var(--s2);
+  background: var(--sfr);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-control);
+  box-shadow: var(--shb);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  transform-origin: top left;
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-enter),
+    transform var(--motion-duration-fast) var(--motion-ease-enter);
+}
+.ds-menu[data-state="open"] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.ds-menu[data-state="closed"] {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  pointer-events: none;
+}
+.ds-menu__label {
+  padding: var(--s2) var(--s3);
+  font-size: var(--tx);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--tm3);
+}
+.ds-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  font-size: var(--ts);
+  color: var(--ti);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--r-control) - 4px);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--motion-duration-micro) var(--motion-ease-standard);
+}
+.ds-menu__item:hover,
+.ds-menu__item[data-highlighted] {
+  background: var(--sf2);
+}
+.ds-menu__item:focus-visible {
+  outline: 2px solid var(--ti);
+  outline-offset: -2px;
+}
+.ds-menu__item[disabled] {
+  color: var(--tm3);
+  cursor: not-allowed;
+}
+.ds-menu__item--danger { color: var(--danger); }
+.ds-menu__item--danger:hover,
+.ds-menu__item--danger[data-highlighted] {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.ds-menu__icon {
+  width: 16px; height: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--tm2);
+}
+.ds-menu__label-text { flex: 1; }
+.ds-menu__shortcut {
+  font-family: var(--font-mono);
+  font-size: var(--tx);
+  color: var(--tm3);
+  letter-spacing: 0.04em;
+}
+.ds-menu__separator {
+  height: 1px;
+  margin: var(--s2) 0;
+  background: var(--border-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-menu { transition: none; }
+}
+
+/* ============================================================================
+   07 · SIDEBAR — gradient + 2px inset stripe (dasti signature)
+   ============================================================================ */
+.ds-sidebar-demo { display: grid; grid-template-columns: 240px 1fr; gap: var(--s4); }
+@media (max-width: 720px) { .ds-sidebar-demo { grid-template-columns: 1fr; } }
+
+.ds-sidebar {
+  background: var(--sf1); border: 1px solid var(--border-soft); border-radius: var(--r-card);
+  padding: var(--s4) var(--s2); display: grid; gap: var(--s1);
+}
+.ds-sidebar__group { font-size: 10px; letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--tg3); font-weight: 600; padding: var(--s2) var(--s3) var(--s1); }
+.ds-sidebar__item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 var(--s3); height: 36px; border-radius: var(--r-inline);
+  font-size: var(--ts); color: var(--tm2); cursor: pointer;
+  position: relative;
+  transition: background-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard);
+}
+.ds-sidebar__item:hover { background: var(--sf2); color: var(--ti); }
+.ds-sidebar__item--active {
+  background: linear-gradient(90deg, var(--ap) 0%, transparent 70%);
+  color: var(--ti); font-weight: 600;
+}
+.ds-sidebar__item--active::before {
+  content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px;
+  background: var(--ac); border-radius: 2px;
+}
+.ds-sidebar__count {
+  font-size: 10px; font-weight: 600; padding: 2px 6px;
+  background: var(--sf2); color: var(--tg3); border-radius: var(--r-pill);
+}
+.ds-sidebar__item--active .ds-sidebar__count { background: var(--am-soft); color: var(--ac); }
+.ds-sidebar-body { padding: var(--s4); background: var(--sf1); border: 1px solid var(--border-soft); border-radius: var(--r-card); color: var(--tg2); font-size: var(--ts); }
+
+/* ============================================================================
+   08 · PAPER — Baskervville document
+   ============================================================================ */
+.ds-stage {
+  padding: var(--s7) var(--s5); background: var(--sf1);
+  border: 1px solid var(--border-soft); border-radius: var(--r-card);
+  display: flex; justify-content: center;
+}
+.ds-paper {
+  width: min(640px,100%);
+  background: var(--paper); color: var(--ti);
+  border-radius: var(--r-paper);
+  box-shadow: var(--sh-paper);
+  padding: var(--s8) var(--s7);
+  font-family: var(--font-serif);
+  font-size: 16px; line-height: 26px;
+  font-feature-settings: "lnum" 0, "onum" 1, "liga" 1;
+}
+.ds-paper h1 { font-family: var(--font-serif); font-size: 28px; font-weight: 600; line-height: 34px; margin-bottom: var(--s2); letter-spacing: var(--tracking-tight); }
+.ds-paper h2 { font-family: var(--font-serif); font-size: 18px; font-weight: 600; line-height: 26px; margin-top: var(--s5); margin-bottom: var(--s2); }
+.ds-paper p  { margin-bottom: var(--s3); color: var(--text-body); }
+.ds-paper__meta { font-family: var(--font-body); font-size: var(--tx); color: var(--tg2); letter-spacing: var(--tracking-wide); text-transform: uppercase; margin-bottom: var(--s5); }
+
+/* Paper keeps light-mode ink in dark: paper is cream, text must be dark (a4 contrast) */
+[data-theme="dark"] .ds-paper        { color: #0F0C08; }
+[data-theme="dark"] .ds-paper h1,
+[data-theme="dark"] .ds-paper h2     { color: #0F0C08; }
+[data-theme="dark"] .ds-paper p      { color: #2F2D29; }
+[data-theme="dark"] .ds-paper__meta  { color: rgba(15,12,8,0.55); }
+[data-theme="dark"] .toolbar-stage   { color: #0F0C08; }
+
+/* ============================================================================
+   09 · AI STAGE LIST
+   ============================================================================ */
+.ds-ai-stage-panel {
+  width: 320px; padding: var(--s5); background: var(--sfr); border: 1px solid var(--border-soft);
+  border-radius: var(--r-card); box-shadow: var(--shb);
+}
+.ds-ai-stage__header { display: flex; align-items: baseline; gap: var(--s2); margin-bottom: var(--s4); font-size: var(--ts); font-weight: 600; }
+.ds-ai-stage__period { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--ac); vertical-align: middle; }
+.ds-ai-stage__period[data-thinking="true"] { animation: tw-breathe var(--motion-duration-brand) var(--ease-breathe) infinite; }
+.ds-ai-stage__list { display: grid; gap: var(--s1); }
+.ds-ai-stage__item { display: flex; align-items: center; gap: var(--s2); height: 30px; transition: opacity 320ms var(--ease-standard), color 320ms var(--ease-standard); }
+.ds-ai-stage__dot  { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; transition: background-color 320ms var(--ease-standard), opacity 320ms var(--ease-standard); }
+.ds-ai-stage__text { font-size: 13px; transition: color 320ms var(--ease-standard); }
+.ds-ai-stage__item[data-state="pending"] .ds-ai-stage__dot  { background: var(--tg2); opacity: 0.3; }
+.ds-ai-stage__item[data-state="pending"] .ds-ai-stage__text { color: var(--tm2); opacity: 0.35; }
+.ds-ai-stage__item[data-state="active"]  .ds-ai-stage__dot  { background: var(--ac); }
+.ds-ai-stage__item[data-state="active"]  .ds-ai-stage__text { color: var(--ti); font-weight: 600; }
+.ds-ai-stage__item[data-state="done"]    .ds-ai-stage__dot  { background: var(--tg2); opacity: 0.55; }
+.ds-ai-stage__item[data-state="done"]    .ds-ai-stage__text { color: var(--tg2); }
+.ds-ai-stage__item[data-state="error"]   .ds-ai-stage__dot  { background: var(--danger); }
+.ds-ai-stage__item[data-state="error"]   .ds-ai-stage__text { color: var(--ti); font-weight: 600; }
+
+/* ============================================================================
+   10 · AI SUGGESTION CARD
+   ============================================================================ */
+.ds-ai-card {
+  border: 1px solid var(--border-strong); border-radius: var(--r-card); background: var(--sfr);
+  box-shadow: var(--shb); display: grid; gap: var(--s3); padding: var(--s4);
+  max-width: 460px;
+}
+.ds-ai-card--compact { padding: var(--s3); border-radius: var(--r-control); gap: var(--s2); }
+.ds-ai-card__overline { font-size: 10px; letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--am); font-weight: 600; }
+.ds-ai-card__title    { font-size: var(--ts); font-weight: 600; color: var(--ti); }
+.ds-ai-card__body     { font-size: 13px; line-height: var(--lb); color: var(--tm2); }
+.ds-ai-card__footer   { display: flex; gap: var(--s2); justify-content: flex-end; align-items: center; }
+.ds-ai-card__loading  { font-size: var(--tx); color: var(--tg2); display: flex; align-items: center; }
+.ds-ai-card__error    { font-size: var(--tx); color: var(--danger); }
+
+/* ============================================================================
+   11 · DIFF
+   ============================================================================ */
+.ds-diff { font-size: 13px; line-height: 22px; color: var(--text-body); }
+.ds-diff-block { padding: 3px 4px; border-radius: 3px; }
+.ds-diff-block--removed { background: var(--danger-soft); color: var(--danger-ink); text-decoration: line-through; text-decoration-color: var(--danger); }
+.ds-diff-block--added   { background: var(--success-soft); color: var(--success-ink); }
+.ds-diff__old { background: var(--danger-soft); color: var(--danger-ink); text-decoration: line-through; text-decoration-color: var(--danger); border-radius: 3px; padding: 1px 3px; margin-right: 4px; }
+.ds-diff__new { background: var(--ap); color: var(--ti); border-radius: 3px; padding: 1px 3px; }
+
+/* ============================================================================
+   12 · FLOATING AI TOOLBAR
+   ============================================================================ */
+.toolbar-stage {
+  position: relative; padding: var(--s5);
+  background: var(--paper); border: 1px solid var(--border-soft); border-radius: var(--r-card);
+  box-shadow: var(--sh-paper);
+  font-family: var(--font-serif); font-size: 16px; line-height: 28px; color: var(--ti);
+}
+.toolbar-stage__selection { background: color-mix(in srgb, var(--fr) 22%, transparent); border-radius: 2px; padding: 1px 0; }
+.ds-ai-toolbar {
+  position: absolute; z-index: var(--z-popover);
+  display: inline-flex; align-items: center; gap: var(--s1);
+  height: 36px; padding: 0 var(--s2);
+  background: var(--sfr); color: var(--ti);
+  border: 1px solid var(--border-strong); border-radius: var(--r-pill);
+  box-shadow: var(--shb); font-family: var(--font-body);
+}
+.ds-ai-toolbar__btn {
+  height: 28px; padding: 0 var(--s3); border: none; background: transparent;
+  color: var(--ti); font: inherit; font-size: var(--tx); font-weight: 600;
+  border-radius: var(--r-inline); cursor: pointer;
+  transition: background-color var(--dur-2) var(--ease-standard);
+}
+.ds-ai-toolbar__btn:hover:not(:disabled) { background: var(--sf2); }
+.ds-ai-toolbar__btn[aria-pressed="true"] { background: var(--ap); color: var(--ac); }
+.ds-ai-toolbar__btn:disabled { opacity: 0.42; cursor: not-allowed; }
+.ds-ai-toolbar__divider { width: 1px; height: 20px; background: var(--border-strong); margin: 0 var(--s1); }
+.ds-ask-ai {
+  display: inline-flex; align-items: center; gap: var(--s2); height: 28px; padding: 0 var(--s2);
+  background: var(--sf2); border-radius: var(--r-inline); width: 220px;
+}
+.ds-ask-ai input {
+  flex: 1; height: 100%; min-width: 0; padding: 0;
+  background: transparent; border: none; outline: none; color: var(--ti);
+  font: inherit; font-size: var(--ts);
+}
+.ds-ask-ai input::placeholder { color: var(--tg2); }
+
+.note {
+  margin-top: var(--s5); padding: var(--s4); border-radius: var(--r-card);
+  background: var(--sf1); border: 1px solid var(--border-soft);
+  font-size: var(--tx); color: var(--tg2); line-height: var(--lx);
+}
+.note code { font-family: var(--font-mono); color: var(--ti); background: var(--sf2); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">two&nbsp;weeks</span><span class="brand-period">.</span>
+    <span class="brand-sub">DS v2 — visual skeleton</span>
+  </div>
+  <div class="theme-switch" role="tablist" aria-label="Theme">
+    <button id="theme-light" aria-pressed="true" onclick="setTheme('light')">Light</button>
+    <button id="theme-dark"  aria-pressed="false" onclick="setTheme('dark')">Dark</button>
+  </div>
+</header>
+
+<main class="shell">
+
+<!-- 01 BUTTONS ────────────────────────────────────────────────────────── -->
+<section class="section" id="buttons">
+  <div class="section-head">
+    <span class="overline">01 · Foundations</span>
+    <h2 class="section-title">Buttons</h2>
+    <p class="section-desc">Primary, secondary, ghost, accent, danger, success, dark. Sizes sm/md/lg. Loading uses period pulse — never a spinner.</p>
+  </div>
+
+  <div class="col">
+    <div>
+      <div class="overline" style="margin-bottom:var(--s2)">Variants — md</div>
+      <div class="row">
+        <button class="ds-btn ds-btn--md ds-btn--primary">Generate</button>
+        <button class="ds-btn ds-btn--md ds-btn--secondary">Save draft</button>
+        <button class="ds-btn ds-btn--md ds-btn--ghost">Cancel</button>
+        <button class="ds-btn ds-btn--md ds-btn--accent">Refine</button>
+        <button class="ds-btn ds-btn--md ds-btn--danger">Delete</button>
+        <button class="ds-btn ds-btn--md ds-btn--success">Export</button>
+        <button class="ds-btn ds-btn--md ds-btn--dark">Sign in</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="overline" style="margin-bottom:var(--s2)">Sizes — primary</div>
+      <div class="row">
+        <button class="ds-btn ds-btn--sm ds-btn--primary">Generate</button>
+        <button class="ds-btn ds-btn--md ds-btn--primary">Generate</button>
+        <button class="ds-btn ds-btn--lg ds-btn--primary">Generate</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="overline" style="margin-bottom:var(--s2)">Loading · disabled · pill · icon</div>
+      <div class="row">
+        <button class="ds-btn ds-btn--md ds-btn--primary" disabled>Generating<span class="ds-btn__period">.</span></button>
+        <button class="ds-btn ds-btn--md ds-btn--secondary" disabled>Save draft</button>
+        <button class="ds-btn ds-btn--md ds-btn--primary ds-btn--pill">Generate</button>
+        <button class="ds-icon-btn" aria-label="More"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="12" cy="8" r="1"/></svg></button>
+        <button class="ds-icon-btn" aria-label="Share"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2l4 4-4 4M14 6H6a4 4 0 0 0 0 8"/></svg></button>
+        <button class="ds-icon-btn" aria-label="Delete"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M5 4V3h6v1M6 7v5M10 7v5M4 4l.5 9h7L12 4"/></svg></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 INPUTS — subtle-fill ────────────────────────────────────────────── -->
+<section class="section" id="inputs">
+  <div class="section-head">
+    <span class="overline">02 · Foundations</span>
+    <h2 class="section-title">Subtle-fill inputs</h2>
+    <p class="section-desc">2px transparent border over <code>--sf2</code> fill. On focus the border swaps to <code>--ti</code> — no glow. This is the dasti hallmark: quieter than a focus ring.</p>
+  </div>
+
+  <div class="grid-2">
+    <div class="ds-field-group">
+      <label class="ds-field-label" for="i1">Company name</label>
+      <input id="i1" class="ds-field" type="text" placeholder="e.g. Framer">
+      <span class="ds-field-meta">default · 2px transparent · bg <code>--sf2</code></span>
+    </div>
+    <div class="ds-field-group">
+      <label class="ds-field-label" for="i2">Role title</label>
+      <input id="i2" class="ds-field" type="text" value="Senior Product Designer" style="border-color: var(--ti);">
+      <span class="ds-field-meta">focus · 2px <code>--ti</code> · no glow</span>
+    </div>
+    <div class="ds-field-group">
+      <label class="ds-field-label" for="i3">Job URL</label>
+      <input id="i3" class="ds-field ds-field--error" type="text" value="notaurl">
+      <span class="ds-field-error">error · border danger · fill mix(danger-soft 35%, sf2)</span>
+    </div>
+    <div class="ds-field-group">
+      <label class="ds-field-label" for="i4">Session id</label>
+      <input id="i4" class="ds-field" type="text" value="sess_0xf2e9" disabled>
+      <span class="ds-field-meta">disabled · opacity 0.5</span>
+    </div>
+  </div>
+
+  <div class="ds-field-group">
+    <label class="ds-field-label" for="t1">Hook — opening sentence</label>
+    <textarea id="t1" class="ds-field ds-field--textarea" placeholder="A single strong sentence that introduces you.">After six years shaping research tools at Stripe, I write the way I design: with the reader's breath in mind.</textarea>
+    <span class="ds-field-meta">textarea · auto-grows to content (88–260px)</span>
+  </div>
+
+  <div class="ds-field-group">
+    <label class="ds-field-label">Native controls — tinted via <code>accent-color: var(--ac)</code></label>
+    <div class="ds-field-row">
+      <label><input type="checkbox" checked> Include cover letter</label>
+      <label><input type="checkbox"> Attach portfolio</label>
+      <span class="sep"></span>
+      <label><input type="radio" name="tn" checked> Warm</label>
+      <label><input type="radio" name="tn"> Formal</label>
+      <label><input type="radio" name="tn"> Balanced</label>
+      <span class="sep"></span>
+      <label>Intensity <input type="range" min="0" max="100" value="64"></label>
+    </div>
+    <span class="ds-field-meta">checkbox · radio · range — all inherit live accent.</span>
+  </div>
+</section>
+
+<!-- 03 CARDS ────────────────────────────────────────────────────────── -->
+<section class="section" id="cards">
+  <div class="section-head">
+    <span class="overline">03 · Foundations</span>
+    <h2 class="section-title">Cards</h2>
+    <p class="section-desc">Default rest, muted, elevated, interactive (hover lift). Loading state uses inline skeleton bands.</p>
+  </div>
+
+  <div class="grid-3">
+    <div class="ds-card" data-interactive="true">
+      <div class="ds-card__eyebrow">Default</div>
+      <div class="ds-card__title">Software Engineer · Acme Corp</div>
+      <div class="ds-card__body">Full-stack role. React, TypeScript, Node. Remote-first team of 12.</div>
+      <div class="ds-card__footer"><span>Updated 2 min ago</span><span class="ds-pill ds-pill--accent">AI ready</span></div>
+    </div>
+
+    <div class="ds-card ds-card--muted">
+      <div class="ds-card__eyebrow">Muted</div>
+      <div class="ds-card__title">Archived drafts</div>
+      <div class="ds-card__body">For secondary lists or read-only contexts. Sits on <code>--sf1</code>.</div>
+      <div class="ds-card__footer"><span>12 items</span><span class="ds-pill ds-pill--neutral">Archive</span></div>
+    </div>
+
+    <div class="ds-card ds-card--elevated">
+      <div class="ds-card__eyebrow">Elevated</div>
+      <div class="ds-card__title">Featured template</div>
+      <div class="ds-card__body">Raised with shadow B — sparingly for primary CTAs or featured content.</div>
+      <div class="ds-card__footer"><span>New</span><span class="ds-pill ds-pill--success">Published</span></div>
+    </div>
+
+    <div class="ds-card" data-state="loading" aria-busy="true">
+      <span class="ds-skel" style="height:10px;width:40%"></span>
+      <span class="ds-skel" style="height:18px;width:72%"></span>
+      <span class="ds-skel" style="height:42px"></span>
+      <div class="ds-card__footer"><span class="ds-skel" style="height:10px;width:80px"></span><span class="ds-skel" style="height:10px;width:54px"></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 PILLS · TONE BADGES · STATUS ───────────────────────────────── -->
+<section class="section" id="pills">
+  <div class="section-head">
+    <span class="overline">04 · Foundations</span>
+    <h2 class="section-title">Pills, tone badges, status</h2>
+    <p class="section-desc">Pills accent = <code>--am-soft</code> peach + <code>--ac</code> terracotta (no sage). Tone badges annotate proposal voices. Status carries a leading dot — only "Generating" breathes.</p>
+  </div>
+
+  <div>
+    <div class="overline" style="margin-bottom:var(--s2)">Status pills</div>
+    <div class="row">
+      <span class="ds-pill ds-pill--neutral">Draft</span>
+      <span class="ds-pill ds-pill--accent">Active</span>
+      <span class="ds-pill ds-pill--info">In review</span>
+      <span class="ds-pill ds-pill--success">Submitted</span>
+      <span class="ds-pill ds-pill--warning">Review</span>
+      <span class="ds-pill ds-pill--danger">Blocked</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="overline" style="margin-bottom:var(--s2)">Tone badges (proposal voice)</div>
+    <div class="row">
+      <span class="ds-tone ds-tone--warm">Warm</span>
+      <span class="ds-tone ds-tone--formal">Formal</span>
+      <span class="ds-tone ds-tone--natural">Natural</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="overline" style="margin-bottom:var(--s2)">Status badges</div>
+    <div class="row">
+      <span class="ds-status ds-status--accent"><span class="ds-status__dot"></span>Generating</span>
+      <span class="ds-status ds-status--success"><span class="ds-status__dot"></span>Done</span>
+      <span class="ds-status ds-status--danger"><span class="ds-status__dot"></span>Failed</span>
+      <span class="ds-status ds-status--neutral"><span class="ds-status__dot"></span>Saved</span>
+    </div>
+  </div>
+</section>
+
+<!-- 05 TOASTS ────────────────────────────────────────────────────────── -->
+<section class="section" id="toasts">
+  <div class="section-head">
+    <span class="overline">05 · Feedback</span>
+    <h2 class="section-title">Toasts</h2>
+    <p class="section-desc">Sentence case, period-terminated. Single region bottom-right. Undo toast keeps the action inline.</p>
+  </div>
+
+  <div class="row" style="align-items:flex-start">
+    <div class="ds-toast ds-toast--neutral">
+      <div class="ds-toast__icon">·</div>
+      <div class="ds-toast__body"><div class="ds-toast__title">Saved.</div></div>
+    </div>
+    <div class="ds-toast ds-toast--neutral">
+      <div class="ds-toast__icon">✓</div>
+      <div class="ds-toast__body"><div class="ds-toast__title">Draft ready.</div><div class="ds-toast__desc">Your proposal has been generated.</div></div>
+    </div>
+    <div class="ds-toast ds-toast--success">
+      <div class="ds-toast__icon">✓</div>
+      <div class="ds-toast__body"><div class="ds-toast__title">Export ready.</div><div class="ds-toast__desc">PDF is ready to download.</div></div>
+    </div>
+    <div class="ds-toast ds-toast--danger">
+      <div class="ds-toast__icon">!</div>
+      <div class="ds-toast__body"><div class="ds-toast__title">Couldn't finish.</div><div class="ds-toast__desc">Check your connection and try again.</div></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="overline" style="margin-bottom:var(--s2)">Undo toast (after Accept)</div>
+    <div class="ds-toast ds-toast--neutral">
+      <div class="ds-toast__icon">·</div>
+      <div class="ds-toast__body"><div class="ds-toast__title">Change applied.</div><button class="ds-toast__action" type="button">Undo</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- 06 DIALOG ────────────────────────────────────────────────────────── -->
+<section class="section" id="dialog">
+  <div class="section-head">
+    <span class="overline">06 · Surface</span>
+    <h2 class="section-title">Dialog</h2>
+    <p class="section-desc">Center-anchored. Frost overlay in real app — shown inline here.</p>
+  </div>
+  <div class="ds-dialog-preview">
+    <h3 class="ds-dialog__title">Discard this draft?</h3>
+    <p class="ds-dialog__body">Your unsaved changes will be lost. This cannot be undone.</p>
+    <div class="ds-dialog__footer">
+      <button class="ds-btn ds-btn--md ds-btn--ghost">Keep editing</button>
+      <button class="ds-btn ds-btn--md ds-btn--danger">Discard</button>
+    </div>
+  </div>
+</section>
+
+<!-- 06b SHEETS ───────────────────────────────────────────────────────── -->
+<section class="section" id="sheet">
+  <div class="section-head">
+    <span class="overline">06b · Surface</span>
+    <h2 class="section-title">Sheet — right drawer + bottom sheet</h2>
+    <p class="section-desc">Right drawer for desktop side panels (skills, sections, filters). Bottom sheet for mobile pickers. Frost overlay, slide via <code>--motion-duration-panel</code> + <code>--motion-ease-emphasized</code>. Replaces ad-hoc <code>SkillsDrawer</code> and <code>AddSectionBottomSheet</code>.</p>
+  </div>
+
+  <div class="ds-sheet-preview">
+    <div class="ds-sheet__overlay"></div>
+    <aside class="ds-sheet" role="dialog" aria-labelledby="sheet-title">
+      <header class="ds-sheet__header">
+        <h3 id="sheet-title" class="ds-sheet__title">Edit skills</h3>
+        <button class="ds-sheet__close" aria-label="Close panel.">×</button>
+      </header>
+      <div class="ds-sheet__body">
+        <p style="font-size: var(--ts); color: var(--tm2); margin: 0;">Body content scrolls when overflowing. Use stack of fields with consistent <code>--s4</code> gaps.</p>
+        <div class="ds-pill-row">
+          <span class="ds-pill ds-pill--accent">React</span>
+          <span class="ds-pill ds-pill--accent">TypeScript</span>
+          <span class="ds-pill ds-pill--accent">Postgres</span>
+        </div>
+      </div>
+      <footer class="ds-sheet__footer">
+        <button class="ds-btn ds-btn--md ds-btn--ghost">Cancel</button>
+        <button class="ds-btn ds-btn--md ds-btn--primary">Save</button>
+      </footer>
+    </aside>
+  </div>
+
+  <div class="ds-sheet-preview" style="height: 320px; margin-top: var(--s5)">
+    <div class="ds-sheet__overlay"></div>
+    <aside class="ds-bottom-sheet" role="dialog" aria-labelledby="bsheet-title">
+      <div class="ds-bottom-sheet__handle" aria-hidden="true"></div>
+      <header class="ds-bottom-sheet__header">
+        <h3 id="bsheet-title" class="ds-sheet__title">Add section</h3>
+      </header>
+      <div class="ds-bottom-sheet__body">
+        <p style="font-size: var(--ts); color: var(--tm2); margin: 0;">Mobile-friendly picker. Slides from bottom, drag handle, max 75% viewport height.</p>
+      </div>
+      <footer class="ds-bottom-sheet__footer">
+        <button class="ds-btn ds-btn--md ds-btn--primary" style="width: 100%">Continue</button>
+      </footer>
+    </aside>
+  </div>
+</section>
+
+<!-- 06c MENU ─────────────────────────────────────────────────────────── -->
+<section class="section" id="menu">
+  <div class="section-head">
+    <span class="overline">06c · Surface</span>
+    <h2 class="section-title">Menu — dropdown anchored to a trigger</h2>
+    <p class="section-desc">Floating menu opened by a button (kebab, "More", select-style trigger). Portal to <code>document.body</code>. Items support icon + label + optional shortcut. Danger variant for destructive actions. Replaces ad-hoc <code>LibraryFilterMenu</code>, popovers in <code>ProposalDisplay</code>, <code>ProposalComposeToolbar</code>, <code>SectionEditor</code>, etc.</p>
+  </div>
+
+  <div class="ds-menu-preview" style="display:flex; gap:var(--s5); flex-wrap:wrap; align-items:flex-start">
+    <div>
+      <button class="ds-btn ds-btn--md ds-btn--secondary" style="margin-bottom:var(--s2)">Actions ▾</button>
+      <div class="ds-menu" data-state="open" role="menu">
+        <button class="ds-menu__item" role="menuitem">
+          <span class="ds-menu__icon" aria-hidden="true">↗</span>
+          <span class="ds-menu__label-text">Open in new tab</span>
+          <span class="ds-menu__shortcut">⌘O</span>
+        </button>
+        <button class="ds-menu__item" role="menuitem">
+          <span class="ds-menu__icon" aria-hidden="true">⎘</span>
+          <span class="ds-menu__label-text">Duplicate</span>
+          <span class="ds-menu__shortcut">⌘D</span>
+        </button>
+        <button class="ds-menu__item" role="menuitem">
+          <span class="ds-menu__icon" aria-hidden="true">↗</span>
+          <span class="ds-menu__label-text">Export as PDF</span>
+        </button>
+        <div class="ds-menu__separator" role="separator"></div>
+        <div class="ds-menu__label">Danger zone</div>
+        <button class="ds-menu__item ds-menu__item--danger" role="menuitem">
+          <span class="ds-menu__icon" aria-hidden="true">×</span>
+          <span class="ds-menu__label-text">Delete</span>
+          <span class="ds-menu__shortcut">⌫</span>
+        </button>
+      </div>
+    </div>
+
+    <div>
+      <button class="ds-btn ds-btn--md ds-btn--ghost" style="margin-bottom:var(--s2)">⋯</button>
+      <div class="ds-menu" data-state="open" role="menu">
+        <button class="ds-menu__item" role="menuitem"><span class="ds-menu__label-text">Rename</span></button>
+        <button class="ds-menu__item" role="menuitem"><span class="ds-menu__label-text">Move to…</span></button>
+        <button class="ds-menu__item" role="menuitem" disabled><span class="ds-menu__label-text">Archive</span></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 07 SIDEBAR ────────────────────────────────────────────────────────── -->
+<section class="section" id="sidebar">
+  <div class="section-head">
+    <span class="overline">07 · Navigation</span>
+    <h2 class="section-title">Sidebar — gradient + 2px stripe (signature)</h2>
+    <p class="section-desc">Active items use a gradient fill (<code>--ap → transparent</code>) paired with a 2px inset accent stripe on the left edge — never a filled block. The stripe is dasti's signature.</p>
+  </div>
+
+  <div class="ds-sidebar-demo">
+    <aside class="ds-sidebar">
+      <div class="ds-sidebar__group">Workspace</div>
+      <div class="ds-sidebar__item">Overview</div>
+      <div class="ds-sidebar__item">Cover letters <span class="ds-sidebar__count">12</span></div>
+      <div class="ds-sidebar__item ds-sidebar__item--active">Résumé <span class="ds-sidebar__count">3</span></div>
+      <div class="ds-sidebar__item">Templates <span class="ds-sidebar__count">24</span></div>
+      <div class="ds-sidebar__group" style="margin-top:var(--s4)">Library</div>
+      <div class="ds-sidebar__item">Companies</div>
+      <div class="ds-sidebar__item">Snippets</div>
+      <div class="ds-sidebar__item">Archive</div>
+    </aside>
+    <div class="ds-sidebar-body">Active state = gradient fill (accent-pale → transparent) + 2 px inset accent stripe, left edge.</div>
+  </div>
+</section>
+
+<!-- 08 PAPER ────────────────────────────────────────────────────────── -->
+<section class="section" id="paper">
+  <div class="section-head">
+    <span class="overline">08 · Document</span>
+    <h2 class="section-title">Paper stage — Baskervville</h2>
+    <p class="section-desc">The document is the hero. Always on <code>--paper</code>, framed by a neutral stage, signed with a layered paper shadow. Baskervville renders the prose. In dark mode, paper dims to <code>#E8E5DB</code> for reading comfort.</p>
+  </div>
+
+  <div class="ds-stage">
+    <article class="ds-paper" role="main" aria-label="Cover letter preview">
+      <h1>Aurélien Gauthier</h1>
+      <div class="ds-paper__meta">Cover letter · March 2026 · for Framer</div>
+
+      <h2>Why Framer, why now</h2>
+      <p>After six years shaping research tools at Stripe, I write the way I design: with the reader's breath in mind. Your recent work on spatial canvases reads as an invitation to rethink what a layout can be — and I'd like to help with that next turn.</p>
+
+      <h2>What I'd bring</h2>
+      <p>A habit of pairing with engineers on the first morning. A bias for quieter chrome and louder content. And a folder of small test files that usually becomes the basis of a shared system within a month.</p>
+
+      <h2>What I'm hoping for</h2>
+      <p>A thirty-minute conversation this week or next. I'll bring two specific questions about the motion system and leave with a clear sense of whether the fit is honest on both sides.</p>
+    </article>
+  </div>
+</section>
+
+<!-- 09 AI STAGE ────────────────────────────────────────────────────── -->
+<section class="section" id="ai-stage">
+  <div class="section-head">
+    <span class="overline">09 · AI surface</span>
+    <h2 class="section-title">AI stage list</h2>
+    <p class="section-desc">One ambient loop in the system: the brand period in the header. Stage dots use color + opacity only, no per-stage animation.</p>
+  </div>
+
+  <div class="row" style="align-items:flex-start; gap:var(--s5)">
+    <div class="ds-ai-stage-panel">
+      <div class="ds-ai-stage__header">Generating<span class="ds-ai-stage__period" id="stage-period" data-thinking="true"></span></div>
+      <div class="ds-ai-stage__list" id="stage-list"></div>
+    </div>
+    <div class="col" style="gap:var(--s2)">
+      <div class="overline">Demo</div>
+      <div class="row">
+        <button class="ds-btn ds-btn--sm ds-btn--secondary" onclick="stagePrev()">← Back</button>
+        <button class="ds-btn ds-btn--sm ds-btn--primary" onclick="stageNext()">Next →</button>
+        <button class="ds-btn ds-btn--sm ds-btn--ghost" onclick="stageReset()">Reset</button>
+        <button class="ds-btn ds-btn--sm ds-btn--danger" onclick="stageError()">Error</button>
+      </div>
+      <div class="overline" style="color:var(--tg2)">progress: <span id="stage-prog">1 / 4</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 10 AI SUGGESTION CARD ───────────────────────────────────────── -->
+<section class="section" id="ai-card">
+  <div class="section-head">
+    <span class="overline">10 · AI surface</span>
+    <h2 class="section-title">AI suggestion card</h2>
+    <p class="section-desc">Preview before apply. Rewrite / Strengthen / Ask never auto-apply — they emit a suggestion card. Accept or Discard. Loading and error states stay calm.</p>
+  </div>
+
+  <div class="grid-2">
+    <div class="ds-ai-card">
+      <div class="ds-ai-card__overline">AI · REWRITE</div>
+      <div class="ds-ai-card__title">Suggested rewrite</div>
+      <div class="ds-diff">
+        <span class="ds-diff__old">At my previous role, I led the redesign of our core design system</span><span class="ds-diff__new">As design systems lead at my previous company, I architected a unified component library used across four product areas</span> — reducing component inconsistency by 40% and cutting time-to-ship by nearly a week per sprint.
+      </div>
+      <div class="ds-ai-card__footer">
+        <button class="ds-btn ds-btn--sm ds-btn--ghost">Discard</button>
+        <button class="ds-btn ds-btn--sm ds-btn--primary">Accept</button>
+      </div>
+    </div>
+
+    <div class="ds-ai-card">
+      <div class="ds-ai-card__overline">AI · ASK</div>
+      <div class="ds-ai-card__title">Working on your request</div>
+      <div class="ds-ai-card__loading">Reading<span class="ds-btn__period">.</span></div>
+      <div class="ds-ai-card__footer"><button class="ds-btn ds-btn--sm ds-btn--ghost">Cancel</button></div>
+    </div>
+
+    <div class="ds-ai-card">
+      <div class="ds-ai-card__overline">AI · REWRITE</div>
+      <div class="ds-ai-card__title">Couldn't finish</div>
+      <div class="ds-ai-card__error">The AI couldn't complete this request. Your draft was not changed.</div>
+      <div class="ds-ai-card__footer">
+        <button class="ds-btn ds-btn--sm ds-btn--ghost">Dismiss</button>
+        <button class="ds-btn ds-btn--sm ds-btn--secondary">Try again</button>
+      </div>
+    </div>
+
+    <div class="ds-ai-card ds-ai-card--compact">
+      <div class="ds-ai-card__title">Strengthen this bullet</div>
+      <div class="ds-diff"><div class="ds-diff-block ds-diff-block--added">Led migration of legacy analytics pipeline to BigQuery, cutting query latency 8× and saving $48k/year in compute.</div></div>
+      <div class="ds-ai-card__footer">
+        <button class="ds-btn ds-btn--sm ds-btn--ghost">Discard</button>
+        <button class="ds-btn ds-btn--sm ds-btn--primary">Accept</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 11 FLOATING AI TOOLBAR ───────────────────────────────────────── -->
+<section class="section" id="floating-toolbar">
+  <div class="section-head">
+    <span class="overline">11 · AI surface</span>
+    <h2 class="section-title">Floating AI toolbar</h2>
+    <p class="section-desc">Maximum 4 actions: Rewrite · Shorten · Fix · Ask. Text only — no icons. None of the actions auto-apply: each emits a suggestion card.</p>
+  </div>
+
+  <div class="toolbar-stage">
+    <p style="margin-bottom:14px">I am writing to express my strong interest in the Senior Engineer position at Acme Corp.</p>
+    <p style="position:relative;margin-bottom:14px">
+      <span class="toolbar-stage__selection">At my previous role, I led the redesign of our core design system — reducing component inconsistency by 40% and cutting time-to-ship by nearly a week per sprint.</span>
+      <span class="ds-ai-toolbar" style="left:50%;top:-44px;transform:translateX(-50%);">
+        <button class="ds-ai-toolbar__btn">Rewrite</button>
+        <button class="ds-ai-toolbar__btn">Shorten</button>
+        <button class="ds-ai-toolbar__btn">Fix</button>
+        <span class="ds-ai-toolbar__divider"></span>
+        <button class="ds-ai-toolbar__btn" aria-pressed="true">Ask</button>
+      </span>
+    </p>
+    <p>I believe this maps directly to your focus on engineering excellence.</p>
+  </div>
+
+  <div>
+    <div class="overline" style="margin-bottom:var(--s2)">Ask AI input — expanded</div>
+    <span class="ds-ai-toolbar" style="position:static;">
+      <button class="ds-ai-toolbar__btn" disabled>Rewrite</button>
+      <button class="ds-ai-toolbar__btn" disabled>Shorten</button>
+      <button class="ds-ai-toolbar__btn" disabled>Fix</button>
+      <span class="ds-ai-toolbar__divider"></span>
+      <span class="ds-ask-ai"><input type="text" placeholder="Ask the document…" value=""></span>
+    </span>
+  </div>
+
+  <div>
+    <div class="overline" style="margin-bottom:var(--s2)">Toolbar busy on action</div>
+    <span class="ds-ai-toolbar" style="position:static;">
+      <button class="ds-ai-toolbar__btn" disabled>Rewriting<span class="ds-btn__period">.</span></button>
+      <button class="ds-ai-toolbar__btn" disabled>Shorten</button>
+      <button class="ds-ai-toolbar__btn" disabled>Fix</button>
+      <span class="ds-ai-toolbar__divider"></span>
+      <button class="ds-ai-toolbar__btn" disabled>Ask</button>
+    </span>
+  </div>
+</section>
+
+<!-- 12 DIFF ────────────────────────────────────────────────────────── -->
+<section class="section" id="diff">
+  <div class="section-head">
+    <span class="overline">12 · AI surface</span>
+    <h2 class="section-title">Diff blocks</h2>
+    <p class="section-desc">Block-level only — never per-character.</p>
+  </div>
+
+  <div class="col" style="max-width:640px">
+    <div>
+      <div class="overline" style="margin-bottom:var(--s2)">Replace</div>
+      <div class="ds-diff"><span class="ds-diff__old">I bring six years of experience.</span><span class="ds-diff__new">I bring six years of shipping AI-driven products in regulated industries.</span></div>
+    </div>
+    <div>
+      <div class="overline" style="margin-bottom:var(--s2)">Add</div>
+      <div class="ds-diff"><div class="ds-diff-block ds-diff-block--added">My open-source work also demonstrates a commitment to craft I would bring to your team from day one.</div></div>
+    </div>
+    <div>
+      <div class="overline" style="margin-bottom:var(--s2)">Remove</div>
+      <div class="ds-diff"><div class="ds-diff-block ds-diff-block--removed">I am very passionate and detail-oriented and a fast learner.</div></div>
+    </div>
+  </div>
+</section>
+
+<div class="note">
+  <strong style="color:var(--ti)">Acceptance review.</strong>
+  Open in browser, toggle light/dark via top-right. Walk through each section. Pills accent are peach + terracotta (no sage), inputs are subtle-fill on <code>--sf2</code> with a quiet border-swap on focus (no glow), sidebar active item has the 2px terracotta stripe, paper is Baskervville, AI surfaces stay calm with the brand period as the only ambient loop.
+  If anything is off — say "section X — change Y" and I correct.
+</div>
+
+</main>
+
+<script>
+function setTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('theme-light').setAttribute('aria-pressed', t === 'light');
+  document.getElementById('theme-dark').setAttribute('aria-pressed', t === 'dark');
+}
+
+const STAGES = ['Reading role', 'Matching profile', 'Writing draft', 'Done.'];
+let stageIdx = 0; let stageErr = null;
+function renderStages() {
+  const list = document.getElementById('stage-list');
+  list.innerHTML = STAGES.map((label, i) => {
+    let state = 'pending';
+    if (stageErr === i) state = 'error';
+    else if (stageErr != null && i > stageErr) state = 'pending';
+    else if (i < stageIdx) state = 'done';
+    else if (i === stageIdx) state = 'active';
+    return `<div class="ds-ai-stage__item" data-state="${state}"><span class="ds-ai-stage__dot"></span><span class="ds-ai-stage__text">${label}</span></div>`;
+  }).join('');
+  document.getElementById('stage-prog').textContent = `${Math.min(stageIdx + 1, STAGES.length)} / ${STAGES.length}`;
+  const period = document.getElementById('stage-period');
+  const thinking = stageErr == null && stageIdx < STAGES.length - 1;
+  period.setAttribute('data-thinking', thinking ? 'true' : 'false');
+}
+function stageNext()  { if (stageIdx < STAGES.length - 1) { stageIdx++; stageErr = null; renderStages(); } }
+function stagePrev()  { if (stageIdx > 0) { stageIdx--; stageErr = null; renderStages(); } }
+function stageReset() { stageIdx = 0; stageErr = null; renderStages(); }
+function stageError() { stageErr = stageIdx; renderStages(); }
+renderStages();
+</script>
+
+</body>
+</html>
