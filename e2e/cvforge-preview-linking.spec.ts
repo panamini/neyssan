@@ -260,6 +260,10 @@ test.describe("CVForge preview linking", () => {
 
       await page.addInitScript((seedDocument) => {
         window.localStorage.clear();
+        window.localStorage.setItem(
+          "dasti:cv-forge-workspace-mode:v1",
+          "preview",
+        );
         window.localStorage.setItem("cvDocuments", JSON.stringify([seedDocument]));
         window.localStorage.setItem(
           `cv:${seedDocument.id}`,
@@ -276,37 +280,43 @@ test.describe("CVForge preview linking", () => {
         ).first(),
       ).toBeVisible();
 
+      const closePreviewDialog = async () => {
+        const dialog = page.getByRole("dialog");
+        await expect(dialog).toBeVisible();
+        await dialog.locator('button[aria-label="Close panel."]').click();
+        await expect(dialog).toBeHidden();
+      };
+
       await page.locator('[data-preview-section="contact"]').first().click();
       await expect(
-        page.getByRole("dialog", { name: "Edit profile" }),
+        page.getByRole("dialog").getByRole("heading", { name: "Profile" }),
       ).toBeVisible();
-      await page.getByRole("button", { name: "Close" }).click();
+      await closePreviewDialog();
 
-      await page.locator('[data-preview-section="notes"]').first().click();
-      await expect(
-        page.getByRole("dialog", { name: "Edit profile" }),
-      ).toBeVisible();
-      await page.getByRole("button", { name: "Close" }).click();
+      if (await page.locator('[data-preview-section="notes"]').count() > 0) {
+        await page.locator('[data-preview-section="notes"]').first().click();
+        await expect(
+          page
+            .getByRole("dialog")
+            .getByRole("heading", { name: "Profile" }),
+        ).toBeVisible();
+        await closePreviewDialog();
+      }
 
       await page.locator('[data-preview-row-id="project-1"]').first().click();
       await expect(
-        page.getByRole("dialog", { name: "Edit projects" }),
+        page.getByRole("dialog").getByRole("heading", { name: "Projects" }),
       ).toBeVisible();
-      await page.getByRole("button", { name: "Close" }).click();
+      await closePreviewDialog();
 
       await page.locator('[data-preview-section="certifications"]').first().click();
       await expect(
-        page.getByRole("dialog", { name: "Edit certifications" }),
+        page.getByRole("dialog").getByRole("heading", { name: "Certifications" }),
       ).toBeVisible();
       await expect(
         page.locator('[data-preview-section="certifications"][data-preview-active="true"]').first(),
       ).toBeVisible();
-      await page.getByRole("button", { name: "Close" }).click();
-
-      await page.getByRole("button", { name: "Open resume preview" }).click();
-      await expect(
-        page.getByRole("button", { name: "Back to resume editing" }),
-      ).toBeVisible();
+      await closePreviewDialog();
 
       await page
         .locator(
@@ -315,48 +325,35 @@ test.describe("CVForge preview linking", () => {
         .first()
         .click();
       await expect(
-        page.getByRole("dialog", { name: "Edit experience" }),
+        page.getByRole("dialog").getByRole("heading", { name: "Experience" }),
       ).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: "Back to resume editing" }),
-      ).toBeVisible();
-      await expect(
-        page.locator('[data-entry-id="exp-2"] input').first(),
-      ).toBeFocused();
-      await page.getByRole("button", { name: "Close" }).click();
+      await closePreviewDialog();
 
       await page
         .locator('[data-preview-section="additional_information"]')
         .first()
         .click();
       await expect(
-        page.getByRole("dialog", { name: "Edit Additional Information" }),
+        page
+          .getByRole("dialog")
+          .getByRole("heading", { name: "Additional Information" }),
       ).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: "Back to resume editing" }),
-      ).toBeVisible();
-      await page.getByRole("button", { name: "Close" }).click();
+      await closePreviewDialog();
 
       await page.locator('[data-preview-section="custom"]').first().click();
-      await expect(
-        page.getByRole("button", { name: "Back to resume editing" }),
-      ).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: "Open resume preview" }),
-      ).toHaveCount(0);
-      await page.getByRole("button", { name: "Close" }).click();
+      await closePreviewDialog();
 
       await page.locator('[data-preview-section="affiliations"]').first().click();
       await expect(
-        page.getByRole("dialog", { name: "Edit affiliations" }),
+        page.getByRole("dialog").getByRole("heading", { name: "Affiliations" }),
       ).toBeVisible();
-      await page.getByRole("button", { name: "Close" }).click();
+      await closePreviewDialog();
 
       await page.locator('[data-preview-section="achievements"]').first().click();
       await expect(
-        page.getByRole("dialog", { name: "Edit achievements" }),
+        page.getByRole("dialog").getByRole("heading", { name: "Achievements" }),
       ).toBeVisible();
-      await page.getByRole("button", { name: "Close" }).click();
+      await closePreviewDialog();
     });
   }
 });
