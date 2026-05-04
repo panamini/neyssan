@@ -7,6 +7,26 @@ Required reference path: `@/Users/pana/.codex/RTK.md`
 
 Treat `v1` as the active development baseline.
 
+## Shared Project Memory
+
+The canonical shared memory vault for twoweeks/Neyssan context is:
+
+`/Volumes/video/git/twoweeks-wiki` (configured for this environment; configurable if needed, e.g. `../twoweeks-wiki`)
+
+Before non-trivial product, design, architecture, parser, jobs, proposal, resume, export, brand, or local workflow work, read the vault in this order:
+
+1. `TWOWEEKS_WIKI_PATH/WIKI_SCHEMA.md`
+2. `TWOWEEKS_WIKI_PATH/AGENTS.md` and/or `TWOWEEKS_WIKI_PATH/CLAUDE.md`
+3. `TWOWEEKS_WIKI_PATH/wiki/hot.md` if present
+4. `TWOWEEKS_WIKI_PATH/wiki/index.md`
+5. 1-3 targeted current durable pages found through `hot.md` / `index.md`
+6. recent `TWOWEEKS_WIKI_PATH/wiki/log.md` entries only when history matters
+
+Set `TWOWEEKS_WIKI_PATH` to your local twoweeks wiki path for portability.
+If `wiki/hot.md` is missing in a worktree, fall back to `TWOWEEKS_WIKI_PATH/WIKI_SCHEMA.md`, then `TWOWEEKS_WIKI_PATH/CLAUDE.md`, then `TWOWEEKS_WIKI_PATH/wiki/overview.md` and `TWOWEEKS_WIKI_PATH/wiki/index.md`.
+Do not read the whole wiki blindly. Treat `wiki/hot.md` as a routing cache, not truth. If `hot.md` conflicts with current durable pages, trust the durable page.
+Do not mutate `twoweeks-wiki` unless the task is explicitly memory/wiki update, ingest, lint, or save-output. If mutating it, follow its `CLAUDE.md` / `SKILL.md` write-time contract and update `wiki/index.md`, `wiki/log.md`, and `wiki/hot.md` when the contract requires it.
+
 Optimize for the core product flow:
 
 1. CV ingestion/parsing
