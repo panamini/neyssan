@@ -11,6 +11,8 @@ Date: 2026-03-21
 - [x] Theme icon pass updated (`Moon` for dark mode)
 - [x] Completed CV `/style` and `/cv` style-only persistence hardening with metadata patching + backend metadata merge safety.
 - [x] Reworked `e2e/cvforge-preview-linking.spec.ts` to stabilize preview-mode selectors and close behavior around section-linking modals.
+- [x] CV Forge edit/preview paper width aligned to the canonical 860px paper; compact edit-only stage was removed and mobile stays at 100%.
+- [x] CV Forge shared preview renderer now covers rich summary editing parity, and CV AI routing is aligned to `mistral-small-latest` for summary/custom and suggestion actions.
 
 ## Next Step (priority)
 
@@ -30,7 +32,4 @@ Date: 2026-03-21
 
 ## Deferred (after Proposal freeze)
 
-- [ ] CV Forge section micro-polish follow-up:
-  - header action icon sizing consistency
-  - `skills/languages` add action placement review
-  - final spacing audit against dasti token grid
+- No current CV Forge polish items remain; revisit only if browser QA exposes new drift.
