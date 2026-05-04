@@ -647,7 +647,7 @@ export const runCvSectionAiAction = action({
         ? isSuggestionAction
           ? process.env.MISTRAL_CV_LIST_MODEL ??
             process.env.MISTRAL_CV_SKILLS_MODEL ??
-            "ministral-3b-2512"
+            "mistral-small-latest"
           : process.env.MISTRAL_CV_TEXT_MODEL ??
             process.env.MISTRAL_CV_SUMMARY_MODEL ??
             "mistral-small-latest"

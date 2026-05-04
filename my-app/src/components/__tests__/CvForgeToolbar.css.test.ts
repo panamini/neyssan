@@ -74,11 +74,20 @@ describe("CvForge toolbar CSS contracts", () => {
     expect(cvForgeSource).not.toContain('className="dasti-cv-preview-workbench"');
     expect(cvForgeSource).not.toContain("<ProfileReviewCard");
     expect(cvForgeSource).not.toContain("<VerbatiCvPreviewPanel");
+    expect(cvForgeSource).toContain(
+      '"dasti-cv-paper-stage dasti-cv-paper-stage--compact"',
+    );
     expect(productCss).toMatch(
       /\.dasti-cv-paper-stage\s*\{[\s\S]*width:\s*min\(100%,\s*860px\);[\s\S]*margin-inline:\s*auto;[\s\S]*min-width:\s*0;/,
     );
     expect(productCss).toMatch(
+      /\.dasti-cv-paper-stage--compact\s*\{[\s\S]*width:\s*min\(100%,\s*760px\);/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-cv-page-preview-stage\s*\{[\s\S]*width:\s*min\(100%,\s*860px\);/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-cv-paper-stage,[\s\S]*\.dasti-cv-paper-stage--compact,[\s\S]*\.dasti-cv-page-preview-stage\s*\{[\s\S]*width:\s*100%;/,
     );
     expect(productCss).toMatch(
       /\.dasti-document-rail--resume-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/,
