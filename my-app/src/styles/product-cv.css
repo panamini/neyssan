@@ -105,9 +105,22 @@
   min-width: 0;
 }
 
+.dasti-cv-paper-stage .dasti-doc-viewer-shell--resume-panel {
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-surface, var(--radius-card));
+  background: color-mix(in srgb, var(--sf0) 72%, var(--sf1));
+  box-shadow: var(--shadow-sm);
+}
+
 .dasti-cv-paper-stage
   .dasti-doc-viewport--resume[data-scroll-mode="natural"] {
   overflow: visible;
+}
+
+.dasti-cv-paper-stage
+  .dasti-document-stage__canvas[data-document-page="true"] {
+  box-shadow: var(--document-stage-halo, var(--sh-paper));
 }
 
 .dasti-cv-paper-stage [data-inline-paper-editable="true"] {
