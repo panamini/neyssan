@@ -35,6 +35,7 @@ const MAX_RESPONSIBILITIES = 3;
 const MAX_KEYWORDS = 8;
 const MAX_MUST_HAVES = 4;
 const LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.7;
+export type JobPostingLanguage = "en" | "fr" | "es" | "pt" | "it" | "de";
 
 const RESPONSIBILITY_CUE_RE =
   /\b(lead|manage|coordinate|support|build|develop|maintain|execute|own|deliver|drive|run|monitor|analy[sz]e|partner|collaborate|improve|create|oversee|organize|plan)\b/i;
@@ -44,6 +45,113 @@ const STRONG_REQUIREMENT_CUE_RE =
   /\b(must|required|requirements?|qualifications?)\b/i;
 const BOILERPLATE_SENTENCE_RE =
   /\b(is hiring|about the role|about us|join our team|we are looking for|this role)\b/i;
+const JOB_LANGUAGE_SIGNAL_PATTERNS: Array<{
+  language: Exclude<JobPostingLanguage, "en">;
+  patterns: RegExp[];
+}> = [
+  {
+    language: "fr",
+    patterns: [
+      /\bexp[eé]rience\b/i,
+      /\bcomp[eé]tences?\b/i,
+      /\bgestion\b/i,
+      /\b[eé]quipe\b/i,
+      /\btravail\b/i,
+      /\bclient[eè]le\b/i,
+      /\bcapacit[eé]\b/i,
+      /\bformation\b/i,
+      /\bdipl[oô]me\b/i,
+      /\bposte\b/i,
+      /\bprofil\b/i,
+      /\bmissions?\b/i,
+      /\bcandidature\b/i,
+      /\bcontr[oô]le\b/i,
+      /\bfinanci[eè]re?\b/i,
+      /\bnous recherchons\b/i,
+      /\bvous (êtes|serez|avez)\b/i,
+    ],
+  },
+  {
+    language: "es",
+    patterns: [
+      /\bexperiencia\b/i,
+      /\bhabilidades?\b/i,
+      /\bgesti[oó]n\b/i,
+      /\bequipo\b/i,
+      /\btrabajo\b/i,
+      /\bclientes?\b/i,
+      /\bcapacidad\b/i,
+      /\beducaci[oó]n\b/i,
+      /\bformaci[oó]n\b/i,
+      /\bpuesto\b/i,
+      /\brequisitos?\b/i,
+      /\bresponsabilidades?\b/i,
+      /\bdisponibilidad\b/i,
+      /\bjornada\b/i,
+      /\bse busca\b/i,
+      /\bpara trabajar\b/i,
+    ],
+  },
+  {
+    language: "pt",
+    patterns: [
+      /\bexperi[eê]ncia\b/i,
+      /\bcompet[eê]ncias?\b/i,
+      /\bgest[aã]o\b/i,
+      /\bequipe\b/i,
+      /\btrabalho\b/i,
+      /\bclientes?\b/i,
+      /\bcapacidade\b/i,
+      /\bforma[cç][aã]o\b/i,
+      /\bvaga\b/i,
+      /\brequisitos?\b/i,
+      /\bresponsabilidades?\b/i,
+      /\bdisponibilidade\b/i,
+      /\bconhecimentos?\b/i,
+      /\bensino\b/i,
+      /\bpara trabalhar\b/i,
+    ],
+  },
+  {
+    language: "it",
+    patterns: [
+      /\besperienza\b/i,
+      /\bcompetenze?\b/i,
+      /\bgestione\b/i,
+      /\bsquadra\b/i,
+      /\blavoro\b/i,
+      /\bclienti\b/i,
+      /\bcapacit[aà]\b/i,
+      /\bformazione\b/i,
+      /\bposizione\b/i,
+      /\brequisiti\b/i,
+      /\bresponsabilit[aà]\b/i,
+      /\bdisponibilit[aà]\b/i,
+      /\bconoscenza\b/i,
+      /\bper lavorare\b/i,
+    ],
+  },
+  {
+    language: "de",
+    patterns: [
+      /\berfahrung\b/i,
+      /\bkenntnisse\b/i,
+      /\bf[aä]higkeiten\b/i,
+      /\bteam\b/i,
+      /\barbeit\b/i,
+      /\bkunden\b/i,
+      /\bausbildung\b/i,
+      /\bstudium\b/i,
+      /\bstelle\b/i,
+      /\banforderungen\b/i,
+      /\baufgaben\b/i,
+      /\bverantwortung\b/i,
+      /\bverf[uü]gbarkeit\b/i,
+      /\bbewerbung\b/i,
+      /\bdeutsch\b/i,
+    ],
+  },
+];
 const KEYWORD_STOP_WORDS = new Set([
   "a",
   "an",
@@ -218,6 +326,28 @@ type SentenceSegment = {
 
 function compactWhitespace(value: string): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+export function detectJobPostingLanguage(value: string): JobPostingLanguage {
+  const text = compactWhitespace(value).toLowerCase();
+  if (!text) {
+    return "en";
+  }
+
+  let bestLanguage: JobPostingLanguage = "en";
+  let bestScore = 0;
+  for (const group of JOB_LANGUAGE_SIGNAL_PATTERNS) {
+    const score = group.patterns.reduce(
+      (count, pattern) => count + (pattern.test(text) ? 1 : 0),
+      0,
+    );
+    if (score > bestScore) {
+      bestLanguage = group.language;
+      bestScore = score;
+    }
+  }
+
+  return bestScore >= 3 ? bestLanguage : "en";
 }
 
 function clampConfidence(value: number): number {
@@ -767,7 +897,7 @@ export function buildCanonicalJobDraftFromSource(args: {
     company: structuredCompany || extractCompany(rawDescription),
     location: structuredLocation || extractLocation(rawDescription),
     rawDescription,
-    rawLanguageDetected: "en",
+    rawLanguageDetected: detectJobPostingLanguage(`${title}\n${rawDescription}`),
     summary: summaryExtraction.value || title,
     summaryExtraction,
     responsibilities: flattenExtractionValues(responsibilitiesExtraction),
