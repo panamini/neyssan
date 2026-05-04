@@ -20,6 +20,9 @@ import ProposalInputForm, {
 import EmbeddedStyleInspector from "../components/EmbeddedStyleInspector";
 import { ProposalComposeToolbar } from "../components/ProposalComposeToolbar";
 import { ProposalBriefCard } from "../components/ProposalBriefCard";
+import ProposalAIStream from "../components/proposal/ProposalAIStream";
+import ProposalDocumentStage from "../components/proposal/ProposalDocumentStage";
+import ProposalRail from "../components/proposal/ProposalRail";
 import {
   CoverLetterStartSurface,
   type CoverLetterStartSurfaceImportState,
@@ -335,6 +338,21 @@ function normalizeComposeToolbarVoicePreset(
   return preset && COMPOSE_TOOLBAR_VISIBLE_VOICE_PRESETS.has(preset)
     ? preset
     : null;
+}
+
+function resolveProposalToneBadgeTone(
+  preset: FormValues["voicePreset"] | null | undefined,
+): "auto" | "warm" | "formal" | "natural" {
+  switch (preset) {
+    case "expert":
+      return "formal";
+    case "signature":
+      return "natural";
+    case "engaging":
+      return "warm";
+    default:
+      return "auto";
+  }
 }
 
 function hasOwnProperty(
@@ -6234,6 +6252,33 @@ export function ProposalForge(): JSX.Element {
       }),
     [draftCharacterLimitMode, draftCharacterLimitValue],
   );
+  const proposalRailTonePreset = composeToolbarVoicePreset ?? proposalVoicePreset;
+  const proposalRailToneLabel = getVoicePresetDisplayLabel(
+    proposalRailTonePreset ?? null,
+  );
+  const proposalRailToneValue =
+    resolveProposalToneBadgeTone(proposalRailTonePreset);
+  const proposalRailKeywords = React.useMemo(
+    () =>
+      [
+        ...(canonicalJobRecord?.visibleKeywords ?? []),
+        ...(canonicalJobRecord?.keywords ?? []),
+        ...proposalHeaderSourceSummary.keywords,
+      ].filter((keyword, index, values) => {
+        const normalized = keyword.trim().toLowerCase();
+        return (
+          normalized.length > 0 &&
+          values.findIndex(
+            (candidate) => candidate.trim().toLowerCase() === normalized,
+          ) === index
+        );
+      }),
+    [
+      canonicalJobRecord?.keywords,
+      canonicalJobRecord?.visibleKeywords,
+      proposalHeaderSourceSummary.keywords,
+    ],
+  );
   const showComposeGridColumn = showComposePanel;
   const shouldAnimateDesktopBriefTransition =
     !isSavedView && !isCompactComposeLayout;
@@ -6719,36 +6764,6 @@ export function ProposalForge(): JSX.Element {
           </section>
         ) : (
           <>
-            {proposalWorkbenchToolbar ? (
-              <div
-                className={[
-                  "dasti-workbench-top-left-slot",
-                  "dasti-workbench-top-left-slot--proposal",
-                  shouldShowCollapsedComposeToolbar
-                    ? "dasti-workbench-top-left-slot--proposal-collapsed"
-                    : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                style={proposalWorkbenchToolbarSlotStyle}
-              >
-                <div
-                  className="dasti-proposal-workbench-left-stack"
-                  style={proposalToolbarWidthStyle}
-                >
-                  {proposalWorkbenchToolbar ? (
-                    <div className="dasti-cv-workbench-bar dasti-cv-workbench-bar--proposal-workspace">
-                      <div
-                        className="dasti-forge-compose-toolbar-slot"
-                        data-testid="proposal-workbench-toolbar-slot"
-                      >
-                        {proposalWorkbenchToolbar}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
             <div className="dasti-flow" style={proposalWorkbenchFrameStyle}>
               <section aria-hidden={false}>
                 {shouldRenderColdStartInlineOnly ? (
@@ -6784,14 +6799,14 @@ export function ProposalForge(): JSX.Element {
                   </>
                 ) : (
                   <div
-                    className="dasti-grid-split"
+                    className="dasti-proposal-skeleton-forge"
                     style={
                       {
                         "--grid-columns": isCompactComposeLayout
                           ? "minmax(0, 1fr)"
                           : showComposeGridColumn
-                            ? `${proposalDesktopComposeWidth} minmax(0, var(--proposal-workspace-output-shell-inline-size))`
-                            : "minmax(0, 0px) minmax(0, 1fr)",
+                            ? "minmax(0, 1fr) 360px"
+                            : "minmax(0, 1fr)",
                         "--grid-gap": showComposeGridColumn
                           ? "var(--layout-card-grid)"
                           : "0px",
@@ -6802,17 +6817,52 @@ export function ProposalForge(): JSX.Element {
                       } as React.CSSProperties
                     }
                   >
-                    <div
-                      className={[
-                        "dasti-flow",
-                        "dasti-forge-left-col",
-                        !showComposeGridColumn && !isCompactComposeLayout
-                          ? "dasti-forge-left-col--hidden"
-                          : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    >
+                    <ProposalRail
+                      jobTitle={briefJobTitle}
+                      company={
+                        canonicalJobRecord?.company?.trim() ||
+                        proposalHeaderSourceSummary.company ||
+                        null
+                      }
+                      location={proposalHeaderSourceSummary.location || null}
+                      sourceLabel={briefSourcePlatform}
+                      keywords={proposalRailKeywords}
+                      sourceCvTitle={attachedCvDisplayTitle}
+                      sourceCvMeta={attachedCvId ? "Attached to this draft" : null}
+                      toneLabel={proposalRailToneLabel}
+                      toneValue={proposalRailToneValue}
+                      lengthLabel={activeCharacterLimitSelection.label}
+                      styleLabel={proposalStyleStatusLabel}
+                      aiStream={
+                        <ProposalAIStream
+                          loading={loading}
+                          error={error}
+                          statusMessage={statusMessage}
+                        />
+                      }
+                      toolbar={
+                        proposalWorkbenchToolbar ? (
+                          <div
+                            className="dasti-forge-compose-toolbar-slot"
+                            data-testid="proposal-workbench-toolbar-slot"
+                          >
+                            {proposalWorkbenchToolbar}
+                          </div>
+                        ) : null
+                      }
+                      onOpenCvPicker={handleToolbarCvPickerToggle}
+                      composePanel={
+                        <div
+                          className={[
+                            "dasti-flow",
+                            "dasti-forge-left-col",
+                            !showComposeGridColumn && !isCompactComposeLayout
+                              ? "dasti-forge-left-col--hidden"
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
                       <div
                         style={composeColumnShellWidthStyle}
                         className="dasti-proposal-compose-column dasti-proposal-compose-column--workspace"
@@ -6957,8 +7007,35 @@ export function ProposalForge(): JSX.Element {
                         </div>
                       </div>
                     </div>
+                      }
+                    />
 
-                    <div className="dasti-flow">
+                    <div className="dasti-flow dasti-proposal-skeleton-forge__stage">
+                      <ProposalDocumentStage
+                        statusLabel={loading ? "Drafting" : "Draft"}
+                        toneLabel={proposalRailToneLabel}
+                        toneValue={proposalRailToneValue}
+                        mode={proposalOutputMode}
+                        exporting={proposalExportingFormat !== null}
+                        hasProposalContent={Boolean(proposalContent)}
+                        onModeChange={setProposalOutputMode}
+                        onCopyText={() => {
+                          void handleCopyOutput();
+                        }}
+                        onExportPdf={(mode) => {
+                          void handleExportProposalFile({
+                            target: "compose",
+                            format: "pdf",
+                            mode,
+                          });
+                        }}
+                        onExportDocx={() => {
+                          void handleExportProposalFile({
+                            target: "compose",
+                            format: "docx",
+                          });
+                        }}
+                      >
                       <div
                         ref={liveOutputShellRef}
                         style={
@@ -7230,6 +7307,7 @@ export function ProposalForge(): JSX.Element {
                           }
                         />
                       </div>
+                      </ProposalDocumentStage>
                     </div>
                   </div>
                 )}
