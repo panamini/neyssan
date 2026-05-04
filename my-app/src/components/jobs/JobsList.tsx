@@ -44,25 +44,25 @@ type JobsListProps = {
   sortOrder: JobsSortOrder;
   matchFilter: JobsMatchFilter;
   hasDocsOnly: boolean;
+  noDocsOnly: boolean;
   needsReviewOnly: boolean;
   favoritesOnly: boolean;
   remoteOnly: boolean;
   seniorOnly: boolean;
   optimisticActivityById: Record<string, number>;
   optimisticFavoriteById: Record<string, boolean>;
-  optimisticReviewStateById: Record<string, string>;
   confirmingPermanentDeleteJobId: string | null;
   onSearchQueryChange: (value: string) => void;
   onSortOrderChange: (value: JobsSortOrder) => void;
   onMatchFilterChange: (value: JobsMatchFilter) => void;
   onHasDocsOnlyChange: (value: boolean) => void;
+  onNoDocsOnlyChange: (value: boolean) => void;
   onNeedsReviewOnlyChange: (value: boolean) => void;
   onFavoritesOnlyChange: (value: boolean) => void;
   onRemoteOnlyChange: (value: boolean) => void;
   onSeniorOnlyChange: (value: boolean) => void;
   onViewChange: (view: JobsViewMode) => void;
   onSelectJob: (jobId: string) => void;
-  onSetJobFavorite: (jobId: string, nextFavorite: boolean) => void;
   onOpenJobSource: (sourceUrl: string) => void;
   onArchiveJob: (jobId: string) => void;
   onDuplicateJob: (jobId: string) => void;
@@ -91,39 +91,6 @@ const JOBS_SORT_OPTIONS = [
   },
 ] as const;
 
-const JOBS_MATCH_FILTER_OPTIONS = [
-  {
-    value: "worth_plus",
-    label: "Worth+ a shot",
-    description: "Worth a shot or better.",
-  },
-  {
-    value: "all",
-    label: "All jobs",
-    description: "Show every match tier.",
-  },
-  {
-    value: "strong",
-    label: "Strong match",
-    description: "Highest-confidence matches.",
-  },
-  {
-    value: "partial",
-    label: "Worth a shot",
-    description: "Some signals match.",
-  },
-  {
-    value: "weak",
-    label: "Probably skip",
-    description: "Low-signal matches.",
-  },
-  {
-    value: "unknown",
-    label: "Maybe",
-    description: "No resolved match tier.",
-  },
-] as const;
-
 function resolveMatchTierLabel(tier: JobsListItem["matchTier"]): string {
   switch (tier) {
     case "strong":
@@ -137,9 +104,37 @@ function resolveMatchTierLabel(tier: JobsListItem["matchTier"]): string {
   }
 }
 
+function resolveMatchTierTone(
+  tier: JobsListItem["matchTier"],
+): "strong" | "worth" | "skip" | "maybe" {
+  switch (tier) {
+    case "strong":
+      return "strong";
+    case "partial":
+      return "worth";
+    case "weak":
+      return "skip";
+    case "unknown":
+      return "maybe";
+  }
+}
+
 function resolveLocationModeLabel(value: string): string {
   const normalizedValue = String(value ?? "").trim();
-  return normalizedValue || "Location unavailable";
+  if (!normalizedValue) {
+    return "Location unavailable";
+  }
+  const locationParts = normalizedValue
+    .split(/\s*·\s*/)
+    .map((part) => part.trim())
+    .filter(
+      (part) =>
+        part &&
+        !/\b\d+\s+(?:second|minute|hour|day|week|month|year)s?\s+ago\b/i.test(part) &&
+        !/\b\d+\s+people\s+clicked\s+apply\b/i.test(part) &&
+        !/\b\d+\s+applicants?\b/i.test(part),
+    );
+  return locationParts.join(" · ") || normalizedValue;
 }
 
 function FilterChip({
@@ -176,25 +171,25 @@ export function JobsList({
   sortOrder,
   matchFilter,
   hasDocsOnly,
+  noDocsOnly,
   needsReviewOnly,
   favoritesOnly,
   remoteOnly,
   seniorOnly,
   optimisticActivityById,
   optimisticFavoriteById,
-  optimisticReviewStateById,
   confirmingPermanentDeleteJobId,
   onSearchQueryChange,
   onSortOrderChange,
   onMatchFilterChange,
   onHasDocsOnlyChange,
+  onNoDocsOnlyChange,
   onNeedsReviewOnlyChange,
   onFavoritesOnlyChange,
   onRemoteOnlyChange,
   onSeniorOnlyChange,
   onViewChange,
   onSelectJob,
-  onSetJobFavorite,
   onOpenJobSource,
   onArchiveJob,
   onDuplicateJob,
@@ -204,7 +199,7 @@ export function JobsList({
   onImportFirstJob,
 }: JobsListProps): JSX.Element {
   return (
-    <section className="dasti-jobs-list-pane" aria-label="Jobs list">
+    <section className="dasti-jobs-list-pane jobs__list" aria-label="Jobs list">
       <div className="dasti-jobs-toolbar">
         <label className="dasti-jobs-toolbar__search">
           <span className="sr-only">Search jobs</span>
@@ -270,12 +265,16 @@ export function JobsList({
 
       {jobsView === "active" ? (
         <div className="dasti-jobs-filter-chips" aria-label="Job filters">
-          <LibraryFilterMenu
-            label="Match quality"
-            value={matchFilter}
-            options={JOBS_MATCH_FILTER_OPTIONS}
-            onChange={onMatchFilterChange}
-          />
+          <FilterChip
+            isActive={matchFilter === "worth_plus"}
+            onClick={() =>
+              onMatchFilterChange(
+                matchFilter === "worth_plus" ? "all" : "worth_plus",
+              )
+            }
+          >
+            Worth+ a shot
+          </FilterChip>
           <div
             className="dasti-jobs-filter-cluster dasti-jobs-filter-cluster--attention"
             aria-label="Review state"
@@ -284,19 +283,13 @@ export function JobsList({
               isActive={needsReviewOnly}
               onClick={() => onNeedsReviewOnlyChange(!needsReviewOnly)}
             >
-              Needs review
+              Unviewed
             </FilterChip>
           </div>
           <div
             className="dasti-jobs-filter-cluster dasti-jobs-filter-cluster--utility"
             aria-label="Job utilities"
           >
-            <FilterChip
-              isActive={hasDocsOnly}
-              onClick={() => onHasDocsOnlyChange(!hasDocsOnly)}
-            >
-              Has docs
-            </FilterChip>
             <FilterChip
               isActive={favoritesOnly}
               onClick={() => onFavoritesOnlyChange(!favoritesOnly)}
@@ -315,15 +308,79 @@ export function JobsList({
             >
               Senior
             </FilterChip>
-            <button
-              type="button"
-              className="dasti-jobs-filter-chip"
-              disabled
-              title="Additional filters coming soon"
-            >
-              + filter
-              <span className="dasti-jobs-filter-chip__status">Coming</span>
-            </button>
+            <Menu
+              ariaLabel="Additional job filters"
+              align="start"
+              sections={[
+                {
+                  label: "Match quality",
+                  items: [
+                    {
+                      id: "all-match-tiers",
+                      label: "All match tiers",
+                      role: "menuitemradio",
+                      selected: matchFilter === "all",
+                      onSelect: () => onMatchFilterChange("all"),
+                    },
+                    {
+                      id: "strong-match",
+                      label: "Strong match",
+                      role: "menuitemradio",
+                      selected: matchFilter === "strong",
+                      onSelect: () => onMatchFilterChange("strong"),
+                    },
+                    {
+                      id: "maybe",
+                      label: "Maybe",
+                      role: "menuitemradio",
+                      selected: matchFilter === "unknown",
+                      onSelect: () => onMatchFilterChange("unknown"),
+                    },
+                    {
+                      id: "probably-skip",
+                      label: "Probably skip",
+                      role: "menuitemradio",
+                      selected: matchFilter === "weak",
+                      onSelect: () => onMatchFilterChange("weak"),
+                    },
+                  ],
+                },
+                {
+                  label: "Documents",
+                  items: [
+                    {
+                      id: "all-docs",
+                      label: "All documents",
+                      role: "menuitemradio",
+                      selected: !hasDocsOnly && !noDocsOnly,
+                      onSelect: () => {
+                        onHasDocsOnlyChange(false);
+                        onNoDocsOnlyChange(false);
+                      },
+                    },
+                    {
+                      id: "has-docs",
+                      label: "Has docs",
+                      role: "menuitemradio",
+                      selected: hasDocsOnly,
+                      onSelect: () => onHasDocsOnlyChange(!hasDocsOnly),
+                    },
+                    {
+                      id: "no-docs",
+                      label: "No docs",
+                      role: "menuitemradio",
+                      selected: noDocsOnly,
+                      onSelect: () => onNoDocsOnlyChange(!noDocsOnly),
+                    },
+                  ],
+                },
+              ]}
+              trigger={
+                <button type="button" className="dasti-jobs-filter-chip">
+                  + filter
+                </button>
+              }
+            />
           </div>
           <div
             className="dasti-jobs-filter-cluster dasti-jobs-filter-cluster--capture"
@@ -367,11 +424,10 @@ export function JobsList({
             const lastActivityLabel =
               formatUiDate(optimisticActivityById[job.id] ?? job.lastActivityAt) ??
               "Recent";
-            const reviewState =
-              optimisticReviewStateById[job.id] ?? job.reviewState;
             const isFavorite =
               optimisticFavoriteById[job.id] ?? job.isFavorite;
             const matchLabel = resolveMatchTierLabel(job.matchTier);
+            const matchTone = resolveMatchTierTone(job.matchTier);
 
             return (
               <div key={job.id} className="dasti-jobs-list-item" role="listitem">
@@ -390,58 +446,38 @@ export function JobsList({
                 >
                   <div className="dasti-jobs-row__copy">
                     <div className="dasti-jobs-row__title">
-                      <span>{title}</span>
-                      {job.isSample ? (
-                        <span className="dasti-jobs-sample-badge">Sample</span>
-                      ) : null}
+                      <span className="dasti-jobs-row__title-copy">
+                        <span>{title}</span>
+                        {job.isSample ? (
+                          <span className="dasti-jobs-sample-badge">Sample</span>
+                        ) : null}
+                      </span>
+                      <span
+                        className={`ds-verdict ds-verdict--${matchTone} dasti-jobs-match-chip`}
+                      >
+                        <span className="ds-verdict__dot" aria-hidden="true" />
+                        {matchLabel}
+                      </span>
                     </div>
                     <div className="dasti-jobs-row__company">
-                      {company}
-                      {` · ${locationLabel}`}
+                      <span>{company}</span>
+                      <span>·</span>
+                      <span>{locationLabel}</span>
+                      {isFavorite ? (
+                        <span className="dasti-jobs-row__meta-favorite" aria-label="Favorite">
+                          <Star size={13} strokeWidth={1.8} weight="fill" aria-hidden="true" />
+                        </span>
+                      ) : null}
                     </div>
                     <div className="dasti-jobs-row__meta">
-                      <span className="dasti-jobs-match-chip">{matchLabel}</span>
                       <span className="dasti-jobs-row__meta-pill">
                         <FileText size={12} strokeWidth={1.7} aria-hidden="true" />
                         <span>{job.linkedDocumentCount}</span>
                       </span>
                       <span>Last activity {lastActivityLabel}</span>
-                      {reviewState === "needs_review" ? (
-                        <span
-                          className="dasti-jobs-review-dot"
-                          aria-label="Needs review"
-                          title="Needs review"
-                        />
-                      ) : null}
                     </div>
                   </div>
                   <div className="dasti-jobs-row__controls">
-                    <div className="dasti-jobs-row__favorite-slot">
-                      {jobsView === "active" ? (
-                        <button
-                          type="button"
-                          className="dasti-icon-button dasti-jobs-row__favorite"
-                          aria-pressed={isFavorite}
-                          aria-label={
-                            isFavorite
-                              ? `Remove ${title} from favorites`
-                              : `Mark ${title} as favorite`
-                          }
-                          title={isFavorite ? "Remove from favorites" : "Mark favorite"}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onSetJobFavorite(job.id, !isFavorite);
-                          }}
-                        >
-                          <Star
-                            size={16}
-                            strokeWidth={1.8}
-                            weight={isFavorite ? "fill" : "regular"}
-                            aria-hidden="true"
-                          />
-                        </button>
-                      ) : null}
-                    </div>
                     <div className="dasti-import-dropdown dasti-jobs-row__menu">
                       <Menu
                         ariaLabel={`Actions for ${title}`}

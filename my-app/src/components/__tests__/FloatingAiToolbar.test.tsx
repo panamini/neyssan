@@ -1,4 +1,6 @@
 import React from "react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import FloatingAiToolbar, {
@@ -163,6 +165,31 @@ describe("FloatingAiToolbar", () => {
     );
   });
 
+  it("submits a custom instruction from the Send button", async () => {
+    const onRunAction = vi.fn();
+
+    render(
+      <FloatingAiToolbar
+        anchor={{ left: 120, top: 80 }}
+        open
+        onClose={vi.fn()}
+        onRunAction={onRunAction}
+      />,
+    );
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Ask" }))[0]);
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Ask AI" }), {
+      target: { value: "Make this sound calmer." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(onRunAction).toHaveBeenCalledWith(
+      "custom",
+      "Make this sound calmer.",
+    );
+  });
+
   it("replaces the Ask button with the inline prompt while expanded", async () => {
     render(
       <FloatingAiToolbar
@@ -177,7 +204,17 @@ describe("FloatingAiToolbar", () => {
 
     expect(screen.getByRole("textbox", { name: "Ask AI" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Ask" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Send request" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument();
+  });
+
+  it("keeps the Ask focus ring on the full input container", () => {
+    const styles = readFileSync(resolve(process.cwd(), "src/styles/ds-v2.css"), "utf8");
+
+    expect(styles).toContain(".ds-ask-ai:focus-within");
+    expect(styles).toMatch(/\.ds-ask-ai:focus-within\s*\{[^}]*outline-color:\s*var\(--fr\)/s);
+    expect(styles).toMatch(/\.ds-ask-ai\s*\{[^}]*outline:\s*2px solid transparent/s);
+    expect(styles).toMatch(/\.ds-ask-ai__input\s*\{[^}]*outline:\s*none/s);
+    expect(styles).toMatch(/\.ds-ask-ai__input\s*\{[^}]*box-shadow:\s*none !important/s);
   });
 
   it("focuses the Ask field when the inline prompt opens", async () => {
@@ -224,6 +261,14 @@ describe("FloatingAiToolbar", () => {
       "Asking.",
     );
     expect(screen.getByRole("button", { name: "Shorten" })).toBeDisabled();
+
+    rerender(<FloatingAiToolbar {...props} isLoading={false} pendingActionId={null} />);
+
+    expect(screen.getByRole("textbox", { name: "Ask AI" })).not.toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Ask AI" })).not.toHaveAttribute(
+      "placeholder",
+      "Asking.",
+    );
   });
 
   it("shows the targeted preset action busy state while AI is running", () => {

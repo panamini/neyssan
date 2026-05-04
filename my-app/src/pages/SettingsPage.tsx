@@ -1,9 +1,11 @@
 import React, { useRef, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useAuth, useUser } from "@clerk/clerk-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
+import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   Check,
-  ColorWheel,
   Feather,
   FileImage,
   Pen,
@@ -24,7 +26,6 @@ import {
   type ProposalPaletteId,
 } from "../lib/proposal-style-display";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
-import { ProposalColorPickerPopover } from "../components/ProposalColorPickerPopover";
 import {
   VERBATI_FONT_PAIR_OPTIONS,
   type VerbatiFontPairId,
@@ -38,6 +39,8 @@ import type {
   StyleFamilyId,
   VerbatiStylePreset,
 } from "../features/verbati/types";
+import { useMotionPreference } from "../lib/motion-preference";
+import { useThemeMode, type ThemePreference } from "../lib/theme-mode";
 import {
   DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
   PROPOSAL_SIGNATURE_FONT_OPTIONS,
@@ -45,10 +48,23 @@ import {
   sanitizeProposalSignatureSettings,
   type ProposalSignatureSettings,
 } from "../lib/proposal-signature-settings";
+import {
+  getLocalPersonalizationSourceByCvId,
+  getProposalApplicantHeaderData,
+} from "../lib/proposal-personalization";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type SlotIndex = 1 | 2 | 3;
+
+type SettingsAccentOption = {
+  id: string;
+  label: string;
+  swatch: string;
+  paletteOverride: ProposalPaletteId | null;
+  accentHex: string | null;
+};
+
 type StoredVerbatiStyle = Omit<VerbatiStylePreset, "accentHex"> & {
   accentHex?: string | null;
 };
@@ -63,6 +79,72 @@ type PresetSlot = {
   signatureSettings: ProposalSignatureSettings;
   name?: string;
 };
+
+type ProposalContactSettings = {
+  proposalDefaultContactEmail?: string | null;
+  proposalDefaultContactPhone?: string | null;
+  proposalDefaultContactLinkedin?: string | null;
+  proposalDefaultContactWebsite?: string | null;
+  proposalDefaultContactLocation?: string | null;
+};
+
+type ProposalContactField = keyof ProposalContactSettings;
+
+const PROPOSAL_CONTACT_FIELDS: Array<{
+  id: ProposalContactField;
+  label: string;
+  type: React.HTMLInputTypeAttribute;
+  placeholder: string;
+  fallbackKey: "email" | "phone" | "location" | "linkedin" | "website";
+}> = [
+  {
+    id: "proposalDefaultContactEmail",
+    label: "Email",
+    type: "email",
+    placeholder: "name@example.com",
+    fallbackKey: "email",
+  },
+  {
+    id: "proposalDefaultContactPhone",
+    label: "Phone",
+    type: "tel",
+    placeholder: "+33 6 00 00 00 00",
+    fallbackKey: "phone",
+  },
+  {
+    id: "proposalDefaultContactLocation",
+    label: "Location",
+    type: "text",
+    placeholder: "Paris, France",
+    fallbackKey: "location",
+  },
+  {
+    id: "proposalDefaultContactLinkedin",
+    label: "LinkedIn",
+    type: "url",
+    placeholder: "https://linkedin.com/in/name",
+    fallbackKey: "linkedin",
+  },
+  {
+    id: "proposalDefaultContactWebsite",
+    label: "Website",
+    type: "url",
+    placeholder: "https://example.com",
+    fallbackKey: "website",
+  },
+];
+
+const EMPTY_PROPOSAL_CONTACT_FIELDS: Record<ProposalContactField, string> = {
+  proposalDefaultContactEmail: "",
+  proposalDefaultContactPhone: "",
+  proposalDefaultContactLinkedin: "",
+  proposalDefaultContactWebsite: "",
+  proposalDefaultContactLocation: "",
+};
+
+function cleanSettingsInput(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
 
 const DEFAULT_SLOT_NAMES: Record<SlotIndex, string> = {
   1: "Style 1",
@@ -84,6 +166,20 @@ const EMPTY_PRESET: PresetSlot = {
   voicePreset: null,
   signatureSettings: DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
 };
+
+const SETTINGS_THEME_OPTIONS: Array<{ id: ThemePreference; label: string }> = [
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+];
+
+const SETTINGS_ACCENT_OPTIONS: SettingsAccentOption[] = [
+  { id: "terre", label: "Terre", swatch: "#A84E2E", paletteOverride: null, accentHex: "#A84E2E" },
+  { id: "ink", label: "Ink", swatch: "#0F0C08", paletteOverride: null, accentHex: "#0F0C08" },
+  { id: "cobalt", label: "Cobalt", swatch: "#2A78D6", paletteOverride: null, accentHex: "#2A78D6" },
+  { id: "sauge", label: "Sage", swatch: "#3B6E4E", paletteOverride: "sauge", accentHex: null },
+  { id: "plum", label: "Plum", swatch: "#7A4FA0", paletteOverride: null, accentHex: "#7A4FA0" },
+  { id: "ochre", label: "Ochre", swatch: "#B8843A", paletteOverride: "ocre", accentHex: null },
+];
 
 // ─── Tone options ──────────────────────────────────────────────────────────────
 
@@ -195,6 +291,26 @@ function buildVerbatiStyleForLayout(args: {
   });
 }
 
+function buildDefaultPresetSlot(slot: SlotIndex): PresetSlot {
+  const fontPairIdBySlot: Record<SlotIndex, VerbatiFontPairId> = {
+    1: "quiet-editorial",
+    2: "geist-baskervville",
+    3: "ledger-sans",
+  };
+  const preset: PresetSlot = {
+    ...EMPTY_PRESET,
+    fontPairId: fontPairIdBySlot[slot],
+    styleChoice: "auto",
+    paletteOverride: null,
+    accentHex: null,
+    signatureSettings: DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
+    verbatiStyle: null,
+    name: DEFAULT_SLOT_NAMES[slot],
+  };
+
+  return preset;
+}
+
 function buildPresetSavePayload(
   preset: PresetSlot,
 ): PresetSlot {
@@ -242,7 +358,7 @@ function StyleMiniPreview({ styleId }: { styleId: StyleOption["id"] }) {
 
 const ZONE_INDICES = Array.from({ length: 25 }, (_, i) => i + 1);
 
-function StyleTiltCard({
+function SettingsLayoutCard({
   option,
   active,
   onSelect,
@@ -252,46 +368,45 @@ function StyleTiltCard({
   onSelect: () => void;
 }) {
   return (
-    <div className="dasti-style-scene">
-      {/* 25 invisible hotspot zones — siblings of the card for CSS :has() */}
-      {/* Ghost sizer — invisible, stays in flow, gives the scene its height */}
-      <div className="dasti-style-sizer" aria-hidden="true">
-        <span className="dasti-settings-style-card__top">
-          <span className="dasti-settings-style-card__label">{option.label}</span>
-        </span>
-        <span className="dasti-settings-style-card__description">{option.description}</span>
-      </div>
-
-      {/* Zone overlay — sits above card, drives CSS :has() tilt */}
-      <div className="dasti-style-zones" aria-hidden="true" onClick={onSelect}>
-        {ZONE_INDICES.map((n) => (
-          <span key={n} className={`dasti-style-zone dasti-style-zone-${n}`} />
-        ))}
-      </div>
-
-      {/* Actual card — absolute, never affects layout */}
-      <button
-        type="button"
-        className={[
-          "dasti-settings-style-card",
-          active ? "dasti-settings-style-card--active" : "",
-        ].filter(Boolean).join(" ")}
-        aria-pressed={active}
-        onClick={onSelect}
-      >
-        <span className="dasti-settings-style-card__top">
-          <span className="dasti-settings-style-card__label">{option.label}</span>
-          {active && (
-            <span className="dasti-settings-style-card__indicator" aria-hidden="true">
-              <Check size={10} strokeWidth={2.6} />
+    <button
+      type="button"
+      className="layout-card"
+      data-selected={active ? "true" : "false"}
+      aria-pressed={active}
+      onClick={onSelect}
+    >
+      <span className="layout-card__preview" data-layout={option.id} aria-hidden="true">
+        {option.id === "workshop" ? (
+          <>
+            <span className="layout-card__column">
+              <span className="layout-card__line layout-card__line--title" />
+              <span className="layout-card__line layout-card__line--short" />
+              <span className="layout-card__line" />
+              <span className="layout-card__line layout-card__line--med" />
             </span>
-          )}
-        </span>
-        <span className="dasti-settings-style-card__description">
-          {option.description}
-        </span>
-      </button>
-    </div>
+            <span className="layout-card__column layout-card__column--wide">
+              <span className="layout-card__line layout-card__line--med" />
+              <span className="layout-card__line" />
+              <span className="layout-card__line layout-card__line--short" />
+              <span className="layout-card__line" />
+              <span className="layout-card__line layout-card__line--med" />
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="layout-card__line layout-card__line--title layout-card__line--med" />
+            <span className="layout-card__line layout-card__line--short" />
+            <span className="layout-card__line layout-card__line--accent" />
+            <span className="layout-card__line" />
+            <span className="layout-card__line layout-card__line--short" />
+            <span className="layout-card__line layout-card__line--accent" />
+            <span className="layout-card__line" />
+            <span className="layout-card__line layout-card__line--med" />
+          </>
+        )}
+      </span>
+      <span className="layout-card__name">{option.label}</span>
+    </button>
   );
 }
 
@@ -763,23 +878,21 @@ function SignatureSelector({
 
   return (
     <div className="dasti-settings-signature" role="group" aria-label="Signature">
-      <div className="dasti-settings-signature-grid">
+      <div className="sig-grid">
         <button
           type="button"
-          className={[
-            "dasti-settings-signature-card",
-            settings.mode === "auto" ? "dasti-settings-signature-card--active" : "",
-          ].filter(Boolean).join(" ")}
+          className="sig-card"
+          data-selected={settings.mode === "auto" ? "true" : "false"}
           aria-pressed={settings.mode === "auto"}
           onClick={() => onChange(DEFAULT_PROPOSAL_SIGNATURE_SETTINGS)}
         >
-          <span className="dasti-settings-signature-card__label">Auto</span>
           <span
-            className="dasti-settings-signature-card__sample"
+            className="sig-card__sig sig-card__sig--auto"
             style={{ fontFamily: bodyFontFamily }}
           >
             {SIGNATURE_SAMPLE_NAME}
           </span>
+          <span className="sig-card__name">Auto — generated from your name</span>
         </button>
 
         {PROPOSAL_SIGNATURE_FONT_OPTIONS.map((option) => {
@@ -788,10 +901,8 @@ function SignatureSelector({
             <button
               key={option.id}
               type="button"
-              className={[
-                "dasti-settings-signature-card",
-                active ? "dasti-settings-signature-card--active" : "",
-              ].filter(Boolean).join(" ")}
+              className="sig-card"
+              data-selected={active ? "true" : "false"}
               aria-label={`${option.label} signature`}
               aria-pressed={active}
               onClick={() =>
@@ -802,15 +913,13 @@ function SignatureSelector({
                 })
               }
             >
-              <span className="dasti-settings-signature-card__label">
-                {option.label}
-              </span>
               <span
-                className="dasti-settings-signature-card__sample"
+                className="sig-card__sig sig-card__sig--font"
                 style={{ fontFamily: option.fontFamily }}
               >
                 {SIGNATURE_SAMPLE_NAME}
               </span>
+              <span className="sig-card__name">{option.label} — signature font</span>
             </button>
           );
         })}
@@ -887,32 +996,77 @@ function SignatureSelector({
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
+type SettingsTab =
+  | "account"
+  | "preferences"
+  | "docstyle"
+  | "voice"
+  | "billing"
+  | "team"
+  | "danger";
+
+const SETTINGS_TABS: Array<{ id: SettingsTab; label: string }> = [
+  { id: "account", label: "Account" },
+  { id: "preferences", label: "Preferences" },
+  { id: "docstyle", label: "Document style" },
+  { id: "voice", label: "Voice & tone" },
+  { id: "billing", label: "Billing" },
+  { id: "team", label: "Team" },
+  { id: "danger", label: "Danger zone" },
+];
+
+function normalizeSettingsTab(value: string | null): SettingsTab {
+  return SETTINGS_TABS.some((tab) => tab.id === value)
+    ? (value as SettingsTab)
+    : "account";
+}
+
 export function SettingsPage(): JSX.Element {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = normalizeSettingsTab(searchParams.get("tab"));
+  const { currentCvId } = useCvLibrary();
+  const { preference: themePreference, setPreference: setThemePreference } = useThemeMode();
+  const {
+    preference: motionPreference,
+    setPreference: setMotionPreference,
+  } = useMotionPreference();
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
+  const isAuthReady = isAuthLoaded !== false;
   const presetsQuery = useQuery(api.proposalSettings.getPresets);
+  const currentProposalSettings = useQuery(
+    api.proposalSettings.getCurrent,
+    isSignedIn ? {} : "skip",
+  ) as ProposalContactSettings | undefined;
   const savePreset = useMutation(api.proposalSettings.savePreset);
   const setActivePreset = useMutation(api.proposalSettings.setActivePreset);
+  const setCurrentProposalSettings = useMutation(api.proposalSettings.setCurrent);
 
   // Local state
   const [editingSlot, setEditingSlot] = React.useState<SlotIndex>(1);
   const [localPresets, setLocalPresets] = React.useState<Record<SlotIndex, PresetSlot>>({
-    1: { ...EMPTY_PRESET },
-    2: { ...EMPTY_PRESET, styleChoice: "balanced" },
-    3: { ...EMPTY_PRESET, styleChoice: "warm" },
+    1: buildDefaultPresetSlot(1),
+    2: buildDefaultPresetSlot(2),
+    3: buildDefaultPresetSlot(3),
   });
   const [activeSlot, setActiveSlot] = React.useState<SlotIndex>(1);
   const [savedTick, setSavedTick] = React.useState(false);
-  const [isColorPickerOpen, setIsColorPickerOpen] = React.useState(false);
-  const colorPickerAnchorRef = React.useRef<HTMLButtonElement>(null);
+  const [contactFields, setContactFields] = React.useState<
+    Record<ProposalContactField, string>
+  >(EMPTY_PROPOSAL_CONTACT_FIELDS);
   const savedTickTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydrated = React.useRef(false);
+  const contactHydrated = React.useRef(false);
 
   // Sync from server once
   React.useEffect(() => {
     if (!presetsQuery || hydrated.current) return;
     hydrated.current = true;
 
-    const serverPreset = (raw: typeof presetsQuery.preset1): PresetSlot => {
+    const serverPreset = (slot: SlotIndex, raw: typeof presetsQuery.preset1): PresetSlot => {
+      const defaults = buildDefaultPresetSlot(slot);
       const rawRecord = raw as
         | (typeof raw & { signatureSettings?: unknown })
         | null
@@ -920,25 +1074,27 @@ export function SettingsPage(): JSX.Element {
 
       return {
         fontPairId:
-          (raw?.fontPairId as VerbatiFontPairId | null) ?? DEFAULT_FONT_PAIR_ID,
-        styleChoice: (raw?.styleChoice as ProposalStyleChoice) ?? "auto",
-        paletteOverride: (raw?.paletteOverride as ProposalPaletteId | null) ?? null,
-        accentHex: raw?.accentHex ?? null,
-        verbatiStyle: sanitizePersistedVerbatiStyle(
-          raw?.verbatiStyle as Partial<VerbatiStylePreset> | null | undefined,
-        ) as StoredVerbatiStyle | null,
-        voicePreset: (raw?.voicePreset as ToneId) ?? null,
+          (raw?.fontPairId as VerbatiFontPairId | null) ?? defaults.fontPairId,
+        styleChoice: (raw?.styleChoice as ProposalStyleChoice) ?? defaults.styleChoice,
+        paletteOverride:
+          (raw?.paletteOverride as ProposalPaletteId | null) ?? defaults.paletteOverride,
+        accentHex: raw?.accentHex ?? defaults.accentHex,
+        verbatiStyle:
+          (sanitizePersistedVerbatiStyle(
+            raw?.verbatiStyle as Partial<VerbatiStylePreset> | null | undefined,
+          ) as StoredVerbatiStyle | null) ?? defaults.verbatiStyle,
+        voicePreset: (raw?.voicePreset as ToneId) ?? defaults.voicePreset,
         signatureSettings: sanitizeProposalSignatureSettings(
-          rawRecord?.signatureSettings,
+          rawRecord?.signatureSettings ?? defaults.signatureSettings,
         ),
-        name: raw?.name,
+        name: raw?.name ?? defaults.name,
       };
     };
 
     setLocalPresets({
-      1: serverPreset(presetsQuery.preset1),
-      2: serverPreset(presetsQuery.preset2),
-      3: serverPreset(presetsQuery.preset3),
+      1: serverPreset(1, presetsQuery.preset1),
+      2: serverPreset(2, presetsQuery.preset2),
+      3: serverPreset(3, presetsQuery.preset3),
     });
     setActiveSlot((presetsQuery.activeSlot as SlotIndex | null) ?? 1);
   }, [presetsQuery]);
@@ -958,6 +1114,26 @@ export function SettingsPage(): JSX.Element {
       if (saveDebounceRef.current !== null) clearTimeout(saveDebounceRef.current);
     };
   }, []);
+
+  React.useEffect(() => {
+    if (currentProposalSettings === undefined || contactHydrated.current) {
+      return;
+    }
+
+    contactHydrated.current = true;
+    setContactFields({
+      proposalDefaultContactEmail:
+        currentProposalSettings.proposalDefaultContactEmail ?? "",
+      proposalDefaultContactPhone:
+        currentProposalSettings.proposalDefaultContactPhone ?? "",
+      proposalDefaultContactLinkedin:
+        currentProposalSettings.proposalDefaultContactLinkedin ?? "",
+      proposalDefaultContactWebsite:
+        currentProposalSettings.proposalDefaultContactWebsite ?? "",
+      proposalDefaultContactLocation:
+        currentProposalSettings.proposalDefaultContactLocation ?? "",
+    });
+  }, [currentProposalSettings]);
 
   // Update a field on the currently editing preset and debounce-save
   const updatePreset = React.useCallback(
@@ -1009,10 +1185,36 @@ export function SettingsPage(): JSX.Element {
   const currentFontPair =
     VERBATI_FONT_PAIR_OPTIONS.find((fontPair) => fontPair.id === currentPreset.fontPairId) ??
     DEFAULT_FONT_PAIR_OPTION;
+  const activeCvContactDefaults = React.useMemo(
+    () =>
+      getProposalApplicantHeaderData(
+        getLocalPersonalizationSourceByCvId(currentCvId),
+      ),
+    [currentCvId],
+  );
 
-  const selectedPaletteOption = currentPreset.paletteOverride
-    ? PROPOSAL_PALETTE_OPTIONS.find((p) => p.id === currentPreset.paletteOverride) ?? null
-    : null;
+  const persistContactField = React.useCallback(
+    (field: ProposalContactField, value: string) => {
+      const cleanedValue = cleanSettingsInput(value);
+      setContactFields((current) => ({
+        ...current,
+        [field]: cleanedValue,
+      }));
+      void setCurrentProposalSettings({
+        [field]: cleanedValue || null,
+      } as Partial<Record<ProposalContactField, string | null>>).then(() =>
+        flashSaved(),
+      );
+    },
+    [flashSaved, setCurrentProposalSettings],
+  );
+
+  const selectSettingsTab = (tab: SettingsTab) => {
+    setSearchParams({ tab });
+  };
+
+  const accountDisplayName = user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? user?.username ?? "Your account";
+  const accountEmail = user?.primaryEmailAddress?.emailAddress ?? "Not connected";
 
   return (
     <div className="dasti-page-scroll" style={{ minWidth: 0 }}>
@@ -1026,6 +1228,25 @@ export function SettingsPage(): JSX.Element {
           } as React.CSSProperties
         }
       >
+        <div className="dasti-settings-layout settings">
+          <nav className="settings__nav" aria-label="Settings sections">
+            {SETTINGS_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className="settings__nav-item"
+                data-active={activeTab === tab.id ? "true" : "false"}
+                aria-current={activeTab === tab.id ? "page" : undefined}
+                onClick={() => selectSettingsTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="settings__content">
+            {activeTab === "docstyle" ? (
+              <div className="settings__pane" data-pane="docstyle" data-active="true">
         {/* ── Header ── */}
         <div className="dasti-settings-builder-header">
           <div>
@@ -1045,29 +1266,8 @@ export function SettingsPage(): JSX.Element {
         {/* ── 2-column builder ── */}
         <div className="dasti-settings-builder">
 
-          {/* Left — slot rail + ingredient panel */}
+          {/* Left — ingredient panel */}
           <div className="dasti-settings-builder__left">
-
-            {/* Slot rail */}
-            <div
-              className="dasti-settings-slot-rail"
-              role="group"
-              aria-label="Style preset slots"
-            >
-              {([1, 2, 3] as SlotIndex[]).map((slot) => (
-                <SlotCard
-                  key={slot}
-                  slotIndex={slot}
-                  preset={localPresets[slot]}
-                  isEditing={editingSlot === slot}
-                  isActive={activeSlot === slot}
-                  onSelect={() => setEditingSlot(slot)}
-                  onSetActive={(e) => { e.stopPropagation(); void handleSetActive(slot); }}
-                />
-              ))}
-            </div>
-
-            {/* Ingredient panel */}
             <div className="dasti-settings-appearance-toolbar dasti-toolbar-drawer-surface">
 
               {/* Typography */}
@@ -1098,13 +1298,9 @@ export function SettingsPage(): JSX.Element {
               {/* Layout */}
               <div className="dasti-settings-appearance-group">
                 <div className="dasti-settings-appearance-label">Layout</div>
-                <div
-                  className="dasti-settings-style-grid"
-                  role="group"
-                  aria-label="Layout"
-                >
+                <div className="layout-grid" role="group" aria-label="Layout">
                   {STYLE_OPTIONS.map((option) => (
-                    <StyleTiltCard
+                    <SettingsLayoutCard
                       key={option.id}
                       option={option}
                       active={resolvePresetLayoutSelection(currentPreset) === option.id}
@@ -1132,69 +1328,31 @@ export function SettingsPage(): JSX.Element {
               {/* Color */}
               <div className="dasti-settings-appearance-group">
                 <div className="dasti-settings-appearance-label">Color</div>
-                <div
-                  className="dasti-settings-section__row dasti-settings-section__row--palette"
-                  role="group"
-                  aria-label="Color"
-                >
-                  <button
-                    type="button"
-                    className={[
-                      "dasti-settings-swatch dasti-settings-swatch--auto",
-                      !currentPreset.paletteOverride && !currentPreset.accentHex
-                        ? "dasti-settings-swatch--active"
-                        : "",
-                    ].filter(Boolean).join(" ")}
-                    aria-pressed={!currentPreset.paletteOverride && !currentPreset.accentHex}
-                    onClick={() => updatePreset({ paletteOverride: null, accentHex: null })}
-                    title="Auto. Follows the style."
-                    aria-label="Automatic palette"
-                  >
-                    <Wand2 size={14} strokeWidth={1.9} aria-hidden="true" />
-                  </button>
+                <div className="style-swatches" role="group" aria-label="Color">
+                  {SETTINGS_ACCENT_OPTIONS.map((option) => {
+                    const active = option.accentHex
+                      ? currentPreset.accentHex === option.accentHex
+                      : currentPreset.paletteOverride === option.paletteOverride;
 
-                  {PROPOSAL_PALETTE_OPTIONS.map((pal) => {
-                    const active = currentPreset.paletteOverride === pal.id;
                     return (
                       <button
-                        key={pal.id}
+                        key={option.id}
                         type="button"
-                        className={[
-                          "dasti-settings-swatch",
-                          active ? "dasti-settings-swatch--active" : "",
-                        ].filter(Boolean).join(" ")}
+                        className="style-swatch"
+                        data-selected={active ? "true" : "false"}
+                        aria-label={option.label}
                         aria-pressed={active}
-                        onClick={() => updatePreset({ paletteOverride: pal.id as ProposalPaletteId, accentHex: null })}
-                        title={pal.label}
-                        aria-label={pal.label}
-                        style={{ "--swatch-color": pal.color } as React.CSSProperties}
+                        onClick={() =>
+                          updatePreset({
+                            paletteOverride: option.paletteOverride,
+                            accentHex: option.accentHex,
+                          })
+                        }
+                        title={option.label}
+                        style={{ "--swatch-color": option.swatch } as React.CSSProperties}
                       />
                     );
                   })}
-
-                  <button
-                    ref={colorPickerAnchorRef}
-                    type="button"
-                    className={[
-                      "dasti-settings-swatch",
-                      "dasti-settings-swatch--custom",
-                      currentPreset.accentHex ? "" : "dasti-settings-swatch--icon",
-                      currentPreset.accentHex ? "dasti-settings-swatch--active" : "",
-                    ].filter(Boolean).join(" ")}
-                    aria-pressed={currentPreset.accentHex !== null}
-                    onClick={() => setIsColorPickerOpen(true)}
-                    title={currentPreset.accentHex ?? "Custom color"}
-                    aria-label="Custom accent color"
-                    style={
-                      currentPreset.accentHex
-                        ? ({ "--swatch-color": currentPreset.accentHex } as React.CSSProperties)
-                        : undefined
-                    }
-                  >
-                    {!currentPreset.accentHex ? (
-                      <ColorWheel size={16} className="dasti-settings-swatch__wheel" aria-hidden="true" />
-                    ) : null}
-                  </button>
                 </div>
               </div>
 
@@ -1238,8 +1396,25 @@ export function SettingsPage(): JSX.Element {
             </div>
           </div>
 
-          {/* Right — sticky hero preview */}
+          {/* Right — sticky preset rail + hero preview */}
           <div className="dasti-settings-builder__right" aria-live="polite" aria-atomic="true">
+            <div
+              className="dasti-settings-slot-rail"
+              role="group"
+              aria-label="Style preset slots"
+            >
+              {([1, 2, 3] as SlotIndex[]).map((slot) => (
+                <SlotCard
+                  key={slot}
+                  slotIndex={slot}
+                  preset={localPresets[slot]}
+                  isEditing={editingSlot === slot}
+                  isActive={activeSlot === slot}
+                  onSelect={() => setEditingSlot(slot)}
+                  onSetActive={(e) => { e.stopPropagation(); void handleSetActive(slot); }}
+                />
+              ))}
+            </div>
             <div className="dasti-settings-builder__preview-label">
               {localPresets[editingSlot].name || DEFAULT_SLOT_NAMES[editingSlot]}
               {activeSlot === editingSlot && (
@@ -1266,22 +1441,186 @@ export function SettingsPage(): JSX.Element {
             )}
           </div>
         </div>
+              </div>
+            ) : activeTab === "account" ? (
+	              <div className="settings__pane" data-pane="account" data-active="true">
+	                <div className="settings__group">
+	                  <div className="settings__group-head">
+	                    <div className="settings__group-title">Profile</div>
+	                    <div className="settings__group-desc">
+	                      Defaults come from your active CV profile. Add an override only when Proposal Forge should use something different.
+	                    </div>
+	                  </div>
+	                  <div className="ds-field-group">
+	                    <label className="ds-field-label" htmlFor="settings-full-name">Full name</label>
+	                    <input id="settings-full-name" className="ds-field" value={isAuthReady ? accountDisplayName : "Checking account"} readOnly />
+	                  </div>
+	                  <div className="settings-contact-grid">
+	                    {PROPOSAL_CONTACT_FIELDS.map((field) => {
+	                      const fallbackValue =
+	                        activeCvContactDefaults[field.fallbackKey] ??
+	                        (field.id === "proposalDefaultContactEmail" ? accountEmail : null);
+	                      const placeholder = fallbackValue || field.placeholder;
+	
+	                      return (
+	                        <div className="ds-field-group" key={field.id}>
+	                          <label className="ds-field-label" htmlFor={`settings-${field.fallbackKey}`}>
+	                            {field.label}
+	                          </label>
+	                          <input
+	                            id={`settings-${field.fallbackKey}`}
+	                            className="ds-field settings-contact-field"
+	                            type={field.type}
+	                            value={contactFields[field.id]}
+	                            placeholder={placeholder}
+	                            onChange={(event) => {
+	                              const nextValue = event.currentTarget.value;
+	                              setContactFields((current) => ({
+	                                ...current,
+	                                [field.id]: nextValue,
+	                              }));
+	                            }}
+	                            onBlur={(event) =>
+	                              persistContactField(field.id, event.currentTarget.value)
+	                            }
+	                          />
+	                          <span className="settings-contact-default">
+	                            CV default: {fallbackValue || "empty"}
+	                          </span>
+	                        </div>
+	                      );
+	                    })}
+	                  </div>
+	                </div>
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Connected accounts</div>
+                  </div>
+                  <div className="settings__row">
+                    <div>
+                      <div className="settings__row-label">Google</div>
+                      <div className="settings__row-desc">Used to sign in.</div>
+                    </div>
+                    {isSignedIn ? (
+                      <button type="button" className="ds-btn ds-btn--sm ds-btn--secondary" onClick={() => navigate("/sign-out")}>Disconnect</button>
+                    ) : (
+                      <button type="button" className="ds-btn ds-btn--sm ds-btn--accent" onClick={() => navigate("/sign-in")}>Connect</button>
+                    )}
+                  </div>
+                  <div className="settings__row">
+                    <div>
+                      <div className="settings__row-label">LinkedIn</div>
+                      <div className="settings__row-desc">Imports profile and applications.</div>
+                    </div>
+                    <button type="button" className="ds-btn ds-btn--sm ds-btn--accent">Connect</button>
+                  </div>
+                </div>
+              </div>
+            ) : activeTab === "preferences" ? (
+              <div className="settings__pane" data-pane="preferences" data-active="true">
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Appearance</div>
+                  </div>
+	                  <div className="settings__row">
+	                    <div>
+	                      <div className="settings__row-label">Theme</div>
+	                      <div className="settings__row-desc">Light or dark.</div>
+	                    </div>
+                    <div className="theme-switch" role="group" aria-label="Theme">
+                      {SETTINGS_THEME_OPTIONS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          aria-pressed={themePreference === option.id}
+                          onClick={() => setThemePreference(option.id)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="settings__row">
+                    <div>
+                      <div className="settings__row-label">Reduce motion</div>
+                      <div className="settings__row-desc">Disable animations and transitions.</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="settings-motion-toggle"
+                      aria-pressed={motionPreference === "reduced"}
+                      aria-label="Reduce motion"
+                      onClick={() =>
+                        setMotionPreference(
+                          motionPreference === "reduced" ? "system" : "reduced",
+                        )
+                      }
+                    >
+                      <span className="settings-motion-toggle__check" aria-hidden="true">
+                        {motionPreference === "reduced" ? (
+                          <Check size={12} strokeWidth={2.4} />
+                        ) : null}
+                      </span>
+                      Use reduce motion
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : activeTab === "voice" ? (
+              <div className="settings__pane" data-pane="voice" data-active="true">
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Default tone</div>
+                    <div className="settings__group-desc">Used when generating new proposals. You can override per document.</div>
+                  </div>
+                  <div className="settings__tone-row">
+                    <span className="ds-tone ds-tone--warm">Warm</span>
+                    <span className="ds-tone ds-tone--formal">Formal</span>
+                    <span className="ds-tone ds-tone--natural">Natural</span>
+                  </div>
+                </div>
+              </div>
+            ) : activeTab === "billing" ? (
+              <div className="settings__pane" data-pane="billing" data-active="true">
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Plan</div>
+                  </div>
+                  <div className="settings__row">
+                    <div>
+                      <div className="settings__row-label">Pro · €12/mo</div>
+                      <div className="settings__row-desc">Renews on May 28.</div>
+                    </div>
+                    <button type="button" className="ds-btn ds-btn--sm ds-btn--secondary">Manage</button>
+                  </div>
+                </div>
+              </div>
+            ) : activeTab === "team" ? (
+              <div className="settings__pane" data-pane="team" data-active="true">
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Members</div>
+                  </div>
+                  <div className="settings__placeholder">Solo workspace. Invite teammates from the dashboard.</div>
+                </div>
+              </div>
+            ) : (
+              <div className="settings__pane" data-pane="danger" data-active="true">
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Delete account</div>
+                    <div className="settings__group-desc">Removes all proposals, CVs, and account data. Cannot be undone.</div>
+                  </div>
+                  <div>
+                    <button type="button" className="ds-btn ds-btn--md ds-btn--danger">Delete account</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      <ProposalColorPickerPopover
-        currentHex={currentPreset.accentHex}
-        onHexChange={(hex) => {
-          updatePreset({ accentHex: hex, paletteOverride: hex ? null : currentPreset.paletteOverride });
-        }}
-        anchorRef={colorPickerAnchorRef}
-        isOpen={isColorPickerOpen}
-        onClose={() => setIsColorPickerOpen(false)}
-        onClear={
-          currentPreset.accentHex !== null
-            ? () => updatePreset({ accentHex: null })
-            : undefined
-        }
-      />
     </div>
   );
 }

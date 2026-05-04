@@ -169,6 +169,58 @@ describe("ProposalDisplay stage behavior", () => {
     });
   });
 
+  it("suppresses ProposalDisplay header rails when the active forge owns the stage toolbar", () => {
+    const { container, rerender } = render(
+      <ProposalDisplay
+        proposalContent={"Dear team,\n\nSingle-page proposal.\n\nAlex"}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        mode="edit"
+        onModeChange={vi.fn()}
+        onContentChange={vi.fn()}
+        onCopy={vi.fn()}
+        contactLineEditable
+        showModeToggle
+        showZoomControls
+        documentHeaderMode="hidden"
+        actions={<button type="button">Legacy output action</button>}
+      />,
+    );
+
+    expect(container.querySelector(".dasti-document-rail")).toBeNull();
+    expect(container.querySelector(".dasti-proposal-sheet__controls")).toBeNull();
+    expect(screen.queryByRole("button", { name: /show applicant details/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /switch to preview mode/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Legacy output action" })).toBeNull();
+
+    rerender(
+      <ProposalDisplay
+        proposalContent={"Dear team,\n\nSingle-page proposal.\n\nAlex"}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        mode="preview"
+        onModeChange={vi.fn()}
+        onContentChange={vi.fn()}
+        onCopy={vi.fn()}
+        contactLineEditable
+        showModeToggle
+        showZoomControls
+        documentHeaderMode="hidden"
+        actions={<button type="button">Legacy output action</button>}
+      />,
+    );
+
+    expect(container.querySelector(".dasti-document-rail")).toBeNull();
+    expect(container.querySelector(".dasti-proposal-sheet__controls")).toBeNull();
+    expect(screen.queryByRole("button", { name: /switch to edit mode/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /open zoom controls/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Legacy output action" })).toBeNull();
+  });
+
   it("can width-fit document previews when the host shell owns the frame size", () => {
     render(
       <ProposalDisplay

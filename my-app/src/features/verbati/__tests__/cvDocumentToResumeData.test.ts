@@ -172,22 +172,7 @@ describe("mapCvDocumentToResumeData", () => {
       achievements: ["achievements"],
       hobbies: ["hobbies"],
     });
-    expect(mapped.metadata).toEqual([
-      {
-        label: "Location",
-        value: "Paris, FR",
-        itemId: "location",
-        sectionId: "profile",
-        sectionType: "profile",
-      },
-      {
-        label: "Portfolio",
-        value: "elenamarlowe.design",
-        itemId: "website",
-        sectionId: "profile",
-        sectionType: "profile",
-      },
-    ]);
+    expect(mapped.metadata).toEqual([]);
     expect(mapped.contact).toEqual([
       {
         label: "Email",
@@ -204,9 +189,9 @@ describe("mapCvDocumentToResumeData", () => {
         sectionType: "profile",
       },
       {
-        label: "Web",
-        value: "elenamarlowe.design",
-        itemId: "website",
+        label: "Location",
+        value: "Paris, FR",
+        itemId: "location",
         sectionId: "profile",
         sectionType: "profile",
       },
@@ -214,6 +199,13 @@ describe("mapCvDocumentToResumeData", () => {
         label: "LinkedIn",
         value: "linkedin.com/in/elenamarlowe",
         itemId: "linkedin",
+        sectionId: "profile",
+        sectionType: "profile",
+      },
+      {
+        label: "Website",
+        value: "elenamarlowe.design",
+        itemId: "website",
         sectionId: "profile",
         sectionType: "profile",
       },
@@ -366,7 +358,7 @@ describe("mapCvDocumentToResumeData", () => {
         sectionOrder: 0,
         role: "Operations Lead",
         company: "Northline Studio",
-        period: "Dates not set",
+        period: "",
         location: "Paris",
         description:
           "Owned the operating cadence and introduced a clearer delivery rhythm across the team.",
@@ -422,6 +414,46 @@ describe("mapCvDocumentToResumeData", () => {
     expect(mapped.title).not.toBe(mapped.name);
   });
 
+  it("maps legacy portfolio profile data into canonical Website contact without duplication", () => {
+    const doc: CvDocument = {
+      id: "cv-portfolio",
+      title: "Portfolio alias",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "profile",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-1",
+              name: "Elena Marlowe",
+              portfolio: "elenamarlowe.design",
+            } as Record<string, unknown>,
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.contact).toEqual([
+      {
+        label: "Website",
+        value: "elenamarlowe.design",
+        itemId: "website",
+        sectionId: "profile",
+        sectionType: "profile",
+      },
+    ]);
+    expect(mapped.contact.some((item) => item.label === "Portfolio")).toBe(false);
+  });
+
   it("returns no synthetic preview summary when the summary section is absent", () => {
     const doc: CvDocument = {
       id: "cv-no-summary",
@@ -468,6 +500,93 @@ describe("mapCvDocumentToResumeData", () => {
 
     expect(mapped.summary).toBe("");
     expect(mapped.summarySectionId).toBeUndefined();
+  });
+
+  it("maps project rich descriptions without responsibility caches or HTML", () => {
+    const doc = {
+      id: "cv-project-rich",
+      title: "Project rich",
+      metadata: {
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "projects",
+          title: "Projects",
+          type: "projects",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "project-1",
+              title: "CV Forge",
+              meta: "React",
+              description: {
+                type: "doc",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [
+                      {
+                        type: "text",
+                        marks: [{ type: "bold" }, { type: "underline" }],
+                        text: "Rich project paragraph",
+                      },
+                    ],
+                  },
+                  {
+                    type: "bulletList",
+                    content: [
+                      {
+                        type: "listItem",
+                        content: [
+                          {
+                            type: "paragraph",
+                            content: [
+                              {
+                                type: "text",
+                                marks: [{ type: "italic" }],
+                                text: "Rich project bullet",
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    } as any;
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.projects[0]).toMatchObject({
+      id: "project-1",
+      description: "Rich project paragraph\nRich project bullet",
+      descriptionRich: {
+        blocks: [
+          {
+            kind: "paragraph",
+            runs: [
+              { text: "Rich project paragraph", bold: true, underline: true },
+            ],
+          },
+          {
+            kind: "bullet_list",
+            items: [
+              { runs: [{ text: "Rich project bullet", italic: true }] },
+            ],
+          },
+        ],
+      },
+    });
+    expect(mapped.projects[0]).not.toHaveProperty("responsibilityBullets");
+    expect(JSON.stringify(mapped.projects[0])).not.toMatch(/<\/?[a-z][\s\S]*>/i);
   });
 
   it("projects remirror responsibilities into separate prose and bullet channels", () => {
@@ -573,6 +692,103 @@ describe("mapCvDocumentToResumeData", () => {
     ]);
   });
 
+  it("keeps cached responsibility bullets when an empty responsibilities field is present", () => {
+    const doc: CvDocument = {
+      id: "cv-inline-bullets",
+      title: "Platform Lead",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "experience",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "exp-inline",
+              company: "Northline",
+              position: "Platform Lead",
+              responsibilities: "",
+              responsibilityBullets: ["Kept bullets after editing the title."],
+            },
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.experience[0]).toEqual(
+      expect.objectContaining({
+        id: "exp-inline",
+        role: "Platform Lead",
+        bullets: ["Kept bullets after editing the title."],
+      }),
+    );
+  });
+
+  it("shows empty draft bullets in edit-mode rich responsibilities without preview/export leakage", () => {
+    const doc: CvDocument = {
+      id: "cv-draft-bullet",
+      title: "Operations Lead",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "experience",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "exp-draft-bullet",
+              company: "Northline",
+              position: "Operations Lead",
+              responsibilities: ensureRemirrorDoc("Led cross-functional delivery."),
+              responsibilityBullets: ["__draft_empty_responsibility_bullet__"],
+              __draftResponsibilityBulletCount: 1,
+            } as any,
+          ],
+        },
+      ],
+    };
+
+    const editMapped = mapCvDocumentToResumeData(doc, { includeDrafts: true });
+    expect(editMapped.experience[0]?.description).toBe(
+      "Led cross-functional delivery.",
+    );
+    expect(editMapped.experience[0]?.bullets).toEqual([""]);
+    expect(editMapped.experience[0]?.responsibilitiesRich?.blocks).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "Led cross-functional delivery." }],
+      },
+      {
+        kind: "bullet_list",
+        items: [{ runs: [{ text: "" }] }],
+      },
+    ]);
+
+    const previewMapped = mapCvDocumentToResumeData(doc);
+    expect(previewMapped.experience[0]?.description).toBe(
+      "Led cross-functional delivery.",
+    );
+    expect(previewMapped.experience[0]?.bullets).toEqual([]);
+    expect(previewMapped.experience[0]?.responsibilitiesRich?.blocks).toEqual([
+      {
+        kind: "paragraph",
+        runs: [{ text: "Led cross-functional delivery." }],
+      },
+    ]);
+  });
+
   it("keeps paragraph-backed remirror responsibilities in the prose channel", () => {
     const doc: CvDocument = {
       id: "cv-4",
@@ -617,7 +833,7 @@ describe("mapCvDocumentToResumeData", () => {
         role: "Operations Lead",
         company: "Northline",
         period: "2023 — Present",
-        location: "Location not set",
+        location: "",
         description: "Led cross-functional delivery rituals. Reduced export QA churn by 42%.",
         bullets: [],
         responsibilitiesRich: {

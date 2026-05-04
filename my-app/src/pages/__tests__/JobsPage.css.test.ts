@@ -43,6 +43,24 @@ describe("JobsPage CSS contracts", () => {
     );
   });
 
+  it("keeps Jobs list rows and match panel visually light for the skeleton surface", () => {
+    expect(productCss).toMatch(
+      /\.dasti-jobs-list\s*\{[\s\S]*gap:\s*2px;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row\s*\{[\s\S]*border:\s*1px solid transparent;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row:hover,\s*\.dasti-jobs-row:focus-visible\s*\{[\s\S]*background:\s*var\(--sf2\);[\s\S]*box-shadow:\s*none;[\s\S]*transform:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row--active\s*\{[\s\S]*border-color:\s*var\(--border-strong\);[\s\S]*background:\s*var\(--sfr\);[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-job-match-panel\s*\{[\s\S]*border:\s*1px solid var\(--border-soft\);[\s\S]*background:\s*var\(--sf1\);[\s\S]*box-shadow:\s*none;[\s\S]*padding:\s*var\(--space-4\);/,
+    );
+  });
+
   it("anchors the resume picker drawer to the resume control with the shared surface gap token", () => {
     expect(productCss).toMatch(
       /\.dasti-jobs-detail__header-actions\s*\{[\s\S]*display:\s*inline-flex;[\s\S]*align-items:\s*center;[\s\S]*gap:\s*var\(--space-1\);/,
@@ -61,12 +79,9 @@ describe("JobsPage CSS contracts", () => {
     );
   });
 
-  it("reuses the detail favorite chrome for job row favorite and menu controls", () => {
+  it("reuses toolbar chrome for job row menu controls", () => {
     expect(productCss).toMatch(
-      /\.dasti-jobs-detail__favorite-action,\s*[\s\S]*\.dasti-jobs-row__favorite,\s*[\s\S]*\.dasti-jobs-row__menu-trigger\s*\{[\s\S]*border-color:\s*var\(--proposal-chrome-control-border\);[\s\S]*background:\s*var\(--proposal-chrome-control-bg\);[\s\S]*color:\s*var\(--tm2\);/,
-    );
-    expect(productCss).toMatch(
-      /\.dasti-jobs-detail__favorite-action\[aria-pressed="true"\],\s*[\s\S]*\.dasti-jobs-row__favorite\[aria-pressed="true"\]\s*\{[\s\S]*background:\s*var\(--proposal-chrome-control-active-bg\);/,
+      /\.dasti-jobs-row__menu-trigger\s*\{[\s\S]*border-color:\s*var\(--proposal-chrome-control-border\);[\s\S]*background:\s*var\(--proposal-chrome-control-bg\);[\s\S]*color:\s*var\(--tm2\);/,
     );
   });
 
@@ -81,6 +96,42 @@ describe("JobsPage CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.dasti-jobs-sample-badge\s*\{[\s\S]*min-height:\s*28px;[\s\S]*background:\s*var\(--am-soft\);[\s\S]*line-height:\s*1;[\s\S]*text-transform:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row__title\s*\{[\s\S]*justify-content:\s*space-between;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row__company\s*\{[\s\S]*width:\s*100%;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row__meta-favorite\s*\{[\s\S]*margin-inline-start:\s*auto;[\s\S]*color:\s*var\(--ac\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-detail__meta-favorite-action\s*\{[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--ac\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-detail__header-action--proposal\s*\{[\s\S]*background:\s*var\(--ac\);[\s\S]*color:\s*var\(--color-on-accent\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-job-match-panel \.ds-card__eyebrow\s*\{[\s\S]*color:\s*var\(--ac\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-job-match-panel__verdict\s*\{[\s\S]*width:\s*100%;[\s\S]*padding:\s*8px var\(--s3\);[\s\S]*font-size:\s*var\(--ts\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-job-match-panel \.dasti-match-read__header\s*\{[\s\S]*border-bottom:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-job-match-panel__refresh\s*\{[\s\S]*justify-self:\s*end;[\s\S]*margin-inline-start:\s*auto;[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--tg2\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-job-match-panel__explanation\s*\{[\s\S]*color:\s*var\(--tm2\);[\s\S]*line-height:\s*var\(--lb\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-job-match-panel__breakdown\s*\{[\s\S]*width:\s*100%;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-job-match-panel \.dasti-match-read__details\s*\{[\s\S]*width:\s*100%;[\s\S]*justify-self:\s*stretch;[\s\S]*padding:\s*0;/,
     );
     expect(productCss).toMatch(
       /\.dasti-jobs-match-chip,\s*\.dasti-jobs-row__meta-pill\s*\{[\s\S]*min-height:\s*28px;[\s\S]*background:\s*var\(--sf2\);[\s\S]*line-height:\s*1;[\s\S]*letter-spacing:\s*0;/,

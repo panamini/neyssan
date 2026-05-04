@@ -29,8 +29,13 @@ import {
 } from "../../../lib/layout/documentTokenSerializers";
 import type { VerbatiStylePreset } from "../types";
 import {
+  InlineEditableText,
+  type ResumeInlineEditing,
+} from "./InlineEditableText";
+import {
   PreviewItemRegion,
   PreviewSectionRegion,
+  buildPreviewRegionAttrs,
   buildProjectPreviewFieldId,
 } from "./resumePreviewRegions";
 
@@ -44,6 +49,7 @@ type ResumePageProps = {
   fitToken?: string;
   onSelectVariantId?: ((variantId: ResumeLayoutVariantId) => void) | undefined;
   activeTarget?: ResumeActiveTarget | null;
+  inlineEditing?: ResumeInlineEditing | null;
   userZoom?: number;
   stageLayout?: DocumentStageLayout;
   onRemoveSection?:
@@ -1733,6 +1739,7 @@ function ClassicResumePage({
   onActivateComparison,
   fitToken,
   activeTarget,
+  inlineEditing,
 }: {
   variant: ResumeVariant;
   data: ResumeData;
@@ -1741,6 +1748,7 @@ function ClassicResumePage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
   activeTarget?: ResumeActiveTarget | null;
+  inlineEditing?: ResumeInlineEditing | null;
 }) {
   const pageVars = buildPageVars(
     variant,
@@ -1819,18 +1827,29 @@ function ClassicResumePage({
                 {data.name}
               </h1>
               {renderableTitle ? <p className="title">{renderableTitle}</p> : null}
-              <PreviewSectionRegion
-                as="p"
+              <InlineEditableText
                 className="summary"
                 data-font-probe="body"
-                sectionType="summary"
-                sectionId={data.summarySectionId}
-                sectionTitle="Summary"
-                activeTarget={activeTarget}
-                surface="section"
-              >
-                {data.summary}
-              </PreviewSectionRegion>
+                value={data.summary}
+                editable={Boolean(inlineEditing?.enabled)}
+                editTarget={{
+                  sectionId: data.summarySectionId ?? "summary",
+                  sectionType: "summary",
+                  fieldPath: "structuredContent.0.summary",
+                  fieldKind: "paragraph",
+                }}
+                onActivate={(target) => inlineEditing?.onActivate(target)}
+                onDeactivate={inlineEditing?.onDeactivate}
+                ariaLabel="Edit Summary"
+                onPlainTextChange={(text) => inlineEditing?.onSummaryChange(text)}
+                {...buildPreviewRegionAttrs({
+                  sectionType: "summary",
+                  sectionId: data.summarySectionId,
+                  sectionTitle: "Summary",
+                  activeTarget,
+                  surface: "section",
+                })}
+              />
             </div>
             <HeaderMeta
               items={data.metadata}
@@ -2218,7 +2237,31 @@ function ClassicResumePage({
                   sectionId={section.sectionId}
                   activeTarget={activeTarget}
                 >
-                  <p className="project-copy">{section.text}</p>
+                  <InlineEditableText
+                    className="project-copy"
+                    value={section.text}
+                    editable={Boolean(inlineEditing?.enabled)}
+                    editTarget={{
+                      sectionId: section.sectionId,
+                      sectionType: section.sectionType,
+                      fieldPath: "blocks.0.plainText",
+                      fieldKind: "paragraph",
+                    }}
+                    onActivate={(target) => inlineEditing?.onActivate(target)}
+                    onDeactivate={inlineEditing?.onDeactivate}
+                    ariaLabel={`Edit ${section.sectionTitle}`}
+                    onPlainTextChange={(text) =>
+                      inlineEditing?.onTextSectionChange(section.sectionId, text)
+                    }
+                    {...buildPreviewRegionAttrs({
+                      sectionType: section.sectionType,
+                      sectionId: section.sectionId,
+                      sectionTitle: section.sectionTitle,
+                      itemId: section.id,
+                      activeTarget,
+                      surface: "item",
+                    })}
+                  />
                 </MainSection>
               ))}
             </main>
@@ -2274,6 +2317,7 @@ function SwissMinimaPage({
   onActivateComparison,
   fitToken,
   activeTarget,
+  inlineEditing,
   onPreviewMetricsChange,
 }: {
   variant: ResumeVariant;
@@ -2283,6 +2327,7 @@ function SwissMinimaPage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
   activeTarget?: ResumeActiveTarget | null;
+  inlineEditing?: ResumeInlineEditing | null;
   onPreviewMetricsChange?: ((metrics: ResumePreviewMetrics) => void) | undefined;
 }) {
   const stylePreset = React.useContext(ResumeStylePresetContext);
@@ -2723,7 +2768,29 @@ function SwissMinimaPage({
           sectionId: section.sectionId,
           sectionOrder: section.sectionOrder,
           content: (
-            <p
+            <InlineEditableText
+              value={section.text}
+              editable={Boolean(inlineEditing?.enabled)}
+              editTarget={{
+                sectionId: section.sectionId,
+                sectionType: section.sectionType,
+                fieldPath: "blocks.0.plainText",
+                fieldKind: "paragraph",
+              }}
+              onActivate={(target) => inlineEditing?.onActivate(target)}
+              onDeactivate={inlineEditing?.onDeactivate}
+              ariaLabel={`Edit ${section.sectionTitle}`}
+              onPlainTextChange={(text) =>
+                inlineEditing?.onTextSectionChange(section.sectionId, text)
+              }
+              {...buildPreviewRegionAttrs({
+                sectionType: section.sectionType,
+                sectionId: section.sectionId,
+                sectionTitle: section.sectionTitle,
+                itemId: section.id,
+                activeTarget,
+                surface: "item",
+              })}
               style={{
                 margin: 0,
                 color: "color-mix(in srgb, var(--color-text) 72%, transparent)",
@@ -2731,9 +2798,7 @@ function SwissMinimaPage({
                 lineHeight: 1.45,
                 whiteSpace: "pre-wrap" as const,
               }}
-            >
-              {section.text}
-            </p>
+            />
           ),
         })),
       ];
@@ -2758,6 +2823,7 @@ function SwissMinimaPage({
       data.skillItems,
       data.skills,
       data.textSections,
+      inlineEditing,
       onRemoveSection,
     ],
   );
@@ -2956,21 +3022,38 @@ function SwissMinimaPage({
         surface="section"
       >
         <div>
-          <p
+          <InlineEditableText
             data-font-probe="body"
             className="summary"
+            value={data.summary}
+            editable={Boolean(inlineEditing?.enabled)}
+            editTarget={{
+              sectionId: data.summarySectionId ?? "summary",
+              sectionType: "summary",
+              fieldPath: "structuredContent.0.summary",
+              fieldKind: "paragraph",
+            }}
+            onActivate={(target) => inlineEditing?.onActivate(target)}
+            onDeactivate={inlineEditing?.onDeactivate}
+            ariaLabel="Edit Summary"
+            onPlainTextChange={(text) => inlineEditing?.onSummaryChange(text)}
+            {...buildPreviewRegionAttrs({
+              sectionType: "summary",
+              sectionId: data.summarySectionId,
+              sectionTitle: "Summary",
+              activeTarget,
+              surface: "item",
+            })}
             style={{
               margin: 0,
               fontFamily: "var(--font-body-family)",
               color: "var(--color-text)",
             }}
-          >
-            {data.summary}
-          </p>
+          />
         </div>
       </PreviewSectionRegion>
     ),
-    [activeTarget, data.summary, data.summarySectionId],
+    [activeTarget, data.summary, data.summarySectionId, inlineEditing],
   );
 
   const renderExperienceHeadingBlock = React.useCallback(
@@ -5092,6 +5175,7 @@ function ResumeVariantPage({
   onActivateComparison,
   fitToken,
   activeTarget,
+  inlineEditing,
   onPreviewMetricsChange,
 }: {
   variant: ResumeVariant;
@@ -5101,6 +5185,7 @@ function ResumeVariantPage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
   activeTarget?: ResumeActiveTarget | null;
+  inlineEditing?: ResumeInlineEditing | null;
   onPreviewMetricsChange?: ((metrics: ResumePreviewMetrics) => void) | undefined;
 }) {
   React.useEffect(() => {
@@ -5117,6 +5202,7 @@ function ResumeVariantPage({
         variant={variant}
         data={data}
         activeTarget={activeTarget}
+        inlineEditing={inlineEditing}
         comparisonLabel={comparisonLabel}
         compactComparison={compactComparison}
         onActivateComparison={onActivateComparison}
@@ -5184,6 +5270,7 @@ function ResumeVariantPage({
       variant={variant}
       data={data}
       activeTarget={activeTarget}
+      inlineEditing={inlineEditing}
       comparisonLabel={comparisonLabel}
       compactComparison={compactComparison}
       onActivateComparison={onActivateComparison}
@@ -5200,6 +5287,7 @@ export default function ResumePage({
   fitToken,
   onSelectVariantId,
   activeTarget = null,
+  inlineEditing = null,
   userZoom = 1,
   stageLayout,
   onRemoveSection,
@@ -5273,6 +5361,7 @@ export default function ResumePage({
                     key={variant.id}
                     variant={variant}
                     activeTarget={activeTarget}
+                    inlineEditing={inlineEditing}
                     comparisonLabel={isComparisonMode ? variant.label : undefined}
                     compactComparison={compactComparison}
                     fitToken={`${fitToken ?? ""}:${variant.id}`}

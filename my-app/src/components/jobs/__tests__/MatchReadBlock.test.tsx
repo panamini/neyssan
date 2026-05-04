@@ -169,7 +169,7 @@ describe("MatchReadBlock", () => {
     fireEvent.click(screen.getByRole("button", { name: "See full breakdown" }));
     expect(screen.getAllByText("Missing").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Customer-facing experience")).toBeInTheDocument();
-    expect(screen.getByText("Miami")).toBeInTheDocument();
+    expect(screen.getByText("Miami · match.")).toBeInTheDocument();
     expect(screen.queryByText("Compensation")).toBeNull();
     expect(screen.queryByText("Acme")).toBeNull();
     expect(screen.queryByText("Equal opportunity employer")).toBeNull();

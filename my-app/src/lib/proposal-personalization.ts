@@ -1,6 +1,8 @@
 import { safeParseCvDocument } from "../schemas/cvDocument.schema";
 import type { CvDocument, CvSection } from "../types/cvDocument";
 import {
+  ACTIVE_CV_STORAGE_KEY,
+  LEGACY_ACTIVE_CV_STORAGE_KEY,
   LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
   LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY,
   LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
@@ -18,7 +20,6 @@ const LOCAL_LIBRARY_KEYS = [
 const parsedDocumentCache = new Map<string, CvDocument | null>();
 const libraryDocumentsCache = new Map<string, CvDocument[]>();
 const activeCvSnapshotCache = new Map<string, ActiveCvSnapshot>();
-const ACTIVE_CV_STORAGE_KEY = "cvActiveId";
 export const PROPOSAL_ATTACHED_CV_STORAGE_KEY =
   "dasti:proposal-attached-cv-id:v1";
 export const PROPOSAL_ATTACHED_CV_UPDATED_EVENT =
@@ -189,7 +190,9 @@ function readStoredProposalAttachedCvId(): string {
   }
 
   const legacyActiveCvId = compactWhitespace(
-    window.localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ?? "",
+    window.localStorage.getItem(ACTIVE_CV_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_ACTIVE_CV_STORAGE_KEY) ??
+      "",
   );
   markProposalAttachedCvMigrationComplete();
   if (!legacyActiveCvId) {

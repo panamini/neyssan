@@ -16,8 +16,12 @@ import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layo
 import type { ResumeActiveTarget } from "../resumeLinking";
 import type { VerbatiStylePreset } from "../types";
 import { buildVerbatiThemeVars } from "../style";
-import ResumeOneColAtsPage from "./ResumeOneColAtsPage";
+import ResumeOneColAtsPage, {
+  type ResumePaperAiState,
+  type ResumeSectionActions,
+} from "./ResumeOneColAtsPage";
 import type { ResumeData } from "./resume.types";
+import type { ResumeInlineEditing } from "./InlineEditableText";
 
 export const WORKSHOP_TEMPLATE_RENDERER_ID = "workshop_resume_onecol_ats";
 export const RESUME_TEMPLATE_PAGE_GAP_PX = 24;
@@ -29,7 +33,10 @@ const WORKSHOP_PREVIEW_THEME_VAR_NAMES = [
   "--color-text-muted",
   "--color-text-subtle",
   "--color-border-strong",
+  "--color-accent",
+  "--color-accent-hover",
   "--color-accent-soft",
+  "--color-on-accent",
   "--paper",
 ] as const;
 
@@ -80,6 +87,9 @@ type ResumeTemplateRendererProps = {
   resumeTemplateId: ResumeTemplateId;
   committedPages?: WorkshopResumeCommittedPage[];
   activeTarget?: ResumeActiveTarget | null;
+  inlineEditing?: ResumeInlineEditing | null;
+  sectionActions?: ResumeSectionActions | null;
+  paperAi?: ResumePaperAiState | null;
   stageLayout?: DocumentStageLayout;
   onStablePageCountChange?: ((pageCount: number) => void) | undefined;
 };
@@ -137,6 +147,9 @@ export function ResumeTemplateRenderer({
   resumeTemplateId,
   committedPages,
   activeTarget = null,
+  inlineEditing = null,
+  sectionActions = null,
+  paperAi = null,
   stageLayout,
   onStablePageCountChange,
 }: ResumeTemplateRendererProps) {
@@ -263,6 +276,9 @@ export function ResumeTemplateRenderer({
               page={page}
               template={templateDefinition}
               activeTarget={activeTarget}
+              inlineEditing={inlineEditing}
+              sectionActions={sectionActions}
+              paperAi={paperAi}
             />
           </div>
         </div>

@@ -2,6 +2,7 @@ import { formatByPrecision, formatRangeFromItem } from "../../lib/date-utils";
 import {
   deriveResponsibilityBullets,
   projectResponsibilitiesForWorkshop,
+  projectRichTextForWorkshop,
 } from "../../lib/resumeResponsibilityAuthority";
 import { remirrorJsonToString } from "../../lib/utils";
 import type { RemirrorJSON } from "remirror";
@@ -36,7 +37,58 @@ import type {
   ResumeSkillItem,
   ResumeTextListItem,
   ResumeTextSection,
+  WorkshopResponsibilitiesRichContent,
 } from "./resume/resume.types";
+
+type ResumeDataMappingOptions = {
+  includeDrafts?: boolean;
+};
+
+const DRAFT_EMPTY_RESPONSIBILITY_BULLET = "__draft_empty_responsibility_bullet__";
+const DRAFT_EMPTY_EXPERIENCE_DESCRIPTION =
+  "__draft_empty_experience_description__";
+
+type ResponsibilityProjection = ReturnType<typeof projectResponsibilitiesForWorkshop>;
+
+function isDraftResponsibilityBullet(value: unknown): boolean {
+  const text = String(value ?? "");
+  return text === DRAFT_EMPTY_RESPONSIBILITY_BULLET || !text.trim();
+}
+
+function richWithDraftResponsibilityBullets(args: {
+  projection: ResponsibilityProjection;
+  draftBullets: string[] | null;
+  includeDrafts?: boolean;
+}): WorkshopResponsibilitiesRichContent {
+  const rich = { blocks: [...args.projection.rich.blocks] };
+  if (!args.includeDrafts || !args.draftBullets || args.draftBullets.length === 0) {
+    return rich;
+  }
+
+  const canonicalBulletCount = args.projection.bullets.length;
+  const missingDrafts = args.draftBullets
+    .slice(canonicalBulletCount)
+    .filter(isDraftResponsibilityBullet);
+  if (missingDrafts.length === 0) {
+    return rich;
+  }
+
+  const draftItems = missingDrafts.map(() => ({ runs: [{ text: "" }] }));
+  const lastBlock = rich.blocks[rich.blocks.length - 1];
+  if (lastBlock?.kind === "bullet_list") {
+    rich.blocks[rich.blocks.length - 1] = {
+      ...lastBlock,
+      items: [...lastBlock.items, ...draftItems],
+    };
+    return rich;
+  }
+
+  rich.blocks.push({
+    kind: "bullet_list",
+    items: draftItems,
+  });
+  return rich;
+}
 
 type SectionContext = {
   section: CvSection;
@@ -236,6 +288,7 @@ function toMetaItem(
   value: string | undefined | null,
   context?: SectionContext,
   itemId?: string,
+  draftFieldKey?: string,
 ): ResumeMetaItem | null {
   const trimmed = String(value ?? "").trim();
   if (!trimmed) {
@@ -248,7 +301,46 @@ function toMetaItem(
     itemId,
     sectionId: context?.sectionId,
     sectionType: context?.sectionType,
+    ...(draftFieldKey ? { draftFieldKey } : {}),
   };
+}
+
+function toDraftableMetaItem(
+  label: string,
+  value: string | undefined | null,
+  context: SectionContext | undefined,
+  itemId: string,
+  draftContactFields: ReadonlySet<string>,
+): ResumeMetaItem | null {
+  const item = toMetaItem(label, value, context, itemId);
+  if (item) {
+    return item;
+  }
+
+  if (!draftContactFields.has(itemId)) {
+    return null;
+  }
+
+  return {
+    label,
+    value: "",
+    itemId,
+    sectionId: context?.sectionId,
+    sectionType: context?.sectionType,
+    draftFieldKey: itemId,
+  };
+}
+
+function readProfileWebsite(profile: IProfileItem | null | undefined): string | undefined {
+  const canonical = String(profile?.website ?? "").trim();
+  if (canonical) return canonical;
+  const profileRecord = profile as Record<string, unknown> | null | undefined;
+  const legacyAliases = ["portfolio", "web", "site"] as const;
+  for (const alias of legacyAliases) {
+    const value = String(profileRecord?.[alias] ?? "").trim();
+    if (value) return value;
+  }
+  return undefined;
 }
 
 function mapProfile(
@@ -257,18 +349,40 @@ function mapProfile(
   return readStructured<IProfileItem>(profileContext?.section)[0];
 }
 
-function mapSummary(summaryContext?: SectionContext, doc?: CvDocument): string {
+function readSummarySource(
+  summaryContext?: SectionContext,
+  doc?: CvDocument,
+): unknown {
   const summaryItem = readStructured<ISummaryItem>(summaryContext?.section)[0];
+  return summaryItem?.summary ?? doc?.summary ?? summaryContext?.section?.blocks[0]?.content;
+}
 
+function mapSummary(summaryContext?: SectionContext, doc?: CvDocument): string {
   return (
-    toPlainText(summaryItem?.summary) ||
-    toPlainText(doc?.summary) ||
+    toPlainText(readSummarySource(summaryContext, doc)) ||
     fallbackSectionText(summaryContext?.section)
+  );
+}
+
+function mapRichTextContent(value: unknown): WorkshopResponsibilitiesRichContent | undefined {
+  const rich = projectResponsibilitiesForWorkshop(value).rich;
+  return rich.blocks.length > 0 ? rich : undefined;
+}
+
+function isSectionDraftEmpty(section: CvSection): boolean {
+  return (
+    !fallbackSectionText(section) &&
+    readStructured<Record<string, unknown>>(section).every((item) =>
+      Object.entries(item)
+        .filter(([key]) => key !== "id")
+        .every(([, value]) => !toPlainText(value)),
+    )
   );
 }
 
 function mapExperience(
   experienceContext?: SectionContext,
+  options: ResumeDataMappingOptions = {},
 ): ResumeData["experience"] {
   if (!experienceContext) {
     return [];
@@ -291,19 +405,70 @@ function mapExperience(
             }),
             rich: { blocks: [] },
           };
-      const bullets = responsibilitiesProjection.bullets;
+      const fallbackBullets = deriveResponsibilityBullets({
+        hasResponsibilitiesField: false,
+        responsibilityBullets: item.responsibilityBullets,
+      });
+      const draftResponsibilityBulletCount = Number(
+        (item as unknown as Record<string, unknown>).__draftResponsibilityBulletCount ?? 0,
+      );
+      const draftResponsibilityBullets =
+        options.includeDrafts && Array.isArray(item.responsibilityBullets)
+          ? item.responsibilityBullets.map((entry) => {
+              const text = String(entry ?? "");
+              return text === DRAFT_EMPTY_RESPONSIBILITY_BULLET ? "" : text;
+            })
+          : null;
+      if (
+        draftResponsibilityBullets &&
+        Number.isFinite(draftResponsibilityBulletCount) &&
+        draftResponsibilityBulletCount > draftResponsibilityBullets.length
+      ) {
+        while (draftResponsibilityBullets.length < draftResponsibilityBulletCount) {
+          draftResponsibilityBullets.push("");
+        }
+      }
+      const responsibilitiesRich = richWithDraftResponsibilityBullets({
+        projection: responsibilitiesProjection,
+        draftBullets: draftResponsibilityBullets,
+        includeDrafts: options.includeDrafts,
+      });
+      const bullets =
+        draftResponsibilityBullets && draftResponsibilityBullets.length > 0
+          ? draftResponsibilityBullets
+          : responsibilitiesProjection.bullets.length > 0 ||
+              responsibilitiesProjection.prose ||
+              fallbackBullets.length === 0
+            ? responsibilitiesProjection.bullets
+            : fallbackBullets;
+      const visibleBullets = options.includeDrafts
+        ? bullets
+        : bullets.filter(
+            (bullet) =>
+              bullet !== DRAFT_EMPTY_RESPONSIBILITY_BULLET &&
+              String(bullet ?? "").trim(),
+          );
+      const hasDraftDescription = Boolean(
+        (item as unknown as Record<string, unknown>).__draftDescription,
+      );
       const description = [
         toPlainText(item.description),
         responsibilitiesProjection.prose,
       ]
         .filter(Boolean)
         .join("\n\n");
+      const visibleDescription =
+        description || (options.includeDrafts && hasDraftDescription
+          ? DRAFT_EMPTY_EXPERIENCE_DESCRIPTION
+          : "");
       const role = String(item.position ?? "").trim();
       const company = String(item.company ?? "").trim();
       const location = String(item.location ?? "").trim();
       const period = formatRangeFromItem(item);
 
-      if (!role && !company && bullets.length === 0 && !description) {
+      const includeDraftItem = Boolean(options.includeDrafts);
+
+      if (!includeDraftItem && !role && !company && visibleBullets.length === 0 && !visibleDescription) {
         return null;
       }
 
@@ -317,14 +482,14 @@ function mapExperience(
             index,
           }),
         ),
-        role: role || company || "Experience",
-        company: company || role || "Experience",
-        period: period || "Dates not set",
-        location: location || "Location not set",
-        ...(description ? { description } : {}),
-        bullets,
-        ...(responsibilitiesProjection.rich.blocks.length > 0
-          ? { responsibilitiesRich: responsibilitiesProjection.rich }
+        role,
+        company,
+        period,
+        location,
+        ...(visibleDescription ? { description: visibleDescription } : {}),
+        bullets: visibleBullets.length > 0 || !includeDraftItem ? visibleBullets : [""],
+        ...(responsibilitiesRich.blocks.length > 0
+          ? { responsibilitiesRich }
           : {}),
       };
     })
@@ -374,7 +539,10 @@ function mapExperience(
     .filter((item): item is ResumeExperienceItem => item !== null);
 }
 
-function mapProjects(projectsContext?: SectionContext): ResumeData["projects"] {
+function mapProjects(
+  projectsContext?: SectionContext,
+  options: ResumeDataMappingOptions = {},
+): ResumeData["projects"] {
   if (!projectsContext) {
     return [];
   }
@@ -383,9 +551,17 @@ function mapProjects(projectsContext?: SectionContext): ResumeData["projects"] {
     .map((item, index) => {
       const name = String(item.name ?? item.title ?? "").trim();
       const meta = String(item.meta ?? item.subtitle ?? "").trim();
-      const description = toPlainText(item.description ?? item.summary);
+      const descriptionSource = item.description ?? item.summary;
+      const descriptionProjection = projectRichTextForWorkshop(descriptionSource);
+      const description = [
+        descriptionProjection.prose,
+        ...descriptionProjection.bullets,
+      ]
+        .filter(Boolean)
+        .join("\n") || toPlainText(descriptionSource);
+      const descriptionRich = descriptionProjection.rich;
 
-      if (!name && !description) {
+      if (!options.includeDrafts && !name && !description) {
         return null;
       }
 
@@ -399,9 +575,10 @@ function mapProjects(projectsContext?: SectionContext): ResumeData["projects"] {
             index,
           }),
         ),
-        name: name || `Project ${index + 1}`,
+        name,
         meta,
-        description: description || meta || "Project details pending.",
+        description,
+        ...(descriptionRich.blocks.length > 0 ? { descriptionRich } : {}),
       };
     })
     .filter((item): item is ResumeProjectItem => item !== null);
@@ -440,6 +617,7 @@ function mapProjects(projectsContext?: SectionContext): ResumeData["projects"] {
 
 function mapEducation(
   educationContext?: SectionContext,
+  options: ResumeDataMappingOptions = {},
 ): ResumeData["education"] {
   if (!educationContext) {
     return [];
@@ -453,7 +631,7 @@ function mapEducation(
       const school = String(item.institution ?? "").trim();
       const period = formatRangeFromItem(item);
 
-      if (!degree && !field && !school) {
+      if (!options.includeDrafts && !degree && !field && !school) {
         return null;
       }
 
@@ -471,7 +649,7 @@ function mapEducation(
         ...(field ? { fieldOfStudy: field } : {}),
         ...(grade ? { grade } : {}),
         school,
-        period: period || "Dates not set",
+        period,
       };
     })
     .filter((item): item is ResumeEducationItem => item !== null);
@@ -517,7 +695,10 @@ function mapEducation(
     .filter((item): item is ResumeEducationItem => item !== null);
 }
 
-function mapSkills(skillsContext?: SectionContext): {
+function mapSkills(
+  skillsContext?: SectionContext,
+  options: ResumeDataMappingOptions = {},
+): {
   skills: string[];
   skillItems: ResumeSkillItem[];
 } {
@@ -528,7 +709,7 @@ function mapSkills(skillsContext?: SectionContext): {
   const structuredSkills = readStructured<ISkillItem>(skillsContext.section)
     .map((item, index): ResumeSkillItem | null => {
       const name = String(item.name ?? "").trim();
-      if (!name) {
+      if (!options.includeDrafts && !name) {
         return null;
       }
 
@@ -580,6 +761,7 @@ function mapSkills(skillsContext?: SectionContext): {
 
 function mapLanguages(
   languagesContext?: SectionContext,
+  options: ResumeDataMappingOptions = {},
 ): ResumeData["languages"] {
   if (!languagesContext) {
     return [];
@@ -589,7 +771,7 @@ function mapLanguages(
     .map((item, index) => {
       const name = String(item.name ?? "").trim();
       const level = String(item.level ?? "").trim();
-      if (!name) {
+      if (!options.includeDrafts && !name) {
         return null;
       }
 
@@ -604,7 +786,7 @@ function mapLanguages(
           }),
         ),
         name,
-        level: level || "Proficiency not set",
+        level,
       };
     })
     .filter((item): item is ResumeData["languages"][number] => item !== null);
@@ -632,6 +814,7 @@ function mapLanguages(
 
 function mapAchievementItems(
   achievementContext?: SectionContext,
+  options: ResumeDataMappingOptions = {},
 ): ResumeTextListItem[] {
   if (!achievementContext) {
     return [];
@@ -642,7 +825,7 @@ function mapAchievementItems(
   )
     .map((item, index) => {
       const text = String(item.text ?? "").trim();
-      if (!text) {
+      if (!options.includeDrafts && !text) {
         return null;
       }
 
@@ -681,12 +864,15 @@ function mapAchievementItems(
   );
 }
 
-function mapHobbyItems(hobbyContexts: SectionContext[]): ResumeHobbyItem[] {
+function mapHobbyItems(
+  hobbyContexts: SectionContext[],
+  options: ResumeDataMappingOptions = {},
+): ResumeHobbyItem[] {
   return hobbyContexts.flatMap((context) => {
     const structuredHobbies = readStructured<Record<string, unknown>>(context.section)
       .map((item, index) => {
         const name = readRecordText(item, "name", "text");
-        if (!name) {
+        if (!options.includeDrafts && !name) {
           return null;
         }
 
@@ -728,6 +914,7 @@ function mapHobbyItems(hobbyContexts: SectionContext[]): ResumeHobbyItem[] {
 
 function mapCertifications(
   certificationsContext?: SectionContext,
+  options: ResumeDataMappingOptions = {},
 ): ResumeCertificationItem[] {
   if (!certificationsContext) {
     return [];
@@ -756,7 +943,7 @@ function mapCertifications(
         .filter(Boolean)
         .join(" · ");
 
-      if (!name && !issuer) {
+      if (!options.includeDrafts && !name && !issuer) {
         return null;
       }
 
@@ -770,7 +957,7 @@ function mapCertifications(
             index,
           }),
         ),
-        name: name || `Certification ${index + 1}`,
+        name,
         ...(issuer ? { issuer } : {}),
         ...(meta ? { meta } : {}),
       };
@@ -816,6 +1003,7 @@ function mapCertifications(
 
 function mapAffiliations(
   affiliationContexts: SectionContext[],
+  options: ResumeDataMappingOptions = {},
 ): ResumeAffiliationItem[] {
   return affiliationContexts.flatMap((context) => {
     const structuredAffiliations = readStructured<IAffiliationItem>(context.section)
@@ -827,7 +1015,7 @@ function mapAffiliations(
         const notes = toPlainText(item.notes);
         const dateRange = formatRangeFromItem(item);
 
-        if (!organizationName && !roleOrMembershipType && !notes) {
+        if (!options.includeDrafts && !organizationName && !roleOrMembershipType && !notes) {
           return null;
         }
 
@@ -841,7 +1029,7 @@ function mapAffiliations(
               index,
             }),
           ),
-          organizationName: organizationName || `Affiliation ${index + 1}`,
+          organizationName,
           ...(roleOrMembershipType ? { roleOrMembershipType } : {}),
           ...(dateRange ? { dateRange } : {}),
           ...(notes ? { notes } : {}),
@@ -887,11 +1075,14 @@ function mapAffiliations(
   });
 }
 
-function mapTextSections(textContexts: SectionContext[]): ResumeTextSection[] {
+function mapTextSections(
+  textContexts: SectionContext[],
+  options: ResumeDataMappingOptions = {},
+): ResumeTextSection[] {
   return textContexts
     .map((context, index) => {
       const text = fallbackSectionText(context.section);
-      if (!text) {
+      if (!options.includeDrafts && !text) {
         return null;
       }
 
@@ -915,7 +1106,10 @@ function mapTextSections(textContexts: SectionContext[]): ResumeTextSection[] {
     .filter((item): item is ResumeTextSection => item !== null);
 }
 
-export function mapCvDocumentToResumeData(doc: CvDocument): ResumeData {
+export function mapCvDocumentToResumeData(
+  doc: CvDocument,
+  options: ResumeDataMappingOptions = {},
+): ResumeData {
   const contexts = createSectionContexts(doc);
   const profileContext = getFirstContext(contexts, "profile");
   const summaryContext = getFirstContext(contexts, "summary");
@@ -935,34 +1129,82 @@ export function mapCvDocumentToResumeData(doc: CvDocument): ResumeData {
   );
 
   const profile = mapProfile(profileContext);
+  const summarySource = readSummarySource(summaryContext, doc);
   const summary = mapSummary(summaryContext, doc);
-  const { skills, skillItems } = mapSkills(skillsContext);
-  const languages = mapLanguages(languagesContext);
-  const experience = mapExperience(experienceContext);
-  const projects = mapProjects(projectsContext);
-  const education = mapEducation(educationContext);
-  const achievementItems = mapAchievementItems(achievementsContext);
-  const hobbyItems = mapHobbyItems(hobbiesContexts);
-  const certifications = mapCertifications(certificationsContext);
-  const affiliations = mapAffiliations(affiliationContexts);
-  const textSections = mapTextSections(textSectionContexts);
+  const summaryRich = mapRichTextContent(summarySource);
+  const { skills, skillItems } = mapSkills(skillsContext, options);
+  const languages = mapLanguages(languagesContext, options);
+  const experience = mapExperience(experienceContext, options);
+  const projects = mapProjects(projectsContext, options);
+  const education = mapEducation(educationContext, options);
+  const achievementItems = mapAchievementItems(achievementsContext, options);
+  const hobbyItems = mapHobbyItems(hobbiesContexts, options);
+  const certifications = mapCertifications(certificationsContext, options);
+  const affiliations = mapAffiliations(affiliationContexts, options);
+  const textSections = mapTextSections(textSectionContexts, options);
+  const draftSectionIds = options.includeDrafts
+    ? contexts
+        .filter((context) => isSectionDraftEmpty(context.section))
+        .map((context) => context.sectionId)
+    : [];
+  const profileDraftContactFields =
+    profile && Array.isArray((profile as Record<string, unknown>).__draftContactFields)
+      ? ((profile as Record<string, unknown>).__draftContactFields as unknown[])
+      : [];
+  const draftContactFields: ReadonlySet<string> =
+    options.includeDrafts && profileDraftContactFields.length > 0
+      ? new Set(
+          profileDraftContactFields.map((field: unknown) => String(field)).filter(Boolean),
+        )
+      : new Set<string>();
 
-  const metadata = [
-    toMetaItem("Location", profile?.location, profileContext, "location"),
-    toMetaItem("Portfolio", profile?.website, profileContext, "website"),
-  ].filter((item): item is ResumeMetaItem => item !== null);
+  const metadata: ResumeMetaItem[] = [];
 
   const contact = [
-    toMetaItem("Email", profile?.email, profileContext, "email"),
-    toMetaItem("Phone", profile?.phone, profileContext, "phone"),
-    toMetaItem("Web", profile?.website, profileContext, "website"),
-    toMetaItem("LinkedIn", profile?.linkedin, profileContext, "linkedin"),
+    toDraftableMetaItem(
+      "Email",
+      profile?.email,
+      profileContext,
+      "email",
+      draftContactFields,
+    ),
+    toDraftableMetaItem(
+      "Phone",
+      profile?.phone,
+      profileContext,
+      "phone",
+      draftContactFields,
+    ),
+    toDraftableMetaItem(
+      "Location",
+      profile?.location,
+      profileContext,
+      "location",
+      draftContactFields,
+    ),
+    toDraftableMetaItem(
+      "LinkedIn",
+      profile?.linkedin,
+      profileContext,
+      "linkedin",
+      draftContactFields,
+    ),
+    toDraftableMetaItem(
+      "Website",
+      readProfileWebsite(profile),
+      profileContext,
+      "website",
+      draftContactFields,
+    ),
   ].filter((item): item is ResumeMetaItem => item !== null);
 
+  const profileName = String(profile?.name ?? "").trim();
+
   return {
-    name: String(profile?.name ?? "").trim() || doc.title || "Candidate name",
+    name: profileName || (!profileContext ? doc.title || "Candidate name" : ""),
     title: String(profile?.desiredPosition ?? "").trim(),
     summary,
+    ...(summaryRich ? { summaryRich } : {}),
     photoUrl: String(profile?.photoUrl ?? "").trim() || undefined,
     metadata,
     contact,
@@ -982,6 +1224,7 @@ export function mapCvDocumentToResumeData(doc: CvDocument): ResumeData {
     profileSectionId: profileContext?.sectionId,
     summarySectionId: summaryContext?.sectionId,
     sectionIdsByType: buildSectionIdMap(contexts),
+    draftSectionIds,
   };
 }
 

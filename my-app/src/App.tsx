@@ -18,7 +18,9 @@ import { CvsLibrary } from "./pages/CvsLibrary";
 import { ProposalForge } from "./pages/ProposalForge";
 import { JobsPage } from "./pages/JobsPage";
 import { ProposalsLibrary } from "./pages/ProposalsLibrary";
+import { DocumentsPage } from "./pages/DocumentsPage";
 import { StyleForge } from "./pages/StyleForge";
+import { TemplatesPage } from "./pages/TemplatesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignInPage } from "./pages/SignInPage";
 import { SignOutPage } from "./pages/SignOutPage";
@@ -30,7 +32,7 @@ import { Sidebar } from "./components/Sidebar";
 import { CommandPalette } from "./components/CommandPalette";
 import { OnboardingReplay } from "./components/onboarding/OnboardingReplay";
 import { QuickStartFlow } from "./components/onboarding/QuickStartFlow";
-import { Button, IconButton, Pill } from "./components/ui";
+import { IconButton, Pill } from "./components/ui";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 import { installStorageDiagnostics } from "./lib/storage-diagnostics";
 import { useCvLibrary } from "./contexts/CvLibraryContext";
@@ -48,8 +50,13 @@ import {
   clearQuickStartLocationState,
   readQuickStartRouteState,
 } from "./lib/quick-start-routing";
+import { resolveCommandShortcutLabel } from "./lib/app-topbar";
+import {
+  applyMotionPreference,
+  readStoredMotionPreference,
+} from "./lib/motion-preference";
+import { MagnifyingGlass, User } from "./lib/icons";
 import { useThemeMode } from "./lib/theme-mode";
-import { User } from "./lib/icons";
 
 function normalizeTitle(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -99,7 +106,7 @@ function useTopbarDocumentTitle(): string | null {
       return normalizeTitle(currentCv?.title) || null;
     }
 
-    if (pathname === "/cvs") {
+    if (pathname === "/cvs" || pathname === "/documents") {
       return cvCount > 0 ? `All resumes (${cvCount})` : "All resumes";
     }
 
@@ -129,6 +136,10 @@ function useTopbarDocumentTitle(): string | null {
       return savedProposalCount > 0
         ? `All cover letters (${savedProposalCount})`
         : "All cover letters";
+    }
+
+    if (pathname === "/templates") {
+      return "Document templates";
     }
 
     if (pathname === "/settings") {
@@ -172,6 +183,10 @@ function useBrowserTitle(topbarDocumentTitle: string | null): void {
       pageTitle = topbarDocumentTitle
         ? `${topbarDocumentTitle} · two weeks`
         : "All cover letters · two weeks";
+    } else if (pathname === "/documents") {
+      pageTitle = "Documents · two weeks";
+    } else if (pathname === "/templates") {
+      pageTitle = "Templates · two weeks";
     } else if (pathname === "/settings") {
       pageTitle = topbarDocumentTitle
         ? `${topbarDocumentTitle} · two weeks`
@@ -198,7 +213,9 @@ function resolvePageLabel(pathname: string): string {
   if (pathname.startsWith("/proposal")) return "Proposal forge";
   if (pathname.startsWith("/cv")) return "CV forge";
   if (pathname.startsWith("/cvs")) return "CV library";
+  if (pathname.startsWith("/documents")) return "Documents";
   if (pathname.startsWith("/proposals")) return "Documents";
+  if (pathname.startsWith("/templates")) return "Templates";
   if (pathname.startsWith("/style")) return "Templates";
   if (pathname.startsWith("/settings")) return "Settings";
   return "Dashboard";
@@ -233,21 +250,22 @@ function useForgeContextLine(topbarDocumentTitle: string | null): {
 function AppTopbar({
   commandPaletteOpen,
   onOpenCommandPalette,
-  onToggleTheme,
-  themeMode,
 }: {
   commandPaletteOpen: boolean;
   onOpenCommandPalette: () => void;
-  onToggleTheme: () => void;
-  themeMode: "light" | "dark";
 }) {
   const location = useLocation();
   const navigate = useNavigate();
   const topbarDocumentTitle = useTopbarDocumentTitle();
   const forgeContext = useForgeContextLine(topbarDocumentTitle);
   const pageLabel = resolvePageLabel(location.pathname);
-  const { isSignedIn } = useAuth();
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
+  const isAccountReady = isAuthLoaded !== false;
+  const shortcutLabel = React.useMemo(
+    () => resolveCommandShortcutLabel(window.navigator.platform),
+    [],
+  );
   const clerkUserButtonRef = React.useRef<HTMLDivElement | null>(null);
 
   const handleProfile = React.useCallback(() => {
@@ -257,10 +275,13 @@ function AppTopbar({
       clerkTrigger.click();
       return;
     }
+    if (!isAccountReady) {
+      return;
+    }
     if (!isSignedIn) {
       void navigate("/sign-in");
     }
-  }, [isSignedIn, navigate]);
+  }, [isAccountReady, isSignedIn, navigate]);
 
   return (
     <header className="app-topbar">
@@ -281,45 +302,26 @@ function AppTopbar({
         ) : null}
       </div>
       <div className="app-topbar__spacer" />
-      <Button
+      <button
         type="button"
-        variant="secondary"
-        size="sm"
         className="app-topbar__cmdk"
+        aria-label="Open command palette"
         aria-expanded={commandPaletteOpen}
         onClick={onOpenCommandPalette}
       >
-        <span>Search or run command</span>
-        <span className="app-topbar__kbd">Cmd/Ctrl K</span>
-      </Button>
-      <div className="app-theme-switch" role="group" aria-label="Theme">
-        <button
-          type="button"
-          aria-pressed={themeMode === "light"}
-          onClick={() => {
-            if (themeMode === "dark") onToggleTheme();
-          }}
-        >
-          Light
-        </button>
-        <button
-          type="button"
-          aria-pressed={themeMode === "dark"}
-          onClick={() => {
-            if (themeMode === "light") onToggleTheme();
-          }}
-        >
-          Dark
-        </button>
-      </div>
+        <MagnifyingGlass className="app-topbar__cmdk-icon" size={15} aria-hidden="true" />
+        <span className="app-topbar__cmdk-label">Search or run command</span>
+        <span className="app-topbar__kbd">{shortcutLabel}</span>
+      </button>
       <IconButton
-        label={isSignedIn ? "Open account menu" : "Sign in"}
+        label={!isAccountReady ? "Account loading" : isSignedIn ? "Open account menu" : "Sign in"}
         onClick={handleProfile}
+        disabled={!isAccountReady}
       >
         <User size={16} aria-hidden="true" />
       </IconButton>
       <span className="app-topbar__profile-name" aria-hidden="true">
-        {isSignedIn ? user?.firstName ?? user?.username ?? "Profile" : "Sign in"}
+        {!isAccountReady ? "Account" : isSignedIn ? user?.firstName ?? user?.username ?? "Profile" : "Sign in"}
       </span>
       {isSignedIn ? (
         <div ref={clerkUserButtonRef} className="app-topbar__clerk-button">
@@ -346,7 +348,11 @@ function AppShell(): JSX.Element {
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = React.useState(false);
   const [onboardingReplayOpen, setOnboardingReplayOpen] = React.useState(false);
-  const { mode: themeMode, toggle: toggleTheme } = useThemeMode();
+  const { toggle: toggleTheme } = useThemeMode();
+
+  React.useEffect(() => {
+    applyMotionPreference(readStoredMotionPreference());
+  }, []);
 
   React.useEffect(() => {
     if (!import.meta.env.DEV) {
@@ -397,8 +403,6 @@ function AppShell(): JSX.Element {
           <AppTopbar
             commandPaletteOpen={commandPaletteOpen}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-            onToggleTheme={toggleTheme}
-            themeMode={themeMode}
           />
 
           <div className="app-pages">
@@ -419,9 +423,9 @@ function AppShell(): JSX.Element {
                 <Route path="/jobs" element={<JobsPage />} />
                 <Route path="/jobs/:jobId" element={<JobsPage />} />
                 <Route path="/proposals" element={<ProposalsLibrary />} />
+                <Route path="/documents" element={<DocumentsPage />} />
                 <Route path="/style" element={<StyleForge />} />
-                <Route path="/templates" element={<Navigate to="/style" replace />} />
-                <Route path="/documents" element={<Navigate to="/proposals" replace />} />
+                <Route path="/templates" element={<TemplatesPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/sign-in/*" element={<SignInPage />} />
                 <Route path="/sign-out" element={<SignOutPage />} />
@@ -440,7 +444,8 @@ function AppShell(): JSX.Element {
         <OnboardingReplay
           open={onboardingReplayOpen}
           onClose={() => setOnboardingReplayOpen(false)}
-          onNavigate={(to) => navigate(to)}
+          onNavigate={(to, options) => navigate(to, options)}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         />
       </div>
     </CvLibraryProvider>

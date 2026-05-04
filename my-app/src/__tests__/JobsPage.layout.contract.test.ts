@@ -18,6 +18,10 @@ const jobDetailSource = readFileSync(
   resolve(process.cwd(), "src/components/jobs/JobDetail.tsx"),
   "utf8",
 );
+const jobMatchPanelSource = readFileSync(
+  resolve(process.cwd(), "src/components/jobs/JobMatchPanel.tsx"),
+  "utf8",
+);
 const productCssPaths = [
   "src/styles/product.css",
   "src/styles/product-proposal.css",
@@ -45,16 +49,31 @@ describe("JobsPage collapsed layout contract", () => {
     expect(jobDetailSource).toContain("Generate proposal");
   });
 
-  it("keeps selected job detail in the right pane for non-mobile widths", () => {
+  it("keeps selected job detail in the right pane for non-collapsed widths", () => {
     expect(jobsWorkspaceSource).not.toContain(
       "JOBS_TWO_PANE_MIN_VIEWPORT_WIDTH",
     );
     expect(jobsWorkspaceSource).not.toContain("shouldRenderInlineDetailPane");
     expect(jobsListSource).not.toContain("dasti-jobs-inline-detail");
     expect(jobsWorkspaceSource).toContain(
-      'className="dasti-jobs-detail-pane"',
+      "JOBS_SPLIT_VIEW_COLLAPSE_WIDTH = 1024",
     );
+    expect(jobsWorkspaceSource).toContain(
+      "viewportWidth < JOBS_SPLIT_VIEW_COLLAPSE_WIDTH",
+    );
+    expect(jobsWorkspaceSource).toContain("dasti-jobs-detail-pane");
     expect(jobsWorkspaceSource).toContain('aria-label="Job detail"');
+  });
+
+  it("exposes APP skeleton aliases on the active split-view surfaces", () => {
+    expect(jobsWorkspaceSource).toMatch(
+      /className=\{\[[\s\S]*"dasti-jobs-layout",[\s\S]*"jobs",/,
+    );
+    expect(jobsListSource).toContain("dasti-jobs-list-pane jobs__list");
+    expect(jobsWorkspaceSource).toContain("dasti-jobs-detail-pane jobs__detail");
+    expect(jobMatchPanelSource).toContain(
+      "dasti-proposal-sheet dasti-match-read dasti-job-match-panel jobs__match",
+    );
   });
 
   it("keeps jobs controls compact and left-anchored inside the list pane", () => {
@@ -62,7 +81,10 @@ describe("JobsPage collapsed layout contract", () => {
       /\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*360px\s+minmax\(0,\s*1fr\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-jobs-layout\s*\{[\s\S]*height:\s*min\(820px,\s*calc\(100dvh - var\(--app-topbar-height,\s*0px\) - 96px\)\);[\s\S]*min-height:\s*0;/,
+      /\.dasti-jobs-page\s*\{[\s\S]*grid-template-rows:\s*auto\s+minmax\(0,\s*1fr\);[\s\S]*height:\s*100%;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-layout\s*\{[\s\S]*height:\s*100%;[\s\S]*min-height:\s*0;/,
     );
     expect(productCss).toMatch(
       /\.dasti-jobs-list-pane\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;/,
@@ -83,7 +105,7 @@ describe("JobsPage collapsed layout contract", () => {
       /@media\s*\(max-width:\s*1439px\)[\s\S]*grid-template-columns:\s*minmax\(0,\s*min\(100%,\s*560px\)\);/,
     );
     expect(productCss).toMatch(
-      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*1fr;/,
+      /@media\s*\(max-width:\s*1023px\)\s*\{[\s\S]*\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*1fr;/,
     );
     expect(productCss).not.toMatch(
       /@media\s*\(max-width:\s*1120px\)[\s\S]*\.dasti-jobs-detail__body\s*\{[\s\S]*grid-template-columns:\s*1fr;/,

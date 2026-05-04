@@ -6,6 +6,7 @@ export type ResumeMetaItem = {
   itemId?: string;
   sectionId?: string;
   sectionType?: ResumeCanonicalSectionType;
+  draftFieldKey?: string;
 };
 
 export type ResumeLinkedItemBase = {
@@ -84,6 +85,7 @@ export type ResumeProjectItem = {
   name: string;
   meta: string;
   description: string;
+  descriptionRich?: WorkshopResponsibilitiesRichContent;
 };
 
 export type ResumeEducationItem = {
@@ -136,6 +138,7 @@ export type ResumeData = {
   name: string;
   title: string;
   summary: string;
+  summaryRich?: WorkshopResponsibilitiesRichContent;
   photoUrl?: string;
   metadata: ResumeMetaItem[];
   contact: ResumeMetaItem[];
@@ -155,6 +158,7 @@ export type ResumeData = {
   profileSectionId?: string;
   summarySectionId?: string;
   sectionIdsByType?: Partial<Record<ResumeCanonicalSectionType, string[]>>;
+  draftSectionIds?: string[];
 };
 
 export type ResumeLayoutVariantId =
