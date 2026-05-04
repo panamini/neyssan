@@ -1643,7 +1643,6 @@ describe("CvForge workspace mode", () => {
     ).toBeNull();
     expect(container.querySelector(".dasti-cv-preview-panel-slot")).toBeNull();
     expect(container.querySelector(".dasti-preview-toolbar")).toBeNull();
-    expect(container.querySelector(".dasti-cv-paper-stage--compact")).toBeTruthy();
 
     const editPageShell = container.querySelector(
       ".dasti-page-shell--cv-forge",

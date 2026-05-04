@@ -31,10 +31,6 @@
   min-width: 0;
 }
 
-.dasti-cv-paper-stage--compact {
-  width: min(100%, 760px);
-}
-
 .dasti-cv-paper-stage .dasti-document-stage-chassis {
   min-height: 0;
   justify-content: center;
@@ -105,7 +101,6 @@
 
 @media (max-width: 760px) {
   .dasti-cv-paper-stage,
-  .dasti-cv-paper-stage--compact,
   .dasti-cv-page-preview-stage {
     width: 100%;
   }
