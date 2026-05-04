@@ -32,4 +32,14 @@ convex/_generated
 # Temporary audit artifacts
 tmp-audit/
 
+.env
 .env copy.private
+.env.chrome
+.env-clerk-chrome.zip
+.env.example
+.env.local
+.env.local.example
+.env.production
+.envlocal-myapp.md
+.envlocalDEV.md
+.envproduction-myapp.md

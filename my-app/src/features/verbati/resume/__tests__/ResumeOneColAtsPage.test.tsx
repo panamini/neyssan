@@ -1,6 +1,6 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
 import { ResumeOneColAtsPage } from "../ResumeOneColAtsPage";
 import { resumeMock } from "../resume.mock";
@@ -33,6 +33,19 @@ function buildRendererData() {
     hobbyItems: [],
     hobbies: [],
     textSections: [],
+  };
+}
+
+function makeInlineEditing() {
+  return {
+    enabled: true,
+    activeTarget: null,
+    onActivate: () => {},
+    onDeactivate: () => {},
+    onSummaryChange: () => {},
+    onTextSectionChange: () => {},
+    onFieldChange: () => {},
+    onAddItem: () => {},
   };
 }
 
@@ -175,6 +188,48 @@ describe("ResumeOneColAtsPage", () => {
     );
   });
 
+  it("applies the document accent to workshop section titles and rules", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const plan = planWorkshopResumePages({
+      data: {
+        ...resumeMock,
+        metadata: resumeMock.metadata.slice(0, 1),
+        contact: resumeMock.contact.slice(0, 2),
+        experience: resumeMock.experience.slice(0, 1),
+        projects: [],
+        education: [],
+        certifications: [],
+        affiliations: [],
+        hobbyItems: [],
+        hobbies: [],
+        textSections: [],
+      },
+      template,
+    });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={resumeMock}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const profileHeader = container.querySelector('[data-preview-section="profile"]');
+    const sectionHeading = container.querySelector("h2");
+    const sectionRule = sectionHeading?.parentElement?.querySelector("div");
+
+    expect(profileHeader?.getAttribute("style")).toContain(
+      "var(--color-accent)",
+    );
+    expect(sectionHeading?.getAttribute("style")).toContain(
+      "color: var(--color-accent);",
+    );
+    expect(sectionRule?.getAttribute("style")).toContain(
+      "var(--color-accent)",
+    );
+  });
+
   it("renders full workshop summary text in preview mode without clamp or ellipsis styles", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const longSummary = repeatWords("full-summary", 60);
@@ -214,6 +269,392 @@ describe("ResumeOneColAtsPage", () => {
     expect(summaryStyle).not.toContain("-webkit-line-clamp");
     expect(summaryStyle).not.toContain("overflow: hidden");
     expect(summaryStyle).not.toContain("text-overflow: ellipsis");
+  });
+
+  it("hydrates rich summary marks in editable workshop display mode", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      summary: "Bold summary",
+      summaryRich: {
+        blocks: [
+          {
+            kind: "paragraph" as const,
+            runs: [{ text: "Bold summary", bold: true }],
+          },
+        ],
+      },
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const summaryItem = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.0.summary"]',
+    );
+    expect(summaryItem).toHaveAttribute("role", "textbox");
+    expect(summaryItem).not.toHaveAttribute("contenteditable");
+    expect(container.querySelector("strong")?.textContent).toBe("Bold summary");
+  });
+
+  it("preserves multiline summary whitespace in the editable workshop paper field", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      summary: "First line\nSecond line",
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const summaryItem = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.0.summary"]',
+    );
+
+    expect(summaryItem).toHaveValue("First line\nSecond line");
+    expect(summaryItem).toHaveAttribute("aria-multiline", "true");
+    expect(summaryItem?.getAttribute("style")).toContain("white-space: pre-wrap;");
+  });
+
+  it("hides Add paragraph for an experience entry that already has a paragraph", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: "Owned the discovery narrative before the bullet outcomes.",
+          bullets: ["Reduced delivery time by 28%."],
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /\+ Add paragraph/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
+  });
+
+  it("renders an editable empty draft bullet after an existing rich paragraph", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: "Led product design.",
+          bullets: [""],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: "Led product design." }],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [{ runs: [{ text: "" }] }],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const richBody = screen.getByRole("textbox", {
+      name: "Edit experience responsibilities",
+    });
+    expect(richBody).toHaveClass("paper-rich-inline-editor");
+    expect(richBody).toHaveAttribute(
+      "data-paper-field-path",
+      expect.stringContaining("responsibilities"),
+    );
+    expect(richBody.querySelector("p")?.textContent).toBe("Led product design.");
+    expect(richBody.querySelector("li")?.textContent).toBe("");
+    expect(
+      screen.queryByRole("textbox", { name: "Edit experience bullet" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
+  });
+
+  it("keeps Add paragraph available for an experience entry without a paragraph", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: undefined,
+          bullets: ["Reduced delivery time by 28%."],
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /\+ Add paragraph/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
+  });
+
+  it("routes the experience entry wand through the item action instead of the section action", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 2),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+    const onAsk = vi.fn();
+    const onAskItem = vi.fn();
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        sectionActions={{
+          hiddenSectionIds: [],
+          onAsk,
+          onAskItem,
+          onToggleHidden: () => {},
+          onDelete: () => {},
+        }}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: /Improve responsibilities for/i })[1]!,
+    );
+
+    expect(onAsk).not.toHaveBeenCalled();
+    expect(onAskItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionType: "experience",
+        itemId: data.experience[1]!.id,
+        itemIndex: 1,
+        field: "responsibilities",
+      }),
+    );
+  });
+
+  it("renders experience AI proposals inline with save, discard, and undo controls", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+    const onAccept = vi.fn();
+    const onDiscard = vi.fn();
+    const suggestionKey = "request-1:exp-1";
+
+    const { rerender } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        paperAi={{
+          textSuggestion: {
+            key: suggestionKey,
+            sectionId: "experience-1",
+            sectionType: "experience",
+            itemId: data.experience[0]!.id,
+            beforeText: "Old responsibility",
+            afterText: "Improved responsibility",
+            state: "ready",
+          },
+          onAcceptTextSuggestion: onAccept,
+          onDiscardTextSuggestion: onDiscard,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Old responsibility")).toBeInTheDocument();
+    expect(screen.getByText("Improved responsibility")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onAccept).toHaveBeenCalledWith(suggestionKey);
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(onDiscard).toHaveBeenCalledWith(suggestionKey);
+
+    const onUndo = vi.fn();
+    rerender(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        paperAi={{
+          textSuggestion: {
+            key: suggestionKey,
+            sectionId: "experience-1",
+            sectionType: "experience",
+            itemId: data.experience[0]!.id,
+            beforeText: "Old responsibility",
+            afterText: "Improved responsibility",
+            state: "accepted",
+          },
+          onUndoTextSuggestion: onUndo,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(onUndo).toHaveBeenCalledWith(suggestionKey);
+  });
+
+  it("renders skill AI suggestions inside the skills section", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+    const onAccept = vi.fn();
+    const onDismiss = vi.fn();
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        paperAi={{
+          listSuggestion: {
+            sectionId: "skills-1",
+            sectionType: "skills",
+            items: ["Stakeholder mapping"],
+            state: "ready",
+          },
+          onAcceptListSuggestion: onAccept,
+          onDismissListSuggestion: onDismiss,
+        }}
+      />,
+    );
+
+    const suggestion = screen.getByText("Stakeholder mapping").closest(
+      "[data-paper-ai-suggestion='list']",
+    );
+    expect(suggestion).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onAccept).toHaveBeenCalledWith("Stakeholder mapping");
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(onDismiss).toHaveBeenCalledWith("Stakeholder mapping");
   });
 
   it("pins the workshop page grid to the top instead of stretching rows across the full A4 shell", () => {
@@ -666,6 +1107,287 @@ describe("ResumeOneColAtsPage", () => {
     expect(continuedListItems).toEqual([continuedBullets[3]]);
     expect(directParagraphs).toEqual([trailingParagraph]);
     expect(experienceItem?.innerHTML.indexOf("</ul><p")).toBeGreaterThan(-1);
+  });
+
+  it("renders project rich descriptions with paragraphs, bullets, and marks", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [],
+      projects: [
+        {
+          ...resumeMock.projects[0]!,
+          description: "Rich project\nBullet win",
+          descriptionRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [
+                  { text: "Rich ", bold: true },
+                  { text: "project", italic: true, underline: true },
+                ],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [{ runs: [{ text: "Bullet win", bold: true }] }],
+              },
+            ],
+          },
+        },
+      ],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const projectDescription = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.item:project-1.description"]',
+    );
+    expect(projectDescription).toHaveAttribute("role", "textbox");
+    expect(projectDescription?.querySelector("strong")?.textContent).toContain("Rich");
+    expect(projectDescription?.querySelector("em")?.textContent).toBe("project");
+    expect(projectDescription?.querySelector("u")?.textContent).toBe("project");
+    expect(projectDescription?.querySelector("li")?.textContent).toBe("Bullet win");
+  });
+
+  it("uses the rich body editor for editable experience paragraphs plus bullets", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: "Owned onboarding.",
+          bullets: ["Launched activation checklist."],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: "Owned onboarding." }],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [
+                  {
+                    runs: [
+                      { text: "Launched " },
+                      { text: "activation", bold: true },
+                      { text: " checklist", italic: true },
+                      { text: ".", underline: true },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const experienceBody = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.item:exp-1.responsibilities"]',
+    );
+    expect(experienceBody).toHaveAttribute("role", "textbox");
+    expect(experienceBody).toHaveClass("paper-rich-inline-editor");
+    expect(experienceBody?.querySelector("textarea")).toBeNull();
+    expect(experienceBody?.querySelector(".ProseMirror")).toBeTruthy();
+    expect(experienceBody?.querySelector("p")?.textContent).toBe("Owned onboarding.");
+    expect(experienceBody?.querySelector("li")?.textContent).toBe(
+      "Launched activation checklist.",
+    );
+    expect(experienceBody?.querySelector("li strong")?.textContent).toBe("activation");
+    expect(experienceBody?.querySelector("li em")?.textContent).toBe(" checklist");
+    expect(experienceBody?.querySelector("li u")?.textContent).toBe(".");
+    expect(
+      screen.queryByRole("textbox", { name: "Edit experience bullet" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides draft experience description sentinel text in the rich body editor", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: "__draft_empty_experience_description__",
+          bullets: [""],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: "__draft_empty_experience_description__" }],
+              },
+              {
+                kind: "bullet_list" as const,
+                items: [{ runs: [{ text: "" }] }],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const experienceBody = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.item:exp-1.responsibilities"]',
+    );
+    expect(experienceBody).toHaveAttribute("role", "textbox");
+    expect(experienceBody).not.toHaveTextContent("__draft_empty_experience_description__");
+  });
+
+  it("uses the rich body editor for editable experience bullet-only rich responsibilities", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: "",
+          bullets: ["Launched activation checklist."],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "bullet_list" as const,
+                items: [{ runs: [{ text: "Launched activation checklist." }] }],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const experienceBody = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.item:exp-1.responsibilities"]',
+    );
+    expect(experienceBody).toHaveAttribute("role", "textbox");
+    expect(experienceBody).toHaveClass("paper-rich-inline-editor");
+    expect(experienceBody?.querySelector("li")?.textContent).toBe(
+      "Launched activation checklist.",
+    );
+    expect(
+      screen.queryByRole("textbox", { name: "Edit experience bullet" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+ Add paragraph/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
+  });
+
+  it("hydrates responsibilitiesRich marks in editable workshop display mode", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          description: "Italic paragraph",
+          bullets: [],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "paragraph" as const,
+                runs: [{ text: "Italic paragraph", italic: true }],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const experienceText = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.item:exp-1.responsibilities"]',
+    );
+    expect(experienceText).toHaveAttribute("role", "textbox");
+    expect(container.querySelector("em")?.textContent).toBe("Italic paragraph");
   });
 
   it("renders responsibilitiesRich for full non-continued experience items", () => {

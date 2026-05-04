@@ -6,6 +6,22 @@ const jobsPageSource = readFileSync(
   resolve(process.cwd(), "src/pages/JobsPage.tsx"),
   "utf8",
 );
+const jobsWorkspaceSource = readFileSync(
+  resolve(process.cwd(), "src/components/jobs/JobsWorkspace.tsx"),
+  "utf8",
+);
+const jobsListSource = readFileSync(
+  resolve(process.cwd(), "src/components/jobs/JobsList.tsx"),
+  "utf8",
+);
+const jobDetailSource = readFileSync(
+  resolve(process.cwd(), "src/components/jobs/JobDetail.tsx"),
+  "utf8",
+);
+const jobMatchPanelSource = readFileSync(
+  resolve(process.cwd(), "src/components/jobs/JobMatchPanel.tsx"),
+  "utf8",
+);
 const productCssPaths = [
   "src/styles/product.css",
   "src/styles/product-proposal.css",
@@ -19,25 +35,80 @@ const productCss = productCssPaths
   .join("\n");
 
 describe("JobsPage collapsed layout contract", () => {
-  it("renders selected job detail inline after the active row at the collapsed breakpoint", () => {
-    expect(jobsPageSource).toContain(
-      "const JOBS_TWO_PANE_MIN_VIEWPORT_WIDTH = 1440;",
+  it("keeps the PR3 jobs workspace on the skeleton split-view contract", () => {
+    expect(productCss).toMatch(
+      /\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*360px\s+minmax\(0,\s*1fr\);/,
     );
-    expect(jobsPageSource).toContain(
-      "viewportWidth < JOBS_TWO_PANE_MIN_VIEWPORT_WIDTH",
+    expect(productCss).toMatch(
+      /\.dasti-jobs-toolbar\s*\{[\s\S]*position:\s*sticky;[\s\S]*top:\s*0;/,
     );
-    expect(jobsPageSource).toContain("shouldRenderInlineDetailPane");
-    expect(jobsPageSource).toContain('className="dasti-jobs-list-item"');
-    expect(jobsPageSource).toContain('className="dasti-jobs-inline-detail"');
-    expect(jobsPageSource).toContain("!shouldRenderInlineDetailPane");
+    expect(jobsListSource).toContain("Paste URL");
+    expect(jobsListSource).toContain("Capture with extension");
+    expect(jobsListSource).toContain("Remote");
+    expect(jobsListSource).toContain("Senior");
+    expect(jobDetailSource).toContain("Generate proposal");
+  });
+
+  it("keeps selected job detail in the right pane for non-collapsed widths", () => {
+    expect(jobsWorkspaceSource).not.toContain(
+      "JOBS_TWO_PANE_MIN_VIEWPORT_WIDTH",
+    );
+    expect(jobsWorkspaceSource).not.toContain("shouldRenderInlineDetailPane");
+    expect(jobsListSource).not.toContain("dasti-jobs-inline-detail");
+    expect(jobsWorkspaceSource).toContain(
+      "JOBS_SPLIT_VIEW_COLLAPSE_WIDTH = 1024",
+    );
+    expect(jobsWorkspaceSource).toContain(
+      "viewportWidth < JOBS_SPLIT_VIEW_COLLAPSE_WIDTH",
+    );
+    expect(jobsWorkspaceSource).toContain("dasti-jobs-detail-pane");
+    expect(jobsWorkspaceSource).toContain('aria-label="Job detail"');
+  });
+
+  it("exposes APP skeleton aliases on the active split-view surfaces", () => {
+    expect(jobsWorkspaceSource).toMatch(
+      /className=\{\[[\s\S]*"dasti-jobs-layout",[\s\S]*"jobs",/,
+    );
+    expect(jobsListSource).toContain("dasti-jobs-list-pane jobs__list");
+    expect(jobsWorkspaceSource).toContain("dasti-jobs-detail-pane jobs__detail");
+    expect(jobMatchPanelSource).toContain(
+      "dasti-proposal-sheet dasti-match-read dasti-job-match-panel jobs__match",
+    );
   });
 
   it("keeps jobs controls compact and left-anchored inside the list pane", () => {
     expect(productCss).toMatch(
-      /\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*min\(100%,\s*560px\)\)\s*minmax\(0,\s*1fr\);/,
+      /\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*360px\s+minmax\(0,\s*1fr\);/,
     );
     expect(productCss).toMatch(
-      /@media\s*\(max-width:\s*1439px\)\s*\{[\s\S]*\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*min\(100%,\s*560px\)\);/,
+      /\.dasti-jobs-page\s*\{[\s\S]*grid-template-rows:\s*auto\s+minmax\(0,\s*1fr\);[\s\S]*height:\s*100%;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-layout\s*\{[\s\S]*height:\s*100%;[\s\S]*min-height:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-list-pane\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-list\s*\{[\s\S]*display:\s*flex;[\s\S]*flex:\s*1 1 auto;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;[\s\S]*overflow-y:\s*auto;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-detail-pane\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-detail\s*\{[\s\S]*display:\s*flex;[\s\S]*flex:\s*1 1 auto;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-detail__body\s*\{[\s\S]*display:\s*grid;[\s\S]*flex:\s*1 1 auto;[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(280px,\s*320px\);[\s\S]*min-height:\s*0;[\s\S]*overflow-y:\s*auto;/,
+    );
+    expect(productCss).not.toMatch(
+      /@media\s*\(max-width:\s*1439px\)[\s\S]*grid-template-columns:\s*minmax\(0,\s*min\(100%,\s*560px\)\);/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*1023px\)\s*\{[\s\S]*\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*1fr;/,
+    );
+    expect(productCss).not.toMatch(
+      /@media\s*\(max-width:\s*1120px\)[\s\S]*\.dasti-jobs-detail__body\s*\{[\s\S]*grid-template-columns:\s*1fr;/,
     );
     expect(productCss).toMatch(
       /\.dasti-jobs-filter-chips\s+\.dasti-proposal-library-filter-menu__drawer\s*\{[\s\S]*inset-inline-start:\s*0;[\s\S]*inset-inline-end:\s*auto;[\s\S]*inline-size:\s*max-content;/,
@@ -54,7 +125,12 @@ describe("JobsPage collapsed layout contract", () => {
   });
 
   it("uses the list magnifying glass icon for the jobs search affordance", () => {
-    expect(jobsPageSource).toContain("ListMagnifyingGlass");
+    expect(jobsListSource).toContain("ListMagnifyingGlass");
     expect(productCss).toContain(".dasti-jobs-toolbar__search-icon");
+  });
+
+  it("keeps JobsPage as the extracted route shell", () => {
+    expect(jobsPageSource.split("\n").length).toBeLessThan(400);
+    expect(jobsPageSource).toContain("JobsWorkspacePage");
   });
 });

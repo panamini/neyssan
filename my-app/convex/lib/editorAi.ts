@@ -131,6 +131,7 @@ async function requestMistralText(args: {
   system: string;
   prompt: string;
   maxOutputTokens: number;
+  responseFormat?: Record<string, unknown>;
 }): Promise<string> {
   const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
     method: "POST",
@@ -145,6 +146,7 @@ async function requestMistralText(args: {
         { role: "user", content: args.prompt },
       ],
       max_tokens: args.maxOutputTokens,
+      ...(args.responseFormat ? { response_format: args.responseFormat } : {}),
     }),
   });
 
@@ -162,12 +164,40 @@ async function runHelperAiTextPrompt(args: {
   system: string;
   prompt: string;
   maxOutputTokens?: number;
+  providerPreference?: "default" | "mistral" | "mistral_only";
+  mistralModelOverride?: string;
+  mistralResponseFormat?: Record<string, unknown>;
 }): Promise<string> {
   const maxOutputTokens = args.maxOutputTokens ?? 700;
   const helperModels = getHelperModelConfig(args.kind);
   const openAiKey = process.env.OPENAI_API_KEY;
   const mistralKey = llmConfig.mistralKey ?? process.env.MISTRAL_API_KEY;
+  const mistralModel = args.mistralModelOverride ?? helperModels.mistralPrimary;
   let lastError: Error | null = null;
+
+  if (
+    (args.providerPreference === "mistral" ||
+      args.providerPreference === "mistral_only") &&
+    mistralKey
+  ) {
+    try {
+      return await requestMistralText({
+        apiKey: mistralKey,
+        model: mistralModel,
+        system: args.system,
+        prompt: args.prompt,
+        maxOutputTokens,
+        responseFormat: args.mistralResponseFormat,
+      });
+    } catch (error) {
+      lastError =
+        error instanceof Error ? error : new Error(String(error ?? ""));
+    }
+  }
+
+  if (args.providerPreference === "mistral_only") {
+    throw lastError ?? new Error("Mistral helper AI provider is not configured");
+  }
 
   if (openAiKey) {
     try {
@@ -209,10 +239,11 @@ async function runHelperAiTextPrompt(args: {
     try {
       return await requestMistralText({
         apiKey: mistralKey,
-        model: helperModels.mistralPrimary,
+        model: mistralModel,
         system: args.system,
         prompt: args.prompt,
         maxOutputTokens,
+        responseFormat: args.mistralResponseFormat,
       });
     } catch (error) {
       lastError =
@@ -231,12 +262,18 @@ export async function runEditorAiTextPrompt(args: {
   system: string;
   prompt: string;
   maxOutputTokens?: number;
+  providerPreference?: "default" | "mistral" | "mistral_only";
+  mistralModelOverride?: string;
+  mistralResponseFormat?: Record<string, unknown>;
 }): Promise<string> {
   return runHelperAiTextPrompt({
     kind: "editor",
     system: args.system,
     prompt: args.prompt,
     maxOutputTokens: args.maxOutputTokens,
+    providerPreference: args.providerPreference,
+    mistralModelOverride: args.mistralModelOverride,
+    mistralResponseFormat: args.mistralResponseFormat,
   });
 }
 
@@ -279,6 +316,7 @@ export async function runEditorSelectionTransform(args: {
       "You are editing a user's text selection in place. Return only the replacement text. Do not add explanations, code fences, or surrounding quotes.",
     prompt,
     maxOutputTokens: 500,
+    providerPreference: "default",
   });
 
   return {

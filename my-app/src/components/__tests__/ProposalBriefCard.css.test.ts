@@ -111,16 +111,20 @@ describe("ProposalBriefCard CSS contracts", () => {
     expect(productCss).toContain("var(--proposal-motion-compose-exit-shift)");
   });
 
-  it("uses semantic review states instead of accent-tinting every review card", () => {
-    expect(productCss).toContain(
-      '.dasti-brief-card__review-item[data-state="warning"] {',
+  it("uses section status dots instead of check/keep review pills", () => {
+    expect(productCss).toContain(".dasti-brief-card__section-header {");
+    expect(productCss).toContain(".dasti-brief-card__section-status {");
+    expect(productCss).toContain("background: var(--ac);");
+    expect(productCss).toContain(".dasti-brief-card__section-status--uncertain {");
+    expect(productCss).toContain("background: var(--danger);");
+    expect(productCss).toMatch(
+      /\.dasti-brief-card__review-label\s*\{[\s\S]*color:\s*var\(--ac\);/,
     );
-    expect(productCss).toContain(
-      '.dasti-brief-card__review-item[data-state="success"] {',
+    expect(productCss).toMatch(
+      /\.dasti-brief-card__section-edit\s*\{[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--tg2\);/,
     );
     expect(productCss).toContain("background: var(--color-surface-raised);");
     expect(productCss).toContain("border: 1px solid var(--color-border);");
-    expect(productCss).toContain("gap: var(--space-2);");
     expect(productCss).not.toContain(".dasti-brief-card__action {");
     expect(productCss).not.toContain(".dasti-brief-card__action--secondary");
     expect(productCss).not.toContain("--brief-review");

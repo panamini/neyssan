@@ -12,6 +12,8 @@ import {
 import {
   buildLanguageSuggestionShortlist,
   buildSkillSuggestionShortlist,
+  filterHobbySuggestionItems,
+  filterLanguageSuggestionItems,
 } from "./lib/cvAiSuggestions";
 import {
   suggestProposalStyleFromDescription,
@@ -112,6 +114,117 @@ function parseStyleSuggestionResult(raw: string): ProposalStyleSuggestion | null
   }
 }
 
+function extractJsonObject(value: string): string | null {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return null;
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]+?)\s*```/i);
+  const candidate = fencedMatch ? fencedMatch[1] : trimmed;
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  return candidate.slice(start, end + 1);
+}
+
+function cleanCvAiRewriteText(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\*\*/g, "")
+    .replace(/`/g, "")
+    .replace(/^\s*[-*•]\s*/gm, "")
+    .replace(/^\s*(responsibilities?|skills?|technologies?|tools?)\s*:\s*/gim, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function limitWords(value: string, maxWords: number): string {
+  const words = cleanCvAiRewriteText(value).split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return words.join(" ");
+  return `${words.slice(0, maxWords).join(" ").replace(/[,:;–-]\s*$/, "")}.`;
+}
+
+function buildCvResponsibilityResponseFormat(
+  outputShape: "paragraph" | "list" | "mixed" | "empty" | undefined,
+) {
+  if (outputShape === "paragraph") {
+    return {
+      type: "json_schema",
+      json_schema: {
+        name: "cv_experience_responsibility_paragraph",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["paragraph"],
+          properties: {
+            paragraph: { type: "string" },
+          },
+        },
+      },
+    };
+  }
+
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: "cv_experience_responsibility_bullets",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["bullets"],
+        properties: {
+          bullets: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+      },
+    },
+  };
+}
+
+function parseExperienceResponsibilityResult(
+  raw: string,
+  outputShape: "paragraph" | "list" | "mixed" | "empty" | undefined,
+) {
+  const jsonObject = extractJsonObject(raw);
+  let parsed: { paragraph?: unknown; bullets?: unknown } | null = null;
+  if (jsonObject) {
+    try {
+      parsed = JSON.parse(jsonObject) as {
+        paragraph?: unknown;
+        bullets?: unknown;
+      };
+    } catch {
+      parsed = null;
+    }
+  }
+
+  if (outputShape === "paragraph") {
+    const paragraph =
+      cleanCvAiRewriteText(parsed?.paragraph) ||
+      (Array.isArray(parsed?.bullets)
+        ? parsed.bullets.map(cleanCvAiRewriteText).filter(Boolean).join(" ")
+        : "") ||
+      cleanCvAiRewriteText(raw);
+
+    return {
+      kind: "text" as const,
+      text: limitWords(paragraph, 42),
+    };
+  }
+
+  const bullets = Array.isArray(parsed?.bullets)
+    ? parsed.bullets.map((item) => limitWords(String(item ?? ""), 22)).filter(Boolean)
+    : parseStringArrayResult(raw)
+        .map((item) => limitWords(item, 22))
+        .filter(Boolean);
+
+  return {
+    kind: "list" as const,
+    items: bullets,
+  };
+}
+
 async function resolveStyleSuggestion(
   description: string,
 ): Promise<ProposalStyleSuggestion> {
@@ -161,9 +274,13 @@ const cvSectionAiActionChoice = v.union(
   v.literal("generate_skills_suggestions"),
   v.literal("generate_skills_from_experience"),
   v.literal("generate_language_suggestions"),
+  v.literal("generate_hobby_suggestions"),
   v.literal("improve_experience_responsibilities"),
   v.literal("improve_experience_bullets"),
+  v.literal("improve_project_description"),
+  v.literal("fix_education_entry"),
   v.literal("improve_achievement_line"),
+  v.literal("improve_custom_text"),
 );
 
 const CV_SECTION_AI_ACTION_IDS = [
@@ -172,9 +289,13 @@ const CV_SECTION_AI_ACTION_IDS = [
   "generate_skills_suggestions",
   "generate_skills_from_experience",
   "generate_language_suggestions",
+  "generate_hobby_suggestions",
   "improve_experience_responsibilities",
   "improve_experience_bullets",
+  "improve_project_description",
+  "fix_education_entry",
   "improve_achievement_line",
+  "improve_custom_text",
 ] as const;
 
 const editorExperienceValidator = v.object({
@@ -234,6 +355,7 @@ export const runCvSectionAiAction = action({
   args: {
     action: cvSectionAiActionChoice,
     existingText: v.optional(v.string()),
+    instruction: v.optional(v.string()),
     existingItems: v.optional(v.array(v.string())),
     excludeItems: v.optional(v.array(v.string())),
     maxItems: v.optional(v.number()),
@@ -292,6 +414,7 @@ export const runCvSectionAiAction = action({
       .filter(Boolean)
       .join("\n");
     const skillShortlist = buildSkillSuggestionShortlist({
+      summary: args.summary,
       experiences,
       educations,
       existingItems: args.existingItems,
@@ -312,11 +435,13 @@ export const runCvSectionAiAction = action({
       | "generate_skills_suggestions"
       | "generate_skills_from_experience"
       | "generate_language_suggestions"
+      | "generate_hobby_suggestions"
       | "improve_experience_responsibilities"
       | "improve_experience_bullets" =>
       action === "generate_skills_suggestions" ||
       action === "generate_skills_from_experience" ||
       action === "generate_language_suggestions" ||
+      action === "generate_hobby_suggestions" ||
       (action === "improve_experience_responsibilities" &&
         (args.outputShape ?? "list") === "list") ||
       action === "improve_experience_bullets";
@@ -328,6 +453,12 @@ export const runCvSectionAiAction = action({
             "Task: draft the CV summary from the full profile evidence.",
             "Return only the rewritten summary text.",
             "Keep it concise, credible, and specific to the actual experience provided.",
+            args.instruction
+              ? `User instruction:\n${args.instruction}`
+              : "User instruction: none.",
+            args.instruction
+              ? "Follow the user instruction first. Use CV evidence when relevant."
+              : "Use the CV evidence as the source of truth.",
             args.summary ? `Current summary:\n${args.summary}` : "Current summary: none.",
             args.skills?.length ? `Skills:\n- ${args.skills.join("\n- ")}` : "Skills: none.",
             compactExperiences ? `Experience evidence:\n${compactExperiences}` : "Experience evidence: none.",
@@ -339,6 +470,12 @@ export const runCvSectionAiAction = action({
             "Task: improve the existing CV summary without inventing facts.",
             "Return only the improved summary text.",
             "Keep the same core meaning, but make it clearer, tighter, and more professional.",
+            args.instruction
+              ? `User instruction:\n${args.instruction}`
+              : "User instruction: none.",
+            args.instruction
+              ? "Follow the user instruction first. Use CV evidence when relevant."
+              : "Use the existing summary as the source of truth.",
             `Existing summary:\n${args.existingText ?? ""}`,
           ].join("\n\n");
         case "generate_skills_suggestions":
@@ -357,6 +494,7 @@ export const runCvSectionAiAction = action({
             args.excludeItems?.length
               ? `Do not repeat in this batch:\n- ${args.excludeItems.join("\n- ")}`
               : "Do not repeat in this batch: none.",
+            args.summary ? `Summary evidence:\n${args.summary}` : "Summary evidence: none.",
             compactExperiences ? `Experience evidence:\n${compactExperiences}` : "Experience evidence: none.",
             compactEducations ? `Education evidence:\n${compactEducations}` : "Education evidence: none.",
           ].join("\n\n");
@@ -365,6 +503,7 @@ export const runCvSectionAiAction = action({
             "Task: suggest languages that are explicitly supported by the resume evidence.",
             "Return JSON only: an array of language names.",
             "Use canonical language names only. Do not return proficiency verbs such as 'write Hungarian' or 'understand spoken Korean'.",
+            "Do not infer spoken languages from programming languages. Java means the programming language unless the evidence explicitly says Javanese.",
             "Prefer the recommended official labels when they fit the evidence.",
             languageShortlist.length
               ? `Recommended official labels:\n- ${languageShortlist.join("\n- ")}`
@@ -379,30 +518,60 @@ export const runCvSectionAiAction = action({
             compactExperiences ? `Experience evidence:\n${compactExperiences}` : "Experience evidence: none.",
             compactEducations ? `Education evidence:\n${compactEducations}` : "Education evidence: none.",
           ].join("\n\n");
+        case "generate_hobby_suggestions":
+          return [
+            "Task: suggest concise CV hobby or interest tags.",
+            "Return JSON only: an array of short hobby or interest strings.",
+            "Only suggest non-work interests explicitly supported by the resume evidence. If there is no hobby or interest evidence, return [].",
+            "Do not include professional skills, languages, protected characteristics, health status, politics, religion, family status, duplicates, or claims not supported by the evidence.",
+            args.existingItems?.length
+              ? `Already present:\n- ${args.existingItems.join("\n- ")}`
+              : "Already present: none.",
+            args.excludeItems?.length
+              ? `Do not repeat in this batch:\n- ${args.excludeItems.join("\n- ")}`
+              : "Do not repeat in this batch: none.",
+            args.summary ? `Summary/profile text:\n${args.summary}` : "Summary/profile text: none.",
+            args.skills?.length
+              ? `Professional skills to exclude:\n- ${args.skills.join("\n- ")}`
+              : "Professional skills to exclude: none.",
+            compactExperiences ? `Experience evidence:\n${compactExperiences}` : "Experience evidence: none.",
+            compactEducations ? `Education evidence:\n${compactEducations}` : "Education evidence: none.",
+          ].join("\n\n");
         case "improve_experience_responsibilities":
           if (args.outputShape === "paragraph") {
             return [
-              "Task: improve the responsibility paragraph for one CV role.",
-              "Return only one replacement paragraph.",
-              "Do not return JSON, markdown, bullets, numbering, quotes, or commentary.",
-              "Preserve factual scope. Improve clarity, specificity, and impact without inventing metrics or responsibilities.",
-              `Existing role text:\n${args.existingText ?? ""}`,
+              "Task: rewrite one CV responsibility paragraph.",
+              "Return JSON only with shape {\"paragraph\": string}.",
+              "Write one short ATS-ready resume paragraph, preferably one sentence and never more than 42 words.",
+              "If the source is very short, only tighten it or extend it slightly with facts already present.",
+              "Do not add skills, tools, metrics, responsibilities, markdown, bullets, labels, or commentary.",
+              `Input JSON:\n${JSON.stringify({
+                requestedShape: "paragraph",
+                currentText: args.existingText ?? "",
+              })}`,
             ].join("\n\n");
           }
           if (args.outputShape === "mixed") {
             return [
-              "Task: improve the responsibilities for one CV role while preserving the existing paragraph and bullet-list structure.",
-              "Return plain text only. Keep paragraphs as paragraphs and bullet items as separate lines prefixed with '- '.",
-              "Do not return JSON, code fences, quotes, or commentary.",
-              "Preserve factual scope. Improve clarity, specificity, and impact without inventing metrics or responsibilities.",
-              `Existing role text:\n${args.existingText ?? ""}`,
+              "Task: rewrite one CV responsibility field while preserving a bullet-list result.",
+              "Return JSON only with shape {\"bullets\": string[]}.",
+              "Keep concise ATS-ready bullets. Prefer the same number of bullets as the source and never more than four.",
+              "Do not add skills, tools, metrics, responsibilities, markdown, labels, or commentary.",
+              `Input JSON:\n${JSON.stringify({
+                requestedShape: "bullets",
+                currentText: args.existingText ?? "",
+              })}`,
             ].join("\n\n");
           }
           return [
-            "Task: improve the responsibility bullet list for one CV role.",
-            "Return JSON only: an array of concise bullet strings.",
-            "Preserve factual scope. Improve clarity, specificity, and impact without inventing metrics or responsibilities.",
-            `Existing role text:\n${args.existingText ?? ""}`,
+            "Task: rewrite one CV responsibility bullet list.",
+            "Return JSON only with shape {\"bullets\": string[]}.",
+            "Keep concise ATS-ready bullets. Preserve bullet-list structure, prefer the same bullet count as the source, and never return more than four bullets.",
+            "Do not add skills, tools, metrics, responsibilities, markdown, labels, or commentary.",
+            `Input JSON:\n${JSON.stringify({
+              requestedShape: "bullets",
+              currentText: args.existingText ?? "",
+            })}`,
           ].join("\n\n");
         case "improve_experience_bullets":
           return [
@@ -411,29 +580,112 @@ export const runCvSectionAiAction = action({
             "Preserve factual scope. Improve clarity, specificity, and impact without inventing metrics or responsibilities.",
             `Existing role text:\n${args.existingText ?? ""}`,
           ].join("\n\n");
+        case "improve_project_description":
+          return [
+            "Task: rewrite only one CV project description body.",
+            "The input is the current description body only.",
+            "Return only the replacement body text.",
+            "Keep one short ATS-ready resume paragraph, preferably one sentence and never more than 42 words.",
+            "Do not add project names, stack, technologies, field labels, markdown, headings, bullets, numbering, quotes, or commentary.",
+            "Preserve factual scope. Improve clarity, specificity, and impact without inventing metrics, tools, or outcomes.",
+            `Current description body:\n${args.existingText ?? ""}`,
+          ].join("\n\n");
+        case "fix_education_entry":
+          return [
+            "Task: fix spelling, capitalization, and syntax for one CV education entry.",
+            "Return exactly three plain-text lines in this format:",
+            "Degree: <fixed degree or empty>",
+            "School: <fixed school or empty>",
+            "Field: <fixed field or empty>",
+            "Do not add missing facts, dates, locations, honors, or new credentials.",
+            `Existing education entry:\n${args.existingText ?? ""}`,
+          ].join("\n\n");
         case "improve_achievement_line":
           return [
             "Task: improve one CV achievement line.",
             "Return only the rewritten achievement line.",
-            "Keep it concise, factual, and stronger in phrasing without inventing metrics or claims.",
+            "Keep it as one short ATS-ready line, ideally under 18 words.",
+            "Keep it factual and stronger in phrasing without inventing metrics or claims.",
             `Existing achievement line:\n${args.existingText ?? ""}`,
+          ].join("\n\n");
+        case "improve_custom_text":
+          return [
+            "Task: clean up one custom CV text section.",
+            "Return only the replacement body text.",
+            "Fix grammar and syntax, make it human, and make it a bit shorter for ATS readability.",
+            args.instruction
+              ? `User instruction:\n${args.instruction}`
+              : "User instruction: none.",
+            args.instruction
+              ? "Follow the user instruction first while preserving the user's facts."
+              : "Preserve the user's facts.",
+            "Preserve facts. Do not add new claims, headings, bullets, markdown, quotes, or commentary.",
+            `Existing section text:\n${args.existingText ?? ""}`,
           ].join("\n\n");
       }
     })();
 
+    const shouldUseCvMistralModel =
+      args.action === "generate_skills_suggestions" ||
+      args.action === "generate_skills_from_experience" ||
+      args.action === "generate_language_suggestions" ||
+      args.action === "generate_hobby_suggestions";
+    const isSuggestionAction =
+      args.action === "generate_skills_suggestions" ||
+      args.action === "generate_skills_from_experience" ||
+      args.action === "generate_language_suggestions" ||
+      args.action === "generate_hobby_suggestions";
     const raw = await runEditorAiTextPrompt({
       system:
         isListAction(args.action)
           ? "You generate structured CV improvements. Return only valid JSON arrays when requested."
           : "You improve CV sections. Return only the revised text with no commentary.",
       prompt: actionPrompt,
-      maxOutputTokens: 700,
+      maxOutputTokens: shouldUseCvMistralModel ? 260 : 700,
+      providerPreference: shouldUseCvMistralModel ? "mistral_only" : "default",
+      mistralModelOverride: shouldUseCvMistralModel
+        ? isSuggestionAction
+          ? process.env.MISTRAL_CV_LIST_MODEL ??
+            process.env.MISTRAL_CV_SKILLS_MODEL ??
+            "ministral-3b-2512"
+          : process.env.MISTRAL_CV_TEXT_MODEL ??
+            process.env.MISTRAL_CV_SUMMARY_MODEL ??
+            "mistral-small-latest"
+        : undefined,
+      mistralResponseFormat:
+        args.action === "improve_experience_responsibilities"
+          ? buildCvResponsibilityResponseFormat(args.outputShape)
+          : undefined,
     });
 
+    if (args.action === "improve_experience_responsibilities") {
+      return parseExperienceResponsibilityResult(raw, args.outputShape);
+    }
+
     if (isListAction(args.action)) {
+      const parsedItems = parseStringArrayResult(raw);
+      if (args.action === "generate_language_suggestions") {
+        return {
+          kind: "list",
+          items: filterLanguageSuggestionItems(parsedItems),
+        };
+      }
+      if (args.action === "generate_hobby_suggestions") {
+        return {
+          kind: "list",
+          items: filterHobbySuggestionItems({
+            items: parsedItems,
+            blockedItems: [
+              ...(args.existingItems ?? []),
+              ...(args.excludeItems ?? []),
+              ...(args.skills ?? []),
+            ],
+          }),
+        };
+      }
       return {
         kind: "list",
-        items: parseStringArrayResult(raw),
+        items: parsedItems,
       };
     }
 

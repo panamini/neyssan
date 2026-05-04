@@ -1632,7 +1632,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       </div>
     ) : null;
   const floatingRail =
-    railStartControls || railEndAddon || actionControls ? (
+    resolvedDocumentHeaderMode !== "hidden" &&
+    (railStartControls || railEndAddon || actionControls) ? (
       <div
         className={
           shouldDetachActionHeader

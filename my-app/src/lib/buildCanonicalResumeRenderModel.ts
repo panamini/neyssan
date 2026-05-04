@@ -17,31 +17,26 @@ function isNotNull<T>(value: T | null): value is T {
 
 export function buildCanonicalResumeRenderModelFromCv(
   document: CvDocument,
+  options?: { includeDrafts?: boolean },
 ): ResumeData {
-  return mapCvDocumentToResumeData(document);
+  return mapCvDocumentToResumeData(document, options);
 }
 
 export function buildCanonicalResumeRenderModelFromAuthoritative(
   model: AuthoritativeResumeExportModel,
 ): ResumeData {
-  const metadata = [
-    { label: "Location", value: cleanString(model.profile.location) },
-    {
-      label: "Portfolio",
-      value:
-        cleanString(model.profile.portfolio) || cleanString(model.profile.website),
-    },
-  ].filter((item) => item.value);
+  const metadata: Array<{ label: string; value: string }> = [];
 
   const contact = [
     { label: "Email", value: cleanString(model.profile.email) },
     { label: "Phone", value: cleanString(model.profile.phone) },
+    { label: "Location", value: cleanString(model.profile.location) },
+    { label: "LinkedIn", value: cleanString(model.profile.linkedin) },
     {
-      label: "Web",
+      label: "Website",
       value:
         cleanString(model.profile.website) || cleanString(model.profile.portfolio),
     },
-    { label: "LinkedIn", value: cleanString(model.profile.linkedin) },
   ].filter((item) => item.value);
 
   return {

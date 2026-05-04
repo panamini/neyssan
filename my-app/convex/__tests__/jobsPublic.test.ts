@@ -177,6 +177,155 @@ describe("jobsPublic.listForUser", () => {
     ]);
   });
 
+  it("sorts jobs globally by latest activity after merging linked profiles", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_first",
+        _creationTime: 100,
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        skills: ["react"],
+        keywords: ["react"],
+        email: "first@example.com",
+      },
+      {
+        _id: "profile_second",
+        _creationTime: 200,
+        clerkId: "clerk_123",
+        updatedAt: 200,
+        createdAt: 200,
+        version: 2,
+        skills: ["typescript"],
+        keywords: ["typescript"],
+        email: "second@example.com",
+      },
+    ];
+    const baseJob = {
+      _creationTime: 100,
+      company: "Acme",
+      location: "Remote",
+      isSample: false,
+      sourceUrl: "https://example.com/job",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      parseStatus: "parsed",
+      reviewState: "ready",
+      status: "active",
+      importedAt: 100,
+      archivedAt: null,
+      mustHaves: ["React"],
+      keywords: ["React"],
+      mustHavesExtraction: [],
+      keywordsExtraction: [],
+    };
+    const jobsByProfileId = new Map([
+      [
+        "profile_first",
+        [
+          {
+            ...baseJob,
+            _id: "job_stale_first_profile",
+            userId: "profile_first",
+            title: "Stale first profile job",
+            updatedAt: 100,
+            lastOpenedAt: 100,
+          },
+        ],
+      ],
+      [
+        "profile_second",
+        [
+          {
+            ...baseJob,
+            _id: "job_fresh_second_profile",
+            userId: "profile_second",
+            title: "Fresh second profile job",
+            updatedAt: 500,
+            lastOpenedAt: 500,
+          },
+        ],
+      ],
+    ]);
+
+    const result = await listForUser._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            if (table === "jobs") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    values: [] as string[],
+                    eq(_field: string, value: string) {
+                      this.values.push(value);
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    collect: async () =>
+                      jobsByProfileId.get(scope.values[0]) ?? [],
+                  };
+                },
+              };
+            }
+
+            if (table === "proposals") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, _value: string) {
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      {},
+    );
+
+    expect(result.map((job) => job.id)).toEqual([
+      "job_fresh_second_profile",
+      "job_stale_first_profile",
+    ]);
+  });
+
   it("prefers a job resume override over the user default resume when computing match tier", async () => {
     const linkedProfiles = [
       {
@@ -712,6 +861,67 @@ describe("jobsPublic.getById", () => {
     expect(result?.linkedProposalCount).toBeGreaterThan(0);
     expect(result?.linkedProposals.length).toBeLessThan(linkedProposalRows.length);
     expect(result?.visibleExtractionSource).toBe("llm");
+  });
+
+  it("uses detected posting language when an existing French job was stored as English", async () => {
+    vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
+    const job = buildProjectionJob({
+      rawDescription:
+        "Nous recherchons un contrôleur de gestion avec expérience financière, compétences en reporting, travail en équipe, formation supérieure et missions de pilotage.",
+      rawLanguageDetected: "en",
+      mustHaves: ["Expérience financière"],
+      mustHavesExtraction: [
+        { value: "Expérience financière", confidence: 0.9, sourceSpan: null },
+      ],
+    });
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        shadowRows: [
+          buildVisibleShadowRow({
+            llm_normalized_output: {
+              summary_short:
+                "Contrôleur de gestion pour structurer le pilotage financier et le reporting.",
+              role_title_normalized: "Contrôleur de gestion",
+              requirements: [
+                {
+                  value: "Expérience en contrôle de gestion",
+                  type: "experience",
+                  required: true,
+                },
+                {
+                  value: "Compétences en reporting financier",
+                  type: "skill",
+                  required: true,
+                },
+              ],
+              keywords_canonical: ["contrôle de gestion", "reporting"],
+              licenses_or_certifications: [],
+              schedule_constraints: [],
+              environment: {
+                customer_facing: null,
+                retail: null,
+                physical_standing: null,
+                onsite: null,
+              },
+              confidence: "high",
+            },
+          }),
+        ],
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result).toMatchObject({
+      visibleExtractionSource: "llm",
+      visibleSummary:
+        "Contrôleur de gestion pour structurer le pilotage financier et le reporting.",
+      visibleRequirements: [
+        "Expérience en contrôle de gestion",
+        "Compétences en reporting financier",
+      ],
+    });
   });
 
   it("falls back to heuristic visible fields when the flag is off or rows are unsafe", async () => {

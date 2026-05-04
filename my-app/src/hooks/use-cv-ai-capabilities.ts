@@ -11,9 +11,13 @@ export const CV_AI_ACTION_IDS = [
   "generate_skills_suggestions",
   "generate_skills_from_experience",
   "generate_language_suggestions",
+  "generate_hobby_suggestions",
   "improve_experience_responsibilities",
   "improve_experience_bullets",
+  "improve_project_description",
+  "fix_education_entry",
   "improve_achievement_line",
+  "improve_custom_text",
 ] as const;
 
 export type CvAiActionId = (typeof CV_AI_ACTION_IDS)[number];

@@ -117,6 +117,7 @@ export type WorkshopPlannerEntry =
       kind: "summary";
       estimatedHeight: number;
       text: string;
+      summaryRich?: WorkshopResponsibilitiesRichContent;
     }
   | WorkshopPlannerExperienceEntry
   | {
@@ -225,6 +226,7 @@ type WorkshopCommittedSummaryFragment = {
   title?: string;
   continued: boolean;
   text: string;
+  summaryRich?: WorkshopResponsibilitiesRichContent;
 };
 
 type WorkshopCommittedExperienceItem = {
@@ -258,6 +260,7 @@ type WorkshopCommittedProjectItem = {
   name: string;
   meta: string;
   description: string;
+  descriptionRich?: WorkshopResponsibilitiesRichContent;
 };
 
 type WorkshopCommittedLanguageItem = {
@@ -293,6 +296,8 @@ type WorkshopCommittedNamedItem = {
 
 type WorkshopCommittedTextSectionItem = {
   id: string;
+  sectionId?: string;
+  sectionType?: ResumePreviewSectionType;
   sectionTitle: string;
   text: string;
 };
@@ -928,9 +933,6 @@ function projectExperienceRichContentToPlannerBlocks(args: {
     block.items.forEach((item, sourceItemIndex) => {
       const runs = trimResponsibilityRuns(item.runs);
       const text = responsibilityRunsToPlainText(runs).trim();
-      if (!text) {
-        return;
-      }
 
       blocks.push(
         buildPlannerExperienceBlock({
@@ -968,7 +970,6 @@ function buildFallbackResponsibilitiesRichContent(
 
   const bulletItems = item.bullets
     .map((bullet) => bullet.trim())
-    .filter(Boolean)
     .map((text) => ({
       runs: [{ text }],
     }));
@@ -1893,7 +1894,10 @@ function buildPlannerSections(
     ],
   });
 
-  if (data.summary.trim()) {
+  if (
+    data.summary.trim() ||
+    (data.summarySectionId && data.draftSectionIds?.includes(data.summarySectionId))
+  ) {
     sections.push({
       key: "summary",
       kind: "summary",
@@ -1914,6 +1918,7 @@ function buildPlannerSections(
               metrics.bodyLineHeightMm,
             ),
           text: data.summary,
+          ...(data.summaryRich ? { summaryRich: data.summaryRich } : {}),
         },
       ],
     });
@@ -2526,6 +2531,9 @@ function buildCommittedFragment(args: {
           args.section.entries[0]?.kind === "summary"
             ? args.section.entries[0].text
             : "",
+        ...(args.section.entries[0]?.kind === "summary" && args.section.entries[0].summaryRich
+          ? { summaryRich: args.section.entries[0].summaryRich }
+          : {}),
       };
     case "experience":
       return {
@@ -2592,6 +2600,9 @@ function buildCommittedFragment(args: {
             name: entry.item.name,
             meta: entry.item.meta,
             description: entry.item.description,
+            ...(entry.item.descriptionRich
+              ? { descriptionRich: entry.item.descriptionRich }
+              : {}),
           })),
       };
     case "languages":
@@ -2669,6 +2680,8 @@ function buildCommittedFragment(args: {
           .filter((entry): entry is Extract<WorkshopPlannerEntry, { kind: "additional_information" }> => entry.kind === "additional_information")
           .map((entry) => ({
             id: entry.item.id,
+            sectionId: entry.item.sectionId,
+            sectionType: entry.item.sectionType as ResumePreviewSectionType,
             sectionTitle: entry.item.sectionTitle,
             text: entry.item.text,
           })),

@@ -67,10 +67,13 @@ describe("CvForge toolbar CSS contracts", () => {
     );
   });
 
-  it("makes the CV preview workspace toolbar follow the preview rail width", () => {
-    expect(cvForgeSource).toContain(
-      "calc(100dvh - var(--header-height) - var(--page-shell-pad-top, var(--space-2)) - var(--page-shell-pad-bottom, var(--space-1)))",
-    );
+  it("keeps CV page preview inside the PR4 forge shell and resume rail width", () => {
+    expect(cvForgeSource).toContain('"dasti-cv-paper-stage dasti-cv-page-preview-stage"');
+    expect(cvForgeSource).toContain('hostMode="panel"');
+    expect(cvForgeSource).not.toContain('hostMode="workspace"');
+    expect(cvForgeSource).not.toContain('className="dasti-cv-preview-workbench"');
+    expect(cvForgeSource).not.toContain("<ProfileReviewCard");
+    expect(cvForgeSource).not.toContain("<VerbatiCvPreviewPanel");
     expect(productCss).toMatch(
       /\.dasti-document-rail--resume-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/,
     );

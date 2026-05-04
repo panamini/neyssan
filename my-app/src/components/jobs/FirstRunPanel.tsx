@@ -50,7 +50,8 @@ export function FirstRunPanel({
             onImportFirstJob();
           }}
         >
-          Import job
+          <span>Import job</span>
+          <span className="ds-btn__period" aria-hidden="true">.</span>
         </button>
         <button
           type="button"

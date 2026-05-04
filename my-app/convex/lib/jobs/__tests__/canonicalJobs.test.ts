@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildCanonicalJobDraftFromSource,
+  detectJobPostingLanguage,
   flattenExtractionValues,
   resolveReparsedCompany,
   resolveReparsedLocation,
@@ -10,6 +11,37 @@ import {
 import { buildMatchReadProfile, computeMatchRead } from "../matchRead";
 
 describe("canonicalJobs", () => {
+  it.each([
+    [
+      "fr",
+      "Nous recherchons un contrôleur de gestion avec expérience financière, compétences en reporting, travail en équipe et formation supérieure.",
+    ],
+    [
+      "es",
+      "Se busca responsable de operaciones con experiencia en gestión, requisitos de disponibilidad, trabajo en equipo y atención a clientes.",
+    ],
+    [
+      "pt",
+      "Vaga para analista com experiência em gestão, competências de reporting, disponibilidade para trabalhar com equipe e clientes.",
+    ],
+    [
+      "it",
+      "Posizione per analista con esperienza nella gestione, competenze di reporting, responsabilità di squadra e disponibilità al lavoro.",
+    ],
+    [
+      "de",
+      "Stelle für Analyst mit Erfahrung, Kenntnisse im Reporting, Aufgaben im Team, Verantwortung für Kunden und deutsche Bewerbung.",
+    ],
+  ] as const)("detects %s job posting language", (language, rawDescription) => {
+    expect(detectJobPostingLanguage(rawDescription)).toBe(language);
+    expect(
+      buildCanonicalJobDraftFromSource({
+        title: "International role",
+        rawDescription,
+      }).rawLanguageDetected,
+    ).toBe(language);
+  });
+
   it("builds structured extraction records alongside legacy arrays", () => {
     const draft = buildCanonicalJobDraftFromSource({
       title: "Operations Associate",

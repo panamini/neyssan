@@ -3,25 +3,24 @@ import clsx from "clsx";
 import type { FunctionReference } from "convex/server";
 import type { Id } from "../../convex/_generated/dataModel";
 import {
-  Check,
   Briefcase,
   FileText,
   FileUser,
+  FolderTree,
   Gear,
+  ImagesSquare,
   Moon,
-  Play,
+  Pin,
+  PinOff,
+  SquaresFour,
   Sun,
-  TrashSimple,
-  User,
-  X,
 } from "@/lib/icons";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { useAuth, useUser, UserButton } from "@clerk/clerk-react";
+import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
-  clearActiveLocalCvId,
   formatCvDisplayTitle,
 } from "../lib/proposal-personalization";
 import {
@@ -33,69 +32,12 @@ import {
   clearStoredProposalWorkspaceState,
   createProposalWorkspaceResetState,
   readStoredProposalComposeDraft,
-  startFreshProposalWorkspace,
 } from "../lib/proposal-workspace-state";
-import { createQuickStartLocationState } from "../lib/quick-start-routing";
+import { useThemeMode } from "../lib/theme-mode";
 
 const MAX_RECENT_ITEMS = 3;
+const MAX_MIXED_RECENT_ITEMS = 4;
 const SIDEBAR_CONTENT_SWAP_DELAY_MS = 320;
-
-function useDarkMode(): [boolean, () => void] {
-  const [isDark, setIsDark] = React.useState(() => {
-    try {
-      const stored = localStorage.getItem("theme");
-      if (stored === "dark") return true;
-      if (stored === "light") return false;
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    } catch {
-      return false;
-    }
-  });
-
-  React.useEffect(() => {
-    document.documentElement.classList.toggle("dark", isDark);
-  }, [isDark]);
-
-  const toggle = React.useCallback(() => {
-    setIsDark((current) => {
-      const next = !current;
-
-      try {
-        localStorage.setItem("theme", next ? "dark" : "light");
-        document.documentElement.classList.toggle("dark", next);
-      } catch {
-        /* noop */
-      }
-
-      return next;
-    });
-  }, []);
-
-  return [isDark, toggle];
-}
-
-const clerkAppearance = {
-  elements: {
-    avatarBox: {
-      width: "26px",
-      height: "26px",
-      borderRadius: "var(--radius-control)",
-    },
-    userButtonAvatarBox: {
-      width: "26px",
-      height: "26px",
-      borderRadius: "var(--radius-control)",
-    },
-    userButtonTrigger: {
-      boxShadow: "none",
-      outline: "none",
-    },
-  },
-  variables: {
-    colorPrimary: "var(--color-accent)",
-    borderRadius: "var(--radius-control)",
-  },
-} as const;
 
 type ProposalRecord = {
   _id: Id<"proposals">;
@@ -119,6 +61,16 @@ type SidebarListItem = {
   onDelete?: () => void | Promise<void>;
   isActive?: boolean;
   markerTone?: "muted";
+};
+
+type SidebarMixedRecentItem = {
+  key: string;
+  title: string;
+  meta: string;
+  href: string;
+  badge: string;
+  onFollow?: () => void;
+  isActive?: boolean;
 };
 
 function normalizeLabel(value: unknown): string {
@@ -182,159 +134,6 @@ function resolveDocumentTitles(
 function formatSidebarResumeLabel(value: string): string {
   return value.replace(/\s+[—–]\s+/g, " - ");
 }
-
-function SidebarDocumentSection({
-  sectionLabel,
-  hasDocuments,
-  createLabel,
-  secondaryActionLabel,
-  secondaryActionHref,
-  allLabel,
-  allCount,
-  items,
-  onCreate,
-  allHref,
-}: {
-  sectionLabel: string;
-  hasDocuments: boolean;
-  createLabel: string;
-  secondaryActionLabel?: string;
-  secondaryActionHref?: string;
-  allLabel: string;
-  allCount: number;
-  items: SidebarListItem[];
-  onCreate: () => void;
-  allHref: string;
-}) {
-  const [confirmingDeleteKey, setConfirmingDeleteKey] = React.useState<
-    string | null
-  >(null);
-
-  return (
-    <section className="sb-section" aria-label={sectionLabel}>
-      <div className="sb-section__title">{sectionLabel}</div>
-
-      {hasDocuments ? (
-        <>
-          <button
-            type="button"
-            className="sb-section__action"
-            onClick={onCreate}
-          >
-            {`+ ${createLabel}`}
-          </button>
-          {secondaryActionLabel && secondaryActionHref ? (
-            <Link to={secondaryActionHref} className="sb-section__all-link">
-              {secondaryActionLabel}
-            </Link>
-          ) : null}
-
-          {items.length > 0 ? (
-            <ul className="sb-section__list" role="list">
-              {items.map((item) => (
-                <li key={item.key}>
-                  <div className="sb-section__document-row card-group">
-                    <Link
-                      to={item.href}
-                      className={clsx(
-                        "sb-section__document",
-                        item.isActive && "sb-section__document--active",
-                        item.markerTone === "muted" &&
-                          "sb-section__document--muted-marker",
-                      )}
-                      onClick={item.onFollow}
-                      aria-current={item.isActive ? "page" : undefined}
-                    >
-                      {item.title}
-                    </Link>
-                    {item.onDelete ? (
-                      <div
-                        className="sb-item-actions"
-                        aria-label={`Delete ${item.title}`}
-                      >
-                        {confirmingDeleteKey === item.key ? (
-                          <>
-                            <button
-                              type="button"
-                              className="sb-item-action sb-item-action--confirm"
-                              title={`Confirm delete ${item.title}`}
-                              aria-label={`Confirm delete ${item.title}`}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                void Promise.resolve(item.onDelete?.())
-                                  .catch(() => undefined)
-                                  .finally(() => {
-                                    setConfirmingDeleteKey(null);
-                                  });
-                              }}
-                            >
-                              <Check size={12} strokeWidth={2.4} aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              className="sb-item-action"
-                              title={`Cancel delete ${item.title}`}
-                              aria-label={`Cancel delete ${item.title}`}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                setConfirmingDeleteKey(null);
-                              }}
-                            >
-                              <X size={12} strokeWidth={2} aria-hidden="true" />
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            className="sb-item-action sb-item-action--delete"
-                            title={`Delete ${item.title}`}
-                            aria-label={`Delete ${item.title}`}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              setConfirmingDeleteKey(item.key);
-                            }}
-                          >
-                            <TrashSimple size={12} strokeWidth={1.8} aria-hidden="true" />
-                          </button>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          <Link
-            to={allHref}
-            className="sb-section__all-link"
-          >
-            {`All ${allLabel.toLowerCase()} (${allCount})`}
-          </Link>
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            className="sb-section__action"
-            onClick={onCreate}
-          >
-            {`+ ${createLabel}`}
-          </button>
-          {secondaryActionLabel && secondaryActionHref ? (
-            <Link to={secondaryActionHref} className="sb-section__all-link">
-              {secondaryActionLabel}
-            </Link>
-          ) : null}
-        </>
-      )}
-    </section>
-  );
-}
-
 
 function SidebarRailButton({
   label,
@@ -446,17 +245,16 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { pathname, search } = location;
-  const [isDarkMode, toggleDarkMode] = useDarkMode();
-  const { user } = useUser();
-  const { isLoaded, isSignedIn } = useAuth();
+  const { mode: themeMode, toggle: toggleTheme } = useThemeMode();
   const {
     isAuthenticated: isConvexAuthenticated,
     isLoading: isConvexAuthLoading,
   } = useConvexAuth();
+  const { isLoaded, isSignedIn } = useAuth();
   const { cvs, currentCv, currentCvId, loadCv, createNewCv, deleteCv } =
     useCvLibrary();
-  const clerkUserButtonRef = React.useRef<HTMLDivElement | null>(null);
-  const [collapsed, setCollapsed] = React.useState(false);
+  const [sidebarPinned, setSidebarPinned] = React.useState(false);
+  const [sidebarHovered, setSidebarHovered] = React.useState(false);
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
@@ -557,12 +355,12 @@ export const Sidebar: React.FC = () => {
 
   const proposals = useQuery(
     proposalsQueryReference,
-    isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
+    isLoaded && isSignedIn && isConvexAuthenticated && !isConvexAuthLoading ? {} : "skip",
   );
 
   const proposalCount = useQuery(
     proposalCountQueryReference,
-    isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
+    isLoaded && isSignedIn && isConvexAuthenticated && !isConvexAuthLoading ? {} : "skip",
   );
   const deleteProposal = useMutation(api.deleteProposalPublic.default);
 
@@ -570,31 +368,21 @@ export const Sidebar: React.FC = () => {
     (base: string) => pathname === base || pathname.startsWith(`${base}/`),
     [pathname],
   );
-  const handleAccountClick = React.useCallback(() => {
-    const clerkTrigger =
-      clerkUserButtonRef.current?.querySelector<HTMLButtonElement>("button");
-
-    if (clerkTrigger) {
-      clerkTrigger.click();
-      return;
-    }
-
-    if (!isSignedIn) {
-      void navigate("/sign-in");
-    }
-  }, [isSignedIn, navigate]);
-
   const forcedCollapsed = viewportWidth < 768;
   const hideSidebar = viewportWidth < 480;
-  const sidebarCollapsed = collapsed || forcedCollapsed;
+  const sidebarCollapsed = forcedCollapsed || (!sidebarPinned && !sidebarHovered);
   const [renderCollapsedContent, setRenderCollapsedContent] = React.useState(
     () => sidebarCollapsed,
   );
   const isResumeRoute = matchesRoute("/cv");
   const isResumeLibraryRoute = matchesRoute("/cvs");
+  const isDashboardRoute = matchesRoute("/dashboard") || pathname === "/";
   const isJobsRoute = matchesRoute("/jobs");
   const isProposalRoute = matchesRoute("/proposal");
   const isProposalLibraryRoute = matchesRoute("/proposals");
+  const isTemplatesRoute = matchesRoute("/style") || matchesRoute("/templates");
+  const isDocumentsRoute =
+    matchesRoute("/documents") || isProposalLibraryRoute || isResumeLibraryRoute;
 
   React.useEffect(() => {
     if (!sidebarCollapsed) {
@@ -613,14 +401,6 @@ export const Sidebar: React.FC = () => {
 
     return () => window.clearTimeout(swapTimer);
   }, [forcedCollapsed, sidebarCollapsed]);
-
-  const handleCreateProposal = React.useCallback(() => {
-    clearActiveLocalCvId();
-    startFreshProposalWorkspace();
-    void navigate("/proposal", {
-      state: createProposalWorkspaceResetState(),
-    });
-  }, [navigate]);
 
   const handleOpenProposalWorkspace = React.useCallback(() => {
     refreshProposalWorkspaceDraftState({
@@ -999,20 +779,91 @@ export const Sidebar: React.FC = () => {
   }, [createNewCv, navigate]);
 
   const hasResumeDocuments = resumeDocs.length > 0;
-  const hasProposalDocuments =
-    proposalTotalCount > 0 || Boolean(activeProposalKey);
-  const handleOpenQuickStart = React.useCallback(() => {
-    void navigate(
-      {
-        pathname: location.pathname,
-        search: location.search,
-      },
-      {
-        state: createQuickStartLocationState(location.state),
-      },
-    );
-  }, [location.pathname, location.search, location.state, navigate]);
+  const mixedRecentItems = React.useMemo<SidebarMixedRecentItem[]>(() => {
+    const items: SidebarMixedRecentItem[] = [];
 
+    if (activeProposalKey && activeProposalTitle) {
+      items.push({
+        key: `proposal:${activeProposalKey}`,
+        title: activeProposalTitle,
+        meta: activeProposalKey === "__draft__" ? "proposal draft" : "saved proposal",
+        href: activeProposalHref,
+        badge: "P",
+        onFollow:
+          activeProposalKey === "__draft__"
+            ? handleOpenProposalWorkspace
+            : undefined,
+        isActive: isProposalRoute,
+      });
+    }
+
+    if (activeResumeKey && activeResumeTitle) {
+      items.push({
+        key: `cv:${activeResumeKey}`,
+        title: activeResumeTitle,
+        meta: "CV source",
+        href: activeResumeHref,
+        badge: "CV",
+        onFollow: () => queueResumeLoad(activeResumeKey),
+        isActive: isResumeRoute,
+      });
+    }
+
+    const savedProposal = recentProposalItems.find(
+      (item) => item.key !== "__draft__" && !items.some((recent) => recent.href === item.href),
+    );
+    if (savedProposal) {
+      items.push({
+        key: `proposal:${savedProposal.key}`,
+        title: savedProposal.title,
+        meta: "document",
+        href: savedProposal.href,
+        badge: "D",
+        onFollow: savedProposal.onFollow,
+        isActive: savedProposal.isActive,
+      });
+    }
+
+    const resumeItem = recentResumeItems.find(
+      (item) => !items.some((recent) => recent.href === item.href),
+    );
+    if (resumeItem) {
+      items.push({
+        key: `cv:${resumeItem.key}`,
+        title: resumeItem.title,
+        meta: "CV",
+        href: resumeItem.href,
+        badge: "CV",
+        onFollow: resumeItem.onFollow,
+        isActive: resumeItem.isActive,
+      });
+    }
+
+    items.push({
+      key: "job:linear",
+      title: "Senior Frontend Engineer",
+      meta: "job match ready",
+      href: "/jobs",
+      badge: "J",
+      isActive: isJobsRoute,
+    });
+
+    return items.slice(0, MAX_MIXED_RECENT_ITEMS);
+  }, [
+    activeProposalHref,
+    activeProposalKey,
+    activeProposalTitle,
+    activeResumeHref,
+    activeResumeKey,
+    activeResumeTitle,
+    handleOpenProposalWorkspace,
+    isJobsRoute,
+    isProposalRoute,
+    isResumeRoute,
+    queueResumeLoad,
+    recentProposalItems,
+    recentResumeItems,
+  ]);
   if (hideSidebar) {
     return null;
   }
@@ -1021,9 +872,13 @@ export const Sidebar: React.FC = () => {
     <aside
       className={clsx(
         "sb",
-        collapsed && "sb--collapsed",
+        sidebarCollapsed && "sb--collapsed",
         forcedCollapsed && "sb--forced-collapsed",
+        sidebarPinned && "sb--pinned",
       )}
+      onMouseEnter={() => setSidebarHovered(true)}
+      onMouseLeave={() => setSidebarHovered(false)}
+      data-pinned={sidebarPinned ? "true" : "false"}
     >
       <div className="sb__top">
         <button
@@ -1031,15 +886,15 @@ export const Sidebar: React.FC = () => {
           className={clsx(
             "sb-toggle",
             !sidebarCollapsed && "sb-toggle--labeled",
-            sidebarCollapsed ? "sb-toggle--expand" : "sb-toggle--collapse",
+            sidebarPinned ? "sb-toggle--collapse" : "sb-toggle--expand",
           )}
           onClick={() => {
             if (!forcedCollapsed) {
-              setCollapsed((current) => !current);
+              setSidebarPinned((current) => !current);
             }
           }}
-          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={sidebarPinned ? "Unpin sidebar" : "Pin sidebar"}
+          aria-label={sidebarPinned ? "Unpin sidebar" : "Pin sidebar"}
         >
           <span className="sb-toggle__label" aria-hidden="true">
             {sidebarCollapsed ? (
@@ -1059,15 +914,27 @@ export const Sidebar: React.FC = () => {
 
       {renderCollapsedContent ? (
         <nav className="sb__nav sb__nav--rail" aria-label="Primary sidebar">
-          <SidebarRailButton
-            label="Start"
-            icon={<Play size={16} strokeWidth={1.5} aria-hidden="true" />}
-            active={false}
-            onClick={handleOpenQuickStart}
+          <SidebarRailLink
+            label="Dashboard"
+            icon={<SquaresFour size={16} strokeWidth={1.5} aria-hidden="true" />}
+            active={isDashboardRoute}
+            href="/dashboard"
+          />
+          <SidebarRailLink
+            label="Jobs"
+            icon={<Briefcase size={16} strokeWidth={1.5} aria-hidden="true" />}
+            active={isJobsRoute}
+            href="/jobs"
+          />
+          <SidebarRailLink
+            label="Proposal forge"
+            icon={<FileText size={16} strokeWidth={1.5} aria-hidden="true" />}
+            active={isProposalRoute}
+            href={activeProposalHref}
           />
           {hasResumeDocuments ? (
             <SidebarRailLink
-              label="Resumes"
+              label="CV forge"
               icon={
                 <FileUser size={16} strokeWidth={1.5} aria-hidden="true" />
               }
@@ -1081,7 +948,7 @@ export const Sidebar: React.FC = () => {
             />
           ) : (
             <SidebarRailButton
-              label="Resumes"
+              label="CV forge"
               icon={
                 <FileUser size={16} strokeWidth={1.5} aria-hidden="true" />
               }
@@ -1089,44 +956,33 @@ export const Sidebar: React.FC = () => {
               onClick={handleCreateResume}
             />
           )}
-          {hasProposalDocuments ? (
-            <SidebarRailLink
-              label="Cover letters"
-              icon={
-                <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
-              }
-              active={isProposalRoute || isProposalLibraryRoute}
-              href={activeProposalHref}
-            />
-          ) : (
-            <SidebarRailButton
-              label="Cover letters"
-              icon={
-                <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
-              }
-              active={isProposalRoute || isProposalLibraryRoute}
-              onClick={handleOpenProposalWorkspace}
-            />
-          )}
-            <SidebarRailLink
-              label="Jobs"
-              icon={
-                <Briefcase size={16} strokeWidth={1.5} aria-hidden="true" />
-              }
-              active={isJobsRoute}
-              href="/jobs"
-            />
+          <SidebarRailLink
+            label="Documents"
+            icon={<FolderTree size={16} strokeWidth={1.5} aria-hidden="true" />}
+            active={isDocumentsRoute}
+            href="/documents"
+          />
+          <SidebarRailLink
+            label="Templates"
+            icon={<ImagesSquare size={16} strokeWidth={1.5} aria-hidden="true" />}
+            active={isTemplatesRoute}
+            href="/templates"
+          />
         </nav>
       ) : (
         <nav className="sb__nav sb__nav--stack" aria-label="Primary sidebar">
-          <div className="sb-section sb-section--primary-nav" aria-label="Start">
-            <button
-              type="button"
-              onClick={handleOpenQuickStart}
-              className="sb-section__action"
+          <div className="sb-section sb-section--primary-nav" aria-label="Workspace">
+            <div className="sb-section__title">Workspace</div>
+            <Link
+              to="/dashboard"
+              className={clsx(
+                "sb-section__action",
+                isDashboardRoute && "sb-section__action--active",
+              )}
             >
-              Start
-            </button>
+              <SquaresFour size={15} strokeWidth={1.5} aria-hidden="true" />
+              <span>Dashboard</span>
+            </Link>
             <Link
               to="/jobs"
               className={clsx(
@@ -1134,31 +990,112 @@ export const Sidebar: React.FC = () => {
                 isJobsRoute && "sb-section__action--active",
               )}
             >
-              Jobs
+              <Briefcase size={15} strokeWidth={1.5} aria-hidden="true" />
+              <span>Jobs</span>
+              <span className="sb-section__count">142</span>
+            </Link>
+            <Link
+              to={activeProposalHref}
+              onClick={
+                activeProposalKey === "__draft__"
+                  ? handleOpenProposalWorkspace
+                  : undefined
+              }
+              className={clsx(
+                "sb-section__action",
+                isProposalRoute && "sb-section__action--active",
+              )}
+            >
+              <FileText size={15} strokeWidth={1.5} aria-hidden="true" />
+              <span>Proposal forge</span>
+            </Link>
+            <Link
+              to={activeResumeHref}
+              onClick={() => {
+                if (activeResumeKey) {
+                  queueResumeLoad(activeResumeKey);
+                }
+              }}
+              className={clsx(
+                "sb-section__action",
+                (isResumeRoute || isResumeLibraryRoute) &&
+                  "sb-section__action--active",
+              )}
+            >
+              <FileUser size={15} strokeWidth={1.5} aria-hidden="true" />
+              <span>CV forge</span>
             </Link>
           </div>
 
-          <SidebarDocumentSection
-            sectionLabel="Resumes"
-            hasDocuments={hasResumeDocuments}
-            createLabel="New resume"
-            allLabel="Resumes"
-            allCount={resumeDocs.length}
-            items={recentResumeItems}
-            onCreate={handleCreateResume}
-            allHref="/cvs"
-          />
+          <div className="sb-section" aria-label="Library">
+            <div className="sb-section__title">Library</div>
+            <Link
+              to="/documents"
+              className={clsx(
+                "sb-section__action",
+                isDocumentsRoute && "sb-section__action--active",
+              )}
+            >
+              <FolderTree size={15} strokeWidth={1.5} aria-hidden="true" />
+              <span>Documents</span>
+              <span className="sb-section__count">
+                {resumeDocs.length + proposalTotalCount}
+              </span>
+            </Link>
+            <Link
+              to="/templates"
+              className={clsx(
+                "sb-section__action",
+                isTemplatesRoute && "sb-section__action--active",
+              )}
+            >
+              <ImagesSquare size={15} strokeWidth={1.5} aria-hidden="true" />
+              <span>Templates</span>
+            </Link>
+          </div>
 
-          <SidebarDocumentSection
-            sectionLabel="Cover letters"
-            hasDocuments={hasProposalDocuments}
-            createLabel="New cover letter"
-            allLabel="Cover letters"
-            allCount={proposalTotalCount}
-            items={recentProposalItems}
-            onCreate={handleCreateProposal}
-            allHref="/proposals"
-          />
+          <section className="sb-recents" aria-label="Recent">
+            <div className="sb-recents__head">
+              <span>Recent</span>
+              <span>Cmd/Ctrl K</span>
+            </div>
+            <ul className="sb-recents__list" role="list">
+              {mixedRecentItems.map((item) => (
+                <li key={item.key}>
+                  <Link
+                    to={item.href}
+                    onClick={item.onFollow}
+                    className={clsx(
+                      "sb-recent",
+                      item.isActive && "sb-recent--active",
+                    )}
+                    aria-current={item.isActive ? "page" : undefined}
+                  >
+                    <span className="sb-recent__badge">{item.badge}</span>
+                    <span className="sb-recent__body">
+                      <span className="sb-recent__title">{item.title}</span>
+                      <span className="sb-recent__meta">{item.meta}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <div className="sb-section">
+            <button
+              type="button"
+              className="sb-section__action"
+              onClick={() => setSidebarPinned((current) => !current)}
+            >
+              {sidebarPinned ? (
+                <PinOff size={15} strokeWidth={1.5} aria-hidden="true" />
+              ) : (
+                <Pin size={15} strokeWidth={1.5} aria-hidden="true" />
+              )}
+              <span>{sidebarPinned ? "Unpin sidebar" : "Pin sidebar"}</span>
+            </button>
+          </div>
         </nav>
       )}
 
@@ -1168,75 +1105,33 @@ export const Sidebar: React.FC = () => {
           sidebarCollapsed && "sb-footer--collapsed",
         )}
       >
-        <div className="sb-footer__avatar">
-          <button
-            type="button"
-            className="sb-footer__account-button"
-            onClick={handleAccountClick}
-            aria-label={isSignedIn ? "Open account menu" : "Sign In"}
-            title={isSignedIn ? "Account" : "Sign In"}
-          >
-            <User size={18} strokeWidth={1.8} aria-hidden="true" />
-          </button>
-          {isSignedIn ? (
-            <div
-              ref={clerkUserButtonRef}
-              className="sb-footer__clerk-user-button"
-              aria-hidden="true"
-            >
-              <UserButton afterSignOutUrl="/" appearance={clerkAppearance} />
-            </div>
-          ) : null}
-        </div>
-        {!sidebarCollapsed ? (
-          <div className="sb-footer__account">
-            <div className="sb-footer__title">
-              {isSignedIn
-                ? (user?.username ??
-                    user?.firstName ??
-                    "you"
-                  ).toLowerCase()
-                : "sign in"}
-            </div>
-            <div className="sb-footer__subtitle">
-              {isSignedIn && isConvexAuthLoading
-                ? "Loading"
-                : isSignedIn
-                  ? null
-                  : "Save draft"}
-            </div>
-          </div>
-        ) : null}
         <div className="sb-footer__tools">
           <Link
             to="/settings"
             className={clsx(
-              "sb-footer__tool-btn",
-              matchesRoute("/settings") && "sb-footer__tool-btn--active",
+              "sb-section__action",
+              matchesRoute("/settings") && "sb-section__action--active",
             )}
             title="Settings"
             aria-label="Settings"
           >
             <Gear size={14} strokeWidth={1.6} aria-hidden="true" />
+            <span className="sb-footer__tool-label">Settings</span>
           </Link>
-          <div className="sb-theme-toggle">
-            <button
-              type="button"
-              className="sb-theme-toggle__single"
-              onClick={toggleDarkMode}
-              aria-pressed={isDarkMode}
-              aria-label={
-                isDarkMode ? "Light mode" : "Dark mode"
-              }
-              title={isDarkMode ? "Light mode" : "Dark mode"}
-            >
-              {isDarkMode ? (
-                <Sun size={14} strokeWidth={1.6} aria-hidden="true" />
-              ) : (
-                <Moon size={14} strokeWidth={1.6} aria-hidden="true" />
-              )}
-            </button>
-          </div>
+          <button
+            type="button"
+            className="sb-theme-toggle__single"
+            onClick={toggleTheme}
+            aria-pressed={themeMode === "dark"}
+            aria-label={themeMode === "dark" ? "Light mode" : "Dark mode"}
+            title={themeMode === "dark" ? "Light mode" : "Dark mode"}
+          >
+            {themeMode === "dark" ? (
+              <Sun size={14} strokeWidth={1.8} aria-hidden="true" />
+            ) : (
+              <Moon size={14} strokeWidth={1.8} aria-hidden="true" />
+            )}
+          </button>
         </div>
       </div>
     </aside>
