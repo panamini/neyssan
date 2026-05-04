@@ -1644,6 +1644,25 @@ describe("CvForge workspace mode", () => {
     expect(container.querySelector(".dasti-cv-preview-panel-slot")).toBeNull();
     expect(container.querySelector(".dasti-preview-toolbar")).toBeNull();
 
+    const editPageShell = container.querySelector(
+      ".dasti-page-shell--cv-forge",
+    ) as HTMLElement | null;
+    expect(editPageShell?.style.getPropertyValue("--page-shell-pad-top")).toBe(
+      "var(--space-2)",
+    );
+    expect(
+      editPageShell?.style.getPropertyValue("--page-shell-pad-top-mobile"),
+    ).toBe("var(--space-2)");
+    expect(editPageShell?.style.getPropertyValue("--cv-preview-toolbar-inset")).toBe(
+      "0px",
+    );
+    expect(
+      editPageShell?.style.getPropertyValue("--page-shell-pad-inline"),
+    ).toBe("var(--space-4)");
+    expect(
+      editPageShell?.style.getPropertyValue("--page-shell-pad-inline-mobile"),
+    ).toBe("var(--space-4)");
+
     await user.click(
       screen.getByRole("button", { name: "Page preview" }),
     );
