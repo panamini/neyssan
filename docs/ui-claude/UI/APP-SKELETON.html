@@ -1,0 +1,3157 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>twoweeks.ai — App skeleton (final architecture)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Baskervville:ital@0;1&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   TOKENS — dasti v5 (Terre/Clay)
+   ============================================================================ */
+:root, [data-theme="light"] {
+  color-scheme: light;
+  --bg:#F8F7F3; --sf1:#FAF9F5; --sf2:#F0EEE6; --sf3:#F5F4EF; --sfr:#FAF9F5; --paper:#FAF9F5;
+  --ti:#0F0C08; --ti-soft:#2F2D29; --text-body:#484643;
+  --tm2:rgba(15,12,8,0.64); --tg2:rgba(15,12,8,0.60); --tg3:#7E7D79; --tg4:#A4A39F;
+  --border-soft:rgba(15,12,8,0.08); --border-strong:#CFCFCB; --border-stronger:#B6B5B1;
+  --ac:#A84E2E; --am:#D97757; --am-soft:#EBBCAF; --ap:rgba(168,78,46,0.10); --as:rgba(168,78,46,0.16); --fr:#D97757; --op:#FAF9F5;
+  --btn-dark-bg:#191915; --btn-dark-fg:#FAF9F5;
+  --link:#2A78D6; --info-bg:#B0D3FA;
+  --success:hsl(150,22%,30%); --success-soft:hsl(150,16%,92%); --success-ink:hsl(150,22%,22%);
+  --danger:hsl(10,36%,42%); --danger-soft:hsl(10,28%,93%); --danger-ink:hsl(10,36%,32%);
+  --warning:hsl(32,40%,34%); --warning-soft:hsl(32,32%,93%); --warning-ink:hsl(32,40%,26%);
+  --sha:0 1px 2px hsla(30,15%,10%,0.04), 0 0 0 1px hsla(30,15%,10%,0.02);
+  --shb:0 4px 12px hsla(30,15%,10%,0.06), 0 1px 2px hsla(30,15%,10%,0.04);
+  --shc:0 12px 32px hsla(30,15%,10%,0.10), 0 4px 8px hsla(30,15%,10%,0.06);
+  --sh-paper:0 4px 24px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.12);
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:40px; --s8:64px; --s9:80px;
+  --r-inline:8px; --r-control:12px; --r-card:16px; --r-surface:20px; --r-pill:999px; --r-paper:4px;
+  --hs:32px; --hm:40px; --hb:44px;
+  --tx:12px; --ts:14px; --tb:16px; --tm:20px; --tl:26px; --tx2:32px;
+  --lx:16px; --ls:20px; --lb:24px; --ll:30px; --lx2:40px;
+  --font-body:"Geist","Geist Variable",-apple-system,BlinkMacSystemFont,sans-serif;
+  --font-serif:"Baskervville","Iowan Old Style",Georgia,serif;
+  --font-mono:"SF Mono",ui-monospace,"Geist Mono",Menlo,Consolas,monospace;
+  --tracking-display:-0.02em; --tracking-tight:-0.01em; --tracking-wide:0.14em;
+  --dur-1:80ms; --dur-2:160ms; --dur-3:240ms; --dur-4:320ms; --dur-5:480ms;
+  --ease-standard:cubic-bezier(0.2,0.6,0.2,1);
+  --ease-emphasized:cubic-bezier(0.2,0,0,1);
+  --ease-breathe:cubic-bezier(0.4,0,0.6,1);
+  --motion-duration-brand:2400ms;
+  --z-popover:400; --z-modal:800; --z-toast:900;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg:#0D0D0D; --sf1:#0E0E0E; --sf2:#1A1918; --sf3:#161616; --sfr:#222120; --paper:#E8E5DB;
+  --ti:#DAD9D3; --ti-soft:#B8B7AE; --text-body:#B8B7AE;
+  --tm2:#95948D; --tg2:#95948D; --tg3:#6E6D69; --tg4:#504F4C;
+  --border-soft:rgba(218,217,211,0.08); --border-strong:#504F4C; --border-stronger:#6E6D69;
+  --ac:#A15A42; --am:#D47554; --am-soft:rgba(212,117,84,0.20); --ap:rgba(212,117,84,0.14); --as:rgba(212,117,84,0.20); --fr:#D47554; --op:#DCD9CF;
+  --btn-dark-bg:#DAD9D3; --btn-dark-fg:#0E0E0E;
+  --link:#2B99FF; --info-bg:rgba(43,153,255,0.16);
+  --success:hsl(150,22%,56%); --success-soft:hsl(150,14%,14%); --success-ink:hsl(150,22%,70%);
+  --danger:hsl(10,34%,58%); --danger-soft:hsl(10,20%,16%); --danger-ink:hsl(10,34%,72%);
+  --warning:hsl(34,30%,62%); --warning-soft:hsl(34,14%,14%); --warning-ink:hsl(34,30%,74%);
+  --sha:0 1px 2px rgba(0,0,0,0.50), inset 0 0 0 1px rgba(255,255,255,0.04);
+  --shb:0 4px 14px rgba(0,0,0,0.60), inset 0 0 0 1px rgba(255,255,255,0.06);
+  --shc:0 20px 48px rgba(0,0,0,0.75), inset 0 0 0 1px rgba(255,255,255,0.08);
+  --sh-paper:0 4px 24px rgba(0,0,0,0.40), 0 1px 2px rgba(0,0,0,0.80);
+}
+/* paper text always uses fixed dark inks even in dark mode */
+[data-theme="dark"] .ds-paper { color: #2F2D29; }
+[data-theme="dark"] .ds-paper h1, [data-theme="dark"] .ds-paper h2, [data-theme="dark"] .ds-paper h3 { color: #0F0C08; }
+
+/* ============================================================================
+   RESET + BASE
+   ============================================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: var(--bg); color: var(--ti);
+  font-family: var(--font-body); font-size: var(--tb); line-height: var(--lb);
+  accent-color: var(--ac); height: 100%; overflow: hidden;
+  transition: background-color var(--dur-3) var(--ease-standard), color var(--dur-3) var(--ease-standard);
+}
+button, input, textarea { font: inherit; color: inherit; }
+@keyframes tw-breathe { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+@keyframes ds-period { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.2; transform: scale(0.6); } }
+@keyframes ds-skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes cmdk-in { from { opacity: 0; transform: translate(-50%, -52%) scale(0.98); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+
+/* ============================================================================
+   PRIMITIVES — Button, Input, Card, Pill, Tone, Status, Toast, Menu
+   ============================================================================ */
+.ds-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid transparent; border-radius: var(--r-control);
+  font-family: inherit; font-weight: 600; cursor: pointer;
+  white-space: nowrap; line-height: 1; user-select: none;
+  transition: background-color var(--dur-2) var(--ease-standard), border-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard), box-shadow var(--dur-2) var(--ease-standard), opacity var(--dur-2) var(--ease-standard);
+}
+.ds-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.ds-btn:active:not(:disabled) { transform: scale(0.96); transition-duration: var(--dur-1); }
+.ds-btn:focus-visible { outline: 2px solid var(--fr); outline-offset: 2px; }
+.ds-btn:disabled { opacity: 0.42; cursor: not-allowed; transform: none !important; }
+.ds-btn--sm { height: var(--hs); padding: 0 var(--s3); font-size: var(--tx); }
+.ds-btn--md { height: var(--hm); padding: 0 var(--s4); font-size: var(--ts); }
+.ds-btn--lg { height: var(--hb); padding: 0 var(--s5); font-size: var(--tb); }
+.ds-btn--primary   { background: var(--ac); color: var(--op); box-shadow: var(--sha); }
+.ds-btn--primary:hover:not(:disabled) { background: var(--am); box-shadow: var(--shb); }
+.ds-btn--secondary { background: var(--sfr); color: var(--ti); border-color: var(--border-strong); box-shadow: var(--sha); }
+.ds-btn--secondary:hover:not(:disabled) { background: var(--sf2); }
+.ds-btn--ghost { background: transparent; color: var(--tm2); }
+.ds-btn--ghost:hover:not(:disabled) { background: var(--sf2); color: var(--ti); }
+.ds-btn--accent { background: var(--ap); color: var(--ti); }
+.ds-btn--accent:hover:not(:disabled) { background: var(--as); }
+.ds-btn--danger { background: var(--danger-soft); color: var(--danger-ink); }
+.ds-btn--danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+.ds-btn--dark { background: var(--btn-dark-bg); color: var(--btn-dark-fg); }
+.ds-btn--pill { border-radius: var(--r-pill); }
+.ds-btn__period { display: inline-block; margin-left: 1px; animation: ds-period 1800ms cubic-bezier(0.45,0,0.55,1) infinite; }
+
+.ds-icon-btn {
+  width: var(--hs); height: var(--hs);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-soft); border-radius: var(--r-control);
+  background: var(--sfr); color: var(--tg2); cursor: pointer; box-shadow: var(--sha);
+  transition: background-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard), border-color var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard);
+  flex-shrink: 0;
+}
+.ds-icon-btn:hover { background: var(--sf2); color: var(--ti); transform: translateY(-1px); }
+.ds-icon-btn:active { transform: scale(0.94); }
+.ds-icon-btn--sm { width: 28px; height: 28px; font-size: 13px; }
+
+.ds-field-group { display: grid; gap: 6px; }
+.ds-field-label { font-size: var(--ts); font-weight: 600; color: var(--ti); }
+.ds-field-meta  { font-size: var(--tx); color: var(--tg2); }
+.ds-field {
+  width: 100%; height: var(--hm); padding: 0 var(--s3);
+  background: var(--sf2); color: var(--ti);
+  border: 2px solid transparent; border-radius: var(--r-control);
+  font-family: inherit; font-size: var(--ts); line-height: var(--ls); outline: none;
+  transition: border-color var(--dur-2) var(--ease-standard), background-color var(--dur-2) var(--ease-standard);
+}
+.ds-field::placeholder { color: var(--tg2); }
+.ds-field:hover:not(:focus):not(:disabled) { background: var(--sf3); }
+.ds-field:focus { border-color: var(--ti); }
+.ds-field--textarea { height: auto; min-height: 88px; padding: var(--s2) var(--s3); resize: vertical; line-height: var(--ls); }
+
+.ds-card {
+  border: 1px solid var(--border-soft); border-radius: var(--r-card);
+  background: var(--sfr); padding: var(--s4); box-shadow: var(--sha);
+  display: grid; gap: var(--s2);
+  transition: border-color var(--dur-2) var(--ease-standard), box-shadow var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard);
+}
+.ds-card[data-interactive="true"]:hover { transform: translateY(-1px); box-shadow: var(--shb); border-color: var(--border-strong); cursor: pointer; }
+.ds-card--muted    { background: var(--sf1); }
+.ds-card__eyebrow { font-size: 10px; letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--am); font-weight: 600; }
+.ds-card__title { font-size: var(--ts); font-weight: 600; color: var(--ti); }
+.ds-card__body  { font-size: 13px; color: var(--tm2); line-height: var(--ls); }
+.ds-card__footer{ display: flex; align-items: center; justify-content: space-between; padding-top: var(--s1); font-size: var(--tx); color: var(--tg2); }
+.ds-skel { background: linear-gradient(90deg, var(--sf2) 0%, var(--sf3) 50%, var(--sf2) 100%); background-size: 200% 100%; animation: ds-skel 1400ms linear infinite; border-radius: var(--r-inline); display: block; }
+
+.ds-pill {
+  display: inline-flex; align-items: center; height: 26px; padding: 0 var(--s3);
+  border-radius: var(--r-pill); font-size: var(--tx); font-weight: 600; white-space: nowrap;
+  border: 1px solid transparent;
+}
+.ds-pill--neutral { background: var(--sf2); color: var(--tg3); }
+.ds-pill--accent  { background: var(--am-soft); color: var(--ac); }
+.ds-pill--info    { background: var(--info-bg); color: var(--link); }
+.ds-pill--success { background: var(--success-soft); color: var(--success-ink); }
+.ds-pill--warning { background: var(--warning-soft); color: var(--warning-ink); }
+.ds-pill--danger  { background: var(--danger-soft); color: var(--danger-ink); }
+
+.ds-tone {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 var(--s3); border-radius: var(--r-pill);
+  font-size: var(--tx); font-weight: 600; border: 1px solid;
+}
+.ds-tone--warm    { background: hsl(30,40%,93%);  color: hsl(28,40%,32%);  border-color: hsl(28,30%,80%); }
+.ds-tone--formal  { background: hsl(220,16%,93%); color: hsl(220,18%,32%); border-color: hsl(220,12%,80%); }
+.ds-tone--natural { background: hsl(150,16%,92%); color: hsl(150,22%,28%); border-color: hsl(150,18%,78%); }
+[data-theme="dark"] .ds-tone--warm    { background: hsl(30,18%,16%);  color: hsl(28,30%,72%);  border-color: hsl(28,16%,28%); }
+[data-theme="dark"] .ds-tone--formal  { background: hsl(220,12%,16%); color: hsl(220,18%,72%); border-color: hsl(220,10%,28%); }
+[data-theme="dark"] .ds-tone--natural { background: hsl(150,12%,14%); color: hsl(150,22%,68%); border-color: hsl(150,12%,26%); }
+
+.ds-status {
+  display: inline-flex; align-items: center; gap: var(--s2); height: var(--hs); padding: 0 var(--s3);
+  border-radius: var(--r-inline); font-size: 13px; font-weight: 600;
+}
+.ds-status__dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.ds-status--accent { background: var(--am-soft); color: var(--ac); }
+.ds-status--accent .ds-status__dot { background: var(--ac); animation: tw-breathe var(--motion-duration-brand) var(--ease-breathe) infinite; }
+.ds-status--success { background: var(--success-soft); color: var(--success-ink); }
+.ds-status--success .ds-status__dot { background: var(--success); }
+.ds-status--neutral { background: var(--sf2); color: var(--tg3); }
+.ds-status--neutral .ds-status__dot { background: var(--tg3); }
+
+/* Menu (06c) */
+.ds-menu {
+  min-width: 200px; padding: var(--s2); background: var(--sfr);
+  border: 1px solid var(--border-soft); border-radius: var(--r-control);
+  box-shadow: var(--shb); display: flex; flex-direction: column; gap: 2px;
+}
+.ds-menu__item {
+  display: flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s3);
+  font-size: var(--ts); color: var(--ti); background: transparent; border: none;
+  border-radius: 8px; cursor: pointer; text-align: left; width: 100%;
+  transition: background-color var(--dur-1) var(--ease-standard);
+}
+.ds-menu__item:hover { background: var(--sf2); }
+.ds-menu__item--danger { color: var(--danger); }
+.ds-menu__item--danger:hover { background: var(--danger-soft); }
+.ds-menu__shortcut { margin-left: auto; font-family: var(--font-mono); font-size: var(--tx); color: var(--tg3); }
+.ds-menu__separator { height: 1px; margin: var(--s2) 0; background: var(--border-soft); }
+.ds-menu__label { padding: var(--s2) var(--s3); font-size: var(--tx); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--tg3); }
+
+/* ============================================================================
+   APP SHELL — sidebar (collapsed default) + topbar + main content
+   ============================================================================ */
+.app-grid {
+  display: grid;
+  grid-template-columns: var(--sb-w, 56px) 1fr;
+  height: 100vh;
+  transition: grid-template-columns var(--dur-3) var(--ease-emphasized);
+}
+[data-sidebar="expanded"] .app-grid { --sb-w: 240px; }
+
+.app-sidebar {
+  background: var(--sf1);
+  border-right: 1px solid var(--border-soft);
+  display: flex; flex-direction: column;
+  padding: var(--s3) var(--s2);
+  gap: var(--s4);
+  overflow: hidden;
+}
+.app-sidebar__brand {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s2) var(--s2);
+  height: 40px;
+  font-size: var(--ts); font-weight: 600; letter-spacing: var(--tracking-tight);
+  color: var(--ti); white-space: nowrap;
+}
+.app-sidebar__brand-mark {
+  width: 28px; height: 28px; flex-shrink: 0;
+  border-radius: 8px; background: var(--ac); color: var(--op);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px;
+}
+.app-sidebar__brand-text { display: flex; align-items: baseline; gap: 1px; }
+.app-sidebar__brand-period { color: var(--ac); animation: tw-breathe var(--motion-duration-brand) var(--ease-breathe) infinite; }
+
+.app-sidebar__group { display: flex; flex-direction: column; gap: 2px; }
+.app-sidebar__group-label {
+  font-size: 10px; letter-spacing: var(--tracking-wide); text-transform: uppercase;
+  color: var(--tg3); font-weight: 600;
+  padding: var(--s2) var(--s3); white-space: nowrap;
+  opacity: 0; transition: opacity var(--dur-2) var(--ease-standard);
+}
+[data-sidebar="expanded"] .app-sidebar__group-label { opacity: 1; }
+
+.app-sidebar__item {
+  position: relative;
+  display: flex; align-items: center; gap: var(--s3);
+  height: 36px; padding: 0 var(--s3);
+  border-radius: var(--r-control);
+  background: transparent; border: none; cursor: pointer;
+  color: var(--tm2); font-size: var(--ts); font-weight: 500;
+  white-space: nowrap; overflow: hidden;
+  transition: background-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard);
+}
+.app-sidebar__item:hover { background: var(--sf2); color: var(--ti); }
+.app-sidebar__item-icon {
+  width: 20px; height: 20px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+.app-sidebar__item-label { flex: 1; opacity: 0; transition: opacity var(--dur-2) var(--ease-standard); }
+[data-sidebar="expanded"] .app-sidebar__item-label { opacity: 1; }
+.app-sidebar__item-count {
+  font-size: var(--tx); color: var(--tg3); font-weight: 600;
+  opacity: 0; transition: opacity var(--dur-2) var(--ease-standard);
+}
+[data-sidebar="expanded"] .app-sidebar__item-count { opacity: 1; }
+/* Active state — gradient + 2px stripe (DS signature) */
+.app-sidebar__item[data-active="true"] {
+  background: linear-gradient(90deg, var(--ap) 0%, transparent 70%);
+  color: var(--ti); font-weight: 600;
+}
+.app-sidebar__item[data-active="true"]::before {
+  content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px;
+  background: var(--ac); border-radius: 2px;
+}
+
+.app-sidebar__spacer { flex: 1; }
+.app-sidebar__footer { display: flex; flex-direction: column; gap: 2px; }
+
+.app-main { display: grid; grid-template-rows: auto 1fr; min-width: 0; min-height: 0; }
+
+.app-topbar {
+  height: 52px;
+  display: flex; align-items: center; gap: var(--s4);
+  padding: 0 var(--s5);
+  border-bottom: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(140%) blur(14px);
+}
+.app-topbar__crumb { display: flex; align-items: center; gap: var(--s2); font-size: var(--ts); color: var(--tm2); }
+.app-topbar__crumb-current { color: var(--ti); font-weight: 600; }
+.app-topbar__crumb-sep { color: var(--tg3); }
+.app-topbar__spacer { flex: 1; }
+.app-topbar__cmdk {
+  display: inline-flex; align-items: center; gap: var(--s2);
+  height: var(--hs); padding: 0 var(--s3);
+  background: var(--sf2); border: 1px solid var(--border-soft); border-radius: var(--r-control);
+  color: var(--tg2); font-size: var(--tx); cursor: pointer;
+  transition: background-color var(--dur-2) var(--ease-standard);
+}
+.app-topbar__cmdk:hover { background: var(--sf3); color: var(--ti); }
+.app-topbar__kbd {
+  font-family: var(--font-mono); font-size: 10px; padding: 2px 6px;
+  background: var(--sfr); border: 1px solid var(--border-soft); border-radius: 4px; color: var(--tg2);
+}
+.theme-switch {
+  display: inline-flex; align-items: center; gap: 2px;
+  height: var(--hs); padding: 2px; border: 1px solid var(--border-soft); border-radius: var(--r-pill);
+  background: var(--sf2);
+}
+.theme-switch button {
+  border: none; cursor: pointer; height: 26px; padding: 0 var(--s3);
+  border-radius: var(--r-pill); background: transparent; color: var(--tg2);
+  font-size: var(--tx); font-weight: 600;
+  transition: background-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard);
+}
+.theme-switch button[aria-pressed="true"] { background: var(--sfr); color: var(--ti); box-shadow: var(--sha); }
+
+.app-pages { overflow: auto; min-height: 0; }
+.app-page { display: none; }
+.app-page[data-active="true"] { display: grid; }
+
+/* shared page wrapper — for non split-view pages */
+.page-wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--s6) var(--s5) var(--s8);
+  display: grid; gap: var(--s5);
+  width: 100%;
+}
+.page-head {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s4);
+  padding-bottom: var(--s3); border-bottom: 1px solid var(--border-soft);
+}
+.page-head__title { font-size: var(--tx2); line-height: var(--lx2); font-weight: 600; letter-spacing: var(--tracking-display); }
+.page-head__sub   { font-size: var(--ts); color: var(--tm2); margin-top: 4px; }
+.page-head__actions { display: flex; gap: var(--s2); }
+
+/* ============================================================================
+   FORGE — document-first 60/40 (Proposal + CV share this)
+   ============================================================================ */
+.forge {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: var(--s4);
+  height: 100%;
+  padding: var(--s4) var(--s5);
+}
+.forge__stage {
+  background: var(--sf1);
+  border-radius: var(--r-surface);
+  padding: var(--s5);
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--s4);
+  min-height: 0;
+}
+.forge__stage-bar {
+  position: relative;
+  display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap;
+}
+.forge__stage-bar .ds-status { margin-right: auto; }
+
+.ds-paper {
+  background: var(--paper); color: var(--ti-soft);
+  border-radius: var(--r-paper);
+  box-shadow: var(--sh-paper);
+  padding: var(--s8) var(--s8);
+  font-family: var(--font-serif);
+  font-size: 15px; line-height: 1.7;
+  max-width: 760px; width: 100%; margin: 0 auto;
+}
+.ds-paper h1 { font-size: 28px; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; margin-bottom: var(--s3); color: var(--ti); }
+.ds-paper h2 { font-size: 18px; font-weight: 600; margin: var(--s5) 0 var(--s2); color: var(--ti); }
+.ds-paper p  { margin-bottom: var(--s3); }
+.ds-paper__meta { font-family: var(--font-body); font-size: var(--tx); color: rgba(15,12,8,0.55); margin-bottom: var(--s5); }
+
+.forge__rail {
+  background: var(--sfr);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-surface);
+  padding: var(--s4);
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--s4);
+  min-height: 0;
+}
+.forge__rail-section {
+  display: flex; flex-direction: column; gap: var(--s2);
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--border-soft);
+}
+.forge__rail-section:last-child { border-bottom: none; padding-bottom: 0; }
+.forge__rail-label {
+  font-size: 10px; letter-spacing: var(--tracking-wide); text-transform: uppercase;
+  color: var(--am); font-weight: 600;
+}
+.forge__rail-title { font-size: var(--ts); font-weight: 600; color: var(--ti); }
+
+/* AI stream — replaces progress bars */
+.ai-stage-list { display: flex; flex-direction: column; gap: var(--s2); }
+.ai-stage {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  font-size: var(--ts);
+  border-radius: var(--r-inline);
+  transition: background-color var(--dur-3) var(--ease-standard), color var(--dur-3) var(--ease-standard);
+}
+.ai-stage__dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--tg4); }
+.ai-stage[data-state="active"] { background: var(--ap); color: var(--ti); font-weight: 600; }
+.ai-stage[data-state="active"] .ai-stage__dot { background: var(--ac); animation: tw-breathe var(--motion-duration-brand) var(--ease-breathe) infinite; }
+.ai-stage[data-state="done"] { color: var(--tg2); }
+.ai-stage[data-state="done"] .ai-stage__dot { background: var(--success); }
+.ai-stage[data-state="pending"] { color: var(--tg3); }
+
+/* ============================================================================
+   JOBS — split-view (list + detail with inline match panel)
+   ============================================================================ */
+.jobs {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 0;
+  height: 100%;
+}
+.jobs__list {
+  border-right: 1px solid var(--border-soft);
+  display: flex; flex-direction: column;
+  background: var(--sf1);
+  min-height: 0;
+}
+.jobs__filters {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; flex-direction: column; gap: var(--s2);
+  padding: var(--s4);
+  background: color-mix(in srgb, var(--sf1) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border-soft);
+}
+.jobs__filters-row { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
+.jobs__items { flex: 1; overflow-y: auto; padding: var(--s2); display: flex; flex-direction: column; gap: 2px; }
+.jobs__item {
+  display: grid; gap: 4px; padding: var(--s3); border-radius: var(--r-inline);
+  background: transparent; border: 1px solid transparent; cursor: pointer; text-align: left;
+  transition: background-color var(--dur-2) var(--ease-standard), border-color var(--dur-2) var(--ease-standard);
+}
+.jobs__item:hover { background: var(--sf2); }
+.jobs__item[data-active="true"] { background: var(--sfr); border-color: var(--border-strong); }
+.jobs__item-row { display: flex; align-items: center; gap: var(--s2); justify-content: space-between; }
+.jobs__item-title { font-size: var(--ts); font-weight: 600; color: var(--ti); }
+.jobs__item-company { font-size: var(--tx); color: var(--tm2); }
+.jobs__item-meta { display: flex; gap: var(--s2); font-size: 11px; color: var(--tg3); }
+
+.jobs__detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.jobs__detail-header {
+  display: flex; flex-direction: column; gap: var(--s3);
+  padding: var(--s5);
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--sfr);
+}
+.jobs__detail-title { font-size: var(--tl); line-height: var(--lx2); font-weight: 600; letter-spacing: var(--tracking-tight); }
+.jobs__detail-sub { display: flex; gap: var(--s3); align-items: center; font-size: var(--ts); color: var(--tm2); }
+.jobs__detail-actions { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.jobs__detail-body {
+  flex: 1; overflow-y: auto;
+  padding: var(--s5);
+  display: grid; grid-template-columns: 1fr 320px; gap: var(--s5); align-items: start;
+}
+.jobs__detail-text { font-size: var(--ts); line-height: var(--lb); color: var(--text-body); display: grid; gap: var(--s3); }
+.jobs__detail-text h3 { font-size: var(--tb); font-weight: 600; color: var(--ti); margin-top: var(--s2); }
+.jobs__match {
+  position: sticky; top: 0;
+  background: var(--sf1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-card);
+  padding: var(--s4);
+  display: flex; flex-direction: column; gap: var(--s3);
+}
+.jobs__match-score {
+  font-size: var(--tx2); font-weight: 700; line-height: 1; color: var(--ti);
+  display: flex; align-items: baseline; gap: 4px;
+}
+.jobs__match-score-pct { font-size: var(--ts); color: var(--tm2); font-weight: 500; }
+.jobs__match-bar { height: 4px; border-radius: 2px; background: var(--sf2); overflow: hidden; }
+.jobs__match-bar > span { display: block; height: 100%; background: var(--ac); }
+.jobs__match-list { display: grid; gap: var(--s2); font-size: var(--tx); }
+.jobs__match-row { display: flex; gap: var(--s2); align-items: flex-start; }
+.jobs__match-row span:first-child { color: var(--tg3); width: 70px; flex-shrink: 0; }
+
+/* job verdict labels — replace numeric % score */
+.ds-verdict {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 var(--s2);
+  border-radius: var(--r-pill);
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+  border: 1px solid transparent;
+}
+.ds-verdict__dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.ds-verdict--strong  { background: var(--success-soft); color: var(--success-ink); }
+.ds-verdict--strong .ds-verdict__dot { background: var(--success); }
+.ds-verdict--worth   { background: var(--am-soft); color: var(--ac); }
+.ds-verdict--worth .ds-verdict__dot { background: var(--ac); }
+.ds-verdict--maybe   { background: var(--warning-soft); color: var(--warning-ink); }
+.ds-verdict--maybe .ds-verdict__dot { background: var(--warning); }
+.ds-verdict--skip    { background: var(--sf2); color: var(--tg3); }
+.ds-verdict--skip .ds-verdict__dot { background: var(--tg4); }
+
+/* ATS-ready badge */
+.ds-ats {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px var(--s2);
+  border-radius: var(--r-pill);
+  background: var(--success-soft); color: var(--success-ink);
+  font-size: var(--tx); font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--success) 26%, transparent);
+}
+.ds-ats__icon { font-size: 10px; }
+.ds-ats--warn { background: var(--warning-soft); color: var(--warning-ink); border-color: color-mix(in srgb, var(--warning) 26%, transparent); }
+
+/* ============================================================================
+   LIBRARY — card grid + filters
+   ============================================================================ */
+.library {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--s4);
+}
+.library-tabs { display: flex; gap: var(--s1); padding: 4px; background: var(--sf2); border-radius: var(--r-control); width: fit-content; }
+.library-tabs button {
+  height: var(--hs); padding: 0 var(--s4);
+  background: transparent; border: none; cursor: pointer;
+  font-size: var(--tx); font-weight: 600; color: var(--tg2); border-radius: var(--r-inline);
+  transition: background-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard);
+}
+.library-tabs button[data-active="true"] { background: var(--sfr); color: var(--ti); box-shadow: var(--sha); }
+
+/* Empty state — minimalist (single prompt, no illustration) */
+.empty-state {
+  padding: var(--s9) var(--s5);
+  display: flex; flex-direction: column; align-items: center; gap: var(--s4);
+  text-align: center;
+}
+.empty-state__title { font-size: var(--tl); font-weight: 600; letter-spacing: var(--tracking-tight); }
+.empty-state__desc  { font-size: var(--ts); color: var(--tm2); max-width: 360px; line-height: var(--lb); }
+
+/* ============================================================================
+   SETTINGS — inner nav rail (200px) + content
+   ============================================================================ */
+.settings {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--s5);
+  max-width: 1080px;
+  margin: 0 auto;
+  width: 100%;
+  padding: var(--s6) var(--s5) var(--s8);
+  align-items: start;
+}
+.settings__nav {
+  display: flex; flex-direction: column; gap: 2px;
+  position: sticky; top: var(--s5);
+}
+.settings__nav-item {
+  position: relative;
+  display: flex; align-items: center; gap: var(--s2);
+  height: 36px; padding: 0 var(--s3);
+  border-radius: var(--r-inline);
+  background: transparent; border: none; cursor: pointer;
+  color: var(--tm2); font-size: var(--ts); font-weight: 500;
+  text-align: left;
+  transition: background-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard);
+}
+.settings__nav-item:hover { background: var(--sf2); color: var(--ti); }
+.settings__nav-item[data-active="true"] {
+  background: linear-gradient(90deg, var(--ap) 0%, transparent 70%);
+  color: var(--ti); font-weight: 600;
+}
+.settings__nav-item[data-active="true"]::before {
+  content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px;
+  background: var(--ac); border-radius: 2px;
+}
+.settings__content { display: grid; gap: var(--s5); }
+.settings__pane { display: none; }
+.settings__pane[data-active="true"] { display: grid; gap: var(--s5); }
+.settings__group {
+  background: var(--sfr); border: 1px solid var(--border-soft); border-radius: var(--r-surface);
+  padding: var(--s5);
+  display: grid; gap: var(--s4);
+}
+.settings__group-head { display: flex; flex-direction: column; gap: 2px; }
+.settings__group-title { font-size: var(--tb); font-weight: 600; }
+.settings__group-desc  { font-size: var(--tx); color: var(--tm2); }
+.settings__row {
+  display: grid; grid-template-columns: 1fr auto; gap: var(--s4); align-items: center;
+  padding: var(--s2) 0;
+}
+.settings__row + .settings__row { border-top: 1px solid var(--border-soft); padding-top: var(--s4); }
+.settings__row-label { font-size: var(--ts); font-weight: 500; }
+.settings__row-desc  { font-size: var(--tx); color: var(--tm2); margin-top: 2px; }
+
+/* ============================================================================
+   SIGN-IN
+   ============================================================================ */
+.signin {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; padding: var(--s5);
+}
+.signin__card {
+  width: min(420px, 100%);
+  background: var(--sfr); border: 1px solid var(--border-soft); border-radius: var(--r-surface);
+  padding: var(--s7);
+  display: grid; gap: var(--s5);
+  box-shadow: var(--shc);
+}
+.signin__brand { display: flex; align-items: center; gap: var(--s3); }
+.signin__brand-mark { width: 32px; height: 32px; border-radius: 8px; background: var(--ac); color: var(--op); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+.signin__title { font-size: var(--tl); font-weight: 600; letter-spacing: var(--tracking-tight); }
+.signin__sub  { font-size: var(--ts); color: var(--tm2); }
+.signin__divider { display: flex; align-items: center; gap: var(--s3); color: var(--tg3); font-size: var(--tx); }
+.signin__divider::before, .signin__divider::after { content: ""; flex: 1; height: 1px; background: var(--border-soft); }
+
+/* ============================================================================
+   COMMAND PALETTE (⌘K)
+   ============================================================================ */
+.cmdk {
+  position: fixed; inset: 0; z-index: 999;
+  display: none;
+  background: color-mix(in srgb, var(--bg) 50%, transparent);
+  backdrop-filter: blur(8px) saturate(140%);
+}
+.cmdk[data-open="true"] { display: block; }
+.cmdk__panel {
+  position: absolute; top: 18%; left: 50%; transform: translateX(-50%);
+  width: min(580px, calc(100% - 32px));
+  background: var(--sfr); border: 1px solid var(--border-soft); border-radius: var(--r-surface);
+  box-shadow: var(--shc); overflow: hidden;
+  animation: cmdk-in 200ms var(--ease-emphasized);
+}
+.cmdk__input {
+  width: 100%; height: 56px; border: none; outline: none;
+  padding: 0 var(--s5);
+  background: transparent;
+  font-size: var(--tb); color: var(--ti);
+  border-bottom: 1px solid var(--border-soft);
+}
+.cmdk__input::placeholder { color: var(--tg2); }
+.cmdk__list { max-height: 360px; overflow-y: auto; padding: var(--s2); }
+.cmdk__group-label {
+  font-size: 10px; letter-spacing: var(--tracking-wide); text-transform: uppercase;
+  color: var(--tg3); font-weight: 600;
+  padding: var(--s2) var(--s3) 4px;
+}
+.cmdk__item {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s2) var(--s3); border-radius: var(--r-inline);
+  font-size: var(--ts); color: var(--ti); cursor: pointer;
+}
+.cmdk__item:hover, .cmdk__item[data-highlighted="true"] { background: var(--sf2); }
+.cmdk__item-icon { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; color: var(--tm2); }
+.cmdk__item-label { flex: 1; }
+.cmdk__item-shortcut { font-family: var(--font-mono); font-size: var(--tx); color: var(--tg3); }
+.cmdk__hint {
+  display: flex; align-items: center; gap: var(--s4);
+  padding: var(--s2) var(--s4);
+  border-top: 1px solid var(--border-soft);
+  font-size: var(--tx); color: var(--tg3);
+}
+
+/* ============================================================================
+   DASHBOARD
+   ============================================================================ */
+.dash-grid { display: grid; grid-template-columns: 2fr 1fr; gap: var(--s5); align-items: start; }
+@media (max-width: 1024px) { .dash-grid { grid-template-columns: 1fr; } }
+.dash-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s4); }
+.dash-stat__num { font-size: var(--tx2); font-weight: 700; line-height: 1; letter-spacing: var(--tracking-display); }
+.dash-stat__label { font-size: var(--tx); color: var(--tm2); margin-top: 4px; }
+.dash-list { display: flex; flex-direction: column; gap: var(--s2); }
+.dash-row {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s3); border-radius: var(--r-inline);
+  background: var(--sf1); border: 1px solid var(--border-soft);
+}
+.dash-row__title { font-size: var(--ts); font-weight: 600; color: var(--ti); }
+.dash-row__sub { font-size: var(--tx); color: var(--tm2); }
+.dash-row__time { margin-left: auto; font-size: var(--tx); color: var(--tg3); }
+
+/* Mixed recents (sidebar middle section) */
+.app-sidebar__recents {
+  display: none; flex-direction: column; gap: 2px;
+  padding: var(--s2) 0;
+  margin: 0 -var(--s2);
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+}
+[data-sidebar="expanded"] .app-sidebar__recents { display: flex; }
+.app-sidebar__recents-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--s2) var(--s3);
+  font-size: 10px; letter-spacing: var(--tracking-wide); text-transform: uppercase;
+  color: var(--tg3); font-weight: 600;
+}
+.app-sidebar__recent {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: 6px var(--s3);
+  border-radius: var(--r-inline);
+  background: transparent; border: none; cursor: pointer; text-align: left;
+  font-size: var(--tx); color: var(--ti);
+  transition: background-color var(--dur-2) var(--ease-standard);
+}
+.app-sidebar__recent:hover { background: var(--sf2); }
+.app-sidebar__recent-dot {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: var(--sf2); color: var(--tg3);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; flex-shrink: 0;
+}
+.app-sidebar__recent-body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.app-sidebar__recent-title { font-size: var(--tx); font-weight: 600; color: var(--ti); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-sidebar__recent-meta  { font-size: 11px; color: var(--tg3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Topbar context line (forge surfaces only) */
+.app-topbar__context {
+  display: none; align-items: center; gap: var(--s2);
+  font-size: var(--tx); color: var(--tm2);
+  padding-left: var(--s4);
+  margin-left: var(--s4);
+  border-left: 1px solid var(--border-soft);
+}
+[data-context="forge"] .app-topbar__context { display: inline-flex; }
+.app-topbar__context strong { color: var(--ti); font-weight: 600; }
+
+/* Quick start checklist (dashboard) */
+.qstart {
+  background: var(--sf1); border: 1px solid var(--border-soft);
+  border-radius: var(--r-surface); padding: var(--s4) var(--s5);
+  display: flex; flex-direction: column; gap: var(--s3);
+}
+.qstart__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4); }
+.qstart__title { font-size: var(--tb); font-weight: 600; }
+.qstart__sub   { font-size: var(--tx); color: var(--tm2); margin-top: 2px; }
+.qstart__progress { display: flex; align-items: center; gap: var(--s3); font-size: var(--tx); color: var(--tg3); }
+.qstart__progress-bar { width: 80px; height: 4px; border-radius: 2px; background: var(--sf2); overflow: hidden; }
+.qstart__progress-bar > span { display: block; height: 100%; background: var(--ac); border-radius: 2px; }
+.qstart__list { display: flex; flex-direction: column; gap: 6px; }
+.qstart__step {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-inline);
+  background: var(--sfr); border: 1px solid var(--border-soft);
+}
+.qstart__step[data-state="done"] .qstart__step-num { background: var(--success); color: #fff; }
+.qstart__step[data-state="active"] .qstart__step-num { background: var(--ac); color: var(--op); animation: tw-breathe var(--motion-duration-brand) var(--ease-breathe) infinite; }
+.qstart__step[data-state="pending"] .qstart__step-num { background: var(--sf2); color: var(--tg3); }
+.qstart__step-num {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+.qstart__step-body { flex: 1; }
+.qstart__step-title { font-size: var(--ts); font-weight: 600; color: var(--ti); }
+.qstart__step-desc  { font-size: var(--tx); color: var(--tm2); margin-top: 1px; }
+
+/* Next best action card (dashboard hero) */
+.dash-next-action {
+  background: linear-gradient(135deg, var(--ap) 0%, transparent 60%);
+  border: 1px solid color-mix(in srgb, var(--ac) 20%, var(--border-soft));
+  border-radius: var(--r-surface);
+  padding: var(--s5) var(--s5);
+  display: flex; flex-direction: column; gap: var(--s3);
+}
+.dash-next-action__label {
+  font-size: 10px; letter-spacing: var(--tracking-wide); text-transform: uppercase;
+  color: var(--ac); font-weight: 600;
+}
+.dash-next-action__title {
+  font-size: var(--tl); line-height: var(--lx2); font-weight: 600;
+  letter-spacing: var(--tracking-tight); color: var(--ti);
+}
+.dash-next-action__copy { font-size: var(--ts); color: var(--text-body); line-height: var(--lb); max-width: 60ch; }
+.dash-next-action__bar { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; margin-top: var(--s2); }
+
+/* Sheet primitive (Safe-send + Import review) */
+.ds-scrim {
+  position: fixed; inset: 0; z-index: 800;
+  background: color-mix(in srgb, var(--ti) 28%, transparent);
+  backdrop-filter: blur(4px) saturate(140%);
+  display: none;
+}
+.ds-scrim[data-open="true"] { display: block; }
+.ds-sheet {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(560px, 100%);
+  z-index: 810;
+  background: var(--sfr);
+  border-left: 1px solid var(--border-soft);
+  box-shadow: var(--shc);
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform var(--dur-4) var(--ease-emphasized);
+}
+.ds-sheet[data-open="true"] { transform: translateX(0); }
+.ds-sheet__head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3);
+  padding: var(--s5) var(--s5) var(--s4);
+  border-bottom: 1px solid var(--border-soft);
+}
+.ds-sheet__title { font-size: var(--tl); font-weight: 600; letter-spacing: var(--tracking-tight); }
+.ds-sheet__copy  { font-size: var(--tx); color: var(--tm2); margin-top: 4px; }
+.ds-sheet__body  { flex: 1; overflow-y: auto; padding: var(--s4) var(--s5) var(--s5); display: flex; flex-direction: column; gap: var(--s4); }
+.ds-sheet__actions {
+  display: flex; gap: var(--s2); flex-wrap: wrap;
+  padding: var(--s4) var(--s5);
+  border-top: 1px solid var(--border-soft);
+  background: var(--sf1);
+}
+
+/* Safe-send checklist rows */
+.safe-status {
+  display: flex; flex-direction: column; gap: var(--s2);
+  padding: var(--s4);
+  background: var(--sf1); border: 1px solid var(--border-soft); border-radius: var(--r-card);
+}
+.safe-status strong { font-size: var(--ts); color: var(--ti); }
+.safe-status small  { font-size: var(--tx); color: var(--tm2); line-height: var(--lb); }
+.checklist { display: flex; flex-direction: column; gap: 2px; }
+.check-row {
+  display: grid; grid-template-columns: 28px 1fr auto; gap: var(--s3);
+  padding: var(--s3);
+  border-radius: var(--r-inline);
+  background: var(--sf1); border: 1px solid var(--border-soft);
+  align-items: center;
+}
+.check-row.clear  { background: color-mix(in srgb, var(--success-soft) 60%, var(--sfr)); border-color: color-mix(in srgb, var(--success) 22%, transparent); }
+.check-row.warn   { background: color-mix(in srgb, var(--warning-soft) 60%, var(--sfr)); border-color: color-mix(in srgb, var(--warning) 22%, transparent); }
+.check-row.danger { background: color-mix(in srgb, var(--danger-soft) 60%, var(--sfr));  border-color: color-mix(in srgb, var(--danger) 26%, transparent); }
+.check-mark {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; background: var(--sf2); color: var(--tg3);
+}
+.check-row.clear .check-mark  { background: var(--success); color: #fff; }
+.check-row.warn .check-mark   { background: var(--warning); color: #fff; }
+.check-row.danger .check-mark { background: var(--danger);  color: #fff; }
+.check-title { font-size: var(--ts); font-weight: 600; color: var(--ti); display: block; }
+.check-meta  { font-size: var(--tx); color: var(--tm2); display: block; line-height: var(--lb); }
+
+/* Import review compare grid */
+.review-block {
+  background: var(--sf1); border: 1px solid var(--border-soft); border-radius: var(--r-card);
+  padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3);
+}
+.review-block__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.compare-grid .ba-label { font-size: 10px; letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--tg3); font-weight: 600; margin-bottom: 4px; }
+.fragment {
+  font-family: var(--font-mono); font-size: var(--tx); color: var(--tm2);
+  background: var(--sf2); padding: var(--s2) var(--s3); border-radius: var(--r-inline);
+  white-space: pre-wrap; line-height: var(--lb);
+}
+
+/* import banner / review banner */
+.ds-banner {
+  display: flex; align-items: flex-start; gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-card);
+  border: 1px solid;
+  font-size: var(--ts);
+}
+.ds-banner__icon { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-weight: 700; font-size: var(--tx); }
+.ds-banner__body { flex: 1; }
+.ds-banner__title { font-weight: 600; }
+.ds-banner__desc  { font-size: var(--tx); color: var(--tm2); margin-top: 2px; }
+.ds-banner__actions { display: flex; gap: var(--s2); margin-top: var(--s2); }
+.ds-banner--info    { background: var(--info-bg); border-color: color-mix(in srgb, var(--link) 30%, transparent); color: var(--link); }
+.ds-banner--info .ds-banner__title { color: var(--ti); }
+.ds-banner--warn    { background: var(--warning-soft); border-color: color-mix(in srgb, var(--warning) 30%, transparent); color: var(--warning-ink); }
+.ds-banner--warn .ds-banner__icon { background: var(--warning); color: #fff; }
+.ds-banner--warn .ds-banner__title { color: var(--warning-ink); }
+.ds-banner--success { background: var(--success-soft); border-color: color-mix(in srgb, var(--success) 30%, transparent); color: var(--success-ink); }
+.ds-banner--success .ds-banner__icon { background: var(--success); color: #fff; }
+
+/* Empty CV import card */
+.cv-import-card {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s3);
+  padding: var(--s5);
+  background: var(--sf1); border: 2px dashed var(--border-strong);
+  border-radius: var(--r-surface);
+  margin: 0 auto; max-width: 720px; width: 100%;
+}
+.cv-import-choice {
+  display: flex; flex-direction: column; gap: var(--s2);
+  padding: var(--s4);
+  background: var(--sfr); border: 1px solid var(--border-soft); border-radius: var(--r-card);
+  cursor: pointer; text-align: left;
+  transition: border-color var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard);
+}
+.cv-import-choice:hover { transform: translateY(-2px); border-color: var(--ac); }
+.cv-import-choice__icon { font-size: 22px; }
+.cv-import-choice__title { font-weight: 600; font-size: var(--ts); }
+.cv-import-choice__desc { font-size: var(--tx); color: var(--tm2); }
+
+/* Rail tabs + collapsed AI stream */
+.rail-tabs {
+  display: flex; gap: 2px;
+  padding: 4px;
+  background: var(--sf2);
+  border-radius: var(--r-control);
+  margin-bottom: var(--s3);
+}
+.rail-tabs button {
+  flex: 1;
+  height: 30px;
+  background: transparent; border: none; cursor: pointer;
+  font-size: var(--tx); font-weight: 600; color: var(--tg2);
+  border-radius: var(--r-inline);
+  transition: background-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard);
+}
+.rail-tabs button[data-active="true"] { background: var(--sfr); color: var(--ti); box-shadow: var(--sha); }
+.rail-pane { display: none; flex-direction: column; gap: var(--s4); }
+.rail-pane[data-active="true"] { display: flex; }
+
+/* AI stream — collapsed (one-line active stage) by default, expandable */
+.ai-stream-collapsed {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  background: var(--ap);
+  border-radius: var(--r-inline);
+  font-size: var(--ts); color: var(--ti);
+  cursor: pointer;
+  transition: background-color var(--dur-2) var(--ease-standard);
+}
+.ai-stream-collapsed:hover { background: var(--as); }
+.ai-stream-collapsed__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ac); animation: tw-breathe var(--motion-duration-brand) var(--ease-breathe) infinite; flex-shrink: 0; }
+.ai-stream-collapsed__label { flex: 1; font-weight: 600; }
+.ai-stream-collapsed__count { font-size: var(--tx); color: var(--tm2); font-weight: 500; }
+.ai-stream-collapsed__caret { color: var(--tg3); transition: transform var(--dur-2) var(--ease-standard); }
+.ai-stream-collapsed[data-expanded="true"] .ai-stream-collapsed__caret { transform: rotate(180deg); }
+.ai-stream-expanded { display: none; }
+.ai-stream-collapsed[data-expanded="true"] + .ai-stream-expanded { display: flex; }
+
+/* Wand button on section rows */
+.org-row__action--wand:hover { background: var(--am-soft); color: var(--ac); }
+
+/* ============================================================================
+   ORGANIZE / MANAGE SECTIONS (CV forge rail)
+   ============================================================================ */
+.org-list { display: flex; flex-direction: column; gap: 4px; }
+.org-row {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s2) var(--s2) var(--s1);
+  border-radius: var(--r-inline);
+  background: var(--sf1); border: 1px solid var(--border-soft);
+  transition: background-color var(--dur-2) var(--ease-standard), border-color var(--dur-2) var(--ease-standard);
+  cursor: grab;
+}
+.org-row:hover { background: var(--sfr); border-color: var(--border-strong); }
+.org-row[data-active="true"] { background: var(--ap); border-color: color-mix(in srgb, var(--ac) 40%, transparent); }
+.org-row[data-hidden="true"] { opacity: 0.5; }
+.org-handle {
+  width: 18px; flex-shrink: 0;
+  color: var(--tg3);
+  font-size: 14px; line-height: 1;
+  text-align: center;
+  cursor: grab;
+}
+.org-row__title { flex: 1; font-size: var(--ts); font-weight: 500; color: var(--ti); }
+.org-row__count { font-size: 11px; color: var(--tg3); font-weight: 600; }
+.org-row__actions { display: flex; gap: 2px; opacity: 0; transition: opacity var(--dur-2) var(--ease-standard); }
+.org-row:hover .org-row__actions { opacity: 1; }
+.org-row__action {
+  width: 22px; height: 22px;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--tg3); border-radius: 4px;
+  font-size: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.org-row__action:hover { background: var(--sf2); color: var(--ti); }
+.org-row__action[data-tone="danger"]:hover { background: var(--danger-soft); color: var(--danger-ink); }
+
+.org-add {
+  display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  background: transparent; border: 1px dashed var(--border-strong);
+  border-radius: var(--r-inline);
+  color: var(--tm2); font-size: var(--ts); cursor: pointer; width: 100%;
+  transition: background-color var(--dur-2) var(--ease-standard), border-color var(--dur-2) var(--ease-standard);
+}
+.org-add:hover { background: var(--sf2); border-color: var(--ac); color: var(--ti); }
+
+/* ============================================================================
+   FLOATING AI TOOLBAR (mock — anchored above selection in real app)
+   ============================================================================ */
+.ai-toolbar {
+  display: inline-flex; gap: 2px; align-items: center;
+  padding: 4px;
+  background: var(--sfr); border: 1px solid var(--border-soft); border-radius: var(--r-pill);
+  box-shadow: var(--shb);
+}
+.ai-toolbar button {
+  height: 28px; padding: 0 var(--s3);
+  background: transparent; border: none; cursor: pointer;
+  font-size: var(--tx); font-weight: 600; color: var(--tm2); border-radius: var(--r-pill);
+  transition: background-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard);
+}
+.ai-toolbar button:hover { background: var(--sf2); color: var(--ti); }
+.ai-toolbar button[data-primary="true"] { background: var(--ap); color: var(--ti); }
+
+/* ============================================================================
+   TEMPLATE GALLERY
+   ============================================================================ */
+.tpl-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--s4);
+}
+.tpl-card {
+  display: flex; flex-direction: column; gap: var(--s2);
+  background: var(--sfr); border: 1px solid var(--border-soft);
+  border-radius: var(--r-card); padding: var(--s3);
+  cursor: pointer; box-shadow: var(--sha);
+  transition: border-color var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard), box-shadow var(--dur-2) var(--ease-standard);
+}
+.tpl-card:hover { transform: translateY(-2px); box-shadow: var(--shb); border-color: var(--border-strong); }
+.tpl-card[data-selected="true"] { border-color: var(--ac); box-shadow: 0 0 0 2px var(--ap); }
+.tpl-card__preview {
+  aspect-ratio: 8.5 / 11;
+  background: var(--paper);
+  border-radius: var(--r-paper);
+  box-shadow: var(--sh-paper);
+  padding: var(--s3);
+  display: flex; flex-direction: column; gap: 6px;
+  font-family: var(--font-serif);
+  color: var(--ti-soft);
+  overflow: hidden;
+  position: relative;
+}
+[data-theme="dark"] .tpl-card__preview { color: #2F2D29; }
+[data-theme="dark"] .tpl-card__preview b { color: #0F0C08; }
+.tpl-card__preview b { font-size: 13px; line-height: 1.15; color: var(--ti); display: block; font-weight: 600; }
+.tpl-card__preview small { font-size: 6px; line-height: 1.4; color: rgba(15,12,8,0.55); display: block; font-family: var(--font-body); }
+.tpl-card__preview .h2 { font-size: 8px; font-weight: 600; color: var(--ti); margin-top: 6px; padding-top: 4px; border-top: 1px solid rgba(15,12,8,0.10); }
+.tpl-card__preview p { font-size: 6.5px; line-height: 1.5; color: var(--ti-soft); margin: 0; }
+[data-theme="dark"] .tpl-card__preview p { color: #2F2D29; }
+[data-theme="dark"] .tpl-card__preview .h2 { color: #0F0C08; }
+[data-theme="dark"] .tpl-card__preview b { color: #0F0C08; }
+.tpl-card__preview--minimal { font-family: var(--font-body); }
+.tpl-card__preview--minimal b { font-family: var(--font-body); font-weight: 600; letter-spacing: -0.01em; font-size: 12px; }
+.tpl-card__preview--minimal .h2 { border-top: none; padding-top: 0; }
+.tpl-card__preview--bold b { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.tpl-card__preview--bold .h2 { color: var(--ac); border-top-color: var(--ac); }
+.tpl-card__preview--classic { font-family: "Iowan Old Style", Georgia, serif; }
+.tpl-card__preview--classic b { text-align: center; }
+.tpl-card__preview--letterpress b { text-transform: uppercase; letter-spacing: 0.12em; font-size: 11px; }
+.tpl-card__preview--letterpress { padding: var(--s4) var(--s3); }
+.tpl-card__preview--compact p { font-size: 5.5px; line-height: 1.4; }
+.tpl-card__preview--compact .h2 { font-size: 7px; }
+.tpl-card__meta { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; }
+.tpl-card__name { font-size: var(--ts); font-weight: 600; }
+.tpl-card__kind { font-size: 11px; color: var(--tg3); }
+
+.tpl-filter { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
+
+/* ============================================================================
+   STYLE PICKER (Document style settings pane)
+   ============================================================================ */
+.style-picker { display: grid; grid-template-columns: 1fr 320px; gap: var(--s5); align-items: start; }
+@media (max-width: 960px) { .style-picker { grid-template-columns: 1fr; } }
+.style-controls { display: grid; gap: var(--s4); }
+.style-row {
+  display: grid; grid-template-columns: 140px 1fr; gap: var(--s4); align-items: center;
+}
+.style-row label { font-size: var(--ts); font-weight: 500; color: var(--ti); }
+.style-swatches { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.style-swatch {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 2px solid var(--border-soft); cursor: pointer;
+  transition: border-color var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard);
+}
+.style-swatch:hover { transform: scale(1.08); }
+.style-swatch[data-selected="true"] { border-color: var(--ti); box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ti); }
+.style-segmented { display: inline-flex; gap: 2px; padding: 2px; background: var(--sf2); border-radius: var(--r-control); }
+.style-segmented button {
+  height: 32px; padding: 0 var(--s4); border: none; background: transparent;
+  cursor: pointer; font-size: var(--tx); font-weight: 600; color: var(--tg2);
+  border-radius: var(--r-inline);
+  transition: background-color var(--dur-2) var(--ease-standard), color var(--dur-2) var(--ease-standard);
+}
+.style-segmented button[data-selected="true"] { background: var(--sfr); color: var(--ti); box-shadow: var(--sha); }
+.style-preview {
+  position: sticky; top: var(--s5);
+  background: var(--sf1); border: 1px solid var(--border-soft); border-radius: var(--r-surface);
+  padding: var(--s4);
+}
+.style-preview__paper {
+  background: var(--paper); color: var(--ti-soft);
+  border-radius: var(--r-paper); box-shadow: var(--sh-paper);
+  padding: var(--s5); font-size: 12px; line-height: 1.6;
+  font-family: var(--style-font, var(--font-serif));
+}
+.style-preview__paper h1 { font-size: 18px; line-height: 1.2; font-weight: 600; color: var(--ti); margin-bottom: var(--s2); }
+
+/* Font-pair card */
+.fontpair-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--s3); }
+.fontpair {
+  display: flex; flex-direction: column; gap: var(--s2);
+  padding: var(--s4);
+  background: var(--sfr); border: 2px solid var(--border-soft); border-radius: var(--r-card);
+  cursor: pointer; text-align: left;
+  transition: border-color var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard);
+}
+.fontpair:hover { transform: translateY(-2px); }
+.fontpair[data-selected="true"] { border-color: var(--ac); }
+.fontpair__heading { font-size: 22px; line-height: 1.1; font-weight: 600; color: var(--ti); }
+.fontpair__body { font-size: 12px; line-height: 1.5; color: var(--tm2); }
+.fontpair__name { font-family: var(--font-body); font-size: var(--tx); color: var(--tg3); font-weight: 600; margin-top: var(--s1); padding-top: var(--s2); border-top: 1px solid var(--border-soft); }
+
+/* Layout card */
+.layout-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--s3); }
+.layout-card {
+  background: var(--sfr); border: 2px solid var(--border-soft); border-radius: var(--r-card);
+  padding: var(--s3); cursor: pointer;
+  display: flex; flex-direction: column; gap: var(--s2);
+  transition: border-color var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard);
+}
+.layout-card:hover { transform: translateY(-2px); }
+.layout-card[data-selected="true"] { border-color: var(--ac); }
+.layout-card__preview {
+  aspect-ratio: 8.5/11;
+  background: var(--paper); border-radius: 3px; box-shadow: var(--sh-paper);
+  padding: 8px;
+  display: grid; gap: 3px;
+}
+.layout-card__name { font-size: var(--tx); color: var(--ti); font-weight: 600; }
+.layout-card__line { height: 3px; background: rgba(15,12,8,0.18); border-radius: 1px; }
+.layout-card__line--accent { background: var(--ac); }
+.layout-card__line--short { width: 50%; }
+.layout-card__line--med   { width: 75%; }
+
+/* Signature picker */
+.sig-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s3); }
+.sig-card {
+  background: var(--sfr); border: 2px solid var(--border-soft); border-radius: var(--r-card);
+  padding: var(--s4); cursor: pointer;
+  display: flex; flex-direction: column; gap: var(--s2); align-items: flex-start;
+  transition: border-color var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard);
+}
+.sig-card:hover { transform: translateY(-2px); }
+.sig-card[data-selected="true"] { border-color: var(--ac); }
+.sig-card__sig {
+  width: 100%;
+  height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--ti);
+}
+.sig-card__sig--brush { font-family: "Brush Script MT", "Snell Roundhand", cursive; font-size: 30px; transform: rotate(-3deg); }
+.sig-card__sig--script { font-family: "Pinyon Script", "Lucida Handwriting", cursive; font-size: 24px; }
+.sig-card__sig--mono { font-family: var(--font-mono); font-size: 16px; letter-spacing: 0.04em; }
+.sig-card__sig--draw {
+  color: var(--tg3); font-size: var(--ts); font-style: italic;
+  border: 2px dashed var(--border-strong); border-radius: var(--r-inline);
+  border-bottom: 2px dashed var(--border-strong);
+}
+.sig-card__sig--auto svg path { stroke: var(--ti); stroke-width: 2; fill: none; }
+.sig-card__name { font-family: var(--font-body); font-size: var(--tx); color: var(--tg3); font-weight: 600; }
+
+/* ============================================================================
+   QUICK START — onboarding checklist on dashboard
+   ============================================================================ */
+.qstart {
+  background: linear-gradient(135deg, var(--ap) 0%, transparent 60%);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-surface);
+  padding: var(--s5);
+  display: grid; gap: var(--s4);
+  position: relative; overflow: hidden;
+}
+.qstart__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4); }
+.qstart__title { font-size: var(--tl); font-weight: 600; letter-spacing: var(--tracking-tight); }
+.qstart__sub { font-size: var(--ts); color: var(--tm2); margin-top: 4px; }
+.qstart__progress { display: flex; align-items: center; gap: var(--s2); font-size: var(--tx); color: var(--tg2); font-weight: 600; }
+.qstart__progress-bar { width: 80px; height: 4px; border-radius: 2px; background: var(--sf2); overflow: hidden; }
+.qstart__progress-bar > span { display: block; height: 100%; background: var(--ac); }
+.qstart__list { display: grid; gap: var(--s2); }
+.qstart__step {
+  display: flex; align-items: center; gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  background: var(--sfr); border: 1px solid var(--border-soft);
+  border-radius: var(--r-card);
+  transition: border-color var(--dur-2) var(--ease-standard);
+}
+.qstart__step:hover { border-color: var(--border-strong); }
+.qstart__step-num {
+  width: 28px; height: 28px; flex-shrink: 0;
+  border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--sf2); color: var(--tg2); font-size: var(--tx); font-weight: 700;
+}
+.qstart__step[data-state="done"] .qstart__step-num { background: var(--success); color: #fff; }
+.qstart__step[data-state="active"] .qstart__step-num { background: var(--ac); color: var(--op); }
+.qstart__step-body { flex: 1; }
+.qstart__step-title { font-size: var(--ts); font-weight: 600; }
+.qstart__step-desc  { font-size: var(--tx); color: var(--tm2); margin-top: 2px; }
+.qstart__step[data-state="done"] .qstart__step-title { color: var(--tm2); text-decoration: line-through; text-decoration-color: var(--tg4); }
+
+/* ============================================================================
+   ONBOARDING (full-screen multi-step overlay)
+   ============================================================================ */
+.onb {
+  position: fixed; inset: 0; z-index: 1000;
+  display: none;
+  background: var(--bg);
+}
+.onb[data-open="true"] { display: flex; flex-direction: column; }
+.onb__bar {
+  display: flex; align-items: center; gap: var(--s4);
+  padding: var(--s4) var(--s5);
+  border-bottom: 1px solid var(--border-soft);
+}
+.onb__brand { display: flex; align-items: baseline; gap: 1px; font-size: var(--ts); font-weight: 600; }
+.onb__brand-period { color: var(--ac); animation: tw-breathe var(--motion-duration-brand) var(--ease-breathe) infinite; }
+.onb__steps { display: flex; gap: var(--s2); align-items: center; }
+.onb__step-dot {
+  width: 24px; height: 4px; border-radius: 2px;
+  background: var(--sf2);
+  transition: background-color var(--dur-2) var(--ease-standard);
+}
+.onb__step-dot[data-state="active"], .onb__step-dot[data-state="done"] { background: var(--ac); }
+.onb__skip { margin-left: auto; }
+
+.onb__body {
+  flex: 1; overflow-y: auto;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--s5);
+}
+.onb__pane {
+  display: none; max-width: 720px; width: 100%;
+  flex-direction: column; gap: var(--s5);
+  text-align: center;
+}
+.onb__pane[data-active="true"] { display: flex; }
+.onb__title {
+  font-size: var(--tx2); line-height: var(--lx2); font-weight: 600;
+  letter-spacing: var(--tracking-display);
+}
+.onb__sub { font-size: var(--tb); color: var(--tm2); max-width: 480px; margin: 0 auto; }
+.onb__choices {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s3);
+  margin: 0 auto; width: 100%;
+}
+.onb__choice {
+  background: var(--sfr); border: 1px solid var(--border-soft); border-radius: var(--r-card);
+  padding: var(--s4); cursor: pointer; text-align: left;
+  display: flex; flex-direction: column; gap: var(--s2);
+  transition: border-color var(--dur-2) var(--ease-standard), transform var(--dur-2) var(--ease-standard);
+}
+.onb__choice:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+.onb__choice[data-selected="true"] { border-color: var(--ac); box-shadow: 0 0 0 2px var(--ap); }
+.onb__choice-icon { font-size: 22px; }
+.onb__choice-title { font-size: var(--ts); font-weight: 600; }
+.onb__choice-desc { font-size: var(--tx); color: var(--tm2); }
+
+.onb__foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--s4) var(--s5);
+  border-top: 1px solid var(--border-soft);
+}
+
+/* ============================================================================
+   UTILITIES
+   ============================================================================ */
+.row { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
+.col { display: grid; gap: var(--s3); }
+.spacer { flex: 1; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body data-sidebar="collapsed">
+
+<div class="app-grid">
+
+  <!-- ─────────────── SIDEBAR (collapsed default, hover/pin to expand) ─────────────── -->
+  <aside class="app-sidebar" id="sidebar"
+         onmouseenter="document.body.dataset.sidebar='expanded'"
+         onmouseleave="if(!document.body.dataset.sidebarPinned) document.body.dataset.sidebar='collapsed'">
+    <div class="app-sidebar__brand">
+      <span class="app-sidebar__brand-mark">tw</span>
+      <span class="app-sidebar__brand-text app-sidebar__item-label">twoweeks<span class="app-sidebar__brand-period">.</span></span>
+    </div>
+
+    <div class="app-sidebar__group">
+      <div class="app-sidebar__group-label">Workspace</div>
+      <button class="app-sidebar__item" data-page="dashboard" data-active="true" onclick="goto('dashboard')">
+        <span class="app-sidebar__item-icon">⌂</span>
+        <span class="app-sidebar__item-label">Dashboard</span>
+      </button>
+      <button class="app-sidebar__item" data-page="proposal" onclick="goto('proposal')">
+        <span class="app-sidebar__item-icon">✎</span>
+        <span class="app-sidebar__item-label">Proposal forge</span>
+      </button>
+      <button class="app-sidebar__item" data-page="cv" onclick="goto('cv')">
+        <span class="app-sidebar__item-icon">▤</span>
+        <span class="app-sidebar__item-label">CV forge</span>
+      </button>
+      <button class="app-sidebar__item" data-page="jobs" onclick="goto('jobs')">
+        <span class="app-sidebar__item-icon">◧</span>
+        <span class="app-sidebar__item-label">Jobs</span>
+        <span class="app-sidebar__item-count">142</span>
+      </button>
+    </div>
+
+    <div class="app-sidebar__group">
+      <div class="app-sidebar__group-label">Library</div>
+      <button class="app-sidebar__item" data-page="library" onclick="goto('library')">
+        <span class="app-sidebar__item-icon">▦</span>
+        <span class="app-sidebar__item-label">Documents</span>
+        <span class="app-sidebar__item-count">36</span>
+      </button>
+      <button class="app-sidebar__item" data-page="templates" onclick="goto('templates')">
+        <span class="app-sidebar__item-icon">◫</span>
+        <span class="app-sidebar__item-label">Templates</span>
+      </button>
+    </div>
+
+    <!-- Mixed recents — surfaces what you were last touching across types -->
+    <div class="app-sidebar__recents">
+      <div class="app-sidebar__recents-head">
+        <span>Recent</span><span style="font-family: var(--font-mono); font-size: 10px;">⌘K</span>
+      </div>
+      <button class="app-sidebar__recent" onclick="goto('library')">
+        <span class="app-sidebar__recent-dot">PK</span>
+        <span class="app-sidebar__recent-body">
+          <span class="app-sidebar__recent-title">Linear package</span>
+          <span class="app-sidebar__recent-meta">blocked by review</span>
+        </span>
+      </button>
+      <button class="app-sidebar__recent" onclick="goto('jobs')">
+        <span class="app-sidebar__recent-dot">J</span>
+        <span class="app-sidebar__recent-body">
+          <span class="app-sidebar__recent-title">Senior Frontend Engineer</span>
+          <span class="app-sidebar__recent-meta">match reviewed</span>
+        </span>
+      </button>
+      <button class="app-sidebar__recent" onclick="goto('cv')">
+        <span class="app-sidebar__recent-dot">CV</span>
+        <span class="app-sidebar__recent-body">
+          <span class="app-sidebar__recent-title">Editorial FE CV</span>
+          <span class="app-sidebar__recent-meta">2 import fixes left</span>
+        </span>
+      </button>
+      <button class="app-sidebar__recent" onclick="goto('proposal')">
+        <span class="app-sidebar__recent-dot">P</span>
+        <span class="app-sidebar__recent-body">
+          <span class="app-sidebar__recent-title">Linear proposal</span>
+          <span class="app-sidebar__recent-meta">AI suggestion pending</span>
+        </span>
+      </button>
+    </div>
+
+    <div class="app-sidebar__spacer"></div>
+
+    <div class="app-sidebar__footer">
+      <button class="app-sidebar__item" data-page="settings" onclick="goto('settings')">
+        <span class="app-sidebar__item-icon">⚙</span>
+        <span class="app-sidebar__item-label">Settings</span>
+      </button>
+      <button class="app-sidebar__item" data-page="signin" onclick="goto('signin')" title="Preview sign-in">
+        <span class="app-sidebar__item-icon">◐</span>
+        <span class="app-sidebar__item-label">Sign in (preview)</span>
+      </button>
+      <button class="app-sidebar__item" onclick="openOnboarding()" title="Replay first-run flow">
+        <span class="app-sidebar__item-icon">★</span>
+        <span class="app-sidebar__item-label">Onboarding (preview)</span>
+      </button>
+      <button class="app-sidebar__item" onclick="document.body.dataset.sidebarPinned = document.body.dataset.sidebarPinned ? '' : '1'; document.body.dataset.sidebar = document.body.dataset.sidebarPinned ? 'expanded' : 'collapsed';">
+        <span class="app-sidebar__item-icon">⇄</span>
+        <span class="app-sidebar__item-label">Pin sidebar</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ─────────────── MAIN ─────────────── -->
+  <div class="app-main">
+
+    <!-- TOPBAR -->
+    <header class="app-topbar">
+      <div class="app-topbar__crumb">
+        <span>twoweeks</span>
+        <span class="app-topbar__crumb-sep">/</span>
+        <span class="app-topbar__crumb-current" id="crumb">Dashboard</span>
+      </div>
+      <div class="app-topbar__context">
+        <span>Working on:</span>
+        <strong id="contextTarget">Linear application package</strong>
+        <span class="ds-pill ds-pill--warning" style="height: 22px; font-size: 11px;">Needs review</span>
+      </div>
+      <div class="app-topbar__spacer"></div>
+      <button class="app-topbar__cmdk" onclick="openCmdk()">
+        <span>Search or run command</span>
+        <span class="app-topbar__kbd">⌘K</span>
+      </button>
+      <div class="theme-switch" role="group" aria-label="Theme">
+        <button aria-pressed="true" onclick="setTheme('light', this)">Light</button>
+        <button aria-pressed="false" onclick="setTheme('dark', this)">Dark</button>
+      </div>
+      <button class="ds-icon-btn" title="Profile">A</button>
+    </header>
+
+    <div class="app-pages">
+
+      <!-- ═══════════════════════════════ DASHBOARD ═══════════════════════════════ -->
+      <section class="app-page" data-page-id="dashboard" data-active="true">
+        <div class="page-wrap">
+          <div class="page-head">
+            <div>
+              <h1 class="page-head__title">Welcome back, Aurélien<span class="brand-period" style="color: var(--ac); animation: tw-breathe var(--motion-duration-brand) var(--ease-breathe) infinite;">.</span></h1>
+              <div class="page-head__sub">Three jobs match your profile this week.</div>
+            </div>
+            <div class="page-head__actions">
+              <button class="ds-btn ds-btn--md ds-btn--secondary">Import CV</button>
+              <button class="ds-btn ds-btn--md ds-btn--primary" onclick="goto('proposal')">New proposal</button>
+            </div>
+          </div>
+
+          <!-- QUICK START (collapses to a single row when 100% complete) -->
+          <div class="qstart">
+            <div class="qstart__head">
+              <div>
+                <div class="qstart__title">Quick start</div>
+                <div class="qstart__sub">Three steps to your first cover letter.</div>
+              </div>
+              <div class="qstart__progress">
+                <span>2 of 4</span>
+                <div class="qstart__progress-bar"><span style="width: 50%"></span></div>
+                <button class="ds-icon-btn ds-icon-btn--sm" title="Dismiss" onclick="this.closest('.qstart').style.display='none'">×</button>
+              </div>
+            </div>
+            <div class="qstart__list">
+              <div class="qstart__step" data-state="done">
+                <div class="qstart__step-num">✓</div>
+                <div class="qstart__step-body">
+                  <div class="qstart__step-title">Import or build your CV</div>
+                  <div class="qstart__step-desc">Frontend Engineer · Editorial v3</div>
+                </div>
+                <button class="ds-btn ds-btn--sm ds-btn--ghost" onclick="goto('cv')">Open</button>
+              </div>
+              <div class="qstart__step" data-state="done">
+                <div class="qstart__step-num">✓</div>
+                <div class="qstart__step-body">
+                  <div class="qstart__step-title">Pick your style</div>
+                  <div class="qstart__step-desc">Editorial template · Baskervville · Terre accent</div>
+                </div>
+                <button class="ds-btn ds-btn--sm ds-btn--ghost" onclick="goto('templates')">Change</button>
+              </div>
+              <div class="qstart__step" data-state="active">
+                <div class="qstart__step-num">3</div>
+                <div class="qstart__step-body">
+                  <div class="qstart__step-title">Browse jobs and pick one</div>
+                  <div class="qstart__step-desc">142 fresh jobs match your profile.</div>
+                </div>
+                <button class="ds-btn ds-btn--sm ds-btn--accent" onclick="goto('jobs')">Browse</button>
+              </div>
+              <div class="qstart__step" data-state="pending">
+                <div class="qstart__step-num">4</div>
+                <div class="qstart__step-body">
+                  <div class="qstart__step-title">Generate your first proposal</div>
+                  <div class="qstart__step-desc">We'll draft a tailored cover letter you can edit.</div>
+                </div>
+                <button class="ds-btn ds-btn--sm ds-btn--ghost" disabled>Locked</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Start (collapses on dismiss; only renders for first-time users in real app) -->
+          <div class="qstart" id="qstart">
+            <div class="qstart__head">
+              <div>
+                <div class="qstart__title">Quick start</div>
+                <div class="qstart__sub">Three steps until your first cover letter is ready to send.</div>
+              </div>
+              <div class="qstart__progress">
+                <span>2 of 4</span>
+                <div class="qstart__progress-bar"><span style="width: 50%"></span></div>
+                <button class="ds-icon-btn ds-icon-btn--sm" title="Dismiss" onclick="document.getElementById('qstart').style.display='none'">×</button>
+              </div>
+            </div>
+            <div class="qstart__list">
+              <div class="qstart__step" data-state="done">
+                <span class="qstart__step-num">✓</span>
+                <div class="qstart__step-body">
+                  <div class="qstart__step-title">Import or build your CV</div>
+                  <div class="qstart__step-desc">Editorial FE CV — done.</div>
+                </div>
+                <button class="ds-btn ds-btn--sm ds-btn--ghost" onclick="goto('cv')">Open</button>
+              </div>
+              <div class="qstart__step" data-state="done">
+                <span class="qstart__step-num">✓</span>
+                <div class="qstart__step-body">
+                  <div class="qstart__step-title">Pick your style</div>
+                  <div class="qstart__step-desc">Editorial · Baskervville × Geist · Terre.</div>
+                </div>
+                <button class="ds-btn ds-btn--sm ds-btn--ghost" onclick="goto('templates')">Change</button>
+              </div>
+              <div class="qstart__step" data-state="active">
+                <span class="qstart__step-num">3</span>
+                <div class="qstart__step-body">
+                  <div class="qstart__step-title">Capture jobs</div>
+                  <div class="qstart__step-desc">Install the extension or paste a URL.</div>
+                </div>
+                <button class="ds-btn ds-btn--sm ds-btn--accent" onclick="goto('jobs')">Browse</button>
+              </div>
+              <div class="qstart__step" data-state="pending">
+                <span class="qstart__step-num">4</span>
+                <div class="qstart__step-body">
+                  <div class="qstart__step-title">Generate your first proposal</div>
+                  <div class="qstart__step-desc">Pick a job and twoweeks drafts a tailored cover letter.</div>
+                </div>
+                <button class="ds-btn ds-btn--sm ds-btn--ghost" disabled>Locked</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Next Best Action — answers "what now?" -->
+          <div class="dash-next-action">
+            <div class="dash-next-action__label">Next best action</div>
+            <h2 class="dash-next-action__title">Review Linear's match evidence before drafting.</h2>
+            <p class="dash-next-action__copy">The verdict is strong, but the role asks for collaboration primitives. Confirm the gap first; drafting unlocks from your Editorial FE CV afterward.</p>
+            <div class="dash-next-action__bar">
+              <button class="ds-btn ds-btn--lg ds-btn--primary" onclick="goto('jobs')">Review match<span class="ds-btn__period">.</span></button>
+              <button class="ds-btn ds-btn--lg ds-btn--secondary" onclick="goto('proposal')">Open draft</button>
+              <span class="ds-pill ds-pill--warning">2 watch-outs</span>
+              <span class="ds-pill ds-pill--success">CV ready</span>
+            </div>
+          </div>
+
+          <div class="dash-grid">
+            <div class="col">
+              <div class="ds-card">
+                <div class="dash-stats">
+                  <div><div class="dash-stat__num">14</div><div class="dash-stat__label">Proposals sent (30d)</div></div>
+                  <div><div class="dash-stat__num">3</div><div class="dash-stat__label">Replies waiting</div></div>
+                  <div><div class="dash-stat__num">28</div><div class="dash-stat__label">Strong matches waiting</div></div>
+                </div>
+              </div>
+
+              <div class="ds-card">
+                <div class="ds-card__title">Recent activity</div>
+                <div class="dash-list">
+                  <div class="dash-row">
+                    <span class="ds-status ds-status--success"><span class="ds-status__dot"></span>Sent</span>
+                    <div>
+                      <div class="dash-row__title">Senior Frontend Engineer · Linear</div>
+                      <div class="dash-row__sub">Cover letter generated and exported.</div>
+                    </div>
+                    <span class="dash-row__time">2h ago</span>
+                  </div>
+                  <div class="dash-row">
+                    <span class="ds-status ds-status--accent"><span class="ds-status__dot"></span>Drafting</span>
+                    <div>
+                      <div class="dash-row__title">Staff Designer · Vercel</div>
+                      <div class="dash-row__sub">Verdict — worth a shot.</div>
+                    </div>
+                    <span class="dash-row__time">yesterday</span>
+                  </div>
+                  <div class="dash-row">
+                    <span class="ds-status ds-status--neutral"><span class="ds-status__dot"></span>Saved</span>
+                    <div>
+                      <div class="dash-row__title">Product Engineer · Stripe</div>
+                      <div class="dash-row__sub">Saved for later.</div>
+                    </div>
+                    <span class="dash-row__time">3d ago</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col">
+              <div class="ds-card">
+                <div class="ds-card__eyebrow">Quick actions</div>
+                <div class="col" style="gap: var(--s2)">
+                  <button class="ds-btn ds-btn--md ds-btn--secondary" style="justify-content: flex-start" onclick="goto('proposal')">✎ New proposal</button>
+                  <button class="ds-btn ds-btn--md ds-btn--secondary" style="justify-content: flex-start" onclick="goto('cv')">▤ New CV</button>
+                  <button class="ds-btn ds-btn--md ds-btn--secondary" style="justify-content: flex-start" onclick="goto('jobs')">◧ Browse jobs</button>
+                </div>
+              </div>
+
+              <div class="ds-card ds-card--muted">
+                <div class="ds-card__eyebrow">Tip</div>
+                <div class="ds-card__title">⌘K opens the command palette.</div>
+                <div class="ds-card__body">All actions, all pages, one shortcut.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════ PROPOSAL FORGE ═══════════════════════════════ -->
+      <section class="app-page" data-page-id="proposal">
+        <div class="forge">
+          <div class="forge__stage">
+            <div class="forge__stage-bar">
+              <span class="ds-status ds-status--accent"><span class="ds-status__dot"></span>Drafting</span>
+              <span class="ds-tone ds-tone--warm">Warm tone</span>
+              <span class="spacer"></span>
+              <div class="style-segmented" title="Toggle page-break preview" style="height: 28px;">
+                <button data-selected="true">Edit</button>
+                <button>Page preview</button>
+              </div>
+              <button class="ds-btn ds-btn--sm ds-btn--ghost">Undo</button>
+              <button class="ds-btn ds-btn--sm ds-btn--ghost">Redo</button>
+              <span style="position: relative; display: inline-block;">
+                <button class="ds-btn ds-btn--sm ds-btn--secondary" onclick="toggleAnchoredMenu('shareMenu1', this)">Share ▾</button>
+                <div id="shareMenu1" class="ds-menu" hidden style="position: absolute; right: 0; top: calc(100% + 4px); z-index: 50;">
+                  <button class="ds-menu__item" onclick="toggleAnchoredMenu('shareMenu1', null); openSheet('safeSendSheet')">☑ Safe-send checklist…</button>
+                  <div class="ds-menu__separator"></div>
+                  <div class="ds-menu__label">Send</div>
+                  <button class="ds-menu__item">✉ Send by email</button>
+                  <button class="ds-menu__item">⎘ Copy link</button>
+                  <button class="ds-menu__item">↗ Public preview link</button>
+                  <div class="ds-menu__separator"></div>
+                  <button class="ds-menu__item">↗ Export PDF</button>
+                  <button class="ds-menu__item">¶ Copy as text</button>
+                </div>
+              </span>
+            </div>
+
+            <article class="ds-paper" id="proposalPaper" style="position: relative;">
+              <div class="ds-paper__meta">Cover letter — Senior Frontend Engineer · <span id="paperCompany">Linear</span> · 28 Apr</div>
+              <h1 contenteditable="true" id="paperHello">Hello <span id="paperGreet">Linear</span> team,</h1>
+              <p contenteditable="true">I've spent the last six years building product surfaces that ship at the speed your engineering culture demands — most recently leading a four-person frontend team through a full rebuild of our planning suite.</p>
+              <p contenteditable="true">Three things drew me to your role. The first is the editor work — the way <span id="paperCompany2">Linear</span> treats keyboard-first interaction as a product surface, not just a power-user concession.</p>
+              <h2 contenteditable="true">Why this fits</h2>
+              <!-- Highlighted selection mock + anchored floating toolbar -->
+              <div style="position: relative;">
+                <div class="ai-toolbar" style="position: absolute; left: 50%; transform: translate(-50%, -125%); top: 0; z-index: 4;">
+                  <button data-primary="true">Rewrite</button>
+                  <button>Shorten</button>
+                  <button>Fix</button>
+                  <button>Ask</button>
+                </div>
+                <p contenteditable="true" style="background: linear-gradient(transparent 80%, var(--am-soft) 80%); border-radius: 2px;">I read your engineering blog posts on the rendering pipeline rewrite and the work on <em>command-line affordances inside a graphical app</em>.</p>
+              </div>
+              <p contenteditable="true">Happy to share a portfolio walkthrough whenever it suits — or to ship a small prototype on a piece of your roadmap.</p>
+              <p>— <span id="paperSig">Aurélien</span></p>
+            </article>
+            <div style="margin: 0 auto; font-size: var(--tx); color: var(--tg3); display: flex; align-items: center; gap: var(--s2);">
+              <span class="ds-status__dot" style="background: var(--ac); width: 6px; height: 6px; border-radius: 50%; animation: tw-breathe var(--motion-duration-brand) var(--ease-breathe) infinite;"></span>
+              Live render — type in the paper or change inputs in the rail. Toolbar above is contextual: appears on text selection, hides otherwise.
+            </div>
+          </div>
+
+          <aside class="forge__rail">
+            <div class="forge__rail-section">
+              <div class="forge__rail-label">Job context</div>
+              <div class="forge__rail-title">Senior Frontend Engineer</div>
+              <div style="font-size: var(--tx); color: var(--tm2);">Linear · Remote · Posted 4 days ago</div>
+              <div class="row" style="margin-top: var(--s2)">
+                <span class="ds-pill ds-pill--accent">React</span>
+                <span class="ds-pill ds-pill--accent">TypeScript</span>
+                <span class="ds-pill ds-pill--neutral">+5</span>
+              </div>
+            </div>
+
+            <div class="forge__rail-section">
+              <div class="forge__rail-label">Source CV</div>
+              <button class="ds-btn ds-btn--md ds-btn--secondary" style="justify-content: space-between; gap: var(--s3);" onclick="document.getElementById('cvMenu').hidden = !document.getElementById('cvMenu').hidden">
+                <span style="display: flex; align-items: center; gap: var(--s2);">
+                  <span style="width: 24px; height: 32px; border-radius: 3px; background: var(--paper); box-shadow: var(--sha); flex-shrink: 0;"></span>
+                  <span style="text-align: left;">
+                    <span style="display: block; font-weight: 600;">Editorial v3</span>
+                    <span style="display: block; font-size: var(--tx); color: var(--tm2); font-weight: 400;">Frontend Engineer · 28 Apr</span>
+                  </span>
+                </span>
+                <span style="color: var(--tg3);">▾</span>
+              </button>
+              <div id="cvMenu" class="ds-menu" hidden style="margin-top: 4px;">
+                <div class="ds-menu__label">Pick a CV</div>
+                <button class="ds-menu__item" onclick="pickCv('Editorial v3', 'Frontend Engineer · 28 Apr')">
+                  <span style="width: 20px; height: 26px; border-radius: 3px; background: var(--paper); box-shadow: var(--sha); flex-shrink: 0;"></span>
+                  <span style="flex: 1;">Editorial v3<br/><span style="font-size: var(--tx); color: var(--tm2);">Frontend Engineer · 28 Apr</span></span>
+                  <span style="color: var(--ac);">✓</span>
+                </button>
+                <button class="ds-menu__item" onclick="pickCv('Minimal v1', 'Frontend Engineer · 12 Apr')">
+                  <span style="width: 20px; height: 26px; border-radius: 3px; background: var(--paper); box-shadow: var(--sha); flex-shrink: 0;"></span>
+                  <span style="flex: 1;">Minimal v1<br/><span style="font-size: var(--tx); color: var(--tm2);">Frontend Engineer · 12 Apr</span></span>
+                </button>
+                <button class="ds-menu__item" onclick="pickCv('Classic v2', 'Senior Engineer · 5 Mar')">
+                  <span style="width: 20px; height: 26px; border-radius: 3px; background: var(--paper); box-shadow: var(--sha); flex-shrink: 0;"></span>
+                  <span style="flex: 1;">Classic v2<br/><span style="font-size: var(--tx); color: var(--tm2);">Senior Engineer · 5 Mar</span></span>
+                </button>
+                <div class="ds-menu__separator"></div>
+                <button class="ds-menu__item" onclick="goto('cv')"><span style="color: var(--ac);">+</span> Create new CV</button>
+                <button class="ds-menu__item">↗ Import from file</button>
+              </div>
+            </div>
+
+            <div class="forge__rail-section">
+              <div class="ai-stream-collapsed" data-expanded="false" onclick="this.dataset.expanded = this.dataset.expanded === 'true' ? 'false' : 'true'">
+                <span class="ai-stream-collapsed__dot"></span>
+                <span class="ai-stream-collapsed__label">Writing draft</span>
+                <span class="ai-stream-collapsed__count">3 of 4</span>
+                <span class="ai-stream-collapsed__caret">▾</span>
+              </div>
+              <div class="ai-stream-expanded ai-stage-list" style="margin-top: -8px; padding: var(--s2) var(--s3); background: var(--sf1); border-radius: var(--r-inline); flex-direction: column;">
+                <div class="ai-stage" data-state="done"><span class="ai-stage__dot"></span>Reading role</div>
+                <div class="ai-stage" data-state="done"><span class="ai-stage__dot"></span>Matching profile</div>
+                <div class="ai-stage" data-state="active"><span class="ai-stage__dot"></span>Writing draft</div>
+                <div class="ai-stage" data-state="pending"><span class="ai-stage__dot"></span>Polishing</div>
+              </div>
+            </div>
+
+            <div class="forge__rail-section">
+              <div class="forge__rail-label">Tone</div>
+              <div class="row">
+                <span class="ds-tone ds-tone--warm">Warm</span>
+                <span class="ds-tone ds-tone--formal">Formal</span>
+                <span class="ds-tone ds-tone--natural">Natural</span>
+              </div>
+            </div>
+
+            <div class="forge__rail-section">
+              <div class="forge__rail-label">Variables</div>
+              <div class="ds-field-group">
+                <label class="ds-field-label">Company</label>
+                <input class="ds-field" id="varCompany" value="Linear" oninput="updatePaperCompany(this.value)" />
+              </div>
+              <div class="ds-field-group">
+                <label class="ds-field-label">Signature</label>
+                <input class="ds-field" id="varSig" value="Aurélien" oninput="document.getElementById('paperSig').textContent = this.value || '...';" />
+              </div>
+              <div style="font-size: var(--tx); color: var(--tg3);">Edits sync to the document on the left.</div>
+            </div>
+
+            <div class="forge__rail-section">
+              <div class="forge__rail-label">Ask AI</div>
+              <textarea class="ds-field ds-field--textarea" placeholder="Make it more concrete about my Linear-style command-line work."></textarea>
+              <button class="ds-btn ds-btn--md ds-btn--primary">Send<span class="ds-btn__period">.</span></button>
+              <div style="font-size: var(--tx); color: var(--tg3);">For quick edits on a sentence, select it in the paper — the floating toolbar appears.</div>
+            </div>
+
+            <div class="forge__rail-section">
+              <div class="forge__rail-label">Settings</div>
+              <div class="ds-field-group">
+                <label class="ds-field-label">Length</label>
+                <select class="ds-field"><option>Short</option><option selected>Medium</option><option>Long</option></select>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════ JOBS ═══════════════════════════════ -->
+      <section class="app-page" data-page-id="jobs">
+        <div class="jobs">
+          <!-- left: list with sticky filters -->
+          <div class="jobs__list">
+            <div class="jobs__filters">
+              <input class="ds-field" placeholder="Search jobs, companies, skills..." />
+              <div class="jobs__filters-row">
+                <button class="ds-btn ds-btn--sm ds-btn--accent">Worth+ a shot</button>
+                <button class="ds-btn ds-btn--sm ds-btn--ghost">★ Favorites</button>
+                <button class="ds-btn ds-btn--sm ds-btn--ghost">Remote</button>
+                <button class="ds-btn ds-btn--sm ds-btn--ghost">Senior</button>
+                <button class="ds-btn ds-btn--sm ds-btn--ghost">+ filter</button>
+              </div>
+            </div>
+            <div class="jobs__items">
+              <button class="jobs__item" data-active="true">
+                <div class="jobs__item-row">
+                  <span class="jobs__item-title">Senior Frontend Engineer</span>
+                  <span class="ds-verdict ds-verdict--strong"><span class="ds-verdict__dot"></span>Strong match</span>
+                </div>
+                <span class="jobs__item-company">Linear</span>
+                <div class="jobs__item-meta"><span>★</span><span>Remote</span><span>·</span><span>4d ago</span></div>
+              </button>
+              <button class="jobs__item">
+                <div class="jobs__item-row">
+                  <span class="jobs__item-title">Staff Designer</span>
+                  <span class="ds-verdict ds-verdict--worth"><span class="ds-verdict__dot"></span>Worth a shot</span>
+                </div>
+                <span class="jobs__item-company">Vercel</span>
+                <div class="jobs__item-meta"><span>Hybrid · SF</span><span>·</span><span>1w ago</span></div>
+              </button>
+              <button class="jobs__item">
+                <div class="jobs__item-row">
+                  <span class="jobs__item-title">Product Engineer</span>
+                  <span class="ds-verdict ds-verdict--worth"><span class="ds-verdict__dot"></span>Worth a shot</span>
+                </div>
+                <span class="jobs__item-company">Stripe</span>
+                <div class="jobs__item-meta"><span>★</span><span>Remote</span><span>·</span><span>2w ago</span></div>
+              </button>
+              <button class="jobs__item">
+                <div class="jobs__item-row">
+                  <span class="jobs__item-title">Frontend Engineer, AI Tools</span>
+                  <span class="ds-verdict ds-verdict--maybe"><span class="ds-verdict__dot"></span>Maybe</span>
+                </div>
+                <span class="jobs__item-company">Anthropic</span>
+                <div class="jobs__item-meta"><span>Remote</span><span>·</span><span>3w ago</span></div>
+              </button>
+              <button class="jobs__item">
+                <div class="jobs__item-row">
+                  <span class="jobs__item-title">Senior Designer Engineer</span>
+                  <span class="ds-verdict ds-verdict--skip"><span class="ds-verdict__dot"></span>Probably skip</span>
+                </div>
+                <span class="jobs__item-company">Notion</span>
+                <div class="jobs__item-meta"><span>NY · Hybrid</span><span>·</span><span>1mo ago</span></div>
+              </button>
+            </div>
+          </div>
+
+          <!-- right: detail with inline match panel -->
+          <div class="jobs__detail">
+            <div class="jobs__detail-header">
+              <div>
+                <div class="jobs__detail-title">Senior Frontend Engineer</div>
+                <div class="jobs__detail-sub">
+                  <span>Linear</span><span>·</span><span>Remote</span><span>·</span>
+                  <span class="ds-verdict ds-verdict--strong"><span class="ds-verdict__dot"></span>Strong match</span>
+                </div>
+              </div>
+              <div class="jobs__detail-actions">
+                <button class="ds-btn ds-btn--md ds-btn--ghost" title="Favorite">★</button>
+                <button class="ds-btn ds-btn--md ds-btn--secondary">Save</button>
+                <button class="ds-btn ds-btn--md ds-btn--ghost">View on Linear</button>
+                <button class="ds-btn ds-btn--md ds-btn--primary" onclick="goto('proposal')">Generate proposal<span class="ds-btn__period">.</span></button>
+              </div>
+            </div>
+            <div class="jobs__detail-body">
+              <div class="jobs__detail-text">
+                <h3>About the role</h3>
+                <p>Linear is a project management tool for high-performance product teams. We're hiring a Senior Frontend Engineer to extend the editor and graph view with new collaborative primitives.</p>
+                <h3>What you'll do</h3>
+                <p>Own the keyboard-first interaction model. Ship rendering pipeline improvements. Pair with design on subtle motion that makes the app feel alive without being noisy.</p>
+                <h3>What we're looking for</h3>
+                <p>5+ years of frontend, fluent in TypeScript and React, comfortable in a system that values craft over speed for its own sake.</p>
+              </div>
+              <aside class="jobs__match">
+                <div class="ds-card__eyebrow">Verdict</div>
+                <div class="ds-verdict ds-verdict--strong" style="height: auto; padding: 6px var(--s3); font-size: var(--ts);"><span class="ds-verdict__dot"></span>Strong match — apply.</div>
+                <div style="font-size: var(--tx); color: var(--tm2); line-height: var(--lb);">Your last two roles map cleanly to this scope. The seniority threshold is met. Editor + rendering work is light on your CV — lean on it in the proposal.</div>
+                <div class="jobs__match-list" style="border-top: 1px solid var(--border-soft); padding-top: var(--s3);">
+                  <div class="jobs__match-row"><span>Skills</span><span>React, TypeScript, GraphQL — strong overlap.</span></div>
+                  <div class="jobs__match-row"><span>Seniority</span><span>6 yrs vs 5+ required.</span></div>
+                  <div class="jobs__match-row"><span>Location</span><span>Remote-friendly. Match.</span></div>
+                  <div class="jobs__match-row"><span>Gap</span><span>Rendering-pipeline experience light.</span></div>
+                </div>
+                <button class="ds-btn ds-btn--sm ds-btn--accent">See full breakdown</button>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════ CV FORGE ═══════════════════════════════ -->
+      <section class="app-page" data-page-id="cv">
+        <div class="forge">
+          <div class="forge__stage">
+            <div class="forge__stage-bar">
+              <span class="ds-status ds-status--success"><span class="ds-status__dot"></span>Saved</span>
+              <span class="ds-ats" title="Parses cleanly into Applicant Tracking Systems."><span class="ds-ats__icon">✓</span>ATS-ready</span>
+              <span class="ds-tone ds-tone--formal">Formal tone</span>
+              <span class="spacer"></span>
+              <div class="style-segmented" title="Toggle page-break preview" style="height: 28px;">
+                <button data-selected="true">Edit</button>
+                <button>Page preview</button>
+              </div>
+              <button class="ds-btn ds-btn--sm ds-btn--ghost">Version history</button>
+              <span style="position: relative; display: inline-block;">
+                <button class="ds-btn ds-btn--sm ds-btn--secondary" onclick="toggleAnchoredMenu('shareMenu2', this)">Share ▾</button>
+                <div id="shareMenu2" class="ds-menu" hidden style="position: absolute; right: 0; top: calc(100% + 4px); z-index: 50;">
+                  <button class="ds-menu__item" onclick="toggleAnchoredMenu('shareMenu2', null); openSheet('safeSendSheet')">☑ Safe-send checklist…</button>
+                  <div class="ds-menu__separator"></div>
+                  <div class="ds-menu__label">Send</div>
+                  <button class="ds-menu__item">✉ Send by email</button>
+                  <button class="ds-menu__item">⎘ Copy link</button>
+                  <button class="ds-menu__item">↗ Public preview link</button>
+                  <div class="ds-menu__separator"></div>
+                  <button class="ds-menu__item">↗ Export PDF</button>
+                  <button class="ds-menu__item">¶ Copy as text</button>
+                </div>
+              </span>
+            </div>
+            <!-- Review banner — shown when import was incomplete or fields are weak -->
+            <div class="ds-banner ds-banner--warn" style="max-width: 760px; width: 100%; margin: 0 auto;">
+              <div class="ds-banner__icon">!</div>
+              <div class="ds-banner__body">
+                <div class="ds-banner__title">Quick review needed.</div>
+                <div class="ds-banner__desc">We parsed your import but two sections look thin. Take 30 seconds to confirm — Education has no dates, Skills got cut at "TypeScript".</div>
+                <div class="ds-banner__actions">
+                  <button class="ds-btn ds-btn--sm ds-btn--secondary" onclick="openSheet('importReviewSheet')">Open import review</button>
+                  <button class="ds-btn ds-btn--sm ds-btn--ghost">Dismiss</button>
+                </div>
+              </div>
+            </div>
+
+            <article class="ds-paper">
+              <div class="ds-paper__meta">Aurélien P. — Frontend Engineer · 28 Apr</div>
+              <h1>Aurélien Pellegrini</h1>
+              <p style="font-family: var(--font-body); font-size: var(--tx); color: rgba(15,12,8,0.55);">Frontend engineer · Paris · porphyre2025@gmail.com</p>
+              <h2>Experience</h2>
+              <p><strong>Lead Frontend</strong> · Studio Aurore · 2022 — present<br/>Built and led a four-person frontend team rebuilding our planning suite from the ground up.</p>
+              <p><strong>Senior Frontend</strong> · Pixel & Co · 2019 — 2022<br/>Scaled the design system across six product teams.</p>
+              <h2>Skills</h2>
+              <p>TypeScript · React · Next.js · Tailwind · Figma · System design · Performance budgets</p>
+            </article>
+
+            <!-- Empty-state alternative (if no CV yet) — comment out by default; toggleable in real app -->
+            <details style="margin-top: var(--s4); font-size: var(--tx); color: var(--tg3); max-width: 760px; width: 100%; margin-left: auto; margin-right: auto;">
+              <summary style="cursor: pointer;">Preview empty-state import card (first-time users)</summary>
+              <div class="cv-import-card" style="margin-top: var(--s3);">
+                <button class="cv-import-choice">
+                  <span class="cv-import-choice__icon">↗</span>
+                  <span class="cv-import-choice__title">Upload PDF</span>
+                  <span class="cv-import-choice__desc">Mistral parses it. Sections appear in seconds.</span>
+                </button>
+                <button class="cv-import-choice">
+                  <span class="cv-import-choice__icon">¶</span>
+                  <span class="cv-import-choice__title">Paste text</span>
+                  <span class="cv-import-choice__desc">From LinkedIn, a doc, anywhere.</span>
+                </button>
+                <button class="cv-import-choice">
+                  <span class="cv-import-choice__icon">✎</span>
+                  <span class="cv-import-choice__title">Start blank</span>
+                  <span class="cv-import-choice__desc">Build it section by section.</span>
+                </button>
+              </div>
+            </details>
+          </div>
+
+          <aside class="forge__rail">
+            <!-- Tabs at top — one pane visible at a time, no infinite-scroll rail -->
+            <div class="rail-tabs" role="tablist">
+              <button data-active="true" onclick="setRailTab('cv', 'sections', this)">Sections</button>
+              <button onclick="setRailTab('cv', 'ai', this)">Ask AI</button>
+              <button onclick="setRailTab('cv', 'style', this)">Style</button>
+            </div>
+
+            <!-- Collapsed AI stream — visible across tabs when AI is working -->
+            <div class="ai-stream-collapsed" data-expanded="false" onclick="this.dataset.expanded = this.dataset.expanded === 'true' ? 'false' : 'true'">
+              <span class="ai-stream-collapsed__dot"></span>
+              <span class="ai-stream-collapsed__label">Structuring sections</span>
+              <span class="ai-stream-collapsed__count">2 of 3</span>
+              <span class="ai-stream-collapsed__caret">▾</span>
+            </div>
+            <div class="ai-stream-expanded ai-stage-list" style="margin-top: -8px; padding: var(--s2) var(--s3); background: var(--sf1); border-radius: var(--r-inline); flex-direction: column;">
+              <div class="ai-stage" data-state="done"><span class="ai-stage__dot"></span>Parsing imported résumé</div>
+              <div class="ai-stage" data-state="active"><span class="ai-stage__dot"></span>Structuring sections</div>
+              <div class="ai-stage" data-state="pending"><span class="ai-stage__dot"></span>Final pass</div>
+            </div>
+
+            <!-- TAB 1 — Sections (default) -->
+            <div class="rail-pane" data-rail-pane="sections" data-active="true">
+              <div class="row" style="justify-content: space-between;">
+                <span class="forge__rail-label">Sections</span>
+                <span style="font-size: var(--tx); color: var(--tg3);">Drag to reorder · ⌖ wand</span>
+              </div>
+              <div class="org-list">
+                <div class="org-row">
+                  <span class="org-handle">⋮⋮</span>
+                  <span class="org-row__title">Header</span>
+                  <span class="org-row__count">1 item</span>
+                  <span class="org-row__actions">
+                    <button class="org-row__action org-row__action--wand" title="Rewrite with AI">⌖</button>
+                    <button class="org-row__action" title="Hide">◐</button>
+                    <button class="org-row__action" data-tone="danger" title="Delete">×</button>
+                  </span>
+                </div>
+                <div class="org-row" data-active="true">
+                  <span class="org-handle">⋮⋮</span>
+                  <span class="org-row__title">Experience</span>
+                  <span class="org-row__count">3 items</span>
+                  <span class="org-row__actions">
+                    <button class="org-row__action org-row__action--wand" title="Rewrite with AI">⌖</button>
+                    <button class="org-row__action" title="Hide">◐</button>
+                    <button class="org-row__action" data-tone="danger" title="Delete">×</button>
+                  </span>
+                </div>
+                <div class="org-row">
+                  <span class="org-handle">⋮⋮</span>
+                  <span class="org-row__title">Education</span>
+                  <span class="org-row__count">2 items</span>
+                  <span class="org-row__actions">
+                    <button class="org-row__action org-row__action--wand" title="Rewrite with AI">⌖</button>
+                    <button class="org-row__action" title="Hide">◐</button>
+                    <button class="org-row__action" data-tone="danger" title="Delete">×</button>
+                  </span>
+                </div>
+                <div class="org-row">
+                  <span class="org-handle">⋮⋮</span>
+                  <span class="org-row__title">Skills</span>
+                  <span class="org-row__count">12 items</span>
+                  <span class="org-row__actions">
+                    <button class="org-row__action org-row__action--wand" title="Rewrite with AI">⌖</button>
+                    <button class="org-row__action" title="Hide">◐</button>
+                    <button class="org-row__action" data-tone="danger" title="Delete">×</button>
+                  </span>
+                </div>
+                <div class="org-row" data-hidden="true">
+                  <span class="org-handle">⋮⋮</span>
+                  <span class="org-row__title">Languages</span>
+                  <span class="org-row__count">hidden</span>
+                  <span class="org-row__actions">
+                    <button class="org-row__action" title="Show">●</button>
+                    <button class="org-row__action" data-tone="danger" title="Delete">×</button>
+                  </span>
+                </div>
+              </div>
+              <span style="position: relative; display: inline-block;">
+                <button class="org-add" onclick="toggleAnchoredMenu('addSectionMenu', this)">
+                  <span style="color: var(--ac);">+</span>
+                  <span>Add section</span>
+                </button>
+                <div id="addSectionMenu" class="ds-menu" hidden style="position: absolute; left: 0; top: calc(100% + 4px); width: 100%; z-index: 50;">
+                  <div class="ds-menu__label">Add a section</div>
+                  <button class="ds-menu__item">Projects</button>
+                  <button class="ds-menu__item">Certifications</button>
+                  <button class="ds-menu__item">Publications</button>
+                  <button class="ds-menu__item">Awards</button>
+                  <button class="ds-menu__item">Volunteer</button>
+                  <button class="ds-menu__item">References</button>
+                  <div class="ds-menu__separator"></div>
+                  <button class="ds-menu__item"><span style="color: var(--ac);">+</span> Custom section…</button>
+                </div>
+              </span>
+              <div style="font-size: var(--tx); color: var(--tg3); padding-top: var(--s2); border-top: 1px solid var(--border-soft);">
+                Click a section row to edit its items. Each section opens its own editor — Skills uses chips, Experience uses a list of jobs, etc.
+              </div>
+            </div>
+
+            <!-- TAB 2 — Ask AI (always section-scoped) -->
+            <div class="rail-pane" data-rail-pane="ai">
+              <div class="forge__rail-label">Ask AI — Experience</div>
+              <div style="font-size: var(--tx); color: var(--tm2);">Editing the section selected in the paper. Click another section header to switch — or use the ⌖ wand on any row.</div>
+              <textarea class="ds-field ds-field--textarea" placeholder="Tighten the second bullet, drop the buzzwords."></textarea>
+              <div class="row" style="gap: var(--s2);">
+                <span class="ds-tone ds-tone--warm">Warm</span>
+                <span class="ds-tone ds-tone--formal">Formal</span>
+                <span class="ds-tone ds-tone--natural">Natural</span>
+              </div>
+              <button class="ds-btn ds-btn--md ds-btn--primary">Apply to Experience<span class="ds-btn__period">.</span></button>
+              <div style="font-size: var(--tx); color: var(--tg3);">CVs are edited section-by-section. To rewrite multiple sections, run them one at a time.</div>
+            </div>
+
+            <!-- TAB 3 — Style (per-document override) -->
+            <div class="rail-pane" data-rail-pane="style">
+              <div style="font-size: var(--tx); color: var(--tm2); padding: 6px var(--s2); background: var(--sf1); border-radius: var(--r-inline);">
+                Per-document style. Defaults come from <a href="#" onclick="goto('settings'); setSettingsTab('docstyle'); return false;" style="color: var(--ac);">Settings → Document style</a>.
+              </div>
+              <div class="forge__rail-label">Template</div>
+              <div class="row">
+                <span class="ds-pill ds-pill--accent">Editorial</span>
+                <span class="ds-pill ds-pill--neutral">Minimal</span>
+                <span class="ds-pill ds-pill--neutral">Classic</span>
+              </div>
+              <div class="forge__rail-label">Font pair</div>
+              <select class="ds-field"><option>Baskervville × Geist</option><option>Geist × Geist</option><option>Iowan × Geist</option><option>Georgia × SF Mono</option></select>
+              <div class="forge__rail-label">Accent</div>
+              <div class="style-swatches">
+                <button class="style-swatch" data-selected="true" style="background:#A84E2E"></button>
+                <button class="style-swatch" style="background:#0F0C08"></button>
+                <button class="style-swatch" style="background:#2A78D6"></button>
+                <button class="style-swatch" style="background:#3B6E4E"></button>
+                <button class="style-swatch" style="background:#7A4FA0"></button>
+                <button class="style-swatch" style="background:#B8843A"></button>
+              </div>
+            </div>
+
+            <!-- Footer — utility actions, always visible -->
+            <div style="margin-top: auto; padding-top: var(--s3); border-top: 1px solid var(--border-soft); display: flex; gap: var(--s2);">
+              <button class="ds-btn ds-btn--sm ds-btn--ghost" style="flex: 1;">↗ Import PDF</button>
+              <button class="ds-btn ds-btn--sm ds-btn--ghost" style="flex: 1;">¶ Paste text</button>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════ LIBRARY ═══════════════════════════════ -->
+      <section class="app-page" data-page-id="library">
+        <div class="page-wrap">
+          <div class="page-head">
+            <div>
+              <h1 class="page-head__title">Documents</h1>
+              <div class="page-head__sub">Proposals and CVs you've created.</div>
+            </div>
+            <div class="page-head__actions">
+              <button class="ds-btn ds-btn--md ds-btn--secondary">Import</button>
+              <button class="ds-btn ds-btn--md ds-btn--primary">New</button>
+            </div>
+          </div>
+
+          <div class="row" style="justify-content: space-between;">
+            <div class="library-tabs" role="tablist">
+              <button data-active="true">All</button>
+              <button>Proposals</button>
+              <button>CVs</button>
+              <button>Drafts</button>
+            </div>
+            <div class="row">
+              <input class="ds-field" placeholder="Search..." style="width: 240px;" />
+            </div>
+          </div>
+
+          <div class="library">
+            <div class="ds-card" data-interactive="true">
+              <span class="ds-card__eyebrow">Proposal</span>
+              <div class="ds-card__title">Senior Frontend Engineer · Linear</div>
+              <div class="ds-card__body">Cover letter, warm tone, ready to send.</div>
+              <div class="ds-card__footer"><span>Updated 2h ago</span><span class="ds-verdict ds-verdict--strong"><span class="ds-verdict__dot"></span>Strong</span></div>
+            </div>
+            <div class="ds-card" data-interactive="true">
+              <span class="ds-card__eyebrow">CV</span>
+              <div class="ds-card__title">Frontend Engineer · Editorial v3</div>
+              <div class="ds-card__body">Updated experience section after Linear application.</div>
+              <div class="ds-card__footer"><span>Updated yesterday</span><span class="ds-pill ds-pill--neutral">Active</span></div>
+            </div>
+            <div class="ds-card" data-interactive="true">
+              <span class="ds-card__eyebrow">Proposal</span>
+              <div class="ds-card__title">Staff Designer · Vercel</div>
+              <div class="ds-card__body">Drafting — match score 76%.</div>
+              <div class="ds-card__footer"><span>Updated 1d ago</span><span class="ds-pill ds-pill--accent">Drafting</span></div>
+            </div>
+            <div class="ds-card" data-interactive="true">
+              <span class="ds-card__eyebrow">Proposal</span>
+              <div class="ds-card__title">Product Engineer · Stripe</div>
+              <div class="ds-card__body">Saved for later.</div>
+              <div class="ds-card__footer"><span>3d ago</span><span class="ds-pill ds-pill--neutral">Saved</span></div>
+            </div>
+            <div class="ds-card" data-interactive="true">
+              <span class="ds-card__eyebrow">CV</span>
+              <div class="ds-card__title">Frontend Engineer · Minimal v1</div>
+              <div class="ds-card__body">Older variant, kept for reference.</div>
+              <div class="ds-card__footer"><span>2w ago</span><span class="ds-pill ds-pill--neutral">Archive</span></div>
+            </div>
+            <div class="ds-card ds-card--muted" data-interactive="true" style="display: flex; align-items: center; justify-content: center; min-height: 140px; color: var(--tm2);">
+              <span>+ New document</span>
+            </div>
+          </div>
+
+          <!-- empty state demo (hidden by default, shown when no items) -->
+          <div class="empty-state" style="display: none">
+            <div class="empty-state__title">No proposals yet.</div>
+            <div class="empty-state__desc">Pick a job from your library and twoweeks will draft a cover letter you can edit in the proposal forge.</div>
+            <button class="ds-btn ds-btn--md ds-btn--primary">Browse jobs</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════ TEMPLATES ═══════════════════════════════ -->
+      <section class="app-page" data-page-id="templates">
+        <div class="page-wrap">
+          <div class="page-head">
+            <div>
+              <h1 class="page-head__title">Templates</h1>
+              <div class="page-head__sub">Pick a starting point. Customize fonts and accent in document style.</div>
+            </div>
+            <div class="page-head__actions">
+              <button class="ds-btn ds-btn--md ds-btn--secondary" onclick="setSettingsTab('docstyle'); goto('settings')">Customize style</button>
+            </div>
+          </div>
+
+          <div class="tpl-filter">
+            <div class="library-tabs" role="tablist">
+              <button data-active="true">All</button>
+              <button>Cover letters</button>
+              <button>CVs</button>
+            </div>
+            <span class="spacer"></span>
+            <span class="ds-pill ds-pill--neutral">Editorial</span>
+            <span class="ds-pill ds-pill--neutral">Minimal</span>
+            <span class="ds-pill ds-pill--neutral">Classic</span>
+            <span class="ds-pill ds-pill--neutral">Bold</span>
+          </div>
+
+          <div class="tpl-grid">
+            <button class="tpl-card" data-selected="true" onclick="pickTemplate(this, 'Editorial')">
+              <div class="tpl-card__preview">
+                <b>Aurélien Pellegrini</b>
+                <small>Frontend engineer · Paris</small>
+                <div class="h2">Experience</div>
+                <p><b style="font-size:7px;">Lead Frontend</b> · Studio Aurore · 2022 — present</p>
+                <p>Led a four-person team rebuilding the planning suite.</p>
+                <div class="h2">Skills</div>
+                <p>TypeScript · React · System design · Performance.</p>
+              </div>
+              <div class="tpl-card__meta">
+                <span class="tpl-card__name">Editorial</span>
+                <span class="tpl-card__kind">Cover letter · CV</span>
+              </div>
+            </button>
+            <button class="tpl-card" onclick="pickTemplate(this, 'Minimal')">
+              <div class="tpl-card__preview tpl-card__preview--minimal">
+                <b>Aurélien Pellegrini</b>
+                <small>aurelien@dasti.io · Paris</small>
+                <div class="h2">Experience</div>
+                <p>Lead Frontend, Studio Aurore — 2022 to present.</p>
+                <p>Senior Frontend, Pixel & Co — 2019 to 2022.</p>
+                <div class="h2">Skills</div>
+                <p>TypeScript, React, Next.js, Tailwind.</p>
+              </div>
+              <div class="tpl-card__meta">
+                <span class="tpl-card__name">Minimal</span>
+                <span class="tpl-card__kind">Cover letter · CV</span>
+              </div>
+            </button>
+            <button class="tpl-card" onclick="pickTemplate(this, 'Bold')">
+              <div class="tpl-card__preview tpl-card__preview--bold">
+                <b>Aurélien.</b>
+                <small style="margin-top: 4px;">Frontend engineer.</small>
+                <div class="h2">EXPERIENCE</div>
+                <p><b style="font-size:7px;">Lead Frontend</b></p>
+                <p>Studio Aurore · 2022—now</p>
+                <p>Built the planning suite from scratch.</p>
+              </div>
+              <div class="tpl-card__meta">
+                <span class="tpl-card__name">Bold</span>
+                <span class="tpl-card__kind">Cover letter</span>
+              </div>
+            </button>
+            <button class="tpl-card" onclick="pickTemplate(this, 'Classic')">
+              <div class="tpl-card__preview tpl-card__preview--classic">
+                <b>Aurélien Pellegrini</b>
+                <small style="text-align: center;">Frontend Engineer · Paris, France</small>
+                <div class="h2" style="text-align: center;">EXPERIENCE</div>
+                <p><i>Lead Frontend</i> — Studio Aurore</p>
+                <p>2022 to present.</p>
+                <p><i>Senior Frontend</i> — Pixel &amp; Co</p>
+                <p>2019 to 2022.</p>
+              </div>
+              <div class="tpl-card__meta">
+                <span class="tpl-card__name">Classic</span>
+                <span class="tpl-card__kind">CV</span>
+              </div>
+            </button>
+            <button class="tpl-card" onclick="pickTemplate(this, 'Compact')">
+              <div class="tpl-card__preview tpl-card__preview--minimal tpl-card__preview--compact">
+                <b style="font-size: 11px;">Aurélien Pellegrini</b>
+                <small>aurelien@dasti.io · linkedin.com/in/aurelien · Paris</small>
+                <div class="h2">Experience</div>
+                <p>Lead Frontend · Studio Aurore · 2022—now.</p>
+                <p>Senior Frontend · Pixel &amp; Co · 2019—2022.</p>
+                <p>Frontend · Acme · 2017—2019.</p>
+                <div class="h2">Education</div>
+                <p>MSc Computer Science · Sorbonne · 2017.</p>
+              </div>
+              <div class="tpl-card__meta">
+                <span class="tpl-card__name">Compact</span>
+                <span class="tpl-card__kind">CV</span>
+              </div>
+            </button>
+            <button class="tpl-card" onclick="pickTemplate(this, 'Letterpress')">
+              <div class="tpl-card__preview tpl-card__preview--letterpress">
+                <b>Aurélien Pellegrini</b>
+                <small style="margin-top: 6px;">28 April 2026</small>
+                <p style="margin-top: 8px;">Hello Linear team,</p>
+                <p>I've spent six years building craft-first product surfaces.</p>
+                <p>Three things drew me to your role.</p>
+                <p style="margin-top: 6px;">— Aurélien</p>
+              </div>
+              <div class="tpl-card__meta">
+                <span class="tpl-card__name">Letterpress</span>
+                <span class="tpl-card__kind">Cover letter</span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════ SETTINGS ═══════════════════════════════ -->
+      <section class="app-page" data-page-id="settings">
+        <div class="settings">
+          <nav class="settings__nav">
+            <button class="settings__nav-item" data-active="true" onclick="setSettingsTab('account', this)">Account</button>
+            <button class="settings__nav-item" onclick="setSettingsTab('preferences', this)">Preferences</button>
+            <button class="settings__nav-item" onclick="setSettingsTab('docstyle', this)">Document style</button>
+            <button class="settings__nav-item" onclick="setSettingsTab('voice', this)">Voice & tone</button>
+            <button class="settings__nav-item" onclick="setSettingsTab('billing', this)">Billing</button>
+            <button class="settings__nav-item" onclick="setSettingsTab('team', this)">Team</button>
+            <button class="settings__nav-item" onclick="setSettingsTab('danger', this)">Danger zone</button>
+          </nav>
+
+          <div class="settings__content">
+            <!-- Account -->
+            <div class="settings__pane" data-pane="account" data-active="true">
+              <div class="settings__group">
+                <div class="settings__group-head">
+                  <div class="settings__group-title">Profile</div>
+                  <div class="settings__group-desc">Information shown on every document you generate.</div>
+                </div>
+                <div class="ds-field-group">
+                  <label class="ds-field-label">Full name</label>
+                  <input class="ds-field" value="Aurélien Pellegrini" />
+                </div>
+                <div class="ds-field-group">
+                  <label class="ds-field-label">Email</label>
+                  <input class="ds-field" type="email" value="porphyre2025@gmail.com" />
+                </div>
+                <div class="ds-field-group">
+                  <label class="ds-field-label">Headline</label>
+                  <input class="ds-field" value="Frontend engineer building craft-first product UIs." />
+                </div>
+              </div>
+              <div class="settings__group">
+                <div class="settings__group-head">
+                  <div class="settings__group-title">Connected accounts</div>
+                </div>
+                <div class="settings__row">
+                  <div>
+                    <div class="settings__row-label">Google</div>
+                    <div class="settings__row-desc">Used to sign in.</div>
+                  </div>
+                  <button class="ds-btn ds-btn--sm ds-btn--secondary">Disconnect</button>
+                </div>
+                <div class="settings__row">
+                  <div>
+                    <div class="settings__row-label">LinkedIn</div>
+                    <div class="settings__row-desc">Imports profile and applications.</div>
+                  </div>
+                  <button class="ds-btn ds-btn--sm ds-btn--accent">Connect</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Preferences -->
+            <div class="settings__pane" data-pane="preferences">
+              <div class="settings__group">
+                <div class="settings__group-head">
+                  <div class="settings__group-title">Appearance</div>
+                </div>
+                <div class="settings__row">
+                  <div>
+                    <div class="settings__row-label">Theme</div>
+                    <div class="settings__row-desc">Light, dark, or follow system.</div>
+                  </div>
+                  <div class="theme-switch">
+                    <button aria-pressed="true">Light</button>
+                    <button aria-pressed="false">Dark</button>
+                    <button aria-pressed="false">System</button>
+                  </div>
+                </div>
+                <div class="settings__row">
+                  <div>
+                    <div class="settings__row-label">Reduce motion</div>
+                    <div class="settings__row-desc">Disable animations and transitions.</div>
+                  </div>
+                  <input type="checkbox" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Document style -->
+            <div class="settings__pane" data-pane="docstyle">
+              <!-- Font pairs -->
+              <div class="settings__group">
+                <div class="settings__group-head">
+                  <div class="settings__group-title">Font pair</div>
+                  <div class="settings__group-desc">Heading and body fonts paired for readability. Avoids the complexity of weight + line-height pickers — fonts are tuned together. Affects every CV and cover letter.</div>
+                </div>
+                <div class="fontpair-grid">
+                  <button class="fontpair" data-selected="true">
+                    <div class="fontpair__heading" style="font-family: 'Baskervville', Georgia, serif;">Aurélien P.</div>
+                    <div class="fontpair__body">Frontend engineer with six years of craft-first product work.</div>
+                    <div class="fontpair__name">Baskervville × Geist</div>
+                  </button>
+                  <button class="fontpair">
+                    <div class="fontpair__heading" style="font-family: 'Geist', sans-serif; letter-spacing: -0.02em;">Aurélien P.</div>
+                    <div class="fontpair__body">Frontend engineer with six years of craft-first product work.</div>
+                    <div class="fontpair__name">Geist × Geist (mono-font)</div>
+                  </button>
+                  <button class="fontpair">
+                    <div class="fontpair__heading" style="font-family: 'Iowan Old Style', Georgia, serif; font-weight: 700;">Aurélien P.</div>
+                    <div class="fontpair__body">Frontend engineer with six years of craft-first product work.</div>
+                    <div class="fontpair__name">Iowan × Geist</div>
+                  </button>
+                  <button class="fontpair">
+                    <div class="fontpair__heading" style="font-family: Georgia, serif; font-weight: 700;">Aurélien P.</div>
+                    <div class="fontpair__body" style="font-family: var(--font-mono); font-size: 11px;">Frontend engineer with six years of craft-first product work.</div>
+                    <div class="fontpair__name">Georgia × SF Mono</div>
+                  </button>
+                </div>
+                <div style="font-size: var(--tx); color: var(--tg3);">Need finer control? Line height auto-adjusts only if a paragraph overflows a page during pagination.</div>
+              </div>
+
+              <!-- Layout -->
+              <div class="settings__group">
+                <div class="settings__group-head">
+                  <div class="settings__group-title">Layout</div>
+                  <div class="settings__group-desc">Page composition. Pick the rhythm that fits your story.</div>
+                </div>
+                <div class="layout-grid">
+                  <button class="layout-card" data-selected="true">
+                    <div class="layout-card__preview">
+                      <div class="layout-card__line layout-card__line--med" style="height: 6px;"></div>
+                      <div class="layout-card__line layout-card__line--short"></div>
+                      <div class="layout-card__line layout-card__line--accent" style="margin-top: 4px;"></div>
+                      <div class="layout-card__line"></div>
+                      <div class="layout-card__line layout-card__line--short"></div>
+                      <div class="layout-card__line layout-card__line--accent" style="margin-top: 4px;"></div>
+                      <div class="layout-card__line"></div>
+                      <div class="layout-card__line layout-card__line--med"></div>
+                    </div>
+                    <div class="layout-card__name">Editorial</div>
+                  </button>
+                  <button class="layout-card">
+                    <div class="layout-card__preview" style="grid-template-columns: 1fr 2fr; padding: 6px; gap: 6px;">
+                      <div style="display: grid; gap: 3px;">
+                        <div class="layout-card__line" style="height: 5px;"></div>
+                        <div class="layout-card__line layout-card__line--short"></div>
+                        <div class="layout-card__line"></div>
+                        <div class="layout-card__line layout-card__line--med"></div>
+                      </div>
+                      <div style="display: grid; gap: 3px;">
+                        <div class="layout-card__line layout-card__line--med"></div>
+                        <div class="layout-card__line"></div>
+                        <div class="layout-card__line layout-card__line--short"></div>
+                        <div class="layout-card__line"></div>
+                        <div class="layout-card__line layout-card__line--med"></div>
+                      </div>
+                    </div>
+                    <div class="layout-card__name">Two-column</div>
+                  </button>
+                  <button class="layout-card">
+                    <div class="layout-card__preview" style="padding: 8px;">
+                      <div class="layout-card__line" style="height: 8px; width: 60%; margin: 0 auto;"></div>
+                      <div class="layout-card__line layout-card__line--short" style="margin: 4px auto;"></div>
+                      <div class="layout-card__line"></div>
+                      <div class="layout-card__line layout-card__line--med"></div>
+                      <div class="layout-card__line layout-card__line--short"></div>
+                    </div>
+                    <div class="layout-card__name">Centered</div>
+                  </button>
+                  <button class="layout-card">
+                    <div class="layout-card__preview">
+                      <div class="layout-card__line" style="height: 8px;"></div>
+                      <div class="layout-card__line layout-card__line--accent" style="height: 5px;"></div>
+                      <div class="layout-card__line"></div>
+                      <div class="layout-card__line"></div>
+                      <div class="layout-card__line layout-card__line--med"></div>
+                      <div class="layout-card__line layout-card__line--short"></div>
+                    </div>
+                    <div class="layout-card__name">Bold header</div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Accent -->
+              <div class="settings__group">
+                <div class="settings__group-head">
+                  <div class="settings__group-title">Accent color</div>
+                  <div class="settings__group-desc">Used for headings, dividers, and the brand period.</div>
+                </div>
+                <div class="style-swatches">
+                  <button class="style-swatch" data-selected="true" style="background:#A84E2E" title="Terre"></button>
+                  <button class="style-swatch" style="background:#0F0C08" title="Ink"></button>
+                  <button class="style-swatch" style="background:#2A78D6" title="Cobalt"></button>
+                  <button class="style-swatch" style="background:#3B6E4E" title="Sauge"></button>
+                  <button class="style-swatch" style="background:#7A4FA0" title="Plum"></button>
+                  <button class="style-swatch" style="background:#B8843A" title="Ochre"></button>
+                </div>
+              </div>
+
+              <!-- Page format -->
+              <div class="settings__group">
+                <div class="settings__group-head">
+                  <div class="settings__group-title">Page format</div>
+                </div>
+                <div class="style-segmented" style="width: fit-content;">
+                  <button data-selected="true">A4</button>
+                  <button>US Letter</button>
+                </div>
+              </div>
+
+              <!-- Signature -->
+              <div class="settings__group">
+                <div class="settings__group-head">
+                  <div class="settings__group-title">Signature</div>
+                  <div class="settings__group-desc">Appears at the bottom of cover letters. Pick a font, draw your own, or let twoweeks generate one from your name.</div>
+                </div>
+                <div class="sig-grid">
+                  <button class="sig-card" data-selected="true">
+                    <div class="sig-card__sig sig-card__sig--brush">Aurélien</div>
+                    <div class="sig-card__name">Brush — Snell Roundhand</div>
+                  </button>
+                  <button class="sig-card">
+                    <div class="sig-card__sig sig-card__sig--script">Aurélien</div>
+                    <div class="sig-card__name">Script — Pinyon</div>
+                  </button>
+                  <button class="sig-card">
+                    <div class="sig-card__sig sig-card__sig--mono">— Aurélien</div>
+                    <div class="sig-card__name">Mono — SF Mono</div>
+                  </button>
+                  <button class="sig-card">
+                    <div class="sig-card__sig sig-card__sig--auto" style="display: flex; align-items: center; justify-content: center;">
+                      <svg width="120" height="40" viewBox="0 0 120 40">
+                        <path d="M5,28 Q15,8 25,24 T50,20 Q60,8 70,28 T100,16 L115,22"/>
+                      </svg>
+                    </div>
+                    <div class="sig-card__name">Auto — generated from your name</div>
+                  </button>
+                  <button class="sig-card">
+                    <div class="sig-card__sig sig-card__sig--draw">Tap to draw your signature</div>
+                    <div class="sig-card__name">Draw — saved to your account</div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Voice -->
+            <div class="settings__pane" data-pane="voice">
+              <div class="settings__group">
+                <div class="settings__group-head">
+                  <div class="settings__group-title">Default tone</div>
+                  <div class="settings__group-desc">Used when generating new proposals. You can override per document.</div>
+                </div>
+                <div class="row">
+                  <span class="ds-tone ds-tone--warm">Warm</span>
+                  <span class="ds-tone ds-tone--formal">Formal</span>
+                  <span class="ds-tone ds-tone--natural">Natural</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Billing -->
+            <div class="settings__pane" data-pane="billing">
+              <div class="settings__group">
+                <div class="settings__group-head">
+                  <div class="settings__group-title">Plan</div>
+                </div>
+                <div class="settings__row">
+                  <div>
+                    <div class="settings__row-label">Pro · €12/mo</div>
+                    <div class="settings__row-desc">Renews on May 28.</div>
+                  </div>
+                  <button class="ds-btn ds-btn--sm ds-btn--secondary">Manage</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Team -->
+            <div class="settings__pane" data-pane="team">
+              <div class="settings__group">
+                <div class="settings__group-head">
+                  <div class="settings__group-title">Members</div>
+                </div>
+                <div style="font-size: var(--ts); color: var(--tm2);">Solo workspace. Invite teammates from the dashboard.</div>
+              </div>
+            </div>
+
+            <!-- Danger -->
+            <div class="settings__pane" data-pane="danger">
+              <div class="settings__group">
+                <div class="settings__group-head">
+                  <div class="settings__group-title">Delete account</div>
+                  <div class="settings__group-desc">Removes all proposals, CVs, and account data. Cannot be undone.</div>
+                </div>
+                <div>
+                  <button class="ds-btn ds-btn--md ds-btn--danger">Delete account</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════ SIGN IN ═══════════════════════════════ -->
+      <section class="app-page" data-page-id="signin">
+        <div class="signin">
+          <div class="signin__card">
+            <div class="signin__brand">
+              <span class="signin__brand-mark">tw</span>
+              <div>
+                <div style="font-weight: 600;">twoweeks<span style="color: var(--ac);">.</span></div>
+                <div style="font-size: var(--tx); color: var(--tm2);">Two weeks. One offer.</div>
+              </div>
+            </div>
+            <div>
+              <div class="signin__title">Sign in</div>
+              <div class="signin__sub">Pick up where you left off.</div>
+            </div>
+            <button class="ds-btn ds-btn--lg ds-btn--secondary" style="width: 100%">Continue with Google</button>
+            <div class="signin__divider">or</div>
+            <div class="ds-field-group">
+              <label class="ds-field-label">Email</label>
+              <input class="ds-field" type="email" placeholder="you@work.com" />
+            </div>
+            <button class="ds-btn ds-btn--lg ds-btn--primary" style="width: 100%">Send magic link<span class="ds-btn__period">.</span></button>
+            <div style="font-size: var(--tx); color: var(--tg2); text-align: center;">No password. We'll email you a link.</div>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /.app-pages -->
+  </div><!-- /.app-main -->
+</div><!-- /.app-grid -->
+
+<!-- ═══════════════════════════════ SAFE-SEND + IMPORT REVIEW SHEETS ═══════════════════════════════ -->
+<div class="ds-scrim" id="dsScrim" data-open="false" onclick="closeAllSheets()"></div>
+
+<aside class="ds-sheet" id="safeSendSheet" data-open="false" role="dialog" aria-modal="true" aria-labelledby="safeSendTitle">
+  <div class="ds-sheet__head">
+    <div>
+      <div class="ds-sheet__title" id="safeSendTitle">Safe-send checklist</div>
+      <div class="ds-sheet__copy">Trust gate for export, share, and send. Each row must be cleared before the package can leave your hands.</div>
+    </div>
+    <button class="ds-icon-btn" onclick="closeSheet('safeSendSheet')" aria-label="Close safe-send checklist">×</button>
+  </div>
+  <div class="ds-sheet__body">
+    <div class="safe-status">
+      <span class="ds-pill ds-pill--danger">Blocked</span>
+      <strong>Linear package cannot be sent yet.</strong>
+      <small>Three blockers remain: an unsupported claim, an unresolved import review, and an unresolved AI suggestion.</small>
+    </div>
+    <div class="checklist">
+      <div class="check-row clear">
+        <span class="check-mark">✓</span>
+        <div><span class="check-title">Source job linked</span><span class="check-meta">Senior Frontend Engineer · Linear</span></div>
+        <span class="ds-pill ds-pill--success" style="height: 22px; font-size: 11px;">Clear</span>
+      </div>
+      <div class="check-row warn">
+        <span class="check-mark">!</span>
+        <div><span class="check-title">Match review not accepted</span><span class="check-meta">Two watch-outs need review before drafting unlocks.</span></div>
+        <span class="ds-pill ds-pill--warning" style="height: 22px; font-size: 11px;">Review</span>
+      </div>
+      <div class="check-row clear">
+        <span class="check-mark">✓</span>
+        <div><span class="check-title">CV variant selected</span><span class="check-meta">Editorial FE CV · targeted variant</span></div>
+        <span class="ds-pill ds-pill--success" style="height: 22px; font-size: 11px;">Clear</span>
+      </div>
+      <div class="check-row clear">
+        <span class="check-mark">✓</span>
+        <div><span class="check-title">Proposal linked</span><span class="check-meta">Linear proposal draft</span></div>
+        <span class="ds-pill ds-pill--success" style="height: 22px; font-size: 11px;">Clear</span>
+      </div>
+      <div class="check-row warn">
+        <span class="check-mark">!</span>
+        <div><span class="check-title">Unresolved import issues</span><span class="check-meta">Education dates and the skills split need confirmation.</span></div>
+        <button class="ds-btn ds-btn--sm ds-btn--secondary" onclick="openSheet('importReviewSheet')">Resolve</button>
+      </div>
+      <div class="check-row warn">
+        <span class="check-mark">!</span>
+        <div><span class="check-title">Unresolved AI suggestion</span><span class="check-meta">The opening rewrite has not been accepted or dismissed.</span></div>
+        <span class="ds-pill ds-pill--accent" style="height: 22px; font-size: 11px;">Pending</span>
+      </div>
+      <div class="check-row danger">
+        <span class="check-mark">×</span>
+        <div><span class="check-title">Unsupported claim</span><span class="check-meta">A realtime collaboration claim must be qualified or removed.</span></div>
+        <span class="ds-pill ds-pill--danger" style="height: 22px; font-size: 11px;">Blocked</span>
+      </div>
+      <div class="check-row clear">
+        <span class="check-mark">✓</span>
+        <div><span class="check-title">No placeholder text</span><span class="check-meta">No [company], lorem, or empty variables detected.</span></div>
+        <span class="ds-pill ds-pill--success" style="height: 22px; font-size: 11px;">Clear</span>
+      </div>
+      <div class="check-row warn">
+        <span class="check-mark">!</span>
+        <div><span class="check-title">Recipient or export target</span><span class="check-meta">Pick PDF, copy, public preview, or email handoff.</span></div>
+        <span class="ds-pill ds-pill--warning" style="height: 22px; font-size: 11px;">Not started</span>
+      </div>
+      <div class="check-row warn">
+        <span class="check-mark">!</span>
+        <div><span class="check-title">Final export reviewed</span><span class="check-meta">Open Page preview before generating the sendable PDF.</span></div>
+        <span class="ds-pill ds-pill--warning" style="height: 22px; font-size: 11px;">Pending</span>
+      </div>
+    </div>
+  </div>
+  <div class="ds-sheet__actions">
+    <button class="ds-btn ds-btn--md ds-btn--ghost" onclick="closeSheet('safeSendSheet')">Cancel</button>
+    <span class="spacer"></span>
+    <button class="ds-btn ds-btn--md ds-btn--secondary" onclick="closeSheet('safeSendSheet'); goto('jobs')">Review match</button>
+    <button class="ds-btn ds-btn--md ds-btn--primary" disabled>Continue to send<span class="ds-btn__period">.</span></button>
+  </div>
+</aside>
+
+<aside class="ds-sheet" id="importReviewSheet" data-open="false" role="dialog" aria-modal="true" aria-labelledby="importReviewTitle">
+  <div class="ds-sheet__head">
+    <div>
+      <div class="ds-sheet__title" id="importReviewTitle">CV import review</div>
+      <div class="ds-sheet__copy">Original fragments are preserved beside parsed results. Export stays blocked until each uncertain block is resolved.</div>
+    </div>
+    <button class="ds-icon-btn" onclick="closeSheet('importReviewSheet')" aria-label="Close import review">×</button>
+  </div>
+  <div class="ds-sheet__body">
+    <div class="ds-banner ds-banner--warn">
+      <div class="ds-banner__icon">!</div>
+      <div class="ds-banner__body">
+        <div class="ds-banner__title">2 uncertain blocks remain.</div>
+        <div class="ds-banner__desc">Accept the parsed result, edit it, or delete the block.</div>
+      </div>
+    </div>
+
+    <div class="review-block">
+      <div class="review-block__head">
+        <strong>Education dates</strong>
+        <span class="ds-pill ds-pill--warning" style="height: 22px; font-size: 11px;">Uncertain</span>
+      </div>
+      <div class="compare-grid">
+        <div>
+          <div class="ba-label">Original fragment</div>
+          <div class="fragment">École 42 — Software engineering — Paris</div>
+        </div>
+        <div>
+          <div class="ba-label">Parsed result</div>
+          <textarea class="ds-field ds-field--textarea">École 42 · Software engineering · dates missing</textarea>
+        </div>
+      </div>
+      <div class="row" style="gap: var(--s2);">
+        <button class="ds-btn ds-btn--sm ds-btn--primary">Accept</button>
+        <button class="ds-btn ds-btn--sm ds-btn--secondary">Edit</button>
+        <button class="ds-btn ds-btn--sm ds-btn--danger">Delete block</button>
+      </div>
+    </div>
+
+    <div class="review-block">
+      <div class="review-block__head">
+        <strong>Skills split</strong>
+        <span class="ds-pill ds-pill--warning" style="height: 22px; font-size: 11px;">Uncertain</span>
+      </div>
+      <div class="compare-grid">
+        <div>
+          <div class="ba-label">Original fragment</div>
+          <div class="fragment">TypeScript / React / design systems / editors / AI UX</div>
+        </div>
+        <div>
+          <div class="ba-label">Parsed result</div>
+          <textarea class="ds-field ds-field--textarea">TypeScript · React · Design systems · Editors · AI UX</textarea>
+        </div>
+      </div>
+      <div class="row" style="gap: var(--s2);">
+        <button class="ds-btn ds-btn--sm ds-btn--primary">Accept</button>
+        <button class="ds-btn ds-btn--sm ds-btn--secondary">Edit</button>
+        <button class="ds-btn ds-btn--sm ds-btn--danger">Delete block</button>
+      </div>
+    </div>
+  </div>
+  <div class="ds-sheet__actions">
+    <button class="ds-btn ds-btn--md ds-btn--ghost" onclick="closeSheet('importReviewSheet')">Close</button>
+    <span class="spacer"></span>
+    <button class="ds-btn ds-btn--md ds-btn--primary">Accept all clear</button>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════ COMMAND PALETTE ═══════════════════════════════ -->
+<div class="cmdk" id="cmdk" onclick="if(event.target===this) closeCmdk()">
+  <div class="cmdk__panel" role="dialog" aria-label="Command palette">
+    <input class="cmdk__input" id="cmdkInput" placeholder="Search or run a command..." autocomplete="off" />
+    <div class="cmdk__list">
+      <div class="cmdk__group-label">Create</div>
+      <div class="cmdk__item" data-highlighted="true" onclick="closeCmdk(); goto('proposal')">
+        <span class="cmdk__item-icon">✎</span>
+        <span class="cmdk__item-label">New proposal</span>
+        <span class="cmdk__item-shortcut">⌘N</span>
+      </div>
+      <div class="cmdk__item" onclick="closeCmdk(); goto('cv')">
+        <span class="cmdk__item-icon">▤</span>
+        <span class="cmdk__item-label">New CV</span>
+        <span class="cmdk__item-shortcut">⌘⇧N</span>
+      </div>
+
+      <div class="cmdk__group-label">Go to</div>
+      <div class="cmdk__item" onclick="closeCmdk(); goto('dashboard')"><span class="cmdk__item-icon">⌂</span><span class="cmdk__item-label">Dashboard</span><span class="cmdk__item-shortcut">G D</span></div>
+      <div class="cmdk__item" onclick="closeCmdk(); goto('jobs')"><span class="cmdk__item-icon">◧</span><span class="cmdk__item-label">Jobs</span><span class="cmdk__item-shortcut">G J</span></div>
+      <div class="cmdk__item" onclick="closeCmdk(); goto('library')"><span class="cmdk__item-icon">▦</span><span class="cmdk__item-label">Documents</span><span class="cmdk__item-shortcut">G L</span></div>
+      <div class="cmdk__item" onclick="closeCmdk(); goto('templates')"><span class="cmdk__item-icon">◫</span><span class="cmdk__item-label">Templates</span><span class="cmdk__item-shortcut">G T</span></div>
+      <div class="cmdk__item" onclick="closeCmdk(); goto('settings')"><span class="cmdk__item-icon">⚙</span><span class="cmdk__item-label">Settings</span><span class="cmdk__item-shortcut">G S</span></div>
+
+      <div class="cmdk__group-label">Actions</div>
+      <div class="cmdk__item" onclick="closeCmdk(); openSheet('safeSendSheet')"><span class="cmdk__item-icon">☑</span><span class="cmdk__item-label">Open safe-send checklist</span><span class="cmdk__item-shortcut">⌘⇧S</span></div>
+      <div class="cmdk__item" onclick="closeCmdk(); openSheet('importReviewSheet')"><span class="cmdk__item-icon">↻</span><span class="cmdk__item-label">Resolve import review</span></div>
+      <div class="cmdk__item" onclick="closeCmdk(); toggleTheme()"><span class="cmdk__item-icon">◐</span><span class="cmdk__item-label">Toggle theme</span><span class="cmdk__item-shortcut">⌘⇧T</span></div>
+      <div class="cmdk__item" onclick="closeCmdk(); openOnboarding()"><span class="cmdk__item-icon">★</span><span class="cmdk__item-label">Replay onboarding</span></div>
+      <div class="cmdk__item"><span class="cmdk__item-icon">↗</span><span class="cmdk__item-label">Export current document</span><span class="cmdk__item-shortcut">⌘E</span></div>
+      <div class="cmdk__item"><span class="cmdk__item-icon">↪</span><span class="cmdk__item-label">Sign out</span></div>
+    </div>
+    <div class="cmdk__hint">
+      <span>↑↓ navigate</span><span>↵ select</span><span>Esc close</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ ONBOARDING (full-screen, multi-step) ═══════════════════════════════ -->
+<div class="onb" id="onb">
+  <div class="onb__bar">
+    <div class="onb__brand">twoweeks<span class="onb__brand-period">.</span></div>
+    <div class="onb__steps" id="onbSteps">
+      <span class="onb__step-dot" data-state="active"></span>
+      <span class="onb__step-dot"></span>
+      <span class="onb__step-dot"></span>
+      <span class="onb__step-dot"></span>
+      <span class="onb__step-dot"></span>
+      <span class="onb__step-dot"></span>
+    </div>
+    <button class="ds-btn ds-btn--sm ds-btn--ghost onb__skip" onclick="closeOnboarding()">Skip for now</button>
+  </div>
+
+  <div class="onb__body">
+    <!-- Step 1 — Welcome -->
+    <div class="onb__pane" data-step="1" data-active="true">
+      <div>
+        <div class="onb__title">Two weeks. One offer<span style="color: var(--ac);">.</span></div>
+        <div class="onb__sub">twoweeks turns your CV into tailored cover letters for jobs that actually match your profile. Let's get you set up in three minutes.</div>
+      </div>
+      <div style="display: flex; justify-content: center; gap: var(--s2); flex-wrap: wrap;">
+        <span class="ds-pill ds-pill--accent">No spinners.</span>
+        <span class="ds-pill ds-pill--accent">No fluff.</span>
+        <span class="ds-pill ds-pill--accent">Edit everything.</span>
+      </div>
+    </div>
+
+    <!-- Step 2 — Import CV -->
+    <div class="onb__pane" data-step="2">
+      <div>
+        <div class="onb__title">Bring your CV.</div>
+        <div class="onb__sub">Import a PDF, paste text, or start from scratch. We'll structure the sections automatically.</div>
+      </div>
+      <div class="onb__choices">
+        <button class="onb__choice"><div class="onb__choice-icon">↗</div><div class="onb__choice-title">Upload PDF</div><div class="onb__choice-desc">We extract sections in seconds.</div></button>
+        <button class="onb__choice" data-selected="true"><div class="onb__choice-icon">¶</div><div class="onb__choice-title">Paste text</div><div class="onb__choice-desc">From LinkedIn, a doc, anywhere.</div></button>
+        <button class="onb__choice"><div class="onb__choice-icon">✎</div><div class="onb__choice-title">Start blank</div><div class="onb__choice-desc">Build it section by section.</div></button>
+      </div>
+    </div>
+
+    <!-- Step 3 — Pick a template -->
+    <div class="onb__pane" data-step="3">
+      <div>
+        <div class="onb__title">Pick a starting style.</div>
+        <div class="onb__sub">You can change it any time. Fonts, sizes, accent — everything is editable.</div>
+      </div>
+      <div class="onb__choices" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+        <button class="onb__choice" data-selected="true">
+          <div style="aspect-ratio: 8.5/11; background: var(--paper); border-radius: 4px; box-shadow: var(--sh-paper); padding: 10px; display: flex; flex-direction: column; gap: 4px;">
+            <b style="font-family: var(--font-serif); color: var(--ti); font-size: 12px;">Editorial</b>
+            <div style="height: 3px; background: rgba(15,12,8,0.16); border-radius: 2px; width: 70%;"></div>
+            <div style="height: 3px; background: rgba(15,12,8,0.16); border-radius: 2px;"></div>
+            <div style="height: 3px; background: rgba(15,12,8,0.16); border-radius: 2px; width: 60%;"></div>
+          </div>
+          <div class="onb__choice-title" style="margin-top: 8px;">Editorial</div>
+        </button>
+        <button class="onb__choice">
+          <div style="aspect-ratio: 8.5/11; background: var(--paper); border-radius: 4px; box-shadow: var(--sh-paper); padding: 10px; display: flex; flex-direction: column; gap: 4px;">
+            <b style="font-family: var(--font-body); color: var(--ti); font-size: 12px; font-weight: 600;">Minimal</b>
+            <div style="height: 3px; background: rgba(15,12,8,0.16); border-radius: 2px; width: 50%;"></div>
+            <div style="height: 3px; background: rgba(15,12,8,0.16); border-radius: 2px;"></div>
+          </div>
+          <div class="onb__choice-title" style="margin-top: 8px;">Minimal</div>
+        </button>
+        <button class="onb__choice">
+          <div style="aspect-ratio: 8.5/11; background: var(--paper); border-radius: 4px; box-shadow: var(--sh-paper); padding: 10px; display: flex; flex-direction: column; gap: 4px;">
+            <b style="color: var(--ti); font-size: 14px; font-weight: 700;">Bold</b>
+            <div style="height: 3px; background: rgba(168,78,46,0.32); border-radius: 2px; width: 70%;"></div>
+            <div style="height: 3px; background: rgba(168,78,46,0.32); border-radius: 2px;"></div>
+          </div>
+          <div class="onb__choice-title" style="margin-top: 8px;">Bold</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 4 — Voice -->
+    <div class="onb__pane" data-step="4">
+      <div>
+        <div class="onb__title">How do you sound?</div>
+        <div class="onb__sub">We'll use this as the default for new cover letters. Override per document any time.</div>
+      </div>
+      <div class="onb__choices">
+        <button class="onb__choice" data-selected="true">
+          <div class="onb__choice-icon"><span class="ds-tone ds-tone--warm">Warm</span></div>
+          <div class="onb__choice-title">Warm</div>
+          <div class="onb__choice-desc">Conversational. First-person. A real human sentence.</div>
+        </button>
+        <button class="onb__choice">
+          <div class="onb__choice-icon"><span class="ds-tone ds-tone--formal">Formal</span></div>
+          <div class="onb__choice-title">Formal</div>
+          <div class="onb__choice-desc">Structured. Senior-track. Light on adjectives.</div>
+        </button>
+        <button class="onb__choice">
+          <div class="onb__choice-icon"><span class="ds-tone ds-tone--natural">Natural</span></div>
+          <div class="onb__choice-title">Natural</div>
+          <div class="onb__choice-desc">Plain prose. Says what it means and stops.</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 5 — Capture jobs (browser extension) -->
+    <div class="onb__pane" data-step="5">
+      <div>
+        <div class="onb__title">Catch jobs as you browse<span style="color: var(--ac);">.</span></div>
+        <div class="onb__sub">Install the twoweeks extension. Hit one button on any LinkedIn, Welcome to the Jungle, or company careers page — the role lands in your jobs library, ready to score.</div>
+      </div>
+      <div class="onb__choices" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); max-width: 640px;">
+        <button class="onb__choice" data-selected="true">
+          <div class="onb__choice-icon">⌬</div>
+          <div class="onb__choice-title">Install for Chrome</div>
+          <div class="onb__choice-desc">One click install. Pin it for fastest capture. Also works on Edge, Brave, Arc — Firefox coming soon.</div>
+        </button>
+        <button class="onb__choice">
+          <div class="onb__choice-icon">↪</div>
+          <div class="onb__choice-title">Skip — I'll paste URLs</div>
+          <div class="onb__choice-desc">Paste any job URL into Jobs and we'll fetch it.</div>
+        </button>
+      </div>
+      <div style="font-size: var(--tx); color: var(--tg3); display: flex; align-items: center; justify-content: center; gap: var(--s2);">
+        <span class="ds-status__dot" style="background: var(--ac); width: 6px; height: 6px; border-radius: 50%; animation: tw-breathe var(--motion-duration-brand) var(--ease-breathe) infinite;"></span>
+        Three captured jobs unlocks your first proposal.
+      </div>
+    </div>
+
+    <!-- Step 6 — Done -->
+    <div class="onb__pane" data-step="6">
+      <div>
+        <div class="onb__title">You're set<span style="color: var(--ac);">.</span></div>
+        <div class="onb__sub">Pin the extension, capture a few jobs, and twoweeks will draft your first cover letter. ⌘K opens the command palette from anywhere.</div>
+      </div>
+      <div style="display: flex; justify-content: center; gap: var(--s3); flex-wrap: wrap;">
+        <button class="ds-btn ds-btn--lg ds-btn--secondary" onclick="closeOnboarding(); goto('templates')">Browse templates</button>
+        <button class="ds-btn ds-btn--lg ds-btn--primary" onclick="closeOnboarding(); goto('dashboard')">Go to dashboard<span class="ds-btn__period">.</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="onb__foot">
+    <button class="ds-btn ds-btn--md ds-btn--ghost" id="onbBack" onclick="onbStep(-1)">Back</button>
+    <span style="font-size: var(--tx); color: var(--tg3);" id="onbCounter">Step 1 of 5</span>
+    <button class="ds-btn ds-btn--md ds-btn--primary" id="onbNext" onclick="onbStep(1)">Continue</button>
+  </div>
+</div>
+
+<script>
+const PAGE_LABELS = {
+  dashboard: "Dashboard",
+  proposal: "Proposal forge",
+  cv: "CV forge",
+  jobs: "Jobs",
+  library: "Documents",
+  templates: "Templates",
+  settings: "Settings",
+  signin: "Sign in"
+};
+
+function goto(page) {
+  document.querySelectorAll('.app-page').forEach(s => s.dataset.active = (s.dataset.pageId === page));
+  document.querySelectorAll('.app-sidebar__item').forEach(b => {
+    if (b.dataset.page) b.dataset.active = (b.dataset.page === page);
+  });
+  const crumb = document.getElementById('crumb');
+  if (crumb) crumb.textContent = PAGE_LABELS[page] || page;
+  // contextual topbar — only on forge surfaces
+  document.body.dataset.context = (page === 'proposal' || page === 'cv') ? 'forge' : '';
+  document.querySelector('.app-pages').scrollTop = 0;
+}
+
+function openSheet(id) {
+  const sheet = document.getElementById(id);
+  if (!sheet) return;
+  document.getElementById('dsScrim').dataset.open = 'true';
+  sheet.dataset.open = 'true';
+}
+function closeSheet(id) {
+  const sheet = document.getElementById(id);
+  if (sheet) sheet.dataset.open = 'false';
+  // close scrim only if no sheet open
+  const anyOpen = document.querySelectorAll('.ds-sheet[data-open="true"]').length > 0;
+  if (!anyOpen) document.getElementById('dsScrim').dataset.open = 'false';
+}
+function closeAllSheets() {
+  document.querySelectorAll('.ds-sheet').forEach(s => s.dataset.open = 'false');
+  document.getElementById('dsScrim').dataset.open = 'false';
+}
+
+function setTheme(theme, btn) {
+  document.documentElement.dataset.theme = theme;
+  document.querySelectorAll('.theme-switch button').forEach(b => b.setAttribute('aria-pressed', 'false'));
+  if (btn) btn.setAttribute('aria-pressed', 'true');
+}
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  document.querySelectorAll('.theme-switch').forEach(group => {
+    group.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String((i === 0) === (next === 'light'))));
+  });
+}
+
+function openCmdk() {
+  document.getElementById('cmdk').dataset.open = 'true';
+  setTimeout(() => document.getElementById('cmdkInput').focus(), 50);
+}
+function closeCmdk() {
+  document.getElementById('cmdk').dataset.open = 'false';
+  document.getElementById('cmdkInput').value = '';
+}
+
+function setSettingsTab(name, btn) {
+  document.querySelectorAll('.settings__nav-item').forEach(b => b.dataset.active = 'false');
+  if (btn) btn.dataset.active = 'true';
+  document.querySelectorAll('.settings__pane').forEach(p => p.dataset.active = (p.dataset.pane === name));
+}
+
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    if (document.getElementById('cmdk').dataset.open === 'true') closeCmdk();
+    else openCmdk();
+  }
+  if (e.key === 'Escape' && document.getElementById('cmdk').dataset.open === 'true') {
+    closeCmdk();
+  }
+  if (e.key === 'Escape' && document.querySelectorAll('.ds-sheet[data-open="true"]').length > 0) {
+    closeAllSheets();
+  }
+});
+
+// Click jobs item highlights it (mock)
+document.querySelectorAll('.jobs__item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.jobs__item').forEach(i => i.dataset.active = 'false');
+    item.dataset.active = 'true';
+  });
+});
+
+// CV picker
+function pickCv(name, sub) {
+  const trigger = document.querySelector('#cvMenu').previousElementSibling;
+  trigger.querySelector('span > span > span:nth-child(1)').textContent = name;
+  trigger.querySelector('span > span > span:nth-child(2)').textContent = sub;
+  document.getElementById('cvMenu').hidden = true;
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('cvMenu');
+  if (menu && !menu.hidden && !menu.contains(e.target) && !menu.previousElementSibling.contains(e.target)) {
+    menu.hidden = true;
+  }
+  // Generic anchored menus
+  document.querySelectorAll('.ds-menu[data-anchored="true"]').forEach(m => {
+    if (!m.hidden && !m.contains(e.target) && !m._trigger?.contains(e.target)) {
+      m.hidden = true;
+      m.dataset.anchored = 'false';
+    }
+  });
+});
+
+function toggleAnchoredMenu(id, trigger) {
+  const m = document.getElementById(id);
+  if (!m) return;
+  const wasOpen = !m.hidden;
+  // close all other menus first
+  document.querySelectorAll('.ds-menu').forEach(x => { if (x !== m) { x.hidden = true; x.dataset.anchored = 'false'; }});
+  m.hidden = wasOpen;
+  m.dataset.anchored = wasOpen ? 'false' : 'true';
+  m._trigger = trigger;
+}
+
+// Live render — sync rail inputs to paper
+function updatePaperCompany(value) {
+  const v = value || '...';
+  ['paperGreet', 'paperCompany', 'paperCompany2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = v;
+  });
+}
+
+// Template picker
+function pickTemplate(card, name) {
+  document.querySelectorAll('.tpl-card').forEach(c => c.dataset.selected = 'false');
+  card.dataset.selected = 'true';
+}
+
+// Document style live preview
+const STYLE = { font: 'serif', weight: 600, size: 12, line: 1.6, accent: '#A84E2E', margin: 32 };
+function setStyle(key, value, btn) {
+  STYLE[key] = value;
+  if (btn) {
+    const group = btn.parentElement;
+    group.querySelectorAll('button').forEach(b => b.dataset.selected = 'false');
+    btn.dataset.selected = 'true';
+  }
+  applyStyle();
+}
+function applyStyle() {
+  const p = document.getElementById('stylePreview');
+  if (!p) return;
+  const fontMap = {
+    serif: '"Baskervville", Georgia, serif',
+    sans: 'var(--font-body)',
+    iowan: '"Iowan Old Style", Georgia, serif'
+  };
+  p.style.fontFamily = fontMap[STYLE.font];
+  p.style.fontSize = STYLE.size + 'px';
+  p.style.lineHeight = STYLE.line;
+  p.style.padding = STYLE.margin + 'px';
+  const h1 = p.querySelector('h1');
+  if (h1) {
+    h1.style.fontWeight = STYLE.weight;
+    h1.style.borderBottomColor = STYLE.accent;
+  }
+}
+
+// Onboarding
+let onbCurrent = 1;
+const ONB_TOTAL = 6;
+function openOnboarding() {
+  onbCurrent = 1;
+  renderOnb();
+  document.getElementById('onb').dataset.open = 'true';
+}
+function closeOnboarding() {
+  document.getElementById('onb').dataset.open = 'false';
+}
+function onbStep(delta) {
+  const next = onbCurrent + delta;
+  if (next < 1) return;
+  if (next > ONB_TOTAL) { closeOnboarding(); return; }
+  onbCurrent = next;
+  renderOnb();
+}
+function renderOnb() {
+  document.querySelectorAll('.onb__pane').forEach(p => p.dataset.active = (Number(p.dataset.step) === onbCurrent));
+  document.querySelectorAll('#onbSteps .onb__step-dot').forEach((d, i) => {
+    if (i + 1 < onbCurrent) d.dataset.state = 'done';
+    else if (i + 1 === onbCurrent) d.dataset.state = 'active';
+    else d.removeAttribute('data-state');
+  });
+  document.getElementById('onbBack').style.visibility = onbCurrent === 1 ? 'hidden' : 'visible';
+  document.getElementById('onbNext').textContent = onbCurrent === ONB_TOTAL ? 'Get started' : 'Continue';
+  document.getElementById('onbCounter').textContent = `Step ${onbCurrent} of ${ONB_TOTAL}`;
+}
+// Choice selection in onboarding
+document.querySelectorAll('.onb__choice').forEach(c => {
+  c.addEventListener('click', () => {
+    c.parentElement.querySelectorAll('.onb__choice').forEach(s => s.dataset.selected = 'false');
+    c.dataset.selected = 'true';
+  });
+});
+
+// Rail tabs (CV forge)
+function setRailTab(forge, name, btn) {
+  const aside = btn.closest('aside');
+  aside.querySelectorAll('.rail-tabs button').forEach(b => b.dataset.active = 'false');
+  btn.dataset.active = 'true';
+  aside.querySelectorAll('.rail-pane').forEach(p => p.dataset.active = (p.dataset.railPane === name));
+}
+
+// Single-select within group: font pairs, layouts, signatures, swatches
+['.fontpair', '.layout-card', '.sig-card', '.style-swatch'].forEach(sel => {
+  document.querySelectorAll(sel).forEach(el => {
+    el.addEventListener('click', () => {
+      el.parentElement.querySelectorAll(sel).forEach(s => s.dataset.selected = 'false');
+      el.dataset.selected = 'true';
+    });
+  });
+});
+</script>
+</body>
+</html>
