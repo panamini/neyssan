@@ -217,6 +217,58 @@ describe("ResumePage", () => {
     expect(summaryStyle?.textTransform).not.toBe("uppercase");
   });
 
+  it("renders rich summary editing in the shared preview renderer", () => {
+    const richSummaryData: ResumeData = {
+      ...resumeMock,
+      summary: "Lead resilient editorial teams.",
+      summaryRich: {
+        blocks: [
+          {
+            kind: "paragraph",
+            runs: [
+              { text: "Lead", bold: true },
+              { text: " resilient editorial teams." },
+            ],
+          },
+        ],
+      },
+    };
+    const onFieldDocChange = vi.fn();
+
+    const { container } = render(
+      <ResumePage
+        data={richSummaryData}
+        mode="swissminima"
+        stylePreset={{
+          ...DEFAULT_VERBATI_STYLE,
+          layout: "swiss",
+        }}
+        inlineEditing={{
+          enabled: true,
+          onActivate: vi.fn(),
+          onDeactivate: vi.fn(),
+          onSummaryChange: vi.fn(),
+          onTextSectionChange: vi.fn(),
+          onFieldChange: vi.fn(),
+          onFieldDocChange,
+        }}
+        stageLayout={FIXED_STAGE_LAYOUT}
+      />,
+    );
+
+    const richSummaryEditor = container.querySelector(
+      ".paper-rich-inline-editor",
+    ) as HTMLElement | null;
+
+    expect(richSummaryEditor).toBeTruthy();
+    expect(richSummaryEditor).toHaveAttribute(
+      "data-paper-field-path",
+      "structuredContent.0.summary",
+    );
+    expect(richSummaryEditor).toHaveAttribute("aria-label", "Edit Summary");
+    expect(richSummaryEditor).toHaveAttribute("data-resume-inline-editable", "true");
+  });
+
   it("keeps Swiss body content on the shared body font while headings stay on the heading font", () => {
     const quietSwiss = {
       ...DEFAULT_VERBATI_STYLE,

@@ -5127,7 +5127,7 @@ export function CvForge(): JSX.Element {
                     className={
                       workspaceMode === "preview"
                         ? "dasti-cv-paper-stage dasti-cv-page-preview-stage"
-                        : "dasti-cv-paper-stage"
+                        : "dasti-cv-paper-stage dasti-cv-paper-stage--compact"
                     }
                     data-cv-workspace-mode={workspaceMode}
                     data-active-paper-edit-section-id={

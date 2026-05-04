@@ -32,6 +32,7 @@ import {
   InlineEditableText,
   type ResumeInlineEditing,
 } from "./InlineEditableText";
+import { PaperRichInlineEditor } from "./RichInlineEditor";
 import {
   PreviewItemRegion,
   PreviewSectionRegion,
@@ -1827,29 +1828,61 @@ function ClassicResumePage({
                 {data.name}
               </h1>
               {renderableTitle ? <p className="title">{renderableTitle}</p> : null}
-              <InlineEditableText
-                className="summary"
-                data-font-probe="body"
-                value={data.summary}
-                editable={Boolean(inlineEditing?.enabled)}
-                editTarget={{
-                  sectionId: data.summarySectionId ?? "summary",
-                  sectionType: "summary",
-                  fieldPath: "structuredContent.0.summary",
-                  fieldKind: "paragraph",
-                }}
-                onActivate={(target) => inlineEditing?.onActivate(target)}
-                onDeactivate={inlineEditing?.onDeactivate}
-                ariaLabel="Edit Summary"
-                onPlainTextChange={(text) => inlineEditing?.onSummaryChange(text)}
-                {...buildPreviewRegionAttrs({
-                  sectionType: "summary",
-                  sectionId: data.summarySectionId,
-                  sectionTitle: "Summary",
-                  activeTarget,
-                  surface: "section",
-                })}
-              />
+              {data.summaryRich ? (
+                <PaperRichInlineEditor
+                  value={data.summary}
+                  rich={data.summaryRich}
+                  editable={Boolean(inlineEditing?.enabled)}
+                  editTarget={{
+                    sectionId: data.summarySectionId ?? "summary",
+                    sectionType: "summary",
+                    fieldPath: "structuredContent.0.summary",
+                    fieldKind: "paragraph",
+                  }}
+                  onActivate={(target) => inlineEditing?.onActivate(target)}
+                  onDeactivate={inlineEditing?.onDeactivate}
+                  onDocChange={inlineEditing?.onFieldDocChange}
+                  ariaLabel="Edit Summary"
+                  style={{
+                    margin: 0,
+                    maxWidth: "var(--header-summary-width)",
+                    fontSize: "var(--text-body-size)",
+                    lineHeight: "var(--text-body-line)",
+                    color: "var(--color-text)",
+                  }}
+                  previewAttrs={buildPreviewRegionAttrs({
+                    sectionType: "summary",
+                    sectionId: data.summarySectionId,
+                    sectionTitle: "Summary",
+                    activeTarget,
+                    surface: "section",
+                  })}
+                />
+              ) : (
+                <InlineEditableText
+                  className="summary"
+                  data-font-probe="body"
+                  value={data.summary}
+                  editable={Boolean(inlineEditing?.enabled)}
+                  editTarget={{
+                    sectionId: data.summarySectionId ?? "summary",
+                    sectionType: "summary",
+                    fieldPath: "structuredContent.0.summary",
+                    fieldKind: "paragraph",
+                  }}
+                  onActivate={(target) => inlineEditing?.onActivate(target)}
+                  onDeactivate={inlineEditing?.onDeactivate}
+                  ariaLabel="Edit Summary"
+                  onPlainTextChange={(text) => inlineEditing?.onSummaryChange(text)}
+                  {...buildPreviewRegionAttrs({
+                    sectionType: "summary",
+                    sectionId: data.summarySectionId,
+                    sectionTitle: "Summary",
+                    activeTarget,
+                    surface: "section",
+                  })}
+                />
+              )}
             </div>
             <HeaderMeta
               items={data.metadata}
@@ -3022,38 +3055,69 @@ function SwissMinimaPage({
         surface="section"
       >
         <div>
-          <InlineEditableText
-            data-font-probe="body"
-            className="summary"
-            value={data.summary}
-            editable={Boolean(inlineEditing?.enabled)}
-            editTarget={{
-              sectionId: data.summarySectionId ?? "summary",
-              sectionType: "summary",
-              fieldPath: "structuredContent.0.summary",
-              fieldKind: "paragraph",
-            }}
-            onActivate={(target) => inlineEditing?.onActivate(target)}
-            onDeactivate={inlineEditing?.onDeactivate}
-            ariaLabel="Edit Summary"
-            onPlainTextChange={(text) => inlineEditing?.onSummaryChange(text)}
-            {...buildPreviewRegionAttrs({
-              sectionType: "summary",
-              sectionId: data.summarySectionId,
-              sectionTitle: "Summary",
-              activeTarget,
-              surface: "item",
-            })}
-            style={{
-              margin: 0,
-              fontFamily: "var(--font-body-family)",
-              color: "var(--color-text)",
-            }}
-          />
+          {data.summaryRich ? (
+            <PaperRichInlineEditor
+              value={data.summary}
+              rich={data.summaryRich}
+              editable={Boolean(inlineEditing?.enabled)}
+              editTarget={{
+                sectionId: data.summarySectionId ?? "summary",
+                sectionType: "summary",
+                fieldPath: "structuredContent.0.summary",
+                fieldKind: "paragraph",
+              }}
+              onActivate={(target) => inlineEditing?.onActivate(target)}
+              onDeactivate={inlineEditing?.onDeactivate}
+              onDocChange={inlineEditing?.onFieldDocChange}
+              ariaLabel="Edit Summary"
+              style={{
+                margin: 0,
+                maxWidth: "var(--header-summary-width)",
+                fontFamily: "var(--font-body-family)",
+                color: "var(--color-text)",
+              }}
+              previewAttrs={buildPreviewRegionAttrs({
+                sectionType: "summary",
+                sectionId: data.summarySectionId,
+                sectionTitle: "Summary",
+                activeTarget,
+                surface: "item",
+              })}
+            />
+          ) : (
+            <InlineEditableText
+              data-font-probe="body"
+              className="summary"
+              value={data.summary}
+              editable={Boolean(inlineEditing?.enabled)}
+              editTarget={{
+                sectionId: data.summarySectionId ?? "summary",
+                sectionType: "summary",
+                fieldPath: "structuredContent.0.summary",
+                fieldKind: "paragraph",
+              }}
+              onActivate={(target) => inlineEditing?.onActivate(target)}
+              onDeactivate={inlineEditing?.onDeactivate}
+              ariaLabel="Edit Summary"
+              onPlainTextChange={(text) => inlineEditing?.onSummaryChange(text)}
+              {...buildPreviewRegionAttrs({
+                sectionType: "summary",
+                sectionId: data.summarySectionId,
+                sectionTitle: "Summary",
+                activeTarget,
+                surface: "item",
+              })}
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-body-family)",
+                color: "var(--color-text)",
+              }}
+            />
+          )}
         </div>
       </PreviewSectionRegion>
     ),
-    [activeTarget, data.summary, data.summarySectionId, inlineEditing],
+    [activeTarget, data.summary, data.summaryRich, data.summarySectionId, inlineEditing],
   );
 
   const renderExperienceHeadingBlock = React.useCallback(
