@@ -9,14 +9,14 @@ describe("useBoundVerbatiCvStyle", () => {
     vi.useFakeTimers();
   });
 
-  it("persists the exact valid style snapshot through importCv", async () => {
+  it("persists the exact valid style snapshot through the style-only callback", async () => {
     const currentCv = generateCvTemplateV1("Verbati Hook CV");
-    const importCv = vi.fn().mockResolvedValue(undefined);
+    const persistStyle = vi.fn().mockResolvedValue(undefined);
 
     const { result } = renderHook(() =>
       useBoundVerbatiCvStyle({
         currentCv,
-        importCv,
+        persistStyle,
         debounceMs: 25,
       }),
     );
@@ -35,18 +35,14 @@ describe("useBoundVerbatiCvStyle", () => {
       await Promise.resolve();
     });
 
-    expect(importCv).toHaveBeenCalledTimes(1);
-    expect(importCv).toHaveBeenCalledWith(
+    expect(persistStyle).toHaveBeenCalledTimes(1);
+    expect(persistStyle).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: currentCv.id,
-        metadata: expect.objectContaining({
-          verbatiStyle: expect.objectContaining({
-            layout: "editorial",
-            palette: "custom",
-            typography: "civic-correspondence",
-            accentHex: "#aa7733",
-          }),
-        }),
+        familyId: "editorial",
+        layout: "editorial",
+        palette: "custom",
+        typography: "civic-correspondence",
+        accentHex: "#aa7733",
       }),
     );
   });

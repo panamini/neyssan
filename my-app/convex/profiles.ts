@@ -346,6 +346,22 @@ export const patch = mutation({
       const incoming: any = (args.profile as any) || {};
       const patchPayload: any =
         args.patch && typeof args.patch === "object" ? args.patch : {};
+      const patchKeys = Object.keys(patchPayload);
+      const incomingKeys = Object.keys(incoming);
+      const isMetadataOnlyPatch =
+        patchKeys.length > 0 &&
+        patchKeys.every((key) => key === "metadata") &&
+        incomingKeys.length === 0;
+
+      if (isMetadataOnlyPatch) {
+        return {
+          profileId: args.profileId,
+          updatedAt: now,
+          written: false,
+          reason: "not_found_metadata_only",
+        };
+      }
+
       const cvScoringFields = buildScoringProfileFieldsFromCvDocument(
         patchPayload.cvDocument ?? incoming.cvDocument,
       );
@@ -433,6 +449,41 @@ export const patch = mutation({
     }
 
     if (!existing) throw new Error("User profile not found");
+
+    const existingPatchPayload: any =
+      args.patch && typeof args.patch === "object" ? args.patch : null;
+    const existingPatchKeys = existingPatchPayload
+      ? Object.keys(existingPatchPayload)
+      : [];
+    const isExistingMetadataOnlyPatch =
+      !args.profile &&
+      existingPatchKeys.length > 0 &&
+      existingPatchKeys.every((key) => key === "metadata");
+
+    if (isExistingMetadataOnlyPatch) {
+      const md = {
+        ...((existing.metadata ?? {}) as Record<string, unknown>),
+        ...(canonicalizeUserProfileMetadata(
+          existingPatchPayload.metadata,
+        ) as Record<string, unknown>),
+      };
+      delete md.updatedAt;
+      delete md.version;
+      delete md.authoritativeResume;
+
+      await ctx.db.patch(existing._id, {
+        metadata: md,
+        updatedAt: now,
+        version: (existing.version || 1) + 1,
+      });
+
+      return {
+        profileId: existing.profileId ?? args.profileId ?? undefined,
+        convexId: existing._id,
+        updatedAt: now,
+        written: true,
+      };
+    }
 
     // If caller provided a full `profile` object, update specific fields (legacy behavior).
     if (args.profile) {

@@ -20,7 +20,6 @@ import {
   getLayoutLabel,
   getVerbatiStyleFromCv,
   resolveVerbatiAccentHex,
-  serializeVerbatiStyle,
   stylesEqual,
   VERBATI_LAYOUT_OPTIONS,
   VERBATI_PALETTE_OPTIONS,
@@ -149,8 +148,14 @@ export function VerbatiStyleWorkspace(): JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
   const isNarrow = useResponsiveWorkspaceBreakpoint();
-  const { cvs, currentCv, currentCvId, importCv, isLoading, loadCv } =
-    useCvLibrary();
+  const {
+    cvs,
+    currentCv,
+    currentCvId,
+    saveCurrentCvStyleOnly,
+    isLoading,
+    loadCv,
+  } = useCvLibrary();
 
   const activeResumeData = React.useMemo(
     () => (currentCv ? buildCanonicalResumeRenderModelFromCv(currentCv) : null),
@@ -307,16 +312,7 @@ export function VerbatiStyleWorkspace(): JSX.Element {
     }
 
     const timeoutId = window.setTimeout(() => {
-      const nextDoc = {
-        ...currentCv,
-        metadata: {
-          ...currentCv.metadata,
-          updatedAt: new Date().toISOString(),
-          verbatiStyle: serializeVerbatiStyle(previewStylePreset),
-        },
-      };
-
-      void importCv(nextDoc).catch((error) => {
+      void saveCurrentCvStyleOnly(previewStylePreset).catch((error) => {
         console.error(
           "[VerbatiStyleWorkspace] Failed to persist style preset",
           error,
@@ -327,7 +323,7 @@ export function VerbatiStyleWorkspace(): JSX.Element {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [currentCv, importCv, persistedStyle, previewStylePreset]);
+  }, [currentCv, persistedStyle, previewStylePreset, saveCurrentCvStyleOnly]);
 
   React.useEffect(() => {
     setPendingStyleCvId(currentCvId);

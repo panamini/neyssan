@@ -26,7 +26,7 @@ Scope: `/cv` only. Audit only; no implementation in this slice.
 - The rail has Sections, Ask, and Style tabs. Sections are reorderable, hide/showable, deletable, and can open section-specific sheet editors.
 - The paper is now an edit/focus surface in edit mode and uses the same canonical section update paths for inline field edits.
 - Page preview routes through the live `VerbatiResumePreview` canvas path and the workshop template renderer when the active style resolves to `workshop_resume_onecol_ats`.
-- The save-size / Convex payload risk called out in the carry-forward checklist has already been handled in the earlier backend payload-size fix pass.
+- The save-size / Convex payload risk called out in the carry-forward checklist is only partially mitigated: backend stripping removed some oversized metadata fields, but style edits still route through the same full `profiles:patch` CV document path and can still trigger the 1 MiB ceiling on large CVs.
 - The latest Proposal-to-CV entry action fix is outside this audit but now routes `Create new CV` / `Import new CV` directly to CV Forge.
 
 ## PR4 checklist status
@@ -40,7 +40,7 @@ Scope: `/cv` only. Audit only; no implementation in this slice.
 | Rail tabs | Partial | Sections/Ask/Style tabs exist. The collapsed AI stream is tied to import progress only and uses static stage copy; it is not a general live AI stream across all AI work. |
 | Sections tab | Mostly complete | Reorder, active row, hide/show, delete, add section, and per-row Ask/wand exist. Delete undo remains missing. Add menu omits some PR4 requested presets such as Publications, Awards, Volunteer, and References. |
 | Ask AI tab | Partial | It is section-scoped and does not offer whole-CV rewrite. Structured suggestions exist for Skills/Languages/Hobbies. Some item/editor AI paths live in `SectionEditorSheet`. Default tone wiring is incomplete; see below. |
-| Style tab | Partial | Per-document style controls exist and persist through `useBoundVerbatiCvStyle`. Current tab exposes only Workshop template in the active UI and uses component-level accent hex values for swatches rather than a fully tokenized selector contract. |
+| Style tab | Partial | Per-document style controls exist and persist through `useBoundVerbatiCvStyle`. Active selector flow is workshop-based (`familyId/layout === workshop`) and the active UI exposes only the Workshop template family; legacy layout aliases are preserved only as compatibility normalization for existing docs, not as active style selectors. It also uses component-level accent hex values for swatches rather than a fully tokenized selector contract. |
 | Footer import row | Partial | Sticky Import PDF exists. PR4 Paste text footer entry is not present. Empty state has Upload PDF and Start blank, but no Paste text action. |
 | Section editor sheet | Mostly complete | A single sheet switches by section type and covers profile/contact, summary, experience, education, projects, skills/languages/hobbies, achievements, certifications, and generic text. Some PR4 generic list families still fall through to text/generic behavior. |
 | Import review sheet | Partial | UI shape exists with compare blocks and local Accept/Edit/Delete. Actions currently mutate only sheet-local state; they do not commit to active CV state or update `metadata.importRecoverySession.reviewStatus`. Export is not blocked by unresolved import blocks. |

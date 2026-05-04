@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { VerbatiCvPreviewPanel } from "../VerbatiCvPreviewPanel";
 
 const mockImportCv = vi.fn().mockResolvedValue(undefined);
+const mockSaveCurrentCvStyleOnly = vi.fn().mockResolvedValue(undefined);
 const mockHasRenderableResumeData = vi.fn(() => true);
 let mockIsLibraryHydrated = true;
 const mockMapCvDocumentToResumeData = vi.fn(() => ({
@@ -52,6 +53,7 @@ vi.mock("../../../contexts/CvLibraryContext", () => ({
   useCvLibrary: () => ({
     currentCv: mockCurrentCv,
     importCv: mockImportCv,
+    saveCurrentCvStyleOnly: mockSaveCurrentCvStyleOnly,
     isLibraryHydrated: mockIsLibraryHydrated,
   }),
 }));
@@ -142,6 +144,7 @@ vi.mock("../VerbatiResumePreview", () => ({
 describe("VerbatiCvPreviewPanel", () => {
   beforeEach(() => {
     mockImportCv.mockClear();
+    mockSaveCurrentCvStyleOnly.mockClear();
     mockHasRenderableResumeData.mockReset();
     mockHasRenderableResumeData.mockReturnValue(true);
     mockMapCvDocumentToResumeData.mockReset();

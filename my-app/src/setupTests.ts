@@ -56,6 +56,7 @@ const makeDefaultCvLibCtx = () => {
     isDirty: false,
     loadCv: () => false,
     saveCurrentCv: asyncNoop,
+    saveCurrentCvStyleOnly: asyncNoop,
     createCvFromState: noop,
     createNewCv: noop,
     importCv: asyncNoop,
