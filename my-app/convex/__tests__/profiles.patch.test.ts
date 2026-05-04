@@ -155,6 +155,89 @@ describe("profiles.patch resume scoring sync", () => {
     expect(fields.raw_text).toContain("part-time luxury retail displays");
   });
 
+  it("does not create a profile row for metadata-only style patches", async () => {
+    const ctx = makePatchCtx([]);
+
+    await patchProfile._handler(
+      ctx as any,
+      {
+        profileId: "cv_content",
+        patch: {
+          metadata: {
+            verbatiStyle: {
+              layout: "workshop",
+              typography: "geist-baskervville",
+              palette: "sauge",
+            },
+          },
+        },
+      },
+    );
+
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("patches existing profile metadata-only style changes without cvDocument or metadata loss", async () => {
+    const existing = {
+      _id: "profile_doc_id",
+      _creationTime: 100,
+      profileId: "cv_content",
+      clerkId: "clerk_123",
+      email: "candidate@example.com",
+      version: 1,
+      createdAt: 100,
+      updatedAt: 100,
+      skills: ["Existing skill"],
+      keywords: ["existing"],
+      experience: [],
+      raw_text: "Existing raw text",
+      summary: "Existing summary",
+      metadata: {
+        source: "legacy-import",
+        importedAt: 123,
+        confidence: 0.82,
+        filename: "resume.pdf",
+      },
+      cvDocument: makeMatchableCvDocument(),
+    };
+    const ctx = makePatchCtx([existing]);
+
+    await patchProfile._handler(
+      ctx as any,
+      {
+        profileId: "cv_content",
+        patch: {
+          metadata: {
+            verbatiStyle: {
+              layout: "workshop",
+              typography: "geist-baskervville",
+              palette: "sauge",
+            },
+          },
+        },
+      },
+    );
+
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "profile_doc_id",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          source: "legacy-import",
+          importedAt: 123,
+          confidence: 0.82,
+          filename: "resume.pdf",
+          verbatiStyle: {
+            layout: "workshop",
+            typography: "geist-baskervville",
+            palette: "sauge",
+          },
+        }),
+      }),
+    );
+    expect(ctx.db.patch.mock.calls[0][1].cvDocument).toBeUndefined();
+  });
+
   it("populates server scoring fields when creating a profile from patch-only CV save", async () => {
     const ctx = makePatchCtx([]);
 

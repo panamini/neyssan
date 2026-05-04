@@ -173,6 +173,42 @@ export class ConvexStorageAdapter {
   }
 
   /**
+   * Persist a metadata-only CV patch to Convex without sending the embedded cvDocument.
+   * The backend treats metadata-only patches as existing-row-only, so this cannot create
+   * orphan/duplicate profile rows when the remote CV document has not been created yet.
+   */
+  public async saveMetadataPatch(
+    cvId: string,
+    metadataPatch: Pick<CvDocument["metadata"], "verbatiStyle">,
+  ): Promise<void> {
+    const metadata: Record<string, unknown> = {};
+    if (metadataPatch?.verbatiStyle !== undefined) {
+      metadata.verbatiStyle = sanitizeBackendVerbatiStyle(
+        metadataPatch.verbatiStyle,
+      );
+    }
+
+    try {
+      await this._patchMutation({
+        profileId: cvId,
+        patch: { metadata },
+      });
+    } catch (error) {
+      if (!isUnauthorizedProfileAccessError(error)) {
+        throw error;
+      }
+
+      try {
+        dbg("[ConvexStorageAdapter] unauthorized metadata patch skipped", {
+          docId: cvId,
+        });
+      } catch {
+        /* noop */
+      }
+    }
+  }
+
+  /**
    * Save a CvDocument to Convex and localStorage
    */
   public async save(cv: CvDocument): Promise<void> {

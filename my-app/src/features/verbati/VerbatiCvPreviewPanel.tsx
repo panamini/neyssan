@@ -6,7 +6,6 @@ import { resumeMock } from "./resume/resume.mock";
 import {
   getVerbatiStyleFromCv,
   resolveVerbatiStyle,
-  serializeVerbatiStyle,
   stylesEqual,
 } from "./style";
 import {
@@ -51,7 +50,8 @@ export function VerbatiCvPreviewPanel({
   onLinkIntent,
   activeTarget = null,
 }: VerbatiCvPreviewPanelProps): JSX.Element {
-  const { currentCv, importCv, isLibraryHydrated } = useCvLibrary();
+  const { currentCv, importCv, isLibraryHydrated, saveCurrentCvStyleOnly } =
+    useCvLibrary();
   const previewCvDocument = cvDocumentOverride ?? currentCv;
   const persistedStylePreset = React.useMemo(
     () => getVerbatiStyleFromCv(currentCv),
@@ -189,16 +189,7 @@ export function VerbatiCvPreviewPanel({
     }
 
     const timeoutId = window.setTimeout(() => {
-      const nextDoc = {
-        ...currentCv,
-        metadata: {
-          ...currentCv.metadata,
-          updatedAt: new Date().toISOString(),
-          verbatiStyle: serializeVerbatiStyle(stylePreset),
-        },
-      };
-
-      void importCv(nextDoc).catch((error) => {
+      void saveCurrentCvStyleOnly(stylePreset).catch((error) => {
         console.error(
           "[VerbatiCvPreviewPanel] Failed to persist style preset",
           error,
@@ -209,7 +200,7 @@ export function VerbatiCvPreviewPanel({
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [currentCv, importCv, persistedStylePreset, stylePreset]);
+  }, [currentCv, persistedStylePreset, saveCurrentCvStyleOnly, stylePreset]);
 
   const handleCycleBundle = React.useCallback(
     (direction: -1 | 1) => {

@@ -2047,6 +2047,7 @@ export function CvForge(): JSX.Element {
     cvs,
     createNewCv,
     importCv,
+    saveCurrentCvStyleOnly,
     isLoading: isCvLibraryLoading,
     isLibraryHydrated,
     lastLibraryFetchFailed,
@@ -2212,7 +2213,7 @@ export function CvForge(): JSX.Element {
   );
   const { stylePreset, setStylePreset } = useBoundVerbatiCvStyle({
     currentCv,
-    importCv,
+    persistStyle: saveCurrentCvStyleOnly,
     debounceMs: 700,
     logPrefix: "[CvForge]",
   });

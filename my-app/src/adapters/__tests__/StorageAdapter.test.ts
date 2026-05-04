@@ -399,6 +399,33 @@ describe("StorageAdapter persistence", () => {
     ).toHaveLength(650_000);
   });
 
+  it("saves style-only metadata without sending cvDocument", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+
+    await expect(
+      adapter.saveMetadataPatch("styled-cv", {
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          palette: "bordeaux",
+          typography: "soft-serif",
+          accentHex: "#9a2d45",
+        },
+      } as any),
+    ).resolves.toBeUndefined();
+
+    expect(patchMutation).toHaveBeenCalledTimes(1);
+    const payload = patchMutation.mock.calls[0][0].patch;
+    expect(payload.cvDocument).toBeUndefined();
+    expect(payload.metadata.verbatiStyle).toEqual({
+      layout: "workshop",
+      palette: "bordeaux",
+      typography: "soft-serif",
+      accentHex: "#9a2d45",
+    });
+  });
+
   it("sends metadata.verbatiStyle through patch metadata and keeps it in cvDocument", async () => {
     const patchMutation = vi.fn().mockResolvedValue(undefined);
     const adapter = new ConvexStorageAdapter(patchMutation);

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { VerbatiCvPreviewPanel } from "../VerbatiCvPreviewPanel";
 
 const mockImportCv = vi.fn().mockResolvedValue(undefined);
+const mockSaveCurrentCvStyleOnly = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("../../../contexts/CvLibraryContext", () => ({
   useCvLibrary: () => ({
@@ -12,6 +13,7 @@ vi.mock("../../../contexts/CvLibraryContext", () => ({
       metadata: {},
     },
     importCv: mockImportCv,
+    saveCurrentCvStyleOnly: mockSaveCurrentCvStyleOnly,
   }),
 }));
 

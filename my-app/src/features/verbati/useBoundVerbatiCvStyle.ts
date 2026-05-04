@@ -1,16 +1,12 @@
 import React from "react";
 import type { CvDocument } from "../../types/cvDocument";
 import type { VerbatiStylePreset } from "./types";
-import {
-  getVerbatiStyleFromCv,
-  serializeVerbatiStyle,
-  stylesEqual,
-} from "./style";
+import { getVerbatiStyleFromCv, stylesEqual } from "./style";
 import { canonicalizeVisualStyle } from "./styleState";
 
 type UseBoundVerbatiCvStyleArgs = {
   currentCv: CvDocument | null | undefined;
-  importCv: (doc: CvDocument) => Promise<void>;
+  persistStyle: (style: VerbatiStylePreset) => Promise<void>;
   debounceMs?: number;
   logPrefix?: string;
 };
@@ -22,7 +18,7 @@ type UseBoundVerbatiCvStyleResult = {
 
 export function useBoundVerbatiCvStyle({
   currentCv,
-  importCv,
+  persistStyle,
   debounceMs = 700,
   logPrefix = "[useBoundVerbatiCvStyle]",
 }: UseBoundVerbatiCvStyleArgs): UseBoundVerbatiCvStyleResult {
@@ -54,16 +50,7 @@ export function useBoundVerbatiCvStyle({
     }
 
     const timeoutId = window.setTimeout(() => {
-      const nextDoc: CvDocument = {
-        ...currentCv,
-        metadata: {
-          ...currentCv.metadata,
-          updatedAt: new Date().toISOString(),
-          verbatiStyle: serializeVerbatiStyle(canonicalStylePreset),
-        },
-      };
-
-      void importCv(nextDoc).catch((error) => {
+      void persistStyle(canonicalStylePreset).catch((error) => {
         console.error(`${logPrefix} Failed to persist style preset`, error);
       });
     }, debounceMs);
@@ -74,7 +61,7 @@ export function useBoundVerbatiCvStyle({
   }, [
     currentCv,
     debounceMs,
-    importCv,
+    persistStyle,
     logPrefix,
     persistedStylePreset,
     stylePreset,

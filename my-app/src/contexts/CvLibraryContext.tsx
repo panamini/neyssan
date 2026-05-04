@@ -58,6 +58,8 @@ import {
   LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY,
   LOCAL_CV_LIBRARY_STORAGE_KEY,
 } from "../lib/cv-local-storage";
+import { serializeVerbatiStyle } from "../features/verbati/style";
+import type { VerbatiStylePreset } from "../features/verbati/types";
 
 /**
  * Small, safe deep equality check used for dirty detection.
@@ -470,6 +472,8 @@ export interface ICvLibraryContext {
   // Import a fully-normalized CvDocument (used by file import workflows).
   // This replaces the current CV with the provided document and schedules persistence.
   importCv: (doc: CvDocument) => Promise<void>;
+  // Persist visual style metadata without sending the full cvDocument to Convex.
+  saveCurrentCvStyleOnly: (style: VerbatiStylePreset) => Promise<void>;
   // Atomic actions for block-based editor
   updateSectionTitle: (sectionId: string, newTitle: string) => void;
   updateBlockTitle: (
@@ -2966,6 +2970,34 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCv, adapter]);
 
+  const saveCurrentCvStyleOnly = useCallback(
+    async (style: VerbatiStylePreset): Promise<void> => {
+      const activeDoc = currentCvRef.current;
+      if (!activeDoc) return;
+
+      const verbatiStyle = serializeVerbatiStyle(style);
+      const nextDoc: CvDocument = {
+        ...activeDoc,
+        metadata: {
+          ...(activeDoc.metadata ?? {}),
+          updatedAt: new Date().toISOString(),
+          verbatiStyle,
+        },
+      };
+
+      safeSetCurrentCv(nextDoc);
+      setCvs((prev) =>
+        prev.map((doc) =>
+          String(doc.id) === String(nextDoc.id) ? nextDoc : doc,
+        ),
+      );
+      cacheDocumentLocally(nextDoc);
+
+      await adapter.saveMetadataPatch(nextDoc.id, { verbatiStyle } as any);
+    },
+    [adapter],
+  );
+
   // Trigger debounced persistence whenever the current CV is mutated and considered dirty.
   // Re-introducing a more controlled and stable save trigger. The previous effect,
   // which was dependent on the entire `currentCv` object, was the source of the
@@ -3828,6 +3860,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       createCvFromState,
       createNewCv,
       importCv,
+      saveCurrentCvStyleOnly,
       updateSectionTitle,
       updateBlockTitle,
       updateBlockContent,
@@ -3880,6 +3913,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       createCvFromState,
       createNewCv,
       importCv,
+      saveCurrentCvStyleOnly,
       updateSectionTitle,
       updateBlockTitle,
       updateBlockContent,
