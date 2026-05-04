@@ -9,10 +9,12 @@ Date: 2026-03-21
 - [x] Proposal compose/output spacing and fade behavior tightened
 - [x] Studio routing fixed to open the active CV deterministically (`/cv?id=...`)
 - [x] Theme icon pass updated (`Moon` for dark mode)
+- [x] Completed CV `/style` and `/cv` style-only persistence hardening with metadata patching + backend metadata merge safety.
+- [x] Reworked `e2e/cvforge-preview-linking.spec.ts` to stabilize preview-mode selectors and close behavior around section-linking modals.
 
 ## Next Step (priority)
 
-- [x] Run a focused cross-breakpoint visual QA pass for `Proposal` (`desktop`, `tablet`, `mobile`) in both themes, then freeze styles.
+- [ ] Reconfirm cross-breakpoint `Proposal` visual QA (`desktop`, `tablet`, `mobile`) in both themes, then freeze styles.
   - Validate: same typography rhythm in preview/edit
   - Validate: bottom text alignment left/right sheets
   - Validate: fixed bottom fade visibility (subtle, no frost)

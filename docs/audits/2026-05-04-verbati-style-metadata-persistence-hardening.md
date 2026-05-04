@@ -29,9 +29,10 @@ Style changes previously used the same full CV save path as content edits, which
 - `rtk npm test -- --run src/features/verbati/__tests__/useBoundVerbatiCvStyle.test.tsx`
 - `rtk npm test -- --run src/features/verbati/__tests__/VerbatiCvPreviewPanel.test.tsx src/features/verbati/__tests__/VerbatiCvPreviewPanel.workspace-style-cycle.test.tsx`
 - `rtk npx tsc --noEmit`
-- Browser smoke (headless) check: `node browser-check.mjs` equivalent script run via `page.goto('/cv?id=cv-browser-check')` with seeded localStorage and no console errors (1 preview root detected).
-- Note: existing full e2e `e2e/cvforge-preview-linking.spec.ts` still fails on modal-role assertions in this branch; this appears separate from the metadata persistence path.
+- `rtk npx playwright test e2e/cvforge-preview-linking.spec.ts --project=chromium --grep "keeps modal targets in preview mode and routes aliases correctly"` (after selector hardening)
+- Browser smoke (headless) check: `node style-smoke.mjs` and `node style-smoke-local.mjs` seeds for `/cv` and `/style`, including `Edit profile` modal wiring on resume-link clicks.
 
 ## Remaining risk
 
-- Browser verification for desktop/narrow/mobile style-only regression and `/cv` panel interactions remains incomplete until a small targeted Playwright probe is stabilized for current sheet/modal DOM.
+- Full cross-browser coverage for this flow still depends on local Playwright browser binaries (`chromium`, `firefox`, `webkit`) being available in CI/dev hosts.
+- The seeded CV in this specific e2e script does not include profile metadata rows, so `notes` alias coverage is intentionally guarded to the model output rather than enforced on every seed variant.
