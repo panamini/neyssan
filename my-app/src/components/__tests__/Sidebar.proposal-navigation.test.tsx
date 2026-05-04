@@ -3,7 +3,6 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Sidebar } from "../Sidebar";
-import { createQuickStartLocationState } from "../../lib/quick-start-routing";
 import {
   PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
   readStoredProposalOutputDraft,
@@ -165,6 +164,10 @@ function writeProposalDraftToStorage(): void {
   );
 }
 
+function pinSidebar(): void {
+  fireEvent.click(screen.getByRole("button", { name: "Pin sidebar" }));
+}
+
 describe("Sidebar proposal navigation", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -195,7 +198,7 @@ describe("Sidebar proposal navigation", () => {
 
     writeProposalDraftToStorage();
 
-    fireEvent.click(screen.getByRole("link", { name: "Cover letters" }));
+    fireEvent.click(screen.getByRole("link", { name: "Proposal forge" }));
 
     expect(screen.getByTestId("proposal-compose-title")).toHaveTextContent(
       "Operations Associate",
@@ -252,10 +255,9 @@ describe("Sidebar proposal navigation", () => {
     expect(
       screen.getByRole("button", { name: "Sign In" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Save draft")).toBeInTheDocument();
   });
 
-  it("shows the sidebar toggle label only in expanded mode", () => {
+  it("shows the sidebar brand label only when hovered or pinned open", () => {
     const { unmount } = render(
       <MemoryRouter initialEntries={["/cv"]}>
         <Sidebar />
@@ -266,9 +268,13 @@ describe("Sidebar proposal navigation", () => {
       </MemoryRouter>,
     );
 
-    const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
+    const toggle = screen.getByRole("button", { name: "Pin sidebar" });
+    expect(toggle).toHaveTextContent("tw.");
+    expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(document.querySelector("aside.sb")!);
+
     expect(toggle).toHaveClass("sb-toggle--labeled");
-    expect(toggle.querySelector("svg")).toBeNull();
     expect(toggle).toHaveTextContent("two weeks.");
     expect(screen.getByText("two weeks")).toHaveClass("sb-toggle__label");
 
@@ -285,14 +291,14 @@ describe("Sidebar proposal navigation", () => {
     );
 
     const collapsedToggle = screen.getByRole("button", {
-      name: "Expand sidebar",
+      name: "Pin sidebar",
     });
     expect(collapsedToggle).toHaveTextContent("tw.");
     expect(collapsedToggle.querySelector("svg")).toBeNull();
     expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
   });
 
-  it("keeps expanded sidebar content mounted until the collapse width animation completes", () => {
+  it("keeps expanded sidebar content mounted until the unpin collapse animation completes", () => {
     vi.useFakeTimers();
 
     try {
@@ -306,10 +312,15 @@ describe("Sidebar proposal navigation", () => {
         </MemoryRouter>,
       );
 
+      expect(container.querySelector(".sb__nav--stack")).toBeNull();
+      expect(container.querySelector(".sb__nav--rail")).not.toBeNull();
+
+      pinSidebar();
+
       expect(container.querySelector(".sb__nav--stack")).not.toBeNull();
       expect(container.querySelector(".sb__nav--rail")).toBeNull();
 
-      fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+      fireEvent.click(screen.getAllByRole("button", { name: "Unpin sidebar" })[0]);
 
       expect(container.querySelector(".sb--collapsed")).not.toBeNull();
       expect(container.querySelector(".sb__nav--stack")).not.toBeNull();
@@ -342,15 +353,13 @@ describe("Sidebar proposal navigation", () => {
       "href",
       "/jobs",
     );
-    expect(screen.getByRole("button", { name: "Start" })).toHaveClass(
+    pinSidebar();
+
+    expect(screen.getByRole("link", { name: /Jobs/ })).toHaveClass(
       "sb-section__action",
     );
-    expect(
-      screen.getByRole("button", { name: "Start" }).closest(".sb-section"),
-    ).toBe(screen.getByRole("link", { name: "Jobs" }).closest(".sb-section"));
-    expect(
-      screen.getByRole("button", { name: "Start" }).closest(".sb-section"),
-    ).toHaveClass("sb-section--primary-nav");
+    expect(screen.getByText("Workspace")).toBeInTheDocument();
+    expect(screen.queryByText(/Onboarding \(preview\)/i)).not.toBeInTheDocument();
   });
 
   it("fully removes the sidebar from layout on very narrow mobile widths", () => {
@@ -384,6 +393,7 @@ describe("Sidebar proposal navigation", () => {
       screen.queryByText("Operations Associate Proposal"),
     ).not.toBeInTheDocument();
 
+    pinSidebar();
     writeProposalDraftToStorage();
     await act(async () => {
       window.dispatchEvent(new Event("focus"));
@@ -396,7 +406,7 @@ describe("Sidebar proposal navigation", () => {
     });
   });
 
-  it("opens Start as a shell-level action from the current workspace", () => {
+  it("does not ship the static skeleton onboarding preview link", () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <Sidebar />
@@ -404,16 +414,15 @@ describe("Sidebar proposal navigation", () => {
           <Route path="/cv" element={<CvRoute />} />
           <Route path="/proposal" element={<ProposalRouteProbe />} />
         </Routes>
-        <LocationProbe />
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    pinSidebar();
 
-    expect(mockCvLibraryState.createNewCv).not.toHaveBeenCalled();
-    expect(screen.getByTestId("sidebar-location")).toHaveTextContent(
-      `/proposal::${JSON.stringify(createQuickStartLocationState(null))}`,
-    );
+    expect(screen.queryByText("Onboarding (preview)")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Replay onboarding" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the resume workspace item visible from currentCvId while proposal stays active", () => {
@@ -437,6 +446,8 @@ describe("Sidebar proposal navigation", () => {
       </MemoryRouter>,
     );
 
+    pinSidebar();
+
     expect(screen.getByText("Operations Associate Proposal")).toBeInTheDocument();
     expect(screen.getByText("Alex Martin Resume")).toBeInTheDocument();
   });
@@ -451,6 +462,8 @@ describe("Sidebar proposal navigation", () => {
         </Routes>
       </MemoryRouter>,
     );
+
+    pinSidebar();
 
     expect(screen.getByText("Saved proposal beta").closest("a")).toHaveAttribute(
       "href",
@@ -471,6 +484,8 @@ describe("Sidebar proposal navigation", () => {
       </MemoryRouter>,
     );
 
+    pinSidebar();
+
     expect(screen.getByText("Operations Associate Proposal")).toBeInTheDocument();
     expect(screen.getByText("Saved proposal beta")).toBeInTheDocument();
     expect(screen.queryByText("Server draft proposal")).not.toBeInTheDocument();
@@ -479,7 +494,7 @@ describe("Sidebar proposal navigation", () => {
   it("shows the just-saved proposal in the saved list immediately when the saved route opens", () => {
     writeProposalDraftToStorage();
 
-    const { container } = render(
+    render(
       <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_new"]}>
         <Sidebar />
         <Routes>
@@ -489,12 +504,11 @@ describe("Sidebar proposal navigation", () => {
       </MemoryRouter>,
     );
 
-    const savedLink = container.querySelector(
-      'a[href="/proposal?view=saved&id=proposal_new"]',
-    );
+    pinSidebar();
 
-    expect(savedLink).not.toBeNull();
-    expect(savedLink).toHaveTextContent("Operations Associate Proposal");
+    expect(
+      screen.getByText("Operations Associate Proposal").closest("a"),
+    ).toHaveAttribute("href", "/proposal?view=saved&id=proposal_new");
   });
 
   it("uses in-place active rows instead of a separate Current section", () => {
@@ -516,11 +530,13 @@ describe("Sidebar proposal navigation", () => {
       </MemoryRouter>,
     );
 
+    pinSidebar();
+
     expect(screen.queryByText("Current")).not.toBeInTheDocument();
-    expect(screen.getByText("Cover letters")).toBeInTheDocument();
-    expect(screen.getByText("Resumes")).toBeInTheDocument();
+    expect(screen.getByText("Recent")).toBeInTheDocument();
+    expect(screen.getByText("Documents")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Operations Associate Proposal" }),
+      screen.getByText("Operations Associate Proposal").closest("a"),
     ).toHaveAttribute("aria-current", "page");
   });
 });
