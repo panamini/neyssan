@@ -1043,6 +1043,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--s1);
+    overflow: auto;
     opacity: 0;
     transform: translateY(-4px) scale(0.98);
     transform-origin: top left;
@@ -1155,6 +1156,16 @@
     letter-spacing: 0.04em;
   }
 
+  .ds-menu__selected {
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--ac);
+  }
+
   .ds-menu__separator {
     height: 1px;
     margin: var(--s2) 0;
@@ -1261,6 +1272,7 @@
   .ds-sheet__close:focus-visible {
     outline: 2px solid var(--ti);
     outline-offset: 2px;
+    box-shadow: none;
   }
 
   .ds-sheet__body {
@@ -1353,9 +1365,17 @@
     width: 240px;
     height: 32px;
     padding: 0 var(--s2);
+    border: 1px solid var(--bc);
     border-radius: var(--radius-1);
     background: var(--sf2);
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: none;
     transition: width var(--motion-duration-medium) var(--motion-ease-emphasized);
+  }
+
+  .ds-ask-ai:focus-within {
+    outline-color: var(--fr);
   }
 
   .ds-ask-ai__input {
@@ -1363,12 +1383,14 @@
     min-width: 0;
     height: 100%;
     padding: 0;
+    appearance: none;
     border: 0;
     background: transparent;
     color: var(--ti);
     font: inherit;
     font-size: var(--ts);
     outline: none;
+    box-shadow: none !important;
   }
 
   .ds-ask-ai__input::placeholder {
@@ -1377,6 +1399,31 @@
 
   .ds-ask-ai[data-loading="true"] .ds-ask-ai__input {
     color: var(--tm2);
+  }
+
+  .ds-ask-ai__send {
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-1);
+    background: transparent;
+    color: var(--ti);
+    cursor: pointer;
+  }
+
+  .ds-ask-ai__send:hover:not(:disabled),
+  .ds-ask-ai__send:focus-visible {
+    background: var(--sf3);
+  }
+
+  .ds-ask-ai__send:disabled {
+    color: var(--tg2);
+    cursor: not-allowed;
+    opacity: 0.54;
   }
 
   .ds-sidebar__item--active {

@@ -299,6 +299,13 @@ function normalizeExperienceItem(entry: any, idx: number): IExperienceItem {
     responsibilities,
     responsibilityBullets: responsibilityBullets?.length ? responsibilityBullets : undefined,
     achievements: Array.isArray(entry?.achievements) ? entry.achievements.map(String) : [],
+    ...(Number.isFinite(Number(entry?.__draftResponsibilityBulletCount))
+      ? {
+          __draftResponsibilityBulletCount: Number(
+            entry.__draftResponsibilityBulletCount,
+          ),
+        }
+      : {}),
   };
   return ExperienceItemSchema.parse(base);
 }

@@ -55,6 +55,15 @@ describe("sidebar visual CSS contracts", () => {
     );
   });
 
+  it("keeps the topbar command shortcut as a tokenized pill", () => {
+    expect(productCss).toMatch(
+      /\.app-topbar__cmdk\s*\{[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*var\(--sf1\);/,
+    );
+    expect(productCss).toMatch(
+      /\.app-topbar__kbd\s*\{[\s\S]*border:\s*1px solid var\(--border-soft\);/,
+    );
+  });
+
   it("keeps DS sidebar active counts tied to accent tokens", () => {
     expect(dsCss).toMatch(
       /\.ds-sidebar__item--active\s*\{[\s\S]*position:\s*relative;[\s\S]*background:\s*linear-gradient\(90deg,\s*var\(--ap\),\s*transparent\);[\s\S]*color:\s*var\(--ti\);/,

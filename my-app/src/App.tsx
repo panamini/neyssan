@@ -10,13 +10,17 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { useConvexAuth, useQuery } from "convex/react";
+import { useAuth, useUser, UserButton } from "@clerk/clerk-react";
 import { ConvexStatusBanner } from "./components/ConvexStatusBanner";
+import { DashboardPage } from "./pages/DashboardPage";
 import { CvForge } from "./pages/CvForge";
 import { CvsLibrary } from "./pages/CvsLibrary";
 import { ProposalForge } from "./pages/ProposalForge";
 import { JobsPage } from "./pages/JobsPage";
 import { ProposalsLibrary } from "./pages/ProposalsLibrary";
+import { DocumentsPage } from "./pages/DocumentsPage";
 import { StyleForge } from "./pages/StyleForge";
+import { TemplatesPage } from "./pages/TemplatesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignInPage } from "./pages/SignInPage";
 import { SignOutPage } from "./pages/SignOutPage";
@@ -25,7 +29,10 @@ import { ProposalPrintPage } from "./pages/ProposalPrintPage";
 import { ResumeFontParityHarnessPage } from "./pages/ResumeFontParityHarnessPage";
 import { PdfRasterHarnessPage } from "./pages/PdfRasterHarnessPage";
 import { Sidebar } from "./components/Sidebar";
+import { CommandPalette } from "./components/CommandPalette";
+import { OnboardingReplay } from "./components/onboarding/OnboardingReplay";
 import { QuickStartFlow } from "./components/onboarding/QuickStartFlow";
+import { IconButton, Pill } from "./components/ui";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
 import { installStorageDiagnostics } from "./lib/storage-diagnostics";
 import { useCvLibrary } from "./contexts/CvLibraryContext";
@@ -43,6 +50,13 @@ import {
   clearQuickStartLocationState,
   readQuickStartRouteState,
 } from "./lib/quick-start-routing";
+import { resolveCommandShortcutLabel } from "./lib/app-topbar";
+import {
+  applyMotionPreference,
+  readStoredMotionPreference,
+} from "./lib/motion-preference";
+import { MagnifyingGlass, User } from "./lib/icons";
+import { useThemeMode } from "./lib/theme-mode";
 
 function normalizeTitle(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -92,7 +106,7 @@ function useTopbarDocumentTitle(): string | null {
       return normalizeTitle(currentCv?.title) || null;
     }
 
-    if (pathname === "/cvs") {
+    if (pathname === "/cvs" || pathname === "/documents") {
       return cvCount > 0 ? `All resumes (${cvCount})` : "All resumes";
     }
 
@@ -124,6 +138,10 @@ function useTopbarDocumentTitle(): string | null {
         : "All cover letters";
     }
 
+    if (pathname === "/templates") {
+      return "Document templates";
+    }
+
     if (pathname === "/settings") {
       return "Proposal defaults";
     }
@@ -151,6 +169,8 @@ function useBrowserTitle(topbarDocumentTitle: string | null): void {
 
     if (pathname === "/cv") {
       pageTitle = topbarDocumentTitle ? `${topbarDocumentTitle} · Resume · two weeks` : "Resume · two weeks";
+    } else if (pathname === "/dashboard" || pathname === "/") {
+      pageTitle = "Dashboard · two weeks";
     } else if (pathname === "/cvs") {
       pageTitle = topbarDocumentTitle
         ? `${topbarDocumentTitle} · two weeks`
@@ -163,10 +183,16 @@ function useBrowserTitle(topbarDocumentTitle: string | null): void {
       pageTitle = topbarDocumentTitle
         ? `${topbarDocumentTitle} · two weeks`
         : "All cover letters · two weeks";
+    } else if (pathname === "/documents") {
+      pageTitle = "Documents · two weeks";
+    } else if (pathname === "/templates") {
+      pageTitle = "Templates · two weeks";
     } else if (pathname === "/settings") {
       pageTitle = topbarDocumentTitle
         ? `${topbarDocumentTitle} · two weeks`
         : "Proposal defaults · two weeks";
+    } else if (pathname.startsWith("/jobs")) {
+      pageTitle = "Jobs · two weeks";
     } else if (pathname === "/style") {
       pageTitle = topbarDocumentTitle ? `${topbarDocumentTitle} · Style Forge · two weeks` : "Style Forge · two weeks";
     }
@@ -175,86 +201,133 @@ function useBrowserTitle(topbarDocumentTitle: string | null): void {
   }, [location.pathname, topbarDocumentTitle]);
 }
 
-const SHOW_TOPBAR = false;
-
 function TopbarTitleSync(): null {
   const topbarDocumentTitle = useTopbarDocumentTitle();
   useBrowserTitle(topbarDocumentTitle);
   return null;
 }
 
-/**
- * Topbar — h:54px (--hdr), wordmark only.
- */
-function Topbar() {
+function resolvePageLabel(pathname: string): string {
+  if (pathname === "/dashboard" || pathname === "/") return "Dashboard";
+  if (pathname.startsWith("/jobs")) return "Jobs";
+  if (pathname.startsWith("/proposal")) return "Proposal forge";
+  if (pathname.startsWith("/cv")) return "CV forge";
+  if (pathname.startsWith("/cvs")) return "CV library";
+  if (pathname.startsWith("/documents")) return "Documents";
+  if (pathname.startsWith("/proposals")) return "Documents";
+  if (pathname.startsWith("/templates")) return "Templates";
+  if (pathname.startsWith("/style")) return "Templates";
+  if (pathname.startsWith("/settings")) return "Settings";
+  return "Dashboard";
+}
+
+function useForgeContextLine(topbarDocumentTitle: string | null): {
+  label: string;
+  tone: "success" | "warning";
+} | null {
+  const location = useLocation();
+  const title = topbarDocumentTitle?.trim();
+
+  if (location.pathname === "/proposal") {
+    return {
+      label: title
+        ? `${title} application package`
+        : "Proposal draft application package",
+      tone: "warning",
+    };
+  }
+
+  if (location.pathname === "/cv") {
+    return {
+      label: title ? `${title} profile source` : "Active CV profile source",
+      tone: "success",
+    };
+  }
+
+  return null;
+}
+
+function AppTopbar({
+  commandPaletteOpen,
+  onOpenCommandPalette,
+}: {
+  commandPaletteOpen: boolean;
+  onOpenCommandPalette: () => void;
+}) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const topbarDocumentTitle = useTopbarDocumentTitle();
+  const forgeContext = useForgeContextLine(topbarDocumentTitle);
+  const pageLabel = resolvePageLabel(location.pathname);
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
+  const isAccountReady = isAuthLoaded !== false;
+  const shortcutLabel = React.useMemo(
+    () => resolveCommandShortcutLabel(window.navigator.platform),
+    [],
+  );
+  const clerkUserButtonRef = React.useRef<HTMLDivElement | null>(null);
+
+  const handleProfile = React.useCallback(() => {
+    const clerkTrigger =
+      clerkUserButtonRef.current?.querySelector<HTMLButtonElement>("button");
+    if (clerkTrigger) {
+      clerkTrigger.click();
+      return;
+    }
+    if (!isAccountReady) {
+      return;
+    }
+    if (!isSignedIn) {
+      void navigate("/sign-in");
+    }
+  }, [isAccountReady, isSignedIn, navigate]);
 
   return (
-    <header
-      style={{
-        height: "var(--hdr)",
-        flexShrink: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 clamp(var(--space-3), 4vw, var(--space-7))",
-        borderBottom: "1px solid var(--color-border)",
-        background: "var(--color-canvas)",
-        boxShadow: "0 1px 0 var(--color-border), var(--shadow-sm)",
-        position: "relative",
-        zIndex: 5,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: "var(--space-3)",
-          minWidth: 0,
-        }}
-      >
-        <span
-          style={{
-            fontFamily: "var(--font-heading-family)",
-            fontSize: "var(--tm)",
-            fontWeight: "var(--font-heading-weight)",
-            letterSpacing: "var(--tracking-display)",
-            color: "var(--ti)",
-            lineHeight: 1,
-            flexShrink: 0,
-          }}
-        >
-          two weeks
-        </span>
-        {topbarDocumentTitle ? (
-          <>
-            <span
-              aria-hidden="true"
-              style={{
-                color: "var(--color-text-subtle)",
-                flexShrink: 0,
-                lineHeight: 1,
-              }}
-            >
-              &gt;
-            </span>
-            <span
-              style={{
-                color: "var(--color-text-muted)",
-                fontSize: "var(--ts)",
-                fontWeight: 500,
-                lineHeight: 1,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-              title={topbarDocumentTitle}
-            >
-              {topbarDocumentTitle}
-            </span>
-          </>
+    <header className="app-topbar">
+      <div className="app-topbar__identity">
+        <div className="app-topbar__crumb" aria-label="Breadcrumb">
+          <span>twoweeks</span>
+          <span className="app-topbar__crumb-sep">/</span>
+          <strong className="app-topbar__crumb-current">{pageLabel}</strong>
+        </div>
+        {forgeContext ? (
+          <div className="app-topbar__context">
+            <span>Working on:</span>
+            <strong>{forgeContext.label}</strong>
+            <Pill tone={forgeContext.tone}>
+              {forgeContext.tone === "warning" ? "Needs review" : "Ready"}
+            </Pill>
+          </div>
         ) : null}
       </div>
+      <div className="app-topbar__spacer" />
+      <button
+        type="button"
+        className="app-topbar__cmdk"
+        aria-label="Open command palette"
+        aria-expanded={commandPaletteOpen}
+        onClick={onOpenCommandPalette}
+      >
+        <MagnifyingGlass className="app-topbar__cmdk-icon" size={15} aria-hidden="true" />
+        <span className="app-topbar__cmdk-label">Search or run command</span>
+        <span className="app-topbar__kbd">{shortcutLabel}</span>
+      </button>
+      <IconButton
+        label={!isAccountReady ? "Account loading" : isSignedIn ? "Open account menu" : "Sign in"}
+        onClick={handleProfile}
+        disabled={!isAccountReady}
+      >
+        <User size={16} aria-hidden="true" />
+      </IconButton>
+      <span className="app-topbar__profile-name" aria-hidden="true">
+        {!isAccountReady ? "Account" : isSignedIn ? user?.firstName ?? user?.username ?? "Profile" : "Sign in"}
+      </span>
+      {isSignedIn ? (
+        <div ref={clerkUserButtonRef} className="app-topbar__clerk-button">
+          <UserButton afterSignOutUrl="/" />
+        </div>
+      ) : null}
     </header>
   );
 }
@@ -273,6 +346,13 @@ function Topbar() {
 function AppShell(): JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
+  const [commandPaletteOpen, setCommandPaletteOpen] = React.useState(false);
+  const [onboardingReplayOpen, setOnboardingReplayOpen] = React.useState(false);
+  const { toggle: toggleTheme } = useThemeMode();
+
+  React.useEffect(() => {
+    applyMotionPreference(readStoredMotionPreference());
+  }, []);
 
   React.useEffect(() => {
     if (!import.meta.env.DEV) {
@@ -315,38 +395,17 @@ function AppShell(): JSX.Element {
 
   return (
     <CvLibraryProvider>
-      {/* .app — flex row, h:100vh overflow:hidden */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "row",
-          height: "100vh",
-          overflow: "hidden",
-          background: "var(--bg)",
-          color: "var(--ti)",
-          fontFamily: "'Source Sans 3', system-ui, sans-serif",
-        }}
-      >
-        {/* Sidebar — h:100vh depuis le parent flex */}
+      <div className="app-shell">
         <Sidebar />
-
-        {/* .page-area — flex:1, flex-col */}
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            minWidth: 0,
-            position: "relative",
-          }}
-        >
+        <div className="app-main">
           <ConvexStatusBanner />
           <TopbarTitleSync />
-          {SHOW_TOPBAR ? <Topbar /> : null}
+          <AppTopbar
+            commandPaletteOpen={commandPaletteOpen}
+            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          />
 
-          {/* .pscroll — flex:1 overflow:hidden, chaque page gère son propre scroll */}
-          <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+          <div className="app-pages">
             {quickStartRouteState.isOpen ? (
               <QuickStartFlow
                 onExit={closeQuickStart}
@@ -356,6 +415,7 @@ function AppShell(): JSX.Element {
               />
             ) : (
               <Routes>
+                <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/cv" element={<CvForge />} />
                 <Route path="/cvs" element={<CvsLibrary />} />
                 <Route path="/proposal" element={<ProposalForge />} />
@@ -363,16 +423,30 @@ function AppShell(): JSX.Element {
                 <Route path="/jobs" element={<JobsPage />} />
                 <Route path="/jobs/:jobId" element={<JobsPage />} />
                 <Route path="/proposals" element={<ProposalsLibrary />} />
+                <Route path="/documents" element={<DocumentsPage />} />
                 <Route path="/style" element={<StyleForge />} />
+                <Route path="/templates" element={<TemplatesPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/sign-in/*" element={<SignInPage />} />
                 <Route path="/sign-out" element={<SignOutPage />} />
-                <Route path="/" element={<Navigate to="/cv" replace />} />
-                <Route path="*" element={<Navigate to="/cv" replace />} />
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             )}
           </div>
         </div>
+        <CommandPalette
+          open={commandPaletteOpen}
+          onOpenChange={setCommandPaletteOpen}
+          onReplayOnboarding={() => setOnboardingReplayOpen(true)}
+          onToggleTheme={toggleTheme}
+        />
+        <OnboardingReplay
+          open={onboardingReplayOpen}
+          onClose={() => setOnboardingReplayOpen(false)}
+          onNavigate={(to, options) => navigate(to, options)}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+        />
       </div>
     </CvLibraryProvider>
   );

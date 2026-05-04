@@ -514,6 +514,25 @@
   color: var(--color-text-muted);
 }
 
+/* Skeleton page header token from docs/UI/APP-SKELETON.html. */
+.page-head__title {
+  margin: 0;
+  color: var(--ti);
+  font-family: var(--font-body-family);
+  font-size: var(--tx2);
+  line-height: var(--lx2);
+  font-weight: var(--font-heading-weight);
+  letter-spacing: var(--tracking-display);
+}
+
+.page-head__sub {
+  margin: var(--s1) 0 0;
+  color: var(--tm2);
+  font-family: var(--font-body-family);
+  font-size: var(--ts);
+  line-height: var(--ls);
+}
+
 /* ============================================================
    SEMANTIC SELECTION CARDS
    ============================================================ */
@@ -1365,11 +1384,16 @@ textarea.dasti-field {
 .dasti-rich .ProseMirror {
   min-height: 120px;
   padding: var(--s3) var(--s4);
-  font-family: "Source Serif 4", serif;
+  font-family: var(--font-body-family);
   font-size: var(--ts);
   line-height: 1.75;
+  font-weight: var(--font-body-weight);
   color: var(--ti);
   outline: none;
+}
+
+.dasti-rich .ProseMirror strong {
+  font-weight: var(--font-strong-weight);
 }
 
 .dasti-rich .ProseMirror:focus,

@@ -7,6 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "../SettingsPage";
 
@@ -44,14 +45,30 @@ vi.mock("convex/react", () => ({
 
 vi.mock("../../../convex/_generated/api", () => ({ api }));
 
+vi.mock("@clerk/clerk-react", () => ({
+  useAuth: () => ({ isLoaded: true, isSignedIn: false }),
+  useUser: () => ({ user: null }),
+}));
+
 vi.mock("../../components/ProposalColorPickerPopover", () => ({
   ProposalColorPickerPopover: () => null,
 }));
+
+function renderSettings(initialEntry = "/settings?tab=docstyle") {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <SettingsPage />
+    </MemoryRouter>,
+  );
+}
 
 describe("SettingsPage preview controls", () => {
   beforeEach(() => {
     savePresetMock.mockClear();
     setActivePresetMock.mockClear();
+    window.localStorage.clear();
+    document.documentElement.dataset.theme = "light";
+    document.documentElement.dataset.reduceMotion = "false";
     presetsQueryMock.mockReturnValue({
       activeSlot: 1,
       preset1: {
@@ -81,9 +98,82 @@ describe("SettingsPage preview controls", () => {
     });
   });
 
+  it("renders skeleton settings navigation and opens account by default", async () => {
+    const user = userEvent.setup();
+    renderSettings("/settings");
+
+    expect(screen.getAllByRole("button").slice(0, 7).map((button) => button.textContent)).toEqual([
+      "Account",
+      "Preferences",
+      "Document style",
+      "Voice & tone",
+      "Billing",
+      "Team",
+      "Danger zone",
+    ]);
+    expect(screen.getByText("Profile")).toBeInTheDocument();
+    expect(screen.getByText("Connected accounts")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Document style" }));
+
+    expect(screen.getByRole("heading", { name: "Style profiles" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Document style" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("activates theme and reduce-motion preferences from preferences", async () => {
+    const user = userEvent.setup();
+    renderSettings("/settings?tab=preferences");
+
+    await user.click(screen.getByRole("button", { name: "Dark" }));
+    expect(screen.getByRole("button", { name: "Dark" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(document.documentElement.dataset.theme).toBe("dark");
+
+    await user.click(screen.getByRole("button", { name: "System" }));
+    expect(screen.getByRole("button", { name: "System" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Reduce motion" }));
+    expect(screen.getByRole("button", { name: "Reduce motion" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(document.documentElement.dataset.reduceMotion).toBe("true");
+  });
+
+  it("hydrates default style slots from the onboarding document style set", () => {
+    presetsQueryMock.mockReturnValue({
+      activeSlot: 1,
+      preset1: null,
+      preset2: null,
+      preset3: null,
+    });
+
+    const { container } = renderSettings();
+
+    expect(container.querySelector(".dasti-settings-hero-preview__chip")).toHaveTextContent(
+      "Fraunces Bold / Syne Regular",
+    );
+
+    const cards = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+    );
+
+    expect(cards[0]).toHaveTextContent("Style 1");
+    expect(cards[1]).toHaveTextContent("Style 2");
+    expect(cards[2]).toHaveTextContent("Style 3");
+  });
+
   it("updates the live preview when selecting a different font pair", async () => {
     const user = userEvent.setup();
-    const { container } = render(<SettingsPage />);
+    const { container } = renderSettings();
 
     const activePair = container.querySelector(
       ".dasti-settings-font-pair-card--active",
@@ -121,7 +211,7 @@ describe("SettingsPage preview controls", () => {
   });
 
   it("renders all curated font pairs in the typography grid", () => {
-    const { container } = render(<SettingsPage />);
+    const { container } = renderSettings();
     const grid = screen.getByRole("group", { name: "Font pair" });
     const optionButtons = within(grid).getAllByRole("button");
 
@@ -136,7 +226,7 @@ describe("SettingsPage preview controls", () => {
 
   it("saves an explicit signature font on the current preset", async () => {
     const user = userEvent.setup();
-    render(<SettingsPage />);
+    renderSettings();
 
     const signatureGroup = screen.getByRole("group", { name: "Signature" });
     await user.click(
@@ -163,11 +253,11 @@ describe("SettingsPage preview controls", () => {
   });
 
   it("shows only auto and workshop style cards", () => {
-    const { container } = render(<SettingsPage />);
+    const { container } = renderSettings();
     const previewBadge = () =>
       container.querySelector(".dasti-settings-hero-preview__style-badge");
     const styleCardLabels = Array.from(
-      container.querySelectorAll(".dasti-settings-style-card__label"),
+      container.querySelectorAll(".layout-card__name"),
     ).map((element) => element.textContent);
     const uniqueStyleCardLabels = Array.from(new Set(styleCardLabels));
 
@@ -177,12 +267,10 @@ describe("SettingsPage preview controls", () => {
 
   it("saves workshop as canonical verbatiStyle on the preset slot", async () => {
     const user = userEvent.setup();
-    const { container } = render(<SettingsPage />);
+    const { container } = renderSettings();
     const workshopStyleButton = screen
       .getAllByRole("button", { name: /Workshop/ })
-      .find((element) =>
-        element.className.includes("dasti-settings-style-card"),
-      );
+      .find((element) => element.className.includes("layout-card"));
     const previewBadge = () =>
       container.querySelector(".dasti-settings-hero-preview__style-badge");
 
@@ -211,17 +299,17 @@ describe("SettingsPage preview controls", () => {
   });
 
   it("renders the layout style cards for the available presets", () => {
-    const { container } = render(<SettingsPage />);
+    const { container } = renderSettings();
 
     expect(
-      Array.from(
-        container.querySelectorAll(".dasti-settings-style-card__label"),
-      ).map((element) => element.textContent),
-    ).toEqual(["Auto", "Auto", "Workshop", "Workshop"]);
+      Array.from(container.querySelectorAll(".layout-card__name")).map(
+        (element) => element.textContent,
+      ),
+    ).toEqual(["Auto", "Workshop"]);
   });
 
   it("updates the hero preview tilt when the pointer moves", async () => {
-    const { container } = render(<SettingsPage />);
+    const { container } = renderSettings();
     const previewCard = container.querySelector<HTMLElement>(
       ".dasti-settings-hero-preview",
     );

@@ -51,12 +51,45 @@ describe("Sheet", () => {
 
     const close = screen.getByRole("button", { name: "Close panel." });
     const languages = screen.getByRole("button", { name: "Languages" });
-    await waitFor(() => expect(close).toHaveFocus());
+    await waitFor(() => expect(dialog).toHaveFocus());
+
+    await user.tab();
+    expect(close).toHaveFocus();
 
     await user.tab({ shift: true });
     expect(languages).toHaveFocus();
 
     await user.tab();
     expect(close).toHaveFocus();
+  });
+
+  it("does not steal focus from a field when the parent rerenders with a new close handler", async () => {
+    const { rerender } = render(
+      <Sheet open onOpenChange={() => {}} title="Edit section">
+        <label>
+          Role
+          <input aria-label="Role" />
+        </label>
+      </Sheet>,
+    );
+
+    const input = await screen.findByLabelText("Role");
+    const dialog = screen.getByRole("dialog", { name: "Edit section" });
+    await waitFor(() => expect(dialog).toHaveFocus());
+    input.focus();
+    expect(input).toHaveFocus();
+
+    rerender(
+      <Sheet open onOpenChange={() => {}} title="Edit section">
+        <label>
+          Role
+          <input aria-label="Role" />
+        </label>
+      </Sheet>,
+    );
+
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+    expect(input).toHaveFocus();
   });
 });

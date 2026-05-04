@@ -46,6 +46,7 @@ const proposalPaletteOverrideValidator = v.union(
 );
 const proposalAccentHexValidator = v.union(v.string(), v.null());
 const proposalFontPairIdValidator = v.union(v.string(), v.null());
+const proposalContactTextValidator = v.union(v.string(), v.null());
 
 const proposalSourceModeValidator = v.union(
   v.literal("inherit_cv"),
@@ -117,6 +118,12 @@ function cleanProposalSignatureSettings(
   return DEFAULT_PROPOSAL_SIGNATURE_SETTINGS;
 }
 
+function cleanProposalContactText(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
 export const getCurrent = query({
   args: {},
   returns: v.object({
@@ -129,6 +136,11 @@ export const getCurrent = query({
     fontPairId: v.optional(proposalFontPairIdValidator),
     verbatiStyle: v.optional(proposalPresetVerbatiStyleValidator),
     sourceMode: v.optional(proposalSourceModeValidator),
+    proposalDefaultContactEmail: v.optional(proposalContactTextValidator),
+    proposalDefaultContactPhone: v.optional(proposalContactTextValidator),
+    proposalDefaultContactLinkedin: v.optional(proposalContactTextValidator),
+    proposalDefaultContactWebsite: v.optional(proposalContactTextValidator),
+    proposalDefaultContactLocation: v.optional(proposalContactTextValidator),
     signatureSettings: proposalSignatureSettingsValidator,
   }),
   handler: async (ctx) => {
@@ -161,6 +173,11 @@ export const getCurrent = query({
           ? (user.proposalVerbatiStyle as PresetSlotData["verbatiStyle"])
           : undefined,
       sourceMode: user?.proposalSourceMode,
+      proposalDefaultContactEmail: user?.proposalDefaultContactEmail ?? null,
+      proposalDefaultContactPhone: user?.proposalDefaultContactPhone ?? null,
+      proposalDefaultContactLinkedin: user?.proposalDefaultContactLinkedin ?? null,
+      proposalDefaultContactWebsite: user?.proposalDefaultContactWebsite ?? null,
+      proposalDefaultContactLocation: user?.proposalDefaultContactLocation ?? null,
       signatureSettings: cleanProposalSignatureSettings(
         user?.proposalSignatureSettings as
           | ProposalSignatureSettingsData
@@ -392,6 +409,11 @@ export const setCurrent = mutation({
     accentHex: v.optional(proposalAccentHexValidator),
     fontPairId: v.optional(proposalFontPairIdValidator),
     sourceMode: v.optional(proposalSourceModeValidator),
+    proposalDefaultContactEmail: v.optional(proposalContactTextValidator),
+    proposalDefaultContactPhone: v.optional(proposalContactTextValidator),
+    proposalDefaultContactLinkedin: v.optional(proposalContactTextValidator),
+    proposalDefaultContactWebsite: v.optional(proposalContactTextValidator),
+    proposalDefaultContactLocation: v.optional(proposalContactTextValidator),
   },
   returns: v.object({
     voicePreset: proposalVoicePresetChoice,
@@ -402,6 +424,11 @@ export const setCurrent = mutation({
     accentHex: v.optional(proposalAccentHexValidator),
     fontPairId: v.optional(proposalFontPairIdValidator),
     sourceMode: v.optional(proposalSourceModeValidator),
+    proposalDefaultContactEmail: v.optional(proposalContactTextValidator),
+    proposalDefaultContactPhone: v.optional(proposalContactTextValidator),
+    proposalDefaultContactLinkedin: v.optional(proposalContactTextValidator),
+    proposalDefaultContactWebsite: v.optional(proposalContactTextValidator),
+    proposalDefaultContactLocation: v.optional(proposalContactTextValidator),
   }),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -437,6 +464,26 @@ export const setCurrent = mutation({
       args,
       "sourceMode",
     );
+    const hasContactEmailPatch = Object.prototype.hasOwnProperty.call(
+      args,
+      "proposalDefaultContactEmail",
+    );
+    const hasContactPhonePatch = Object.prototype.hasOwnProperty.call(
+      args,
+      "proposalDefaultContactPhone",
+    );
+    const hasContactLinkedinPatch = Object.prototype.hasOwnProperty.call(
+      args,
+      "proposalDefaultContactLinkedin",
+    );
+    const hasContactWebsitePatch = Object.prototype.hasOwnProperty.call(
+      args,
+      "proposalDefaultContactWebsite",
+    );
+    const hasContactLocationPatch = Object.prototype.hasOwnProperty.call(
+      args,
+      "proposalDefaultContactLocation",
+    );
 
     if (
       !hasVoicePresetPatch &&
@@ -445,7 +492,12 @@ export const setCurrent = mutation({
       !hasPalettePatch &&
       !hasAccentHexPatch &&
       !hasFontPairPatch &&
-      !hasSourceModePatch
+      !hasSourceModePatch &&
+      !hasContactEmailPatch &&
+      !hasContactPhonePatch &&
+      !hasContactLinkedinPatch &&
+      !hasContactWebsitePatch &&
+      !hasContactLocationPatch
     ) {
       throw new Error("No proposal setting patch was provided");
     }
@@ -501,6 +553,21 @@ export const setCurrent = mutation({
     const nextSourceMode = hasSourceModePatch
       ? (args.sourceMode ?? undefined)
       : user.proposalSourceMode;
+    const nextContactEmail = hasContactEmailPatch
+      ? cleanProposalContactText(args.proposalDefaultContactEmail)
+      : user.proposalDefaultContactEmail;
+    const nextContactPhone = hasContactPhonePatch
+      ? cleanProposalContactText(args.proposalDefaultContactPhone)
+      : user.proposalDefaultContactPhone;
+    const nextContactLinkedin = hasContactLinkedinPatch
+      ? cleanProposalContactText(args.proposalDefaultContactLinkedin)
+      : user.proposalDefaultContactLinkedin;
+    const nextContactWebsite = hasContactWebsitePatch
+      ? cleanProposalContactText(args.proposalDefaultContactWebsite)
+      : user.proposalDefaultContactWebsite;
+    const nextContactLocation = hasContactLocationPatch
+      ? cleanProposalContactText(args.proposalDefaultContactLocation)
+      : user.proposalDefaultContactLocation;
 
     const needsWrite =
       currentSavedVoicePreset !== nextSavedVoicePreset ||
@@ -509,7 +576,12 @@ export const setCurrent = mutation({
       user.proposalPaletteOverride !== nextPaletteOverride ||
       user.proposalAccentHex !== nextAccentHex ||
       user.proposalFontPairId !== nextFontPairId ||
-      user.proposalSourceMode !== nextSourceMode;
+      user.proposalSourceMode !== nextSourceMode ||
+      user.proposalDefaultContactEmail !== nextContactEmail ||
+      user.proposalDefaultContactPhone !== nextContactPhone ||
+      user.proposalDefaultContactLinkedin !== nextContactLinkedin ||
+      user.proposalDefaultContactWebsite !== nextContactWebsite ||
+      user.proposalDefaultContactLocation !== nextContactLocation;
 
     if (needsWrite) {
       const replacementByProfile = profiles.map((profile) => {
@@ -557,6 +629,12 @@ export const setCurrent = mutation({
           delete nextReplacement.proposalSourceMode;
         }
 
+        nextReplacement.proposalDefaultContactEmail = nextContactEmail ?? null;
+        nextReplacement.proposalDefaultContactPhone = nextContactPhone ?? null;
+        nextReplacement.proposalDefaultContactLinkedin = nextContactLinkedin ?? null;
+        nextReplacement.proposalDefaultContactWebsite = nextContactWebsite ?? null;
+        nextReplacement.proposalDefaultContactLocation = nextContactLocation ?? null;
+
         return { id: profile._id, replacement: nextReplacement };
       });
 
@@ -576,6 +654,11 @@ export const setCurrent = mutation({
       accentHex: nextAccentHex,
       fontPairId: nextFontPairId,
       sourceMode: nextSourceMode,
+      proposalDefaultContactEmail: nextContactEmail ?? null,
+      proposalDefaultContactPhone: nextContactPhone ?? null,
+      proposalDefaultContactLinkedin: nextContactLinkedin ?? null,
+      proposalDefaultContactWebsite: nextContactWebsite ?? null,
+      proposalDefaultContactLocation: nextContactLocation ?? null,
     };
   },
 });
