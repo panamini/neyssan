@@ -601,6 +601,14 @@
   font-weight: var(--font-strong-weight);
 }
 
+.sb-toggle__collapsed-logo {
+  display: block;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
 .sb-toggle__period--active {
   animation: tw-breathe 950ms var(--motion-ease-breathe) 1;
 }
@@ -1750,8 +1758,9 @@
 }
 
 .app-topbar__identity {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   min-width: 0;
 }
 
@@ -1783,10 +1792,12 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex-wrap: nowrap;
   min-width: 0;
   color: var(--color-text-subtle);
   font-size: var(--tx);
   line-height: 1.2;
+  white-space: nowrap;
 }
 
 .app-topbar__context strong {
@@ -2564,6 +2575,10 @@
   .app-topbar__kbd,
   .app-theme-switch {
     display: none;
+  }
+
+  .app-topbar__context {
+    max-width: 100%;
   }
 
   .dash-grid {
