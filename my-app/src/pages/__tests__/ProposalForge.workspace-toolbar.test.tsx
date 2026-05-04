@@ -200,6 +200,46 @@ describe("ProposalForge workbench layout", () => {
     });
   });
 
+  it("renders the PR2 proposal stage, rail order, and Safe-send sheet from Share", () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const skeletonGrid = container.querySelector(
+      ".dasti-proposal-skeleton-forge",
+    ) as HTMLElement | null;
+    const rail = screen.getByLabelText("Proposal rail");
+    const railLabels = within(rail)
+      .getAllByText(/Job context|Source CV|Tone|Variables|Ask AI|Settings/)
+      .map((label) => label.textContent);
+
+    expect(skeletonGrid?.style.getPropertyValue("--grid-columns")).toBe(
+      "minmax(0, 1fr) 360px",
+    );
+    expect(railLabels).toEqual([
+      "Job context",
+      "Source CV",
+      "Tone",
+      "Variables",
+      "Ask AI",
+      "Settings",
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Safe-send checklist" }),
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Safe-send checklist" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Continue to send" }),
+    ).toBeDisabled();
+  });
+
   it("routes the live workbench toolbar through the compose form's external CV and tone controls", () => {
     const { container } = render(
       <MemoryRouter initialEntries={["/proposal"]}>
@@ -236,17 +276,16 @@ describe("ProposalForge workbench layout", () => {
     expect(
       toolbarSlot?.closest(".dasti-proposal-compose-column"),
     ).toBeNull();
-    expect(toolbarSlot?.closest(".dasti-flow")).toBeNull();
+    expect(
+      toolbarSlot?.closest(".dasti-proposal-skeleton-rail"),
+    ).toBeTruthy();
     const pageShell = container.querySelector(".dasti-page-shell") as
       | HTMLElement
       | null;
-    const toolbarRow = container.querySelector(
-      ".dasti-workbench-top-left-slot--proposal",
-    ) as HTMLElement | null;
     const workbenchFrame = container.querySelector(".dasti-flow") as
       | HTMLElement
       | null;
-    const gridSplit = container.querySelector(".dasti-grid-split") as
+    const skeletonGrid = container.querySelector(".dasti-proposal-skeleton-forge") as
       | HTMLElement
       | null;
     const outputShell = container.querySelector(".dasti-proposal-output-shell") as
@@ -264,19 +303,8 @@ describe("ProposalForge workbench layout", () => {
       ),
     ).toBe("calc(var(--document-sheet-inline-size) + (var(--s2) * 2) + 2px)");
     expect(
-      gridSplit?.style.getPropertyValue("--grid-columns"),
-    ).toBe(
-      "var(--proposal-workspace-output-shell-inline-size) minmax(0, var(--proposal-workspace-output-shell-inline-size))",
-    );
-    expect(toolbarRow?.style.maxWidth).toBe(
-      "var(--proposal-workspace-output-shell-inline-size)",
-    );
-    expect(toolbarRow?.style.marginInline).toBe("0");
-    expect(
-      toolbarRow?.style.getPropertyValue(
-        "--proposal-workspace-output-shell-inline-size",
-      ),
-    ).toBe("calc(var(--document-sheet-inline-size) + (var(--s2) * 2) + 2px)");
+      skeletonGrid?.style.getPropertyValue("--grid-columns"),
+    ).toBe("minmax(0, 1fr) 360px");
     expect(outputShell?.style.width).toBe("100%");
     expect(
       outputShell?.style.getPropertyValue("--document-viewer-shell-inline-size"),
@@ -302,18 +330,14 @@ describe("ProposalForge workbench layout", () => {
     const workbenchFrame = container.querySelector(".dasti-flow") as
       | HTMLElement
       | null;
-    const toolbarRow = container.querySelector(
-      ".dasti-workbench-top-left-slot--proposal",
-    ) as HTMLElement | null;
-    const gridSplit = container.querySelector(".dasti-grid-split") as
+    const skeletonGrid = container.querySelector(".dasti-proposal-skeleton-forge") as
       | HTMLElement
       | null;
 
     expect(workbenchFrame?.style.maxWidth).toBe("560px");
     expect(workbenchFrame?.style.marginInline).toBe("0");
-    expect(toolbarRow?.style.marginInline).toBe("0");
     expect(
-      gridSplit?.style.getPropertyValue("--grid-columns"),
+      skeletonGrid?.style.getPropertyValue("--grid-columns"),
     ).toBe("minmax(0, 1fr)");
   });
 
@@ -344,7 +368,7 @@ describe("ProposalForge workbench layout", () => {
     const workbenchFrame = container.querySelector(".dasti-flow") as
       | HTMLElement
       | null;
-    const gridSplit = container.querySelector(".dasti-grid-split") as
+    const skeletonGrid = container.querySelector(".dasti-proposal-skeleton-forge") as
       | HTMLElement
       | null;
 
@@ -353,7 +377,7 @@ describe("ProposalForge workbench layout", () => {
     ).toBe("var(--proposal-workspace-output-shell-inline-size)");
     expect(workbenchFrame?.style.maxWidth).toBe("560px");
     expect(
-      gridSplit?.style.getPropertyValue("--grid-columns"),
+      skeletonGrid?.style.getPropertyValue("--grid-columns"),
     ).toBe("minmax(0, 1fr)");
   });
 
@@ -413,7 +437,7 @@ describe("ProposalForge workbench layout", () => {
     expect(lastToolbarCall.onGenerateFromBrief).toEqual(expect.any(Function));
     expect(composeShell.parentElement).toHaveStyle({ display: "none" });
     const gridSplitAfterCollapse = container.querySelector(
-      ".dasti-grid-split",
+      ".dasti-proposal-skeleton-forge",
     ) as HTMLElement | null;
     const workbenchFrameAfterCollapse = container.querySelector(
       ".dasti-flow",
@@ -422,12 +446,9 @@ describe("ProposalForge workbench layout", () => {
       gridSplitAfterCollapse?.style.getPropertyValue("--grid-justify"),
     ).toBe("center");
     expect(workbenchFrameAfterCollapse?.style.maxWidth).toBe("860px");
-    const toolbarRowAfterCollapse = container.querySelector(
-      ".dasti-workbench-top-left-slot--proposal",
-    ) as HTMLElement | null;
-    expect(toolbarRowAfterCollapse?.style.maxWidth).toBe(
-      "var(--proposal-workspace-output-shell-inline-size)",
-    );
+    expect(
+      container.querySelector(".dasti-proposal-skeleton-rail"),
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Restore compose" }));
 
@@ -443,11 +464,11 @@ describe("ProposalForge workbench layout", () => {
     expect(lastToolbarCall.onCollapseCompose).toEqual(expect.any(Function));
     expect(composeShell.parentElement).not.toHaveStyle({ display: "none" });
     expect(
-      container.querySelector(".dasti-cv-workbench-bar--proposal-workspace"),
+      container.querySelector(".dasti-proposal-skeleton-rail"),
     ).toBeTruthy();
   });
 
-  it("replaces the desktop floating brief card with a compact focus strip under the detached toolbar", () => {
+  it("keeps the generated brief card and toolbar inside the proposal rail", () => {
     vi.useFakeTimers();
     const { container } = render(
       <MemoryRouter initialEntries={["/proposal"]}>
@@ -475,19 +496,19 @@ describe("ProposalForge workbench layout", () => {
     ).toBeNull();
     expect(toolbarSlot).toBeTruthy();
     expect(
-      toolbarSlot?.closest(".dasti-workbench-top-left-slot--proposal"),
+      toolbarSlot?.closest(".dasti-proposal-skeleton-rail"),
     ).toBeTruthy();
     expect(
       toolbarSlot?.closest(".dasti-proposal-compose-column"),
     ).toBeNull();
     expect(toolbarSlot?.contains(briefCapsule ?? null)).toBe(false);
     expect(
-      container.querySelector(".dasti-proposal-workbench-left-stack"),
+      container.querySelector(".dasti-proposal-skeleton-rail"),
     ).toBeTruthy();
     const workbenchFrame = container.querySelector(".dasti-flow") as
       | HTMLElement
       | null;
-    const gridSplit = container.querySelector(".dasti-grid-split") as
+    const skeletonGrid = container.querySelector(".dasti-proposal-skeleton-forge") as
       | HTMLElement
       | null;
     const outputShell = container.querySelector(
@@ -496,18 +517,16 @@ describe("ProposalForge workbench layout", () => {
     expect(leftColumn?.classList.contains("dasti-forge-left-col--hidden")).toBe(false);
     expect(workbenchFrame?.style.marginInline).toBe("0");
     expect(
-      gridSplit?.style.getPropertyValue("--grid-columns"),
-    ).toBe(
-      "var(--proposal-workspace-output-shell-inline-size) minmax(0, var(--proposal-workspace-output-shell-inline-size))",
-    );
-    expect(gridSplit?.style.getPropertyValue("--grid-justify")).toBe("start");
+      skeletonGrid?.style.getPropertyValue("--grid-columns"),
+    ).toBe("minmax(0, 1fr) 360px");
+    expect(skeletonGrid?.style.getPropertyValue("--grid-justify")).toBe("start");
     expect(outputShell?.style.width).toBe("100%");
     expect(
       outputShell?.closest(".dasti-workbench-top-left-slot--proposal"),
     ).toBeNull();
     expect(
-      outputShell?.closest(".dasti-grid-split"),
-    ).toBe(gridSplit);
+      outputShell?.closest(".dasti-proposal-skeleton-forge"),
+    ).toBe(skeletonGrid);
     const expandButton = screen.getByRole("button", { name: "Expand" });
     expect(expandButton).not.toHaveAttribute("data-toolbar-tooltip");
 
@@ -612,7 +631,7 @@ describe("ProposalForge workbench layout", () => {
     const workbenchFrame = container.querySelector(".dasti-flow") as
       | HTMLElement
       | null;
-    const gridSplit = container.querySelector(".dasti-grid-split") as
+    const skeletonGrid = container.querySelector(".dasti-proposal-skeleton-forge") as
       | HTMLElement
       | null;
     const composeShell = screen.getByTestId("proposal-input-form").parentElement
@@ -626,9 +645,9 @@ describe("ProposalForge workbench layout", () => {
       pageShell?.style.getPropertyValue("--page-shell-max-width"),
     ).toBe("100%");
     expect(workbenchFrame?.style.maxWidth).toBe("560px");
-    expect(gridSplit).toBeTruthy();
+    expect(skeletonGrid).toBeTruthy();
     expect(
-      gridSplit?.style.getPropertyValue("--grid-columns"),
+      skeletonGrid?.style.getPropertyValue("--grid-columns"),
     ).toBe("minmax(0, 1fr)");
     expect(composeShell?.style.width).toBe(
       "min(100%, var(--proposal-workspace-output-shell-inline-size))",
