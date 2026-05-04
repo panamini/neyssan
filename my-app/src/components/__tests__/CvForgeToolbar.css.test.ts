@@ -75,6 +75,12 @@ describe("CvForge toolbar CSS contracts", () => {
     expect(cvForgeSource).not.toContain("<ProfileReviewCard");
     expect(cvForgeSource).not.toContain("<VerbatiCvPreviewPanel");
     expect(productCss).toMatch(
+      /\.dasti-cv-paper-stage\s*\{[\s\S]*width:\s*min\(100%,\s*860px\);[\s\S]*margin-inline:\s*auto;[\s\S]*min-width:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-page-preview-stage\s*\{[\s\S]*width:\s*min\(100%,\s*860px\);/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-document-rail--resume-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/,
     );
     expect(productCss).toMatch(
