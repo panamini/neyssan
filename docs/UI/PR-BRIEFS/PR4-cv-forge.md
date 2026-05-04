@@ -70,7 +70,7 @@ What this PR is **not**: a parser refactor, a verdict-engine change, an export-p
 </section>
 ```
 
-Same `.forge` grid as PR2 (1fr / 360px). Stage centers a `max-width: 760px` paper.
+Same `.forge` grid as PR2 (1fr / 360px). Stage centers a `max-width: 860px` paper; mobile collapses to `100%`.
 
 ### 3.2 Stage bar — lines 1864–1888
 
