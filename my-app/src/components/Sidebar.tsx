@@ -34,6 +34,10 @@ import {
   readStoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { useThemeMode } from "../lib/theme-mode";
+import collapsedLogoDarkLogo16 from "../assets/logo/twoweeks-logo-darkmode-16.png";
+import collapsedLogoDarkLogo32 from "../assets/logo/twoweeks-logo-darkmode-32.png";
+import collapsedLogoDarkLogo64 from "../assets/logo/twoweeks-logo-darkmode-64.png";
+import collapsedLogoLightUrl from "../assets/logo/twoweeks-logo-light.png";
 
 const MAX_RECENT_ITEMS = 3;
 const MAX_MIXED_RECENT_ITEMS = 4;
@@ -914,17 +918,22 @@ export const Sidebar: React.FC = () => {
         >
           <span className="sb-toggle__label" aria-hidden="true">
             {sidebarCollapsed ? (
-              <>
-                tw
-                <span
-                  className={clsx(
-                    "sb-toggle__period",
-                    brandPeriodAnimating && "sb-toggle__period--active",
-                  )}
-                >
-                  .
-                </span>
-              </>
+              <img
+                className="sb-toggle__collapsed-logo"
+                src={
+                  themeMode === "dark"
+                    ? collapsedLogoDarkLogo32
+                    : collapsedLogoLightUrl
+                }
+                srcSet={
+                  themeMode === "dark"
+                    ? `${collapsedLogoDarkLogo16} 16w, ${collapsedLogoDarkLogo32} 32w, ${collapsedLogoDarkLogo64} 64w`
+                    : undefined
+                }
+                sizes={themeMode === "dark" ? "32px" : undefined}
+                alt=""
+                aria-hidden="true"
+              />
             ) : (
               <>
                 two weeks
