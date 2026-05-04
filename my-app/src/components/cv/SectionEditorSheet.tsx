@@ -561,10 +561,15 @@ export function SectionEditorSheet({
 
     const sourceSectionChanged =
       loadedDraftSignatureRef.current !== sectionDraftSignature;
+    const localDraftSectionSignature = getSectionDraftSignature(draftSectionRef.current);
+    const sourceSectionChangedFromLocalDraft =
+      localDraftSectionSignature === sectionDraftSignature;
     if (
       !wasOpen ||
       loadedDraftKeyRef.current !== sectionDraftKey ||
-      (sourceSectionChanged && !pendingAutosaveSectionRef.current)
+      (sourceSectionChanged &&
+        !pendingAutosaveSectionRef.current &&
+        !sourceSectionChangedFromLocalDraft)
     ) {
       loadedDraftKeyRef.current = sectionDraftKey;
       loadedDraftSignatureRef.current = sectionDraftSignature;

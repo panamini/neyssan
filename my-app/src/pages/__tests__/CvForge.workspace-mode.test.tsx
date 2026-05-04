@@ -621,10 +621,22 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
       ))}
       <div data-testid="paper-structured-sections">
         {(data?.experience ?? []).map((item) => (
-          <p key={item.role}>{item.role}</p>
+          <p
+            key={item.role}
+            data-preview-section-id={item.sectionId}
+            tabIndex={-1}
+          >
+            {item.role}
+          </p>
         ))}
         {(data?.education ?? []).map((item) => (
-          <p key={item.degree}>{item.degree}</p>
+          <p
+            key={item.degree}
+            data-preview-section-id={item.sectionId}
+            tabIndex={-1}
+          >
+            {item.degree}
+          </p>
         ))}
         {(data?.skillItems ?? []).map((item) => (
           <span key={item.name}>{item.name}</span>
@@ -681,6 +693,134 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
             }
           >
             + Add bullet
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onFieldChange?.(
+                {
+                  sectionId: "experience-cv_123",
+                  sectionType: "experience",
+                  fieldPath: "structuredContent.item:experience-item-cv_123.position",
+                  fieldKind: "heading",
+                },
+                "Principal designer",
+              )
+            }
+          >
+            Update inline experience position
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onFieldChange?.(
+                {
+                  sectionId: "experience-cv_123",
+                  sectionType: "experience",
+                  fieldPath: "structuredContent.item:experience-item-cv_123.company",
+                  fieldKind: "meta",
+                },
+                "Design systems inc.",
+              )
+            }
+          >
+            Update inline experience company
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onFieldChange?.(
+                {
+                  sectionId: "experience-cv_123",
+                  sectionType: "experience",
+                  fieldPath: "structuredContent.item:experience-item-cv_123.location",
+                  fieldKind: "meta",
+                },
+                "Remote city",
+              )
+            }
+          >
+            Update inline experience location
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onFieldChange?.(
+                {
+                  sectionId: "experience-cv_123",
+                  sectionType: "experience",
+                  fieldPath: "structuredContent.item:experience-item-cv_123.startDate",
+                  fieldKind: "date",
+                },
+                "2024",
+              )
+            }
+          >
+            Update inline experience start date
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onFieldChange?.(
+                {
+                  sectionId: "experience-cv_123",
+                  sectionType: "experience",
+                  fieldPath: "structuredContent.item:experience-item-cv_123.endDate",
+                  fieldKind: "date",
+                },
+                "Present",
+              )
+            }
+          >
+            Update inline experience end date
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onFieldChange?.(
+                {
+                  sectionId: "education-cv_123",
+                  sectionType: "education",
+                  fieldPath: "structuredContent.item:education-item-cv_123.degree",
+                  fieldKind: "heading",
+                },
+                "PhD",
+              )
+            }
+          >
+            Update inline education degree
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onFieldChange?.(
+                {
+                  sectionId: "education-cv_123",
+                  sectionType: "education",
+                  fieldPath: "structuredContent.item:education-item-cv_123.fieldOfStudy",
+                  fieldKind: "heading",
+                },
+                "Human-Computer Interaction",
+              )
+            }
+          >
+            Update inline education field of study
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              inlineEditing.onFieldChange?.(
+                {
+                  sectionId: "education-cv_123",
+                  sectionType: "education",
+                  fieldPath: "structuredContent.item:education-item-cv_123.institution",
+                  fieldKind: "meta",
+                },
+                "Design Academy",
+              )
+            }
+          >
+            Update inline education institution
           </button>
           <button
             type="button"
@@ -1176,6 +1316,14 @@ function getLastSavedProjectItem(importCv: ReturnType<typeof vi.fn>) {
   return projectSection?.structuredContent?.[0] as any;
 }
 
+function getLastSavedEducationItem(importCv: ReturnType<typeof vi.fn>) {
+  const savedCv = importCv.mock.calls.at(-1)?.[0] as any;
+  const educationSection = savedCv?.sections?.find(
+    (section: any) => section.id === "education-cv_123",
+  );
+  return educationSection?.structuredContent?.[0] as any;
+}
+
 function docHasMark(value: unknown, markType: string): boolean {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, any>;
@@ -1336,6 +1484,64 @@ describe("CvForge workspace mode", () => {
       "__draft_empty_responsibility_bullet__",
       "__draft_empty_responsibility_bullet__",
     ]);
+  });
+
+  it("writes inline item and section field updates through canonical structured paths", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        importCv,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Update inline experience position" }),
+    );
+    expect(getLastSavedExperienceItem(importCv).position).toBe("Principal designer");
+
+    await user.click(
+      screen.getByRole("button", { name: "Update inline experience company" }),
+    );
+    expect(getLastSavedExperienceItem(importCv).company).toBe("Design systems inc.");
+
+    await user.click(
+      screen.getByRole("button", { name: "Update inline experience location" }),
+    );
+    expect(getLastSavedExperienceItem(importCv).location).toBe("Remote city");
+
+    await user.click(
+      screen.getByRole("button", { name: "Update inline experience start date" }),
+    );
+    expect(getLastSavedExperienceItem(importCv).startDate).toBe("2024");
+
+    await user.click(
+      screen.getByRole("button", { name: "Update inline experience end date" }),
+    );
+    expect(getLastSavedExperienceItem(importCv).endDate).toBe("Present");
+
+    await user.click(
+      screen.getByRole("button", { name: "Update inline education degree" }),
+    );
+    expect(getLastSavedEducationItem(importCv).degree).toBe("PhD");
+
+    await user.click(
+      screen.getByRole("button", { name: "Update inline education field of study" }),
+    );
+    expect(getLastSavedEducationItem(importCv).fieldOfStudy).toBe(
+      "Human-Computer Interaction",
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Update inline education institution" }),
+    );
+    expect(getLastSavedEducationItem(importCv).institution).toBe("Design Academy");
   });
 
   it("removes an empty draft bullet on blur without deleting paragraph text", async () => {
