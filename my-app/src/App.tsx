@@ -286,11 +286,13 @@ function AppTopbar({
   return (
     <header className="app-topbar">
       <div className="app-topbar__identity">
-        <div className="app-topbar__crumb" aria-label="Breadcrumb">
-          <span>twoweeks</span>
-          <span className="app-topbar__crumb-sep">/</span>
-          <strong className="app-topbar__crumb-current">{pageLabel}</strong>
-        </div>
+        {forgeContext ? null : (
+          <div className="app-topbar__crumb" aria-label="Breadcrumb">
+            <span>twoweeks</span>
+            <span className="app-topbar__crumb-sep">/</span>
+            <strong className="app-topbar__crumb-current">{pageLabel}</strong>
+          </div>
+        )}
         {forgeContext ? (
           <div className="app-topbar__context">
             <span>Working on:</span>

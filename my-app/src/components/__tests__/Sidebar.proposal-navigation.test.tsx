@@ -84,6 +84,13 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
   useCvLibrary: () => mockCvLibraryState,
 }));
 
+vi.mock("../../lib/theme-mode", () => ({
+  useThemeMode: () => ({
+    mode: "light",
+    toggle: vi.fn(),
+  }),
+}));
+
 function CvRoute(): JSX.Element {
   return <div>Resume workspace</div>;
 }
@@ -269,7 +276,11 @@ describe("Sidebar proposal navigation", () => {
     );
 
     const toggle = screen.getByRole("button", { name: "Pin sidebar" });
-    expect(toggle).toHaveTextContent("tw.");
+    expect(toggle.querySelector(".sb-toggle__collapsed-logo")).not.toBeNull();
+    expect(
+      (toggle.querySelector(".sb-toggle__collapsed-logo") as HTMLImageElement)
+        ?.getAttribute("src"),
+    ).toContain("twoweeks-logo-light.png");
     expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
 
     fireEvent.mouseEnter(document.querySelector("aside.sb")!);
@@ -293,7 +304,16 @@ describe("Sidebar proposal navigation", () => {
     const collapsedToggle = screen.getByRole("button", {
       name: "Pin sidebar",
     });
-    expect(collapsedToggle).toHaveTextContent("tw.");
+    expect(
+      collapsedToggle.querySelector(".sb-toggle__collapsed-logo"),
+    ).not.toBeNull();
+    expect(
+      (
+        collapsedToggle.querySelector(
+          ".sb-toggle__collapsed-logo",
+        ) as HTMLImageElement
+      )?.getAttribute("src"),
+    ).toContain("twoweeks-logo-light.png");
     expect(collapsedToggle.querySelector("svg")).toBeNull();
     expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
   });
@@ -358,7 +378,7 @@ describe("Sidebar proposal navigation", () => {
     expect(screen.getByRole("link", { name: /Jobs/ })).toHaveClass(
       "sb-section__action",
     );
-    expect(screen.getByText("Workspace")).toBeInTheDocument();
+    expect(screen.queryByText("Workspace")).not.toBeInTheDocument();
     expect(screen.queryByText(/Onboarding \(preview\)/i)).not.toBeInTheDocument();
   });
 

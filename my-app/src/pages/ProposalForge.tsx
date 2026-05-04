@@ -211,6 +211,7 @@ type ProposalForgeCanonicalJob = {
   applicationUrl: string;
   parseStatus: string;
   reviewState: string;
+  lastOpenedAt?: number;
   summary: string;
   visibleSummary?: string | null;
   visibleRequirements?: string[];
@@ -555,7 +556,7 @@ function resolveSafeSendMatchReviewAccepted(
     return null;
   }
 
-  return jobRecord.reviewState === "ready";
+  return typeof jobRecord.lastOpenedAt === "number" && jobRecord.lastOpenedAt > 0;
 }
 
 function resolveSafeSendImportIssues(
@@ -6294,13 +6295,16 @@ export function ProposalForge(): JSX.Element {
     !isComposePanelVisible &&
     !isSavedView &&
     canCollapseComposePanel;
+  const showComposeGridColumn = showComposePanel;
   const liveWorkbenchMaxWidth = isCompactComposeLayout
-    ? "560px"
+    ? "100%"
     : shouldRenderColdStartInlineOnly
       ? proposalDesktopComposeWidth
-      : shouldCenterOutputStage
-        ? "860px"
-        : `calc(${proposalDesktopComposeWidth} + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))`;
+      : showComposeGridColumn
+        ? "100%"
+        : shouldCenterOutputStage
+          ? "860px"
+          : `calc(${proposalDesktopComposeWidth} + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))`;
 
   const stackedCardWidthStyle: React.CSSProperties = isCompactComposeLayout
     ? {
@@ -6325,7 +6329,9 @@ export function ProposalForge(): JSX.Element {
     maxWidth: liveWorkbenchMaxWidth,
     marginInline: shouldRenderColdStartInlineOnly
       ? "auto"
-      : shouldLeftAnchorStackedWorkbench || shouldShowDesktopBriefCapsule
+      : showComposeGridColumn ||
+          shouldLeftAnchorStackedWorkbench ||
+          shouldShowDesktopBriefCapsule
         ? 0
         : "auto",
     minWidth: 0,
@@ -6381,7 +6387,6 @@ export function ProposalForge(): JSX.Element {
       proposalHeaderSourceSummary.keywords,
     ],
   );
-  const showComposeGridColumn = showComposePanel;
   const shouldAnimateDesktopBriefTransition =
     !isSavedView && !isCompactComposeLayout;
   const shouldRenderBriefCard =
@@ -6739,25 +6744,25 @@ export function ProposalForge(): JSX.Element {
             "--page-shell-max-width": isSavedView ? "100%" : "100%",
             "--page-shell-gap": isSavedView
               ? "var(--layout-panel-stack)"
-              : "var(--space-2)",
+              : "0px",
             "--page-shell-pad-top": shouldRenderColdStartInlineOnly
               ? "0px"
-              : "var(--space-2)",
+              : "0px",
             "--page-shell-pad-bottom": shouldRenderColdStartInlineOnly
               ? "0px"
-              : undefined,
+              : "0px",
             "--page-shell-pad-top-mobile": shouldRenderColdStartInlineOnly
               ? "0px"
-              : undefined,
+              : "0px",
             "--page-shell-pad-bottom-mobile": shouldRenderColdStartInlineOnly
               ? "0px"
-              : undefined,
+              : "0px",
             "--page-shell-pad-inline": shouldRenderColdStartInlineOnly
               ? "0px"
-              : "var(--space-4)",
+              : "0px",
             "--page-shell-pad-inline-mobile": shouldRenderColdStartInlineOnly
               ? "0px"
-              : "var(--space-4)",
+              : "0px",
           } as React.CSSProperties
         }
       >
@@ -6870,9 +6875,11 @@ export function ProposalForge(): JSX.Element {
                           ? "var(--layout-card-grid)"
                           : "0px",
                         "--grid-align": "start",
-                        "--grid-justify": shouldCenterOutputStage
-                          ? "center"
-                          : "start",
+                        "--grid-justify": showComposeGridColumn
+                          ? "stretch"
+                          : shouldCenterOutputStage
+                            ? "center"
+                            : "start",
                       } as React.CSSProperties
                     }
                   >

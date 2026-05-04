@@ -7268,9 +7268,10 @@
   grid-template-columns: var(--grid-columns, minmax(0, 1fr) 360px);
   gap: var(--grid-gap, var(--layout-card-grid));
   align-items: var(--grid-align, start);
-  justify-content: var(--grid-justify, start);
+  justify-content: var(--grid-justify, stretch);
   width: 100%;
   min-width: 0;
+  padding: var(--space-4) var(--space-5);
 }
 
 .dasti-proposal-skeleton-forge__stage {
@@ -7351,6 +7352,7 @@
   top: var(--space-4);
   width: 360px;
   max-width: 100%;
+  justify-self: end;
   min-width: 0;
   box-sizing: border-box;
   max-height: calc(100dvh - var(--header-height, 0px) - (var(--space-4) * 2));

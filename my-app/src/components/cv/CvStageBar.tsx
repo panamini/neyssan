@@ -89,9 +89,9 @@ export function CvStageBar({
     },
     {
       title: "Match review accepted",
-      meta: "Detection pending for CV-only send.",
-      state: "warn",
-      label: "Detection pending",
+      meta: "No source job is required for CV-only export.",
+      state: "clear",
+      label: "Clear",
     },
     {
       title: "CV variant selected",

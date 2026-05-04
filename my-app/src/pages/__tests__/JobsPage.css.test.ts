@@ -104,10 +104,19 @@ describe("JobsPage CSS contracts", () => {
       /\.dasti-jobs-row__company\s*\{[\s\S]*width:\s*100%;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-jobs-row__meta-favorite\s*\{[\s\S]*margin-inline-start:\s*auto;[\s\S]*color:\s*var\(--ac\);/,
+      /\.dasti-jobs-match-chip\s*\{[\s\S]*margin-inline-start:\s*auto;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row__footer\s*\{[\s\S]*align-items:\s*center;[\s\S]*justify-content:\s*space-between;[\s\S]*gap:\s*var\(--space-2\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-row__favorite-slot\s*\{[\s\S]*justify-content:\s*center;[\s\S]*color:\s*var\(--ac\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-jobs-detail__meta-favorite-action\s*\{[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--ac\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-jobs-detail__action-row\s*\{[\s\S]*display:\s*flex;[\s\S]*justify-content:\s*flex-start;[\s\S]*gap:\s*var\(--space-2\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-jobs-detail__header-action--proposal\s*\{[\s\S]*background:\s*var\(--ac\);[\s\S]*color:\s*var\(--color-on-accent\);/,

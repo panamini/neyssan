@@ -201,7 +201,7 @@ describe("ProposalForge workbench layout", () => {
       name: "Safe-send checklist",
     });
     expect(within(dialog).getByText("Source job linked")).toBeInTheDocument();
-    expect(within(dialog).getByText("Match review not accepted")).toBeInTheDocument();
+    expect(within(dialog).getByText("Match review accepted")).toBeInTheDocument();
     expect(within(dialog).getByText("Unsupported claim")).toBeInTheDocument();
     expect(
       within(dialog).getAllByText("Detection pending", { selector: "span" })
@@ -230,6 +230,7 @@ describe("ProposalForge workbench layout", () => {
           applicationUrl: "https://example.com/apply",
           parseStatus: "parsed",
           reviewState: "ready",
+          lastOpenedAt: 1711002000000,
           summary: "Game UI role.",
           rawDescription:
             "Detailed role description for the proposal brief capsule tests.",
@@ -282,11 +283,11 @@ describe("ProposalForge workbench layout", () => {
       name: "Safe-send checklist",
     });
     const matchReviewRow = within(dialog)
-      .getByText("Match review not accepted")
+      .getByText("Match review accepted")
       .closest(".dasti-proposal-safe-send__row");
     expect(matchReviewRow).toHaveAttribute("data-state", "clear");
     expect(
-      within(matchReviewRow as HTMLElement).getByText("Accepted"),
+      within(matchReviewRow as HTMLElement).getByText("Viewed"),
     ).toBeInTheDocument();
 
     const importIssueRow = within(dialog)
