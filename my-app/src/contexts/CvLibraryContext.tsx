@@ -773,6 +773,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   const cvsRef = useRef<CvDocument[]>(cvs);
   const currentCvRef = useRef<CvDocument | null>(null);
   const pendingSwitchTargetRef = useRef<string | null>(null);
+  const activeLoadTargetRef = useRef<string | null>(null);
   const activeCvSnapshotSyncTimeoutRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
@@ -2136,6 +2137,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   const loadCv = useCallback(
     (id: string): boolean => {
       const targetId = String(id);
+      activeLoadTargetRef.current = targetId;
       const visibleTargetDoc = cvsRef.current.find(
         (candidate) => String(candidate.id) === targetId,
       );
@@ -2360,6 +2362,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                 ) {
                   return;
                 }
+                if (activeLoadTargetRef.current !== targetId) {
+                  return;
+                }
                 safeSetCurrentCv(remoteNorm);
                 setCvs((prev) => {
                   const exists = prev.some((c) => c.id === remoteNorm.id);
@@ -2466,10 +2471,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
               ) {
                 return;
               }
-              const activeLoadedId = currentCvRef.current
-                ? String(currentCvRef.current.id)
-                : null;
-              if (activeLoadedId && activeLoadedId !== targetId) {
+              if (activeLoadTargetRef.current !== targetId) {
                 return;
               }
 

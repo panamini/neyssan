@@ -34,6 +34,10 @@ import {
   readStoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { useThemeMode } from "../lib/theme-mode";
+import collapsedLogoDarkLogo16 from "../assets/logo/twoweeks-logo-darkmode-16.png";
+import collapsedLogoDarkLogo32 from "../assets/logo/twoweeks-logo-darkmode-32.png";
+import collapsedLogoDarkLogo64 from "../assets/logo/twoweeks-logo-darkmode-64.png";
+import collapsedLogoLightUrl from "../assets/logo/twoweeks-logo-light.png";
 
 const MAX_RECENT_ITEMS = 3;
 const MAX_MIXED_RECENT_ITEMS = 4;
@@ -255,6 +259,7 @@ export const Sidebar: React.FC = () => {
     useCvLibrary();
   const [sidebarPinned, setSidebarPinned] = React.useState(false);
   const [sidebarHovered, setSidebarHovered] = React.useState(false);
+  const [brandPeriodAnimating, setBrandPeriodAnimating] = React.useState(false);
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
@@ -864,6 +869,20 @@ export const Sidebar: React.FC = () => {
     recentProposalItems,
     recentResumeItems,
   ]);
+  const pulseBrandPeriod = () => {
+    setBrandPeriodAnimating(true);
+  };
+
+  React.useEffect(() => {
+    if (!brandPeriodAnimating) {
+      return undefined;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setBrandPeriodAnimating(false);
+    }, 950);
+    return () => window.clearTimeout(timeoutId);
+  }, [brandPeriodAnimating]);
+
   if (hideSidebar) {
     return null;
   }
@@ -890,6 +909,7 @@ export const Sidebar: React.FC = () => {
           )}
           onClick={() => {
             if (!forcedCollapsed) {
+              pulseBrandPeriod();
               setSidebarPinned((current) => !current);
             }
           }}
@@ -898,14 +918,33 @@ export const Sidebar: React.FC = () => {
         >
           <span className="sb-toggle__label" aria-hidden="true">
             {sidebarCollapsed ? (
-              <>
-                tw
-                <span className="sb-toggle__period">.</span>
-              </>
+              <img
+                className="sb-toggle__collapsed-logo"
+                src={
+                  themeMode === "dark"
+                    ? collapsedLogoDarkLogo32
+                    : collapsedLogoLightUrl
+                }
+                srcSet={
+                  themeMode === "dark"
+                    ? `${collapsedLogoDarkLogo16} 16w, ${collapsedLogoDarkLogo32} 32w, ${collapsedLogoDarkLogo64} 64w`
+                    : undefined
+                }
+                sizes={themeMode === "dark" ? "32px" : undefined}
+                alt=""
+                aria-hidden="true"
+              />
             ) : (
               <>
                 two weeks
-                <span className="sb-toggle__period">.</span>
+                <span
+                  className={clsx(
+                    "sb-toggle__period",
+                    brandPeriodAnimating && "sb-toggle__period--active",
+                  )}
+                >
+                  .
+                </span>
               </>
             )}
           </span>
@@ -956,23 +995,10 @@ export const Sidebar: React.FC = () => {
               onClick={handleCreateResume}
             />
           )}
-          <SidebarRailLink
-            label="Documents"
-            icon={<FolderTree size={16} strokeWidth={1.5} aria-hidden="true" />}
-            active={isDocumentsRoute}
-            href="/documents"
-          />
-          <SidebarRailLink
-            label="Templates"
-            icon={<ImagesSquare size={16} strokeWidth={1.5} aria-hidden="true" />}
-            active={isTemplatesRoute}
-            href="/templates"
-          />
         </nav>
       ) : (
         <nav className="sb__nav sb__nav--stack" aria-label="Primary sidebar">
           <div className="sb-section sb-section--primary-nav" aria-label="Workspace">
-            <div className="sb-section__title">Workspace</div>
             <Link
               to="/dashboard"
               className={clsx(
@@ -1057,7 +1083,6 @@ export const Sidebar: React.FC = () => {
           <section className="sb-recents" aria-label="Recent">
             <div className="sb-recents__head">
               <span>Recent</span>
-              <span>Cmd/Ctrl K</span>
             </div>
             <ul className="sb-recents__list" role="list">
               {mixedRecentItems.map((item) => (
@@ -1082,11 +1107,14 @@ export const Sidebar: React.FC = () => {
             </ul>
           </section>
 
-          <div className="sb-section">
+          <div className="sb-section sb-section--pin">
             <button
               type="button"
               className="sb-section__action"
-              onClick={() => setSidebarPinned((current) => !current)}
+              onClick={() => {
+                pulseBrandPeriod();
+                setSidebarPinned((current) => !current);
+              }}
             >
               {sidebarPinned ? (
                 <PinOff size={15} strokeWidth={1.5} aria-hidden="true" />
@@ -1118,20 +1146,22 @@ export const Sidebar: React.FC = () => {
             <Gear size={14} strokeWidth={1.6} aria-hidden="true" />
             <span className="sb-footer__tool-label">Settings</span>
           </Link>
-          <button
-            type="button"
-            className="sb-theme-toggle__single"
-            onClick={toggleTheme}
-            aria-pressed={themeMode === "dark"}
-            aria-label={themeMode === "dark" ? "Light mode" : "Dark mode"}
-            title={themeMode === "dark" ? "Light mode" : "Dark mode"}
-          >
-            {themeMode === "dark" ? (
-              <Sun size={14} strokeWidth={1.8} aria-hidden="true" />
-            ) : (
-              <Moon size={14} strokeWidth={1.8} aria-hidden="true" />
-            )}
-          </button>
+          {!sidebarCollapsed ? (
+            <button
+              type="button"
+              className="sb-theme-toggle__single"
+              onClick={toggleTheme}
+              aria-pressed={themeMode === "dark"}
+              aria-label={themeMode === "dark" ? "Light mode" : "Dark mode"}
+              title={themeMode === "dark" ? "Light mode" : "Dark mode"}
+            >
+              {themeMode === "dark" ? (
+                <Sun size={14} strokeWidth={1.8} aria-hidden="true" />
+              ) : (
+                <Moon size={14} strokeWidth={1.8} aria-hidden="true" />
+              )}
+            </button>
+          ) : null}
         </div>
       </div>
     </aside>

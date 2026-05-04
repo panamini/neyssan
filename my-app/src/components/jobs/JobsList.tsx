@@ -463,94 +463,107 @@ export function JobsList({
                       <span>{company}</span>
                       <span>·</span>
                       <span>{locationLabel}</span>
-                      {isFavorite ? (
-                        <span className="dasti-jobs-row__meta-favorite" aria-label="Favorite">
-                          <Star size={13} strokeWidth={1.8} weight="fill" aria-hidden="true" />
+                    </div>
+                    <div className="dasti-jobs-row__footer">
+                      <div className="dasti-jobs-row__meta">
+                        <span className="dasti-jobs-row__meta-pill">
+                          <span>{job.linkedDocumentCount}</span>
                         </span>
-                      ) : null}
-                    </div>
-                    <div className="dasti-jobs-row__meta">
-                      <span className="dasti-jobs-row__meta-pill">
-                        <FileText size={12} strokeWidth={1.7} aria-hidden="true" />
-                        <span>{job.linkedDocumentCount}</span>
-                      </span>
-                      <span>Last activity {lastActivityLabel}</span>
-                    </div>
-                  </div>
-                  <div className="dasti-jobs-row__controls">
-                    <div className="dasti-import-dropdown dasti-jobs-row__menu">
-                      <Menu
-                        ariaLabel={`Actions for ${title}`}
-                        align="end"
-                        sections={[
-                          {
-                            items:
-                              jobsView === "active"
-                                ? [
-                                    {
-                                      id: "open-source",
-                                      label: "Open source",
-                                      disabled: !job.sourceUrl,
-                                      onSelect: () => onOpenJobSource(job.sourceUrl),
-                                    },
-                                    {
-                                      id: "archive",
-                                      label: "Archive",
-                                      onSelect: () => onArchiveJob(job.id),
-                                    },
-                                    {
-                                      id: "duplicate",
-                                      label: "Duplicate",
-                                      onSelect: () => onDuplicateJob(job.id),
-                                    },
-                                  ]
-                                : confirmingPermanentDeleteJobId === job.id
-                                  ? [
-                                      {
-                                        id: "restore",
-                                        label: "Restore",
-                                        onSelect: () => onRestoreArchivedJob(job.id),
-                                      },
-                                      {
-                                        id: "confirm-delete",
-                                        label: "Confirm",
-                                        tone: "danger",
-                                        onSelect: () => onDeleteArchivedJob(job.id),
-                                      },
-                                      {
-                                        id: "cancel-delete",
-                                        label: "Cancel",
-                                        onSelect: () =>
-                                          onConfirmPermanentDeleteJobIdChange(null),
-                                      },
-                                    ]
-                                  : [
-                                      {
-                                        id: "restore",
-                                        label: "Restore",
-                                        onSelect: () => onRestoreArchivedJob(job.id),
-                                      },
-                                      {
-                                        id: "delete-forever",
-                                        label: "Delete forever",
-                                        tone: "danger",
-                                        onSelect: () =>
-                                          onConfirmPermanentDeleteJobIdChange(job.id),
-                                      },
-                                    ],
-                          },
-                        ]}
-                        trigger={
-                          <button
-                            type="button"
-                            className="dasti-icon-button dasti-jobs-row__menu-trigger"
-                            aria-label={`More actions for ${title}`}
-                            onClick={(event) => event.stopPropagation()}
+                        <span>Last activity {lastActivityLabel}</span>
+                      </div>
+                      <div className="dasti-jobs-row__controls">
+                        <div className="dasti-import-dropdown dasti-jobs-row__menu">
+                          <Menu
+                            ariaLabel={`Actions for ${title}`}
+                            align="end"
+                            sections={[
+                              {
+                                items:
+                                  jobsView === "active"
+                                    ? [
+                                        {
+                                          id: "open-source",
+                                          label: "Open source",
+                                          disabled: !job.sourceUrl,
+                                          onSelect: () => onOpenJobSource(job.sourceUrl),
+                                        },
+                                        {
+                                          id: "archive",
+                                          label: "Archive",
+                                          onSelect: () => onArchiveJob(job.id),
+                                        },
+                                        {
+                                          id: "duplicate",
+                                          label: "Duplicate",
+                                          onSelect: () => onDuplicateJob(job.id),
+                                        },
+                                      ]
+                                    : confirmingPermanentDeleteJobId === job.id
+                                      ? [
+                                          {
+                                            id: "restore",
+                                            label: "Restore",
+                                            onSelect: () => onRestoreArchivedJob(job.id),
+                                          },
+                                          {
+                                            id: "confirm-delete",
+                                            label: "Confirm",
+                                            tone: "danger",
+                                            onSelect: () => onDeleteArchivedJob(job.id),
+                                          },
+                                          {
+                                            id: "cancel-delete",
+                                            label: "Cancel",
+                                            onSelect: () =>
+                                              onConfirmPermanentDeleteJobIdChange(null),
+                                          },
+                                        ]
+                                      : [
+                                          {
+                                            id: "restore",
+                                            label: "Restore",
+                                            onSelect: () => onRestoreArchivedJob(job.id),
+                                          },
+                                          {
+                                            id: "delete-forever",
+                                            label: "Delete forever",
+                                            tone: "danger",
+                                            onSelect: () =>
+                                              onConfirmPermanentDeleteJobIdChange(job.id),
+                                          },
+                                        ],
+                              },
+                            ]}
+                            trigger={
+                              <button
+                                type="button"
+                                className="dasti-icon-button dasti-jobs-row__menu-trigger"
+                                aria-label={`More actions for ${title}`}
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <DotsThree
+                                  size={16}
+                                  strokeWidth={1.7}
+                                  aria-hidden="true"
+                                />
+                              </button>
+                            }
+                          />
+                        </div>
+                        {isFavorite ? (
+                          <span
+                            className="dasti-jobs-row__favorite-slot"
+                            aria-label="Favorite"
                           >
-                            <DotsThree size={16} strokeWidth={1.7} aria-hidden="true" />
-                          </button>
-                        }
-                      />
+                            <Star
+                              size={13}
+                              strokeWidth={1.8}
+                              weight="fill"
+                              aria-hidden="true"
+                            />
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </article>

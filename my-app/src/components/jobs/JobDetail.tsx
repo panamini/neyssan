@@ -164,6 +164,63 @@ export function JobDetail({
         <div className="dasti-jobs-detail__identity">
           <div className="dasti-jobs-detail__title">
             <span>{selectedJobTitle}</span>
+            {selectedJob.isSample ? (
+              <span className="dasti-jobs-sample-badge">Sample</span>
+            ) : null}
+          </div>
+          <div className="dasti-jobs-detail__meta">
+            <span>{selectedJob.company || "Unknown company"}</span>
+            <span>·</span>
+            <span>{resolveLocationModeLabel(selectedJob.location)}</span>
+            {selectedSourceLabel ? (
+              <>
+                <span>·</span>
+                {selectedJob.sourceUrl ? (
+                  <button
+                    type="button"
+                    className="dasti-jobs-detail__source-action"
+                    aria-label={`Open original job offer on ${selectedSourceLabel}`}
+                    title={`Open original job offer on ${selectedSourceLabel}`}
+                    onClick={() => onOpenJobSource(selectedJob.sourceUrl)}
+                  >
+                    <span>{`From ${selectedSourceLabel}`}</span>
+                    <ArrowSquareOut
+                      size={13}
+                      strokeWidth={1.8}
+                      aria-hidden="true"
+                    />
+                  </button>
+                ) : (
+                  <span>{`From ${selectedSourceLabel}`}</span>
+                )}
+              </>
+            ) : null}
+            <span>·</span>
+            <span
+              className={`ds-verdict ds-verdict--${selectedJobVerdictTone} dasti-jobs-detail__verdict`}
+            >
+              <span className="ds-verdict__dot" aria-hidden="true" />
+              {selectedJobVerdictLabel}
+            </span>
+          </div>
+          <div className="dasti-jobs-detail__action-row">
+            <button
+              type="button"
+              className="dasti-jobs-detail__meta-favorite-action"
+              aria-pressed={selectedJobIsFavorite}
+              aria-label="Favorite"
+              title="Favorite"
+              onClick={() => {
+                onSetJobFavorite(selectedJob.id, !selectedJobIsFavorite);
+              }}
+            >
+              <Star
+                size={13}
+                strokeWidth={1.8}
+                weight={selectedJobIsFavorite ? "fill" : "regular"}
+                aria-hidden="true"
+              />
+            </button>
             <div
               className="dasti-jobs-detail__header-actions"
               aria-label="Job actions"
@@ -256,62 +313,6 @@ export function JobDetail({
                 <span>Generate proposal</span>
               </button>
             </div>
-            {selectedJob.isSample ? (
-              <span className="dasti-jobs-sample-badge">Sample</span>
-            ) : null}
-          </div>
-          <div className="dasti-jobs-detail__meta">
-            <button
-              type="button"
-              className="dasti-jobs-detail__meta-favorite-action"
-              aria-pressed={selectedJobIsFavorite}
-              aria-label="Favorite"
-              title="Favorite"
-              onClick={() => {
-                onSetJobFavorite(selectedJob.id, !selectedJobIsFavorite);
-              }}
-            >
-              <Star
-                size={13}
-                strokeWidth={1.8}
-                weight={selectedJobIsFavorite ? "fill" : "regular"}
-                aria-hidden="true"
-              />
-            </button>
-            <span>·</span>
-            <span>{selectedJob.company || "Unknown company"}</span>
-            <span>·</span>
-            <span>{resolveLocationModeLabel(selectedJob.location)}</span>
-            <span>·</span>
-            <span
-              className={`ds-verdict ds-verdict--${selectedJobVerdictTone} dasti-jobs-detail__verdict`}
-            >
-              <span className="ds-verdict__dot" aria-hidden="true" />
-              {selectedJobVerdictLabel}
-            </span>
-            {selectedSourceLabel ? (
-              <>
-                <span>·</span>
-                {selectedJob.sourceUrl ? (
-                  <button
-                    type="button"
-                    className="dasti-jobs-detail__source-action"
-                    aria-label={`Open original job offer on ${selectedSourceLabel}`}
-                    title={`Open original job offer on ${selectedSourceLabel}`}
-                    onClick={() => onOpenJobSource(selectedJob.sourceUrl)}
-                  >
-                    <span>{`From ${selectedSourceLabel}`}</span>
-                    <ArrowSquareOut
-                      size={13}
-                      strokeWidth={1.8}
-                      aria-hidden="true"
-                    />
-                  </button>
-                ) : (
-                  <span>{`From ${selectedSourceLabel}`}</span>
-                )}
-              </>
-            ) : null}
           </div>
         </div>
       </div>

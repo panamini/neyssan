@@ -668,6 +668,100 @@ describe('CvLibraryContext', () => {
     expect(ctx.currentCv.id).toBe(firstId);
   });
 
+  it('applies an asynchronous remote cv load when switching from an active cv', async () => {
+    const now = new Date().toISOString();
+    const activeFull = {
+      id: 'cv_active',
+      title: 'Active Resume',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: [
+        {
+          id: 'profile-1',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [{ id: 'profile-item-1', name: 'Ada Lovelace' }],
+        },
+      ],
+    };
+    const compactTarget = {
+      id: 'cv_remote_target',
+      title: 'Remote Target',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        librarySummaryOnly: true,
+      },
+      profilePreview: {
+        name: 'Grace Hopper',
+        desiredPosition: 'Engineering Manager',
+      },
+    };
+    const remoteTarget = {
+      id: 'cv_remote_target',
+      title: 'Remote Target',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: [
+        {
+          id: 'profile-1',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'profile-item-1',
+              name: 'Grace Hopper',
+              desiredPosition: 'Engineering Manager',
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.mocked(convexClient.query).mockImplementation(async (_query: unknown, args: unknown) => {
+      if ((args as { profileId?: string } | undefined)?.profileId === 'cv_remote_target') {
+        return {
+          profileId: 'cv_remote_target',
+          cvDocument: remoteTarget,
+        };
+      }
+      return null;
+    });
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([activeFull, compactTarget]));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, 'cv_active');
+    mockLocalStorage.setItem('cv:cv_active', JSON.stringify(activeFull));
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_active'));
+
+    act(() => {
+      ctx.loadCv('cv_remote_target');
+    });
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_remote_target'));
+    expect(ctx.currentCv.sections[0].structuredContent[0]).toMatchObject({
+      name: 'Grace Hopper',
+      desiredPosition: 'Engineering Manager',
+    });
+  });
+
   it('does not reshuffle visible CV recency when loading a summary-only entry from fallback cache', async () => {
     const olderUpdatedAt = '2024-04-08T09:00:00.000Z';
     const newerUpdatedAt = '2024-05-09T10:00:00.000Z';
