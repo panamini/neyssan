@@ -108,6 +108,8 @@ interface ProposalInputFormProps {
   suppressToneControls?: boolean;
   /** Optional external tone source used by workspace-level toolbars. */
   externalVoicePreset?: FormValues["voicePreset"] | null;
+  externalCharacterLimitMode?: FormValues["characterLimitMode"] | null;
+  externalCharacterLimitValue?: FormValues["characterLimitValue"] | null;
   onActiveCvChange?: (cvId: string | null) => void;
   activeCvId?: string | null;
   headerLabel?: string | null;
@@ -338,6 +340,8 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   onCvPickerOpenChange,
   suppressToneControls = false,
   externalVoicePreset,
+  externalCharacterLimitMode,
+  externalCharacterLimitValue,
   onActiveCvChange,
   activeCvId,
   headerLabel = null,
@@ -763,6 +767,33 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       shouldTouch: false,
     });
   }, [applyVoicePresetSelection, externalVoicePreset, form]);
+
+  React.useEffect(() => {
+    if (externalCharacterLimitMode === undefined) {
+      return;
+    }
+
+    const currentMode = form.getValues("characterLimitMode") ?? null;
+    const currentValue = form.getValues("characterLimitValue") ?? null;
+    const nextMode = externalCharacterLimitMode ?? DEFAULT_COMPOSE_CHARACTER_LIMIT_MODE;
+    const nextValue =
+      sanitizeProposalCharacterLimit(externalCharacterLimitValue) ??
+      DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE;
+
+    if (currentMode !== nextMode) {
+      form.setValue("characterLimitMode", nextMode, {
+        shouldDirty: false,
+        shouldTouch: false,
+      });
+    }
+
+    if (currentValue !== nextValue) {
+      form.setValue("characterLimitValue", nextValue, {
+        shouldDirty: false,
+        shouldTouch: false,
+      });
+    }
+  }, [externalCharacterLimitMode, externalCharacterLimitValue, form]);
 
   React.useEffect(() => {
     if (!selectedVoicePreset) {

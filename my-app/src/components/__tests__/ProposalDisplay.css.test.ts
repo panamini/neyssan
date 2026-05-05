@@ -241,7 +241,7 @@ describe("ProposalDisplay CSS contracts", () => {
       "scroll-padding-block-end: calc(var(--control-sm) + var(--space-3));",
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-character-badge-wrap\[data-overlap-hidden="true"\]\s*\{[\s\S]*opacity:\s*0;[\s\S]*transform:\s*translate3d\(0,\s*6px,\s*0\);/,
+      /\.dasti-proposal-character-badge-wrap\[data-overlap-hidden="true"\]\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*none;/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-character-badge\s*\{[\s\S]*background:\s*var\([\s\S]*--proposal-chrome-control-bg[\s\S]*--document-viewer-frame-surface/,

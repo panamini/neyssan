@@ -9,7 +9,9 @@ import ProposalInputForm, {
 } from "../components/ProposalInputForm";
 import ProposalAIStream from "../components/proposal/ProposalAIStream";
 import ProposalDocumentStage from "../components/proposal/ProposalDocumentStage";
-import ProposalRail from "../components/proposal/ProposalRail";
+import ProposalRail, {
+  type ProposalRailJobMatchSummary,
+} from "../components/proposal/ProposalRail";
 import {
   CoverLetterStartSurface,
   type CoverLetterStartSurfaceImportState,
@@ -137,6 +139,7 @@ import {
   type ProposalSignatureSettings,
 } from "../lib/proposal-signature-settings";
 import type { EditorAiJobContext } from "../lib/ai/editorAiJobContext";
+import { normalizeEditorAiTextResult } from "../lib/ai/applyAiSuggestion";
 
 type CurrentProposalSettings = {
   voicePreset: string;
@@ -229,9 +232,100 @@ type ProposalForgeCanonicalJob = {
   linkedProposalCount: number;
   linkedProposals: ProposalForgeLinkedProposal[];
   reviewItems: ProposalForgeReviewItem[];
+  matchRead?: unknown | null;
+  matchReview?: unknown | null;
 } | null;
 
 type ProposalForgeView = "compose" | "saved";
+
+type ProposalRailMatchTone = ProposalRailJobMatchSummary["tone"];
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
+function compactRailText(value: string | null | undefined, maxLength = 180): string | null {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  if (/press\s+space\s+or\s+enter\s+keys?\s+to\s+toggle/i.test(normalized)) {
+    return null;
+  }
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1).trimEnd()}…` : normalized;
+}
+
+function compactStoredJobSummary(value: string | null | undefined): string | null {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  if (/^no\s+summary\.?$/i.test(normalized)) return "No summary";
+  return compactRailText(normalized, 180);
+}
+
+function normalizeProposalRailJobTitle(value: string | null | undefined): string {
+  const normalized = value?.replace(/\s+/g, " ").trim() ?? "";
+  if (!normalized) return "";
+  const applicationMatch = normalized.match(/^application\s+for\s+the\s+position\s+of\s+(.+?)(?:\s+at\s+.+)?$/i);
+  return applicationMatch?.[1]?.trim() || normalized;
+}
+
+function resolveRailMatchTone(
+  tier: string | null,
+  reviewVerdict: string | null,
+): ProposalRailMatchTone {
+  if (reviewVerdict === "strong_lead") return "strong";
+  if (reviewVerdict === "possible_lead") return "worth";
+  if (reviewVerdict === "probably_skip") return "skip";
+  if (tier === "strong") return "strong";
+  if (tier === "partial") return "worth";
+  if (tier === "weak") return "skip";
+  return "maybe";
+}
+
+function resolveRailMatchLabel(
+  tier: string | null,
+  reviewVerdict: string | null,
+): string {
+  if (reviewVerdict === "strong_lead" || tier === "strong") return "Strong match";
+  if (reviewVerdict === "possible_lead" || tier === "partial") return "Worth a shot";
+  if (reviewVerdict === "probably_skip" || tier === "weak") return "Probably skip";
+  return "Match unclear";
+}
+
+function resolveProposalRailJobMatch(
+  matchRead: unknown,
+  matchReview: unknown,
+): ProposalRailJobMatchSummary | null {
+  const read = readRecord(matchRead);
+  if (!read) return null;
+  const review = readRecord(matchReview);
+  const tier = readString(read.tier);
+  const reviewVerdict = readString(review?.verdict);
+  const label = resolveRailMatchLabel(tier, reviewVerdict);
+  const tone = resolveRailMatchTone(tier, reviewVerdict);
+  const oneLiner = compactRailText(readString(review?.one_liner), 96);
+  if (oneLiner) return { label, tone, detail: oneLiner };
+
+  const matchedCount = readStringArray(read.matched).length;
+  const missingCount = readStringArray(read.missing).length;
+  const detailParts = [
+    matchedCount > 0 ? `${matchedCount} overlap${matchedCount === 1 ? "" : "s"}` : null,
+    missingCount > 0 ? `${missingCount} gap${missingCount === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+  return {
+    label,
+    tone,
+    detail: detailParts.length > 0 ? detailParts.join(" · ") : null,
+  };
+}
 type ProposalBriefAnimationPhase =
   | "idle"
   | "form-exit"
@@ -1065,6 +1159,9 @@ export function ProposalForge(): JSX.Element {
     requestedView,
   ]);
   const generateProposalAction = useAction(api.functions.generateProposal);
+  const transformEditorSelectionAction = useAction(
+    (api.functions as any).transformEditorSelection,
+  );
   const updateProposal = useMutation(api.updateProposalPublic.default);
   const approveJobReviewItem = useMutation(
     (api as any).jobsPublic?.approveReviewItem ??
@@ -1511,6 +1608,8 @@ export function ProposalForge(): JSX.Element {
   const [savedCopyFeedback, setSavedCopyFeedback] = React.useState<
     "idle" | "copied"
   >("idle");
+  const [railAskAiValue, setRailAskAiValue] = React.useState("");
+  const [railAskAiBusy, setRailAskAiBusy] = React.useState(false);
   const copyFeedbackTimeoutRef = React.useRef<number | null>(null);
   const savedCopyFeedbackTimeoutRef = React.useRef<number | null>(null);
   const lastCharacterLimitToastIdRef = React.useRef<string | null>(null);
@@ -1526,14 +1625,16 @@ export function ProposalForge(): JSX.Element {
   const composeAutosaveTimeoutRef = React.useRef<number | null>(null);
   const pendingComposeSavePromiseRef =
     React.useRef<Promise<Id<"proposals"> | null> | null>(null);
-  const pendingQueuedComposeSnapshotRef = React.useRef<{
+  type ComposeSaveSnapshot = {
     id: Id<"proposals"> | null;
     title: string;
     content: string;
     metadata: ProposalDocumentMetadata | undefined;
     status: string;
     token: string;
-  } | null>(null);
+  };
+  const pendingQueuedComposeSnapshotRef = React.useRef<ComposeSaveSnapshot | null>(null);
+  const latestComposeAutosaveSnapshotRef = React.useRef<ComposeSaveSnapshot | null>(null);
   const isSavingComposeProposalRef = React.useRef(false);
   const lastPersistedComposeTokenRef = React.useRef<string | null>(null);
   const composeAutosavePrimedRef = React.useRef(false);
@@ -2607,6 +2708,9 @@ export function ProposalForge(): JSX.Element {
     () => buildComposeSaveSnapshot(),
     [buildComposeSaveSnapshot],
   );
+  React.useEffect(() => {
+    latestComposeAutosaveSnapshotRef.current = composeAutosaveSnapshot;
+  }, [composeAutosaveSnapshot]);
   const performProposalSave = React.useCallback(
     async (
       initialSnapshot: NonNullable<typeof composeAutosaveSnapshot>,
@@ -2941,6 +3045,25 @@ export function ProposalForge(): JSX.Element {
       traceProposalStyle,
     ],
   );
+  const performProposalSaveRef = React.useRef(performProposalSave);
+  React.useEffect(() => {
+    performProposalSaveRef.current = performProposalSave;
+  }, [performProposalSave]);
+
+  React.useEffect(() => {
+    return () => {
+      const pendingSnapshot =
+        pendingQueuedComposeSnapshotRef.current ?? latestComposeAutosaveSnapshotRef.current;
+      if (!pendingSnapshot) return;
+      if (pendingSnapshot.token === lastPersistedComposeTokenRef.current) return;
+      if (composeAutosaveTimeoutRef.current !== null) {
+        window.clearTimeout(composeAutosaveTimeoutRef.current);
+        composeAutosaveTimeoutRef.current = null;
+      }
+      void performProposalSaveRef.current(pendingSnapshot, { silent: true }).catch(() => {});
+    };
+  }, []);
+
   const optimisticSavedDraftProposal =
     React.useMemo<SavedProposalRecord | null>(() => {
       if (
@@ -4898,6 +5021,66 @@ export function ProposalForge(): JSX.Element {
     },
     [],
   );
+  const handleRailAskAiSubmit = React.useCallback(async () => {
+    const instruction = railAskAiValue.trim();
+    const currentContent = proposalContent?.trim();
+    if (!instruction || !currentContent || railAskAiBusy) {
+      return;
+    }
+
+    setRailAskAiBusy(true);
+    try {
+      const jobContext = canonicalJobId
+        ? {
+            jobId: canonicalJobId,
+            title:
+              canonicalJobRecord?.title?.trim() ||
+              composePreviewValues?.jobTitle?.trim() ||
+              null,
+            company: canonicalJobRecord?.company?.trim() || null,
+            visibleSummary: canonicalJobRecord?.visibleSummary?.trim() || null,
+            visibleRequirements: canonicalJobRecord?.visibleRequirements ?? [],
+            visibleKeywords: canonicalJobRecord?.visibleKeywords ?? [],
+          }
+        : null;
+      const result = await transformEditorSelectionAction({
+        mode: "custom",
+        instruction,
+        selectedText: proposalContent,
+        ...(jobContext ? { jobContext } : {}),
+      });
+      const normalizedResult = normalizeEditorAiTextResult(result, "custom");
+      if (!normalizedResult) {
+        showToast("Ask AI returned no text", {
+          variant: "warning",
+          description: "Try a more specific instruction.",
+        });
+        return;
+      }
+      setProposalContent(normalizedResult.text);
+      setRailAskAiValue("");
+    } catch {
+      showToast("Ask AI could not update the draft", {
+        variant: "danger",
+        description: "Please try again in a moment.",
+      });
+    } finally {
+      setRailAskAiBusy(false);
+    }
+  }, [
+    canonicalJobId,
+    canonicalJobRecord?.company,
+    canonicalJobRecord?.title,
+    canonicalJobRecord?.visibleKeywords,
+    canonicalJobRecord?.visibleRequirements,
+    canonicalJobRecord?.visibleSummary,
+    composePreviewValues?.jobTitle,
+    proposalContent,
+    railAskAiBusy,
+    railAskAiValue,
+    showToast,
+    transformEditorSelectionAction,
+  ]);
   const handleProposalSalutationChange = React.useCallback((value: string) => {
     const previousSalutation = proposalSalutationValueRef.current;
     setProposalSalutationValue(value);
@@ -5211,8 +5394,12 @@ export function ProposalForge(): JSX.Element {
 
     if (!composeAutosavePrimedRef.current) {
       composeAutosavePrimedRef.current = true;
-      lastPersistedComposeTokenRef.current = composeAutosaveSnapshot.token;
-      setComposeSaveStatus("idle");
+      if (generatedProposalIdRef.current || lastPersistedComposeTokenRef.current) {
+        lastPersistedComposeTokenRef.current = composeAutosaveSnapshot.token;
+        setComposeSaveStatus("idle");
+        return;
+      }
+      scheduleProposalSave(composeAutosaveSnapshot);
       return;
     }
 
@@ -6263,13 +6450,17 @@ export function ProposalForge(): JSX.Element {
       showToast,
     ],
   );
-  const briefJobTitle =
+  const briefJobTitle = normalizeProposalRailJobTitle(
     canonicalJobRecord?.title?.trim() ||
-    composePreviewValues?.jobTitle?.trim() ||
-    prefill?.jobTitle?.trim() ||
-    storedComposeDraft?.jobTitle?.trim() ||
-    "";
+      prefill?.jobTitle?.trim() ||
+      storedComposeDraft?.jobTitle?.trim() ||
+      composePreviewValues?.jobTitle?.trim() ||
+      "",
+  );
   const briefSummaryText = canonicalJobRecord?.summary?.trim() || null;
+  const proposalRailJobSummary =
+    compactStoredJobSummary(canonicalJobRecord?.visibleSummary) ||
+    compactStoredJobSummary(canonicalJobRecord?.summary);
   const briefTrustState = canonicalJobRecord?.reviewState ?? null;
   const briefReviewItems = canonicalJobRecord?.reviewItems ?? [];
   const briefLinkedDocumentCount = canonicalJobRecord?.linkedProposalCount ?? 0;
@@ -6296,6 +6487,14 @@ export function ProposalForge(): JSX.Element {
       (Boolean(canonicalJobId) &&
         (isConvexAuthLoading ||
           (isConvexAuthenticated && canonicalJobRecord === undefined))));
+  const shouldShowProposalAiStream = Boolean(
+    isLoadingHandoff ||
+      loading ||
+      error ||
+      statusMessage ||
+      composeGenerateControl.state === "loading" ||
+      composeGenerateControl.state === "error",
+  );
   const shouldShowCoverLetterStartSurface =
     !isSavedView &&
     proposalEntryIntent === "cover-letter-start" &&
@@ -6377,32 +6576,98 @@ export function ProposalForge(): JSX.Element {
       }),
     [draftCharacterLimitMode, draftCharacterLimitValue],
   );
+  const proposalRailLengthOptions = React.useMemo(() => {
+    const activeValue = activeCharacterLimitSelection.value;
+    return [
+      {
+        id: "short" as const,
+        label: "Short",
+        description: "~1,200 chars",
+        selected: activeValue !== null && activeValue <= 1400,
+      },
+      {
+        id: "medium" as const,
+        label: "Medium",
+        description: "~2,000 chars",
+        selected: activeValue === null || (activeValue > 1400 && activeValue <= 2600),
+      },
+      {
+        id: "long" as const,
+        label: "Long",
+        description: "~3,200 chars",
+        selected: activeValue !== null && activeValue > 2600,
+      },
+    ];
+  }, [activeCharacterLimitSelection.value]);
+  const handleProposalRailLengthSelect = React.useCallback(
+    (lengthId: "short" | "medium" | "long") => {
+      const nextValue = lengthId === "short" ? 1200 : lengthId === "long" ? 3200 : 2000;
+      const nextDraft = {
+        ...(composePreviewValues ?? readStoredProposalComposeDraft() ?? {}),
+        characterLimitMode: "custom" as const,
+        characterLimitValue: nextValue,
+      };
+      writeStoredProposalComposeDraft(nextDraft);
+      setComposePreviewValues(nextDraft);
+      setOutputSourceComposeDraft((current) => ({
+        ...(current ?? nextDraft),
+        characterLimitMode: "custom",
+        characterLimitValue: nextValue,
+      }));
+      setComposeDraftInitialSeed((current) => ({
+        ...(current ?? nextDraft),
+        characterLimitMode: "custom",
+        characterLimitValue: nextValue,
+      }));
+    },
+    [composePreviewValues],
+  );
   const proposalRailTonePreset = composeToolbarVoicePreset ?? proposalVoicePreset;
   const proposalRailToneLabel = getVoicePresetDisplayLabel(
     proposalRailTonePreset ?? null,
   );
   const proposalRailToneValue =
     resolveProposalToneBadgeTone(proposalRailTonePreset);
-  const proposalRailKeywords = React.useMemo(
-    () =>
-      [
-        ...(canonicalJobRecord?.visibleKeywords ?? []),
-        ...(canonicalJobRecord?.keywords ?? []),
-        ...proposalHeaderSourceSummary.keywords,
-      ].filter((keyword, index, values) => {
-        const normalized = keyword.trim().toLowerCase();
-        return (
-          normalized.length > 0 &&
-          values.findIndex(
-            (candidate) => candidate.trim().toLowerCase() === normalized,
-          ) === index
-        );
-      }),
-    [
-      canonicalJobRecord?.keywords,
-      canonicalJobRecord?.visibleKeywords,
-      proposalHeaderSourceSummary.keywords,
+  const proposalRailToneOptions = React.useMemo(
+    () => [
+      {
+        id: null,
+        label: getVoicePresetDisplayLabel(null),
+        description: "Auto-fit tone to the role and source CV.",
+        tone: "auto" as const,
+        selected: proposalRailTonePreset === null || proposalRailTonePreset === undefined,
+      },
+      {
+        id: "engaging",
+        label: getVoicePresetDisplayLabel("engaging"),
+        description: "Warm and approachable.",
+        tone: "warm" as const,
+        selected: proposalRailTonePreset === "engaging",
+      },
+      {
+        id: "signature",
+        label: getVoicePresetDisplayLabel("signature"),
+        description: "Natural and credible.",
+        tone: "natural" as const,
+        selected: proposalRailTonePreset === "signature",
+      },
+      {
+        id: "expert",
+        label: getVoicePresetDisplayLabel("expert"),
+        description: "Formal and composed.",
+        tone: "formal" as const,
+        selected: proposalRailTonePreset === "expert",
+      },
     ],
+    [proposalRailTonePreset],
+  );
+  const proposalRailJobMatch = React.useMemo(
+    () =>
+      resolveProposalRailJobMatch(
+        canonicalJobRecord?.matchRead ?? null,
+        canonicalJobRecord?.matchReview ?? null,
+      ),
+    [canonicalJobRecord?.matchRead, canonicalJobRecord?.matchReview],
   );
   const shouldAnimateDesktopBriefTransition =
     !isSavedView && !isCompactComposeLayout;
@@ -6462,7 +6727,7 @@ export function ProposalForge(): JSX.Element {
       }
       return {
         isBusy,
-        label: "Import a resume",
+        label: "Import PDF",
         hint: "Upload a PDF or image.",
         fileName: coverLetterInlineImportFileName,
         error: coverLetterInlineImportError,
@@ -6908,20 +7173,48 @@ export function ProposalForge(): JSX.Element {
                         null
                       }
                       location={proposalHeaderSourceSummary.location || null}
+                      jobHref={proposalJobHref}
                       sourceLabel={briefSourcePlatform}
-                      keywords={proposalRailKeywords}
+                      sourceUrl={briefSourceUrl}
+                      jobSummary={proposalRailJobSummary}
+                      jobMatch={proposalRailJobMatch}
                       sourceCvTitle={attachedCvDisplayTitle}
                       sourceCvMeta={attachedCvId ? "Attached to this draft" : null}
+                      draftTitle={proposalDocumentTitle}
+                      draftTitlePlaceholder={buildProfessionalApplicationSubject({
+                        jobTitle: composePreviewValues?.jobTitle ?? "",
+                        jobDescription: composePreviewValues?.jobDescription ?? "",
+                        proposalType,
+                      })}
+                      onDraftTitleChange={setProposalDocumentTitle}
+                      onDraftTitleCommit={() => {
+                        void handleProposalDocumentCommit();
+                      }}
                       toneLabel={proposalRailToneLabel}
-                      toneValue={proposalRailToneValue}
-                      lengthLabel={activeCharacterLimitSelection.label}
-                      styleLabel={proposalStyleStatusLabel}
+                      toneOptions={proposalRailToneOptions}
+                      onSelectTone={(toneId) => {
+                        handleToolbarVoicePresetChange(
+                          toneId === "engaging" ||
+                            toneId === "signature" ||
+                            toneId === "expert"
+                            ? toneId
+                            : null,
+                        );
+                      }}
+                      lengthOptions={proposalRailLengthOptions}
+                      onSelectLength={handleProposalRailLengthSelect}
                       aiStream={
-                        <ProposalAIStream
-                          loading={loading}
-                          error={error}
-                          statusMessage={statusMessage}
-                        />
+                        shouldShowProposalAiStream ? (
+                          <ProposalAIStream
+                            loading={
+                              loading ||
+                              isLoadingHandoff ||
+                              composeGenerateControl.state === "loading"
+                            }
+                            error={error}
+                            statusMessage={statusMessage}
+                          />
+                        ) : null
                       }
                       cvOptions={sourceCvOptions}
                       onSelectCv={handleAttachedCvChange}
@@ -6933,17 +7226,25 @@ export function ProposalForge(): JSX.Element {
                       generateDisabled={composeGenerateControl.disabled || loading || isLoadingHandoff}
                       generateState={composeGenerateControl.state}
                       onGenerateDraft={handleGenerateFromCollapsedToolbar}
+                      askAiValue={railAskAiValue}
+                      askAiBusy={railAskAiBusy}
+                      askAiDisabled={!proposalContent}
+                      askAiPlaceholder="Make this more concrete, warmer, shorter…"
+                      askAiHint={
+                        proposalContent
+                          ? "Applies your instruction to the current draft."
+                          : "Generate a draft before asking AI to edit it."
+                      }
+                      onAskAiChange={setRailAskAiValue}
+                      onAskAiSubmit={() => {
+                        void handleRailAskAiSubmit();
+                      }}
                       variableFields={[
                         {
                           id: "proposal-subject",
-                          label: "Proposal subject",
+                          label: "Subject line",
                           value: proposalDocumentTitle,
-                          placeholder: buildProfessionalApplicationSubject({
-                            jobTitle: composePreviewValues?.jobTitle ?? "",
-                            jobDescription:
-                              composePreviewValues?.jobDescription ?? "",
-                            proposalType,
-                          }),
+                          placeholder: "Subject line",
                           onChange: setProposalDocumentTitle,
                           onBlur: () => {
                             void handleProposalDocumentCommit();
@@ -6951,9 +7252,9 @@ export function ProposalForge(): JSX.Element {
                         },
                         {
                           id: "applicant-name",
-                          label: "Applicant name",
+                          label: "Full name",
                           value: proposalApplicantName,
-                          placeholder: "Your name",
+                          placeholder: "Full name",
                           onChange: setProposalApplicantName,
                           onBlur: () => {
                             void handleProposalDocumentCommit();
@@ -6961,9 +7262,9 @@ export function ProposalForge(): JSX.Element {
                         },
                         {
                           id: "applicant-role",
-                          label: "Applicant role",
+                          label: "Target role",
                           value: proposalApplicantRole,
-                          placeholder: "Target role or headline",
+                          placeholder: "Target role",
                           onChange: setProposalApplicantRole,
                           onBlur: () => {
                             void handleProposalDocumentCommit();
@@ -6971,9 +7272,9 @@ export function ProposalForge(): JSX.Element {
                         },
                         {
                           id: "contact-line",
-                          label: "Contact line",
+                          label: "Contact information",
                           value: proposalContactLine,
-                          placeholder: "Email · phone · location",
+                          placeholder: "Contact information",
                           onChange: handleProposalContactLineChange,
                           onBlur: () => {
                             handleProposalContactLineCommit();
@@ -6982,9 +7283,9 @@ export function ProposalForge(): JSX.Element {
                         },
                         {
                           id: "letter-date",
-                          label: "Date line",
+                          label: "Date",
                           value: proposalLetterDate,
-                          placeholder: "Paris, 1 May 2026",
+                          placeholder: "Date",
                           onChange: setProposalLetterDate,
                           onBlur: () => {
                             void handleProposalDocumentCommit();
@@ -6992,9 +7293,9 @@ export function ProposalForge(): JSX.Element {
                         },
                         {
                           id: "recipient-details",
-                          label: "Recipient details",
+                          label: "Recipient information",
                           value: proposalRecipientDetails,
-                          placeholder: "Hiring team\nCompany",
+                          placeholder: "Recipient information",
                           multiline: true,
                           onChange: setProposalRecipientDetails,
                           onBlur: () => {
@@ -7005,7 +7306,7 @@ export function ProposalForge(): JSX.Element {
                           id: "salutation",
                           label: "Salutation",
                           value: proposalSalutationValue,
-                          placeholder: proposalSalutationPlaceholder,
+                          placeholder: "Salutation",
                           onChange: handleProposalSalutationChange,
                           onBlur: () => {
                             void handleProposalDocumentCommit();
@@ -7035,6 +7336,8 @@ export function ProposalForge(): JSX.Element {
                           cvPickerRequestKey={cvPickerRequestKey}
                           suppressCvPicker
                           externalVoicePreset={composeToolbarVoicePreset}
+                          externalCharacterLimitMode={draftCharacterLimitMode}
+                          externalCharacterLimitValue={draftCharacterLimitValue}
                           headerLabel={null}
                           initialComposeDraft={composeDraftInitialSeed}
                           sourceUrl={briefSourceUrl}

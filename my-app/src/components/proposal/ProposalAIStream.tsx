@@ -1,4 +1,5 @@
 import React from "react";
+import { ChevronDown } from "../../lib/icons";
 import AiStageList from "../ai/AiStageList";
 
 type ProposalAIStreamProps = {
@@ -20,6 +21,12 @@ export function ProposalAIStream({
   statusMessage,
 }: ProposalAIStreamProps): JSX.Element {
   const [expanded, setExpanded] = React.useState(false);
+  React.useEffect(() => {
+    if (loading || error || statusMessage?.trim()) {
+      setExpanded(true);
+    }
+  }, [error, loading, statusMessage]);
+
   const currentIndex = loading ? 2 : PROPOSAL_AI_STAGES.length;
   const summary = error
     ? "Generation needs attention"
@@ -41,9 +48,7 @@ export function ProposalAIStream({
           {Math.min(currentIndex + 1, PROPOSAL_AI_STAGES.length)} of{" "}
           {PROPOSAL_AI_STAGES.length}
         </span>
-        <span className="dasti-proposal-ai-stream__caret" aria-hidden="true">
-          v
-        </span>
+        <ChevronDown className="dasti-proposal-ai-stream__caret" aria-hidden="true" />
       </button>
       {expanded ? (
         <AiStageList

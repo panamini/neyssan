@@ -297,7 +297,7 @@ describe("ProposalForge workbench layout", () => {
     expect(within(importIssueRow as HTMLElement).getByText("Resolve")).toBeInTheDocument();
   });
 
-  it("renders the skeleton rail with lightweight setup and no visible legacy compose controls", () => {
+  it("renders the skeleton rail with lightweight setup and no visible legacy compose controls", async () => {
     const { container } = renderProposalForge();
 
     const rail = screen.getByLabelText("Proposal rail");
@@ -305,24 +305,40 @@ describe("ProposalForge workbench layout", () => {
       rail.querySelectorAll(".dasti-proposal-skeleton-rail__label"),
     ).map((label) => label.textContent);
 
-    expect(railLabels).toEqual([
-      "Job context",
-      "Source CV",
-      "Tone",
-      "Variables",
-      "Ask AI",
-      "Settings",
-    ]);
-    expect(within(rail).getByText("Draft setup")).toBeInTheDocument();
-    expect(within(rail).getByText("Role")).toBeInTheDocument();
-    expect(within(rail).getByText("CV")).toBeInTheDocument();
-    expect(within(rail).getAllByText("Tone").length).toBeGreaterThan(0);
+    expect(railLabels).toEqual(["Job context", "Draft"]);
+    const draftSetup = within(rail)
+      .getByRole("button", { name: "Generate" })
+      .closest("section");
+    expect(draftSetup).toBeInTheDocument();
+    expect(within(rail).getByRole("textbox", { name: "Draft title" })).toBeInTheDocument();
+    expect(within(rail).getByPlaceholderText("Draft title")).toBeInTheDocument();
+    expect(within(rail).getByText("Pick a CV")).toBeInTheDocument();
+    expect(within(rail).queryByText("Tone")).not.toBeInTheDocument();
+    const draftToneButton = within(rail).getByRole("button", { name: /auto/i });
+    expect(draftToneButton).toBeInTheDocument();
+    fireEvent.click(draftToneButton);
+    const toneMenu = await screen.findByRole("menu", { name: "Tone" });
+    expect(within(toneMenu).getByText("Tone")).toBeInTheDocument();
+    expect(within(rail).queryByText("Ready for edits")).not.toBeInTheDocument();
     expect(within(rail).getByRole("button", { name: "Generate" })).toBeInTheDocument();
     expect(
-      within(rail).getByText("Generate a draft to edit document variables here."),
+      within(rail).getByRole("button", {
+        name: /job context game ui artist/i,
+      }),
+    ).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(within(rail).getByRole("tab", { name: "Ask" }));
+    expect(
+      rail.querySelector(".dasti-proposal-skeleton-rail__tone-select"),
     ).toBeInTheDocument();
-    expect(within(rail).queryByRole("textbox", { name: /ask ai/i })).toBeNull();
-    expect(within(rail).queryByRole("button", { name: "Send" })).toBeNull();
+    expect(within(rail).getByRole("button", { name: "Auto" })).toBeInTheDocument();
+    expect(within(rail).getByRole("button", { name: "Medium" })).toBeInTheDocument();
+    expect(within(rail).getByRole("textbox", { name: /ask ai/i })).toBeDisabled();
+    expect(within(rail).getByRole("button", { name: "Send" })).toBeDisabled();
+    fireEvent.click(within(rail).getByRole("tab", { name: "Heading" }));
+    expect(within(rail).getAllByText("Heading").length).toBeGreaterThan(0);
+    expect(within(rail).getByText("Applicant details")).toBeInTheDocument();
+    expect(within(rail).getByText("Recipient details")).toBeInTheDocument();
+    expect(within(rail).getByText("Letter details")).toBeInTheDocument();
     expect(screen.queryByTestId("proposal-compose-toolbar")).toBeNull();
     expect(container.querySelector(".dasti-proposal-compose-panel-stage")).toBeNull();
   });
@@ -332,9 +348,11 @@ describe("ProposalForge workbench layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
-    expect(await screen.findByLabelText("Proposal subject")).toBeInTheDocument();
-    expect(screen.getByLabelText("Applicant name")).toBeInTheDocument();
-    expect(screen.getByLabelText("Contact line")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Heading" }));
+    expect(await screen.findByLabelText("Subject line")).toBeInTheDocument();
+    expect(screen.queryByText("Ready for edits")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Full name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Contact information")).toBeInTheDocument();
     expect(
       container.querySelector(".dasti-proposal-skeleton-rail__variables"),
     ).toBeTruthy();
@@ -346,6 +364,7 @@ describe("ProposalForge workbench layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
+    fireEvent.click(screen.getByRole("tab", { name: "Heading" }));
     const salutationField = await screen.findByLabelText("Salutation");
     fireEvent.change(salutationField, { target: { value: "H" } });
     fireEvent.change(salutationField, { target: { value: "HR" } });
@@ -410,15 +429,24 @@ describe("ProposalForge workbench layout", () => {
     });
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Choose a CV Attach one to personalize the draft.",
+        name: "Pick a CV",
       }),
     );
-    const sourceCvMenu = await screen.findByRole("menu", { name: "Source CV" });
+    const sourceCvMenu = await screen.findByRole("menu", { name: "Pick a CV" });
     const menuItems = within(sourceCvMenu).getAllByRole("menuitem");
     expect(menuItems[0]).toHaveTextContent("Create new CV");
-    expect(menuItems[1]).toHaveTextContent("Import new CV");
+    expect(menuItems[1]).toHaveTextContent("Import PDF");
     expect(sourceCvMenu.querySelector(".ds-menu__separator")).not.toBeNull();
     fireEvent.click(await screen.findByRole("menuitemradio", { name: "Editorial v3" }));
+
+    const rail = screen.getByLabelText("Proposal rail");
+    expect(within(rail).queryByText("Active source CV")).not.toBeInTheDocument();
+    expect(within(rail).getAllByText("Editorial v3").length).toBeGreaterThan(0);
+
+    fireEvent.click(within(rail).getByRole("tab", { name: "Ask" }));
+    fireEvent.click(within(rail).getByRole("button", { name: "Formal" }));
+    const toneMenu = await screen.findByRole("menu", { name: "Tone" });
+    fireEvent.click(within(toneMenu).getByRole("menuitemradio", { name: "Warm" }));
 
     await waitFor(() => {
       lastInputCall =
@@ -426,11 +454,28 @@ describe("ProposalForge workbench layout", () => {
       expect(lastInputCall).toMatchObject({
         activeCvId: "cv_editorial",
         cvPickerOpen: false,
-        externalVoicePreset: "expert",
+        externalVoicePreset: "engaging",
       });
     });
     expect(screen.queryByRole("dialog", { name: "Choose resume" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Balanced" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(rail).getByRole("button", { name: "Medium" }));
+    const lengthMenu = await screen.findByRole("menu", { name: "Length" });
+    fireEvent.click(
+      within(lengthMenu).getByRole("menuitemradio", {
+        name: "Short proposal length",
+      }),
+    );
+
+    await waitFor(() => {
+      lastInputCall =
+        proposalInputFormSpy.mock.calls[proposalInputFormSpy.mock.calls.length - 1]?.[0];
+      expect(lastInputCall).toMatchObject({
+        externalCharacterLimitMode: "custom",
+        externalCharacterLimitValue: 1200,
+      });
+    });
   });
 
   it("keeps the skeleton workbench constrained on desktop and compact widths", () => {
@@ -456,7 +501,7 @@ describe("ProposalForge workbench layout", () => {
       Array.from(rail.children).filter((child) =>
         child.classList.contains("forge__rail-section"),
       ),
-    ).toHaveLength(7);
+    ).toHaveLength(2);
 
     act(() => {
       Object.defineProperty(window, "innerWidth", {
