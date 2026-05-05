@@ -120,12 +120,16 @@ import {
   buildProposalLetterDateLine,
   buildProposalRecipientPrefill,
   buildProposalSalutation,
-  hasProposalHeaderVisibilityOverride,
   readProposalSalutation,
   replaceProposalSalutation,
   resolveProposalHeaderVisibility,
   type ProposalHeaderVisibility,
 } from "../lib/proposal-header";
+import {
+  buildProposalApplicantHeaderFromMetadata,
+  buildProposalHeadingMetadataPatch,
+  resolveProposalHeadingText,
+} from "../lib/proposal-heading-state";
 import {
   buildProposalExportSource,
   buildProposalPreviewPrintSource,
@@ -1615,6 +1619,11 @@ export function ProposalForge(): JSX.Element {
       contactLine: defaultPreviewContactLine,
     };
 
+    if (generatedProposalId || proposalContent) {
+      lastAutoApplicantHeaderRef.current = nextAuto;
+      return;
+    }
+
     setProposalApplicantName((current) => {
       const trimmedCurrent = current.trim();
       if (isInvalidProposalApplicantName(trimmedCurrent)) {
@@ -1648,6 +1657,8 @@ export function ProposalForge(): JSX.Element {
     defaultPreviewApplicantHeader.name,
     defaultPreviewApplicantHeader.role,
     defaultPreviewContactLine,
+    generatedProposalId,
+    proposalContent,
   ]);
   const [savedProposalContent, setSavedProposalContent] = React.useState<
     string | null
@@ -2044,6 +2055,11 @@ export function ProposalForge(): JSX.Element {
       salutation: buildProposalSalutation(autoProposalRecipientDetails),
     };
 
+    if (generatedProposalId || proposalContent) {
+      lastAutoLetterHeaderRef.current = nextAuto;
+      return;
+    }
+
     setProposalRecipientDetails((current) => {
       const trimmedCurrent = current.trim();
       const sanitizedCurrent = sanitizeProposalRecipientDetails(trimmedCurrent);
@@ -2079,7 +2095,12 @@ export function ProposalForge(): JSX.Element {
     });
 
     lastAutoLetterHeaderRef.current = nextAuto;
-  }, [autoProposalLetterDate, autoProposalRecipientDetails]);
+  }, [
+    autoProposalLetterDate,
+    autoProposalRecipientDetails,
+    generatedProposalId,
+    proposalContent,
+  ]);
 
   const consumedHandoffIdRef = React.useRef<string | null>(null);
 
@@ -2696,30 +2717,17 @@ export function ProposalForge(): JSX.Element {
     if (lastProposalRequest?.creativity) {
       nextMetadata.creativity = lastProposalRequest.creativity;
     }
-    const sanitizedApplicantName = sanitizeProposalApplicantName(proposalApplicantName);
-    if (sanitizedApplicantName) {
-      nextMetadata.applicantName = sanitizedApplicantName;
-    }
-    if (proposalApplicantRole.trim()) {
-      nextMetadata.applicantRole = proposalApplicantRole.trim();
-    }
-    if (proposalContactLine.trim()) {
-      nextMetadata.contactLine = proposalContactLine.trim();
-    }
-    if (proposalLetterDate.trim()) {
-      nextMetadata.letterDate = proposalLetterDate.trim();
-    }
-    if (proposalRecipientDetails.trim()) {
-      nextMetadata.recipientDetails = proposalRecipientDetails.trim();
-    }
-    if (hasProposalHeaderVisibilityOverride(proposalHeaderVisibility)) {
-      nextMetadata.headerShowSender = proposalHeaderVisibility.showSender;
-      nextMetadata.headerShowDate = proposalHeaderVisibility.showDate;
-      nextMetadata.headerShowSubject = proposalHeaderVisibility.showSubject;
-      nextMetadata.headerShowRecipient = proposalHeaderVisibility.showRecipient;
-      nextMetadata.headerShowRecipientDetails =
-        proposalHeaderVisibility.showRecipientDetails;
-    }
+    Object.assign(
+      nextMetadata,
+      buildProposalHeadingMetadataPatch({
+        applicantName: sanitizeProposalApplicantName(proposalApplicantName),
+        applicantRole: proposalApplicantRole,
+        contactLine: proposalContactLine,
+        letterDate: proposalLetterDate,
+        recipientDetails: proposalRecipientDetails,
+        headerVisibility: proposalHeaderVisibility,
+      }),
+    );
 
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
   }, [
@@ -4494,6 +4502,24 @@ export function ProposalForge(): JSX.Element {
     const nextTitle = draftProposal.title || "Draft proposal";
     const nextMeta = nextType ? formatProposalTypeLabel(nextType) : "Draft";
     const nextGeneratedId = draftProposal._id as Id<"proposals">;
+    const nextApplicantName =
+      resolveProposalHeadingText(draftProposal.metadata, "applicantName") ?? "";
+    const nextApplicantRole =
+      resolveProposalHeadingText(draftProposal.metadata, "applicantRole") ?? "";
+    const nextContactLine =
+      resolveProposalHeadingText(draftProposal.metadata, "contactLine") ?? "";
+    const nextLetterDate =
+      resolveProposalHeadingText(draftProposal.metadata, "letterDate") ?? "";
+    const nextRecipientDetails =
+      resolveProposalHeadingText(draftProposal.metadata, "recipientDetails") ?? "";
+    const nextHeaderVisibility = resolveProposalHeaderVisibility({
+      ...buildProposalHeaderVisibilityFromContent(nextRecipientDetails),
+      showSender: draftProposal.metadata?.headerShowSender,
+      showDate: draftProposal.metadata?.headerShowDate,
+      showSubject: draftProposal.metadata?.headerShowSubject,
+      showRecipient: draftProposal.metadata?.headerShowRecipient,
+      showRecipientDetails: draftProposal.metadata?.headerShowRecipientDetails,
+    });
 
     loadedDraftProposalIdRef.current = selectedDraftProposalId;
     cancelPendingComposeDraftSync();
@@ -4504,6 +4530,12 @@ export function ProposalForge(): JSX.Element {
     setProposalTemplateId(nextTemplateId);
     setProposalStylePreset(nextStylePreset);
     setProposalStyleLinkMode(nextStyleLinkMode);
+    setProposalApplicantName(nextApplicantName);
+    setProposalApplicantRole(nextApplicantRole);
+    setProposalContactLine(nextContactLine);
+    setProposalLetterDate(nextLetterDate);
+    setProposalRecipientDetails(nextRecipientDetails);
+    setProposalHeaderVisibility(nextHeaderVisibility);
     setProposalDocumentTitle(nextTitle);
     setProposalDocumentMeta(nextMeta);
     setGeneratedProposalId(nextGeneratedId);
@@ -4526,17 +4558,17 @@ export function ProposalForge(): JSX.Element {
       proposalVerbatiStyle: nextStylePreset,
       proposalStyleLinkMode: nextStyleLinkMode,
       proposalStyleChoice,
-      proposalApplicantName,
-      proposalApplicantRole,
-      proposalContactLine,
-      proposalLetterDate,
-      proposalRecipientDetails,
-      proposalHeaderShowSender: proposalHeaderVisibility.showSender,
-      proposalHeaderShowDate: proposalHeaderVisibility.showDate,
-      proposalHeaderShowSubject: proposalHeaderVisibility.showSubject,
-      proposalHeaderShowRecipient: proposalHeaderVisibility.showRecipient,
+      proposalApplicantName: nextApplicantName,
+      proposalApplicantRole: nextApplicantRole,
+      proposalContactLine: nextContactLine,
+      proposalLetterDate: nextLetterDate,
+      proposalRecipientDetails: nextRecipientDetails,
+      proposalHeaderShowSender: nextHeaderVisibility.showSender,
+      proposalHeaderShowDate: nextHeaderVisibility.showDate,
+      proposalHeaderShowSubject: nextHeaderVisibility.showSubject,
+      proposalHeaderShowRecipient: nextHeaderVisibility.showRecipient,
       proposalHeaderShowRecipientDetails:
-        proposalHeaderVisibility.showRecipientDetails,
+        nextHeaderVisibility.showRecipientDetails,
       proposalDocumentTitle: nextTitle,
       proposalDocumentMeta: nextMeta,
       generatedProposalId: nextGeneratedId,
@@ -4561,14 +4593,8 @@ export function ProposalForge(): JSX.Element {
     draftCharacterLimitMode,
     fallbackProposalTemplateId,
     formatProposalTypeLabel,
-    proposalApplicantName,
-    proposalApplicantRole,
-    proposalContactLine,
     proposalCustomAccentHex,
-    proposalHeaderVisibility,
-    proposalLetterDate,
     proposalPaletteOverride,
-    proposalRecipientDetails,
     proposalStyleChoice,
     proposalTemplateBundleId,
     requestedView,
@@ -5165,6 +5191,41 @@ export function ProposalForge(): JSX.Element {
       setProposalContent(signedProposal);
       setGeneratedProposalId(nextProposalId ?? null);
       generatedProposalIdRef.current = nextProposalId ?? null;
+      if (nextProposalId && canPersistProposalState) {
+        const immediateMetadata: ProposalDocumentMetadata = {
+          ...(proposalPersistenceMetadata ?? {}),
+          proposalType: values.proposalType,
+          voicePreset: resolvedVoicePreset,
+          resolvedVoicePreset,
+          requestedVoicePreset: values.voicePreset ?? null,
+          ...(values.jobDescription?.trim()
+            ? { sourceJobDescription: values.jobDescription.trim() }
+            : {}),
+          ...(values.sourceUrl?.trim()
+            ? { sourceUrl: values.sourceUrl.trim() }
+            : {}),
+          ...(values.platform?.trim() ? { platform: values.platform.trim() } : {}),
+          ...buildProposalHeadingMetadataPatch({
+            applicantName: previewApplicantHeader.name ?? "",
+            applicantRole: previewApplicantHeader.role ?? "",
+            contactLine: buildProposalApplicantContactLine(previewApplicantHeader),
+            letterDate:
+              proposalLetterDate ||
+              getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
+            recipientDetails: proposalRecipientDetails,
+            headerVisibility: proposalHeaderVisibility,
+          }),
+        };
+        void updateProposal({
+          id: nextProposalId,
+          content: signedProposal,
+          sections: [{ type: "text", content: signedProposal }],
+          status: "draft",
+          metadata: immediateMetadata,
+        }).catch((saveErr) => {
+          console.warn("Failed to patch generated proposal metadata:", saveErr);
+        });
+      }
       setProposalOutputMode("preview");
       setIsComposePanelVisible(true);
       setIsBriefExpanded(false);
@@ -5191,6 +5252,7 @@ export function ProposalForge(): JSX.Element {
     },
     [
       effectivePersonalizationSource,
+      canPersistProposalState,
       cancelPendingComposeDraftSync,
       effectiveProposalStylePresetWithPalette,
       effectiveProposalTemplateId,
@@ -5198,6 +5260,7 @@ export function ProposalForge(): JSX.Element {
       buildStoredProposalComposeDraftSnapshot,
       formatProposalTypeLabel,
       proposalCustomAccentHex,
+      proposalPersistenceMetadata,
       proposalHeaderVisibility,
       proposalLetterDate,
       proposalPaletteOverride,
@@ -5206,6 +5269,8 @@ export function ProposalForge(): JSX.Element {
       proposalStyleChoice,
       resolvedRuntimeStyleLinkMode,
       resolveProposalVoicePreset,
+      updateProposal,
+      defaultPreviewApplicantHeader.location,
       writeStoredOutputDraft,
     ],
   );
@@ -5820,15 +5885,44 @@ export function ProposalForge(): JSX.Element {
     const shouldRestoreSavedDetachedStyle =
       savedProposalStyleLinkMode === "proposal_local";
     const restoredJobId = openedSavedProposal.metadata?.jobId?.trim() || null;
+    const restoredApplicantName =
+      resolveProposalHeadingText(openedSavedProposal.metadata, "applicantName") ?? "";
+    const restoredApplicantRole =
+      resolveProposalHeadingText(openedSavedProposal.metadata, "applicantRole") ?? "";
+    const restoredContactLine =
+      resolveProposalHeadingText(openedSavedProposal.metadata, "contactLine") ?? "";
+    const restoredLetterDate =
+      resolveProposalHeadingText(openedSavedProposal.metadata, "letterDate") ?? "";
+    const restoredRecipientDetails =
+      resolveProposalHeadingText(openedSavedProposal.metadata, "recipientDetails") ?? "";
+    const restoredHeaderVisibility = resolveProposalHeaderVisibility({
+      ...buildProposalHeaderVisibilityFromContent(restoredRecipientDetails),
+      showSender: openedSavedProposal.metadata?.headerShowSender,
+      showDate: openedSavedProposal.metadata?.headerShowDate,
+      showSubject: openedSavedProposal.metadata?.headerShowSubject,
+      showRecipient: openedSavedProposal.metadata?.headerShowRecipient,
+      showRecipientDetails: openedSavedProposal.metadata?.headerShowRecipientDetails,
+    });
     let duplicatedDraftId: Id<"proposals"> | null = null;
 
     if (canPersistProposalState) {
       const duplicateMetadata: ProposalDocumentMetadata = {
         ...(openedSavedProposal.metadata ?? {}),
         ...(restoredJobId ? { jobId: restoredJobId } : {}),
+        ...buildProposalHeadingMetadataPatch({
+          applicantName: restoredApplicantName,
+          applicantRole: restoredApplicantRole,
+          contactLine: restoredContactLine,
+          letterDate: restoredLetterDate,
+          recipientDetails: restoredRecipientDetails,
+          headerVisibility: restoredHeaderVisibility,
+        }),
       };
       void createProposal({
-        title: savedProposalDocumentTitle.trim() || openedSavedProposal.title || "Draft proposal",
+        title:
+          savedProposalDocumentTitle.trim() ||
+          openedSavedProposal.title ||
+          "Draft proposal",
         content: savedProposalContent,
         sections: [{ type: "text", content: savedProposalContent }],
         status: "draft",
@@ -5913,6 +6007,12 @@ export function ProposalForge(): JSX.Element {
     setProposalTemplateBundleId(restoredTemplateBundleId);
     setProposalPaletteOverride(restoredPaletteOverride);
     setProposalCustomAccentHex(restoredCustomAccentHex);
+    setProposalApplicantName(restoredApplicantName);
+    setProposalApplicantRole(restoredApplicantRole);
+    setProposalContactLine(restoredContactLine);
+    setProposalLetterDate(restoredLetterDate);
+    setProposalRecipientDetails(restoredRecipientDetails);
+    setProposalHeaderVisibility(restoredHeaderVisibility);
     setProposalDocumentTitle(savedProposalDocumentTitle);
     setProposalDocumentMeta(savedProposalDocumentMeta);
     setDuplicateSourceJobId(restoredJobId);
@@ -6415,15 +6515,16 @@ export function ProposalForge(): JSX.Element {
   );
   const proposalDisplayApplicantHeader = React.useMemo(
     () => ({
-      ...defaultPreviewApplicantHeader,
       name: sanitizeProposalApplicantName(proposalApplicantName) || null,
       role: proposalApplicantRole.trim() || null,
+      email: null,
+      phone: null,
+      linkedin: null,
+      website: null,
+      location: null,
+      tag: null,
     }),
-    [
-      defaultPreviewApplicantHeader,
-      proposalApplicantName,
-      proposalApplicantRole,
-    ],
+    [proposalApplicantName, proposalApplicantRole],
   );
   const proposalContentSalutation = React.useMemo(
     () => readProposalSalutation(proposalContent),
@@ -6544,17 +6645,21 @@ export function ProposalForge(): JSX.Element {
     }
 
     const savedMetadata = openedSavedProposal.metadata;
-    const savedApplicantHeader = {
-      ...defaultPreviewApplicantHeader,
-      name:
-        savedMetadata?.applicantName?.trim() ||
-        defaultPreviewApplicantHeader.name ||
-        "",
-      role:
-        savedMetadata?.applicantRole?.trim() ||
-        defaultPreviewApplicantHeader.role ||
-        "",
-    };
+    const savedApplicantHeader = buildProposalApplicantHeaderFromMetadata(
+      savedMetadata,
+    );
+    const savedContactLine = resolveProposalHeadingText(
+      savedMetadata,
+      "contactLine",
+    );
+    const savedLetterDate = resolveProposalHeadingText(
+      savedMetadata,
+      "letterDate",
+    );
+    const savedRecipientDetails = resolveProposalHeadingText(
+      savedMetadata,
+      "recipientDetails",
+    );
 
     return buildProposalExportSource({
       content: savedProposalContent,
@@ -6564,13 +6669,9 @@ export function ProposalForge(): JSX.Element {
         openedSavedProposal.title ||
         "Proposal",
       documentMeta: savedProposalDocumentMeta,
-      contactLine:
-        savedMetadata?.contactLine ??
-        buildProposalApplicantContactLine(savedApplicantHeader),
-      letterDate:
-        savedMetadata?.letterDate ??
-        getDefaultProposalLetterDate(savedApplicantHeader.location),
-      recipientDetails: savedMetadata?.recipientDetails ?? "",
+      contactLine: savedContactLine ?? "",
+      letterDate: savedLetterDate ?? "",
+      recipientDetails: savedRecipientDetails ?? "",
       applicantHeader: savedApplicantHeader,
       headerVisibility: resolveProposalHeaderVisibility({
         showSender: savedMetadata?.headerShowSender,
@@ -6583,7 +6684,6 @@ export function ProposalForge(): JSX.Element {
       signatureSettings: proposalSignatureSettings,
     });
   }, [
-    defaultPreviewApplicantHeader,
     openedSavedProposal,
     proposalSignatureSettings,
     savedProposalContent,
@@ -6598,36 +6698,44 @@ export function ProposalForge(): JSX.Element {
     }
 
     const savedMetadata = openedSavedProposal.metadata;
-    const savedApplicantHeader = {
-      ...defaultPreviewApplicantHeader,
-      name:
-        savedMetadata?.applicantName?.trim() ||
-        defaultPreviewApplicantHeader.name ||
-        "",
-      role:
-        savedMetadata?.applicantRole?.trim() ||
-        defaultPreviewApplicantHeader.role ||
-        "",
-    };
+    const savedApplicantHeader = buildProposalApplicantHeaderFromMetadata(
+      savedMetadata,
+    );
+    const savedRailTitle = resolveProposalHeadingText(
+      savedMetadata,
+      "applicantName",
+    );
+    const savedRailMeta = resolveProposalHeadingText(
+      savedMetadata,
+      "applicantRole",
+    );
+    const savedContactLine = resolveProposalHeadingText(
+      savedMetadata,
+      "contactLine",
+    );
+    const savedLetterDate = resolveProposalHeadingText(
+      savedMetadata,
+      "letterDate",
+    );
+    const savedRecipientDetails = resolveProposalHeadingText(
+      savedMetadata,
+      "recipientDetails",
+    );
 
     return buildProposalPreviewPrintSource({
       content: savedProposalContent,
       proposalType: savedProposalType,
       voicePreset: savedProposalVoicePreset,
-      railTitle: savedApplicantHeader.name,
-      railMeta: savedApplicantHeader.role,
+      railTitle: savedRailTitle ?? null,
+      railMeta: savedRailMeta ?? null,
       documentTitle:
         savedProposalDocumentTitle.trim() ||
         openedSavedProposal.title ||
         "Proposal",
       documentMeta: savedProposalDocumentMeta,
-      contactLine:
-        savedMetadata?.contactLine ??
-        buildProposalApplicantContactLine(savedApplicantHeader),
-      letterDate:
-        savedMetadata?.letterDate ??
-        getDefaultProposalLetterDate(savedApplicantHeader.location),
-      recipientDetails: savedMetadata?.recipientDetails ?? "",
+      contactLine: savedContactLine ?? "",
+      letterDate: savedLetterDate ?? "",
+      recipientDetails: savedRecipientDetails ?? "",
       applicantHeader: savedApplicantHeader,
       headerVisibility: resolveProposalHeaderVisibility({
         showSender: savedMetadata?.headerShowSender,
@@ -6641,7 +6749,6 @@ export function ProposalForge(): JSX.Element {
       signatureSettings: proposalSignatureSettings,
     });
   }, [
-    defaultPreviewApplicantHeader,
     effectiveSavedProposalStylePreset,
     effectiveSavedProposalTemplateId,
     openedSavedProposal,
@@ -7826,11 +7933,11 @@ export function ProposalForge(): JSX.Element {
                           }
                           stylePreset={effectiveProposalStylePresetWithPalette}
                           signatureSettings={proposalSignatureSettings}
-                          railTitle={sanitizeProposalApplicantName(proposalApplicantName) || null}
-                          railMeta={proposalApplicantRole || null}
-                          contactLine={proposalContactLine || null}
-                          letterDate={proposalLetterDate || null}
-                          recipientDetails={proposalRecipientDetails || null}
+                          railTitle={sanitizeProposalApplicantName(proposalApplicantName)}
+                          railMeta={proposalApplicantRole}
+                          contactLine={proposalContactLine}
+                          letterDate={proposalLetterDate}
+                          recipientDetails={proposalRecipientDetails}
                           salutationValue={proposalSalutationValue || null}
                           applicantHeader={proposalDisplayApplicantHeader}
                           headerVisibility={proposalHeaderVisibility}

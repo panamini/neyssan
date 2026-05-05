@@ -543,15 +543,18 @@ export function ProposalDocumentRenderer({
     [documentTypography, pageGapPx, resolvedTemplateId, stylePreset],
   );
   const resolvedRailTitle =
-    railTitle?.trim() || applicantHeader?.name || documentTitle || null;
+    typeof railTitle === "string"
+      ? railTitle.trim() || null
+      : applicantHeader?.name || documentTitle || null;
   const resolvedRailMeta =
-    railMeta?.trim() || applicantHeader?.role || documentMeta || null;
+    typeof railMeta === "string"
+      ? railMeta.trim() || null
+      : applicantHeader?.role || documentMeta || null;
   const resolvedSenderEmail = applicantHeader?.email ?? documentMeta ?? null;
   const resolvedSenderLine =
-    normalizeDocumentContactLine(contactLine) ||
-    buildVolkRegisterSenderLine(applicantHeader) ||
-    resolvedSenderEmail ||
-    null;
+    typeof contactLine === "string"
+      ? normalizeDocumentContactLine(contactLine)
+      : buildVolkRegisterSenderLine(applicantHeader) || resolvedSenderEmail || null;
   const resolvedHeaderVisibility = React.useMemo(
     () => resolveProposalHeaderVisibility(headerVisibility),
     [headerVisibility],
