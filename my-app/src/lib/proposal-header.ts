@@ -199,8 +199,10 @@ export function readProposalSalutation(content?: string | null): string {
 export function replaceProposalSalutation(args: {
   content?: string | null;
   salutation?: string | null;
+  previousSalutation?: string | null;
 }): string {
   const nextSalutation = normalizeHeaderValue(args.salutation);
+  const previousSalutation = normalizeHeaderValue(args.previousSalutation);
   const lines = String(args.content ?? "").replace(/\r\n/g, "\n").split("\n");
   const firstNonEmptyIndex = lines.findIndex((line) => line.trim().length > 0);
 
@@ -208,7 +210,11 @@ export function replaceProposalSalutation(args: {
     return nextSalutation;
   }
 
-  if (SALUTATION_PATTERN.test(lines[firstNonEmptyIndex].trim())) {
+  const currentFirstLine = lines[firstNonEmptyIndex].trim();
+  if (
+    SALUTATION_PATTERN.test(currentFirstLine) ||
+    (previousSalutation && currentFirstLine === previousSalutation)
+  ) {
     if (!nextSalutation) {
       lines.splice(firstNonEmptyIndex, 1);
       while (
