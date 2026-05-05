@@ -941,12 +941,14 @@
   --type-title-line: var(--text-title-line);
 
   /* Dark-neutral card shadow — light mode: standard elevation */
+  --shadow-card-dark: var(--shb);
   --shadow-card: var(--shb);
 }
 .dark {
   /* Raised card shadow: depth + inner top highlight for elevation legibility */
-  --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.60),
+  --shadow-card-dark: 0 4px 14px rgba(0, 0, 0, 0.60),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --shadow-card: var(--shadow-card-dark);
 }
 
 /* Single ambient loop in the system: brand period only. Opacity-only, floored at 0.55. */

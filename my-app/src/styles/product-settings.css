@@ -337,7 +337,7 @@
   width: 40px;
   min-width: 40px;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-surface);
   color: var(--tm2);
   display: inline-flex;
@@ -452,7 +452,7 @@
   align-content: space-between;
   gap: var(--space-3);
   padding: var(--space-4);
-  border-radius: 22px;
+  border-radius: var(--radius-3);
   border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
   background: radial-gradient(
       circle at top right,
@@ -584,7 +584,7 @@
   align-items: center;
   min-height: 24px;
   padding: 0 var(--space-2);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--color-border) 68%, transparent);
   background: color-mix(in srgb, white 82%, var(--settings-preview-accent) 18%);
   color: var(--ti);
@@ -983,7 +983,7 @@
   justify-content: center;
   width: 17px;
   height: 17px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
   background: color-mix(in srgb, var(--color-accent) 15%, transparent);
   color: var(--color-accent-hover);
@@ -1012,7 +1012,7 @@
 .dasti-settings-style-card__mini-title,
 .dasti-settings-style-card__mini-body {
   display: block;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--ti) 16%, transparent);
 }
 
@@ -1072,7 +1072,7 @@
   grid-column: 1;
   grid-row: 2 / 6;
   width: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(
     in srgb,
     var(--settings-preview-accent, var(--sfr)) 22%,
@@ -1149,7 +1149,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--sfr) 96%, transparent);
   color: var(--ti);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border) 80%, transparent);
@@ -1318,7 +1318,7 @@
   justify-content: center;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(
     in srgb,
     var(--document-viewer-frame-surface, var(--sf1)) 94%,
@@ -1454,7 +1454,7 @@
   min-block-size: 108px;
   overflow: visible;
   isolation: isolate;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: none;
   background: transparent;
   cursor: ns-resize;
@@ -1608,7 +1608,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--color-surface) 92%, transparent);
   color: var(--ti);
   box-shadow: var(--shadow-sm);
@@ -1728,7 +1728,7 @@
   bottom: 6px;
   left: 0;
   width: 2px;
-  border-radius: 2px;
+  border-radius: var(--radius-1);
   background: var(--ac);
 }
 
@@ -2132,7 +2132,7 @@ html[data-reduce-motion="true"] *::after {
 .layout-card__line {
   display: block;
   height: 3px;
-  border-radius: 1px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--ti) 18%, transparent);
 }
 
@@ -2274,7 +2274,7 @@ html[data-reduce-motion="true"] *::after {
   gap: 3px;
   height: 18px;
   padding: 0 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -2384,7 +2384,7 @@ html[data-reduce-motion="true"] *::after {
   flex-shrink: 0;
   height: 17px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -2401,7 +2401,7 @@ html[data-reduce-motion="true"] *::after {
   color: var(--tm2);
   cursor: pointer;
   padding: 2px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-1);
   transition:
     color 0.1s var(--ez),
     background 0.1s var(--ez);
@@ -2414,7 +2414,7 @@ html[data-reduce-motion="true"] *::after {
 }
 
 .dasti-settings-slot-card__mini-preview {
-  border-radius: 4px;
+  border-radius: var(--radius-1);
   overflow: hidden;
   min-height: 48px;
 }
@@ -2521,7 +2521,7 @@ html[data-reduce-motion="true"] *::after {
   justify-content: center;
   width: 17px;
   height: 17px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--color-accent) 15%, transparent);
   color: var(--color-accent-hover);
   border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
@@ -2897,7 +2897,7 @@ button.dasti-settings-signature-tool:focus-visible {
     var(--color-border) 56%
   );
   height: 1px;
-  border-radius: 1px;
+  border-radius: var(--radius-pill);
   align-self: stretch;
 }
 
@@ -2957,7 +2957,7 @@ button.dasti-settings-signature-tool:focus-visible {
   align-items: center;
   height: 22px;
   padding: 0 var(--s2);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--color-border) 64%, transparent);
   background: color-mix(
     in srgb,
@@ -2988,7 +2988,7 @@ button.dasti-settings-signature-tool:focus-visible {
   align-items: center;
   height: 22px;
   padding: 0 var(--s2);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid color-mix(in srgb, var(--color-border) 64%, transparent);
   background: color-mix(
     in srgb,
@@ -3428,7 +3428,7 @@ button.dasti-settings-signature-tool:focus-visible {
   width: 52px;
   height: 52px;
   min-width: 52px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 3px solid var(--color-surface-raised);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border) 72%, transparent);
 }
