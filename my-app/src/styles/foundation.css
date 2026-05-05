@@ -884,6 +884,34 @@
 }
 
 /* ============================================================
+   MISSING ALIAS LAYER — tokens referenced in product CSS
+   that had no definition. All map to existing DASTI values.
+   ============================================================ */
+:root {
+  /* Short radius aliases (complement --rx/rs/rm/rl/rp) */
+  --r-inline:  var(--radius-inline);          /* 8px  */
+  --r-control: var(--radius-control);         /* 12px */
+  --r-card:    var(--radius-card);            /* 16px */
+  --r-surface: var(--radius-surface);         /* 20px */
+  --r-pill:    var(--radius-pill);            /* 999px */
+  --r-paper:   var(--document-paper-radius);  /* 4px  */
+
+  /* Toolbar radius */
+  --radius-toolbar-shell:   var(--radius-card);
+  --radius-toolbar-control: var(--radius-control);
+
+  /* Paper shadow alias */
+  --sh-paper: var(--document-paper-shadow);
+
+  /* Typography: sub-muted and extra-small */
+  --tm1: color-mix(in srgb, var(--ti) 84%, transparent);
+  --txs: 10.5px;
+
+  /* Semantic color aliases */
+  --color-muted: var(--tm2);
+}
+
+/* ============================================================
    PHASE 1 — Semantic convenience tokens (audit v1)
    Purpose: named shortcuts so component CSS stops hardcoding
    raw space-* values. All values reference existing tokens.

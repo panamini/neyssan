@@ -272,7 +272,7 @@
 }
 
 .dasti-settings-appearance-label {
-  font-size: 10.5px;
+  font-size: var(--txs);
   line-height: 1.2;
   font-weight: 600;
   letter-spacing: 0.1em;
