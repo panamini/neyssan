@@ -678,9 +678,13 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       onRailMetaChange,
   );
   const applicantDisplayName =
-    railTitle?.trim() || applicantHeader?.name?.trim() || "Applicant name";
+    typeof railTitle === "string"
+      ? railTitle.trim()
+      : applicantHeader?.name?.trim() || "Applicant name";
   const applicantDisplayRole =
-    railMeta?.trim() || applicantHeader?.role?.trim() || "Applicant role";
+    typeof railMeta === "string"
+      ? railMeta.trim()
+      : applicantHeader?.role?.trim() || "Applicant role";
   const resolvedHeaderVisibility = React.useMemo(
     () => resolveProposalHeaderVisibility(headerVisibility),
     [headerVisibility],

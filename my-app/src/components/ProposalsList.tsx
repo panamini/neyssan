@@ -13,7 +13,6 @@ import {
   buildAppProposalPersonalizationPayload,
   getActiveLocalPersonalizationSource,
   getLocalCvDocumentById,
-  getProposalApplicantHeaderData,
   type ProposalApplicantHeaderData,
   type ProposalGenerationPersonalizationPayload,
 } from "../lib/proposal-personalization";
@@ -54,6 +53,10 @@ import {
   buildProposalHeaderVisibilityFromContent,
   resolveProposalHeaderVisibility,
 } from "../lib/proposal-header";
+import {
+  buildProposalApplicantHeaderFromMetadata,
+  resolveProposalHeadingText,
+} from "../lib/proposal-heading-state";
 import type { ProposalSignatureSettings } from "../lib/proposal-signature-settings";
 
 type SavedProposalLayoutId = Extract<
@@ -179,7 +182,7 @@ function normalizeSavedTextValue(value: unknown): string | null {
 function resolveSavedHeaderVisibility(proposal: SavedProposalRecord | null) {
   return resolveProposalHeaderVisibility({
     ...buildProposalHeaderVisibilityFromContent(
-      normalizeSavedTextValue(proposal?.metadata?.recipientDetails) ?? null,
+      resolveProposalHeadingText(proposal?.metadata, "recipientDetails"),
     ),
     showSender: proposal?.metadata?.headerShowSender,
     showDate: proposal?.metadata?.headerShowDate,
@@ -255,29 +258,8 @@ function resolveSavedSourceCvStylePreset(
 
 function buildSavedApplicantHeader(
   proposal: SavedProposalRecord | null,
-  fallbackHeader: ProposalApplicantHeaderData | null,
 ): ProposalApplicantHeaderData | null {
-  if (!proposal && !fallbackHeader) {
-    return null;
-  }
-
-  return {
-    ...(fallbackHeader ?? {}),
-    name:
-      normalizeSavedTextValue(proposal?.metadata?.applicantName) ??
-      fallbackHeader?.name ??
-      null,
-    role:
-      normalizeSavedTextValue(proposal?.metadata?.applicantRole) ??
-      fallbackHeader?.role ??
-      null,
-    email: fallbackHeader?.email ?? null,
-    phone: fallbackHeader?.phone ?? null,
-    linkedin: fallbackHeader?.linkedin ?? null,
-    website: fallbackHeader?.website ?? null,
-    location: fallbackHeader?.location ?? null,
-    tag: fallbackHeader?.tag ?? null,
-  };
+  return buildProposalApplicantHeaderFromMetadata(proposal?.metadata);
 }
 
 function inferSavedProposalType(
@@ -560,10 +542,6 @@ export default function ProposalsList({
     isLoading: isConvexAuthLoading,
   } = useConvexAuth();
   const { currentCv } = useCvLibrary();
-  const activeApplicantHeader = React.useMemo(
-    () => getProposalApplicantHeaderData(getActiveLocalPersonalizationSource()),
-    [currentCv?.id, currentCv?.metadata?.updatedAt, currentCv?.title],
-  );
   const proposals = useQuery(
     api.proposalsPublic.default as any,
     isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
@@ -1570,8 +1548,8 @@ export default function ProposalsList({
     ? toneLabel(getStoredVoicePreset(selected))
     : "";
   const selectedApplicantHeader = React.useMemo(
-    () => buildSavedApplicantHeader(selected, activeApplicantHeader),
-    [activeApplicantHeader, selected],
+    () => buildSavedApplicantHeader(selected),
+    [selected],
   );
   const selectedHeaderVisibility = React.useMemo(
     () => resolveSavedHeaderVisibility(selected),
@@ -1931,34 +1909,26 @@ export default function ProposalsList({
                     templateId={selectedRenderState?.templateId ?? null}
                     stylePreset={selectedRenderState?.stylePreset ?? null}
                     signatureSettings={signatureSettings}
-                    railTitle={
-                      normalizeSavedTextValue(
-                        selected?.metadata?.applicantName,
-                      ) ??
-                      selectedApplicantHeader?.name ??
-                      null
-                    }
-                    railMeta={
-                      normalizeSavedTextValue(
-                        selected?.metadata?.applicantRole,
-                      ) ??
-                      selectedApplicantHeader?.role ??
-                      null
-                    }
-                    contactLine={
-                      normalizeSavedTextValue(
-                        selected?.metadata?.contactLine,
-                      ) ?? null
-                    }
-                    letterDate={
-                      normalizeSavedTextValue(selected?.metadata?.letterDate) ??
-                      null
-                    }
-                    recipientDetails={
-                      normalizeSavedTextValue(
-                        selected?.metadata?.recipientDetails,
-                      ) ?? null
-                    }
+                    railTitle={resolveProposalHeadingText(
+                      selected?.metadata,
+                      "applicantName",
+                    )}
+                    railMeta={resolveProposalHeadingText(
+                      selected?.metadata,
+                      "applicantRole",
+                    )}
+                    contactLine={resolveProposalHeadingText(
+                      selected?.metadata,
+                      "contactLine",
+                    )}
+                    letterDate={resolveProposalHeadingText(
+                      selected?.metadata,
+                      "letterDate",
+                    )}
+                    recipientDetails={resolveProposalHeadingText(
+                      selected?.metadata,
+                      "recipientDetails",
+                    )}
                     applicantHeader={selectedApplicantHeader}
                     headerVisibility={selectedHeaderVisibility}
                     characterLimit={
@@ -2017,39 +1987,27 @@ export default function ProposalsList({
                           templateId={proposalRenderState?.templateId ?? null}
                           stylePreset={proposalRenderState?.stylePreset ?? null}
                           signatureSettings={signatureSettings}
-                          railTitle={
-                            normalizeSavedTextValue(
-                              proposal.metadata?.applicantName,
-                            ) ??
-                            activeApplicantHeader?.name ??
-                            null
-                          }
-                          railMeta={
-                            normalizeSavedTextValue(
-                              proposal.metadata?.applicantRole,
-                            ) ??
-                            activeApplicantHeader?.role ??
-                            null
-                          }
-                          contactLine={
-                            normalizeSavedTextValue(
-                              proposal.metadata?.contactLine,
-                            ) ?? null
-                          }
-                          letterDate={
-                            normalizeSavedTextValue(
-                              proposal.metadata?.letterDate,
-                            ) ?? null
-                          }
-                          recipientDetails={
-                            normalizeSavedTextValue(
-                              proposal.metadata?.recipientDetails,
-                            ) ?? null
-                          }
-                          applicantHeader={buildSavedApplicantHeader(
-                            proposal,
-                            activeApplicantHeader,
+                          railTitle={resolveProposalHeadingText(
+                            proposal.metadata,
+                            "applicantName",
                           )}
+                          railMeta={resolveProposalHeadingText(
+                            proposal.metadata,
+                            "applicantRole",
+                          )}
+                          contactLine={resolveProposalHeadingText(
+                            proposal.metadata,
+                            "contactLine",
+                          )}
+                          letterDate={resolveProposalHeadingText(
+                            proposal.metadata,
+                            "letterDate",
+                          )}
+                          recipientDetails={resolveProposalHeadingText(
+                            proposal.metadata,
+                            "recipientDetails",
+                          )}
+                          applicantHeader={buildSavedApplicantHeader(proposal)}
                           headerVisibility={resolveSavedHeaderVisibility(
                             proposal,
                           )}
