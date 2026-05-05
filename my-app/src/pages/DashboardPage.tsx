@@ -82,7 +82,7 @@ export function DashboardPage(): JSX.Element {
             >
               Import CV
             </Button>
-            <Button variant="primary" size="md" onClick={() => navigate("/proposal")}>
+            <Button variant="secondary" size="md" onClick={() => navigate("/proposal")}>
               New proposal
             </Button>
           </div>
@@ -196,7 +196,7 @@ export function DashboardPage(): JSX.Element {
                   />
                   <ActivityRow
                     status="Drafting"
-                    tone="accent"
+                    tone="warning"
                     title="Staff Designer · Vercel"
                     sub="Verdict is worth a shot."
                     time="yesterday"
@@ -269,7 +269,7 @@ function QuickStartStep({
       </div>
       <Button
         size="sm"
-        variant={state === "active" ? "accent" : "ghost"}
+        variant={state === "active" ? "secondary" : "ghost"}
         onClick={onAction}
         disabled={disabled}
       >
@@ -296,7 +296,7 @@ function ActivityRow({
   time,
 }: {
   status: string;
-  tone: "neutral" | "accent" | "success";
+  tone: "neutral" | "warning" | "success";
   title: string;
   sub: string;
   time: string;

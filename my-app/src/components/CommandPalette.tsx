@@ -40,7 +40,7 @@ export function CommandPalette({
   const { signOut } = useClerk();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = React.useState("");
-  const [activeIndex, setActiveIndex] = React.useState(0);
+  const [activeIndex, setActiveIndex] = React.useState<number | null>(null);
 
   const filteredCommands = React.useMemo(
     () => APP_COMMANDS.filter((command) => commandMatches(command, query)),
@@ -50,7 +50,7 @@ export function CommandPalette({
   React.useEffect(() => {
     if (!open) {
       setQuery("");
-      setActiveIndex(0);
+      setActiveIndex(null);
       return;
     }
 
@@ -59,7 +59,7 @@ export function CommandPalette({
   }, [open]);
 
   React.useEffect(() => {
-    setActiveIndex(0);
+    setActiveIndex(null);
   }, [query]);
 
   React.useEffect(() => {
@@ -140,7 +140,11 @@ export function CommandPalette({
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setActiveIndex((current) =>
-        filteredCommands.length === 0 ? 0 : (current + 1) % filteredCommands.length,
+        filteredCommands.length === 0
+          ? null
+          : current === null
+            ? 0
+            : (current + 1) % filteredCommands.length,
       );
       return;
     }
@@ -149,14 +153,19 @@ export function CommandPalette({
       event.preventDefault();
       setActiveIndex((current) =>
         filteredCommands.length === 0
-          ? 0
-          : (current - 1 + filteredCommands.length) % filteredCommands.length,
+          ? null
+          : current === null
+            ? filteredCommands.length - 1
+            : (current - 1 + filteredCommands.length) % filteredCommands.length,
       );
       return;
     }
 
     if (event.key === "Enter") {
       event.preventDefault();
+      if (activeIndex === null) {
+        return;
+      }
       const command = filteredCommands[activeIndex];
       if (command) {
         runCommand(command);
@@ -224,8 +233,10 @@ export function CommandPalette({
                       </span>
                       <span className="cmdk__item-label">{command.label}</span>
                       {command.shortcut ? (
-                        <span className="cmdk__item-shortcut">
-                          {command.shortcut}
+                        <span className="cmdk__item-shortcut" aria-label={command.shortcut}>
+                          {command.shortcut.split(" ").map((key) => (
+                            <kbd key={`${command.id}-${key}`}>{key}</kbd>
+                          ))}
                         </span>
                       ) : null}
                     </button>

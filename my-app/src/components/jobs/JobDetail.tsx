@@ -183,7 +183,7 @@ export function JobDetail({
                     title={`Open original job offer on ${selectedSourceLabel}`}
                     onClick={() => onOpenJobSource(selectedJob.sourceUrl)}
                   >
-                    <span>{`From ${selectedSourceLabel}`}</span>
+                    <span>Source</span>
                     <ArrowSquareOut
                       size={13}
                       strokeWidth={1.8}
@@ -191,7 +191,7 @@ export function JobDetail({
                     />
                   </button>
                 ) : (
-                  <span>{`From ${selectedSourceLabel}`}</span>
+                  <span>Source</span>
                 )}
               </>
             ) : null}

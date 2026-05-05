@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Pill } from "../components/ui";
+import { Check } from "../lib/icons";
 
 const TEMPLATE_FILTERS = ["cover letters", "resume"] as const;
 type TemplateFilter = (typeof TEMPLATE_FILTERS)[number];
@@ -121,6 +122,7 @@ function filterLabel(filter: TemplateFilter): string {
 export function TemplatesPage(): JSX.Element {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = React.useState<TemplateFilter>("cover letters");
+  const [selectedTemplateId, setSelectedTemplateId] = React.useState("minimal-letter");
   const visibleTemplates = React.useMemo(
     () => TEMPLATES.filter((template) => filterMatches(template, activeFilter)),
     [activeFilter],
@@ -171,9 +173,20 @@ export function TemplatesPage(): JSX.Element {
               key={template.id}
               type="button"
               className={`dasti-template-card dasti-template-card--${template.family}`}
-              onClick={() => navigate(template.kind === "Resume" ? "/cv" : "/proposal")}
+              data-selected={selectedTemplateId === template.id ? "true" : "false"}
+              onClick={() => {
+                setSelectedTemplateId(template.id);
+                navigate(template.kind === "Resume" ? "/cv" : "/proposal");
+              }}
             >
-              <span className="ds-card__eyebrow dasti-library-card__eyebrow">{template.kind}</span>
+              <span className="dasti-template-card__topline">
+                <span className="ds-card__eyebrow dasti-library-card__eyebrow">{template.kind}</span>
+                {selectedTemplateId === template.id ? (
+                  <span className="dasti-template-card__check" aria-label="Selected">
+                    <Check size={13} strokeWidth={2.4} aria-hidden="true" />
+                  </span>
+                ) : null}
+              </span>
               <span className="dasti-template-card__title">{template.name}</span>
               <span className="dasti-template-card__description">{template.description}</span>
               <span className="dasti-template-card__preview" aria-hidden="true">

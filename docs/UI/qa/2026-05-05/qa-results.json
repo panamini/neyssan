@@ -1,0 +1,222 @@
+[
+  {
+    "route": "http://127.0.0.1:4173/dashboard",
+    "theme": "light",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/dashboard",
+    "theme": "light",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/dashboard-light.png",
+    "finalUrl": "http://127.0.0.1:4173/dashboard"
+  },
+  {
+    "route": "http://127.0.0.1:4173/jobs",
+    "theme": "light",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/jobs",
+    "theme": "light",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/jobs-light.png",
+    "finalUrl": "http://127.0.0.1:4173/jobs"
+  },
+  {
+    "route": "http://127.0.0.1:4173/documents",
+    "theme": "light",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/documents",
+    "theme": "light",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/documents-light.png",
+    "finalUrl": "http://127.0.0.1:4173/documents"
+  },
+  {
+    "route": "http://127.0.0.1:4173/templates",
+    "theme": "light",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/templates",
+    "theme": "light",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/templates-light.png",
+    "finalUrl": "http://127.0.0.1:4173/templates"
+  },
+  {
+    "route": "http://127.0.0.1:4173/settings?tab=docstyle",
+    "theme": "light",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/settings?tab=docstyle",
+    "theme": "light",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/settings-docstyle-light.png",
+    "finalUrl": "http://127.0.0.1:4173/settings?tab=docstyle"
+  },
+  {
+    "route": "http://127.0.0.1:4173/dashboard",
+    "theme": "dark",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/dashboard",
+    "theme": "dark",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/dashboard-dark.png",
+    "finalUrl": "http://127.0.0.1:4173/dashboard"
+  },
+  {
+    "route": "http://127.0.0.1:4173/jobs",
+    "theme": "dark",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/jobs",
+    "theme": "dark",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/jobs-dark.png",
+    "finalUrl": "http://127.0.0.1:4173/jobs"
+  },
+  {
+    "route": "http://127.0.0.1:4173/documents",
+    "theme": "dark",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/documents",
+    "theme": "dark",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/documents-dark.png",
+    "finalUrl": "http://127.0.0.1:4173/documents"
+  },
+  {
+    "route": "http://127.0.0.1:4173/templates",
+    "theme": "dark",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/templates",
+    "theme": "dark",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/templates-dark.png",
+    "finalUrl": "http://127.0.0.1:4173/templates"
+  },
+  {
+    "route": "http://127.0.0.1:4173/settings?tab=docstyle",
+    "theme": "dark",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/settings?tab=docstyle",
+    "theme": "dark",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/settings-docstyle-dark.png",
+    "finalUrl": "http://127.0.0.1:4173/settings?tab=docstyle"
+  },
+  {
+    "route": "http://127.0.0.1:4173/jobs/job_alpha",
+    "theme": "light",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/jobs/job_alpha",
+    "theme": "light",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/job-detail-light.png",
+    "finalUrl": "http://127.0.0.1:4173/jobs/job_alpha",
+    "title": "Jobs \u00b7 two weeks",
+    "bodyTextPreview": "twoweeks\n/\nJobs\nSearch or run command\n\u2318K\nSign in\nSign in to see jobs."
+  },
+  {
+    "route": "http://127.0.0.1:4173/proposal",
+    "theme": "light",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/proposal",
+    "theme": "light",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/proposal-light.png",
+    "finalUrl": "http://127.0.0.1:4173/proposal",
+    "title": "Cover letter \u00b7 two weeks",
+    "bodyTextPreview": "Working on:\nProposal draft application package\nNeeds review\nSearch or run command\n\u2318K\nSign in\nJOB CONTEXT\nUntitled role\nAdd a job brief to ground the proposal.\nSOURCE CV\nChoose a CV\nAttach one to personalize the draft.\n\u25be\nDraft setup\nReady fo"
+  },
+  {
+    "route": "http://127.0.0.1:4173/cv",
+    "theme": "light",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/cv",
+    "theme": "light",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/cv-light.png",
+    "finalUrl": "http://127.0.0.1:4173/cv",
+    "title": "Resume \u00b7 two weeks",
+    "bodyTextPreview": "Working on:\nActive CV profile source\nReady\nSearch or run command\n\u2318K\nSign in\nNo CV\n!\nATS review\nNatural tone\nEdit\nPage preview\nVersion history\nPick resume\n\u25be\nImport CV\nNew CV\nShare\nUpload PDF\nMistral parses it. Sections appear in seconds.\nSta"
+  },
+  {
+    "route": "http://127.0.0.1:4173/jobs/job_alpha",
+    "theme": "dark",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/jobs/job_alpha",
+    "theme": "dark",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/job-detail-dark.png",
+    "finalUrl": "http://127.0.0.1:4173/jobs/job_alpha",
+    "title": "Jobs \u00b7 two weeks",
+    "bodyTextPreview": "twoweeks\n/\nJobs\nSearch or run command\n\u2318K\nSign in\nSign in to see jobs."
+  },
+  {
+    "route": "http://127.0.0.1:4173/proposal",
+    "theme": "dark",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/proposal",
+    "theme": "dark",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/proposal-dark.png",
+    "finalUrl": "http://127.0.0.1:4173/proposal",
+    "title": "Cover letter \u00b7 two weeks",
+    "bodyTextPreview": "Working on:\nProposal draft application package\nNeeds review\nSearch or run command\n\u2318K\nSign in\nJOB CONTEXT\nUntitled role\nAdd a job brief to ground the proposal.\nSOURCE CV\nChoose a CV\nAttach one to personalize the draft.\n\u25be\nDraft setup\nReady fo"
+  },
+  {
+    "route": "http://127.0.0.1:4173/cv",
+    "theme": "dark",
+    "type": "console:warning",
+    "text": "Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview"
+  },
+  {
+    "route": "/cv",
+    "theme": "dark",
+    "type": "screenshot",
+    "file": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/docs/UI/qa/2026-05-05/cv-dark.png",
+    "finalUrl": "http://127.0.0.1:4173/cv",
+    "title": "Resume \u00b7 two weeks",
+    "bodyTextPreview": "Working on:\nActive CV profile source\nReady\nSearch or run command\n\u2318K\nSign in\nNo CV\n!\nATS review\nNatural tone\nEdit\nPage preview\nVersion history\nPick resume\n\u25be\nImport CV\nNew CV\nShare\nUpload PDF\nMistral parses it. Sections appear in seconds.\nSta"
+  }
+]

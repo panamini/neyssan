@@ -36,6 +36,7 @@ type OnboardingChoice = {
 
 type OnboardingStep = {
   title: string;
+  progressLabel: string;
   copy: string;
   pills?: string[];
   choices: OnboardingChoice[];
@@ -44,12 +45,14 @@ type OnboardingStep = {
 const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     title: "Two weeks. One offer.",
+    progressLabel: "Intro",
     copy: "twoweeks turns your CV into tailored cover letters for jobs that actually match your profile. Let's get you set up in three minutes.",
     pills: ["No spinners.", "No fluff.", "Edit everything."],
     choices: [],
   },
   {
     title: "Bring your CV.",
+    progressLabel: "CV",
     copy: "Import a PDF, paste text, or start from scratch. We'll structure the sections automatically.",
     choices: [
       {
@@ -66,6 +69,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "Pick a starting style.",
+    progressLabel: "Style",
     copy: "You can change it any time. Fonts, sizes, accent — everything is editable.",
     choices: [
       {
@@ -94,6 +98,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "How do you sound?",
+    progressLabel: "Tone",
     copy: "We'll use this as the default for new cover letters. Override per document any time.",
     choices: [
       {
@@ -121,6 +126,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "Catch jobs as you browse.",
+    progressLabel: "Jobs",
     copy: "Install the twoweeks extension. Hit one button on any LinkedIn, Welcome to the Jungle, or company careers page — the role lands in your jobs library, ready to score.",
     choices: [
       {
@@ -139,6 +145,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     title: "You're set.",
+    progressLabel: "Done",
     copy: "Pin the extension, capture a few jobs, and twoweeks will draft your first cover letter. ⌘K opens the command palette from anywhere.",
     choices: [
       { label: "Go to dashboard", action: "dashboard" },
@@ -274,9 +281,13 @@ export function OnboardingReplay({
           {ONBOARDING_STEPS.map((item, index) => (
             <span
               key={item.title}
-              className="onb-replay__dot"
+              className="onb-replay__segment"
               data-state={index <= stepIndex ? "active" : "pending"}
-            />
+              aria-current={index === stepIndex ? "step" : undefined}
+            >
+              <span className="onb-replay__dot" aria-hidden="true" />
+              <span>{item.progressLabel}</span>
+            </span>
           ))}
         </div>
         <Button variant="ghost" size="sm" onClick={onClose}>

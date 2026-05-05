@@ -322,7 +322,7 @@
 
 .dasti-proposal-sheet__title {
   margin: 0;
-  font-family: "Baskervville", serif;
+  font-family: var(--font-app);
   font-size: var(--tb);
   line-height: 1.22;
   font-weight: 600;
@@ -339,7 +339,7 @@
   -webkit-appearance: none;
   background: transparent;
   color: var(--ti);
-  font-family: "Baskervville", serif;
+  font-family: var(--font-app);
   font-size: var(--tb);
   line-height: 1.22;
   font-weight: 600;

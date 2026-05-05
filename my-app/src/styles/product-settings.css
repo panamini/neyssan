@@ -2048,18 +2048,24 @@ html[data-reduce-motion="true"] *::after {
 }
 
 .style-swatches {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: var(--s2);
 }
 
 .style-swatch {
-  width: 32px;
-  height: 32px;
-  border: 2px solid var(--border-soft);
-  border-radius: 50%;
-  background: var(--swatch-color, var(--ac));
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-control);
+  background: var(--sfr);
+  color: var(--ti);
   cursor: pointer;
+  text-align: left;
   transition:
     border-color var(--dur-2) var(--ease-standard),
     transform var(--dur-2) var(--ease-standard),
@@ -2069,12 +2075,33 @@ html[data-reduce-motion="true"] *::after {
 .style-swatch:hover,
 .style-swatch:focus-visible {
   outline: none;
-  transform: scale(1.08);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
 }
 
 .style-swatch[data-selected="true"] {
-  border-color: var(--ti);
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ti);
+  border-color: var(--ac);
+  box-shadow: inset 0 0 0 1px var(--ac);
+}
+
+.style-swatch__chip {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--swatch-color, var(--ac));
+  color: var(--color-on-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ti) 16%, transparent);
+}
+
+.style-swatch__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--type-small);
+  font-weight: var(--font-label-weight);
 }
 
 .layout-grid {
