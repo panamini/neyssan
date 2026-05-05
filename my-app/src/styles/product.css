@@ -1,5 +1,16 @@
 /* Cross-cutting product shell styles. Feature styles live in product-*.css. */
 
+:root {
+  --type-h1: var(--font-heading-weight) clamp(32px, 4vw, 46px) / 1.04 var(--font-app);
+  --type-h2: 650 clamp(22px, 3vw, 34px) / 1.1 var(--font-app);
+  --type-body: var(--font-body-weight) var(--tb) / var(--lb) var(--font-app);
+}
+
+body,
+#root {
+  font-family: var(--font-app);
+}
+
 /* ============================================================
    APP SIDEBAR SHELL
    ============================================================ */
@@ -390,7 +401,7 @@
   justify-content: center;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--color-text-subtle);
   cursor: pointer;
@@ -485,7 +496,7 @@
   bottom: 10px;
   width: 2px;
   background: var(--ac);
-  border-radius: 2px;
+  border-radius: var(--radius-1);
 }
 
 .sb-utility-link {
@@ -1553,7 +1564,7 @@
 .dasti-auth-card__title {
   margin: 0;
   color: var(--color-text);
-  font-family: var(--font-heading-family);
+  font-family: var(--font-app);
   font-size: var(--text-display-size);
   font-weight: var(--font-heading-weight);
   letter-spacing: var(--tracking-display);
@@ -1993,6 +2004,7 @@
 .dashboard-page {
   height: 100%;
   overflow: auto;
+  font: var(--type-body);
 }
 
 .dashboard-page__inner {
@@ -2012,6 +2024,8 @@
 
 .dashboard-head__title {
   margin: 0;
+  font: var(--type-h1);
+  letter-spacing: var(--tracking-display);
 }
 
 .dashboard-head__sub {
@@ -2051,8 +2065,8 @@
 .qstart__title {
   margin: 0;
   color: var(--ti);
-  font-size: var(--tl);
-  line-height: 1.15;
+  font: var(--type-h2);
+  letter-spacing: var(--tracking-tight);
 }
 
 .qstart__sub {
@@ -2143,6 +2157,7 @@
   gap: var(--space-3);
   padding: clamp(var(--space-4), 4vw, var(--space-6));
   border-radius: var(--radius-card);
+  border: 1px solid var(--border-soft);
   background:
     linear-gradient(135deg, var(--ap), transparent),
     var(--sfr);
@@ -2161,8 +2176,7 @@
   margin: 0;
   max-width: 720px;
   color: var(--ti);
-  font-size: clamp(24px, 3vw, 38px);
-  line-height: 1.05;
+  font: var(--type-h2);
   letter-spacing: 0;
 }
 
@@ -2210,6 +2224,7 @@
   font-size: clamp(28px, 4vw, 40px);
   font-weight: 700;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .dash-stat__label {
