@@ -259,6 +259,8 @@
   --gutter-tablet: 24px;
   --gutter-desktop: 32px;
   --document-sheet-inline-size: 560px;
+  --forge-page-inline-size: 860px;
+  --forge-page-inline-size-mobile: 100%;
   --document-sheet-ratio: 1 / 1.41421356;
   --document-sheet-min-block: 420px;
   --document-sheet-max-block: min(72vh, 780px);
