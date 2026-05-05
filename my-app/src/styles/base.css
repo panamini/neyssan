@@ -123,13 +123,22 @@ code {
 
 /* ============================================================
    ACCESSIBILITY — FOCUS RING
+   Outline-based: works through overflow:hidden, matches element
+   shape without forcing a global border-radius.
    ============================================================ */
 :focus {
   outline: none;
 }
 :focus-visible {
-  box-shadow: var(--focus-shadow-soft);
-  border-radius: var(--radius-inline);
+  outline: 2px solid var(--fr);
+  outline-offset: 2px;
+}
+
+/* Fields: keep box-shadow for the inset ring effect they use,
+   but overlay the outline-based focus on top. */
+:where(input, textarea, select):focus-visible {
+  outline: 2px solid var(--fr);
+  outline-offset: 0;
 }
 
 button,
@@ -162,24 +171,6 @@ button::-moz-focus-inner,
 [type="reset"]::-moz-focus-inner {
   border: 0;
   padding: 0;
-}
-
-:where(
-    button,
-    [type="button"],
-    [type="submit"],
-    [type="reset"],
-    [role="button"],
-    a,
-    input,
-    textarea,
-    select
-  ):focus-visible {
-  box-shadow: var(--focus-shadow-soft) !important;
-}
-
-:where(input, textarea, select):focus {
-  box-shadow: var(--focus-shadow-soft) !important;
 }
 
 /* ============================================================
