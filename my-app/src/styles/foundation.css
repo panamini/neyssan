@@ -879,6 +879,44 @@
   --motion-opacity-breathe-high: 1;
 }
 
+/* ============================================================
+   PHASE 1 — Semantic convenience tokens (audit v1)
+   Purpose: named shortcuts so component CSS stops hardcoding
+   raw space-* values. All values reference existing tokens.
+   ============================================================ */
+:root {
+  /* Card geometry */
+  --card-pad-x: var(--space-5);
+  --card-pad-y: var(--space-5);
+  --card-pad-compact: var(--space-4);
+
+  /* Content grid gaps */
+  --grid-gap-content: var(--space-5);
+  --grid-gap-tight: var(--space-3);
+
+  /* Font role aliases */
+  --font-app: var(--font-body-family);
+  --font-document: var(--font-serif-display);
+
+  /* Typography semantic shortcuts */
+  --type-caption-size: var(--text-caption-size);
+  --type-caption-line: var(--text-caption-line);
+  --type-label-size: var(--text-label-size);
+  --type-label-line: var(--text-label-line);
+  --type-body-size: var(--text-body-size);
+  --type-body-line: var(--text-body-line);
+  --type-title-size: var(--text-title-size);
+  --type-title-line: var(--text-title-line);
+
+  /* Dark-neutral card shadow — light mode: standard elevation */
+  --shadow-card: var(--shb);
+}
+.dark {
+  /* Raised card shadow: depth + inner top highlight for elevation legibility */
+  --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.60),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
 /* Single ambient loop in the system: brand period only. Opacity-only, floored at 0.55. */
 @keyframes tw-breathe {
   0%, 100% { opacity: var(--motion-opacity-breathe-high); }
