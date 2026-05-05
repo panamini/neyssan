@@ -6918,6 +6918,21 @@ export function ProposalForge(): JSX.Element {
                       onGenerateDraft={handleGenerateFromCollapsedToolbar}
                       variableFields={[
                         {
+                          id: "proposal-subject",
+                          label: "Proposal subject",
+                          value: proposalDocumentTitle,
+                          placeholder: buildProfessionalApplicationSubject({
+                            jobTitle: composePreviewValues?.jobTitle ?? "",
+                            jobDescription:
+                              composePreviewValues?.jobDescription ?? "",
+                            proposalType,
+                          }),
+                          onChange: setProposalDocumentTitle,
+                          onBlur: () => {
+                            void handleProposalDocumentCommit();
+                          },
+                        },
+                        {
                           id: "applicant-name",
                           label: "Applicant name",
                           value: proposalApplicantName,
@@ -7045,6 +7060,7 @@ export function ProposalForge(): JSX.Element {
                         hasPlaceholderText={/(\[[^\]]+\]|\blorem\b|\{\{[^}]+\}\})/i.test(
                           [
                             proposalContent,
+                            proposalDocumentTitle,
                             proposalRecipientDetails,
                             proposalSalutationValue,
                             proposalApplicantName,
