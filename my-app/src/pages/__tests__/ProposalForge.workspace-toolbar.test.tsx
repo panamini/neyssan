@@ -341,6 +341,24 @@ describe("ProposalForge workbench layout", () => {
     expect(screen.getByTestId("proposal-input-form").closest("[hidden]")).toBeTruthy();
   });
 
+  it("edits a custom salutation without stacking typed characters", async () => {
+    renderProposalForge();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    const salutationField = await screen.findByLabelText("Salutation");
+    fireEvent.change(salutationField, { target: { value: "H" } });
+    fireEvent.change(salutationField, { target: { value: "HR" } });
+
+    await waitFor(() => {
+      const lastCall =
+        proposalDisplaySpy.mock.calls[proposalDisplaySpy.mock.calls.length - 1]?.[0];
+      expect(lastCall.proposalContent).toBe(
+        "HR\n\nGenerated proposal body.",
+      );
+    });
+  });
+
   it("keeps the hidden compose runtime wired to the rail CV menu and tone state", async () => {
     window.localStorage.setItem(
       "cvDocuments",

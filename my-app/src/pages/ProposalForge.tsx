@@ -1176,6 +1176,11 @@ export function ProposalForge(): JSX.Element {
   const [proposalContent, setProposalContent] = React.useState<string | null>(
     storedOutputDraft?.proposalContent ?? null,
   );
+  const [proposalSalutationValue, setProposalSalutationValue] =
+    React.useState<string>(() =>
+      readProposalSalutation(storedOutputDraft?.proposalContent),
+    );
+  const proposalSalutationValueRef = React.useRef(proposalSalutationValue);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [statusMessage, setStatusMessage] = React.useState<string | null>(null);
@@ -4894,10 +4899,14 @@ export function ProposalForge(): JSX.Element {
     [],
   );
   const handleProposalSalutationChange = React.useCallback((value: string) => {
+    const previousSalutation = proposalSalutationValueRef.current;
+    setProposalSalutationValue(value);
+    proposalSalutationValueRef.current = value;
     setProposalContent((current) =>
       replaceProposalSalutation({
         content: current,
         salutation: value,
+        previousSalutation,
       }),
     );
   }, []);
@@ -5881,10 +5890,18 @@ export function ProposalForge(): JSX.Element {
       proposalApplicantRole,
     ],
   );
-  const proposalSalutationValue = React.useMemo(
+  const proposalContentSalutation = React.useMemo(
     () => readProposalSalutation(proposalContent),
     [proposalContent],
   );
+  React.useEffect(() => {
+    if (!proposalContentSalutation) {
+      return;
+    }
+
+    setProposalSalutationValue(proposalContentSalutation);
+    proposalSalutationValueRef.current = proposalContentSalutation;
+  }, [proposalContentSalutation]);
   const proposalSalutationPlaceholder = React.useMemo(
     () =>
       buildProposalSalutation(
