@@ -4,7 +4,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { Button, Card, CardBody, CardFooter, CardTitle, Input, Menu, Pill, ToneBadge } from "../components/ui";
+import { Button, Card, CardBody, CardFooter, CardTitle, Input, Menu, Pill, type PillTone } from "../components/ui";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { formatCvDisplaySubtitle } from "../lib/proposal-personalization";
 import {
@@ -14,6 +14,7 @@ import {
 } from "../lib/proposal-workspace-state";
 import { readStoredProposalOutputDraft } from "../lib/proposal-output-draft";
 import { clearActiveLocalCvId } from "../lib/proposal-personalization";
+import { DotsThree } from "../lib/icons";
 import type { CvDocument } from "../types/cvDocument";
 
 const DOCUMENT_TABS = ["all", "proposals", "cvs", "drafts"] as const;
@@ -67,10 +68,12 @@ function tabLabel(tab: DocumentTab): string {
   return tab.charAt(0).toUpperCase() + tab.slice(1);
 }
 
-function proposalTone(value: unknown): "warm" | "formal" | "natural" {
-  if (value === "engaging" || value === "storyteller") return "warm";
-  if (value === "expert") return "formal";
-  return "natural";
+function documentStatusTone(item: DocumentItem, currentCvId: string | null): PillTone {
+  if (item.kind === "draft") return "warning";
+  if (item.kind === "cv") {
+    return currentCvId === item.id ? "success" : "neutral";
+  }
+  return "neutral";
 }
 
 function formatUpdatedLabel(value: number): string {
@@ -115,7 +118,7 @@ export function DocumentsPage(): JSX.Element {
     isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
   ) as ProposalRecord[] | undefined;
   const deleteProposal = useMutation(api.deleteProposalPublic.default);
-  const { cvs, loadCv, deleteCv } = useCvLibrary();
+  const { cvs, currentCvId, loadCv, deleteCv } = useCvLibrary();
   const [activeTab, setActiveTab] = React.useState<DocumentTab>("all");
   const [searchQuery, setSearchQuery] = React.useState("");
 
@@ -156,7 +159,7 @@ export function DocumentsPage(): JSX.Element {
       body: formatCvDisplaySubtitle({ title: String(cv.title ?? "") }) ||
         "Resume variant kept in your CV library.",
       updatedAt: cvUpdatedAt(cv),
-      status: String(cv.id) ? "Active" : "Saved",
+      status: currentCvId === String(cv.id) ? "Active" : "Saved",
       onOpen: () => {
         const opened = loadCv(String(cv.id));
         if (opened) {
@@ -197,7 +200,7 @@ export function DocumentsPage(): JSX.Element {
     return [...draftItems, ...proposalItems, ...cvItems].sort(
       (a, b) => b.updatedAt - a.updatedAt,
     );
-  }, [cvs, deleteCv, deleteProposal, isConvexAuthLoading, isConvexAuthenticated, loadCv, navigate, proposals]);
+  }, [cvs, currentCvId, deleteCv, deleteProposal, isConvexAuthLoading, isConvexAuthenticated, loadCv, navigate, proposals]);
 
   const filteredItems = React.useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -270,44 +273,45 @@ export function DocumentsPage(): JSX.Element {
           <div className="dasti-documents-grid" aria-label="Documents">
             {filteredItems.map((item) => (
               <Card key={`${item.kind}:${item.id}`} as="article" interactive className="dasti-documents-card">
+                <div className="dasti-documents-card__top">
+                  <span className="ds-card__eyebrow dasti-library-card__eyebrow">{item.eyebrow}</span>
+                  <Menu
+                    ariaLabel={`More actions for ${item.title}`}
+                    align="end"
+                    sections={[
+                      {
+                        items: [
+                          { id: "open", label: "Open", onSelect: item.onOpen },
+                          ...(item.onDelete
+                            ? [{ id: "delete", label: "Delete", tone: "danger" as const, onSelect: item.onDelete }]
+                            : []),
+                        ],
+                      },
+                    ]}
+                    trigger={
+                      <button
+                        type="button"
+                        className="dasti-documents-card__menu"
+                        aria-label={`More actions for ${item.title}`}
+                        title={`More actions for ${item.title}`}
+                      >
+                        <DotsThree size={16} strokeWidth={1.7} aria-hidden="true" />
+                      </button>
+                    }
+                  />
+                </div>
                 <button
                   type="button"
                   className="dasti-documents-card__surface"
                   onClick={item.onOpen}
                 >
-                  <span className="ds-card__eyebrow dasti-library-card__eyebrow">{item.eyebrow}</span>
                   <CardTitle className="dasti-library-card__title">{item.title}</CardTitle>
                   <CardBody className="dasti-library-card__body">{item.body}</CardBody>
                 </button>
                 <CardFooter className="dasti-library-card__footer">
                   <span>{formatUpdatedLabel(item.updatedAt)}</span>
-                  {item.kind === "proposal" ? (
-                    <ToneBadge tone={proposalTone((proposals ?? []).find((proposal) => String(proposal._id) === item.id)?.metadata?.voicePreset)}>
-                      {item.status}
-                    </ToneBadge>
-                  ) : (
-                    <Pill tone={item.kind === "draft" ? "accent" : "neutral"}>{item.status}</Pill>
-                  )}
+                  <Pill tone={documentStatusTone(item, currentCvId)}>{item.status}</Pill>
                 </CardFooter>
-                <Menu
-                  ariaLabel={`Actions for ${item.title}`}
-                  align="end"
-                  sections={[
-                    {
-                      items: [
-                        { id: "open", label: "Open", onSelect: item.onOpen },
-                        ...(item.onDelete
-                          ? [{ id: "delete", label: "Delete", tone: "danger" as const, onSelect: item.onDelete }]
-                          : []),
-                      ],
-                    },
-                  ]}
-                  trigger={
-                    <button type="button" className="dasti-documents-card__menu">
-                      Actions
-                    </button>
-                  }
-                />
               </Card>
             ))}
             <Card interactive className="dasti-documents-card dasti-documents-card--new">

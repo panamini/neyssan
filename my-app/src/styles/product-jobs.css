@@ -558,30 +558,22 @@
 .dasti-jobs-detail__source-action {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 26px;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--proposal-chrome-control-border);
-  background: var(--proposal-chrome-control-bg);
+  gap: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--tm2);
-  font: inherit;
-  font-size: var(--tx);
+  font: var(--type-small);
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
-  transition:
-    background var(--duration-fast) var(--ease-standard),
-    border-color var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-jobs-detail__source-action:hover,
 .dasti-jobs-detail__source-action:focus-visible {
-  border-color: var(--proposal-chrome-control-active-border);
-  background: var(--proposal-chrome-control-hover-bg);
   color: var(--ti);
+  text-decoration: underline;
   outline: none;
 }
 
@@ -813,7 +805,7 @@
   width: 100%;
   min-height: 32px;
   padding: 8px var(--s3);
-  font-size: var(--ts);
+  font: var(--type-small);
 }
 
 .dasti-job-match-panel__explanation {
@@ -825,23 +817,29 @@
 
 .dasti-job-match-panel__rows {
   display: grid;
-  gap: var(--space-2);
   padding-block-start: var(--space-3);
   border-block-start: 1px solid var(--border-soft);
 }
 
-.dasti-job-match-panel__row {
+.verdict-grid {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: var(--space-2);
-  width: 100%;
-  color: var(--text-body);
-  font-size: var(--tx);
-  line-height: var(--lb);
+  grid-template-columns: 88px 1fr;
+  row-gap: 12px;
+  column-gap: 16px;
 }
 
-.dasti-job-match-panel__row span:first-child {
+.verdict-grid dt {
+  margin: 0;
+  font: var(--type-label);
   color: var(--tg3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.verdict-grid dd {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--ti);
 }
 
 .dasti-job-match-panel__breakdown {

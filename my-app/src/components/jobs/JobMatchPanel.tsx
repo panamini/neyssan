@@ -174,24 +174,16 @@ export function JobMatchPanel({
         </div>
       </div>
 
-      <div className="dasti-job-match-panel__rows">
-        <div className="dasti-job-match-panel__row">
-          <span>Skills</span>
-          <span>{skillsCopy}</span>
-        </div>
-        <div className="dasti-job-match-panel__row">
-          <span>Seniority</span>
-          <span>{seniorityCopy}</span>
-        </div>
-        <div className="dasti-job-match-panel__row">
-          <span>Location</span>
-          <span>{locationCopy}</span>
-        </div>
-        <div className="dasti-job-match-panel__row">
-          <span>Gap</span>
-          <span>{watchOutCopy}</span>
-        </div>
-      </div>
+      <dl className="verdict-grid dasti-job-match-panel__rows">
+        <dt>Skills</dt>
+        <dd>{skillsCopy}</dd>
+        <dt>Seniority</dt>
+        <dd>{seniorityCopy}</dd>
+        <dt>Location</dt>
+        <dd>{locationCopy}</dd>
+        <dt>Gap</dt>
+        <dd>{watchOutCopy}</dd>
+      </dl>
 
       <button
         type="button"

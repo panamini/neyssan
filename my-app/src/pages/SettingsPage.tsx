@@ -1350,7 +1350,12 @@ export function SettingsPage(): JSX.Element {
                         }
                         title={option.label}
                         style={{ "--swatch-color": option.swatch } as React.CSSProperties}
-                      />
+                      >
+                        <span className="style-swatch__chip" aria-hidden="true">
+                          {active ? <Check size={13} strokeWidth={2.4} /> : null}
+                        </span>
+                        <span className="style-swatch__label">{option.label}</span>
+                      </button>
                     );
                   })}
                 </div>
