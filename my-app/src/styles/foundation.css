@@ -167,10 +167,12 @@
   --radius-surface: var(--radius-4);
 
   /* §4 Hauteurs interactives */
+  --hxs: 24px;
   --hs: 32px;
   --hm: 40px;
   --hb: 44px;
   --hdr: 54px;
+  --control-xs: var(--hxs);
   --control-sm: var(--hs);
   --control-md: var(--hm);
   --control-lg: var(--hb);
@@ -496,6 +498,7 @@
 */
 :root {
   --bg: #FAF9F5;   /* app content canvas — lighter/cleaner */
+  --sf0: var(--bg); /* floor level — canvas alias, used for focus ring halos + sunken fills */
   --sf1: #F8F7F3;  /* sidebar chrome — slightly deeper than content */
   --sf2: #F0EEE6;  /* secondary surfaces + resume stage */
   --sf3: #F5F4EF;  /* subtle-fill input hover */
@@ -583,6 +586,7 @@
      Keep it on the workspace selector in product.css so the preview canvas
      can be changed without creating a parallel theme token. */
   --bg: #0D0D0D;         /* INKWELL — page canvas */
+  --sf0: var(--bg);      /* floor level — canvas alias, focus ring halos + sunken fills */
   --sf1: #0E0E0E;        /* sidebar chrome — fractionally above canvas */
   --sf2: #1A1918;        /* card rest, panels, secondary surfaces — subtle step up */
   --sf3: #161616;        /* subtle-fill input hover — between canvas and sf2 */
