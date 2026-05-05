@@ -962,6 +962,23 @@
   --shadow-card: var(--shadow-card-dark);
 }
 
+/* ============================================================
+   PROPOSAL POLISH — surface depth, control sizing
+   Additive tokens for the polish pass. No renames.
+   ============================================================ */
+:root {
+  --polish-card-border: color-mix(in srgb, var(--ti) 8%, transparent);
+  --polish-card-highlight: 0 0 0 0 transparent;
+  --polish-control-h-sm: 32px;
+  --polish-control-h-md: 36px;
+  --polish-disabled-bg: color-mix(in srgb, var(--ti) 7%, transparent);
+  --polish-disabled-fg: var(--tg3);
+}
+.dark {
+  --polish-card-border: color-mix(in srgb, #FFFFFF 9%, transparent);
+  --polish-card-highlight: inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+
 /* Single ambient loop in the system: brand period only. Opacity-only, floored at 0.55. */
 @keyframes tw-breathe {
   0%, 100% { opacity: var(--motion-opacity-breathe-high); }

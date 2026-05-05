@@ -7745,10 +7745,11 @@
 .dasti-proposal-skeleton-rail__variable-group {
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-2);
-  border: 1px solid var(--color-border);
+  padding: var(--space-3);
+  border: 1px solid var(--polish-card-border, var(--color-border));
   border-radius: var(--radius-md);
   background: var(--color-surface);
+  box-shadow: var(--polish-card-highlight, none);
 }
 
 .dasti-proposal-skeleton-rail__variable-group + .dasti-proposal-skeleton-rail__variable-group {

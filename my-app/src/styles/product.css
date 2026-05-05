@@ -729,7 +729,7 @@ body,
 }
 
 .sb-nav-item--active {
-  background: var(--sf2);
+  background: var(--as);
   color: var(--sidebar-active-ink);
 }
 
