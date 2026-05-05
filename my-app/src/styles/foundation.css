@@ -630,8 +630,11 @@
   --shc: 0 20px 48px rgba(0, 0, 0, 0.75),
     inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   --shadow-frost: var(--shb);
-  --document-paper-shadow: 0 4px 24px rgba(0, 0, 0, 0.40),
-    0 1px 2px rgba(0, 0, 0, 0.80);
+  --document-paper-shadow: 0 10px 30px rgba(0, 0, 0, 0.24),
+    0 1px 2px rgba(0, 0, 0, 0.34);
+  --document-stage-halo: 0 0 0 1px
+      color-mix(in srgb, var(--border-strong) 42%, transparent),
+    var(--document-paper-shadow);
   --proposal-compose-edge-top-fade: linear-gradient(
     to bottom,
     color-mix(in srgb, var(--document-viewer-frame-surface) 100%, transparent) 0%,

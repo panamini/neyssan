@@ -25,6 +25,22 @@ function renderStage(props: Partial<React.ComponentProps<typeof ProposalDocument
 }
 
 describe("ProposalDocumentStage share and safe-send controls", () => {
+  it("shows undo and redo only while editing", () => {
+    const { rerender } = renderStage({ mode: "preview" });
+
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Redo" })).not.toBeInTheDocument();
+
+    rerender(
+      <ProposalDocumentStage {...baseProps} mode="edit">
+        <div>Paper body</div>
+      </ProposalDocumentStage>,
+    );
+
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Redo" })).toBeInTheDocument();
+  });
+
   it("marks unavailable share actions explicitly and wires copy text", async () => {
     const onCopyText = vi.fn();
     renderStage({ onCopyText });

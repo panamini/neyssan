@@ -432,7 +432,7 @@
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-5);
   padding: var(--space-4);
   border: 1px solid var(--border-soft);
   border-radius: var(--r-surface, var(--radius-card));

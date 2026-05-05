@@ -6,6 +6,8 @@ import {
   ArrowRight as PhArrowRight,
   ArrowDown as PhArrowDown,
   ArrowSquareOut as PhArrowSquareOut,
+  ArrowUDownRight as PhArrowUDownRight,
+  ArrowUUpLeft as PhArrowUUpLeft,
   ArrowUp as PhArrowUp,
   Camera as PhCamera,
   CaretDown as PhCaretDown,
@@ -133,6 +135,8 @@ export const ArrowLeft = withCompat(PhArrowLeft);
 export const ArrowRight = withCompat(PhArrowRight);
 export const ArrowDown = withCompat(PhArrowDown);
 export const ArrowSquareOut = withCompat(PhArrowSquareOut);
+export const ArrowUDownRight = withCompat(PhArrowUDownRight);
+export const ArrowUUpLeft = withCompat(PhArrowUUpLeft);
 export const ArrowUp = withCompat(PhArrowUp);
 export const ArrowsOutSimple = withCompat(PhArrowsOutSimple);
 export const Bold = withCompat(PhTextB);

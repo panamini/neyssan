@@ -857,7 +857,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       !isEditable &&
       !showPreviewParagraphActions &&
       showPageCountBadge &&
-      documentPageCount > 1,
+      documentPageCount >= 1,
   );
 
   React.useEffect(() => {
@@ -2109,7 +2109,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                             <div className="dasti-proposal-editor-page__drawer-card-header">
                               <div>
                                 <p className="ds-card__eyebrow dasti-proposal-editor-page__drawer-card-kicker">
-                                  Letter details
+                                  Header details
                                 </p>
                                 <h5
                                   id={letterDetailsCardTitleId}
@@ -2604,6 +2604,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           <div
             ref={characterBadgeWrapRef}
             className="dasti-proposal-character-badge-wrap"
+            data-badge-kind={isEditable ? "character-count" : "page-count"}
             data-overlap-hidden={
               isEditable && !isDocumentEditor && isCharacterBadgeOverlappingPage
                 ? "true"

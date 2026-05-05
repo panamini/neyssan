@@ -1,11 +1,15 @@
 import React from "react";
 import { Button, Menu, Pill, Sheet, ToneBadge } from "../ui";
 import {
+  ArrowUDownRight,
+  ArrowUUpLeft,
   ClipboardText,
+  Eye,
   FilePdf,
   FileText,
   Link,
   PaperPlaneRight,
+  PenLine,
   ShareFat,
 } from "@/lib/icons";
 
@@ -326,48 +330,74 @@ export function ProposalDocumentStage({
       className="dasti-proposal-skeleton-stage"
       aria-label="Proposal document stage"
     >
-      <div className="forge__stage-bar dasti-proposal-skeleton-stage__bar">
-        <Pill tone="accent" className="dasti-proposal-skeleton-stage__status">
+      <div className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-toolbar--surface-tooltips">
+        <span
+          className={`ds-status ds-status--${statusLabel === "Drafting" ? "warning" : "neutral"} dasti-proposal-skeleton-stage__status`}
+        >
+          <span className="ds-status__dot" aria-hidden="true" />
           {statusLabel}
-        </Pill>
+        </span>
         <ToneBadge tone={toneValue}>{toneLabel}</ToneBadge>
-        <span className="dasti-proposal-skeleton-stage__spacer" />
         <div
-          className="style-segmented dasti-proposal-skeleton-stage__mode"
+          className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__actions"
           role="group"
-          aria-label="Proposal view mode"
+          aria-label="Proposal document actions"
         >
-          <button
-            type="button"
-            data-selected={mode === "edit" ? "true" : undefined}
-            onClick={() => onModeChange("edit")}
+          <div
+            className="style-segmented dasti-proposal-skeleton-stage__mode"
+            role="group"
+            aria-label="Proposal view mode"
           >
-            Edit
-          </button>
-          <button
-            type="button"
-            data-selected={mode === "preview" ? "true" : undefined}
-            onClick={() => onModeChange("preview")}
-          >
-            Page preview
-          </button>
+            <button
+              type="button"
+              className="dasti-proposal-mode-toggle"
+              data-selected={mode === "edit" ? "true" : undefined}
+              onClick={() => onModeChange("edit")}
+              aria-label="Edit proposal"
+              title="Edit proposal"
+              data-toolbar-tooltip="Edit"
+            >
+              <PenLine size={14} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="dasti-proposal-mode-toggle"
+              data-selected={mode === "preview" ? "true" : undefined}
+              onClick={() => onModeChange("preview")}
+              aria-label="Preview proposal"
+              title="Preview proposal"
+              data-toolbar-tooltip="Preview"
+            >
+              <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+          </div>
+          {mode === "edit" ? (
+            <>
+              <span className="dasti-icon-cluster__divider" aria-hidden="true" />
+              <button
+                type="button"
+                className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
+                onClick={() => runBrowserCommand("undo")}
+                aria-label="Undo"
+                title="Undo"
+                data-toolbar-tooltip="Undo"
+              >
+                <ArrowUUpLeft size={14} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
+                onClick={() => runBrowserCommand("redo")}
+                aria-label="Redo"
+                title="Redo"
+                data-toolbar-tooltip="Redo"
+              >
+                <ArrowUDownRight size={14} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            </>
+          ) : null}
         </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() => runBrowserCommand("undo")}
-        >
-          Undo
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() => runBrowserCommand("redo")}
-        >
-          Redo
-        </Button>
+        <span className="dasti-proposal-skeleton-stage__spacer" />
         <Menu
           ariaLabel="Share proposal"
           align="end"
@@ -451,12 +481,12 @@ export function ProposalDocumentStage({
           trigger={
             <button
               type="button"
-              className="ds-btn ds-btn--sm ds-btn--secondary"
+              className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
+              aria-label="Share proposal"
+              title="Share proposal"
+              data-toolbar-tooltip="Share"
             >
-              <span aria-hidden="true">
-                <ShareFat size={15} strokeWidth={1.8} />
-              </span>
-              Share ▾
+              <ShareFat size={15} strokeWidth={1.8} aria-hidden="true" />
             </button>
           }
         />
