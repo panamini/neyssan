@@ -1209,7 +1209,7 @@
 
 .library-tabs button[data-active="true"],
 .library-tabs button[aria-selected="true"] {
-  background: var(--sf0);
+  background: var(--sfr);
   color: var(--ti);
   box-shadow: var(--shadow-sm);
 }
@@ -1262,7 +1262,7 @@
 .dasti-template-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(188px, 1fr));
-  gap: var(--s4);
+  gap: var(--grid-gap-content);
 }
 
 .dasti-documents-card,
@@ -1322,8 +1322,8 @@
 .dasti-template-card__description {
   margin: 0;
   color: var(--tm2);
-  font-size: calc(var(--ts) - 1px);
-  line-height: var(--ls);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1359,7 +1359,7 @@
   padding-inline: var(--s2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
-  background: var(--sf0);
+  background: var(--sfr);
   color: var(--tm2);
   font-size: var(--tx);
   font-weight: var(--font-label-weight);
