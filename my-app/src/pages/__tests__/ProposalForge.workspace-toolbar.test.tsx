@@ -332,7 +332,8 @@ describe("ProposalForge workbench layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
-    expect(await screen.findByLabelText("Applicant name")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Proposal subject")).toBeInTheDocument();
+    expect(screen.getByLabelText("Applicant name")).toBeInTheDocument();
     expect(screen.getByLabelText("Contact line")).toBeInTheDocument();
     expect(
       container.querySelector(".dasti-proposal-skeleton-rail__variables"),
