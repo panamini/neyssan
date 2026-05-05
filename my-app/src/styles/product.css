@@ -2146,6 +2146,7 @@
   background:
     linear-gradient(135deg, var(--ap), transparent),
     var(--sfr);
+  box-shadow: var(--shadow-card);
 }
 
 .dash-next-action__label {
