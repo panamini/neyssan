@@ -5740,7 +5740,7 @@ export function ProposalForge(): JSX.Element {
   }, [attachedCvId, attachedCvTitle]);
   const proposalTwoPaneMinViewportWidth = 1024;
   const proposalBaseWorkspaceOutputShellInlineSize =
-    "calc(var(--document-sheet-inline-size) + (var(--s2) * 2) + 2px)";
+    "var(--forge-page-inline-size)";
   const proposalWorkspaceShellBlockSize =
     "min(var(--document-viewer-shell-max-block), calc(100dvh - var(--header-height) - (var(--space-4) * 2) - var(--document-viewer-toolbar-block-size) - var(--space-2)))";
   const isCompactComposeLayout =
@@ -6303,7 +6303,7 @@ export function ProposalForge(): JSX.Element {
       : showComposeGridColumn
         ? "100%"
         : shouldCenterOutputStage
-          ? "860px"
+          ? "var(--forge-page-inline-size)"
           : `calc(${proposalDesktopComposeWidth} + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))`;
 
   const stackedCardWidthStyle: React.CSSProperties = isCompactComposeLayout
@@ -6737,7 +6737,7 @@ export function ProposalForge(): JSX.Element {
         className={
           isSavedView
             ? "dasti-page-shell dasti-page-shell--proposal-saved"
-            : "dasti-page-shell"
+            : "dasti-page-shell dasti-page-shell--proposal-forge"
         }
         style={
           {
@@ -6747,22 +6747,22 @@ export function ProposalForge(): JSX.Element {
               : "0px",
             "--page-shell-pad-top": shouldRenderColdStartInlineOnly
               ? "0px"
-              : "0px",
+              : "var(--space-2)",
             "--page-shell-pad-bottom": shouldRenderColdStartInlineOnly
               ? "0px"
               : "0px",
             "--page-shell-pad-top-mobile": shouldRenderColdStartInlineOnly
               ? "0px"
-              : "0px",
+              : "var(--space-2)",
             "--page-shell-pad-bottom-mobile": shouldRenderColdStartInlineOnly
               ? "0px"
               : "0px",
             "--page-shell-pad-inline": shouldRenderColdStartInlineOnly
               ? "0px"
-              : "0px",
+              : "var(--space-4)",
             "--page-shell-pad-inline-mobile": shouldRenderColdStartInlineOnly
               ? "0px"
-              : "0px",
+              : "var(--space-4)",
           } as React.CSSProperties
         }
       >
@@ -7171,6 +7171,7 @@ export function ProposalForge(): JSX.Element {
                           showPreviewParagraphActions={false}
                           zoomStorageKey={null}
                           previewAnchor="top"
+                          previewFitMode="width"
                           size="default"
                           documentHeaderMode="hidden"
                           copyFeedback={copyFeedback}

@@ -425,9 +425,7 @@ describe("ProposalForge workbench layout", () => {
       ".dasti-proposal-output-shell",
     ) as HTMLElement | null;
 
-    expect(workbenchFrame?.style.maxWidth).toBe(
-      "calc(var(--proposal-workspace-output-shell-inline-size) + var(--proposal-workspace-output-shell-inline-size) + var(--layout-card-grid))",
-    );
+    expect(workbenchFrame?.style.maxWidth).toBe("100%");
     expect(skeletonGrid?.style.getPropertyValue("--grid-columns")).toBe(
       "minmax(0, 1fr) 360px",
     );
@@ -450,7 +448,7 @@ describe("ProposalForge workbench layout", () => {
       window.dispatchEvent(new Event("resize"));
     });
 
-    expect(workbenchFrame?.style.maxWidth).toBe("560px");
+    expect(workbenchFrame?.style.maxWidth).toBe("100%");
     expect(skeletonGrid?.style.getPropertyValue("--grid-columns")).toBe(
       "minmax(0, 1fr)",
     );

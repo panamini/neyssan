@@ -7263,6 +7263,10 @@
   );
 }
 
+.dasti-page-shell--proposal-forge {
+  position: relative;
+}
+
 .dasti-proposal-skeleton-forge {
   display: grid;
   grid-template-columns: var(--grid-columns, minmax(0, 1fr) 360px);

@@ -26,7 +26,7 @@
 }
 
 .dasti-cv-paper-stage {
-  width: min(100%, 860px);
+  width: min(100%, var(--forge-page-inline-size));
   margin-inline: auto;
   min-width: 0;
 }
@@ -41,7 +41,7 @@
 }
 
 .dasti-cv-page-preview-stage {
-  width: min(100%, 860px);
+  width: min(100%, var(--forge-page-inline-size));
 }
 
 .dasti-cv-page-preview-stage .dasti-doc-viewer-shell--resume-panel {
@@ -102,7 +102,7 @@
 @media (max-width: 760px) {
   .dasti-cv-paper-stage,
   .dasti-cv-page-preview-stage {
-    width: 100%;
+    width: var(--forge-page-inline-size-mobile);
   }
 }
 
