@@ -134,22 +134,39 @@ export function DocumentsPage(): JSX.Element {
 
   const items = React.useMemo<DocumentItem[]>(() => {
     const proposalItems = (proposals ?? [])
-      .filter((proposal) => proposal.status === "saved")
-      .map<DocumentItem>((proposal) => ({
-        id: String(proposal._id),
-        kind: "proposal",
-        eyebrow: "Proposal",
-        title: normalizeTitle(proposal.title, "Untitled proposal"),
-        body: textSnippet(proposal.content, "Cover letter saved to the library."),
-        updatedAt: proposal.updatedAt ?? proposal._creationTime,
-        status: "Saved",
-        onOpen: () =>
-          navigate(`/proposal?view=saved&id=${encodeURIComponent(String(proposal._id))}`),
-        onDelete: () => {
-          if (!isConvexAuthenticated || isConvexAuthLoading) return;
-          void deleteProposal({ id: proposal._id });
-        },
-      }));
+      .filter(
+        (proposal) => proposal.status === "draft" || proposal.status === "saved",
+      )
+      .map<DocumentItem>((proposal) => {
+        const isDraft = proposal.status === "draft";
+        return {
+          id: String(proposal._id),
+          kind: isDraft ? "draft" : "proposal",
+          eyebrow: isDraft ? "Draft" : "Proposal",
+          title: normalizeTitle(
+            proposal.title,
+            isDraft ? "Draft proposal" : "Untitled proposal",
+          ),
+          body: textSnippet(
+            proposal.content,
+            isDraft
+              ? "Generated draft saved to the library."
+              : "Cover letter saved to the library.",
+          ),
+          updatedAt: proposal.updatedAt ?? proposal._creationTime,
+          status: isDraft ? "Draft" : "Saved",
+          onOpen: () =>
+            navigate(
+              isDraft
+                ? `/proposal?draftId=${encodeURIComponent(String(proposal._id))}`
+                : `/proposal?view=saved&id=${encodeURIComponent(String(proposal._id))}`,
+            ),
+          onDelete: () => {
+            if (!isConvexAuthenticated || isConvexAuthLoading) return;
+            void deleteProposal({ id: proposal._id });
+          },
+        };
+      });
 
     const cvItems = cvs.map<DocumentItem>((cv) => ({
       id: String(cv.id),
@@ -178,7 +195,7 @@ export function DocumentsPage(): JSX.Element {
       "Proposal draft",
     );
     const draftContent = textSnippet(
-      outputDraft?.proposalContent ?? composeDraft?.sourceJobDescription,
+      outputDraft?.proposalContent ?? composeDraft?.jobDescription,
       "Draft in progress.",
     );
     const draftItems: DocumentItem[] =

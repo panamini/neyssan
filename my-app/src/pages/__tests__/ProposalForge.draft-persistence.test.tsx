@@ -165,7 +165,7 @@ describe("ProposalForge draft persistence", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Generate and go to resume" }),
+      screen.getByRole("button", { name: "Generate and go to resume", hidden: true }),
     );
 
     expect(screen.getByRole("button", { name: "Back to proposal" })).toBeInTheDocument();

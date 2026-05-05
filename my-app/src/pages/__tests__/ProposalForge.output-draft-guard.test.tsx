@@ -127,7 +127,7 @@ describe("ProposalForge output draft guard", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Start generation" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start generation", hidden: true }));
 
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "Content Creation & Social Media Intern|empty",

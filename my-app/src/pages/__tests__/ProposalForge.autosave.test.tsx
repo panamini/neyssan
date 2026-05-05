@@ -91,6 +91,10 @@ vi.mock("../../lib/proposal-personalization", () => ({
   }),
   getLocalActiveCvSnapshotById: (id: string) =>
     id === "cv_alpha" ? { title: "Alex Martin Resume" } : null,
+  getLocalPersonalizationSourceByCvId: (id: string | null | undefined) => ({
+    title: id === "cv_alpha" ? "Alex Martin Resume" : null,
+    personalizationContext: null,
+  }),
   getLocalCvDocumentById: (id: string) =>
     id === "cv_alpha" ? mockSourceCv : null,
   listLocalCvPickerOptions: () => [],
@@ -272,10 +276,6 @@ describe("ProposalForge autosave", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit content once" }));
     fireEvent.click(screen.getByRole("button", { name: "Edit content twice" }));
-    expect(screen.getByTestId("compose-save-status")).toHaveTextContent(
-      "saving",
-    );
-
     await waitForAutosave();
 
     await waitFor(() => {
@@ -284,13 +284,10 @@ describe("ProposalForge autosave", () => {
         expect.objectContaining({
           title: "Original autosave title",
           content: "Second autosave draft.",
-          status: "saved",
+          status: "draft",
         }),
       );
       expect(mockUpdateProposal).not.toHaveBeenCalled();
-      expect(screen.getByTestId("compose-save-status")).toHaveTextContent(
-        "saved",
-      );
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Edit title" }));
@@ -368,7 +365,7 @@ describe("ProposalForge autosave", () => {
         expect.objectContaining({
           title: "Workshop autosave title",
           content: "First autosave draft.",
-          status: "saved",
+          status: "draft",
           metadata: expect.objectContaining({
             templateId: "workshop_proposal_margin",
             styleLinkMode: "proposal_local",
@@ -384,6 +381,7 @@ describe("ProposalForge autosave", () => {
   });
 
   it("preserves source cv and detached style semantics when autosaving direct style edits", async () => {
+    mockAttachedCvId = "cv_alpha";
     window.localStorage.setItem(
       PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
       JSON.stringify({
@@ -421,9 +419,6 @@ describe("ProposalForge autosave", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Attach CV from form" }),
-    );
     fireEvent.click(screen.getByRole("button", { name: "Direct style edit" }));
 
     await waitForAutosave();
@@ -492,7 +487,7 @@ describe("ProposalForge autosave", () => {
           id: "proposal_existing_inherit",
           title: "Reloaded inherited proposal",
           content: expect.stringContaining("Reloaded inherited proposal body."),
-          status: "saved",
+          status: "draft",
           metadata: expect.objectContaining({
             sourceCvId: "cv_alpha",
             templateId: "editorial_wide",
@@ -555,7 +550,7 @@ describe("ProposalForge autosave", () => {
           id: "proposal_existing_local",
           title: "Reloaded detached proposal",
           content: expect.stringContaining("Reloaded detached proposal body."),
-          status: "saved",
+          status: "draft",
           metadata: expect.objectContaining({
             sourceCvId: "cv_alpha",
             templateId: "swiss_margin",

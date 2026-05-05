@@ -82,8 +82,8 @@ const proposalVerbatiStyleChoice = v.object({
 });
 
 /**
- * Public query to list the most recent proposals for the authenticated user.
- * Returns up to 10 most recent proposals.
+ * Public query to list the most recent proposal library rows for the authenticated user.
+ * Returns both autosaved drafts and finalized saved proposals.
  */
 export default query({
   args: {},
@@ -184,23 +184,23 @@ export default query({
       profiles.map((profile) =>
         ctx.db
           .query("proposals")
-          .withIndex("by_user_and_status", (q) =>
-            q.eq("userId", profile._id).eq("status", "saved"),
-          )
+          .withIndex("by_user", (q) => q.eq("userId", profile._id))
           .collect(),
       ),
     );
 
     const proposals = proposalGroups.flat();
 
-    const savedProposals = proposals
-      .filter((proposal) => proposal.status === "saved")
+    const libraryProposals = proposals
+      .filter(
+        (proposal) => proposal.status === "draft" || proposal.status === "saved",
+      )
       .sort((left, right) => right._creationTime - left._creationTime)
-      .slice(0, 10);
+      .slice(0, 30);
 
     // Project proposals to the exact public return shape so added storage fields
     // do not trigger ReturnsValidationError in client-facing queries.
-    return savedProposals.map((proposal) => ({
+    return libraryProposals.map((proposal) => ({
       _id: proposal._id,
       _creationTime: proposal._creationTime,
       userId: proposal.userId,
@@ -215,7 +215,7 @@ export default query({
       })),
       metadata: {
         platform: proposal.metadata.platform ?? undefined,
-        jobId: proposal.metadata.jobId ?? undefined,
+        jobId: proposal.metadata.jobId ?? proposal.jobId ?? undefined,
         tags: proposal.metadata.tags ?? undefined,
         sourceJobDescription: proposal.metadata.sourceJobDescription ?? undefined,
         sourceUrl: proposal.metadata.sourceUrl ?? undefined,

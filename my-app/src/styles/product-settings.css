@@ -543,7 +543,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--tm2) 84%, var(--settings-preview-accent) 16%);
+  color: var(--am);
 }
 
 .dasti-settings-preview-card__body {
@@ -566,7 +566,7 @@
   margin: 0;
   font-size: var(--ts);
   line-height: 1.3;
-  color: var(--tm2);
+  color: var(--am);
 }
 
 .dasti-settings-preview-card__footer {
@@ -3440,7 +3440,7 @@ button.dasti-settings-signature-tool:focus-visible {
   font-weight: var(--font-label-weight);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
-  color: var(--color-text-subtle);
+  color: var(--am);
 }
 .styleforge-active-color-card__hex {
   font-family: var(--font-mono-family);

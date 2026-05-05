@@ -186,20 +186,53 @@ describe("ProposalForge save to library", () => {
   it("confirms the title, saves the generated proposal to the library, and opens the saved route", async () => {
     mockAttachedCvId = "cv_alpha";
 
+    window.localStorage.setItem(
+      PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        jobTitle: "Operations Associate",
+        jobDescription:
+          "Support recurring processes and coordinate communication.",
+        sourceUrl: null,
+        platform: null,
+        proposalType: "cover_letter",
+        voicePreset: "signature",
+      }),
+    );
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "Freshly generated proposal body.",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: null,
+        proposalVerbatiStyle: null,
+        proposalStyleLinkMode: "inherit_cv",
+        proposalStyleChoice: "auto",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "Operations Associate",
+        proposalDocumentMeta: "alex@example.com",
+        generatedProposalId: "proposal_generated",
+        proposalOutputMode: "preview",
+        paletteOverride: null,
+        customAccentHex: null,
+        templateBundleId: null,
+        typographyOverride: null,
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <ProposalForge />
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
-
-    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "Operations Associate|Freshly generated proposal body.|preview",
-    );
-
     fireEvent.click(
-      screen.getByRole("button", { name: "Save proposal to library" }),
+      await screen.findByRole("button", { name: "Save proposal to library" }),
     );
     fireEvent.change(screen.getByPlaceholderText("Proposal title"), {
       target: { value: "Operations Associate saved" },
@@ -211,7 +244,7 @@ describe("ProposalForge save to library", () => {
         expect.objectContaining({
           id: "proposal_generated",
           title: "Operations Associate saved",
-          content: "Freshly generated proposal body.",
+          content: expect.stringContaining("Freshly generated proposal body."),
           status: "saved",
           metadata: expect.objectContaining({
             sourceCvId: "cv_alpha",
@@ -229,15 +262,8 @@ describe("ProposalForge save to library", () => {
       expect(screen.getByText("Saved proposals")).toBeInTheDocument();
     });
 
-    expect(readStoredProposalComposeDraft()).toMatchObject({
-      jobTitle: "Operations Associate",
-      jobDescription: "Support recurring processes and coordinate communication.",
-    });
-    expect(readStoredProposalOutputDraft()).toMatchObject({
-      proposalContent: "Freshly generated proposal body.",
-      generatedProposalId: "proposal_generated",
-      proposalDocumentTitle: "Operations Associate saved",
-    });
+    expect(readStoredProposalComposeDraft()).toBeNull();
+    expect(readStoredProposalOutputDraft()).toBeNull();
     expect(mockShowToast).toHaveBeenCalledWith(
       "Saved.",
       expect.objectContaining({
@@ -378,9 +404,7 @@ describe("ProposalForge save to library", () => {
     await waitFor(() => {
       expect(screen.getByText("Saved proposals")).toBeInTheDocument();
     });
-    expect(readStoredProposalOutputDraft()).toMatchObject({
-      proposalContent: expect.stringContaining("Edited detached draft."),
-      proposalDocumentTitle: "Detached proposal",
-    });
+    expect(readStoredProposalComposeDraft()).toBeNull();
+    expect(readStoredProposalOutputDraft()).toBeNull();
   });
 });

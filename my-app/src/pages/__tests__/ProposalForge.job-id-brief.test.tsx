@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { ProposalForge } from "../ProposalForge";
+import { PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY } from "../../lib/proposal-workspace-state";
+import { PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY } from "../../lib/proposal-output-draft";
 
 const mockUseQuery = vi.fn();
 
@@ -154,7 +156,44 @@ describe("ProposalForge canonical job brief", () => {
     });
   });
 
-  it("renders a minimal collapsed focus strip with Back to job and the source link", async () => {
+  it("renders the canonical job brief as collapsed rail context without the full brief card", async () => {
+    window.localStorage.setItem(
+      PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        jobTitle: "Operations Associate",
+        jobDescription:
+          "Support recurring processes and coordinate communication.",
+        proposalType: "cover_letter",
+        voicePreset: "signature",
+      }),
+    );
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "Generated proposal body.",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: null,
+        proposalVerbatiStyle: null,
+        proposalStyleLinkMode: "inherit_cv",
+        proposalStyleChoice: "auto",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "Operations Associate",
+        proposalDocumentMeta: "Cover letter",
+        generatedProposalId: "proposal_generated",
+        proposalOutputMode: "preview",
+        paletteOverride: null,
+        customAccentHex: null,
+        templateBundleId: null,
+        typographyOverride: null,
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
     const { container } = render(
       <MemoryRouter initialEntries={["/proposal?jobId=job_123"]}>
         <Routes>
@@ -172,21 +211,16 @@ describe("ProposalForge canonical job brief", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
-
     expect(
-      await screen.findByTestId("proposal-brief-focus-strip"),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Back to job" })).toHaveAttribute(
-      "href",
-      "/jobs/job_123",
-    );
-    expect(
-      screen.getByRole("link", {
-        name: /Open original job offer on Example\.com/i,
+      await screen.findByRole("button", {
+        name: /Job context Operations Associate/i,
       }),
-    ).toHaveAttribute("href", "https://example.com/jobs/123");
-    expect(screen.getByRole("button", { name: "Expand" })).toBeInTheDocument();
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Operations Associate role focused on recurring launches and structured handoffs.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
     expect(screen.queryByText("Review state")).not.toBeInTheDocument();
     expect(screen.queryByText("Extracted summary")).not.toBeInTheDocument();
@@ -201,9 +235,5 @@ describe("ProposalForge canonical job brief", () => {
       container.querySelector(".dasti-brief-card__summary"),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("link", { name: "Back to job" }));
-    expect(screen.getByTestId("proposal-location")).toHaveTextContent(
-      "/jobs/job_123",
-    );
   });
 });

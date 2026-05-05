@@ -179,6 +179,30 @@ function titleCaseKeyword(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+export function sanitizeProposalCompanyName(value: string | null | undefined): string | null {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const wordCount = normalized.split(/\s+/).length;
+  const sentenceLike =
+    /[.!?]/.test(normalized) ||
+    /\b(?:our|we|you|your|hq|headquarters|situated|located|position|application|provided|coverage|benefits?|medical|dental|insurance|salary|compensation)\b/i.test(
+      normalized,
+    );
+
+  if (sentenceLike || wordCount > 5) {
+    return null;
+  }
+
+  if (/^(?:hr|human resources)$/i.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
+}
+
 function extractCompany(rawJobDescription: string): string | null {
   const labeledValue = extractLabeledValue(rawJobDescription, [
     "company",
@@ -187,14 +211,14 @@ function extractCompany(rawJobDescription: string): string | null {
     "organisation",
   ]);
   if (labeledValue) {
-    return labeledValue;
+    return sanitizeProposalCompanyName(labeledValue);
   }
 
   const normalized = normalizeWhitespace(rawJobDescription);
   const contextMatch = normalized.match(
     /\b(?:[Jj]oin|[Aa]t|[Ww]ith|[Ff]or)\s+([A-Z][A-Za-z0-9&.'’ -]{2,52}?)(?=\s+(?:in|to|that|who|where|as)\b|[.,;:]|$)/,
   );
-  return contextMatch?.[1] ? normalizeWhitespace(contextMatch[1]) : null;
+  return sanitizeProposalCompanyName(contextMatch?.[1] ?? null);
 }
 
 function normalizePlaceLikeValue(value: string | null): string | null {

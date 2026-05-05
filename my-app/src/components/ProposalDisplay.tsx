@@ -663,10 +663,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const hasDocumentCaption =
     showDocumentCaption &&
     resolvedDocumentHeaderMode !== "hidden" &&
-    Boolean(
-      (documentTitle && documentTitle.trim().length > 0) ||
-        (documentMeta && documentMeta.trim().length > 0),
-    );
+    Boolean(documentTitle && documentTitle.trim().length > 0);
   const usesDocumentRenderer =
     proposalType === "cover_letter" ||
     proposalType === "application_message" ||
@@ -1674,9 +1671,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       ) : documentTitle ? (
         <h3 className="dasti-proposal-sheet__title">{documentTitle}</h3>
       ) : null}
-      {documentMeta ? (
-        <p className="dasti-proposal-sheet__meta">{documentMeta}</p>
-      ) : null}
     </div>
   );
   const documentCaption = hasDocumentCaption
@@ -2295,33 +2289,40 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         data-state="loading"
         aria-busy="true"
       >
-        <div className="dasti-proposal-loading-skeleton">
-          {[0.85, 1, 0.72, 0.95, 0.6].map((w, i) => (
-            <div
-              key={i}
-              className="dasti-proposal-loading-skeleton__line"
-              style={
-                {
-                  "--proposal-skeleton-line-width": `${w * 100}%`,
-                  "--proposal-skeleton-line-delay": `${i * 0.1}s`,
-                } as React.CSSProperties
-              }
-            />
-          ))}
-          <div className="dasti-proposal-loading-skeleton__gap" />
-          {[0.9, 0.78, 1, 0.55].map((w, i) => (
-            <div
-              key={`b${i}`}
-              className="dasti-proposal-loading-skeleton__line"
-              style={
-                {
-                  "--proposal-skeleton-line-width": `${w * 100}%`,
-                  "--proposal-skeleton-line-delay": `${(i + 5) * 0.1}s`,
-                } as React.CSSProperties
-              }
-            />
-          ))}
-          <p className="dasti-proposal-loading-skeleton__caption">Generating</p>
+        <div className="dasti-proposal-loading-skeleton" aria-hidden="true">
+          <div className="dasti-proposal-loading-skeleton__masthead">
+            <span className="dasti-proposal-loading-skeleton__eyebrow" />
+            <span className="dasti-proposal-loading-skeleton__title" />
+          </div>
+          <div className="dasti-proposal-loading-skeleton__meta-grid">
+            <span className="dasti-proposal-loading-skeleton__eyebrow" />
+            <span className="dasti-proposal-loading-skeleton__eyebrow" />
+            <span className="dasti-proposal-loading-skeleton__meta" />
+            <span className="dasti-proposal-loading-skeleton__meta" />
+          </div>
+          <div className="dasti-proposal-loading-skeleton__subject">
+            <span className="dasti-proposal-loading-skeleton__eyebrow" />
+            <span className="dasti-proposal-loading-skeleton__subject-line" />
+          </div>
+          <div className="dasti-proposal-loading-skeleton__body">
+            <span className="dasti-proposal-loading-skeleton__salutation" />
+            <div className="dasti-proposal-loading-skeleton__paragraph">
+              <span />
+              <span />
+              <span />
+            </div>
+            <div className="dasti-proposal-loading-skeleton__paragraph">
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
+            <div className="dasti-proposal-loading-skeleton__paragraph">
+              <span />
+              <span />
+              <span />
+            </div>
+          </div>
         </div>
       </div>
     );

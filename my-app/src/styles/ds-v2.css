@@ -314,7 +314,7 @@
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--tm2);
+    color: var(--am);
   }
 
   .ds-card__title {

@@ -190,8 +190,7 @@ describe("ProposalForge jobId auth hydration", () => {
   it("hydrates the real compose inputs after auth becomes ready and the canonical job resolves", async () => {
     const view = render(renderProposalForge());
 
-    expect(screen.getByText("Loading saved job brief…")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText("Job title")).not.toBeInTheDocument();
+    expect(screen.queryByText("Operations Associate")).not.toBeInTheDocument();
 
     const initialCanonicalCalls = queryCalls
       .filter((entry) => entry.query === generatedApiModule.api.jobsPublic.getById)
@@ -204,7 +203,7 @@ describe("ProposalForge jobId auth hydration", () => {
       view.rerender(renderProposalForge());
     });
 
-    expect(screen.getByText("Loading saved job brief…")).toBeInTheDocument();
+    expect(screen.queryByText("Operations Associate")).not.toBeInTheDocument();
 
     await act(async () => {
       queryState.canonicalJobRecord = {
@@ -234,17 +233,18 @@ describe("ProposalForge jobId auth hydration", () => {
       view.rerender(renderProposalForge());
     });
 
-    const jobTitleInput = await screen.findByPlaceholderText("Job title");
     await waitFor(() =>
-      expect(jobTitleInput).toHaveValue("Operations Associate"),
+      expect(
+        screen.getByRole("button", {
+          name: /Job context Operations Associate/i,
+        }),
+      ).toBeInTheDocument(),
     );
-
-    const jobDescriptionInput = await screen.findByPlaceholderText(
-      "Paste job offer",
-    );
-    expect(jobDescriptionInput).toHaveValue(
-      "Coordinate recurring launches, keep handoffs clear, and maintain documentation.",
-    );
+    expect(
+      screen.getByText(
+        "Coordinate recurring launches, keep handoffs clear, and maintain documentation.",
+      ),
+    ).toBeInTheDocument();
 
     const authenticatedCanonicalCalls = queryCalls
       .filter((entry) => entry.query === generatedApiModule.api.jobsPublic.getById)
@@ -255,13 +255,15 @@ describe("ProposalForge jobId auth hydration", () => {
       view.rerender(renderProposalForge());
     });
 
-    expect(screen.getByPlaceholderText("Job title")).toHaveValue(
-      "Operations Associate",
-    );
     expect(
-      screen.getByPlaceholderText("Paste job offer"),
-    ).toHaveValue(
-      "Coordinate recurring launches, keep handoffs clear, and maintain documentation.",
-    );
+      screen.getByRole("button", {
+        name: /Job context Operations Associate/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Coordinate recurring launches, keep handoffs clear, and maintain documentation.",
+      ),
+    ).toBeInTheDocument();
   });
 });

@@ -1365,6 +1365,13 @@ function buildJobProjection(
     status: string;
     updatedAt: number;
   }> = [],
+  draftProposalCount = 0,
+  draftProposals: Array<{
+    id: string;
+    title: string;
+    status: string;
+    updatedAt: number;
+  }> = [],
   visibleExtraction?: VisibleJobExtractionSelection,
   structuredShadowSummary: StructuredShadowSummary | null = null,
   matchReview: JobMatchReview | null = null,
@@ -1473,7 +1480,11 @@ function buildJobProjection(
     matchReview,
     nextStepBlock,
     linkedProposalCount,
+    savedProposalCount: linkedProposalCount,
+    draftProposalCount,
     linkedProposals,
+    savedProposals: linkedProposals,
+    draftProposals,
     structuredShadowSummary,
     reviewItems: reviewItems.map((item: any) => ({
       id: item.id,
@@ -1654,6 +1665,10 @@ async function listProjectedJobsForProfiles(
   >();
 
   for (const proposal of proposals) {
+    if (proposal.status !== "saved") {
+      continue;
+    }
+
     const jobId = typeof proposal.jobId === "string" ? proposal.jobId : "";
     if (!jobId) {
       continue;
@@ -1972,7 +1987,25 @@ export const getById = query({
         }),
       ),
       linkedProposalCount: v.number(),
+      savedProposalCount: v.number(),
+      draftProposalCount: v.number(),
       linkedProposals: v.array(
+        v.object({
+          id: v.string(),
+          title: v.string(),
+          status: v.string(),
+          updatedAt: v.number(),
+        }),
+      ),
+      savedProposals: v.array(
+        v.object({
+          id: v.string(),
+          title: v.string(),
+          status: v.string(),
+          updatedAt: v.number(),
+        }),
+      ),
+      draftProposals: v.array(
         v.object({
           id: v.string(),
           title: v.string(),
@@ -2017,19 +2050,35 @@ export const getById = query({
       return null;
     }
 
-    const linkedProposals = await ctx.db
-      .query("proposals")
-      .withIndex("by_job", (q) => q.eq("jobId", String(job._id)))
-      .order("desc")
-      .take(JOB_DETAIL_LINKED_PROPOSALS_LIMIT);
+    const [linkedProposals, draftProposals] = await Promise.all([
+      ctx.db
+        .query("proposals")
+        .withIndex("by_job_and_status", (q) =>
+          q.eq("jobId", String(job._id)).eq("status", "saved"),
+        )
+        .order("desc")
+        .take(JOB_DETAIL_LINKED_PROPOSALS_LIMIT),
+      ctx.db
+        .query("proposals")
+        .withIndex("by_job_and_status", (q) =>
+          q.eq("jobId", String(job._id)).eq("status", "draft"),
+        )
+        .order("desc")
+        .take(JOB_DETAIL_LINKED_PROPOSALS_LIMIT),
+    ]);
+
+    const projectLinkedProposal = (proposal: any) => ({
+      id: String(proposal._id),
+      title: proposal.title ?? "Untitled proposal",
+      status: proposal.status ?? "draft",
+      updatedAt: proposal.updatedAt ?? 0,
+    });
 
     const projectedLinkedProposals = linkedProposals
-      .map((proposal) => ({
-        id: String(proposal._id),
-        title: proposal.title ?? "Untitled proposal",
-        status: proposal.status ?? "draft",
-        updatedAt: proposal.updatedAt ?? 0,
-      }))
+      .map(projectLinkedProposal)
+      .sort((left, right) => right.updatedAt - left.updatedAt);
+    const projectedDraftProposals = draftProposals
+      .map(projectLinkedProposal)
       .sort((left, right) => right.updatedAt - left.updatedAt);
 
     const primaryProfile = profiles[0] ?? null;
@@ -2113,6 +2162,8 @@ export const getById = query({
       nextStepBlock,
       linkedProposals.length,
       projectedLinkedProposals,
+      draftProposals.length,
+      projectedDraftProposals,
       visibleExtraction,
       structuredShadowSummary,
       matchReview,

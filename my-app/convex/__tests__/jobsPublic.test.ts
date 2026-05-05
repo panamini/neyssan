@@ -581,23 +581,33 @@ describe("jobsPublic.getById", () => {
           if (table === "proposals") {
             return {
               withIndex(_indexName: string, buildIndex: any) {
+                const criteria: Record<string, string> = {};
                 const scope = {
-                  eq(_field: string, _value: string) {
+                  eq(field: string, value: string) {
+                    criteria[field] = value;
                     return this;
                   },
                 };
                 buildIndex(scope);
+                const scopedRows = linkedProposalRows.filter((row) => {
+                  if (criteria.status && row.status !== criteria.status) {
+                    return false;
+                  }
+                  if (criteria.jobId && row.jobId && row.jobId !== criteria.jobId) {
+                    return false;
+                  }
+                  return true;
+                });
                 return {
                   order() {
                     return this;
                   },
-                  take: async (limit: number) =>
-                    linkedProposalRows.slice(0, limit),
+                  take: async (limit: number) => scopedRows.slice(0, limit),
                   collect: async () => {
                     if (failUnboundedDetailReads) {
                       throw new Error("unbounded proposals collect");
                     }
-                    return linkedProposalRows;
+                    return scopedRows;
                   },
                 };
               },
@@ -861,6 +871,40 @@ describe("jobsPublic.getById", () => {
     expect(result?.linkedProposalCount).toBeGreaterThan(0);
     expect(result?.linkedProposals.length).toBeLessThan(linkedProposalRows.length);
     expect(result?.visibleExtractionSource).toBe("llm");
+  });
+
+  it("returns only saved linked proposals in job detail", async () => {
+    const job = buildProjectionJob();
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        linkedProposalRows: [
+          {
+            _id: "proposal_draft",
+            jobId: job._id,
+            title: "Draft proposal",
+            status: "draft",
+            updatedAt: 300,
+          },
+          {
+            _id: "proposal_saved",
+            jobId: job._id,
+            title: "Saved proposal",
+            status: "saved",
+            updatedAt: 200,
+          },
+        ],
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result?.linkedProposalCount).toBe(1);
+    expect(result?.linkedProposals).toEqual([
+      expect.objectContaining({
+        id: "proposal_saved",
+        status: "saved",
+      }),
+    ]);
   });
 
   it("uses detected posting language when an existing French job was stored as English", async () => {

@@ -113,7 +113,7 @@ body,
   padding: 0 var(--space-2);
   font-size: var(--app-sidebar-section-size);
   font-weight: 500;
-  color: var(--color-text-subtle);
+  color: var(--am);
   letter-spacing: var(--app-sidebar-section-tracking);
   text-transform: uppercase;
 }
@@ -131,7 +131,7 @@ body,
 .sb-section__editing-label {
   font-size: var(--tx);
   font-weight: 600;
-  color: var(--color-text-subtle);
+  color: var(--am);
 }
 
 .sb-workspace-card {
@@ -253,7 +253,7 @@ body,
   padding: 0 var(--space-1);
   border-radius: var(--radius-pill);
   background: var(--ap);
-  color: var(--ac);
+  color: var(--am);
   font-size: var(--tx);
   font-weight: 600;
   line-height: 1;
@@ -397,7 +397,7 @@ body,
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--color-text-subtle);
+  color: var(--am);
   cursor: pointer;
   transition:
     background-color var(--duration-fast) var(--ease-standard),
@@ -567,11 +567,11 @@ body,
 }
 
 .sb-toggle--collapse {
-  cursor: w-resize;
+  cursor: pointer;
 }
 
 .sb-toggle--expand {
-  cursor: e-resize;
+  cursor: pointer;
 }
 
 .sb-toggle--labeled {
@@ -1948,6 +1948,7 @@ body,
 }
 
 .sb-recent {
+  position: relative;
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   gap: var(--space-2);
@@ -1966,7 +1967,16 @@ body,
 }
 
 .sb-recent--active {
-  box-shadow: inset 2px 0 0 var(--ac);
+  box-shadow: none;
+}
+
+.sb-recent--active::before {
+  content: "";
+  position: absolute;
+  inset-block: var(--space-1);
+  inset-inline-start: 0;
+  width: 2px;
+  background: var(--ac);
 }
 
 .sb-recent__badge {

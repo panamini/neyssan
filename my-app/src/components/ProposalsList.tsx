@@ -13,7 +13,6 @@ import {
   buildAppProposalPersonalizationPayload,
   getActiveLocalPersonalizationSource,
   getLocalCvDocumentById,
-  getProposalAttachedCvId,
   getProposalApplicantHeaderData,
   type ProposalApplicantHeaderData,
   type ProposalGenerationPersonalizationPayload,
@@ -29,11 +28,9 @@ import { type ProposalCharacterLimitMode } from "../../convex/lib/proposals/gene
 import { type ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import { formatUiDate } from "../lib/ui-date";
 import {
-  readStoredProposalOutputDraft,
   resolveProposalStoredText,
   type StoredProposalTextSection,
 } from "../lib/proposal-output-draft";
-import { readStoredProposalComposeDraft } from "../lib/proposal-workspace-state";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
 import {
   getVerbatiStyleFromCv,
@@ -543,6 +540,7 @@ function stepSavedProposalViewMode(
 interface ProposalsListProps {
   selectedProposalId?: string | null;
   onSelectedProposalIdChange?: (id: string | null) => void;
+  onOpenDraftProposal?: (id: string) => void;
   signatureSettings?: ProposalSignatureSettings | null;
   savedViewActions?: React.ReactNode;
 }
@@ -552,6 +550,7 @@ const SECONDARY_PROPOSAL_PAGE_SIZE = 2;
 export default function ProposalsList({
   selectedProposalId = null,
   onSelectedProposalIdChange,
+  onOpenDraftProposal,
   signatureSettings = null,
   savedViewActions = null,
 }: ProposalsListProps) {
@@ -587,68 +586,10 @@ export default function ProposalsList({
         : [],
     [isConvexAuthenticated, isLoaded, isSignedIn],
   );
-  const optimisticSavedProposal =
-    React.useMemo<SavedProposalRecord | null>(() => {
-      if (!selectedProposalId) {
-        return null;
-      }
-
-      const outputDraft = readStoredProposalOutputDraft();
-      if (
-        !outputDraft?.generatedProposalId ||
-        String(outputDraft.generatedProposalId) !== String(selectedProposalId)
-      ) {
-        return null;
-      }
-
-      const trimmedContent = outputDraft.proposalContent?.trim() ?? "";
-      if (!trimmedContent) {
-        return null;
-      }
-
-      const composeDraft = readStoredProposalComposeDraft();
-      const optimisticTimestamp = Date.now();
-      return {
-        _id: selectedProposalId,
-        _creationTime: optimisticTimestamp,
-        title: outputDraft.proposalDocumentTitle?.trim() || "Saved proposal",
-        content: trimmedContent,
-        status: "saved",
-        updatedAt: optimisticTimestamp,
-        createdAt: optimisticTimestamp,
-        sections: [{ type: "text", content: trimmedContent }],
-        metadata: {
-          sourceJobDescription:
-            composeDraft?.jobDescription?.trim() || undefined,
-          sourceCvId: getProposalAttachedCvId() ?? undefined,
-          proposalType: outputDraft.proposalType ?? undefined,
-          voicePreset: outputDraft.proposalVoicePreset ?? undefined,
-          styleLinkMode: outputDraft.proposalStyleLinkMode ?? undefined,
-          verbatiStyle: outputDraft.proposalVerbatiStyle ?? undefined,
-          applicantName:
-            normalizeSavedTextValue(outputDraft.proposalApplicantName) ??
-            undefined,
-          applicantRole:
-            normalizeSavedTextValue(outputDraft.proposalApplicantRole) ??
-            undefined,
-          contactLine:
-            normalizeSavedTextValue(outputDraft.proposalContactLine) ??
-            undefined,
-          letterDate:
-            normalizeSavedTextValue(outputDraft.proposalLetterDate) ??
-            undefined,
-          recipientDetails:
-            normalizeSavedTextValue(outputDraft.proposalRecipientDetails) ??
-            undefined,
-          headerShowSender: outputDraft.proposalHeaderShowSender,
-          headerShowDate: outputDraft.proposalHeaderShowDate,
-          headerShowSubject: outputDraft.proposalHeaderShowSubject,
-          headerShowRecipient: outputDraft.proposalHeaderShowRecipient,
-          headerShowRecipientDetails:
-            outputDraft.proposalHeaderShowRecipientDetails,
-        },
-      };
-    }, [selectedProposalId]);
+  const optimisticSavedProposal = React.useMemo<SavedProposalRecord | null>(
+    () => null,
+    [],
+  );
   const savedProposals = React.useMemo(() => {
     const mergedProposals = new Map<string, SavedProposalRecord>();
 
@@ -663,9 +604,17 @@ export default function ProposalsList({
       );
     }
 
-    return [...mergedProposals.values()].filter(
-      (proposal) => proposal.status === "saved",
-    );
+    return [...mergedProposals.values()]
+      .filter(
+        (proposal) => proposal.status === "draft" || proposal.status === "saved",
+      )
+      .sort((left, right) => {
+        const leftRank = left.status === "saved" ? 0 : 1;
+        const rightRank = right.status === "saved" ? 0 : 1;
+        if (leftRank !== rightRank) return leftRank - rightRank;
+        return (right.updatedAt ?? right._creationTime ?? 0) -
+          (left.updatedAt ?? left._creationTime ?? 0);
+      });
   }, [fallbackProposals, optimisticSavedProposal, proposals]);
   const deleteProposal = useMutation(
     (api as any).deleteProposalPublic?.default,
@@ -874,7 +823,12 @@ export default function ProposalsList({
   ]);
 
   const displayList = localProposals ?? savedProposals;
-  const savedProposalCount = displayList.length;
+  const draftProposalCount = displayList.filter(
+    (proposal) => proposal.status === "draft",
+  ).length;
+  const savedProposalCount = displayList.filter(
+    (proposal) => proposal.status === "saved",
+  ).length;
   const selected = displayList.find((p) => p._id === selectedId) ?? null;
   const resolveSavedProposalRenderState = React.useCallback(
     (proposal: SavedProposalRecord | null) => {
@@ -1639,13 +1593,13 @@ export default function ProposalsList({
       <div className="dasti-proposal-library-info-card__stack">
         <div className="dasti-proposal-library-sidebar__eyebrow-row">
           <div className="ds-card__eyebrow dasti-proposal-library-sidebar__eyebrow">
-            Saved proposals
+            Proposal Library
           </div>
           <span
             className="dasti-count-pill"
-            aria-label={`${savedProposalCount} saved proposals`}
+            aria-label={`${draftProposalCount} draft proposals and ${savedProposalCount} saved proposals`}
           >
-            {savedProposalCount}
+            {draftProposalCount} draft · {savedProposalCount} saved
           </span>
         </div>
         {selectedOutputMode === "edit" || isEditingSelectedTitle ? (
@@ -1854,9 +1808,18 @@ export default function ProposalsList({
               {visibleLibraryProposals.map((proposal) => {
                 const snippet = buildProposalSnippet(proposal.content);
                 const isSelectedCard = proposal._id === selected._id;
+                const isDraftProposal = proposal.status === "draft";
                 const proposalToneLabel = toneLabel(
                   getStoredVoicePreset(proposal),
                 );
+                const openProposal = () => {
+                  if (isDraftProposal && onOpenDraftProposal) {
+                    onOpenDraftProposal(String(proposal._id));
+                    return;
+                  }
+                  handleSelectProposal(proposal, true);
+                  setSavedViewMode("stack");
+                };
 
                 return (
                   <article
@@ -1877,18 +1840,18 @@ export default function ProposalsList({
                     <button
                       type="button"
                       className="dasti-doc-card__surface"
-                      onClick={() => {
-                        handleSelectProposal(proposal, true);
-                        setSavedViewMode("stack");
-                      }}
+                      onClick={openProposal}
                     >
                       <div className="dasti-doc-card__stack">
                         <div className="dasti-doc-card__header">
                           <div className="dasti-doc-card__title-frame dasti-doc-card__title-frame--top">
                             <h3 className="ds-card__title dasti-doc-card__title">
                               {(proposal.title || "").trim() ||
-                                "Saved proposal"}
+                                (isDraftProposal ? "Draft proposal" : "Saved proposal")}
                             </h3>
+                            <span className="dasti-count-pill">
+                              {isDraftProposal ? "Draft" : "Saved"}
+                            </span>
                           </div>
                         </div>
                         <div className="ds-card__content dasti-doc-card__body-band">
@@ -1923,12 +1886,9 @@ export default function ProposalsList({
                       <button
                         type="button"
                         className="dasti-doc-card__quick-action"
-                        onClick={() => {
-                          handleSelectProposal(proposal, true);
-                          setSavedViewMode("stack");
-                        }}
+                        onClick={openProposal}
                       >
-                        Open
+                        {isDraftProposal ? "Edit draft" : "Open"}
                       </button>
                     </div>
                   </article>
