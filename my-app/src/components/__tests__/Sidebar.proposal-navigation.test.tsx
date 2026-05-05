@@ -172,7 +172,14 @@ function writeProposalDraftToStorage(): void {
 }
 
 function pinSidebar(): void {
-  fireEvent.click(screen.getByRole("button", { name: "Pin sidebar" }));
+  const openButton = screen.queryByRole("button", { name: "Open sidebar" });
+  if (openButton) {
+    fireEvent.click(openButton);
+  }
+  const pinButton = screen.queryByRole("button", { name: "Open sidebar" });
+  if (pinButton) {
+    fireEvent.click(pinButton);
+  }
 }
 
 describe("Sidebar proposal navigation", () => {
@@ -224,7 +231,7 @@ describe("Sidebar proposal navigation", () => {
     expect(window.localStorage.getItem("cvActiveId")).toBe("cv_beta");
   });
 
-  it("renders an explicit account trigger in the sidebar footer", () => {
+  it("renders the settings trigger in the sidebar footer", () => {
     render(
       <MemoryRouter initialEntries={["/cv"]}>
         <Sidebar />
@@ -235,12 +242,13 @@ describe("Sidebar proposal navigation", () => {
       </MemoryRouter>,
     );
 
-    expect(
-      screen.getByRole("button", { name: "Open account menu" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+      "href",
+      "/settings",
+    );
   });
 
-  it("uses the sidebar footer as the signed-out sign-in entry", () => {
+  it("does not render authenticated recents when signed out", () => {
     mockAuthState.isSignedIn = false;
 
     render(
@@ -254,14 +262,13 @@ describe("Sidebar proposal navigation", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+    pinSidebar();
 
-    expect(screen.getByTestId("sidebar-location")).toHaveTextContent(
-      "/sign-in::null",
+    expect(screen.getByText("Saved proposal beta")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+      "href",
+      "/settings",
     );
-    expect(
-      screen.getByRole("button", { name: "Sign In" }),
-    ).toBeInTheDocument();
   });
 
   it("shows the sidebar brand label only when hovered or pinned open", () => {
@@ -275,7 +282,7 @@ describe("Sidebar proposal navigation", () => {
       </MemoryRouter>,
     );
 
-    const toggle = screen.getByRole("button", { name: "Pin sidebar" });
+    const toggle = screen.getByRole("button", { name: "Open sidebar" });
     expect(toggle.querySelector(".sb-toggle__collapsed-logo")).not.toBeNull();
     expect(
       (toggle.querySelector(".sb-toggle__collapsed-logo") as HTMLImageElement)
@@ -283,10 +290,11 @@ describe("Sidebar proposal navigation", () => {
     ).toContain("twoweeks-logo-light.png");
     expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
 
-    fireEvent.mouseEnter(document.querySelector("aside.sb")!);
+    fireEvent.click(toggle);
 
-    expect(toggle).toHaveClass("sb-toggle--labeled");
-    expect(toggle).toHaveTextContent("two weeks.");
+    const expandedToggle = screen.getByRole("button", { name: "Close sidebar" });
+    expect(expandedToggle).toHaveClass("sb-toggle--labeled");
+    expect(expandedToggle).toHaveTextContent("two weeks.");
     expect(screen.getByText("two weeks")).toHaveClass("sb-toggle__label");
 
     unmount();
@@ -302,7 +310,7 @@ describe("Sidebar proposal navigation", () => {
     );
 
     const collapsedToggle = screen.getByRole("button", {
-      name: "Pin sidebar",
+      name: "Open sidebar",
     });
     expect(
       collapsedToggle.querySelector(".sb-toggle__collapsed-logo"),
@@ -340,16 +348,9 @@ describe("Sidebar proposal navigation", () => {
       expect(container.querySelector(".sb__nav--stack")).not.toBeNull();
       expect(container.querySelector(".sb__nav--rail")).toBeNull();
 
-      fireEvent.click(screen.getAllByRole("button", { name: "Unpin sidebar" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: "Close sidebar" })[0]);
 
       expect(container.querySelector(".sb--collapsed")).not.toBeNull();
-      expect(container.querySelector(".sb__nav--stack")).not.toBeNull();
-      expect(container.querySelector(".sb__nav--rail")).toBeNull();
-
-      act(() => {
-        vi.advanceTimersByTime(320);
-      });
-
       expect(container.querySelector(".sb__nav--stack")).toBeNull();
       expect(container.querySelector(".sb__nav--rail")).not.toBeNull();
     } finally {
@@ -491,7 +492,7 @@ describe("Sidebar proposal navigation", () => {
     );
   });
 
-  it("keeps draft proposals out of the saved proposal list", () => {
+  it("keeps recents focused on saved proposal rows", () => {
     writeProposalDraftToStorage();
 
     render(
@@ -506,9 +507,11 @@ describe("Sidebar proposal navigation", () => {
 
     pinSidebar();
 
-    expect(screen.getByText("Operations Associate Proposal")).toBeInTheDocument();
-    expect(screen.getByText("Saved proposal beta")).toBeInTheDocument();
     expect(screen.queryByText("Server draft proposal")).not.toBeInTheDocument();
+    expect(screen.getByText("Saved proposal beta").closest("a")).toHaveAttribute(
+      "href",
+      "/proposal?view=saved&id=proposal_saved",
+    );
   });
 
   it("shows the just-saved proposal in the saved list immediately when the saved route opens", () => {
@@ -526,9 +529,11 @@ describe("Sidebar proposal navigation", () => {
 
     pinSidebar();
 
-    expect(
-      screen.getByText("Operations Associate Proposal").closest("a"),
-    ).toHaveAttribute("href", "/proposal?view=saved&id=proposal_new");
+    expect(screen.queryByText("Operations Associate Proposal")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Proposal forge/ })).toHaveAttribute(
+      "href",
+      "/proposal?view=saved&id=proposal_new",
+    );
   });
 
   it("uses in-place active rows instead of a separate Current section", () => {

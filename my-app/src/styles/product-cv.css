@@ -605,7 +605,7 @@
 }
 
 .dasti-cv-rail-label {
-  color: var(--ac);
+  color: var(--am);
   font-size: var(--tx);
   line-height: var(--lx);
   font-weight: var(--font-label-weight);
@@ -3657,7 +3657,7 @@
 .dasti-import-review-trigger[data-review-state="required"] {
   border-color: color-mix(in srgb, var(--wa) 34%, transparent);
   background: color-mix(in srgb, var(--wab) 72%, var(--color-surface) 28%);
-  color: var(--wat);
+  color: var(--am);
 }
 .dasti-import-review-trigger[data-review-state="required"]:hover,
 .dasti-import-review-trigger[data-review-state="required"]:focus-visible {
@@ -3670,7 +3670,7 @@
   color: var(--wat);
 }
 .dasti-import-review-trigger[data-review-state="acknowledged"] {
-  color: var(--tm2);
+  color: var(--am);
 }
 .achievements-display .ProseMirror {
   font-family: inherit;

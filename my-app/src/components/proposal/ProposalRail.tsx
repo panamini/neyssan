@@ -122,7 +122,6 @@ export function ProposalRail({
 }: ProposalRailProps): JSX.Element {
   const [activeTab, setActiveTab] = React.useState<"draft" | "ask" | "header">("draft");
   const [jobContextOpen, setJobContextOpen] = React.useState(false);
-  const [headerDetailsOpen, setHeaderDetailsOpen] = React.useState(true);
   const jobMeta = [company, location].filter(Boolean).join(" · ");
   const compactJobSummary = jobSummary?.trim() || jobMeta || null;
   const cvMenuSections = React.useMemo<MenuSection[]>(() => {
@@ -203,6 +202,7 @@ export function ProposalRail({
   const lengthMenuSections = React.useMemo<MenuSection[]>(
     () => [
       {
+        label: "Length",
         items: lengthOptions.map((option) => ({
           id: option.id,
           role: "menuitemradio" as const,
@@ -216,6 +216,27 @@ export function ProposalRail({
     [lengthOptions, onSelectLength],
   );
 
+  const renderLengthSelect = (size: "sm" | "md") => (
+    <Menu
+      ariaLabel="Length"
+      align="start"
+      side="bottom"
+      matchTriggerWidth={size === "md"}
+      sections={lengthMenuSections}
+      trigger={
+        <button
+          type="button"
+          id={size === "sm" ? "proposal-rail-ask-length" : "proposal-rail-draft-length"}
+          className={`ds-btn ds-btn--${size} ds-btn--secondary dasti-proposal-skeleton-rail__length-select dasti-toolbar-tooltip-trigger--above`}
+          data-toolbar-tooltip={selectedLengthOption?.description ?? "Proposal length"}
+        >
+          <span>{selectedLengthOption?.label ?? "Medium"}</span>
+          <ChevronDown className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
+        </button>
+      }
+    />
+  );
+
   const renderToneSelect = (size: "sm" | "md") => (
     <Menu
       ariaLabel="Tone"
@@ -226,8 +247,8 @@ export function ProposalRail({
       trigger={
         <button
           type="button"
-          className={`ds-btn ds-btn--${size} ds-btn--secondary dasti-proposal-skeleton-rail__tone-select`}
-          title={selectedToneOption?.description ?? undefined}
+          className={`ds-btn ds-btn--${size} ds-btn--secondary dasti-proposal-skeleton-rail__tone-select dasti-toolbar-tooltip-trigger--above`}
+          data-toolbar-tooltip={selectedToneOption?.description ?? "Proposal tone"}
         >
           <span>{toneLabel}</span>
           <ChevronDown className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
@@ -237,7 +258,15 @@ export function ProposalRail({
   );
 
   const renderVariableField = (field: ProposalRailVariableField) => (
-    <label key={field.id} className="dasti-proposal-skeleton-rail__variable-field">
+    <label
+      key={field.id}
+      className={[
+        "dasti-proposal-skeleton-rail__variable-field",
+        field.multiline ? "dasti-proposal-skeleton-rail__variable-field--wide" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {field.multiline ? (
         <textarea
           className="ds-field ds-field--textarea"
@@ -349,15 +378,16 @@ export function ProposalRail({
                     target="_blank"
                     rel="noreferrer"
                     className="dasti-proposal-skeleton-rail__job-link"
-                    aria-label={`Open ${sourceLabel || "source"}`}
+                    aria-label={`Open original job offer${sourceLabel ? ` on ${sourceLabel}` : ""}`}
+                    title={`Open original job offer${sourceLabel ? ` on ${sourceLabel}` : ""}`}
                   >
-                    <span>{sourceLabel || "Source"}</span>
+                    <span>Source</span>
                     <ArrowSquareOut className="dasti-proposal-skeleton-rail__link-icon" aria-hidden="true" />
                   </a>
                 ) : null}
                 {jobHref ? (
                   <a href={jobHref} className="dasti-proposal-skeleton-rail__job-link">
-                    <span>Open in Jobs</span>
+                    <span>Job page</span>
                     <Briefcase className="dasti-proposal-skeleton-rail__link-icon" aria-hidden="true" />
                   </a>
                 ) : null}
@@ -385,6 +415,7 @@ export function ProposalRail({
                 className="ds-field"
                 value={draftTitle}
                 placeholder="Draft title"
+                title="Name this draft."
                 onChange={(event) => onDraftTitleChange(event.target.value)}
                 onBlur={onDraftTitleCommit}
                 aria-label="Draft title"
@@ -401,10 +432,8 @@ export function ProposalRail({
                   <button
                     type="button"
                     className="ds-btn ds-btn--md ds-btn--secondary dasti-proposal-skeleton-rail__cv-button"
+                    title="Choose the CV used for this draft."
                   >
-                    <span className="dasti-proposal-skeleton-rail__cv-thumb">
-                      <FileUser size={18} strokeWidth={1.7} aria-hidden="true" />
-                    </span>
                     <span>
                       <strong>{sourceCvTitle || "Pick a CV"}</strong>
                     </span>
@@ -418,10 +447,14 @@ export function ProposalRail({
             <div className="dasti-proposal-skeleton-rail__control-stack">
               {renderToneSelect("md")}
             </div>
+            <div className="dasti-proposal-skeleton-rail__control-stack">
+              {renderLengthSelect("md")}
+            </div>
             <Button
               type="button"
               variant="primary"
               size="md"
+              title="Generate a draft from this job and CV."
               disabled={generateDisabled}
               data-state={generateState}
               onClick={onGenerateDraft}
@@ -435,73 +468,57 @@ export function ProposalRail({
       ) : null}
 
       {activeTab === "ask" ? (
-      <section className="forge__rail-section dasti-proposal-skeleton-rail__section dasti-proposal-skeleton-rail__ask-section">
+      <section className="forge__rail-section dasti-proposal-skeleton-rail__section dasti-proposal-skeleton-rail__ask-section dasti-toolbar--surface-tooltips">
         <div className="dasti-proposal-skeleton-rail__ask-header">
           <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Ask</div>
+        </div>
+        <div className="dasti-proposal-skeleton-rail__ask-hub">
+          <label
+            className="dasti-proposal-skeleton-rail__ask-field dasti-toolbar-tooltip-trigger--above"
+            data-toolbar-tooltip="Describe the change you want to apply to the current draft."
+          >
+            <span className="sr-only">Ask AI</span>
+            <textarea
+              className="ds-field ds-field--textarea"
+              value={askAiValue}
+              placeholder={askAiPlaceholder}
+              disabled={askAiDisabled || askAiBusy}
+              onChange={(event) => onAskAiChange(event.target.value)}
+            />
+          </label>
           <div className="dasti-proposal-skeleton-rail__ask-controls">
-          <Menu
-            ariaLabel="Length"
-            align="end"
-            side="bottom"
-            sections={lengthMenuSections}
-            trigger={
-              <button
-                type="button"
-                id="proposal-rail-length"
-                className="ds-btn ds-btn--sm ds-btn--secondary dasti-proposal-skeleton-rail__length-select"
-                title={selectedLengthOption?.description ?? "Proposal length"}
-              >
-                <span>{selectedLengthOption?.label ?? "Medium"}</span>
-                <ChevronDown className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
-              </button>
-            }
-          />
-          {renderToneSelect("sm")}
+            {renderLengthSelect("sm")}
+            {renderToneSelect("sm")}
           </div>
         </div>
-        <label className="dasti-proposal-skeleton-rail__ask-field">
-          <span className="sr-only">Ask AI</span>
-          <textarea
-            className="ds-field ds-field--textarea"
-            value={askAiValue}
-            placeholder={askAiPlaceholder}
-            disabled={askAiDisabled || askAiBusy}
-            onChange={(event) => onAskAiChange(event.target.value)}
-          />
-        </label>
         <Button
           type="button"
           variant="primary"
           size="md"
+          data-toolbar-tooltip={askAiHint}
           disabled={askAiDisabled || askAiBusy || !askAiValue.trim()}
           onClick={onAskAiSubmit}
         >
           {askAiBusy ? "Applying…" : "Send"}
         </Button>
-        <div className="dasti-proposal-skeleton-rail__hint">{askAiHint}</div>
       </section>
       ) : null}
 
       {activeTab === "header" ? (
       <section className="forge__rail-section dasti-proposal-skeleton-rail__section dasti-proposal-skeleton-rail__header-details">
-        <button
-          type="button"
-          className="dasti-proposal-skeleton-rail__summary-row"
-          aria-expanded={headerDetailsOpen}
-          aria-controls="proposal-rail-header-details"
-          onClick={() => setHeaderDetailsOpen((current) => !current)}
-        >
+        <div className="dasti-proposal-skeleton-rail__summary-row">
           <span className="dasti-proposal-skeleton-rail__summary-copy">
             <span className="forge__rail-label dasti-proposal-skeleton-rail__label">Heading</span>
           </span>
-          <ChevronDown className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
-        </button>
-        {headerDetailsOpen ? (
-          <div id="proposal-rail-header-details" className="dasti-proposal-skeleton-rail__drawer-body">
+        </div>
+        <div className="dasti-proposal-skeleton-rail__drawer-body">
             {variableFields.length > 0 ? (
               <div className="dasti-proposal-skeleton-rail__variables">
                 {headingFieldGroups.map((group) => (
-                  <div key={group.id} className="dasti-proposal-skeleton-rail__variable-group">
+                  <div
+                    key={group.id}
+                    className={`dasti-proposal-skeleton-rail__variable-group dasti-proposal-skeleton-rail__variable-group--${group.id}`}
+                  >
                     <div className="dasti-proposal-skeleton-rail__variable-group-title">
                       {group.label}
                     </div>
@@ -527,7 +544,6 @@ export function ProposalRail({
               </p>
             )}
           </div>
-        ) : null}
       </section>
       ) : null}
     </aside>

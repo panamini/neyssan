@@ -10,8 +10,6 @@ import {
   Gear,
   ImagesSquare,
   Moon,
-  Pin,
-  PinOff,
   SquaresFour,
   Sun,
 } from "@/lib/icons";
@@ -41,7 +39,6 @@ import collapsedLogoLightUrl from "../assets/logo/twoweeks-logo-light.png";
 
 const MAX_RECENT_ITEMS = 3;
 const MAX_MIXED_RECENT_ITEMS = 4;
-const SIDEBAR_CONTENT_SWAP_DELAY_MS = 320;
 
 type ProposalRecord = {
   _id: Id<"proposals">;
@@ -258,7 +255,6 @@ export const Sidebar: React.FC = () => {
   const { cvs, currentCv, currentCvId, loadCv, createNewCv, deleteCv } =
     useCvLibrary();
   const [sidebarPinned, setSidebarPinned] = React.useState(false);
-  const [sidebarHovered, setSidebarHovered] = React.useState(false);
   const [brandPeriodAnimating, setBrandPeriodAnimating] = React.useState(false);
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
@@ -304,6 +300,7 @@ export const Sidebar: React.FC = () => {
       ? "saved"
       : null;
   const selectedProposalId = params.get("id");
+  const selectedDraftProposalId = params.get("draftId");
   const selectedResumeId = params.get("id");
 
   React.useEffect(() => {
@@ -373,9 +370,9 @@ export const Sidebar: React.FC = () => {
     (base: string) => pathname === base || pathname.startsWith(`${base}/`),
     [pathname],
   );
-  const forcedCollapsed = viewportWidth < 768;
+  const forcedCollapsed = false;
   const hideSidebar = viewportWidth < 480;
-  const sidebarCollapsed = forcedCollapsed || (!sidebarPinned && !sidebarHovered);
+  const sidebarCollapsed = !sidebarPinned;
   const [renderCollapsedContent, setRenderCollapsedContent] = React.useState(
     () => sidebarCollapsed,
   );
@@ -395,16 +392,8 @@ export const Sidebar: React.FC = () => {
       return undefined;
     }
 
-    if (forcedCollapsed || typeof window === "undefined") {
-      setRenderCollapsedContent(true);
-      return undefined;
-    }
-
-    const swapTimer = window.setTimeout(() => {
-      setRenderCollapsedContent(true);
-    }, SIDEBAR_CONTENT_SWAP_DELAY_MS);
-
-    return () => window.clearTimeout(swapTimer);
+    setRenderCollapsedContent(true);
+    return undefined;
   }, [forcedCollapsed, sidebarCollapsed]);
 
   const handleOpenProposalWorkspace = React.useCallback(() => {
@@ -589,44 +578,15 @@ export const Sidebar: React.FC = () => {
     isProposalRoute && proposalView === "saved" && Boolean(selectedProposalId);
   const effectiveProposalOutputDraft = proposalOutputDraft;
   const effectiveProposalComposeDraft = proposalComposeDraft;
-  const optimisticSavedProposal = React.useMemo<ProposalRecord | null>(() => {
-    if (!selectedProposalId || proposalView !== "saved") {
-      return null;
-    }
-
-    if (
-      !effectiveProposalOutputDraft?.generatedProposalId ||
-      String(effectiveProposalOutputDraft.generatedProposalId) !==
-        String(selectedProposalId)
-    ) {
-      return null;
-    }
-
-    const normalizedTitle =
-      normalizeLabel(effectiveProposalOutputDraft.proposalDocumentTitle) ||
-      normalizeLabel(effectiveProposalComposeDraft?.jobTitle) ||
-      "Saved cover letter";
-    const optimisticTimestamp = Date.now();
-
-    return {
-      _id: selectedProposalId as Id<"proposals">,
-      _creationTime: optimisticTimestamp,
-      title: normalizedTitle,
-      updatedAt: optimisticTimestamp,
-      status: "saved",
-    };
-  }, [
-    effectiveProposalComposeDraft?.jobTitle,
-    effectiveProposalOutputDraft?.generatedProposalId,
-    effectiveProposalOutputDraft?.proposalDocumentTitle,
-    proposalView,
-    selectedProposalId,
-  ]);
+  const optimisticSavedProposal = React.useMemo<ProposalRecord | null>(
+    () => null,
+    [],
+  );
   const sortedProposals = React.useMemo(() => {
     const mergedProposals = new Map<string, ProposalRecord>();
 
     for (const proposal of proposals ?? []) {
-      if (proposal.status === "saved") {
+      if (proposal.status === "draft" || proposal.status === "saved") {
         mergedProposals.set(String(proposal._id), proposal);
       }
     }
@@ -639,6 +599,11 @@ export const Sidebar: React.FC = () => {
     }
 
     return [...mergedProposals.values()].sort((left, right) => {
+      const leftStatusRank = left.status === "saved" ? 0 : 1;
+      const rightStatusRank = right.status === "saved" ? 0 : 1;
+      if (leftStatusRank !== rightStatusRank) {
+        return leftStatusRank - rightStatusRank;
+      }
       const rightTime = toTimestamp(right.updatedAt ?? right._creationTime);
       const leftTime = toTimestamp(left.updatedAt ?? left._creationTime);
       return rightTime - leftTime;
@@ -651,6 +616,7 @@ export const Sidebar: React.FC = () => {
         proposalId: proposal._id,
         key: String(proposal._id),
         rawTitle: normalizeLabel(proposal.title),
+        status: proposal.status === "draft" ? "draft" : "saved",
       })),
     [sortedProposals],
   );
@@ -685,13 +651,25 @@ export const Sidebar: React.FC = () => {
           ?.rawTitle,
       ) || "";
     activeProposalHref = buildSavedProposalHref(selectedProposalId);
+  } else if (isProposalRoute && selectedDraftProposalId) {
+    activeProposalKey = selectedDraftProposalId;
+    activeProposalRawTitle =
+      normalizeLabel(
+        proposalDocs.find((proposal) => proposal.key === selectedDraftProposalId)
+          ?.rawTitle,
+      ) || "";
+    activeProposalHref = `/proposal?draftId=${encodeURIComponent(selectedDraftProposalId)}`;
   } else if (hasEditableProposalDraft) {
     activeProposalKey = "__draft__";
     activeProposalRawTitle = outputDraftTitle || composeJobTitle;
   }
 
   const proposalDocsForTitles = React.useMemo(() => {
-    const docs = proposalDocs.map(({ key, rawTitle }) => ({ key, rawTitle }));
+    const docs = proposalDocs.map(({ key, rawTitle, status }) => ({
+      key,
+      rawTitle,
+      status,
+    }));
     if (
       hasEditableProposalDraft &&
       !docs.some((doc) => doc.key === "__draft__")
@@ -730,6 +708,9 @@ export const Sidebar: React.FC = () => {
   const activeProposalTitle = activeProposalKey
     ? proposalTitles.get(activeProposalKey) ?? "Untitled cover letter"
     : null;
+  const activeProposalServerStatus = activeProposalKey
+    ? proposalDocs.find((proposal) => proposal.key === activeProposalKey)?.status ?? null
+    : null;
 
   const recentProposalItems = React.useMemo(
     () =>
@@ -739,7 +720,11 @@ export const Sidebar: React.FC = () => {
           key: doc.key,
           title: proposalTitles.get(doc.key) ?? "Untitled cover letter",
           href:
-            doc.key === "__draft__" ? "/proposal" : buildSavedProposalHref(doc.key),
+            doc.key === "__draft__"
+              ? "/proposal"
+              : doc.status === "draft"
+                ? `/proposal?draftId=${encodeURIComponent(doc.key)}`
+                : buildSavedProposalHref(doc.key),
           onFollow:
             doc.key === "__draft__" ? handleOpenProposalWorkspace : undefined,
           onDelete:
@@ -757,7 +742,9 @@ export const Sidebar: React.FC = () => {
           isActive:
             doc.key === "__draft__"
               ? activeProposalKey === "__draft__"
-              : highlightedSavedProposalKey === doc.key,
+              : doc.status === "draft"
+                ? isProposalRoute && params.get("draftId") === doc.key
+                : highlightedSavedProposalKey === doc.key,
           markerTone:
             doc.key === "__draft__" && activeProposalKey !== "__draft__"
               ? "muted"
@@ -769,6 +756,8 @@ export const Sidebar: React.FC = () => {
       handleDeleteProposalWorkspace,
       handleOpenProposalWorkspace,
       highlightedSavedProposalKey,
+      isProposalRoute,
+      params,
       proposalDocsForTitles,
       proposalTitles,
       sortedProposals,
@@ -791,7 +780,10 @@ export const Sidebar: React.FC = () => {
       items.push({
         key: `proposal:${activeProposalKey}`,
         title: activeProposalTitle,
-        meta: activeProposalKey === "__draft__" ? "proposal draft" : "saved proposal",
+        meta:
+          activeProposalKey === "__draft__" || activeProposalServerStatus === "draft"
+            ? "proposal draft"
+            : "saved proposal",
         href: activeProposalHref,
         badge: "P",
         onFollow:
@@ -857,6 +849,7 @@ export const Sidebar: React.FC = () => {
   }, [
     activeProposalHref,
     activeProposalKey,
+    activeProposalServerStatus,
     activeProposalTitle,
     activeResumeHref,
     activeResumeKey,
@@ -895,8 +888,6 @@ export const Sidebar: React.FC = () => {
         forcedCollapsed && "sb--forced-collapsed",
         sidebarPinned && "sb--pinned",
       )}
-      onMouseEnter={() => setSidebarHovered(true)}
-      onMouseLeave={() => setSidebarHovered(false)}
       data-pinned={sidebarPinned ? "true" : "false"}
     >
       <div className="sb__top">
@@ -908,13 +899,11 @@ export const Sidebar: React.FC = () => {
             sidebarPinned ? "sb-toggle--collapse" : "sb-toggle--expand",
           )}
           onClick={() => {
-            if (!forcedCollapsed) {
-              pulseBrandPeriod();
-              setSidebarPinned((current) => !current);
-            }
+            pulseBrandPeriod();
+            setSidebarPinned((current) => !current);
           }}
-          title={sidebarPinned ? "Unpin sidebar" : "Pin sidebar"}
-          aria-label={sidebarPinned ? "Unpin sidebar" : "Pin sidebar"}
+          title={sidebarCollapsed ? "Open sidebar" : "Close sidebar"}
+          aria-label={sidebarCollapsed ? "Open sidebar" : "Close sidebar"}
         >
           <span className="sb-toggle__label" aria-hidden="true">
             {sidebarCollapsed ? (
@@ -1107,23 +1096,6 @@ export const Sidebar: React.FC = () => {
             </ul>
           </section>
 
-          <div className="sb-section sb-section--pin">
-            <button
-              type="button"
-              className="sb-section__action"
-              onClick={() => {
-                pulseBrandPeriod();
-                setSidebarPinned((current) => !current);
-              }}
-            >
-              {sidebarPinned ? (
-                <PinOff size={15} strokeWidth={1.5} aria-hidden="true" />
-              ) : (
-                <Pin size={15} strokeWidth={1.5} aria-hidden="true" />
-              )}
-              <span>{sidebarPinned ? "Unpin sidebar" : "Pin sidebar"}</span>
-            </button>
-          </div>
         </nav>
       )}
 

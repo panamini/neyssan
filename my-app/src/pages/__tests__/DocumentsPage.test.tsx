@@ -53,7 +53,7 @@ vi.mock("../../lib/proposal-workspace-state", () => ({
   createProposalWorkspaceResetState: () => ({ reset: true }),
   readStoredProposalComposeDraft: () => ({
     jobTitle: "Draft product designer",
-    sourceJobDescription: "Draft job context.",
+    jobDescription: "Draft job context.",
   }),
   startFreshProposalWorkspace: vi.fn(),
 }));

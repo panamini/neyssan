@@ -296,6 +296,7 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_job", ["jobId"])
+    .index("by_job_and_status", ["jobId", "status"])
     .index("by_status", ["status"])
     .index("by_platform", ["metadata.platform"])
     .index("by_created", ["createdAt"])

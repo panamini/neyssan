@@ -7,13 +7,16 @@ import {
   within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
 import {
   readStoredProposalOutputDraft,
   writeStoredProposalOutputDraft,
 } from "../../lib/proposal-output-draft";
-import { PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY } from "../../lib/proposal-workspace-state";
+import {
+  PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+  readStoredProposalComposeDraft,
+} from "../../lib/proposal-workspace-state";
 
 const ATTACHED_CV_STORAGE_KEY = "dasti:proposal-attached-cv-id:v1";
 
@@ -326,10 +329,79 @@ vi.mock("../../components/ProposalsList", () => ({
   ),
 }));
 
+function LocationProbe(): JSX.Element {
+  const location = useLocation();
+  return (
+    <div data-testid="proposal-location">
+      {`${location.pathname}${location.search}`}
+    </div>
+  );
+}
+
 describe("ProposalForge saved view", () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockAttachedCvId = null;
+  });
+
+  it("opens a saved proposal without mutating the current draft", async () => {
+    window.localStorage.setItem(
+      PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        jobTitle: "Existing draft title",
+        jobDescription: "Existing draft brief.",
+        proposalType: "cover_letter",
+        voicePreset: "signature",
+      }),
+    );
+    writeStoredProposalOutputDraft({
+      proposalContent: "Existing draft output.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: null,
+      proposalVerbatiStyle: null,
+      proposalStyleLinkMode: "inherit_cv",
+      proposalStyleChoice: "auto",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Existing draft output",
+      proposalDocumentMeta: "Compose output",
+      generatedProposalId: "proposal_current_draft",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <LocationProbe />
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
+        "proposal_beta",
+      );
+    });
+
+    expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+      "/proposal?view=saved&id=proposal_beta",
+    );
+    expect(readStoredProposalComposeDraft()).toMatchObject({
+      jobTitle: "Existing draft title",
+      jobDescription: "Existing draft brief.",
+    });
+    expect(readStoredProposalOutputDraft()).toMatchObject({
+      proposalContent: "Existing draft output.",
+      generatedProposalId: "proposal_current_draft",
+    });
   });
 
   it("renders explicit saved proposal actions beside the saved stack", () => {
@@ -369,6 +441,7 @@ describe("ProposalForge saved view", () => {
     expect(actionButtons).toEqual([
       "Duplicate to draft",
       "Export proposal",
+      "Delete proposal",
       "Share proposal",
     ]);
     expect(toolbar).not.toHaveTextContent("Based on CV: Alex Martin Resume");

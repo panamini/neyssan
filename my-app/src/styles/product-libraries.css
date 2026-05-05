@@ -745,7 +745,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--tm2);
+  color: var(--am);
 }
 
 .dasti-proposal-library-info-card__title,
@@ -1314,7 +1314,7 @@
 }
 
 .dasti-library-card__eyebrow {
-  color: var(--ac);
+  color: var(--am);
 }
 
 .dasti-library-card__title,

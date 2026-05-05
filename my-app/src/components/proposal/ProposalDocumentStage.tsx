@@ -11,6 +11,7 @@ import {
   PaperPlaneRight,
   PenLine,
   ShareFat,
+  TrashSimple,
 } from "@/lib/icons";
 
 type SafeSendState = "clear" | "warn" | "danger";
@@ -33,9 +34,12 @@ type ProposalDocumentStageProps = {
   mode: "preview" | "edit";
   exporting: boolean;
   hasProposalContent: boolean;
+  styleControl?: React.ReactNode;
   children: React.ReactNode;
   onModeChange: (mode: "preview" | "edit") => void;
   onCopyText: () => void;
+  onDeleteDraft?: () => void;
+  onSaveToLibrary?: () => void;
   onExportPdf: (mode: "ats" | "styled") => void;
   onExportDocx: () => void;
   sourceJobLinked?: boolean;
@@ -269,9 +273,12 @@ export function ProposalDocumentStage({
   mode,
   exporting,
   hasProposalContent,
+  styleControl = null,
   children,
   onModeChange,
   onCopyText,
+  onDeleteDraft,
+  onSaveToLibrary,
   onExportPdf,
   onExportDocx,
   sourceJobLinked = false,
@@ -371,6 +378,11 @@ export function ProposalDocumentStage({
               <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
             </button>
           </div>
+          {styleControl ? (
+            <div className="dasti-proposal-skeleton-stage__style-control">
+              {styleControl}
+            </div>
+          ) : null}
           {mode === "edit" ? (
             <>
               <span className="dasti-icon-cluster__divider" aria-hidden="true" />
@@ -394,6 +406,37 @@ export function ProposalDocumentStage({
               >
                 <ArrowUDownRight size={14} strokeWidth={1.8} aria-hidden="true" />
               </button>
+            </>
+          ) : null}
+          {onDeleteDraft || onSaveToLibrary ? (
+            <>
+              <span className="dasti-icon-cluster__divider" aria-hidden="true" />
+              {onSaveToLibrary ? (
+                <button
+                  type="button"
+                  className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
+                  onClick={onSaveToLibrary}
+                  disabled={!hasProposalContent}
+                  aria-label="Save proposal to library"
+                  title="Save proposal to library"
+                  data-toolbar-tooltip="Save to library"
+                >
+                  <ClipboardText size={14} strokeWidth={1.8} aria-hidden="true" />
+                </button>
+              ) : null}
+              {onDeleteDraft ? (
+                <button
+                  type="button"
+                  className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
+                  onClick={onDeleteDraft}
+                  disabled={!hasProposalContent}
+                  aria-label="Delete draft"
+                  title="Delete draft"
+                  data-toolbar-tooltip="Delete draft"
+                >
+                  <TrashSimple size={14} strokeWidth={1.8} aria-hidden="true" />
+                </button>
+              ) : null}
             </>
           ) : null}
         </div>
