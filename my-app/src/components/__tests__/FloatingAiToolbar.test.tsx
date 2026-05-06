@@ -94,7 +94,7 @@ describe("FloatingAiToolbar", () => {
     expect(screen.queryByRole("button", { name: "Tailor" })).toBeNull();
   });
 
-  it("does not add contextual job actions when job context actions are enabled", async () => {
+  it("adds contextual job actions when job context actions are enabled", async () => {
     const onRunAction = vi.fn();
 
     render(
@@ -113,8 +113,8 @@ describe("FloatingAiToolbar", () => {
     expect(screen.getByRole("button", { name: "Shorten" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Fix" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ask" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Tailor" })).toBeNull();
-    expect(screen.getAllByRole("button")).toHaveLength(4);
+    expect(screen.getByRole("button", { name: "Tailor" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button")).toHaveLength(5);
     expect(onRunAction).not.toHaveBeenCalled();
   });
 

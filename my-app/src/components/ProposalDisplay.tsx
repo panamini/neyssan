@@ -43,6 +43,7 @@ import {
   getTextareaSelectionState,
   isInlineAiToolbarActiveElement,
   isPrimaryPointerPressed,
+  type EditorSelectionAnchor,
 } from "../lib/editor-ai-selection";
 import { resolveProposalCharacterLimitSelection } from "../../convex/lib/proposals/generationControls";
 import type { ProposalApplicantHeaderData } from "../lib/proposal-personalization";
@@ -54,7 +55,6 @@ import {
 } from "../lib/proposal-header";
 import { collectProposalFontDebugSnapshot } from "../lib/proposal-font-debug";
 import type { ProposalSignatureSettings } from "../lib/proposal-signature-settings";
-import AiSuggestionCard from "./ai/AiSuggestionCard";
 import {
   createAiUndoSnapshot,
   normalizeEditorAiTextResult,
@@ -180,9 +180,164 @@ type ProposalAiSuggestion = {
   beforeText: string;
   afterText: string;
   selection: { start: number; end: number };
+  anchor: EditorSelectionAnchor;
   status: "preview" | "accepted";
   undoSnapshot?: AiUndoSnapshot<string>;
 };
+
+function isInlineAiToolbarTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement
+    ? Boolean(target.closest("[data-inline-ai-toolbar='true']"))
+    : false;
+}
+
+function getInlineProofingTextParts(
+  content: string,
+  suggestion: ProposalAiSuggestion,
+): {
+  before: string;
+  selected: string;
+  replacement: string;
+  after: string;
+} {
+  const start = Math.max(0, Math.min(suggestion.selection.start, content.length));
+  const end = Math.max(start, Math.min(suggestion.selection.end, content.length));
+
+  if (suggestion.status === "accepted") {
+    const replacementEnd = Math.max(
+      start,
+      Math.min(start + suggestion.afterText.length, content.length),
+    );
+
+    return {
+      before: content.slice(0, start),
+      selected: content.slice(start, replacementEnd),
+      replacement: "",
+      after: content.slice(replacementEnd),
+    };
+  }
+
+  return {
+    before: content.slice(0, start),
+    selected: content.slice(start, end),
+    replacement: suggestion.afterText,
+    after: content.slice(end),
+  };
+}
+
+function ProposalInlineProofingOverlay({
+  content,
+  documentTypography,
+  suggestion,
+  scrollTop,
+  onAccept,
+  onDiscard,
+  onDismiss,
+  onUndo,
+}: {
+  content: string;
+  documentTypography: ReturnType<typeof getProposalDocumentTypography>;
+  suggestion: ProposalAiSuggestion;
+  scrollTop: number;
+  onAccept: () => void;
+  onDiscard: () => void;
+  onDismiss: () => void;
+  onUndo: () => void;
+}) {
+  const parts = getInlineProofingTextParts(content, suggestion);
+  const isAccepted = suggestion.status === "accepted";
+  const textRunStyle: React.CSSProperties = {
+    fontFamily: documentTypography.fontFamily,
+    fontSize: "var(--tb)",
+    lineHeight: documentTypography.lineHeight,
+    fontWeight: documentTypography.fontWeight,
+    letterSpacing: documentTypography.letterSpacing,
+    color: "var(--proposal-document-ink)",
+  };
+
+  return (
+    <div
+      className="dasti-proposal-inline-proofing"
+      data-state={suggestion.status}
+      role="group"
+      aria-label={`${suggestion.actionLabel} inline suggestion`}
+      style={{
+        transform: `translateY(-${scrollTop}px)`,
+      }}
+    >
+      <span className="dasti-proposal-inline-proofing__text-run" style={textRunStyle}>
+        {parts.before}
+      </span>
+      {isAccepted ? (
+        <span
+          className="dasti-proposal-inline-proofing__text-run dasti-proposal-inline-proofing__accepted"
+          style={textRunStyle}
+        >
+          {parts.selected}
+        </span>
+      ) : (
+        <>
+          <span
+            className="ds-diff-block__old dasti-proposal-inline-proofing__text-run dasti-proposal-inline-proofing__old"
+            style={textRunStyle}
+          >
+            {parts.selected}
+          </span>{" "}
+          <span
+            className="ds-diff-block__new dasti-proposal-inline-proofing__text-run dasti-proposal-inline-proofing__new"
+            style={textRunStyle}
+          >
+            {parts.replacement}
+          </span>
+        </>
+      )}
+      <span className="dasti-proposal-inline-proofing__actions">
+        {isAccepted ? (
+          <>
+            <span className="ds-status ds-status--success dasti-proposal-inline-proofing__status">
+              <span className="ds-status__dot" aria-hidden="true" />
+              Applied.
+            </span>
+            <button
+              type="button"
+              className="ds-btn ds-btn--sm ds-btn--ghost"
+              onClick={onUndo}
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              className="ds-btn ds-btn--sm ds-btn--ghost"
+              onClick={onDismiss}
+            >
+              Close
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="ds-btn ds-btn--sm ds-btn--ghost"
+              onClick={onDiscard}
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              className="ds-btn ds-btn--sm ds-btn--primary"
+              onClick={onAccept}
+            >
+              Accept
+            </button>
+          </>
+        )}
+      </span>
+      <span className="dasti-proposal-inline-proofing__text-run" style={textRunStyle}>
+        {parts.after}
+      </span>
+    </div>
+  );
+}
 
 function stripInlineMarkdown(text: string): string {
   return text
@@ -534,10 +689,12 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     React.useState(false);
   const [textareaSelectionState, setTextareaSelectionState] = React.useState<{
     text: string;
-    anchor: { left: number; top: number; bottom: number };
+    anchor: EditorSelectionAnchor;
     start: number;
     end: number;
   } | null>(null);
+  const [editableTextareaScrollTop, setEditableTextareaScrollTop] =
+    React.useState(0);
   const isZoomControlled = typeof controlledZoomIndex === "number";
   const zoomIndex = isZoomControlled
     ? clampProposalZoomIndex(controlledZoomIndex)
@@ -1202,14 +1359,18 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             start: textareaSelectionState.start,
             end: textareaSelectionState.end,
           },
+          anchor: textareaSelectionState.anchor,
         };
 
-        if (normalizedResult.applyMode === "preview_required") {
+        const shouldPreviewBeforeApply =
+          normalizedResult.applyMode === "preview_required" ||
+          normalizedResult.actionId === "shorten";
+
+        if (shouldPreviewBeforeApply) {
           setAiSuggestion({
             ...suggestionBase,
             status: "preview",
           });
-          setTextareaSelectionState(null);
           return;
         }
 
@@ -1232,7 +1393,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           applyMode: normalizedResult.applyMode,
           outputMode: normalizedResult.outputMode,
         });
-        setTextareaSelectionState(null);
 
         window.setTimeout(() => {
           const textarea = editableTextareaRef.current;
@@ -1323,6 +1483,24 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     });
     setAiSuggestion(null);
   }, [aiSuggestion]);
+
+  const handleDismissAiSuggestion = React.useCallback(() => {
+    setAiSuggestion(null);
+  }, []);
+
+  const inlineProofingOverlay =
+    isEditable && aiSuggestion && proposalContent ? (
+      <ProposalInlineProofingOverlay
+        content={proposalContent}
+        documentTypography={documentTypography}
+        suggestion={aiSuggestion}
+        scrollTop={editableTextareaScrollTop}
+        onAccept={handleAcceptAiSuggestion}
+        onDiscard={handleDiscardAiSuggestion}
+        onDismiss={handleDismissAiSuggestion}
+        onUndo={handleUndoAiSuggestion}
+      />
+    ) : null;
 
   const handlePreviewParagraphAction = React.useCallback(
     (label: string) => {
@@ -2185,6 +2363,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   </div>
                 ) : null}
                 <div className="dasti-proposal-editor-page__inner">
+                  {inlineProofingOverlay}
                   <textarea
                     ref={attachEditableTextarea}
                     value={proposalContent ?? ""}
@@ -2192,7 +2371,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                       setAiSuggestion(null);
                       onContentChange?.(event.target.value);
                     }}
-                    onBlur={() => {
+                    onBlur={(event) => {
+                      if (isInlineAiToolbarTarget(event.relatedTarget)) return;
                       setTextareaSelectionState(null);
                       onContentCommit?.();
                     }}
@@ -2200,11 +2380,22 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                     onMouseUp={() => scheduleTextareaSelectionCheck(true)}
                     onKeyUp={() => scheduleTextareaSelectionCheck(true)}
                     onScroll={() => {
+                      setEditableTextareaScrollTop(
+                        editableTextareaRef.current?.scrollTop ?? 0,
+                      );
                       updateEditableScrollEdges();
                       scheduleTextareaSelectionCheck();
                     }}
                     placeholder="Content appears here"
-                    className="dasti-proposal-sheet__body--editable dasti-proposal-editor-page__textarea"
+                    className={[
+                      "dasti-proposal-sheet__body--editable",
+                      "dasti-proposal-editor-page__textarea",
+                      aiSuggestion
+                        ? "dasti-proposal-inline-proofing__textarea--active"
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                     style={{
                       fontFamily: documentTypography.fontFamily,
                       fontSize: "var(--tb)",
@@ -2419,18 +2610,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             Pick a paragraph, then tap {queuedPreviewActionLabel.toLowerCase()}.
           </div>
         ) : null}
-        {aiSuggestion ? (
-          <AiSuggestionCard
-            compact
-            actionLabel={aiSuggestion.actionLabel}
-            beforeText={aiSuggestion.beforeText}
-            afterText={aiSuggestion.afterText}
-            status={aiSuggestion.status}
-            onAccept={handleAcceptAiSuggestion}
-            onDiscard={handleDiscardAiSuggestion}
-            onUndo={handleUndoAiSuggestion}
-          />
-        ) : null}
         {renderDocumentStage()}
       </div>
     ) : (
@@ -2440,51 +2619,53 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         data-scroll-bottom={activeScrollBottom ? "true" : "false"}
         style={activeScrollFadeStyle}
       >
-        {aiSuggestion ? (
-          <AiSuggestionCard
-            compact
-            actionLabel={aiSuggestion.actionLabel}
-            beforeText={aiSuggestion.beforeText}
-            afterText={aiSuggestion.afterText}
-            status={aiSuggestion.status}
-            onAccept={handleAcceptAiSuggestion}
-            onDiscard={handleDiscardAiSuggestion}
-            onUndo={handleUndoAiSuggestion}
+        <div className="dasti-proposal-inline-proofing-field">
+          {inlineProofingOverlay}
+          <textarea
+            ref={attachEditableTextarea}
+            value={proposalContent}
+            onChange={(event) => {
+              setAiSuggestion(null);
+              onContentChange?.(event.target.value);
+            }}
+            onBlur={(event) => {
+              if (isInlineAiToolbarTarget(event.relatedTarget)) return;
+              setTextareaSelectionState(null);
+              onContentCommit?.();
+            }}
+            onSelect={() => scheduleTextareaSelectionCheck(true)}
+            onMouseUp={() => scheduleTextareaSelectionCheck(true)}
+            onKeyUp={() => scheduleTextareaSelectionCheck(true)}
+            onScroll={() => {
+              setEditableTextareaScrollTop(
+                editableTextareaRef.current?.scrollTop ?? 0,
+              );
+            }}
+            placeholder="Content appears here"
+            className={[
+              "dasti-proposal-sheet__body--editable",
+              aiSuggestion ? "dasti-proposal-inline-proofing__textarea--active" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            style={{
+              fontFamily: documentTypography.fontFamily,
+              fontSize: "var(--tb)",
+              lineHeight: documentTypography.lineHeight,
+              fontWeight: documentTypography.fontWeight,
+              letterSpacing: documentTypography.letterSpacing,
+              color: "var(--ti)",
+              caretColor: "var(--ti)",
+              background: "transparent",
+              width: "100%",
+              outline: "none",
+              height: "100%",
+              resize: "none",
+              paddingTop: isLetterLike ? "clamp(28px, 6vh, 52px)" : undefined,
+              paddingBottom: "var(--proposal-sheet-content-bottom-inset)",
+            }}
           />
-        ) : null}
-        <textarea
-          ref={attachEditableTextarea}
-          value={proposalContent}
-          onChange={(event) => {
-            setAiSuggestion(null);
-            onContentChange?.(event.target.value);
-          }}
-          onBlur={() => {
-            setTextareaSelectionState(null);
-            onContentCommit?.();
-          }}
-          onSelect={() => scheduleTextareaSelectionCheck(true)}
-          onMouseUp={() => scheduleTextareaSelectionCheck(true)}
-          onKeyUp={() => scheduleTextareaSelectionCheck(true)}
-          placeholder="Content appears here"
-          className="dasti-proposal-sheet__body--editable"
-          style={{
-            fontFamily: documentTypography.fontFamily,
-            fontSize: "var(--tb)",
-            lineHeight: documentTypography.lineHeight,
-            fontWeight: documentTypography.fontWeight,
-            letterSpacing: documentTypography.letterSpacing,
-            color: "var(--ti)",
-            caretColor: "var(--ti)",
-            background: "transparent",
-            width: "100%",
-            outline: "none",
-            height: "100%",
-            resize: "none",
-            paddingTop: isLetterLike ? "clamp(28px, 6vh, 52px)" : undefined,
-            paddingBottom: "var(--proposal-sheet-content-bottom-inset)",
-          }}
-        />
+        </div>
       </div>
     );
   } else {
@@ -2562,7 +2743,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
   const viewerShell = (
     <div className="dasti-doc-viewer-shell">
-      {isEditable && textareaSelectionState ? (
+      {isEditable && textareaSelectionState && !aiSuggestion ? (
         <FloatingAiToolbar
           open
           anchor={textareaSelectionState.anchor}

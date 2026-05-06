@@ -2000,6 +2000,81 @@
   box-shadow: none !important;
 }
 
+.dasti-proposal-inline-proofing-field {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+}
+
+.dasti-proposal-inline-proofing {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ti);
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+}
+
+.dasti-proposal-editor-page__inner > .dasti-proposal-inline-proofing {
+  padding-inline: var(--proposal-output-editor-inline-padding);
+  padding-block-start: var(--proposal-output-editor-block-start);
+  padding-block-end: var(--proposal-output-editor-block-end);
+}
+
+.dasti-proposal-inline-proofing-field > .dasti-proposal-inline-proofing {
+  padding-bottom: var(--proposal-sheet-content-bottom-inset);
+}
+
+.dasti-proposal-inline-proofing__textarea--active {
+  color: transparent !important;
+}
+
+.dasti-proposal-inline-proofing__textarea--active::selection {
+  color: transparent;
+  background: transparent;
+}
+
+.dasti-proposal-inline-proofing__textarea--active::-moz-selection {
+  color: transparent;
+  background: transparent;
+}
+
+.dasti-proposal-inline-proofing__text-run {
+  font-synthesis: none;
+}
+
+.dasti-proposal-inline-proofing__old,
+.dasti-proposal-inline-proofing__new,
+.dasti-proposal-inline-proofing__accepted {
+  display: inline;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.dasti-proposal-inline-proofing__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-inline: var(--s2);
+  vertical-align: baseline;
+  pointer-events: auto;
+  font: var(--type-label);
+  letter-spacing: 0;
+}
+
+.dasti-proposal-inline-proofing__status {
+  vertical-align: baseline;
+  font-family: var(--font-app);
+}
+
 .dasti-proposal-loading-skeleton {
   inline-size: 100%;
   max-inline-size: min(

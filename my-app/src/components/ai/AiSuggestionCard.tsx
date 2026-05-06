@@ -22,6 +22,7 @@ type AiSuggestionCardProps = {
   errorMessage?: string;
   onAccept?: () => void;
   onDiscard?: () => void;
+  onDismiss?: () => void;
   onRetry?: () => void;
   onUndo?: () => void;
 };
@@ -96,6 +97,7 @@ export function AiSuggestionCard({
   errorMessage,
   onAccept,
   onDiscard,
+  onDismiss,
   onRetry,
   onUndo,
 }: AiSuggestionCardProps) {
@@ -198,9 +200,14 @@ export function AiSuggestionCard({
             </Button>
           </>
         ) : (
-          <Button type="button" variant="ghost" size="sm" onClick={onUndo}>
-            Undo
-          </Button>
+          <>
+            <Button type="button" variant="ghost" size="sm" onClick={onUndo}>
+              Undo
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
+              Close
+            </Button>
+          </>
         )}
       </div>
     </section>
