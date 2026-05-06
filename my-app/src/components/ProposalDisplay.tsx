@@ -225,6 +225,24 @@ function getInlineProofingTextParts(
   };
 }
 
+function getInlineSelectionTextParts(
+  content: string,
+  selection: { start: number; end: number },
+): {
+  before: string;
+  selected: string;
+  after: string;
+} {
+  const start = Math.max(0, Math.min(selection.start, content.length));
+  const end = Math.max(start, Math.min(selection.end, content.length));
+
+  return {
+    before: content.slice(0, start),
+    selected: content.slice(start, end),
+    after: content.slice(end),
+  };
+}
+
 function ProposalInlineProofingOverlay({
   content,
   documentTypography,
@@ -331,6 +349,52 @@ function ProposalInlineProofingOverlay({
             </button>
           </>
         )}
+      </span>
+      <span className="dasti-proposal-inline-proofing__text-run" style={textRunStyle}>
+        {parts.after}
+      </span>
+    </div>
+  );
+}
+
+function ProposalInlineSelectionOverlay({
+  content,
+  documentTypography,
+  selection,
+  scrollTop,
+}: {
+  content: string;
+  documentTypography: ReturnType<typeof getProposalDocumentTypography>;
+  selection: { start: number; end: number };
+  scrollTop: number;
+}) {
+  const parts = getInlineSelectionTextParts(content, selection);
+  const textRunStyle: React.CSSProperties = {
+    fontFamily: documentTypography.fontFamily,
+    fontSize: "var(--tb)",
+    lineHeight: documentTypography.lineHeight,
+    fontWeight: documentTypography.fontWeight,
+    letterSpacing: documentTypography.letterSpacing,
+    color: "var(--proposal-document-ink)",
+  };
+
+  return (
+    <div
+      className="dasti-proposal-inline-proofing dasti-proposal-inline-proofing--selection"
+      data-inline-ai-selection-overlay="true"
+      aria-hidden="true"
+      style={{
+        transform: `translateY(-${scrollTop}px)`,
+      }}
+    >
+      <span className="dasti-proposal-inline-proofing__text-run" style={textRunStyle}>
+        {parts.before}
+      </span>
+      <span
+        className="dasti-proposal-inline-proofing__text-run dasti-proposal-inline-proofing__selection"
+        style={textRunStyle}
+      >
+        {parts.selected}
       </span>
       <span className="dasti-proposal-inline-proofing__text-run" style={textRunStyle}>
         {parts.after}
@@ -1501,6 +1565,17 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         onUndo={handleUndoAiSuggestion}
       />
     ) : null;
+  const inlineSelectionOverlay =
+    isEditable && textareaSelectionState && proposalContent && !aiSuggestion ? (
+      <ProposalInlineSelectionOverlay
+        content={proposalContent}
+        documentTypography={documentTypography}
+        selection={textareaSelectionState}
+        scrollTop={editableTextareaScrollTop}
+      />
+    ) : null;
+  const shouldMirrorTextareaSelection =
+    Boolean(inlineSelectionOverlay) || Boolean(aiSuggestion);
 
   const handlePreviewParagraphAction = React.useCallback(
     (label: string) => {
@@ -2363,6 +2438,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   </div>
                 ) : null}
                 <div className="dasti-proposal-editor-page__inner">
+                  {inlineSelectionOverlay}
                   {inlineProofingOverlay}
                   <textarea
                     ref={attachEditableTextarea}
@@ -2390,7 +2466,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                     className={[
                       "dasti-proposal-sheet__body--editable",
                       "dasti-proposal-editor-page__textarea",
-                      aiSuggestion
+                      shouldMirrorTextareaSelection
                         ? "dasti-proposal-inline-proofing__textarea--active"
                         : "",
                     ]
@@ -2620,6 +2696,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         style={activeScrollFadeStyle}
       >
         <div className="dasti-proposal-inline-proofing-field">
+          {inlineSelectionOverlay}
           {inlineProofingOverlay}
           <textarea
             ref={attachEditableTextarea}
@@ -2644,7 +2721,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             placeholder="Content appears here"
             className={[
               "dasti-proposal-sheet__body--editable",
-              aiSuggestion ? "dasti-proposal-inline-proofing__textarea--active" : "",
+              shouldMirrorTextareaSelection
+                ? "dasti-proposal-inline-proofing__textarea--active"
+                : "",
             ]
               .filter(Boolean)
               .join(" ")}

@@ -2023,6 +2023,10 @@
   line-height: inherit;
 }
 
+.dasti-proposal-inline-proofing--selection {
+  z-index: 1;
+}
+
 .dasti-proposal-editor-page__inner > .dasti-proposal-inline-proofing {
   padding-inline: var(--proposal-output-editor-inline-padding);
   padding-block-start: var(--proposal-output-editor-block-start);
@@ -2053,10 +2057,16 @@
 
 .dasti-proposal-inline-proofing__old,
 .dasti-proposal-inline-proofing__new,
-.dasti-proposal-inline-proofing__accepted {
+.dasti-proposal-inline-proofing__accepted,
+.dasti-proposal-inline-proofing__selection {
   display: inline;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+}
+
+.dasti-proposal-inline-proofing__selection {
+  background: var(--selection-highlight-bg);
+  color: currentColor;
 }
 
 .dasti-proposal-inline-proofing__actions {
