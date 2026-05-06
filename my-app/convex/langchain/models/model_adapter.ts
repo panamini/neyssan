@@ -72,6 +72,11 @@ export interface ModelAdapter {
   generate(prompt: string | BaseMessage[], config: ModelGenerationConfig): Promise<string>;
 
   /**
+   * Human-readable model label used for logging and provenance.
+   */
+  getModelName?(): string;
+
+  /**
    * Parse and validate the generated result
    * @param result Raw generated text
    * @returns Validated proposal draft

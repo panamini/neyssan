@@ -37,8 +37,8 @@ const baseProps = {
   lengthOptions: [
     {
       id: "medium" as const,
-      label: "Medium",
-      description: "Medium length.",
+      label: "Standard",
+      description: "Enough. No more.",
       selected: true,
     },
   ],
@@ -217,5 +217,21 @@ describe("ProposalRail style tab", () => {
       "aria-pressed",
       "true",
     );
+  });
+});
+
+describe("ProposalRail length control", () => {
+  it("removes Length from Draft while keeping it available in Ask", () => {
+    render(<ProposalRail {...baseProps} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Standard" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Ask" }));
+
+    expect(
+      screen.getByRole("button", { name: "Standard" }),
+    ).toBeInTheDocument();
   });
 });

@@ -54,6 +54,10 @@ export class OpenAIResponsesAdapter implements ModelAdapter {
       "gpt-5.5";
   }
 
+  getModelName(): string {
+    return this.modelName;
+  }
+
   async generate(
     prompt: string | BaseMessage[],
     config: ModelGenerationConfig,

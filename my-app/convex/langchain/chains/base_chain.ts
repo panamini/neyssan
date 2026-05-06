@@ -49,7 +49,7 @@ export abstract class BaseProposalChain<TParams extends Record<string, any>> {
     const result = await parseProposalContent(content); // Pass raw content
 
     // Additional schema validation
-    const validationResult = ProposalSchema.safeParse({ result });
+    const validationResult = ProposalSchema.safeParse(result);
     if (!validationResult.success) {
       throw new ProposalParsingError(
         "Generated proposal failed schema validation",

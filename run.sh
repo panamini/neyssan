@@ -581,10 +581,14 @@ sync_local_convex_env() {
     ENABLE_COVER_LETTER_PREMIUM_PATH_V1
     ENABLE_NER
     EXTENSION_ORIGIN
+    DEEPSEEK_API_KEY
+    DEEPSEEK_CHAT_COMPLETIONS_URL
     MISTRAL_API_KEY
     NER_SERVICE_KEY
     NER_SERVICE_URL
     OPENAI_API_KEY
+    QWEN_API_KEY
+    QWEN_CHAT_COMPLETIONS_URL
     STRUCTURED_UPLOAD_DEBUG
     STRUCTURED_UPLOAD_SKIP_HEALTHCHECK
     STRUCTURED_UPLOAD_STRICT
@@ -610,6 +614,13 @@ sync_local_convex_env() {
     unset CONVEX_SELF_HOSTED_URL
     unset CONVEX_SELF_HOSTED_ADMIN_KEY
     export CONVEX_TMPDIR="${CONVEX_TMPDIR}"
+    if [[ -z "${CONVEX_DEPLOYMENT_NAME_RESULT:-}" ]]; then
+      resolve_convex_project_binding >/dev/null 2>&1 || true
+    fi
+    local convex_env_deployment_name="${CONVEX_DEPLOYMENT_NAME_RESULT:-}"
+    if [[ -n "${convex_env_deployment_name}" ]]; then
+      resolve_local_convex_runtime "${convex_env_deployment_name}" >/dev/null 2>&1 || true
+    fi
     local convex_env_url="${CONVEX_URL_RESULT:-}"
     local convex_env_admin_key=""
     if [[ -z "${convex_env_url}" ]]; then
@@ -629,6 +640,8 @@ sync_local_convex_env() {
       [[ -n "${value}" ]] || continue
       if [[ -n "${convex_env_url}" && -n "${convex_env_admin_key}" ]]; then
         CONVEX_SELF_HOSTED_URL="${convex_env_url}" CONVEX_SELF_HOSTED_ADMIN_KEY="${convex_env_admin_key}" "${convex_bin}" env set "${name}" "${value}" >/dev/null
+      elif [[ -n "${convex_env_deployment_name}" ]]; then
+        CONVEX_DEPLOYMENT="local:${convex_env_deployment_name}" "${convex_bin}" env set "${name}" "${value}" >/dev/null
       else
         "${convex_bin}" env set "${name}" "${value}" >/dev/null
       fi

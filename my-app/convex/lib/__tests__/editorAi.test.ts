@@ -147,14 +147,12 @@ describe("editor AI transform contract", () => {
     );
   });
 
-  it("routes visible rewrite toolbar actions to Qwen 3.6 Plus", async () => {
-    vi.stubEnv("OPENAI_API_KEY", "openai-test-key");
-    vi.stubEnv("QWEN_API_KEY", "qwen-test-key");
-    vi.stubEnv("QWEN_CHAT_COMPLETIONS_URL", "https://qwen.test/v1/chat/completions");
+  it("routes visible rewrite toolbar actions to Mistral Medium", async () => {
+    vi.stubEnv("MISTRAL_API_KEY", "mistral-test-key");
     const fetchMock = vi.fn(async () =>
       new Response(
         JSON.stringify({
-          choices: [{ message: { content: "Qwen rewrite" } }],
+          choices: [{ message: { content: "Mistral rewrite" } }],
         }),
         { status: 200 },
       ),
@@ -167,57 +165,87 @@ describe("editor AI transform contract", () => {
       selectedText: "Original text",
     });
 
-    expect(result.text).toBe("Qwen rewrite");
+    expect(result.text).toBe("Mistral rewrite");
+    expect(result).toMatchObject({
+      actualModelProvider: "mistral",
+      actualModelName: "mistral-medium-latest",
+      fallbackUsed: false,
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "https://qwen.test/v1/chat/completions",
+      "https://api.mistral.ai/v1/chat/completions",
     );
     expect(
       JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)),
     ).toMatchObject({
-      model: "qwen-3.6-plus",
+      model: "mistral-medium-latest",
       max_tokens: 500,
     });
   });
 
-  it("routes cheap fix toolbar actions to Qwen 3.6 Flash", async () => {
-    vi.stubEnv("QWEN_API_KEY", "qwen-test-key");
-    vi.stubEnv("QWEN_CHAT_COMPLETIONS_URL", "https://qwen.test/v1/chat/completions");
+  it("routes cheap fix toolbar actions to Mistral Medium", async () => {
+    vi.stubEnv("MISTRAL_API_KEY", "mistral-test-key");
     const fetchMock = vi.fn(async () =>
       new Response(
         JSON.stringify({
-          choices: [{ message: { content: "Qwen fix" } }],
+          choices: [{ message: { content: "Mistral fix" } }],
         }),
         { status: 200 },
       ),
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await runEditorSelectionTransform({
+    const result = await runEditorSelectionTransform({
       mode: "fix_grammar",
       instruction: "Fix this.",
       selectedText: "Bad text",
     });
 
+    expect(result).toMatchObject({
+      actualModelProvider: "mistral",
+      actualModelName: "mistral-medium-latest",
+      fallbackUsed: false,
+    });
     expect(
       JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)),
     ).toMatchObject({
-      model: "qwen-3.6-flash",
+      model: "mistral-medium-latest",
     });
   });
 
-  it("falls back from Qwen to Mistral before DeepSeek for toolbar actions", async () => {
-    vi.stubEnv("QWEN_API_KEY", "qwen-test-key");
-    vi.stubEnv("QWEN_CHAT_COMPLETIONS_URL", "https://qwen.test/v1/chat/completions");
+  it("does not hide the configured fallback failure behind an unconfigured DeepSeek fallback", async () => {
     vi.stubEnv("MISTRAL_API_KEY", "mistral-test-key");
-    vi.stubEnv("DEEPSEEK_API_KEY", "deepseek-test-key");
+    const fetchMock = vi.fn(async () =>
+      new Response("mistral model rejected", { status: 400 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      runEditorSelectionTransform({
+        mode: "custom",
+        instruction: "Make this longer.",
+        selectedText: "Short text.",
+      }),
+    ).rejects.toThrow(/Mistral helper action failed/);
+
+    await expect(
+      runEditorSelectionTransform({
+        mode: "custom",
+        instruction: "Make this longer.",
+        selectedText: "Short text.",
+      }),
+    ).rejects.not.toThrow(/deepseek helper AI provider is not configured/);
+  });
+
+  it("falls back from Mistral Medium to Mistral Small for toolbar actions", async () => {
+    vi.stubEnv("MISTRAL_API_KEY", "mistral-test-key");
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+      .mockResolvedValueOnce(new Response("mistral medium down", { status: 503 }))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            choices: [{ message: { content: "Mistral fallback" } }],
+            choices: [{ message: { content: "Mistral small fallback" } }],
           }),
           { status: 200 },
         ),
@@ -230,19 +258,24 @@ describe("editor AI transform contract", () => {
       selectedText: "Long text",
     });
 
-    expect(result.text).toBe("Mistral fallback");
+    expect(result.text).toBe("Mistral small fallback");
+    expect(result).toMatchObject({
+      actualModelProvider: "mistral",
+      actualModelName: "mistral-small-latest",
+      fallbackUsed: true,
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "https://qwen.test/v1/chat/completions",
-    );
-    expect(fetchMock.mock.calls[1]?.[0]).toBe(
-      "https://api.mistral.ai/v1/chat/completions",
-    );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.mistral.ai/v1/chat/completions");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://api.mistral.ai/v1/chat/completions");
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      model: "mistral-medium-latest",
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({
+      model: "mistral-small-latest",
+    });
   });
 
-  it("falls back to DeepSeek after Qwen and Mistral fail", async () => {
-    vi.stubEnv("QWEN_API_KEY", "qwen-test-key");
-    vi.stubEnv("QWEN_CHAT_COMPLETIONS_URL", "https://qwen.test/v1/chat/completions");
+  it("falls back from Mistral Medium to DeepSeek after Mistral Small fails", async () => {
     vi.stubEnv("MISTRAL_API_KEY", "mistral-test-key");
     vi.stubEnv("DEEPSEEK_API_KEY", "deepseek-test-key");
     vi.stubEnv(
@@ -251,8 +284,8 @@ describe("editor AI transform contract", () => {
     );
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response("qwen down", { status: 503 }))
-      .mockResolvedValueOnce(new Response("mistral down", { status: 503 }))
+      .mockResolvedValueOnce(new Response("mistral medium down", { status: 503 }))
+      .mockResolvedValueOnce(new Response("mistral small down", { status: 503 }))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -270,14 +303,30 @@ describe("editor AI transform contract", () => {
     });
 
     expect(result.text).toBe("DeepSeek fallback");
+    expect(result).toMatchObject({
+      actualModelProvider: "deepseek",
+      actualModelName: "deepseek-v4-flash",
+      fallbackUsed: true,
+    });
     expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.mistral.ai/v1/chat/completions");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://api.mistral.ai/v1/chat/completions");
     expect(fetchMock.mock.calls[2]?.[0]).toBe(
       "https://deepseek.test/chat/completions",
     );
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      model: "mistral-medium-latest",
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({
+      model: "mistral-small-latest",
+    });
     expect(
       JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)),
     ).toMatchObject({
-      model: "DeepSeek V4 Flash",
+      model: "deepseek-v4-flash",
+      thinking: {
+        type: "disabled",
+      },
     });
   });
 

@@ -284,6 +284,15 @@ describe("ProposalDisplay CSS contracts", () => {
     );
   });
 
+  it("keeps inline AI proofing old text as document text with a strike instead of a filled error block", () => {
+    expect(productCss).toMatch(
+      /\.dasti-proposal-inline-proofing__old\s*\{[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--proposal-document-ink\);[\s\S]*text-decoration:\s*line-through;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-inline-proofing__new\s*\{[\s\S]*background:\s*var\(--ap\);[\s\S]*color:\s*var\(--proposal-document-ink\);/,
+    );
+  });
+
   it("supports a detached saved-proposal header row with tighter library chrome spacing", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-sheet__header--detached\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/,

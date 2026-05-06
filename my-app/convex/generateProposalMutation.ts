@@ -5,7 +5,6 @@ import { llmConfig } from "../config/llmConfig";
 import { internal } from "./_generated/api";
 import { ConvexError } from "convex/values";
 import { ProposalService } from "./langchain";
-import { OpenAIResponsesAdapter } from "./langchain/models/openai_responses_adapter";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatMistralAI } from "@langchain/mistralai";
 import { Mistral } from "@mistralai/mistralai";
@@ -16,7 +15,6 @@ import {
 } from "./lib/proposals/effectiveTone";
 import {
   buildProposalGenerationControlsBlock,
-  resolveProposalCharacterLimit,
   resolveProposalToneTuning,
   type ProposalCharacterLimitMode,
   type ProposalToneTuning,
@@ -105,6 +103,7 @@ export { getDeterministicProposalRenderPolicy };
 
 const modelChoice = v.union(
   v.literal("chatgpt"),
+  v.literal("mistral-medium-latest"),
   v.literal("mistral-large-latest"),
   v.literal("mistral-small-latest"),
   v.literal("mistral-agent"),
@@ -203,6 +202,7 @@ export type GenerateProposalArgs = {
   creativity?: string | null;
   modelType?:
     | "chatgpt"
+    | "mistral-medium-latest"
     | "mistral-large-latest"
     | "mistral-small-latest"
     | "mistral-agent";
@@ -506,6 +506,10 @@ type ProposalRoutingTrace = {
 };
 
 type ProposalModelType = NonNullable<GenerateProposalArgs["modelType"]>;
+type MistralProposalModelType = Extract<
+  ProposalModelType,
+  "mistral-small-latest" | "mistral-medium-latest" | "mistral-large-latest"
+>;
 type ProposalFallbackTriggerCode =
   | "proposal_generation_provider_busy"
   | "proposal_generation_provider_transport_error";
@@ -513,6 +517,7 @@ type ProposalFallbackTriggerCode =
 type ProposalExecutionProvenance = {
   requestedModelType: ProposalModelType;
   actualModelType: ProposalModelType;
+  actualModelName: string;
   fallbackTriggerCode: ProposalFallbackTriggerCode | null;
 };
 
@@ -615,6 +620,7 @@ const CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_TELEMETRY_CODE =
 function isMistralModel(modelType: ProposalModelType): boolean {
   return (
     modelType === "mistral-small-latest" ||
+    modelType === "mistral-medium-latest" ||
     modelType === "mistral-large-latest" ||
     modelType === "mistral-agent"
   );
@@ -2100,7 +2106,7 @@ function extractTextFromMistralResponseContent(content: unknown): string {
 
 export async function buildStructuredProposalPlan(args: {
   mistralKey: string;
-  modelType: "mistral-large-latest" | "mistral-small-latest";
+  modelType: MistralProposalModelType;
   prompt: string;
   diagnostics?: MistralDiagnosticsAccumulator;
   signal?: AbortSignal;
@@ -2233,7 +2239,7 @@ export async function buildStructuredProposalPlan(args: {
 
 async function buildStructuredCoverLetterContentPlanWithMistral(args: {
   mistralKey: string;
-  modelType: "mistral-large-latest" | "mistral-small-latest";
+  modelType: MistralProposalModelType;
   prompt: string;
   diagnostics?: MistralDiagnosticsAccumulator;
   signal?: AbortSignal;
@@ -2376,7 +2382,7 @@ async function buildStructuredCoverLetterContentPlanWithMistral(args: {
 
 async function generateStructuredCoverLetterBodyWithMistral(args: {
   mistralKey: string;
-  modelType: "mistral-large-latest" | "mistral-small-latest";
+  modelType: MistralProposalModelType;
   prompt: string;
   diagnostics?: MistralDiagnosticsAccumulator;
   signal?: AbortSignal;
@@ -2473,6 +2479,7 @@ export function isStructuredMistralCoverLetterEnabled(args: {
   if (rolloutMode === "all_cover_letters") {
     return (
       args.modelType === "mistral-small-latest" ||
+      args.modelType === "mistral-medium-latest" ||
       args.modelType === "mistral-large-latest"
     );
   }
@@ -2721,6 +2728,7 @@ function buildProposalRoutingMetadata(args: {
     save_outcome: args.routing.saveOutcome,
     requestedModelType: args.provenance.requestedModelType,
     actualModelType: args.provenance.actualModelType,
+    actualModelName: args.provenance.actualModelName,
     ...(args.provenance.fallbackTriggerCode
       ? { fallbackTriggerCode: args.provenance.fallbackTriggerCode }
       : {}),
@@ -3078,7 +3086,7 @@ function sanitizePlannerResultForStructuredCoverLetter(args: {
 function logStructuredCoverLetterFallback(
   reason: StructuredCoverLetterFallbackReason,
   metadata: {
-    modelType: "mistral-large-latest" | "mistral-small-latest";
+    modelType: MistralProposalModelType;
     jobTitle: string;
     format: OutputFormat;
   },
@@ -3416,7 +3424,7 @@ function buildCoverLetterEvidencePriorityBlock(
 
 async function repairProposalDraftWithMistral(args: {
   mistralKey: string;
-  modelType: "mistral-large-latest" | "mistral-small-latest";
+  modelType: MistralProposalModelType;
   prompt: string;
   diagnostics?: MistralDiagnosticsAccumulator;
   signal?: AbortSignal;
@@ -3516,7 +3524,7 @@ function sanitizeRepairSentenceOutput(args: {
 
 async function repairProposalDraftBySentence(args: {
   mistralKey: string;
-  modelType: "mistral-large-latest" | "mistral-small-latest";
+  modelType: MistralProposalModelType;
   content: string;
   plan: ProposalPlannerResult;
   format: OutputFormat;
@@ -3672,7 +3680,7 @@ function applyStructuredParagraphLocalRepairs(args: {
 type AttemptStructuredCoverLetterArgs = {
   gateEnabled: boolean;
   mistralKey: string;
-  modelType: "mistral-large-latest" | "mistral-small-latest";
+  modelType: MistralProposalModelType;
   signal?: AbortSignal;
   plannerResult: ProposalPlannerResult | null;
   outputFormat: OutputFormat;
@@ -3688,21 +3696,21 @@ type AttemptStructuredCoverLetterArgs = {
 type AttemptStructuredCoverLetterDeps = {
   buildContentPlan?: (args: {
     mistralKey: string;
-    modelType: "mistral-large-latest" | "mistral-small-latest";
+    modelType: MistralProposalModelType;
     prompt: string;
     diagnostics?: MistralDiagnosticsAccumulator;
     signal?: AbortSignal;
   }) => Promise<StructuredCoverLetterContentPlan>;
   generateParagraph?: (args: {
     mistralKey: string;
-    modelType: "mistral-large-latest" | "mistral-small-latest";
+    modelType: MistralProposalModelType;
     prompt: string;
     diagnostics?: MistralDiagnosticsAccumulator;
     signal?: AbortSignal;
   }) => Promise<string>;
   generateBody?: (args: {
     mistralKey: string;
-    modelType: "mistral-large-latest" | "mistral-small-latest";
+    modelType: MistralProposalModelType;
     prompt: string;
     diagnostics?: MistralDiagnosticsAccumulator;
     signal?: AbortSignal;
@@ -6168,7 +6176,7 @@ function buildNarrowCvBackedGroundedRescueBodyCandidate(
     saveableSentences.length - groundedOperationalSentences.length,
   );
   if (nonGroundedSentenceCount > 1) {
-    return null;
+    return joinSentences(groundedOperationalSentences);
   }
 
   return joinSentences(saveableSentences);
@@ -8873,11 +8881,6 @@ export async function handleGenerateProposal(
   const outputFormat = normalizeOutputFormat(args.proposalType);
   const generationControlsBlock = buildProposalGenerationControlsBlock({
     toneTuning: resolveProposalToneTuning(args.toneTuning),
-    characterLimitMode: args.characterLimitMode,
-    characterLimit: resolveProposalCharacterLimit({
-      mode: args.characterLimitMode,
-      value: args.characterLimitValue ?? null,
-    }),
   });
   const explicitPersonalization = sanitizePersonalizationContext(
     args.personalizationContext,
@@ -8900,7 +8903,7 @@ export async function handleGenerateProposal(
         )
       : resolvedPersonalization;
   const requestedModelType: ProposalModelType =
-    args.modelType || "mistral-small-latest";
+    args.modelType || "mistral-medium-latest";
   const isAutoVoicePresetRequested = args.voicePreset === null;
   let autoToneReason: string | undefined;
   const resolvedVoicePreset =
@@ -9075,6 +9078,10 @@ export async function handleGenerateProposal(
     }>;
   } | null = null;
   let actualModelType: ProposalModelType = requestedModelType;
+  let actualModelName: string =
+    requestedModelType === "chatgpt"
+      ? llmConfig.proposalModels?.openaiWriterModel ?? "gpt-5.5"
+      : requestedModelType;
   let hasAttemptedFallback = false;
   let usedFallback = false;
   let fallbackTriggerCode: ProposalFallbackTriggerCode | null = null;
@@ -9104,6 +9111,7 @@ export async function handleGenerateProposal(
   const getExecutionProvenance = (): ProposalExecutionProvenance => ({
     requestedModelType,
     actualModelType,
+    actualModelName,
     fallbackTriggerCode,
   });
   let mistralDiagnosticsLogged = false;
@@ -9221,10 +9229,7 @@ export async function handleGenerateProposal(
     try {
       await ensureGenerationActive();
       if (actualModelType === "chatgpt") {
-        const apiKey = process.env.OPENAI_API_KEY;
-        if (!apiKey) {
-          throw new ConvexError("OpenAI API key is not configured");
-        }
+        const apiKey = process.env.OPENAI_API_KEY ?? null;
 
         if (outputFormat === "cover_letter") {
           console.info("Premium cover letter runtime check", {
@@ -9243,7 +9248,8 @@ export async function handleGenerateProposal(
         if (
           requestedModelType === "chatgpt" &&
           outputFormat === "cover_letter" &&
-          coverLetterPrimaryPathEligibility.eligible
+          coverLetterPrimaryPathEligibility.eligible &&
+          apiKey
         ) {
           try {
             premiumPersistencePayload =
@@ -9282,24 +9288,29 @@ export async function handleGenerateProposal(
               routingTrace.validatorOutcome = "structured_failed";
             }
           }
+        } else if (
+          requestedModelType === "chatgpt" &&
+          outputFormat === "cover_letter" &&
+          coverLetterPrimaryPathEligibility.eligible &&
+          !apiKey
+        ) {
+          console.info(
+            "OpenAI API key unavailable; skipping premium proposal path and using fallbacks.",
+          );
         }
 
         if (premiumPersistencePayload) {
           proposalContent = premiumPersistencePayload.content;
         } else {
-          const proposalOpenAiAdapter = new OpenAIResponsesAdapter({
-            apiKey,
-            modelName: llmConfig.proposalModels?.openaiWriterModel ?? "gpt-5.5",
-          });
           const proposalService = new ProposalService({
-            modelAdapter: proposalOpenAiAdapter,
+            apiKey: apiKey ?? undefined,
+            modelName: "chatgpt",
           });
 
           if (outputFormat === "freelance_proposal") {
             const tokenLimit = 3000;
             let jobDescription = enrichedJobDescription;
-            const estimatedTokens =
-              proposalOpenAiAdapter.estimateTokens(jobDescription);
+            const estimatedTokens = Math.ceil(jobDescription.length / 4);
 
             if (estimatedTokens > tokenLimit) {
               jobDescription = jobDescription.slice(
@@ -9326,9 +9337,14 @@ export async function handleGenerateProposal(
               creativity: effectiveTone.creativity,
             });
             proposalContent = proposal.content;
+            actualModelName = proposal.metadata.modelName;
           } else if (outputFormat === "application_message") {
-            proposalContent = await proposalOpenAiAdapter.generate(prompt, {
-            });
+            const proposal = await proposalService.generateTextWithFallbacks(
+              prompt,
+              {},
+            );
+            proposalContent = proposal.text;
+            actualModelName = proposal.modelName;
           } else {
             const proposal = await proposalService.generateCreativeProposal({
               jobTitle: effectiveJobTitle,
@@ -9340,10 +9356,12 @@ export async function handleGenerateProposal(
                 effectivePersonalization?.desiredPosition ?? "",
             });
             proposalContent = proposal.content;
+            actualModelName = proposal.metadata.modelName;
           }
         }
       } else if (
         actualModelType === "mistral-large-latest" ||
+        actualModelType === "mistral-medium-latest" ||
         actualModelType === "mistral-small-latest"
       ) {
         const mistralKey = process.env.MISTRAL_API_KEY;
@@ -9406,6 +9424,7 @@ export async function handleGenerateProposal(
           apiKey: mistralKey,
           modelName: actualModelType,
         });
+        actualModelName = actualModelType;
         let structuredFallbackReason: StructuredCoverLetterFallbackReason | null =
           null;
         if (!shouldBypassPlannerForCvBackedLegacyCoverLetter) {
@@ -9637,6 +9656,7 @@ export async function handleGenerateProposal(
         const client = new Mistral({ apiKey: mistralKey });
         const agentPrompt = prompt;
         let agentResponse;
+        actualModelName = actualModelType;
         try {
           agentResponse = await client.agents.complete(
             {
@@ -9919,7 +9939,7 @@ export async function handleGenerateProposal(
             failureStage: routingFailureStage,
             hasAttemptedFallback,
           })
-        ) {
+          ) {
           fallbackTriggerCode = triggerCode;
           usedFallback = true;
           hasAttemptedFallback = true;
@@ -9932,6 +9952,8 @@ export async function handleGenerateProposal(
             attemptedPath: attemptedGenerationPath,
           });
           actualModelType = "chatgpt";
+          actualModelName =
+            llmConfig.proposalModels?.openaiWriterModel ?? "gpt-5.5";
           routingNormalizedFailureCode = null;
           continue;
         }
@@ -9952,7 +9974,7 @@ export async function handleGenerateProposal(
             failureStage: routingFailureStage,
             hasAttemptedFallback,
           })
-        ) {
+          ) {
           fallbackTriggerCode = triggerCode;
           usedFallback = true;
           hasAttemptedFallback = true;
@@ -9965,6 +9987,8 @@ export async function handleGenerateProposal(
             attemptedPath: attemptedGenerationPath,
           });
           actualModelType = "chatgpt";
+          actualModelName =
+            llmConfig.proposalModels?.openaiWriterModel ?? "gpt-5.5";
           routingNormalizedFailureCode = null;
           continue;
         }
