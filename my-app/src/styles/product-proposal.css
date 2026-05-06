@@ -2013,7 +2013,7 @@
   inset: 0;
   z-index: 2;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
   pointer-events: none;
   white-space: pre-wrap;
   word-break: break-word;
@@ -2031,6 +2031,14 @@
   padding-inline: var(--proposal-output-editor-inline-padding);
   padding-block-start: var(--proposal-output-editor-block-start);
   padding-block-end: var(--proposal-output-editor-block-end);
+}
+
+.dasti-proposal-sheet__body--document-editor
+  .dasti-proposal-editor-page__inner
+  > .dasti-proposal-inline-proofing {
+  padding-block-end: calc(
+    var(--proposal-output-editor-block-end) + var(--control-sm) + var(--space-3)
+  );
 }
 
 .dasti-proposal-inline-proofing-field > .dasti-proposal-inline-proofing {
@@ -2082,20 +2090,15 @@
   color: currentColor;
 }
 
-.dasti-proposal-inline-proofing__actions {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  margin-inline: var(--s2);
-  vertical-align: baseline;
-  pointer-events: auto;
-  font: var(--type-label);
-  letter-spacing: 0;
-}
-
 .dasti-proposal-inline-proofing__status {
   vertical-align: baseline;
   font-family: var(--font-app);
+}
+
+.ds-ai-toolbar .dasti-proposal-inline-proofing__status {
+  height: 28px;
+  padding: 0 var(--s3);
+  background: transparent;
 }
 
 .dasti-proposal-loading-skeleton {

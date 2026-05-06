@@ -20,6 +20,7 @@ import {
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
 import FloatingAiToolbar, { type InlineAiActionId } from "./FloatingAiToolbar";
+import FloatingSuggestionToolbar from "./FloatingSuggestionToolbar";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
 import { useDocumentPan } from "../hooks/use-document-pan";
@@ -248,19 +249,11 @@ function ProposalInlineProofingOverlay({
   documentTypography,
   suggestion,
   scrollTop,
-  onAccept,
-  onDiscard,
-  onDismiss,
-  onUndo,
 }: {
   content: string;
   documentTypography: ReturnType<typeof getProposalDocumentTypography>;
   suggestion: ProposalAiSuggestion;
   scrollTop: number;
-  onAccept: () => void;
-  onDiscard: () => void;
-  onDismiss: () => void;
-  onUndo: () => void;
 }) {
   const parts = getInlineProofingTextParts(content, suggestion);
   const isAccepted = suggestion.status === "accepted";
@@ -272,7 +265,6 @@ function ProposalInlineProofingOverlay({
     letterSpacing: documentTypography.letterSpacing,
     color: "var(--proposal-document-ink)",
   };
-
   return (
     <div
       className="dasti-proposal-inline-proofing"
@@ -309,47 +301,6 @@ function ProposalInlineProofingOverlay({
           </span>
         </>
       )}
-      <span className="dasti-proposal-inline-proofing__actions">
-        {isAccepted ? (
-          <>
-            <span className="ds-status ds-status--success dasti-proposal-inline-proofing__status">
-              <span className="ds-status__dot" aria-hidden="true" />
-              Applied.
-            </span>
-            <button
-              type="button"
-              className="ds-btn ds-btn--sm ds-btn--ghost"
-              onClick={onUndo}
-            >
-              Undo
-            </button>
-            <button
-              type="button"
-              className="ds-btn ds-btn--sm ds-btn--ghost"
-              onClick={onDismiss}
-            >
-              Close
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="ds-btn ds-btn--sm ds-btn--ghost"
-              onClick={onDiscard}
-            >
-              Discard
-            </button>
-            <button
-              type="button"
-              className="ds-btn ds-btn--sm ds-btn--primary"
-              onClick={onAccept}
-            >
-              Accept
-            </button>
-          </>
-        )}
-      </span>
       <span className="dasti-proposal-inline-proofing__text-run" style={textRunStyle}>
         {parts.after}
       </span>
@@ -1569,23 +1520,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         documentTypography={documentTypography}
         suggestion={aiSuggestion}
         scrollTop={editableTextareaScrollTop}
-        onAccept={handleAcceptAiSuggestion}
-        onDiscard={handleDiscardAiSuggestion}
-        onDismiss={handleDismissAiSuggestion}
-        onUndo={handleUndoAiSuggestion}
       />
     ) : null;
-  const inlineSelectionOverlay =
-    isEditable && textareaSelectionState && proposalContent && !aiSuggestion ? (
-      <ProposalInlineSelectionOverlay
-        content={proposalContent}
-        documentTypography={documentTypography}
-        selection={textareaSelectionState}
-        scrollTop={editableTextareaScrollTop}
-      />
-    ) : null;
-  const shouldMirrorTextareaSelection =
-    Boolean(inlineSelectionOverlay) || Boolean(aiSuggestion);
+  const inlineSelectionOverlay = null;
+  const shouldMirrorTextareaSelection = Boolean(aiSuggestion);
 
   const handlePreviewParagraphAction = React.useCallback(
     (label: string) => {
@@ -2832,12 +2770,24 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
   const viewerShell = (
     <div className="dasti-doc-viewer-shell">
+      {isEditable && aiSuggestion ? (
+        <FloatingSuggestionToolbar
+          open
+          anchor={aiSuggestion.anchor}
+          state={aiSuggestion.status}
+          onAccept={handleAcceptAiSuggestion}
+          onDiscard={handleDiscardAiSuggestion}
+          onUndo={handleUndoAiSuggestion}
+          onClose={handleDismissAiSuggestion}
+        />
+      ) : null}
       {isEditable && textareaSelectionState && !aiSuggestion ? (
         <FloatingAiToolbar
           open
           anchor={textareaSelectionState.anchor}
           isLoading={isApplyingInlineAi}
           pendingActionId={pendingInlineAiActionId}
+          includeJobContextActions={Boolean(normalizedEditorAiJobContext)}
           onClose={() => setTextareaSelectionState(null)}
           onRunAction={handleRunInlineAiAction}
         />

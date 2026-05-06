@@ -137,6 +137,14 @@ describe("ProposalDisplay", () => {
     fireEvent.click(getToolbarButton("Rewrite"));
 
     await screen.findByRole("group", { name: "Rewrite inline suggestion" });
+    const suggestionToolbar = await screen.findByRole("toolbar", {
+      name: "Suggestion actions",
+    });
+    expect(suggestionToolbar).toHaveClass("ds-ai-toolbar");
+    expect(suggestionToolbar).toHaveAttribute(
+      "data-inline-ai-suggestion-toolbar",
+      "true",
+    );
     expect(
       document.querySelector("[data-inline-ai-suggestion-card='true']"),
     ).toBeNull();
@@ -166,7 +174,7 @@ describe("ProposalDisplay", () => {
       "polished proposal copy",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
 
     await waitFor(() => {
       expect(textarea).toHaveValue("This is polished proposal copy.");
@@ -177,7 +185,7 @@ describe("ProposalDisplay", () => {
       "ai_accepted",
     ]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
 
     await waitFor(() => {
       expect(textarea).toHaveValue("This is rough proposal copy.");
@@ -207,11 +215,12 @@ describe("ProposalDisplay", () => {
     fireEvent.change(screen.getByLabelText("Ask AI"), {
       target: { value: "Make it warmer" },
     });
-    const selectionOverlay = document.querySelector(
-      "[data-inline-ai-selection-overlay='true'] .dasti-proposal-inline-proofing__selection",
+    expect(
+      document.querySelector("[data-inline-ai-selection-overlay='true']"),
+    ).toBeNull();
+    expect(textarea).not.toHaveClass(
+      "dasti-proposal-inline-proofing__textarea--active",
     );
-    expect(selectionOverlay).not.toBeNull();
-    expect(selectionOverlay).toHaveTextContent("rough proposal copy");
     const sendButton = document.querySelector(
       'button[aria-label="Send"]',
     ) as HTMLButtonElement | null;
@@ -297,13 +306,13 @@ describe("ProposalDisplay", () => {
       "Customer operations role",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
 
     await waitFor(() => {
       expect(textarea).toHaveValue("This is tailored proposal copy.");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
 
     await waitFor(() => {
       expect(textarea).toHaveValue("This is rough proposal copy.");
@@ -334,7 +343,7 @@ describe("ProposalDisplay", () => {
     fireEvent.click(getToolbarButton("Tailor"));
 
     await screen.findByRole("group", { name: "Tailor inline suggestion" });
-    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
 
     expect(textarea).toHaveValue("This is rough proposal copy.");
     expect(
@@ -363,7 +372,7 @@ describe("ProposalDisplay", () => {
     fireEvent.click(getToolbarButton("Rewrite"));
 
     await screen.findByRole("group", { name: "Rewrite inline suggestion" });
-    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Discard" }));
 
     expect(textarea).toHaveValue("This is rough proposal copy.");
     expect(
@@ -440,7 +449,7 @@ describe("ProposalDisplay", () => {
       applyMode: "inline_replace_with_undo",
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
 
     await waitFor(() => {
       expect(textarea).toHaveValue("This is rough proposal copy.");
@@ -455,7 +464,7 @@ describe("ProposalDisplay", () => {
     await selectTextareaText(textarea, "rough proposal copy");
     fireEvent.click(getToolbarButton("Fix"));
     await screen.findByRole("group", { name: "Fix inline suggestion" });
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Close" }));
     expect(
       screen.queryByRole("group", { name: "Fix inline suggestion" }),
     ).not.toBeInTheDocument();
@@ -476,17 +485,17 @@ describe("ProposalDisplay", () => {
     fireEvent.click(getToolbarButton("Shorten"));
 
     await screen.findByRole("group", { name: "Shorten inline suggestion" });
-    expect(screen.getByRole("button", { name: "Accept" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Discard" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Accept" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Discard" })).toBeInTheDocument();
     expect(textarea).toHaveValue("This is rough proposal copy.");
 
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
 
     await waitFor(() => {
       expect(textarea).toHaveValue("This is short copy.");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Undo" }));
 
     await waitFor(() => {
       expect(textarea).toHaveValue("This is rough proposal copy.");
