@@ -21,6 +21,7 @@ export type StoredProposalComposeDraft = {
   jobTitle?: string;
   jobDescription?: string;
   proposalType?: string;
+  modelType?: string | null;
   voicePreset?: string | null;
   toneTuning?: string | null;
   characterLimitMode?: string | null;
