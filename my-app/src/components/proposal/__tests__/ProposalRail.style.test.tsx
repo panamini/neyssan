@@ -107,13 +107,46 @@ describe("ProposalRail style tab", () => {
     expect(onSelectStyleBundle).toHaveBeenCalledWith("grid_mono");
 
     fireEvent.click(screen.getByRole("button", { name: "Use Ochre accent" }));
-    expect(onSelectStylePalette).toHaveBeenCalledWith("ocre");
+    expect(onSelectStylePalette).toHaveBeenCalledWith("ochre");
 
     fireEvent.click(screen.getByRole("button", { name: "Use Cobalt accent" }));
-    expect(onSelectStyleCustomAccent).toHaveBeenCalledWith("#2A78D6");
+    expect(onSelectStylePalette).toHaveBeenCalledWith("cobalt");
+    expect(onSelectStyleCustomAccent).not.toHaveBeenCalledWith("#2A78D6");
 
     expect(document.querySelector('input[type="color"]')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open custom color picker" }));
     expect(screen.getByRole("dialog", { name: "Custom accent color" })).toBeInTheDocument();
+  });
+
+  it("keeps Style 3 selected, highlights ink, and exposes reset when the bundle is customized", () => {
+    const onResetStyleBundle = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        styleTemplateBundleId="grid_mono"
+        stylePreset={{
+          layout: "workshop",
+          typography: "geist-baskervville",
+          palette: "ink",
+        }}
+        onResetStyleBundle={onResetStyleBundle}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+
+    expect(screen.getByRole("button", { name: "Style 3" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText("Style 3 · Custom")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use Ink accent" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset Style 3" }));
+    expect(onResetStyleBundle).toHaveBeenCalledWith("grid_mono");
   });
 });

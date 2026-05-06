@@ -2011,17 +2011,17 @@ function makeDraftSection(sectionKind: CvAddSectionKind): CvSection {
 function resolveAccentStyle(accent: CvAccentChoice): Partial<VerbatiStylePreset> {
   switch (accent) {
     case "terre":
-      return { palette: "custom", accentHex: "#A84E2E" };
+      return { palette: "terre", accentHex: undefined };
     case "ink":
-      return { palette: "custom", accentHex: "#0F0C08" };
+      return { palette: "ink", accentHex: undefined };
     case "cobalt":
-      return { palette: "custom", accentHex: "#2A78D6" };
+      return { palette: "cobalt", accentHex: undefined };
     case "sauge":
       return { palette: "sauge", accentHex: undefined };
     case "plum":
-      return { palette: "custom", accentHex: "#7A4FA0" };
+      return { palette: "plum", accentHex: undefined };
     case "ochre":
-      return { palette: "ocre", accentHex: undefined };
+      return { palette: "ochre", accentHex: undefined };
   }
 }
 

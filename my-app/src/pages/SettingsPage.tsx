@@ -173,12 +173,13 @@ const SETTINGS_THEME_OPTIONS: Array<{ id: ThemePreference; label: string }> = [
 ];
 
 const SETTINGS_ACCENT_OPTIONS: SettingsAccentOption[] = [
-  { id: "terre", label: "Terre", swatch: "#A84E2E", paletteOverride: null, accentHex: "#A84E2E" },
-  { id: "ink", label: "Ink", swatch: "#0F0C08", paletteOverride: null, accentHex: "#0F0C08" },
-  { id: "cobalt", label: "Cobalt", swatch: "#2A78D6", paletteOverride: null, accentHex: "#2A78D6" },
-  { id: "sauge", label: "Sage", swatch: "#3B6E4E", paletteOverride: "sauge", accentHex: null },
-  { id: "plum", label: "Plum", swatch: "#7A4FA0", paletteOverride: null, accentHex: "#7A4FA0" },
-  { id: "ochre", label: "Ochre", swatch: "#B8843A", paletteOverride: "ocre", accentHex: null },
+  ...PROPOSAL_PALETTE_OPTIONS.map((option) => ({
+    id: option.id,
+    label: option.label,
+    swatch: option.color,
+    paletteOverride: option.id,
+    accentHex: null,
+  })),
 ];
 
 // ─── Tone options ──────────────────────────────────────────────────────────────

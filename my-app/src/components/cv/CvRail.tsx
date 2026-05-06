@@ -41,6 +41,7 @@ import {
   getVerbatiFontPairOption,
   type VerbatiFontPairId,
 } from "../../features/verbati/fontCatalog";
+import { PROPOSAL_PALETTE_OPTIONS } from "../../lib/proposal-style-display";
 
 export type CvRailTab = "sections" | "ai" | "style";
 export type CvToneChoice = "warm" | "formal" | "natural";
@@ -159,16 +160,14 @@ const FONT_PAIR_OPTIONS = FONT_PAIR_IDS.map((id) => getVerbatiFontPairOption(id)
 const ACCENT_OPTIONS: Array<{
   id: CvAccentChoice;
   label: string;
-  palette?: VerbatiStylePreset["palette"];
+  palette: VerbatiStylePreset["palette"];
   accentHex: string;
-}> = [
-  { id: "terre", label: "Terre", palette: "custom", accentHex: "#A84E2E" },
-  { id: "ink", label: "Ink", palette: "custom", accentHex: "#0F0C08" },
-  { id: "cobalt", label: "Cobalt", palette: "custom", accentHex: "#2A78D6" },
-  { id: "sauge", label: "Sauge", palette: "sauge", accentHex: "#6E7E62" },
-  { id: "plum", label: "Plum", palette: "custom", accentHex: "#7A4FA0" },
-  { id: "ochre", label: "Ochre", palette: "ocre", accentHex: "#B4762D" },
-];
+}> = PROPOSAL_PALETTE_OPTIONS.map((option) => ({
+  id: option.id as CvAccentChoice,
+  label: option.label,
+  palette: option.id,
+  accentHex: option.color,
+}));
 
 function getSectionId(section: CvSection, index: number): string {
   return String(section.id ?? `${section.type}-${index}`);
@@ -498,11 +497,9 @@ export function CvRail({
     }),
   );
   const activeAccent = ACCENT_OPTIONS.find((option) => {
-    if (option.palette && option.palette !== stylePreset.palette) return false;
-    if (option.palette && option.palette !== "custom") {
-      return !stylePreset.accentHex;
-    }
+    if (option.palette === stylePreset.palette) return !stylePreset.accentHex;
     return (
+      stylePreset.palette === "custom" &&
       String(stylePreset.accentHex ?? "").toLowerCase() ===
       option.accentHex.toLowerCase()
     );

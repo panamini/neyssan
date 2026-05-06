@@ -1,8 +1,8 @@
 /* ============================================================
    PALETTES ACCENT INTERCHANGEABLES — §6 dasti-spec-v5
    Surcharger via classe body.pal-* (jamais via style inline)
-   Layout pyramide : 3 dots ligne 1 (Terre, Ocre, Pierre)
-                     2 dots ligne 2 (Bordeaux, Encre)
+   Active palette: Terre, Cobalt, Ink, Sauge, Plum, Ochre
+   Legacy palette classes stay readable for older saved documents.
    Défaut: Terre (clay/terracotta) — défini dans foundation.css :root
    ============================================================ */
 
@@ -27,6 +27,48 @@
   --op: var(--color-on-accent);
 }
 
+/* Cobalt — link-blue accent */
+.pal-cobalt {
+  --ac: #2A78D6;
+  --am: #5391DD;
+  --ap: rgba(42, 120, 214, 0.10);
+  --as: rgba(42, 120, 214, 0.16);
+  --fr: #5391DD;
+  --color-on-accent: #FAF9F5;
+  --op: var(--color-on-accent);
+}
+.dark.pal-cobalt,
+.dark .pal-cobalt {
+  --ac: #2B99FF;
+  --am: #55AEFF;
+  --ap: rgba(43, 153, 255, 0.14);
+  --as: rgba(43, 153, 255, 0.20);
+  --fr: #55AEFF;
+  --color-on-accent: #0E0E0E;
+  --op: var(--color-on-accent);
+}
+
+/* Ink — dark heading accent */
+.pal-ink {
+  --ac: #0F0C08;
+  --am: #2F2D29;
+  --ap: rgba(15, 12, 8, 0.08);
+  --as: rgba(15, 12, 8, 0.14);
+  --fr: rgba(15, 12, 8, 0.22);
+  --color-on-accent: #FAF9F5;
+  --op: var(--color-on-accent);
+}
+.dark.pal-ink,
+.dark .pal-ink {
+  --ac: #FAF9F5;
+  --am: #D7D1C5;
+  --ap: rgba(250, 249, 245, 0.10);
+  --as: rgba(250, 249, 245, 0.16);
+  --fr: rgba(250, 249, 245, 0.24);
+  --color-on-accent: #0E0E0E;
+  --op: var(--color-on-accent);
+}
+
 /* Sauge — kept as alternate option */
 .pal-sauge {
   --ac: hsl(155, 22%, 30%);
@@ -45,6 +87,48 @@
   --as: hsl(155, 18%, 22%);
   --fr: hsl(155, 28%, 78%);
   --color-on-accent: hsl(80, 5%, 7%);
+  --op: var(--color-on-accent);
+}
+
+/* Plum */
+.pal-plum {
+  --ac: #7A4FA0;
+  --am: #9A70BE;
+  --ap: rgba(122, 79, 160, 0.10);
+  --as: rgba(122, 79, 160, 0.16);
+  --fr: #9A70BE;
+  --color-on-accent: #FAF9F5;
+  --op: var(--color-on-accent);
+}
+.dark.pal-plum,
+.dark .pal-plum {
+  --ac: #B88DDA;
+  --am: #CBA7E7;
+  --ap: rgba(184, 141, 218, 0.14);
+  --as: rgba(184, 141, 218, 0.20);
+  --fr: #CBA7E7;
+  --color-on-accent: #0E0E0E;
+  --op: var(--color-on-accent);
+}
+
+/* Ochre */
+.pal-ochre {
+  --ac: #B8843A;
+  --am: #C99A55;
+  --ap: rgba(184, 132, 58, 0.10);
+  --as: rgba(184, 132, 58, 0.16);
+  --fr: #C99A55;
+  --color-on-accent: #FAF9F5;
+  --op: var(--color-on-accent);
+}
+.dark.pal-ochre,
+.dark .pal-ochre {
+  --ac: #D5A85F;
+  --am: #E2BD7A;
+  --ap: rgba(213, 168, 95, 0.14);
+  --as: rgba(213, 168, 95, 0.20);
+  --fr: #E2BD7A;
+  --color-on-accent: #0E0E0E;
   --op: var(--color-on-accent);
 }
 

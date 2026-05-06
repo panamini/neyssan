@@ -101,7 +101,10 @@ import {
   type ProposalStyleChoice,
 } from "../lib/proposal-style-choice";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
-import type { ProposalPaletteId } from "../lib/proposal-style-display";
+import {
+  isProposalPaletteId,
+  type ProposalPaletteId,
+} from "../lib/proposal-style-display";
 import {
   resolveProposalStyle,
   resolveProposalStyleStatus,
@@ -754,16 +757,6 @@ function resolveSourceCvStylePreset(
 
   const sourceCvDocument = getLocalCvDocumentById(normalizedSourceCvId);
   return sourceCvDocument ? getVerbatiStyleFromCv(sourceCvDocument) : null;
-}
-
-function isProposalPaletteId(value: unknown): value is ProposalPaletteId {
-  return (
-    value === "sauge" ||
-    value === "ocre" ||
-    value === "pierre" ||
-    value === "bordeaux" ||
-    value === "encre"
-  );
 }
 
 function normalizeProposalAccentHex(value: unknown): string | null {
@@ -5060,6 +5053,10 @@ export function ProposalForge(): JSX.Element {
     ) => {
       const resolvedStylePreset = resolveVerbatiStyle(nextStyle);
       const nextTemplateId = getProposalTwinTemplateId(resolvedStylePreset);
+      const nextTemplateBundleId =
+        helpers.templateBundleId === undefined
+          ? proposalTemplateBundleId
+          : helpers.templateBundleId;
       const nextStyleChoice =
         resolveProposalStyleChoiceFromRenderState({
           templateId: nextTemplateId,
@@ -5067,7 +5064,7 @@ export function ProposalForge(): JSX.Element {
         }) ?? proposalStyleChoice;
 
       setProposalStyleLinkMode("proposal_local");
-      setProposalTemplateBundleId(helpers.templateBundleId ?? null);
+      setProposalTemplateBundleId(nextTemplateBundleId ?? null);
       setProposalPaletteOverride(helpers.paletteOverride ?? null);
       setProposalCustomAccentHex(helpers.customAccentHex ?? null);
       setProposalStylePreset(resolvedStylePreset);
@@ -5086,10 +5083,10 @@ export function ProposalForge(): JSX.Element {
         verbatiStyle: serializeProposalMetadataVerbatiStyle(resolvedStylePreset),
         styleLinkMode: "proposal_local",
         styleChoice: nextStyleChoice,
-        ...(helpers.templateBundleId ? { templateBundleId: helpers.templateBundleId } : null),
+        ...(nextTemplateBundleId ? { templateBundleId: nextTemplateBundleId } : null),
       };
     },
-    [proposalStyleChoice],
+    [proposalStyleChoice, proposalTemplateBundleId],
   );
 
   const applyProposalDirectStyle = React.useCallback(
@@ -5121,6 +5118,19 @@ export function ProposalForge(): JSX.Element {
     [commitProposalLocalStyle],
   );
 
+  const handleProposalStyleBundleReset = React.useCallback(
+    (bundleId: ProposalTemplateBundleId) => {
+      const bundleDefinition = getProposalTemplateBundleDefinition(bundleId);
+
+      commitProposalLocalStyle(bundleDefinition.stylePreset, {
+        templateBundleId: bundleDefinition.id,
+        paletteOverride: null,
+        customAccentHex: null,
+      });
+    },
+    [commitProposalLocalStyle],
+  );
+
   const handleProposalTypographySelect = React.useCallback(
     (typography: VerbatiStylePreset["typography"]) => {
       applyProposalDirectStyle({
@@ -5142,7 +5152,6 @@ export function ProposalForge(): JSX.Element {
         {
           paletteOverride: palette as ProposalPaletteId,
           customAccentHex: null,
-          templateBundleId: null,
         },
       );
     },
@@ -5160,7 +5169,6 @@ export function ProposalForge(): JSX.Element {
         {
           paletteOverride: null,
           customAccentHex: null,
-          templateBundleId: null,
         },
       );
     },
@@ -5178,7 +5186,6 @@ export function ProposalForge(): JSX.Element {
         {
           paletteOverride: null,
           customAccentHex: hex,
-          templateBundleId: null,
         },
       );
     },
@@ -5189,13 +5196,12 @@ export function ProposalForge(): JSX.Element {
     commitProposalLocalStyle(
       {
         ...effectiveProposalStylePresetWithPalette,
-        palette: proposalPaletteOverride ?? "pierre",
+        palette: proposalPaletteOverride ?? "terre",
         accentHex: undefined,
       },
       {
         paletteOverride: proposalPaletteOverride,
         customAccentHex: null,
-        templateBundleId: null,
       },
     );
   }, [commitProposalLocalStyle, effectiveProposalStylePresetWithPalette, proposalPaletteOverride]);
@@ -6056,9 +6062,9 @@ export function ProposalForge(): JSX.Element {
       isProposalPaletteId(effectiveSavedProposalStylePreset.palette)
         ? effectiveSavedProposalStylePreset.palette
         : null;
-    const restoredTemplateBundleId = findProposalTemplateBundleIdByStylePreset(
-      effectiveSavedProposalStylePreset,
-    );
+    const restoredTemplateBundleId =
+      resolveProposalTemplateBundleId(openedSavedProposal.metadata?.templateBundleId) ??
+      findProposalTemplateBundleIdByStylePreset(effectiveSavedProposalStylePreset);
     const shouldRestoreSavedDetachedStyle =
       savedProposalStyleLinkMode === "proposal_local";
     const restoredJobId = openedSavedProposal.metadata?.jobId?.trim() || null;
@@ -7859,6 +7865,7 @@ export function ProposalForge(): JSX.Element {
                       stylePreset={effectiveProposalStylePresetWithPalette}
                       styleTemplateBundleId={proposalTemplateBundleId}
                       onSelectStyleBundle={handleProposalStyleBundleSelect}
+                      onResetStyleBundle={handleProposalStyleBundleReset}
                       onSelectStyleTypography={handleProposalTypographySelect}
                       onSelectStylePalette={handleProposalPaletteSelect}
                       onSelectStyleFixedAccent={handleProposalFixedAccentSelect}

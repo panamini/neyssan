@@ -170,7 +170,12 @@ export interface UserProfileDoc extends Doc<"userProfiles"> {
         | "engaging"
         | "expert";
       palette:
+        | "terre"
+        | "cobalt"
+        | "ink"
         | "sauge"
+        | "plum"
+        | "ochre"
         | "ocre"
         | "pierre"
         | "bordeaux"
