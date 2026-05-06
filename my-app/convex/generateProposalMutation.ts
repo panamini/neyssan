@@ -1,10 +1,11 @@
 // convex/generateProposalMutation.ts
 import { action } from "./_generated/server";
 import { v } from "convex/values";
+import { llmConfig } from "../config/llmConfig";
 import { internal } from "./_generated/api";
 import { ConvexError } from "convex/values";
 import { ProposalService } from "./langchain";
-import { GPT4Adapter } from "./langchain/models/gpt4_adapter";
+import { OpenAIResponsesAdapter } from "./langchain/models/openai_responses_adapter";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatMistralAI } from "@langchain/mistralai";
 import { Mistral } from "@mistralai/mistralai";
@@ -9286,16 +9287,19 @@ export async function handleGenerateProposal(
         if (premiumPersistencePayload) {
           proposalContent = premiumPersistencePayload.content;
         } else {
-          const proposalService = new ProposalService({
+          const proposalOpenAiAdapter = new OpenAIResponsesAdapter({
             apiKey,
-            modelName: "chatgpt",
+            modelName: llmConfig.proposalModels?.openaiWriterModel ?? "gpt-5.5",
           });
-          const gpt4Adapter = new GPT4Adapter({ apiKey });
+          const proposalService = new ProposalService({
+            modelAdapter: proposalOpenAiAdapter,
+          });
 
           if (outputFormat === "freelance_proposal") {
             const tokenLimit = 3000;
             let jobDescription = enrichedJobDescription;
-            const estimatedTokens = gpt4Adapter.estimateTokens(jobDescription);
+            const estimatedTokens =
+              proposalOpenAiAdapter.estimateTokens(jobDescription);
 
             if (estimatedTokens > tokenLimit) {
               jobDescription = jobDescription.slice(
@@ -9323,7 +9327,7 @@ export async function handleGenerateProposal(
             });
             proposalContent = proposal.content;
           } else if (outputFormat === "application_message") {
-            proposalContent = await gpt4Adapter.generate(prompt, {
+            proposalContent = await proposalOpenAiAdapter.generate(prompt, {
             });
           } else {
             const proposal = await proposalService.generateCreativeProposal({

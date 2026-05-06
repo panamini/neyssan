@@ -593,7 +593,11 @@ describe("premium cover letter prompt contract", () => {
     expect(request).toEqual({
       model: "gpt-5.4",
       input: "Structured brief: {}",
+      reasoning: {
+        effort: "low",
+      },
       text: {
+        verbosity: "medium",
         format: {
           type: "json_schema",
           name: "cover_letter_body_parts",
@@ -894,15 +898,18 @@ describe("premium cover letter generation and rendering", () => {
     }
   });
 
-  it("defaults the premium writer model to gpt-5.4 and safely accepts gpt-5-mini", () => {
+  it("defaults the premium writer model to gpt-5.5 and safely accepts smaller fallbacks", () => {
     delete process.env.COVER_LETTER_PREMIUM_WRITER_MODEL;
+    expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5.5");
+
+    process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5.4";
     expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5.4");
 
     process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5-mini";
     expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5-mini");
 
     process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "unsupported-model";
-    expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5.4");
+    expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5.5");
 
     delete process.env.COVER_LETTER_PREMIUM_WRITER_MODEL;
   });

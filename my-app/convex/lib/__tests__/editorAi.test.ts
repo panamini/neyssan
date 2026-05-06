@@ -136,6 +136,7 @@ describe("editor AI transform contract", () => {
 
     expect(runTextPrompt).toHaveBeenCalledWith(
       expect.objectContaining({
+        actionId: "rewrite",
         providerPreference: "default",
       }),
     );
@@ -144,6 +145,140 @@ describe("editor AI transform contract", () => {
         providerPreference: "mistral",
       }),
     );
+  });
+
+  it("routes visible rewrite toolbar actions to Qwen 3.6 Plus", async () => {
+    vi.stubEnv("OPENAI_API_KEY", "openai-test-key");
+    vi.stubEnv("QWEN_API_KEY", "qwen-test-key");
+    vi.stubEnv("QWEN_CHAT_COMPLETIONS_URL", "https://qwen.test/v1/chat/completions");
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "Qwen rewrite" } }],
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runEditorSelectionTransform({
+      mode: "rewrite",
+      instruction: "Improve this.",
+      selectedText: "Original text",
+    });
+
+    expect(result.text).toBe("Qwen rewrite");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://qwen.test/v1/chat/completions",
+    );
+    expect(
+      JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)),
+    ).toMatchObject({
+      model: "qwen-3.6-plus",
+      max_tokens: 500,
+    });
+  });
+
+  it("routes cheap fix toolbar actions to Qwen 3.6 Flash", async () => {
+    vi.stubEnv("QWEN_API_KEY", "qwen-test-key");
+    vi.stubEnv("QWEN_CHAT_COMPLETIONS_URL", "https://qwen.test/v1/chat/completions");
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "Qwen fix" } }],
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runEditorSelectionTransform({
+      mode: "fix_grammar",
+      instruction: "Fix this.",
+      selectedText: "Bad text",
+    });
+
+    expect(
+      JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)),
+    ).toMatchObject({
+      model: "qwen-3.6-flash",
+    });
+  });
+
+  it("falls back from Qwen to Mistral before DeepSeek for toolbar actions", async () => {
+    vi.stubEnv("QWEN_API_KEY", "qwen-test-key");
+    vi.stubEnv("QWEN_CHAT_COMPLETIONS_URL", "https://qwen.test/v1/chat/completions");
+    vi.stubEnv("MISTRAL_API_KEY", "mistral-test-key");
+    vi.stubEnv("DEEPSEEK_API_KEY", "deepseek-test-key");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "Mistral fallback" } }],
+          }),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runEditorSelectionTransform({
+      mode: "shorten",
+      instruction: "Shorten this.",
+      selectedText: "Long text",
+    });
+
+    expect(result.text).toBe("Mistral fallback");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://qwen.test/v1/chat/completions",
+    );
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      "https://api.mistral.ai/v1/chat/completions",
+    );
+  });
+
+  it("falls back to DeepSeek after Qwen and Mistral fail", async () => {
+    vi.stubEnv("QWEN_API_KEY", "qwen-test-key");
+    vi.stubEnv("QWEN_CHAT_COMPLETIONS_URL", "https://qwen.test/v1/chat/completions");
+    vi.stubEnv("MISTRAL_API_KEY", "mistral-test-key");
+    vi.stubEnv("DEEPSEEK_API_KEY", "deepseek-test-key");
+    vi.stubEnv(
+      "DEEPSEEK_CHAT_COMPLETIONS_URL",
+      "https://deepseek.test/chat/completions",
+    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("qwen down", { status: 503 }))
+      .mockResolvedValueOnce(new Response("mistral down", { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "DeepSeek fallback" } }],
+          }),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runEditorSelectionTransform({
+      mode: "custom",
+      instruction: "Ask something.",
+      selectedText: "Text",
+    });
+
+    expect(result.text).toBe("DeepSeek fallback");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      "https://deepseek.test/chat/completions",
+    );
+    expect(
+      JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)),
+    ).toMatchObject({
+      model: "DeepSeek V4 Flash",
+    });
   });
 
   it("rejects invalid actions before calling the model", async () => {

@@ -1,4 +1,8 @@
-import { llmConfig } from "../../config/llmConfig";
+import {
+  llmConfig,
+  type HelperModelActionPolicy,
+  type HelperModelRoute,
+} from "../../config/llmConfig";
 import {
   requireEditorAiActionDefinition,
   type AiActionId,
@@ -73,6 +77,7 @@ function getHelperModelConfig(kind: HelperKind): {
   openaiPrimary: string;
   openaiFallback: string;
   mistralPrimary: string;
+  actions?: Record<string, HelperModelActionPolicy> | Partial<Record<string, HelperModelActionPolicy>>;
 } {
   const helperConfig = llmConfig.helperModels?.[kind];
 
@@ -159,6 +164,159 @@ async function requestMistralText(args: {
   return stripCodeFences(extractMistralText(await response.json()));
 }
 
+async function requestOpenAiCompatibleChatText(args: {
+  providerName: string;
+  apiKey: string;
+  url: string;
+  model: string;
+  system: string;
+  prompt: string;
+  maxOutputTokens: number;
+}): Promise<string> {
+  const response = await fetch(args.url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${args.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: args.model,
+      messages: [
+        { role: "system", content: args.system },
+        { role: "user", content: args.prompt },
+      ],
+      max_tokens: args.maxOutputTokens,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `${args.providerName} helper action failed for ${args.model}: ${response.status} ${response.statusText} ${await response.text()}`,
+    );
+  }
+
+  return stripCodeFences(extractMistralText(await response.json()));
+}
+
+function resolveEditorActionPolicy(
+  actionId: AiActionId | undefined,
+): HelperModelActionPolicy | null {
+  if (!actionId) return null;
+  const helperModels = getHelperModelConfig("editor");
+  return helperModels.actions?.[actionId] ?? null;
+}
+
+function getRouteCredentials(route: HelperModelRoute): {
+  apiKey: string | null;
+  url?: string | null;
+} {
+  if (route.provider === "mistral") {
+    return { apiKey: llmConfig.mistralKey ?? process.env.MISTRAL_API_KEY ?? null };
+  }
+
+  if (route.provider === "qwen") {
+    return {
+      apiKey: llmConfig.qwenKey ?? process.env.QWEN_API_KEY ?? null,
+      url: process.env.QWEN_CHAT_COMPLETIONS_URL ?? llmConfig.qwenChatCompletionsUrl ?? null,
+    };
+  }
+
+  if (route.provider === "deepseek") {
+    return {
+      apiKey: llmConfig.deepseekKey ?? process.env.DEEPSEEK_API_KEY ?? null,
+      url:
+        process.env.DEEPSEEK_CHAT_COMPLETIONS_URL ??
+        llmConfig.deepseekChatCompletionsUrl ??
+        null,
+    };
+  }
+
+  if (route.provider === "openai") {
+    return { apiKey: llmConfig.openaiKey ?? process.env.OPENAI_API_KEY ?? null };
+  }
+
+  return { apiKey: null };
+}
+
+async function runModelRoute(args: {
+  route: HelperModelRoute;
+  system: string;
+  prompt: string;
+  maxOutputTokens: number;
+  mistralResponseFormat?: Record<string, unknown>;
+}): Promise<string> {
+  const credentials = getRouteCredentials(args.route);
+  if (!credentials.apiKey) {
+    throw new Error(`${args.route.provider} helper AI provider is not configured`);
+  }
+
+  if (args.route.provider === "mistral") {
+    return requestMistralText({
+      apiKey: credentials.apiKey,
+      model: args.route.model,
+      system: args.system,
+      prompt: args.prompt,
+      maxOutputTokens: args.maxOutputTokens,
+      responseFormat: args.mistralResponseFormat,
+    });
+  }
+
+  if (args.route.provider === "openai") {
+    return requestOpenAiText({
+      apiKey: credentials.apiKey,
+      model: args.route.model,
+      system: args.system,
+      prompt: args.prompt,
+      maxOutputTokens: args.maxOutputTokens,
+    });
+  }
+
+  if (args.route.provider === "qwen" || args.route.provider === "deepseek") {
+    if (!credentials.url) {
+      throw new Error(
+        `${args.route.provider} helper AI chat completions URL is not configured`,
+      );
+    }
+    return requestOpenAiCompatibleChatText({
+      providerName: args.route.provider,
+      apiKey: credentials.apiKey,
+      url: credentials.url,
+      model: args.route.model,
+      system: args.system,
+      prompt: args.prompt,
+      maxOutputTokens: args.maxOutputTokens,
+    });
+  }
+
+  throw new Error(`Unsupported helper AI provider: ${args.route.provider}`);
+}
+
+async function runEditorActionRoute(args: {
+  policy: HelperModelActionPolicy;
+  system: string;
+  prompt: string;
+  maxOutputTokens: number;
+  mistralResponseFormat?: Record<string, unknown>;
+}): Promise<string> {
+  let lastError: Error | null = null;
+  for (const route of [args.policy.primary, ...args.policy.fallbacks]) {
+    try {
+      return await runModelRoute({
+        route,
+        system: args.system,
+        prompt: args.prompt,
+        maxOutputTokens: args.maxOutputTokens,
+        mistralResponseFormat: args.mistralResponseFormat,
+      });
+    } catch (error) {
+      lastError =
+        error instanceof Error ? error : new Error(String(error ?? ""));
+    }
+  }
+
+  throw lastError ?? new Error("No editor action AI provider is configured");
+}
+
 async function runHelperAiTextPrompt(args: {
   kind: HelperKind;
   system: string;
@@ -167,6 +325,7 @@ async function runHelperAiTextPrompt(args: {
   providerPreference?: "default" | "mistral" | "mistral_only";
   mistralModelOverride?: string;
   mistralResponseFormat?: Record<string, unknown>;
+  actionId?: AiActionId;
 }): Promise<string> {
   const maxOutputTokens = args.maxOutputTokens ?? 700;
   const helperModels = getHelperModelConfig(args.kind);
@@ -174,6 +333,20 @@ async function runHelperAiTextPrompt(args: {
   const mistralKey = llmConfig.mistralKey ?? process.env.MISTRAL_API_KEY;
   const mistralModel = args.mistralModelOverride ?? helperModels.mistralPrimary;
   let lastError: Error | null = null;
+  const editorActionPolicy =
+    args.kind === "editor" && args.providerPreference !== "mistral" && args.providerPreference !== "mistral_only"
+      ? resolveEditorActionPolicy(args.actionId)
+      : null;
+
+  if (editorActionPolicy) {
+    return runEditorActionRoute({
+      policy: editorActionPolicy,
+      system: args.system,
+      prompt: args.prompt,
+      maxOutputTokens,
+      mistralResponseFormat: args.mistralResponseFormat,
+    });
+  }
 
   if (
     (args.providerPreference === "mistral" ||
@@ -265,6 +438,7 @@ export async function runEditorAiTextPrompt(args: {
   providerPreference?: "default" | "mistral" | "mistral_only";
   mistralModelOverride?: string;
   mistralResponseFormat?: Record<string, unknown>;
+  actionId?: AiActionId;
 }): Promise<string> {
   return runHelperAiTextPrompt({
     kind: "editor",
@@ -274,6 +448,7 @@ export async function runEditorAiTextPrompt(args: {
     providerPreference: args.providerPreference,
     mistralModelOverride: args.mistralModelOverride,
     mistralResponseFormat: args.mistralResponseFormat,
+    actionId: args.actionId,
   });
 }
 
@@ -317,6 +492,7 @@ export async function runEditorSelectionTransform(args: {
     prompt,
     maxOutputTokens: 500,
     providerPreference: "default",
+    actionId: actionDefinition.id,
   });
 
   return {

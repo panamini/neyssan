@@ -1,5 +1,6 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { BaseMessage, HumanMessage, MessageContentComplex } from "@langchain/core/messages";
+import { llmConfig } from "../../../config/llmConfig";
 import type {
   ModelAdapter,
   ModelGenerationConfig,
@@ -19,7 +20,11 @@ export class GPT4Adapter implements ModelAdapter {
       openAIApiKey: config.apiKey,
       temperature: 0.7,
       maxTokens: 2048,
-      modelName: "gpt-3.5-turbo-1106",
+      modelName:
+        config.modelName ??
+        llmConfig.proposalModels?.openaiWriterModel ??
+        process.env.OPENAI_PROPOSAL_MODEL ??
+        "gpt-5.5",
     });
   }
 
