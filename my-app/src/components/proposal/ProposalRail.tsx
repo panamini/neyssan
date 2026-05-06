@@ -461,7 +461,7 @@ export function ProposalRail({
           className={`ds-btn ds-btn--${size} ds-btn--secondary dasti-proposal-skeleton-rail__length-select dasti-toolbar-tooltip-trigger--above`}
           data-toolbar-tooltip={selectedLengthOption?.description ?? "Proposal length"}
         >
-          <span>{selectedLengthOption?.label ?? "Medium"}</span>
+          <span>{selectedLengthOption?.label ?? "Standard"}</span>
           <ChevronDown className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
         </button>
       }
@@ -679,9 +679,6 @@ export function ProposalRail({
             </div>
             <div className="dasti-proposal-skeleton-rail__control-stack">
               {renderToneSelect("md")}
-            </div>
-            <div className="dasti-proposal-skeleton-rail__control-stack">
-              {renderLengthSelect("md")}
             </div>
             <Button
               type="button"

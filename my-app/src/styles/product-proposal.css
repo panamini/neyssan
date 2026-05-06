@@ -2064,6 +2064,19 @@
   -webkit-box-decoration-break: clone;
 }
 
+.dasti-proposal-inline-proofing__old {
+  background: transparent;
+  color: var(--proposal-document-ink);
+  text-decoration: line-through;
+  text-decoration-color: var(--er);
+  text-decoration-thickness: 1px;
+}
+
+.dasti-proposal-inline-proofing__new {
+  background: var(--ap);
+  color: var(--proposal-document-ink);
+}
+
 .dasti-proposal-inline-proofing__selection {
   background: var(--selection-highlight-bg);
   color: currentColor;

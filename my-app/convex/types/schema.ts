@@ -36,6 +36,10 @@ export interface ProposalDoc extends Doc<"proposals"> {
     fallback_reason?: string;
     validator_outcome?: string;
     save_outcome?: string;
+    requestedModelType?: string;
+    actualModelType?: string;
+    actualModelName?: string;
+    fallbackTriggerCode?: string;
     voicePreset?:
       | "signature"
       | "expert"

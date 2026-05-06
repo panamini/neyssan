@@ -1372,6 +1372,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       if (!textareaSelectionState || !proposalContent) return;
 
       const interactionId = createAiInteractionId();
+      const startedAt = window.performance.now();
       recordAiInteractionEvent({
         name: "ai_started",
         interactionId,
@@ -1401,6 +1402,15 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           });
           return;
         }
+
+        console.info("[ProposalDisplay] editor AI model used", {
+          requestedActionId: actionId,
+          actionId: normalizedResult.actionId,
+          actualModelProvider: normalizedResult.actualModelProvider,
+          actualModelName: normalizedResult.actualModelName,
+          fallbackUsed: normalizedResult.fallbackUsed,
+          durationMs: Math.round(window.performance.now() - startedAt),
+        });
 
         recordAiInteractionEvent({
           name: "ai_completed",
@@ -2828,7 +2838,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           anchor={textareaSelectionState.anchor}
           isLoading={isApplyingInlineAi}
           pendingActionId={pendingInlineAiActionId}
-          includeJobContextActions={hasEditorAiJobContext}
           onClose={() => setTextareaSelectionState(null)}
           onRunAction={handleRunInlineAiAction}
         />

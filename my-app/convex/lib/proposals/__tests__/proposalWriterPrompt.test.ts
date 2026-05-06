@@ -1006,6 +1006,38 @@ describe("proposal writer prompt contract", () => {
     ).toThrow(/substantive body content/i);
   });
 
+  it("rescues cv-backed grounded cover letters by dropping extra non-grounded cleanup residue", () => {
+    const saved = finalizeProposalForPersistence({
+      content: [
+        "Dear Hiring Manager,",
+        "",
+        "I am writing to apply for the Building Security Guard position with Travis County. I am a safety-conscious and attentive Security Guard with eight years of experience protecting people, property, and facilities, including work in military and defense-related environments. I am interested in this full-time role because it aligns well with my background in access control, patrol procedures, visitor assistance, CCTV monitoring, safety compliance, and professional response to security concerns.",
+        "",
+        "In my recent security roles with ADT Security and Copwatch, I have been responsible for maintaining safe environments by monitoring grounds, equipment controls, and selected areas through CCTV and smart-device applications. I have also conducted regular checks, logged in with security headquarters on required schedules, inspected restrooms and facility areas after closing for vagrants or unauthorized personnel, and reported concerns according to procedure.",
+        "",
+        "I understand that a Building Security Guard for Travis County serves as a first point of contact for employees, officials, and visitors. I am comfortable providing directions, assisting the public, signing visitors in and out, escorting individuals when needed, and maintaining a positive and respectful presence. My background has strengthened my ability to observe surroundings carefully, identify suspicious activity, communicate effectively, and support a secure and welcoming environment.",
+        "",
+        "I am also prepared for the physical and schedule requirements of this position, including standing and walking for long periods, conducting foot and vehicle patrols, working outdoors in varying conditions, and being flexible for AM, PM, overnight, weekend, and holiday shifts. I understand the importance of securing doors and windows, monitoring camera and door-lock systems, checking for maintenance concerns such as leaks, equipment issues, vandalism, or lighting problems, and reporting deficiencies to the proper authority.",
+        "",
+        "My skills in investigation, safety compliance, criminal justice knowledge, and physical security support my ability to respond appropriately to rule violations, emergencies, and questionable activities. I take instructions seriously, work independently and efficiently, and value strong working relationships with employees, officials, and the public. I am willing to complete required training and maintain the clearances, certifications, and standards required by the Department, including CJIS security clearance and a valid Texas Driver's License if selected.",
+        "",
+        "I would welcome the opportunity to contribute my experience, reliability, and commitment to safety to the Travis County Office of Security and Protection. Thank you for your time and consideration.",
+        "",
+        "Sincerely,",
+        "Robert Cooper",
+      ].join("\n"),
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Robert Cooper",
+      voicePreset: "expert",
+      noContextMode: false,
+    });
+
+    expect(saved).toContain("I have also conducted regular checks");
+    expect(saved).toContain("I understand the importance of securing doors and windows");
+    expect(saved).not.toContain("Thank you for your time and consideration.");
+  });
+
   it("fails closed for application-message shells that only survive as one weak sentence plus the local follow-up", () => {
     expect(() =>
       finalizeProposalForPersistence({

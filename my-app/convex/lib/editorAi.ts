@@ -23,8 +23,25 @@ export type EditorAiResult = {
   text: string;
   applyMode: AiApplyMode;
   outputMode: AiOutputMode;
+  actualModelProvider?: string;
+  actualModelName?: string;
+  fallbackUsed?: boolean;
   variants: [];
 };
+
+type HelperAiTextPromptResult = {
+  text: string;
+  actualModelProvider?: string;
+  actualModelName?: string;
+  fallbackUsed?: boolean;
+};
+
+class UnconfiguredHelperRouteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UnconfiguredHelperRouteError";
+  }
+}
 
 function compactWhitespace(value: string | null | undefined): string {
   if (typeof value !== "string") return "";
@@ -173,6 +190,11 @@ async function requestOpenAiCompatibleChatText(args: {
   prompt: string;
   maxOutputTokens: number;
 }): Promise<string> {
+  const thinking =
+    args.providerName === "deepseek"
+      ? ({ type: "disabled" as const })
+      : undefined;
+
   const response = await fetch(args.url, {
     method: "POST",
     headers: {
@@ -186,6 +208,7 @@ async function requestOpenAiCompatibleChatText(args: {
         { role: "user", content: args.prompt },
       ],
       max_tokens: args.maxOutputTokens,
+      ...(thinking ? { thinking } : {}),
     }),
   });
 
@@ -244,48 +267,65 @@ async function runModelRoute(args: {
   prompt: string;
   maxOutputTokens: number;
   mistralResponseFormat?: Record<string, unknown>;
-}): Promise<string> {
+}): Promise<HelperAiTextPromptResult> {
   const credentials = getRouteCredentials(args.route);
   if (!credentials.apiKey) {
-    throw new Error(`${args.route.provider} helper AI provider is not configured`);
+    throw new UnconfiguredHelperRouteError(
+      `${args.route.provider} helper AI provider is not configured`,
+    );
   }
 
   if (args.route.provider === "mistral") {
-    return requestMistralText({
-      apiKey: credentials.apiKey,
-      model: args.route.model,
-      system: args.system,
-      prompt: args.prompt,
-      maxOutputTokens: args.maxOutputTokens,
-      responseFormat: args.mistralResponseFormat,
-    });
+    return {
+      text: await requestMistralText({
+        apiKey: credentials.apiKey,
+        model: args.route.model,
+        system: args.system,
+        prompt: args.prompt,
+        maxOutputTokens: args.maxOutputTokens,
+        responseFormat: args.mistralResponseFormat,
+      }),
+      actualModelProvider: args.route.provider,
+      actualModelName: args.route.model,
+      fallbackUsed: false,
+    };
   }
 
   if (args.route.provider === "openai") {
-    return requestOpenAiText({
-      apiKey: credentials.apiKey,
-      model: args.route.model,
-      system: args.system,
-      prompt: args.prompt,
-      maxOutputTokens: args.maxOutputTokens,
-    });
+    return {
+      text: await requestOpenAiText({
+        apiKey: credentials.apiKey,
+        model: args.route.model,
+        system: args.system,
+        prompt: args.prompt,
+        maxOutputTokens: args.maxOutputTokens,
+      }),
+      actualModelProvider: args.route.provider,
+      actualModelName: args.route.model,
+      fallbackUsed: false,
+    };
   }
 
   if (args.route.provider === "qwen" || args.route.provider === "deepseek") {
     if (!credentials.url) {
-      throw new Error(
+      throw new UnconfiguredHelperRouteError(
         `${args.route.provider} helper AI chat completions URL is not configured`,
       );
     }
-    return requestOpenAiCompatibleChatText({
-      providerName: args.route.provider,
-      apiKey: credentials.apiKey,
-      url: credentials.url,
-      model: args.route.model,
-      system: args.system,
-      prompt: args.prompt,
-      maxOutputTokens: args.maxOutputTokens,
-    });
+    return {
+      text: await requestOpenAiCompatibleChatText({
+        providerName: args.route.provider,
+        apiKey: credentials.apiKey,
+        url: credentials.url,
+        model: args.route.model,
+        system: args.system,
+        prompt: args.prompt,
+        maxOutputTokens: args.maxOutputTokens,
+      }),
+      actualModelProvider: args.route.provider,
+      actualModelName: args.route.model,
+      fallbackUsed: false,
+    };
   }
 
   throw new Error(`Unsupported helper AI provider: ${args.route.provider}`);
@@ -297,27 +337,50 @@ async function runEditorActionRoute(args: {
   prompt: string;
   maxOutputTokens: number;
   mistralResponseFormat?: Record<string, unknown>;
-}): Promise<string> {
+}): Promise<HelperAiTextPromptResult> {
   let lastError: Error | null = null;
-  for (const route of [args.policy.primary, ...args.policy.fallbacks]) {
+  const skippedRoutes: string[] = [];
+  const attemptedRoutes: string[] = [];
+  for (const [routeIndex, route] of [
+    args.policy.primary,
+    ...args.policy.fallbacks,
+  ].entries()) {
+    attemptedRoutes.push(`${route.provider}:${route.model}`);
     try {
-      return await runModelRoute({
+      const result = await runModelRoute({
         route,
         system: args.system,
         prompt: args.prompt,
         maxOutputTokens: args.maxOutputTokens,
         mistralResponseFormat: args.mistralResponseFormat,
       });
+      return {
+        ...result,
+        fallbackUsed: routeIndex > 0 || skippedRoutes.length > 0,
+      };
     } catch (error) {
-      lastError =
+      const routeError =
         error instanceof Error ? error : new Error(String(error ?? ""));
+      if (routeError instanceof UnconfiguredHelperRouteError) {
+        skippedRoutes.push(`${route.provider}:${route.model}`);
+        continue;
+      }
+      lastError = routeError;
     }
   }
 
-  throw lastError ?? new Error("No editor action AI provider is configured");
+  if (lastError) {
+    throw new Error(
+      `Editor action AI routing failed after trying ${attemptedRoutes.join(" -> ")}. Last configured route error: ${lastError.message}`,
+    );
+  }
+
+  throw new Error(
+    `No configured editor action AI provider is available. Skipped routes: ${skippedRoutes.join(" -> ") || "none"}`,
+  );
 }
 
-async function runHelperAiTextPrompt(args: {
+async function runHelperAiTextPromptDetailed(args: {
   kind: HelperKind;
   system: string;
   prompt: string;
@@ -326,7 +389,7 @@ async function runHelperAiTextPrompt(args: {
   mistralModelOverride?: string;
   mistralResponseFormat?: Record<string, unknown>;
   actionId?: AiActionId;
-}): Promise<string> {
+}): Promise<HelperAiTextPromptResult> {
   const maxOutputTokens = args.maxOutputTokens ?? 700;
   const helperModels = getHelperModelConfig(args.kind);
   const openAiKey = process.env.OPENAI_API_KEY;
@@ -354,14 +417,19 @@ async function runHelperAiTextPrompt(args: {
     mistralKey
   ) {
     try {
-      return await requestMistralText({
-        apiKey: mistralKey,
-        model: mistralModel,
-        system: args.system,
-        prompt: args.prompt,
-        maxOutputTokens,
-        responseFormat: args.mistralResponseFormat,
-      });
+      return {
+        text: await requestMistralText({
+          apiKey: mistralKey,
+          model: mistralModel,
+          system: args.system,
+          prompt: args.prompt,
+          maxOutputTokens,
+          responseFormat: args.mistralResponseFormat,
+        }),
+        actualModelProvider: "mistral",
+        actualModelName: mistralModel,
+        fallbackUsed: false,
+      };
     } catch (error) {
       lastError =
         error instanceof Error ? error : new Error(String(error ?? ""));
@@ -374,13 +442,18 @@ async function runHelperAiTextPrompt(args: {
 
   if (openAiKey) {
     try {
-      return await requestOpenAiText({
-        apiKey: openAiKey,
-        model: helperModels.openaiPrimary,
-        system: args.system,
-        prompt: args.prompt,
-        maxOutputTokens,
-      });
+      return {
+        text: await requestOpenAiText({
+          apiKey: openAiKey,
+          model: helperModels.openaiPrimary,
+          system: args.system,
+          prompt: args.prompt,
+          maxOutputTokens,
+        }),
+        actualModelProvider: "openai",
+        actualModelName: helperModels.openaiPrimary,
+        fallbackUsed: false,
+      };
     } catch (error) {
       lastError =
         error instanceof Error ? error : new Error(String(error ?? ""));
@@ -391,13 +464,18 @@ async function runHelperAiTextPrompt(args: {
         /model_not_found/i.test(lastError.message)
       ) {
         try {
-          return await requestOpenAiText({
-            apiKey: openAiKey,
-            model: helperModels.openaiFallback,
-            system: args.system,
-            prompt: args.prompt,
-            maxOutputTokens,
-          });
+          return {
+            text: await requestOpenAiText({
+              apiKey: openAiKey,
+              model: helperModels.openaiFallback,
+              system: args.system,
+              prompt: args.prompt,
+              maxOutputTokens,
+            }),
+            actualModelProvider: "openai",
+            actualModelName: helperModels.openaiFallback,
+            fallbackUsed: true,
+          };
         } catch (fallbackError) {
           lastError =
             fallbackError instanceof Error
@@ -410,14 +488,19 @@ async function runHelperAiTextPrompt(args: {
 
   if (mistralKey) {
     try {
-      return await requestMistralText({
-        apiKey: mistralKey,
-        model: mistralModel,
-        system: args.system,
-        prompt: args.prompt,
-        maxOutputTokens,
-        responseFormat: args.mistralResponseFormat,
-      });
+      return {
+        text: await requestMistralText({
+          apiKey: mistralKey,
+          model: mistralModel,
+          system: args.system,
+          prompt: args.prompt,
+          maxOutputTokens,
+          responseFormat: args.mistralResponseFormat,
+        }),
+        actualModelProvider: "mistral",
+        actualModelName: mistralModel,
+        fallbackUsed: Boolean(openAiKey),
+      };
     } catch (error) {
       lastError =
         error instanceof Error ? error : new Error(String(error ?? ""));
@@ -429,6 +512,20 @@ async function runHelperAiTextPrompt(args: {
   }
 
   throw new Error("No helper AI provider is configured");
+}
+
+async function runHelperAiTextPrompt(args: {
+  kind: HelperKind;
+  system: string;
+  prompt: string;
+  maxOutputTokens?: number;
+  providerPreference?: "default" | "mistral" | "mistral_only";
+  mistralModelOverride?: string;
+  mistralResponseFormat?: Record<string, unknown>;
+  actionId?: AiActionId;
+}): Promise<string> {
+  const result = await runHelperAiTextPromptDetailed(args);
+  return result.text;
 }
 
 export async function runEditorAiTextPrompt(args: {
@@ -486,21 +583,30 @@ export async function runEditorSelectionTransform(args: {
     args.selectedText,
   ].join("\n");
   const runTextPrompt = args.runTextPrompt ?? runEditorAiTextPrompt;
-  const text = await runTextPrompt({
+  const promptArgs = {
     system:
       "You are editing a user's text selection in place. Return only the replacement text. Do not add explanations, code fences, or surrounding quotes.",
     prompt,
     maxOutputTokens: 500,
-    providerPreference: "default",
+    providerPreference: "default" as const,
     actionId: actionDefinition.id,
-  });
+  };
+  const promptResult = args.runTextPrompt
+    ? { text: await runTextPrompt(promptArgs) }
+    : await runHelperAiTextPromptDetailed({
+        kind: "editor",
+        ...promptArgs,
+      });
 
   return {
     kind: "text",
     actionId: actionDefinition.id,
-    text: text.trim(),
+    text: promptResult.text.trim(),
     applyMode: actionDefinition.applyMode,
     outputMode: actionDefinition.outputMode,
+    actualModelProvider: promptResult.actualModelProvider,
+    actualModelName: promptResult.actualModelName,
+    fallbackUsed: promptResult.fallbackUsed,
     variants: [],
   };
 }

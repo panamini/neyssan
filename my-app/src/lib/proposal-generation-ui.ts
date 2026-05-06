@@ -24,6 +24,7 @@ const JOB_ONLY_TOO_THIN_MESSAGE =
 export type ProposalGenerationFallbackInfo = {
   requestedModelType?: string | null;
   actualModelType?: string | null;
+  actualModelName?: string | null;
   fallbackTriggerCode?: string | null;
 };
 

@@ -25,6 +25,10 @@ export class MistralAdapter implements ModelAdapter {
     });
   }
 
+  getModelName(): string {
+    return this.modelName;
+  }
+
   /**
    * Generate text using Mistral
    */

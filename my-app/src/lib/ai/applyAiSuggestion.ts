@@ -13,6 +13,9 @@ export type EditorAiTextResult =
       text?: string;
       applyMode?: string;
       outputMode?: string;
+      actualModelProvider?: string;
+      actualModelName?: string;
+      fallbackUsed?: boolean;
       variants?: unknown[];
     };
 
@@ -22,6 +25,9 @@ export type NormalizedEditorAiTextResult = {
   text: string;
   applyMode: AiApplyMode;
   outputMode: AiOutputMode;
+  actualModelProvider?: string;
+  actualModelName?: string;
+  fallbackUsed?: boolean;
   variants: [];
 };
 
@@ -71,6 +77,18 @@ export function normalizeEditorAiTextResult(
     text,
     applyMode,
     outputMode,
+    actualModelProvider:
+      typeof structuredResult?.actualModelProvider === "string"
+        ? structuredResult.actualModelProvider
+        : undefined,
+    actualModelName:
+      typeof structuredResult?.actualModelName === "string"
+        ? structuredResult.actualModelName
+        : undefined,
+    fallbackUsed:
+      typeof structuredResult?.fallbackUsed === "boolean"
+        ? structuredResult.fallbackUsed
+        : undefined,
     variants: [],
   };
 }

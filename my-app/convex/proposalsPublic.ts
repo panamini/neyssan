@@ -122,6 +122,7 @@ export default query({
         save_outcome: v.optional(v.string()),
         requestedModelType: v.optional(v.string()),
         actualModelType: v.optional(v.string()),
+        actualModelName: v.optional(v.string()),
         fallbackTriggerCode: v.optional(v.string()),
         voicePreset: v.optional(proposalVoicePresetChoice),
         requestedVoicePreset: v.optional(

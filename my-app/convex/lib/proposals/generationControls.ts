@@ -158,13 +158,9 @@ export function buildProposalGenerationControlsBlock(args: {
     lines.push(`Tone tuning: ${args.toneTuning}.`);
   }
 
-  if (args.characterLimitMode && args.characterLimitMode !== "none") {
-    if (args.characterLimit) {
-      lines.push(`Keep the output within ${args.characterLimit} characters.`);
-    } else {
-      lines.push(`Respect the selected character-limit mode: ${args.characterLimitMode}.`);
-    }
-  }
+  // Initial proposal generation deliberately ignores the Length selector.
+  // Grounded first drafts are more important than character-budget compliance;
+  // length remains available for editing/Ask flows through their own prompts.
 
   return lines.join("\n");
 }
