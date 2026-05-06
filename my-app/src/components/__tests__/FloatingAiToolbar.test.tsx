@@ -405,6 +405,39 @@ describe("FloatingAiToolbar", () => {
     });
   });
 
+  it("flips above before entering the editor bottom fade zone", async () => {
+    render(
+      <FloatingAiToolbar
+        anchor={{
+          left: 220,
+          top: 430,
+          bottom: 446,
+          aboveCenter: 220,
+          aboveLeft: 190,
+          aboveRight: 250,
+          aboveLineHeight: 20,
+          belowCenter: 220,
+          belowLeft: 190,
+          belowRight: 250,
+          belowLineHeight: 20,
+          containerLeft: 100,
+          containerRight: 700,
+          containerTop: 0,
+          containerBottom: 500,
+        }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    const toolbar = screen.getByRole("toolbar", { name: "Selected text actions" });
+    await waitFor(() => {
+      expect(toolbar).toHaveAttribute("data-placement", "above");
+      expect(toolbar).toHaveStyle({ top: "370px" });
+    });
+  });
+
   it("uses smarter horizontal anchoring for short selections near an edge", async () => {
     render(
       <FloatingAiToolbar

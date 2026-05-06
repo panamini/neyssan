@@ -265,13 +265,17 @@ export function FloatingAiToolbar({
       viewportRight,
       (anchor.containerRight ?? viewportRight) - compactGap,
     );
+    const containerBottomAvoidance =
+      typeof anchor.containerBottom === "number"
+        ? Math.max(controlSize + baseGap, compactGap)
+        : compactGap;
     const verticalMin = Math.max(
       viewportTop,
       (anchor.containerTop ?? viewportTop) + compactGap,
     );
     const verticalMax = Math.min(
       viewportBottom,
-      (anchor.containerBottom ?? viewportBottom) - compactGap,
+      (anchor.containerBottom ?? viewportBottom) - containerBottomAvoidance,
     );
 
     const maxLeft = horizontalMax - width;

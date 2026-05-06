@@ -293,6 +293,24 @@ describe("ProposalDisplay CSS contracts", () => {
     );
   });
 
+  it("keeps inline AI controls out of the mirrored text flow", () => {
+    expect(productCss).toMatch(
+      /\.dasti-proposal-editor-page__inner\s*>\s*\.dasti-proposal-inline-proofing\s*\{[\s\S]*padding-inline:\s*var\(--proposal-output-editor-inline-padding\);[\s\S]*padding-block-start:\s*var\(--proposal-output-editor-block-start\);[\s\S]*padding-block-end:\s*var\(--proposal-output-editor-block-end\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-sheet__body--document-editor\s+\.dasti-proposal-editor-page__inner\s+>\s*\.dasti-proposal-inline-proofing\s*\{[\s\S]*padding-block-end:\s*calc\([\s\S]*var\(--proposal-output-editor-block-end\)\s*\+\s*var\(--control-sm\)\s*\+\s*var\(--space-3\)/,
+    );
+    expect(productCss).not.toContain(
+      ".dasti-proposal-inline-proofing__actions",
+    );
+    expect(productCss).not.toContain(
+      ".dasti-proposal-inline-proofing__action-anchor",
+    );
+    expect(productCss).toMatch(
+      /\.ds-ai-toolbar\s+\.dasti-proposal-inline-proofing__status\s*\{[\s\S]*height:\s*28px;[\s\S]*padding:\s*0\s+var\(--s3\);[\s\S]*background:\s*transparent;/,
+    );
+  });
+
   it("supports a detached saved-proposal header row with tighter library chrome spacing", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-sheet__header--detached\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/,
