@@ -42,6 +42,7 @@ The selector work added a live model routing layer for helper actions and a defa
 - Qwen uses `QWEN_API_KEY` plus `QWEN_CHAT_COMPLETIONS_URL` or `QWEN_BASE_URL`.
 - DeepSeek uses `DEEPSEEK_API_KEY` plus `DEEPSEEK_CHAT_COMPLETIONS_URL` or `DEEPSEEK_BASE_URL`.
 - Mistral uses `MISTRAL_API_KEY`.
+- The jobs match-read synthesis path uses the Ministral/Mistral family for keyword and summary matching; the current default model is `ministral-3-3b-instruct-2512`.
 
 ## Inline Diff Contract
 
@@ -59,6 +60,7 @@ The selector work added a live model routing layer for helper actions and a defa
 - Proposal generation stays on OpenAI `gpt-5.5`.
 - Toolbar actions now have a clear primary/fallback chain across Qwen, Mistral, and DeepSeek.
 - `fix_grammar` is not routed to Qwen Plus.
+- Job summary/keyword match synthesis is on the Ministral/Mistral path, not the proposal writer path.
 - The proposal editor now reviews text in place instead of in a detached suggestion card.
 
 ## Files
