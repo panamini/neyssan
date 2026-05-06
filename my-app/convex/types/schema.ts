@@ -27,6 +27,7 @@ export interface ProposalDoc extends Doc<"proposals"> {
     platform?: string;
     jobId?: string;
     tags?: string[];
+    sourceJobTitle?: string;
     sourceJobDescription?: string;
     sourceUrl?: string;
     sourceCvId?: string;

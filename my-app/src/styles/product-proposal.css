@@ -7719,8 +7719,8 @@
 }
 
 .dasti-proposal-skeleton-rail__style-swatch-wheel {
-  width: 17px;
-  height: 17px;
+  width: 100%;
+  height: 100%;
   display: block;
   pointer-events: none;
   filter: saturate(0.34) opacity(0.68);
@@ -7729,15 +7729,6 @@
 .dasti-proposal-skeleton-rail__style-swatch--icon:hover .dasti-proposal-skeleton-rail__style-swatch-wheel,
 .dasti-proposal-skeleton-rail__style-swatch--icon:focus-within .dasti-proposal-skeleton-rail__style-swatch-wheel {
   filter: saturate(0.54) opacity(0.86);
-}
-
-.dasti-proposal-skeleton-rail__style-swatch--custom input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
 }
 
 .dasti-proposal-skeleton-rail__cv-button {

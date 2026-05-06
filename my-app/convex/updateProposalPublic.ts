@@ -172,6 +172,7 @@ export default mutation({
         platform: v.optional(v.string()),
         jobId: v.optional(v.string()),
         tags: v.optional(v.array(v.string())),
+        sourceJobTitle: v.optional(v.string()),
         sourceJobDescription: v.optional(v.string()),
         sourceUrl: v.optional(v.string()),
         sourceCvId: v.optional(v.string()),

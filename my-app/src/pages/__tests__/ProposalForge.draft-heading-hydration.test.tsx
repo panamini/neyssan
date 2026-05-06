@@ -3,7 +3,10 @@ import { render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
-import { readStoredProposalOutputDraft } from "../../lib/proposal-output-draft";
+import {
+  PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+  readStoredProposalOutputDraft,
+} from "../../lib/proposal-output-draft";
 
 const mockUpdateProposal = vi.fn().mockResolvedValue(undefined);
 const mockCreateProposal = vi.fn().mockResolvedValue("created_proposal");
@@ -19,6 +22,15 @@ const DRAFT_PROPOSALS = [
     sections: [{ type: "text", content: "Draft A body." }],
     metadata: {
       proposalType: "cover_letter",
+      templateId: "proposal-workshop",
+      verbatiStyle: {
+        layout: "workshop",
+        typography: "geist-baskervville",
+        palette: "pierre",
+      },
+      styleLinkMode: "proposal_local",
+      styleChoice: "balanced",
+      templateBundleId: "swiss_serif",
       applicantName: "Applicant A",
       applicantRole: "Role A",
       contactLine: "a@example.com",
@@ -40,6 +52,15 @@ const DRAFT_PROPOSALS = [
     sections: [{ type: "text", content: "Draft B body." }],
     metadata: {
       proposalType: "cover_letter",
+      templateId: "proposal-workshop",
+      verbatiStyle: {
+        layout: "workshop",
+        typography: "engaging",
+        palette: "bordeaux",
+      },
+      styleLinkMode: "proposal_local",
+      styleChoice: "warm",
+      templateBundleId: "magazine_editorial",
       applicantName: "Applicant B",
       applicantRole: "Role B",
       contactLine: "b@example.com",
@@ -136,6 +157,66 @@ describe("ProposalForge draft heading hydration", () => {
         letterDate: "Paris, 2 May 2026",
         recipientDetails: "Recipient B",
       });
+    });
+  });
+
+  it("hydrates the opened draft style instead of a stale local workspace style", async () => {
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "Draft B body.",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: "proposal-workshop",
+        proposalVerbatiStyle: {
+          layout: "workshop",
+          typography: "engaging",
+          palette: "bordeaux",
+        },
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "warm",
+        proposalApplicantName: "Applicant B",
+        proposalApplicantRole: "Role B",
+        proposalContactLine: "b@example.com",
+        proposalLetterDate: "Paris, 2 May 2026",
+        proposalRecipientDetails: "Recipient B",
+        proposalDocumentTitle: "Draft B Subject",
+        proposalDocumentMeta: "Draft",
+        generatedProposalId: "draft_b",
+        proposalOutputMode: "preview",
+        paletteOverride: "bordeaux",
+        customAccentHex: null,
+        templateBundleId: "magazine_editorial",
+        typographyOverride: "engaging",
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?draftId=draft_a"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(readStoredProposalOutputDraft()?.generatedProposalId).toBe("draft_a");
+    });
+
+    await waitFor(() => {
+      expect(proposalDisplayProps.at(-1)?.stylePreset).toMatchObject({
+        layout: "workshop",
+        typography: "geist-baskervville",
+        palette: "pierre",
+      });
+    });
+
+    expect(readStoredProposalOutputDraft()).toMatchObject({
+      proposalStyleChoice: "balanced",
+      templateBundleId: "swiss_serif",
+      paletteOverride: "pierre",
     });
   });
 });

@@ -112,9 +112,8 @@ describe("ProposalRail style tab", () => {
     fireEvent.click(screen.getByRole("button", { name: "Use Cobalt accent" }));
     expect(onSelectStyleCustomAccent).toHaveBeenCalledWith("#2A78D6");
 
-    fireEvent.change(screen.getByLabelText("Choose a custom color"), {
-      target: { value: "#123456" },
-    });
-    expect(onSelectStyleCustomAccent).toHaveBeenCalledWith("#123456");
+    expect(document.querySelector('input[type="color"]')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open custom color picker" }));
+    expect(screen.getByRole("dialog", { name: "Custom accent color" })).toBeInTheDocument();
   });
 });

@@ -419,7 +419,8 @@ describe("ProposalForge autosave", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Direct style edit" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use Ochre accent" }));
 
     await waitForAutosave();
 
@@ -432,7 +433,7 @@ describe("ProposalForge autosave", () => {
             templateId: expect.any(String),
             styleLinkMode: "proposal_local",
             verbatiStyle: expect.objectContaining({
-              palette: "bordeaux",
+              palette: "ocre",
             }),
           }),
         }),

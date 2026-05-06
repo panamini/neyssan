@@ -259,7 +259,8 @@ describe("ProposalForge save to library", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Saved proposals")).toBeInTheDocument();
+      expect(screen.queryByText("Saved proposals")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Proposal rail")).toBeInTheDocument();
     });
 
     expect(readStoredProposalComposeDraft()).toBeNull();
@@ -402,7 +403,8 @@ describe("ProposalForge save to library", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Saved proposals")).toBeInTheDocument();
+      expect(screen.queryByText("Saved proposals")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Proposal rail")).toBeInTheDocument();
     });
     expect(readStoredProposalComposeDraft()).toBeNull();
     expect(readStoredProposalOutputDraft()).toBeNull();
