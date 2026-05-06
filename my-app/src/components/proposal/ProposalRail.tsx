@@ -2,10 +2,14 @@ import React from "react";
 import { ArrowSquareOut, Briefcase, Check, ChevronDown, ColorWheel, FilePdf, FileUser, X } from "../../lib/icons";
 import {
   findProposalTemplateBundleIdByStylePreset,
+  getProposalTemplateBundleDefinition,
   PROPOSAL_TEMPLATE_BUNDLE_DEFINITIONS,
   type ProposalTemplateBundleId,
 } from "../../lib/proposal-template-bundles";
-import type { ProposalPaletteId } from "../../lib/proposal-style-display";
+import {
+  PROPOSAL_PALETTE_OPTIONS,
+  type ProposalPaletteId,
+} from "../../lib/proposal-style-display";
 import {
   getVerbatiFontPairOption,
   type VerbatiFontPairId,
@@ -60,7 +64,6 @@ type ProposalRailAccentOption = {
   label: string;
   swatch: string;
   paletteOverride: ProposalPaletteId | null;
-  accentHex: string | null;
 };
 
 const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
@@ -88,13 +91,13 @@ const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
 ];
 
 const PROPOSAL_STYLE_ACCENT_OPTIONS: ProposalRailAccentOption[] = [
-  { id: "terre", label: "Terre", swatch: "#A84E2E", paletteOverride: null, accentHex: "#A84E2E" },
-  { id: "ink", label: "Ink", swatch: "#0F0C08", paletteOverride: null, accentHex: "#0F0C08" },
-  { id: "cobalt", label: "Cobalt", swatch: "#2A78D6", paletteOverride: null, accentHex: "#2A78D6" },
-  { id: "sauge", label: "Sage", swatch: "#3B6E4E", paletteOverride: "sauge", accentHex: null },
-  { id: "plum", label: "Plum", swatch: "#7A4FA0", paletteOverride: null, accentHex: "#7A4FA0" },
-  { id: "ochre", label: "Ochre", swatch: "#B8843A", paletteOverride: "ocre", accentHex: null },
-  { id: "custom", label: "Custom", swatch: "#8A8176", paletteOverride: null, accentHex: null },
+  ...PROPOSAL_PALETTE_OPTIONS.map((option) => ({
+    id: option.id,
+    label: option.label,
+    swatch: option.color,
+    paletteOverride: option.id,
+  })),
+  { id: "custom", label: "Custom", swatch: "#8A8176", paletteOverride: null },
 ];
 
 const PROPOSAL_CUSTOM_ACCENT_STARTER_HEX = "#8A8176";
@@ -102,6 +105,18 @@ const PROPOSAL_CUSTOM_ACCENT_STARTER_HEX = "#8A8176";
 function normalizeRailAccentHex(value: string | null | undefined): string | null {
   const normalized = value?.trim() ?? "";
   return /^#[0-9a-fA-F]{6}$/.test(normalized) ? normalized.toLowerCase() : null;
+}
+
+function railStylesEqual(
+  first: Partial<VerbatiStylePreset> | null | undefined,
+  second: Partial<VerbatiStylePreset> | null | undefined,
+): boolean {
+  return (
+    first?.layout === second?.layout &&
+    first?.typography === second?.typography &&
+    first?.palette === second?.palette &&
+    normalizeRailAccentHex(first?.accentHex) === normalizeRailAccentHex(second?.accentHex)
+  );
 }
 
 const PROPOSAL_STYLE_FONT_PAIR_IDS: VerbatiFontPairId[] = [
@@ -211,6 +226,7 @@ type ProposalRailProps = {
   stylePreset: VerbatiStylePreset;
   styleTemplateBundleId: ProposalTemplateBundleId | null;
   onSelectStyleBundle: (bundleId: ProposalTemplateBundleId) => void;
+  onResetStyleBundle?: (bundleId: ProposalTemplateBundleId) => void;
   onSelectStyleTypography: (typography: VerbatiStylePreset["typography"]) => void;
   onSelectStylePalette: (palette: ProposalPaletteId) => void;
   onSelectStyleFixedAccent?: (hex: string) => void;
@@ -260,9 +276,9 @@ export function ProposalRail({
   stylePreset,
   styleTemplateBundleId,
   onSelectStyleBundle,
+  onResetStyleBundle,
   onSelectStyleTypography,
   onSelectStylePalette,
-  onSelectStyleFixedAccent,
   onSelectStyleCustomAccent,
   onClearStyleCustomAccent,
   aiStream,
@@ -366,12 +382,21 @@ export function ProposalRail({
   const activeTemplateBundleId = normalizeProposalTemplateBundleId(
     styleTemplateBundleId ?? findProposalTemplateBundleIdByStylePreset(stylePreset),
   );
+  const activeTemplateBundleDefinition =
+    getProposalTemplateBundleDefinition(activeTemplateBundleId);
+  const isActiveTemplateBundleCustomized = Boolean(
+    styleTemplateBundleId &&
+      !railStylesEqual(stylePreset, activeTemplateBundleDefinition.stylePreset),
+  );
+  const activeTemplateBundleLabel =
+    PROPOSAL_STYLE_OPTIONS.find((option) => option.id === activeTemplateBundleId)
+      ?.label ?? "Style";
   const activeAccentHex = normalizeRailAccentHex(stylePreset.accentHex);
   const fixedAccentHexMatch = PROPOSAL_STYLE_ACCENT_OPTIONS.some(
     (option) =>
-      option.accentHex !== null &&
+      option.paletteOverride !== null &&
       stylePreset.palette === "custom" &&
-      activeAccentHex === normalizeRailAccentHex(option.accentHex),
+      activeAccentHex === normalizeRailAccentHex(option.swatch),
   );
   const customAccentHex = stylePreset.palette === "custom" ? stylePreset.accentHex : null;
   const hasCustomAccentColor = normalizeRailAccentHex(customAccentHex) !== null;
@@ -723,21 +748,44 @@ export function ProposalRail({
           </div>
           <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Template</div>
           <div className="dasti-proposal-skeleton-rail__style-pills" aria-label="Proposal style presets">
-            {PROPOSAL_STYLE_OPTIONS.map((option) => (
+            {PROPOSAL_STYLE_OPTIONS.map((option) => {
+              const isSelected = activeTemplateBundleId === option.id;
+              const label =
+                isSelected && isActiveTemplateBundleCustomized
+                  ? `${option.label} · Custom`
+                  : option.label;
+
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-label={option.label}
+                  data-selected={isSelected ? "true" : undefined}
+                  aria-pressed={isSelected}
+                  title={option.description}
+                  onClick={() => {
+                    setIsCustomColorPickerOpen(false);
+                    onSelectStyleBundle(option.id);
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+            {isActiveTemplateBundleCustomized && onResetStyleBundle ? (
               <button
-                key={option.id}
                 type="button"
-                data-selected={activeTemplateBundleId === option.id ? "true" : undefined}
-                aria-pressed={activeTemplateBundleId === option.id}
-                title={option.description}
+                className="dasti-proposal-skeleton-rail__style-reset"
+                aria-label={`Reset ${activeTemplateBundleLabel}`}
+                title={`Reset ${activeTemplateBundleLabel} to its original color, font, and layout.`}
                 onClick={() => {
                   setIsCustomColorPickerOpen(false);
-                  onSelectStyleBundle(option.id);
+                  onResetStyleBundle(activeTemplateBundleId);
                 }}
               >
-                {option.label}
+                Reset
               </button>
-            ))}
+            ) : null}
           </div>
           <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Font pair</div>
           <ProposalRailFontPairMenu
@@ -756,11 +804,10 @@ export function ProposalRail({
             {PROPOSAL_STYLE_ACCENT_OPTIONS.map((swatch) => {
               const isSelected =
                 swatch.paletteOverride !== null
-                  ? stylePreset.palette === swatch.paletteOverride
-                  : swatch.accentHex !== null
-                    ? stylePreset.palette === "custom" &&
-                      activeAccentHex === normalizeRailAccentHex(swatch.accentHex)
-                    : isSeventhCustomToneSelected;
+                  ? stylePreset.palette === swatch.paletteOverride ||
+                    (stylePreset.palette === "custom" &&
+                      activeAccentHex === normalizeRailAccentHex(swatch.swatch))
+                  : isSeventhCustomToneSelected;
 
               return swatch.paletteOverride ? (
                 <button
@@ -778,28 +825,6 @@ export function ProposalRail({
                   onClick={() => {
                     setIsCustomColorPickerOpen(false);
                     onSelectStylePalette(swatch.paletteOverride);
-                  }}
-                >
-                  {isSelected ? <Check size={12} strokeWidth={1.9} /> : null}
-                </button>
-              ) : swatch.accentHex ? (
-                <button
-                  key={swatch.id}
-                  type="button"
-                  className="dasti-proposal-skeleton-rail__style-swatch"
-                  style={
-                    {
-                      "--proposal-accent-swatch": swatch.swatch,
-                    } as React.CSSProperties
-                  }
-                  aria-label={`Use ${swatch.label} accent`}
-                  aria-pressed={isSelected}
-                  data-selected={isSelected ? "true" : undefined}
-                  onClick={() => {
-                    setIsCustomColorPickerOpen(false);
-                    (onSelectStyleFixedAccent ?? onSelectStyleCustomAccent)(
-                      swatch.accentHex ?? swatch.swatch,
-                    );
                   }}
                 >
                   {isSelected ? <Check size={12} strokeWidth={1.9} /> : null}

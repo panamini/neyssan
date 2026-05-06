@@ -14,7 +14,7 @@ import {
   resolveProposalStyleChoice,
   type ProposalStyleChoice,
 } from "./proposal-style-choice";
-import type { ProposalPaletteId } from "./proposal-style-display";
+import { isProposalPaletteId, type ProposalPaletteId } from "./proposal-style-display";
 import {
   resolveProposalTemplateBundleId,
   type ProposalTemplateBundleId,
@@ -285,14 +285,9 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
           : null,
       proposalOutputMode:
         parsed.proposalOutputMode === "edit" ? "edit" : "preview",
-      paletteOverride:
-        parsed.paletteOverride === "sauge" ||
-        parsed.paletteOverride === "ocre" ||
-        parsed.paletteOverride === "pierre" ||
-        parsed.paletteOverride === "bordeaux" ||
-        parsed.paletteOverride === "encre"
-          ? parsed.paletteOverride
-          : null,
+      paletteOverride: isProposalPaletteId(parsed.paletteOverride)
+        ? parsed.paletteOverride
+        : null,
       customAccentHex:
         typeof parsed.customAccentHex === "string" &&
         /^#[0-9a-fA-F]{6}$/.test(parsed.customAccentHex)
@@ -418,14 +413,9 @@ function buildSanitizedStoredProposalOutputDraft(
         ? draft.generatedProposalId
         : null,
     proposalOutputMode: draft.proposalOutputMode === "edit" ? "edit" : "preview",
-    paletteOverride:
-      draft.paletteOverride === "sauge" ||
-      draft.paletteOverride === "ocre" ||
-      draft.paletteOverride === "pierre" ||
-      draft.paletteOverride === "bordeaux" ||
-      draft.paletteOverride === "encre"
-        ? draft.paletteOverride
-        : null,
+    paletteOverride: isProposalPaletteId(draft.paletteOverride)
+      ? draft.paletteOverride
+      : null,
     customAccentHex:
       typeof draft.customAccentHex === "string" &&
       /^#[0-9a-fA-F]{6}$/.test(draft.customAccentHex)

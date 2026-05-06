@@ -176,7 +176,7 @@ const proposalSignatureSettingsChoice = v.object({
 const proposalPresetSlotChoice = v.object({
   fontPairId: v.union(v.string(), v.null()),
   styleChoice: proposalStyleChoiceChoice,
-  paletteOverride: v.union(v.literal("sauge"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
+  paletteOverride: v.union(v.literal("terre"), v.literal("cobalt"), v.literal("ink"), v.literal("sauge"), v.literal("plum"), v.literal("ochre"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
   accentHex: v.union(v.string(), v.null()),
   verbatiStyle: v.optional(proposalPresetVerbatiStyleChoice),
   voicePreset: v.union(proposalVoicePresetChoice, v.null()),

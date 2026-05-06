@@ -43,7 +43,7 @@ const TEMPLATE_BUNDLE_BASES: readonly BundleBase[] = [
     stylePreset: {
       layout: "workshop",
       typography: "geist-baskervville",
-      palette: "pierre",
+      palette: "terre",
     },
   },
   {
@@ -53,7 +53,7 @@ const TEMPLATE_BUNDLE_BASES: readonly BundleBase[] = [
     stylePreset: {
       layout: "workshop",
       typography: "expert",
-      palette: "encre",
+      palette: "ink",
     },
   },
   {
@@ -64,7 +64,7 @@ const TEMPLATE_BUNDLE_BASES: readonly BundleBase[] = [
     stylePreset: {
       layout: "workshop",
       typography: "engaging",
-      palette: "bordeaux",
+      palette: "cobalt",
     },
   },
   {
@@ -74,7 +74,7 @@ const TEMPLATE_BUNDLE_BASES: readonly BundleBase[] = [
     stylePreset: {
       layout: "workshop",
       typography: "signature",
-      palette: "ocre",
+      palette: "ochre",
     },
   },
   {
@@ -85,7 +85,7 @@ const TEMPLATE_BUNDLE_BASES: readonly BundleBase[] = [
     stylePreset: {
       layout: "workshop",
       typography: "expert",
-      palette: "encre",
+      palette: "ink",
     },
   },
 ] as const;

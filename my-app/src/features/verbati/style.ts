@@ -9,6 +9,7 @@ import {
   type VerbatiFontPairOption,
 } from "./fontCatalog";
 import {
+  ALL_VERBATI_PALETTE_OPTIONS,
   VERBATI_PALETTE_OPTIONS,
   normalizeVerbatiAccentHex,
   resolvePreviewCanonicalAppearance,
@@ -135,7 +136,7 @@ function sanitizePersistedVerbatiPalette(
   }
 
   return value === "custom" ||
-    VERBATI_PALETTE_OPTIONS.some((option) => option.id === value)
+    ALL_VERBATI_PALETTE_OPTIONS.some((option) => option.id === value)
     ? (value as VerbatiStylePreset["palette"])
     : null;
 }

@@ -37,7 +37,12 @@ const proposalStyleChoiceValidator = v.union(
 );
 
 const proposalPaletteOverrideValidator = v.union(
+  v.literal("terre"),
+  v.literal("cobalt"),
+  v.literal("ink"),
   v.literal("sauge"),
+  v.literal("plum"),
+  v.literal("ochre"),
   v.literal("ocre"),
   v.literal("pierre"),
   v.literal("bordeaux"),
@@ -204,7 +209,18 @@ const presetSlotValidator = v.object({
 type PresetSlotData = {
   fontPairId: string | null;
   styleChoice: "auto" | "formal" | "warm" | "technical" | "balanced";
-  paletteOverride: "sauge" | "ocre" | "pierre" | "bordeaux" | "encre" | null;
+  paletteOverride:
+    | "terre"
+    | "cobalt"
+    | "ink"
+    | "sauge"
+    | "plum"
+    | "ochre"
+    | "ocre"
+    | "pierre"
+    | "bordeaux"
+    | "encre"
+    | null;
   accentHex: string | null;
   verbatiStyle?: {
     familyId?: string;

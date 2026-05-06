@@ -17,7 +17,12 @@ export const USER_PROFILE_VERBATI_LAYOUT_LEGACY_ALIASES = [
 ] as const;
 
 export const USER_PROFILE_VERBATI_PALETTE_IDS = [
+  "terre",
+  "cobalt",
+  "ink",
   "sauge",
+  "plum",
+  "ochre",
   "ocre",
   "pierre",
   "bordeaux",

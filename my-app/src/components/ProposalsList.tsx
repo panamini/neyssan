@@ -48,7 +48,10 @@ import {
   getProposalTemplateBundleDefinition,
   type ProposalTemplateBundleId,
 } from "../lib/proposal-template-bundles";
-import type { ProposalPaletteId } from "../lib/proposal-style-display";
+import {
+  isProposalPaletteId,
+  type ProposalPaletteId,
+} from "../lib/proposal-style-display";
 import {
   buildProposalHeaderVisibilityFromContent,
   resolveProposalHeaderVisibility,
@@ -148,16 +151,6 @@ function normalizeSavedBundleId(
     return "magazine_editorial";
   }
   return "swiss_serif";
-}
-
-function isProposalPaletteId(value: unknown): value is ProposalPaletteId {
-  return (
-    value === "sauge" ||
-    value === "ocre" ||
-    value === "pierre" ||
-    value === "bordeaux" ||
-    value === "encre"
-  );
 }
 
 function normalizeAccentHex(value: unknown): string | null {

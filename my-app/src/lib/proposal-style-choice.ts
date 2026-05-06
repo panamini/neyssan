@@ -64,12 +64,12 @@ const PROPOSAL_STYLE_DEFINITIONS: Record<
     stylePreset: resolveVerbatiStyle({
       layout: "workshop",
       typography: "expert",
-      palette: "pierre",
+      palette: "cobalt",
     }),
     templateId: getProposalTwinTemplateId({
       layout: "workshop",
       typography: "expert",
-      palette: "pierre",
+      palette: "cobalt",
     }),
   },
   warm: {
@@ -78,12 +78,12 @@ const PROPOSAL_STYLE_DEFINITIONS: Record<
     stylePreset: resolveVerbatiStyle({
       layout: "workshop",
       typography: "engaging",
-      palette: "bordeaux",
+      palette: "cobalt",
     }),
     templateId: getProposalTwinTemplateId({
       layout: "workshop",
       typography: "engaging",
-      palette: "bordeaux",
+      palette: "cobalt",
     }),
   },
   technical: {
@@ -92,12 +92,12 @@ const PROPOSAL_STYLE_DEFINITIONS: Record<
     stylePreset: resolveVerbatiStyle({
       layout: "workshop",
       typography: "expert",
-      palette: "encre",
+      palette: "ink",
     }),
     templateId: getProposalTwinTemplateId({
       layout: "workshop",
       typography: "expert",
-      palette: "encre",
+      palette: "ink",
     }),
   },
   balanced: {
@@ -106,12 +106,12 @@ const PROPOSAL_STYLE_DEFINITIONS: Record<
     stylePreset: resolveVerbatiStyle({
       layout: "workshop",
       typography: "geist-baskervville",
-      palette: "pierre",
+      palette: "terre",
     }),
     templateId: getProposalTwinTemplateId({
       layout: "workshop",
       typography: "geist-baskervville",
-      palette: "pierre",
+      palette: "terre",
     }),
   },
 };

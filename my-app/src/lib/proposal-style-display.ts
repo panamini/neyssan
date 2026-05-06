@@ -1,11 +1,8 @@
 import type { ResolvedProposalStyleChoice } from "./proposal-style-choice";
+import { ALL_VERBATI_PALETTE_OPTIONS, VERBATI_PALETTE_OPTIONS } from "./layout/documentAppearance";
+import type { VerbatiStylePreset } from "../features/verbati/types";
 
-export type ProposalPaletteId =
-  | "sauge"
-  | "ocre"
-  | "pierre"
-  | "bordeaux"
-  | "encre";
+export type ProposalPaletteId = Exclude<VerbatiStylePreset["palette"], "custom">;
 
 export type ProposalStylePreviewDefinition = {
   headingFont: string;
@@ -19,13 +16,22 @@ export const PROPOSAL_PALETTE_OPTIONS: Array<{
   id: ProposalPaletteId;
   label: string;
   color: string;
-}> = [
-  { id: "sauge", label: "Sage", color: "hsl(155 22% 30%)" },
-  { id: "ocre", label: "Ochre", color: "hsl(34 38% 32%)" },
-  { id: "pierre", label: "Stone", color: "hsl(220 14% 30%)" },
-  { id: "bordeaux", label: "Bordeaux", color: "hsl(348 22% 30%)" },
-  { id: "encre", label: "Ink", color: "hsl(200 18% 24%)" },
-];
+  cssClassName: `pal-${string}`;
+  accentToken: string;
+}> = VERBATI_PALETTE_OPTIONS.map((option) => ({
+  id: option.id,
+  label: option.name,
+  color: option.accentHex,
+  cssClassName: option.cssClassName,
+  accentToken: option.accentToken,
+}));
+
+export function isProposalPaletteId(value: unknown): value is ProposalPaletteId {
+  return (
+    typeof value === "string" &&
+    ALL_VERBATI_PALETTE_OPTIONS.some((option) => option.id === value)
+  );
+}
 
 export const PROPOSAL_STYLE_PREVIEW_DEFINITIONS: Record<
   ResolvedProposalStyleChoice,

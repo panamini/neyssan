@@ -72,7 +72,10 @@ import {
   PROPOSAL_CHARACTER_LIMIT_TOAST_THRESHOLDS,
 } from "../../convex/lib/proposals/generationControls";
 import { resolveProposalRenderState } from "../lib/proposal-render-state";
-import { type ProposalPaletteId } from "../lib/proposal-style-display";
+import {
+  isProposalPaletteId,
+  type ProposalPaletteId,
+} from "../lib/proposal-style-display";
 import { type ProposalStyleChoice } from "../lib/proposal-style-choice";
 import { buildProposalSourceSummary } from "../lib/proposal-source-summary";
 
@@ -127,16 +130,6 @@ type SavedProposalRecord = {
     paletteOverride?: ProposalPaletteId | null;
   };
 };
-
-function isProposalPaletteId(value: unknown): value is ProposalPaletteId {
-  return (
-    value === "sauge" ||
-    value === "ocre" ||
-    value === "pierre" ||
-    value === "bordeaux" ||
-    value === "encre"
-  );
-}
 
 function inferSavedProposalType(
   content: string | undefined,

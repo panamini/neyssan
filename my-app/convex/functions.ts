@@ -233,7 +233,7 @@ async function resolveStyleSuggestion(
   try {
     const raw = await runStyleRoutingAiTextPrompt({
       system:
-        "You map a user's visual-style request to a constrained document style system. Return JSON only with keys bundleId and overrides. bundleId must be one of: minimal, rounded, editorial, bold. overrides may optionally include layout, typography, and palette. Use only these values. layout: swiss, two-column, editorial, modernist, quire. typography: signature, engaging, expert. palette: sauge, ocre, pierre, bordeaux, encre.",
+        "You map a user's visual-style request to a constrained document style system. Return JSON only with keys bundleId and overrides. bundleId must be one of: minimal, rounded, editorial, bold. overrides may optionally include layout, typography, and palette. Use only these values. layout: swiss, two-column, editorial, modernist, quire. typography: signature, engaging, expert. palette: terre, cobalt, ink, sauge, plum, ochre.",
       prompt: [
         "Map this style request into the closest canonical document style bundle.",
         "Prefer the bundle that best matches the user's intent, then add only necessary overrides.",

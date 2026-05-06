@@ -18,7 +18,12 @@ export type LegacyVerbatiLayoutAlias =
   | "slate-column";
 export type VerbatiLayoutPreset = StyleFamilyId | LegacyVerbatiLayoutAlias;
 export type VerbatiPalettePreset =
+  | "terre"
+  | "cobalt"
+  | "ink"
   | "sauge"
+  | "plum"
+  | "ochre"
   | "ocre"
   | "pierre"
   | "bordeaux"

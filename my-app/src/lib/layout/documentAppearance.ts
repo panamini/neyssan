@@ -15,6 +15,9 @@ export type VerbatiPaletteOption = {
   id: Exclude<VerbatiPalettePreset, "custom">;
   name: string;
   accentHex: string;
+  cssClassName: `pal-${string}`;
+  accentToken: string;
+  legacy?: boolean;
 };
 
 const PREVIEW_NEUTRAL_THEME = {
@@ -42,11 +45,88 @@ const EXPORT_MONO_THEME = {
 const DOCX_SAFE_FALLBACK_HEX = EXPORT_MONO_THEME.ink.slice(1).toUpperCase();
 
 export const VERBATI_PALETTE_OPTIONS: VerbatiPaletteOption[] = [
-  { id: "sauge", name: "Sage", accentHex: "#556d60" },
-  { id: "ocre", name: "Ochre", accentHex: "#8c6640" },
-  { id: "pierre", name: "Stone", accentHex: "#5b6472" },
-  { id: "bordeaux", name: "Bordeaux", accentHex: "#7c5158" },
-  { id: "encre", name: "Ink", accentHex: "#3f5b67" },
+  {
+    id: "terre",
+    name: "Terre",
+    accentHex: "#A84E2E",
+    cssClassName: "pal-terre",
+    accentToken: "var(--ac)",
+  },
+  {
+    id: "cobalt",
+    name: "Cobalt",
+    accentHex: "#2A78D6",
+    cssClassName: "pal-cobalt",
+    accentToken: "var(--link)",
+  },
+  {
+    id: "ink",
+    name: "Ink",
+    accentHex: "#0F0C08",
+    cssClassName: "pal-ink",
+    accentToken: "var(--paper-dark-heading-ink)",
+  },
+  {
+    id: "sauge",
+    name: "Sage",
+    accentHex: "#3B6E4E",
+    cssClassName: "pal-sauge",
+    accentToken: "var(--ac)",
+  },
+  {
+    id: "plum",
+    name: "Plum",
+    accentHex: "#7A4FA0",
+    cssClassName: "pal-plum",
+    accentToken: "var(--ac)",
+  },
+  {
+    id: "ochre",
+    name: "Ochre",
+    accentHex: "#B8843A",
+    cssClassName: "pal-ochre",
+    accentToken: "var(--ac)",
+  },
+];
+
+export const LEGACY_VERBATI_PALETTE_OPTIONS: VerbatiPaletteOption[] = [
+  {
+    id: "ocre",
+    name: "Ochre legacy",
+    accentHex: "#8c6640",
+    cssClassName: "pal-ocre",
+    accentToken: "var(--ac)",
+    legacy: true,
+  },
+  {
+    id: "pierre",
+    name: "Stone legacy",
+    accentHex: "#5b6472",
+    cssClassName: "pal-pierre",
+    accentToken: "var(--ac)",
+    legacy: true,
+  },
+  {
+    id: "bordeaux",
+    name: "Bordeaux legacy",
+    accentHex: "#7c5158",
+    cssClassName: "pal-bordeaux",
+    accentToken: "var(--ac)",
+    legacy: true,
+  },
+  {
+    id: "encre",
+    name: "Ink legacy",
+    accentHex: "#3f5b67",
+    cssClassName: "pal-encre",
+    accentToken: "var(--ac)",
+    legacy: true,
+  },
+];
+
+export const ALL_VERBATI_PALETTE_OPTIONS: VerbatiPaletteOption[] = [
+  ...VERBATI_PALETTE_OPTIONS,
+  ...LEGACY_VERBATI_PALETTE_OPTIONS,
 ];
 
 export const DEFAULT_VERBATI_ACCENT = VERBATI_PALETTE_OPTIONS[0].accentHex;
@@ -138,7 +218,7 @@ export function resolveVerbatiAccentHex(style: VerbatiStylePreset): string {
   }
 
   return (
-    VERBATI_PALETTE_OPTIONS.find((option) => option.id === style.palette)
+    ALL_VERBATI_PALETTE_OPTIONS.find((option) => option.id === style.palette)
       ?.accentHex ?? DEFAULT_VERBATI_ACCENT
   );
 }
