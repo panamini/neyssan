@@ -91,6 +91,16 @@ describe("ProposalRail style tab", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Style" }));
 
+    expect(
+      screen.getAllByText((_, element) =>
+        Boolean(
+          element?.textContent?.includes(
+            "Style inherited from selected CV when available.",
+          ),
+        ),
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText(/Default settings/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "→ Document style" })).toBeInTheDocument();
     expect(screen.getByText("Template")).toBeInTheDocument();
     expect(screen.getByText("Font pair")).toBeInTheDocument();

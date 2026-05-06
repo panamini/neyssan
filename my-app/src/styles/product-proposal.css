@@ -7723,6 +7723,9 @@
   height: 100%;
   display: block;
   pointer-events: none;
+  transform: scale(1.3);
+  transform-box: fill-box;
+  transform-origin: center;
   filter: saturate(0.34) opacity(0.68);
 }
 
