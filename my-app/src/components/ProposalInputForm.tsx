@@ -142,6 +142,26 @@ const DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE =
   DEFAULT_PROPOSAL_CHARACTER_LIMIT_VALUE;
 
 const VISIBLE_MODEL_OPTIONS = [{ value: "chatgpt", label: "ChatGPT" }] as const;
+const PROPOSAL_FORM_MODEL_TYPES = [
+  "chatgpt",
+  "mistral-small-latest",
+  "mistral-large-latest",
+  "mistral-agent",
+] as const;
+type ProposalFormModelType = (typeof PROPOSAL_FORM_MODEL_TYPES)[number];
+
+function resolveDefaultProposalModelType(): ProposalFormModelType {
+  const rawValue = String(
+    ((import.meta as any).env?.VITE_PROPOSAL_MODEL_TYPE ??
+      (import.meta as any).env?.VITE_PROPOSAL_DEFAULT_MODEL_TYPE ??
+      "") as string,
+  ).trim();
+  return PROPOSAL_FORM_MODEL_TYPES.includes(rawValue as ProposalFormModelType)
+    ? (rawValue as ProposalFormModelType)
+    : "chatgpt";
+}
+
+const DEFAULT_PROPOSAL_MODEL_TYPE = resolveDefaultProposalModelType();
 const VISIBLE_PROPOSAL_TYPE_OPTIONS = [
   { value: "cover_letter", label: "Cover letter" },
   { value: "freelance_proposal", label: "Freelance proposal" },
@@ -241,11 +261,12 @@ function normalizeProposalFormValues(values: Partial<FormValues>): FormValues {
       sanitizeProposalCharacterLimit(values.characterLimitValue) ??
       DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE,
     modelType:
+      values.modelType === "chatgpt" ||
       values.modelType === "mistral-small-latest" ||
       values.modelType === "mistral-large-latest" ||
       values.modelType === "mistral-agent"
         ? values.modelType
-        : "chatgpt",
+        : DEFAULT_PROPOSAL_MODEL_TYPE,
   };
 }
 
@@ -613,7 +634,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       toneTuning: null,
       characterLimitMode: DEFAULT_COMPOSE_CHARACTER_LIMIT_MODE,
       characterLimitValue: DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE,
-      modelType: "chatgpt" as const,
+      modelType: DEFAULT_PROPOSAL_MODEL_TYPE,
       ...readStoredComposeDraft(initialComposeDraft),
     },
   });

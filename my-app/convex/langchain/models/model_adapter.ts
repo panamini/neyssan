@@ -23,6 +23,7 @@ export type ModelGenerationConfig = z.infer<typeof ModelGenerationConfigSchema>;
 export const ModelInitConfigSchema = z.object({
   apiKey: z.string().min(1),
   organization: z.string().optional(),
+  modelName: z.string().optional(),
 }).strict();
 
 /**

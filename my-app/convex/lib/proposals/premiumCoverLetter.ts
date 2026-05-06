@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { llmConfig } from "../../../config/llmConfig";
 import type { ProposalOutputLanguage } from "./proposalOutput";
 import { normalizeProposalConstraintText } from "./proposalPlanner";
 import { ENGLISH_SALUTATION, FRENCH_SALUTATION } from "./proposalRenderer";
@@ -13,7 +14,7 @@ export type PremiumCoverLetterPreset = Extract<
   ProposalVoicePreset,
   "signature" | "expert" | "engaging"
 >;
-export type PremiumCoverLetterWriterModel = "gpt-5.4" | "gpt-5-mini";
+export type PremiumCoverLetterWriterModel = "gpt-5.5" | "gpt-5.4" | "gpt-5-mini";
 
 export type AllowedFact = {
   text: string;
@@ -127,8 +128,9 @@ export type PremiumCoverLetterWriter = (args: {
 }) => Promise<CoverLetterBodyParts>;
 
 export const PREMIUM_COVER_LETTER_OPENAI_MODEL: PremiumCoverLetterWriterModel =
-  "gpt-5.4";
+  "gpt-5.5";
 export const PREMIUM_COVER_LETTER_WRITER_MODELS = [
+  "gpt-5.5",
   "gpt-5.4",
   "gpt-5-mini",
 ] as const satisfies readonly PremiumCoverLetterWriterModel[];
@@ -930,7 +932,8 @@ export function isPremiumCoverLetterPreset(
 export function resolvePremiumCoverLetterWriterModel(
   rawValue:
     | string
-    | undefined = process.env.COVER_LETTER_PREMIUM_WRITER_MODEL,
+    | undefined = process.env.COVER_LETTER_PREMIUM_WRITER_MODEL ??
+    llmConfig.proposalModels?.openaiWriterModel,
 ): PremiumCoverLetterWriterModel {
   const normalized = compactWhitespace(rawValue ?? "");
   return PREMIUM_COVER_LETTER_WRITER_MODELS.includes(
@@ -1524,7 +1527,11 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
         {
           model: resolvedModel,
           input: args.prompt,
+          reasoning: {
+            effort: llmConfig.proposalModels?.openaiWriterReasoningEffort ?? "low",
+          },
           text: {
+            verbosity: "medium",
             format: zodTextFormat(
               PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
               "cover_letter_body_parts",
@@ -1574,7 +1581,11 @@ export function buildPremiumCoverLetterOpenAIRequest(args: {
   return {
     model: resolvePremiumCoverLetterWriterModel(args.writerModel),
     input: args.prompt,
+    reasoning: {
+      effort: llmConfig.proposalModels?.openaiWriterReasoningEffort ?? "low",
+    },
     text: {
+      verbosity: "medium",
       format: {
         type: "json_schema",
         name: "cover_letter_body_parts",

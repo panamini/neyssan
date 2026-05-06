@@ -1,17 +1,19 @@
 import { ProposalCache } from './utils/cache';
+import { llmConfig } from '../../config/llmConfig';
 import type {
   TechnicalProposalParams,
   CreativeProposalParams,
   ProposalResult,
 } from './types';
 import { createPromptManager, PromptManager } from './prompts';
-import { GPT4Adapter } from './models/gpt4_adapter';
+import { OpenAIResponsesAdapter } from './models/openai_responses_adapter';
 import { MistralAdapter } from './models/mistral_adapter'; // Import MistralAdapter
 import { ModelAdapter } from './models/model_adapter';
 import { createChainFactory, ChainFactory, ChainType } from "./chains/chain_factory"; // Import ChainFactory
 
 interface ProposalServiceConfig {
-  apiKey: string;
+  apiKey?: string;
+  modelAdapter?: ModelAdapter;
   maxTokens?: number;
   temperature?: number;
   organization?: string;
@@ -25,21 +27,26 @@ export class ProposalService {
   private promptManager: PromptManager;
 
   constructor(config: ProposalServiceConfig) {
-    if (!config.apiKey) {
+    if (config.modelAdapter) {
+      this.modelAdapter = config.modelAdapter;
+    } else if (!config.apiKey) {
       throw new Error('API key is required');
-    }
-
-    // Determine the model adapter based on config.modelName, default to mistral-small-latest
-    switch (config.modelName) {
-      case "chatgpt":
-        this.modelAdapter = new GPT4Adapter({ apiKey: config.apiKey });
-        break;
-      case "mistral-large-latest":
-      case "mistral-small-latest":
-      case "mistral-agent":
-      default:
-        this.modelAdapter = new MistralAdapter({ apiKey: config.apiKey, modelName: config.modelName || "mistral-small-latest" });
-        break;
+    } else {
+      // Determine the model adapter based on config.modelName, default to mistral-small-latest
+      switch (config.modelName) {
+        case "chatgpt":
+          this.modelAdapter = new OpenAIResponsesAdapter({
+            apiKey: config.apiKey,
+            modelName: llmConfig.proposalModels?.openaiWriterModel ?? "gpt-5.5",
+          });
+          break;
+        case "mistral-large-latest":
+        case "mistral-small-latest":
+        case "mistral-agent":
+        default:
+          this.modelAdapter = new MistralAdapter({ apiKey: config.apiKey, modelName: config.modelName || "mistral-small-latest" });
+          break;
+      }
     }
 
     this.promptManager = createPromptManager();

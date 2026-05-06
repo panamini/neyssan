@@ -1,15 +1,50 @@
+export type LLMProvider = "mistral" | "openai" | "qwen" | "deepseek" | string;
+
+export type HelperModelRoute = {
+  provider: LLMProvider;
+  model: string;
+};
+
+export type HelperModelActionPolicy = {
+  primary: HelperModelRoute;
+  fallbacks: HelperModelRoute[];
+};
+
 export interface ILLMConfig {
-  provider: "mistral" | "openai" | string;
+  provider: LLMProvider;
   model: string;
   openaiKey?: string | null;
   openaiModel?: string | null;
   mistralKey?: string | null;
   mistralModel?: string | null;
+  qwenKey?: string | null;
+  qwenChatCompletionsUrl?: string | null;
+  deepseekKey?: string | null;
+  deepseekChatCompletionsUrl?: string | null;
+  proposalModels?: {
+    productionModelType: "chatgpt" | "mistral-small-latest";
+    developmentModelType: "chatgpt" | "mistral-small-latest";
+    openaiWriterModel: string;
+    openaiWriterReasoningEffort?: "minimal" | "low" | "medium" | "high" | null;
+  };
   helperModels?: {
     editor: {
       openaiPrimary: string;
       openaiFallback: string;
       mistralPrimary: string;
+      actions?: Partial<
+        Record<
+          | "fix_grammar"
+          | "shorten"
+          | "rewrite"
+          | "clarify"
+          | "strengthen"
+          | "expand"
+          | "tailor_to_job"
+          | "custom",
+          HelperModelActionPolicy
+        >
+      >;
     };
     styleRouting: {
       openaiPrimary: string;
@@ -20,7 +55,33 @@ export interface ILLMConfig {
   // When true, force using GPT-5 Nano (skip Mistral entirely)
   forceGpt5NanoOnly?: boolean;
 }
- 
+const mistralSmallFallbackModel =
+  process.env.MISTRAL_TOOLBAR_FALLBACK_MODEL ??
+  process.env.MISTRAL_EDITOR_MODEL ??
+  process.env.MISTRAL_MODEL ??
+  "mistral-small-latest";
+
+const visibleToolbarPrimaryFallbacks: HelperModelRoute[] = [
+  {
+    provider: "mistral",
+    model: mistralSmallFallbackModel,
+  },
+  {
+    provider: "deepseek",
+    model: process.env.DEEPSEEK_TOOLBAR_FALLBACK_MODEL ?? "DeepSeek V4 Flash",
+  },
+];
+
+const qwenToolbarPlusRoute: HelperModelRoute = {
+  provider: "qwen",
+  model: process.env.QWEN_TOOLBAR_PLUS_MODEL ?? "qwen-3.6-plus",
+};
+
+const qwenToolbarFlashRoute: HelperModelRoute = {
+  provider: "qwen",
+  model: process.env.QWEN_TOOLBAR_FLASH_MODEL ?? "qwen-3.6-flash",
+};
+
 export const llmConfig: ILLMConfig = {
   // Provider preference: explicit LLM_PROVIDER takes precedence,
   // otherwise prefer mistral if a MISTRAL_API_KEY exists, else openai.
@@ -32,6 +93,30 @@ export const llmConfig: ILLMConfig = {
   openaiModel: process.env.OPENAI_MODEL ?? "gpt-5-nano",
   mistralKey: process.env.MISTRAL_API_KEY ?? null,
   mistralModel: process.env.MISTRAL_MODEL ?? "mistral-small-latest",
+  qwenKey: process.env.QWEN_API_KEY ?? null,
+  qwenChatCompletionsUrl:
+    process.env.QWEN_CHAT_COMPLETIONS_URL ??
+    (process.env.QWEN_BASE_URL
+      ? `${process.env.QWEN_BASE_URL.replace(/\/$/, "")}/chat/completions`
+      : null),
+  deepseekKey: process.env.DEEPSEEK_API_KEY ?? null,
+  deepseekChatCompletionsUrl:
+    process.env.DEEPSEEK_CHAT_COMPLETIONS_URL ??
+    (process.env.DEEPSEEK_BASE_URL
+      ? `${process.env.DEEPSEEK_BASE_URL.replace(/\/$/, "")}/chat/completions`
+      : "https://api.deepseek.com/chat/completions"),
+  proposalModels: {
+    productionModelType: "chatgpt",
+    developmentModelType: "mistral-small-latest",
+    openaiWriterModel: process.env.OPENAI_PROPOSAL_MODEL ?? "gpt-5.5",
+    openaiWriterReasoningEffort:
+      (process.env.OPENAI_PROPOSAL_REASONING_EFFORT as
+        | "minimal"
+        | "low"
+        | "medium"
+        | "high"
+        | undefined) ?? "low",
+  },
   helperModels: {
     editor: {
       openaiPrimary:
@@ -43,6 +128,40 @@ export const llmConfig: ILLMConfig = {
         process.env.MISTRAL_EDITOR_MODEL ??
         process.env.MISTRAL_MODEL ??
         "mistral-small-latest",
+      actions: {
+        fix_grammar: {
+          primary: qwenToolbarFlashRoute,
+          fallbacks: visibleToolbarPrimaryFallbacks,
+        },
+        shorten: {
+          primary: qwenToolbarPlusRoute,
+          fallbacks: visibleToolbarPrimaryFallbacks,
+        },
+        rewrite: {
+          primary: qwenToolbarPlusRoute,
+          fallbacks: visibleToolbarPrimaryFallbacks,
+        },
+        clarify: {
+          primary: qwenToolbarPlusRoute,
+          fallbacks: visibleToolbarPrimaryFallbacks,
+        },
+        strengthen: {
+          primary: qwenToolbarPlusRoute,
+          fallbacks: visibleToolbarPrimaryFallbacks,
+        },
+        expand: {
+          primary: qwenToolbarPlusRoute,
+          fallbacks: visibleToolbarPrimaryFallbacks,
+        },
+        tailor_to_job: {
+          primary: qwenToolbarPlusRoute,
+          fallbacks: visibleToolbarPrimaryFallbacks,
+        },
+        custom: {
+          primary: qwenToolbarPlusRoute,
+          fallbacks: visibleToolbarPrimaryFallbacks,
+        },
+      },
     },
     styleRouting: {
       openaiPrimary:
