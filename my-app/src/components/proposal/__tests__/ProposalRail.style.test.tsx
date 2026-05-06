@@ -2,6 +2,11 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProposalRail } from "../ProposalRail";
+import {
+  getProposalTemplateBundleDefinition,
+  type ProposalTemplateBundleId,
+} from "../../../lib/proposal-template-bundles";
+import type { VerbatiStylePreset } from "../../../features/verbati/types";
 
 const baseProps = {
   jobTitle: "Operations Associate",
@@ -148,5 +153,59 @@ describe("ProposalRail style tab", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Reset Style 3" }));
     expect(onResetStyleBundle).toHaveBeenCalledWith("grid_mono");
+  });
+
+  it("marks the selected style custom immediately after a manual palette edit", () => {
+    function StyleHarness(): JSX.Element {
+      const [styleTemplateBundleId, setStyleTemplateBundleId] =
+        React.useState<ProposalTemplateBundleId>("swiss_serif");
+      const [stylePreset, setStylePreset] = React.useState<VerbatiStylePreset>(
+        getProposalTemplateBundleDefinition("swiss_serif").stylePreset,
+      );
+
+      return (
+        <ProposalRail
+          {...baseProps}
+          styleTemplateBundleId={styleTemplateBundleId}
+          stylePreset={stylePreset}
+          onSelectStyleBundle={(bundleId) => {
+            const bundleDefinition = getProposalTemplateBundleDefinition(
+              bundleId as ProposalTemplateBundleId,
+            );
+            setStyleTemplateBundleId(bundleDefinition.id);
+            setStylePreset(bundleDefinition.stylePreset);
+          }}
+          onSelectStylePalette={(palette) => {
+            setStylePreset((current) => ({
+              ...current,
+              palette,
+              accentHex: undefined,
+            }));
+          }}
+        />
+      );
+    }
+
+    render(<StyleHarness />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Style 3" }));
+    expect(screen.getByRole("button", { name: "Style 3" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.queryByText("Style 3 · Custom")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use Cobalt accent" }));
+
+    expect(screen.getByRole("button", { name: "Style 3" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText("Style 3 · Custom")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use Cobalt accent" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 });

@@ -32,10 +32,8 @@ import {
   readStoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { useThemeMode } from "../lib/theme-mode";
-import collapsedLogoDarkLogo16 from "../assets/logo/twoweeks-logo-darkmode-16.png";
-import collapsedLogoDarkLogo32 from "../assets/logo/twoweeks-logo-darkmode-32.png";
-import collapsedLogoDarkLogo64 from "../assets/logo/twoweeks-logo-darkmode-64.png";
-import collapsedLogoLightUrl from "../assets/logo/twoweeks-logo-light.png";
+import collapsedLogoLightModeUrl from "../assets/logo/twoweeks-pixel-bird-logo-light-mode-black-transparent.png";
+import collapsedLogoDarkModeUrl from "../assets/logo/twoweeks-pixel-bird-logo-dark-mode-white-transparent.png";
 
 const MAX_RECENT_ITEMS = 3;
 const MAX_MIXED_RECENT_ITEMS = 4;
@@ -293,6 +291,8 @@ export const Sidebar: React.FC = () => {
       }).proposalsCountPublic.default,
     [],
   );
+  const collapsedLogoUrl =
+    themeMode === "dark" ? collapsedLogoDarkModeUrl : collapsedLogoLightModeUrl;
 
   const params = React.useMemo(() => new URLSearchParams(search), [search]);
   const proposalView =
@@ -909,17 +909,7 @@ export const Sidebar: React.FC = () => {
             {sidebarCollapsed ? (
               <img
                 className="sb-toggle__collapsed-logo"
-                src={
-                  themeMode === "dark"
-                    ? collapsedLogoDarkLogo32
-                    : collapsedLogoLightUrl
-                }
-                srcSet={
-                  themeMode === "dark"
-                    ? `${collapsedLogoDarkLogo16} 16w, ${collapsedLogoDarkLogo32} 32w, ${collapsedLogoDarkLogo64} 64w`
-                    : undefined
-                }
-                sizes={themeMode === "dark" ? "32px" : undefined}
+                src={collapsedLogoUrl}
                 alt=""
                 aria-hidden="true"
               />
