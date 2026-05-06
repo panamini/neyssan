@@ -80,6 +80,7 @@ type SavedProposalRecord = {
     content?: string;
   }>;
   metadata?: {
+    sourceJobTitle?: string;
     sourceJobDescription?: string;
     proposalType?: SavedProposalType;
     requestedModelType?: string;

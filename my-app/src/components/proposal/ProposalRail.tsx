@@ -11,6 +11,7 @@ import {
   type VerbatiFontPairId,
 } from "../../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../../features/verbati/types";
+import { ProposalColorPickerPopover } from "../ProposalColorPickerPopover";
 import { Button } from "../ui";
 import { Menu, type MenuSection } from "../ui/menu";
 
@@ -95,6 +96,13 @@ const PROPOSAL_STYLE_ACCENT_OPTIONS: ProposalRailAccentOption[] = [
   { id: "ochre", label: "Ochre", swatch: "#B8843A", paletteOverride: "ocre", accentHex: null },
   { id: "custom", label: "Custom", swatch: "#8A8176", paletteOverride: null, accentHex: null },
 ];
+
+const PROPOSAL_CUSTOM_ACCENT_STARTER_HEX = "#8A8176";
+
+function normalizeRailAccentHex(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? "";
+  return /^#[0-9a-fA-F]{6}$/.test(normalized) ? normalized.toLowerCase() : null;
+}
 
 const PROPOSAL_STYLE_FONT_PAIR_IDS: VerbatiFontPairId[] = [
   "geist-baskervville",
@@ -205,7 +213,9 @@ type ProposalRailProps = {
   onSelectStyleBundle: (bundleId: ProposalTemplateBundleId) => void;
   onSelectStyleTypography: (typography: VerbatiStylePreset["typography"]) => void;
   onSelectStylePalette: (palette: ProposalPaletteId) => void;
+  onSelectStyleFixedAccent?: (hex: string) => void;
   onSelectStyleCustomAccent: (hex: string) => void;
+  onClearStyleCustomAccent?: () => void;
   aiStream: React.ReactNode;
   variableFields: ProposalRailVariableField[];
   hasProposalContent: boolean;
@@ -252,7 +262,9 @@ export function ProposalRail({
   onSelectStyleBundle,
   onSelectStyleTypography,
   onSelectStylePalette,
+  onSelectStyleFixedAccent,
   onSelectStyleCustomAccent,
+  onClearStyleCustomAccent,
   aiStream,
   variableFields,
   hasProposalContent,
@@ -275,6 +287,9 @@ export function ProposalRail({
 }: ProposalRailProps): JSX.Element {
   const [activeTab, setActiveTab] = React.useState<ProposalRailTab>("draft");
   const [jobContextOpen, setJobContextOpen] = React.useState(false);
+  const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] = React.useState(false);
+  const customColorAnchorRef = React.useRef<HTMLButtonElement | null>(null);
+  const customColorSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const jobMeta = [company, location].filter(Boolean).join(" · ");
   const compactJobSummary = jobSummary?.trim() || jobMeta || null;
   const cvMenuSections = React.useMemo<MenuSection[]>(() => {
@@ -351,15 +366,27 @@ export function ProposalRail({
   const activeTemplateBundleId = normalizeProposalTemplateBundleId(
     styleTemplateBundleId ?? findProposalTemplateBundleIdByStylePreset(stylePreset),
   );
+  const activeAccentHex = normalizeRailAccentHex(stylePreset.accentHex);
   const fixedAccentHexMatch = PROPOSAL_STYLE_ACCENT_OPTIONS.some(
     (option) =>
       option.accentHex !== null &&
       stylePreset.palette === "custom" &&
-      stylePreset.accentHex?.toLowerCase() === option.accentHex.toLowerCase(),
+      activeAccentHex === normalizeRailAccentHex(option.accentHex),
   );
   const customAccentHex = stylePreset.palette === "custom" ? stylePreset.accentHex : null;
-  const hasCustomAccentColor = /^#[0-9a-fA-F]{6}$/.test(customAccentHex ?? "");
-  const customAccentColor = hasCustomAccentColor ? (customAccentHex as string) : "#8A8176";
+  const hasCustomAccentColor = normalizeRailAccentHex(customAccentHex) !== null;
+  const isSeventhCustomToneSelected =
+    stylePreset.palette === "custom" && hasCustomAccentColor && !fixedAccentHexMatch;
+  const customAccentColor =
+    isSeventhCustomToneSelected && customAccentHex
+      ? customAccentHex
+      : PROPOSAL_CUSTOM_ACCENT_STARTER_HEX;
+
+  React.useEffect(() => {
+    if (activeTab !== "style") {
+      setIsCustomColorPickerOpen(false);
+    }
+  }, [activeTab]);
 
   const toneMenuSections = React.useMemo<MenuSection[]>(
     () => [
@@ -703,7 +730,10 @@ export function ProposalRail({
                 data-selected={activeTemplateBundleId === option.id ? "true" : undefined}
                 aria-pressed={activeTemplateBundleId === option.id}
                 title={option.description}
-                onClick={() => onSelectStyleBundle(option.id)}
+                onClick={() => {
+                  setIsCustomColorPickerOpen(false);
+                  onSelectStyleBundle(option.id);
+                }}
               >
                 {option.label}
               </button>
@@ -712,18 +742,25 @@ export function ProposalRail({
           <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Font pair</div>
           <ProposalRailFontPairMenu
             value={stylePreset.typography}
-            onSelectFontPair={onSelectStyleTypography}
+            onSelectFontPair={(typography) => {
+              setIsCustomColorPickerOpen(false);
+              onSelectStyleTypography(typography);
+            }}
           />
           <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Accent</div>
-          <div className="dasti-proposal-skeleton-rail__style-swatches" aria-label="Proposal accent colors">
+          <div
+            ref={customColorSurfaceRef}
+            className="dasti-proposal-skeleton-rail__style-swatches"
+            aria-label="Proposal accent colors"
+          >
             {PROPOSAL_STYLE_ACCENT_OPTIONS.map((swatch) => {
               const isSelected =
                 swatch.paletteOverride !== null
                   ? stylePreset.palette === swatch.paletteOverride
                   : swatch.accentHex !== null
                     ? stylePreset.palette === "custom" &&
-                      stylePreset.accentHex?.toLowerCase() === swatch.accentHex.toLowerCase()
-                    : stylePreset.palette === "custom" && !fixedAccentHexMatch;
+                      activeAccentHex === normalizeRailAccentHex(swatch.accentHex)
+                    : isSeventhCustomToneSelected;
 
               return swatch.paletteOverride ? (
                 <button
@@ -738,7 +775,10 @@ export function ProposalRail({
                   aria-label={`Use ${swatch.label} accent`}
                   aria-pressed={isSelected}
                   data-selected={isSelected ? "true" : undefined}
-                  onClick={() => onSelectStylePalette(swatch.paletteOverride)}
+                  onClick={() => {
+                    setIsCustomColorPickerOpen(false);
+                    onSelectStylePalette(swatch.paletteOverride);
+                  }}
                 >
                   {isSelected ? <Check size={12} strokeWidth={1.9} /> : null}
                 </button>
@@ -755,13 +795,20 @@ export function ProposalRail({
                   aria-label={`Use ${swatch.label} accent`}
                   aria-pressed={isSelected}
                   data-selected={isSelected ? "true" : undefined}
-                  onClick={() => onSelectStyleCustomAccent(swatch.accentHex ?? swatch.swatch)}
+                  onClick={() => {
+                    setIsCustomColorPickerOpen(false);
+                    (onSelectStyleFixedAccent ?? onSelectStyleCustomAccent)(
+                      swatch.accentHex ?? swatch.swatch,
+                    );
+                  }}
                 >
                   {isSelected ? <Check size={12} strokeWidth={1.9} /> : null}
                 </button>
               ) : (
-                <label
+                <button
                   key={swatch.id}
+                  ref={customColorAnchorRef}
+                  type="button"
                   className={[
                     "dasti-proposal-skeleton-rail__style-swatch",
                     "dasti-proposal-skeleton-rail__style-swatch--custom",
@@ -775,28 +822,40 @@ export function ProposalRail({
                     } as React.CSSProperties
                   }
                   title={isSelected ? `Custom accent ${customAccentColor}` : "Open custom color picker"}
+                  aria-label="Open custom color picker"
+                  aria-pressed={isSelected}
                   data-selected={isSelected ? "true" : undefined}
+                  onClick={() => setIsCustomColorPickerOpen(true)}
                 >
-                  <span className="sr-only">Open custom color picker</span>
                   {isSelected ? (
                     <Check size={12} strokeWidth={1.9} />
                   ) : (
                     <ColorWheel
-                      size={17}
                       className="dasti-proposal-skeleton-rail__style-swatch-wheel"
                       aria-hidden="true"
                     />
                   )}
-                  <input
-                    type="color"
-                    value={customAccentColor}
-                    aria-label="Choose a custom color"
-                    onChange={(event) => onSelectStyleCustomAccent(event.target.value)}
-                  />
-                </label>
+                </button>
               );
             })}
           </div>
+          <ProposalColorPickerPopover
+            currentHex={customAccentColor}
+            anchorRef={customColorAnchorRef}
+            surfaceAnchorRef={customColorSurfaceRef}
+            horizontalAlign="center"
+            isOpen={isCustomColorPickerOpen}
+            onClose={() => setIsCustomColorPickerOpen(false)}
+            onHexChange={onSelectStyleCustomAccent}
+            onClear={
+              isSeventhCustomToneSelected && onClearStyleCustomAccent
+                ? () => {
+                    onClearStyleCustomAccent();
+                    setIsCustomColorPickerOpen(false);
+                  }
+                : undefined
+            }
+          />
         </section>
       ) : null}
 
