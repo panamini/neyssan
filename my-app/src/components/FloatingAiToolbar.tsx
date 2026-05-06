@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { BodyPortal } from "@/components/ui/body-portal";
 import { SendHorizontal } from "@/lib/icons";
 import {
+  getVisibleToolbarAiActions,
   VISIBLE_TOOLBAR_AI_ACTIONS,
   type AiActionDefinition,
   type AiActionId,
@@ -200,7 +201,13 @@ export function FloatingAiToolbar({
 
   const isAskOpen = activeActionId === "custom";
   const isPromptLoading = isLoading && pendingActionId === "custom";
-  const toolbarActions = React.useMemo(() => INLINE_AI_ACTIONS, []);
+  const toolbarActions = React.useMemo(
+    () =>
+      includeJobContextActions
+        ? getVisibleToolbarAiActions({ includeJobContextActions: true })
+        : INLINE_AI_ACTIONS,
+    [includeJobContextActions],
+  );
 
   const updatePosition = React.useCallback(() => {
     if (!anchor || !panelRef.current || typeof window === "undefined") {
@@ -502,9 +509,15 @@ export function FloatingAiToolbar({
   const handlePresetAction = React.useCallback(
     (action: AiActionDefinition) => {
       if (action.id === "custom") {
-        setActiveActionId((current) =>
-          current === "custom" ? DEFAULT_ACTION_ID : "custom",
-        );
+        setActiveActionId((current) => {
+          if (current === "custom") {
+            window.setTimeout(() => {
+              askInputRef.current?.focus({ preventScroll: true });
+            }, 0);
+            return "custom";
+          }
+          return "custom";
+        });
         return;
       }
 

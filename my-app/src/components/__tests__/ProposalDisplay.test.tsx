@@ -79,7 +79,10 @@ function getToolbarButton(label: string): HTMLButtonElement {
     .getAllByText(label)
     .map((node) => node.closest("button"))
     .find((button): button is HTMLButtonElement =>
-      Boolean(button?.classList.contains("dasti-inline-ai-toolbar__action")),
+      Boolean(
+        button?.classList.contains("dasti-inline-ai-toolbar__action") ||
+          button?.classList.contains("ds-ai-toolbar__btn"),
+      ),
     );
 
   if (!match) {
@@ -133,7 +136,16 @@ describe("ProposalDisplay", () => {
     await selectTextareaText(textarea, "rough proposal copy");
     fireEvent.click(getToolbarButton("Rewrite"));
 
-    await screen.findByRole("region", { name: "Rewrite suggestion" });
+    await screen.findByRole("group", { name: "Rewrite inline suggestion" });
+    expect(
+      document.querySelector("[data-inline-ai-suggestion-card='true']"),
+    ).toBeNull();
+    expect(screen.getByText("rough proposal copy")).toHaveClass(
+      "dasti-proposal-inline-proofing__old",
+    );
+    expect(screen.getByText("polished proposal copy")).toHaveClass(
+      "dasti-proposal-inline-proofing__new",
+    );
     expect(textarea).toHaveValue("This is rough proposal copy.");
     expect(telemetryEvents.map((event) => event.name)).toEqual([
       "ai_started",
@@ -196,12 +208,15 @@ describe("ProposalDisplay", () => {
       target: { value: "Make it warmer" },
     });
     const sendButton = document.querySelector(
-      'button[aria-label="Send request"]',
+      'button[aria-label="Send"]',
     ) as HTMLButtonElement | null;
     expect(sendButton).not.toBeNull();
     fireEvent.click(sendButton as HTMLButtonElement);
 
-    await screen.findByRole("region", { name: "Ask suggestion" });
+    await screen.findByRole("group", { name: "Ask inline suggestion" });
+    expect(
+      document.querySelector("[data-inline-ai-suggestion-card='true']"),
+    ).toBeNull();
     expect(textarea).toHaveValue("This is rough proposal copy.");
     expect(telemetryEvents).toEqual([
       expect.objectContaining({
@@ -244,7 +259,7 @@ describe("ProposalDisplay", () => {
     await selectTextareaText(textarea, "rough proposal copy");
     fireEvent.click(getToolbarButton("Tailor"));
 
-    await screen.findByRole("region", { name: "Tailor suggestion" });
+    await screen.findByRole("group", { name: "Tailor inline suggestion" });
     expect(textarea).toHaveValue("This is rough proposal copy.");
     expect(mockTransformEditorSelection).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -313,12 +328,12 @@ describe("ProposalDisplay", () => {
     await selectTextareaText(textarea, "rough proposal copy");
     fireEvent.click(getToolbarButton("Tailor"));
 
-    await screen.findByRole("region", { name: "Tailor suggestion" });
+    await screen.findByRole("group", { name: "Tailor inline suggestion" });
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
 
     expect(textarea).toHaveValue("This is rough proposal copy.");
     expect(
-      screen.queryByRole("region", { name: "Tailor suggestion" }),
+      screen.queryByRole("group", { name: "Tailor inline suggestion" }),
     ).not.toBeInTheDocument();
     expect(telemetryEvents.map((event) => event.name)).toEqual([
       "ai_started",
@@ -342,12 +357,12 @@ describe("ProposalDisplay", () => {
     await selectTextareaText(textarea, "rough proposal copy");
     fireEvent.click(getToolbarButton("Rewrite"));
 
-    await screen.findByRole("region", { name: "Rewrite suggestion" });
+    await screen.findByRole("group", { name: "Rewrite inline suggestion" });
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
 
     expect(textarea).toHaveValue("This is rough proposal copy.");
     expect(
-      screen.queryByRole("region", { name: "Rewrite suggestion" }),
+      screen.queryByRole("group", { name: "Rewrite inline suggestion" }),
     ).not.toBeInTheDocument();
     expect(telemetryEvents.map((event) => event.name)).toEqual([
       "ai_started",
@@ -404,8 +419,8 @@ describe("ProposalDisplay", () => {
     await selectTextareaText(textarea, "rough proposal copy");
     fireEvent.click(getToolbarButton("Fix"));
 
-    await screen.findByRole("region", { name: "Fix suggestion" });
-    expect(screen.getByText("Applied")).toBeInTheDocument();
+    await screen.findByRole("group", { name: "Fix inline suggestion" });
+    expect(screen.getByText("Applied.")).toBeInTheDocument();
 
     await waitFor(() => {
       expect(textarea).toHaveValue("This is clean proposal copy.");
@@ -431,9 +446,17 @@ describe("ProposalDisplay", () => {
       "ai_accepted",
       "ai_undone",
     ]);
+
+    await selectTextareaText(textarea, "rough proposal copy");
+    fireEvent.click(getToolbarButton("Fix"));
+    await screen.findByRole("group", { name: "Fix inline suggestion" });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(
+      screen.queryByRole("group", { name: "Fix inline suggestion" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("applies shorten inline and exposes undo", async () => {
+  it("previews shorten suggestions before applying", async () => {
     mockTransformEditorSelection.mockResolvedValue({
       kind: "text",
       actionId: "shorten",
@@ -447,8 +470,12 @@ describe("ProposalDisplay", () => {
     await selectTextareaText(textarea, "rough proposal copy");
     fireEvent.click(getToolbarButton("Shorten"));
 
-    await screen.findByRole("region", { name: "Shorten suggestion" });
-    expect(screen.getByText("Applied")).toBeInTheDocument();
+    await screen.findByRole("group", { name: "Shorten inline suggestion" });
+    expect(screen.getByRole("button", { name: "Accept" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Discard" })).toBeInTheDocument();
+    expect(textarea).toHaveValue("This is rough proposal copy.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
 
     await waitFor(() => {
       expect(textarea).toHaveValue("This is short copy.");
