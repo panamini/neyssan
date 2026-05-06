@@ -1,5 +1,16 @@
 import React from "react";
-import { ArrowSquareOut, Briefcase, ChevronDown, FilePdf, FileUser, X } from "../../lib/icons";
+import { ArrowSquareOut, Briefcase, Check, ChevronDown, ColorWheel, FilePdf, FileUser, X } from "../../lib/icons";
+import {
+  findProposalTemplateBundleIdByStylePreset,
+  PROPOSAL_TEMPLATE_BUNDLE_DEFINITIONS,
+  type ProposalTemplateBundleId,
+} from "../../lib/proposal-template-bundles";
+import type { ProposalPaletteId } from "../../lib/proposal-style-display";
+import {
+  getVerbatiFontPairOption,
+  type VerbatiFontPairId,
+} from "../../features/verbati/fontCatalog";
+import type { VerbatiStylePreset } from "../../features/verbati/types";
 import { Button } from "../ui";
 import { Menu, type MenuSection } from "../ui/menu";
 
@@ -35,11 +46,139 @@ type ProposalRailLengthOption = {
   selected: boolean;
 };
 
+type ProposalRailTab = "draft" | "ask" | "header" | "style";
+
+type ProposalRailStyleOption = {
+  id: ProposalTemplateBundleId;
+  label: string;
+  description: string;
+};
+
+type ProposalRailAccentOption = {
+  id: string;
+  label: string;
+  swatch: string;
+  paletteOverride: ProposalPaletteId | null;
+  accentHex: string | null;
+};
+
+const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
+  {
+    id: "swiss_serif",
+    label: "Style 1",
+    description:
+      PROPOSAL_TEMPLATE_BUNDLE_DEFINITIONS.find((definition) => definition.id === "swiss_serif")
+        ?.description ?? "Workshopped serif-led proposal style.",
+  },
+  {
+    id: "magazine_editorial",
+    label: "Style 2",
+    description:
+      PROPOSAL_TEMPLATE_BUNDLE_DEFINITIONS.find((definition) => definition.id === "magazine_editorial")
+        ?.description ?? "Workshopped editorial proposal style.",
+  },
+  {
+    id: "grid_mono",
+    label: "Style 3",
+    description:
+      PROPOSAL_TEMPLATE_BUNDLE_DEFINITIONS.find((definition) => definition.id === "grid_mono")
+        ?.description ?? "Workshopped technical proposal style.",
+  },
+];
+
+const PROPOSAL_STYLE_ACCENT_OPTIONS: ProposalRailAccentOption[] = [
+  { id: "terre", label: "Terre", swatch: "#A84E2E", paletteOverride: null, accentHex: "#A84E2E" },
+  { id: "ink", label: "Ink", swatch: "#0F0C08", paletteOverride: null, accentHex: "#0F0C08" },
+  { id: "cobalt", label: "Cobalt", swatch: "#2A78D6", paletteOverride: null, accentHex: "#2A78D6" },
+  { id: "sauge", label: "Sage", swatch: "#3B6E4E", paletteOverride: "sauge", accentHex: null },
+  { id: "plum", label: "Plum", swatch: "#7A4FA0", paletteOverride: null, accentHex: "#7A4FA0" },
+  { id: "ochre", label: "Ochre", swatch: "#B8843A", paletteOverride: "ocre", accentHex: null },
+  { id: "custom", label: "Custom", swatch: "#8A8176", paletteOverride: null, accentHex: null },
+];
+
+const PROPOSAL_STYLE_FONT_PAIR_IDS: VerbatiFontPairId[] = [
+  "geist-baskervville",
+  "quiet-editorial",
+  "soft-serif",
+  "fd-garamond-geist",
+  "ledger-sans",
+  "mono-signal",
+];
+
+const PROPOSAL_STYLE_FONT_PAIR_OPTIONS = PROPOSAL_STYLE_FONT_PAIR_IDS.map((id) =>
+  getVerbatiFontPairOption(id),
+);
+
 export type ProposalRailJobMatchSummary = {
   label: string;
   tone: "strong" | "worth" | "maybe" | "skip";
   detail: string | null;
 };
+
+function ProposalRailFontPairMenu({
+  value,
+  onSelectFontPair,
+}: {
+  value: VerbatiStylePreset["typography"];
+  onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
+}): JSX.Element {
+  const activeOption = getVerbatiFontPairOption(value);
+
+  return (
+    <Menu
+      ariaLabel="Proposal font pair"
+      menuClassName="dasti-proposal-font-menu"
+      matchTriggerWidth
+      sections={[
+        {
+          label: "Font pair",
+          items: PROPOSAL_STYLE_FONT_PAIR_OPTIONS.map((option) => ({
+            id: option.id,
+            role: "menuitemradio" as const,
+            selected: option.id === activeOption.id,
+            label: (
+              <span
+                className="dasti-proposal-font-menu__sample"
+                style={
+                  {
+                    "--proposal-font-pair-heading": option.headingFamily,
+                    "--proposal-font-pair-body": option.bodyFamily,
+                  } as React.CSSProperties
+                }
+              >
+                <span className="dasti-proposal-font-menu__sample-title">
+                  {option.headingLabel}
+                </span>
+                <span className="dasti-proposal-font-menu__sample-body">
+                  {option.bodyLabel}
+                </span>
+              </span>
+            ),
+            ariaLabel: option.name,
+            onSelect: () => onSelectFontPair(option.id),
+          })),
+        },
+      ]}
+      trigger={
+        <button type="button" className="dasti-proposal-font-menu-trigger">
+          <span
+            className="dasti-proposal-font-menu-trigger__label"
+            style={
+              {
+                "--proposal-font-pair-heading": activeOption.headingFamily,
+                "--proposal-font-pair-body": activeOption.bodyFamily,
+              } as React.CSSProperties
+            }
+          >
+            <span>{activeOption.headingLabel}</span>
+            <small>{activeOption.bodyLabel}</small>
+          </span>
+          <ChevronDown size={14} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+      }
+    />
+  );
+}
 
 type ProposalRailProps = {
   jobTitle: string;
@@ -61,6 +200,12 @@ type ProposalRailProps = {
   onSelectTone: (toneId: string | null) => void;
   lengthOptions: ProposalRailLengthOption[];
   onSelectLength: (lengthId: ProposalRailLengthOption["id"]) => void;
+  stylePreset: VerbatiStylePreset;
+  styleTemplateBundleId: ProposalTemplateBundleId | null;
+  onSelectStyleBundle: (bundleId: ProposalTemplateBundleId) => void;
+  onSelectStyleTypography: (typography: VerbatiStylePreset["typography"]) => void;
+  onSelectStylePalette: (palette: ProposalPaletteId) => void;
+  onSelectStyleCustomAccent: (hex: string) => void;
   aiStream: React.ReactNode;
   variableFields: ProposalRailVariableField[];
   hasProposalContent: boolean;
@@ -92,7 +237,9 @@ export function ProposalRail({
   jobSummary,
   jobMatch,
   sourceCvTitle,
+  sourceCvMeta,
   draftTitle,
+  draftTitlePlaceholder,
   onDraftTitleChange,
   onDraftTitleCommit,
   toneLabel,
@@ -100,6 +247,12 @@ export function ProposalRail({
   onSelectTone,
   lengthOptions,
   onSelectLength,
+  stylePreset,
+  styleTemplateBundleId,
+  onSelectStyleBundle,
+  onSelectStyleTypography,
+  onSelectStylePalette,
+  onSelectStyleCustomAccent,
   aiStream,
   variableFields,
   hasProposalContent,
@@ -120,7 +273,7 @@ export function ProposalRail({
   onAskAiChange,
   onAskAiSubmit,
 }: ProposalRailProps): JSX.Element {
-  const [activeTab, setActiveTab] = React.useState<"draft" | "ask" | "header">("draft");
+  const [activeTab, setActiveTab] = React.useState<ProposalRailTab>("draft");
   const [jobContextOpen, setJobContextOpen] = React.useState(false);
   const jobMeta = [company, location].filter(Boolean).join(" · ");
   const compactJobSummary = jobSummary?.trim() || jobMeta || null;
@@ -181,6 +334,32 @@ export function ProposalRail({
     toneOptions.find((option) => option.selected) ?? toneOptions[0] ?? null;
   const selectedLengthOption =
     lengthOptions.find((option) => option.selected) ?? lengthOptions[1] ?? lengthOptions[0] ?? null;
+
+  const normalizeProposalTemplateBundleId = React.useCallback(
+    (bundleId: ProposalTemplateBundleId | null | undefined): ProposalTemplateBundleId => {
+      if (bundleId === "swiss_serif") return "swiss_serif";
+      if (bundleId === "magazine_editorial" || bundleId === "magazine_serif") {
+        return "magazine_editorial";
+      }
+      if (bundleId === "grid_mono" || bundleId === "swiss_mono") {
+        return "grid_mono";
+      }
+      return "swiss_serif";
+    },
+    [],
+  );
+  const activeTemplateBundleId = normalizeProposalTemplateBundleId(
+    styleTemplateBundleId ?? findProposalTemplateBundleIdByStylePreset(stylePreset),
+  );
+  const fixedAccentHexMatch = PROPOSAL_STYLE_ACCENT_OPTIONS.some(
+    (option) =>
+      option.accentHex !== null &&
+      stylePreset.palette === "custom" &&
+      stylePreset.accentHex?.toLowerCase() === option.accentHex.toLowerCase(),
+  );
+  const customAccentHex = stylePreset.palette === "custom" ? stylePreset.accentHex : null;
+  const hasCustomAccentColor = /^#[0-9a-fA-F]{6}$/.test(customAccentHex ?? "");
+  const customAccentColor = hasCustomAccentColor ? (customAccentHex as string) : "#8A8176";
 
   const toneMenuSections = React.useMemo<MenuSection[]>(
     () => [
@@ -328,6 +507,7 @@ export function ProposalRail({
           ["draft", "Draft"],
           ["ask", "Ask"],
           ["header", "Heading"],
+          ["style", "Style"],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -336,7 +516,7 @@ export function ProposalRail({
             aria-selected={activeTab === id}
             className="dasti-proposal-skeleton-rail__tab"
             data-active={activeTab === id ? "true" : undefined}
-            onClick={() => setActiveTab(id as "draft" | "ask" | "header")}
+            onClick={() => setActiveTab(id as ProposalRailTab)}
           >
             {label}
           </button>
@@ -414,7 +594,7 @@ export function ProposalRail({
               <input
                 className="ds-field"
                 value={draftTitle}
-                placeholder="Draft title"
+                placeholder={draftTitlePlaceholder}
                 title="Name this draft."
                 onChange={(event) => onDraftTitleChange(event.target.value)}
                 onBlur={onDraftTitleCommit}
@@ -436,6 +616,7 @@ export function ProposalRail({
                   >
                     <span>
                       <strong>{sourceCvTitle || "Pick a CV"}</strong>
+                      {sourceCvMeta ? <small>{sourceCvMeta}</small> : null}
                     </span>
                     <span className="dasti-proposal-skeleton-rail__cv-caret" aria-hidden="true">
                       <ChevronDown className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
@@ -502,6 +683,121 @@ export function ProposalRail({
           {askAiBusy ? "Applying…" : "Send"}
         </Button>
       </section>
+      ) : null}
+
+      {activeTab === "style" ? (
+        <section className="forge__rail-section dasti-proposal-skeleton-rail__section dasti-proposal-skeleton-rail__style" data-rail-pane="style">
+          <div className="dasti-proposal-skeleton-rail__style-note">
+            Default settings{" "}
+            <a className="dasti-proposal-skeleton-rail__link" href="/settings">
+              → Document style
+            </a>
+            .
+          </div>
+          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Template</div>
+          <div className="dasti-proposal-skeleton-rail__style-pills" aria-label="Proposal style presets">
+            {PROPOSAL_STYLE_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                data-selected={activeTemplateBundleId === option.id ? "true" : undefined}
+                aria-pressed={activeTemplateBundleId === option.id}
+                title={option.description}
+                onClick={() => onSelectStyleBundle(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Font pair</div>
+          <ProposalRailFontPairMenu
+            value={stylePreset.typography}
+            onSelectFontPair={onSelectStyleTypography}
+          />
+          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Accent</div>
+          <div className="dasti-proposal-skeleton-rail__style-swatches" aria-label="Proposal accent colors">
+            {PROPOSAL_STYLE_ACCENT_OPTIONS.map((swatch) => {
+              const isSelected =
+                swatch.paletteOverride !== null
+                  ? stylePreset.palette === swatch.paletteOverride
+                  : swatch.accentHex !== null
+                    ? stylePreset.palette === "custom" &&
+                      stylePreset.accentHex?.toLowerCase() === swatch.accentHex.toLowerCase()
+                    : stylePreset.palette === "custom" && !fixedAccentHexMatch;
+
+              return swatch.paletteOverride ? (
+                <button
+                  key={swatch.id}
+                  type="button"
+                  className="dasti-proposal-skeleton-rail__style-swatch"
+                  style={
+                    {
+                      "--proposal-accent-swatch": swatch.swatch,
+                    } as React.CSSProperties
+                  }
+                  aria-label={`Use ${swatch.label} accent`}
+                  aria-pressed={isSelected}
+                  data-selected={isSelected ? "true" : undefined}
+                  onClick={() => onSelectStylePalette(swatch.paletteOverride)}
+                >
+                  {isSelected ? <Check size={12} strokeWidth={1.9} /> : null}
+                </button>
+              ) : swatch.accentHex ? (
+                <button
+                  key={swatch.id}
+                  type="button"
+                  className="dasti-proposal-skeleton-rail__style-swatch"
+                  style={
+                    {
+                      "--proposal-accent-swatch": swatch.swatch,
+                    } as React.CSSProperties
+                  }
+                  aria-label={`Use ${swatch.label} accent`}
+                  aria-pressed={isSelected}
+                  data-selected={isSelected ? "true" : undefined}
+                  onClick={() => onSelectStyleCustomAccent(swatch.accentHex ?? swatch.swatch)}
+                >
+                  {isSelected ? <Check size={12} strokeWidth={1.9} /> : null}
+                </button>
+              ) : (
+                <label
+                  key={swatch.id}
+                  className={[
+                    "dasti-proposal-skeleton-rail__style-swatch",
+                    "dasti-proposal-skeleton-rail__style-swatch--custom",
+                    isSelected ? "" : "dasti-proposal-skeleton-rail__style-swatch--icon",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  style={
+                    {
+                      "--proposal-accent-swatch": customAccentColor,
+                    } as React.CSSProperties
+                  }
+                  title={isSelected ? `Custom accent ${customAccentColor}` : "Open custom color picker"}
+                  data-selected={isSelected ? "true" : undefined}
+                >
+                  <span className="sr-only">Open custom color picker</span>
+                  {isSelected ? (
+                    <Check size={12} strokeWidth={1.9} />
+                  ) : (
+                    <ColorWheel
+                      size={17}
+                      className="dasti-proposal-skeleton-rail__style-swatch-wheel"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <input
+                    type="color"
+                    value={customAccentColor}
+                    aria-label="Choose a custom color"
+                    onChange={(event) => onSelectStyleCustomAccent(event.target.value)}
+                  />
+                </label>
+              );
+            })}
+          </div>
+        </section>
       ) : null}
 
       {activeTab === "header" ? (

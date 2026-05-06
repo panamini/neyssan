@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { v4 as uuidv4 } from "uuid";
 import { ClipboardText, ShareFat, TrashSimple } from "@/lib/icons";
-import EmbeddedStyleInspector from "../components/EmbeddedStyleInspector";
 import ProposalExportActions from "../components/ProposalExportActions";
 import ProposalInputForm, {
   type ProposalGenerateControl,
@@ -4995,16 +4994,6 @@ export function ProposalForge(): JSX.Element {
     [proposalStyleChoice],
   );
 
-  const handleProposalLayoutSelect = React.useCallback(
-    (layout: VerbatiStylePreset["layout"]) => {
-      applyProposalDirectStyle({
-        ...effectiveProposalStylePresetWithPalette,
-        layout,
-      });
-    },
-    [applyProposalDirectStyle, effectiveProposalStylePresetWithPalette],
-  );
-
   const handleProposalTypographySelect = React.useCallback(
     (typography: VerbatiStylePreset["typography"]) => {
       applyProposalDirectStyle({
@@ -7677,6 +7666,12 @@ export function ProposalForge(): JSX.Element {
                       }}
                       lengthOptions={proposalRailLengthOptions}
                       onSelectLength={handleProposalRailLengthSelect}
+                      stylePreset={effectiveProposalStylePresetWithPalette}
+                      styleTemplateBundleId={proposalTemplateBundleId}
+                      onSelectStyleBundle={handleProposalStyleBundleSelect}
+                      onSelectStyleTypography={handleProposalTypographySelect}
+                      onSelectStylePalette={handleProposalPaletteSelect}
+                      onSelectStyleCustomAccent={handleProposalCustomAccentSelect}
                       aiStream={
                         shouldShowProposalAiStream ? (
                           <ProposalAIStream
@@ -7839,25 +7834,7 @@ export function ProposalForge(): JSX.Element {
                         mode={proposalOutputMode}
                         exporting={proposalExportingFormat !== null}
                         hasProposalContent={Boolean(proposalContent)}
-                        styleControl={
-                          <EmbeddedStyleInspector
-                            stylePreset={effectiveProposalStylePresetWithPalette}
-                            templateId={
-                              proposalRenderMetadata?.templateId ??
-                              effectiveProposalTemplateId ??
-                              fallbackProposalTemplateId
-                            }
-                            copyMode="title-only"
-                            controlMode="direct"
-                            showCustomizeControl={false}
-                            showPromptControl={false}
-                            onSelectBundle={handleProposalStyleBundleSelect}
-                            onSelectLayout={handleProposalLayoutSelect}
-                            onSelectTypography={handleProposalTypographySelect}
-                            onSelectPalette={handleProposalPaletteSelect}
-                            onSelectCustomAccent={handleProposalCustomAccentSelect}
-                          />
-                        }
+                        styleControl={null}
                         sourceJobLinked={Boolean(
                           composePreviewValues?.jobTitle?.trim() ||
                             composePreviewValues?.jobDescription?.trim(),
