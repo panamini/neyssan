@@ -207,6 +207,11 @@ describe("ProposalDisplay", () => {
     fireEvent.change(screen.getByLabelText("Ask AI"), {
       target: { value: "Make it warmer" },
     });
+    const selectionOverlay = document.querySelector(
+      "[data-inline-ai-selection-overlay='true'] .dasti-proposal-inline-proofing__selection",
+    );
+    expect(selectionOverlay).not.toBeNull();
+    expect(selectionOverlay).toHaveTextContent("rough proposal copy");
     const sendButton = document.querySelector(
       'button[aria-label="Send"]',
     ) as HTMLButtonElement | null;
