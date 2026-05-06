@@ -93,6 +93,10 @@ import {
   buildProposalSourceSummary,
   sanitizeProposalCompanyName,
 } from "../lib/proposal-source-summary";
+import {
+  resolveProposalWorkspaceSourceDraft,
+  type ResolvedProposalWorkspaceSourceDraft,
+} from "../lib/proposal-job-context";
 import { formatUiDate } from "../lib/ui-date";
 import {
   resolveProposalStyleChoice,
@@ -1999,21 +2003,66 @@ export function ProposalForge(): JSX.Element {
     return null;
   }, [activeLockedPublicHandoffPrefill, canonicalPrefill, handoffPrefill]);
 
+  const storedComposeDraft =
+    typeof window !== "undefined" ? readStoredProposalComposeDraft() : null;
+  const resolvedProposalWorkspaceSourceDraft = React.useMemo<ResolvedProposalWorkspaceSourceDraft | null>(
+    () =>
+      resolveProposalWorkspaceSourceDraft({
+        canonicalJobRecord: canonicalJobRecord
+          ? {
+              title: canonicalJobRecord.title,
+              rawDescription: canonicalJobRecord.rawDescription,
+              sourceUrl: canonicalJobRecord.sourceUrl,
+              sourceDomain: canonicalJobRecord.sourceDomain,
+            }
+          : null,
+        storedOutputSourceDraft: storedOutputDraft?.sourceComposeDraft ?? null,
+        composePreviewValues,
+        outputSourceComposeDraft,
+        composeDraftInitialSeed,
+        storedComposeDraft,
+        prefill: prefill
+          ? {
+              jobTitle: prefill.jobTitle,
+              jobDescription: prefill.jobDescription,
+              sourceUrl: prefill.sourceUrl ?? null,
+              platform: prefill.platform ?? null,
+            }
+          : null,
+        stickyImportedSource: stickyImportedSource
+          ? {
+              sourceUrl: stickyImportedSource.sourceUrl,
+              platform: stickyImportedSource.platform,
+            }
+          : null,
+      }),
+    [
+      canonicalJobRecord?.rawDescription,
+      canonicalJobRecord?.sourceDomain,
+      canonicalJobRecord?.sourceUrl,
+      canonicalJobRecord?.title,
+      composeDraftInitialSeed,
+      composePreviewValues,
+      outputSourceComposeDraft,
+      prefill?.jobDescription,
+      prefill?.jobTitle,
+      prefill?.platform,
+      prefill?.sourceUrl,
+      stickyImportedSource.platform,
+      stickyImportedSource.sourceUrl,
+      storedComposeDraft,
+      storedOutputDraft?.sourceComposeDraft,
+    ],
+  );
+
+  const resolvedProposalJobId =
+    canonicalJobId?.trim() || prefill?.jobId?.trim() || duplicateSourceJobId?.trim() || "";
+
   const proposalHeaderSourceJobTitle =
-    canonicalJobRecord?.title?.trim() ||
-    composePreviewValues?.jobTitle?.trim() ||
-    outputSourceComposeDraft?.jobTitle?.trim() ||
-    composeDraftInitialSeed?.jobTitle?.trim() ||
-    storedOutputDraft?.sourceComposeDraft?.jobTitle?.trim() ||
-    prefill?.jobTitle?.trim() ||
+    resolvedProposalWorkspaceSourceDraft?.jobTitle?.trim() ||
     "";
   const proposalHeaderSourceDescription =
-    canonicalJobRecord?.rawDescription?.trim() ||
-    composePreviewValues?.jobDescription?.trim() ||
-    outputSourceComposeDraft?.jobDescription?.trim() ||
-    composeDraftInitialSeed?.jobDescription?.trim() ||
-    storedOutputDraft?.sourceComposeDraft?.jobDescription?.trim() ||
-    prefill?.jobDescription?.trim() ||
+    resolvedProposalWorkspaceSourceDraft?.jobDescription?.trim() ||
     "";
   const proposalHeaderSourceSummary = React.useMemo(
     () =>
@@ -2692,38 +2741,27 @@ export function ProposalForge(): JSX.Element {
     }
 
     const sourceJobTitle =
-      canonicalJobRecord?.title?.trim() ||
-      outputSourceComposeDraft?.jobTitle?.trim() ||
-      composePreviewValues?.jobTitle?.trim() ||
-      "";
+      resolvedProposalWorkspaceSourceDraft?.jobTitle?.trim() || "";
     if (sourceJobTitle) {
       nextMetadata.sourceJobTitle = sourceJobTitle;
     }
     const sourceJobDescription =
-      outputSourceComposeDraft?.jobDescription?.trim() ||
-      composePreviewValues?.jobDescription?.trim() ||
-      "";
+      resolvedProposalWorkspaceSourceDraft?.jobDescription?.trim() || "";
     if (sourceJobDescription) {
       nextMetadata.sourceJobDescription = sourceJobDescription;
     }
     const sourceUrl =
-      outputSourceComposeDraft?.sourceUrl?.trim() ||
-      composePreviewValues?.sourceUrl?.trim() ||
-      "";
+      resolvedProposalWorkspaceSourceDraft?.sourceUrl?.trim() || "";
     if (sourceUrl) {
       nextMetadata.sourceUrl = sourceUrl;
     }
     const sourcePlatform =
-      outputSourceComposeDraft?.platform?.trim() ||
-      composePreviewValues?.platform?.trim() ||
-      "";
+      resolvedProposalWorkspaceSourceDraft?.platform?.trim() || "";
     if (sourcePlatform) {
       nextMetadata.platform = sourcePlatform;
     }
-    const linkedJobId =
-      canonicalJobId?.trim() || prefill?.jobId?.trim() || duplicateSourceJobId?.trim() || "";
-    if (linkedJobId) {
-      nextMetadata.jobId = linkedJobId;
+    if (resolvedProposalJobId) {
+      nextMetadata.jobId = resolvedProposalJobId;
     }
     if (lastProposalRequest?.formalityLevel) {
       nextMetadata.formalityLevel = lastProposalRequest.formalityLevel;
@@ -2745,21 +2783,14 @@ export function ProposalForge(): JSX.Element {
 
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
   }, [
-    canonicalJobId,
-    canonicalJobRecord?.title,
-    composePreviewValues?.jobDescription,
-    composePreviewValues?.jobTitle,
-    composePreviewValues?.platform,
-    composePreviewValues?.sourceUrl,
-    duplicateSourceJobId,
+    resolvedProposalJobId,
+    resolvedProposalWorkspaceSourceDraft?.jobDescription,
+    resolvedProposalWorkspaceSourceDraft?.jobTitle,
+    resolvedProposalWorkspaceSourceDraft?.platform,
+    resolvedProposalWorkspaceSourceDraft?.sourceUrl,
     lastProposalRequest?.creativity,
     lastProposalRequest?.formalityLevel,
     lastProposalRequest?.voicePreset,
-    outputSourceComposeDraft?.jobTitle,
-    outputSourceComposeDraft?.platform,
-    outputSourceComposeDraft?.jobDescription,
-    outputSourceComposeDraft?.sourceUrl,
-    prefill?.jobId,
     proposalRenderMetadata,
     proposalApplicantName,
     proposalApplicantRole,
@@ -4321,6 +4352,22 @@ export function ProposalForge(): JSX.Element {
         stickyImportedSource.platform ??
         prefill?.platform ??
         null;
+      const nextJobTitle = values.jobTitle.trim();
+      const nextJobDescription = values.jobDescription.trim();
+      const currentSourceJobTitle =
+        resolvedProposalWorkspaceSourceDraft?.jobTitle?.trim() ?? "";
+      const currentSourceJobDescription =
+        resolvedProposalWorkspaceSourceDraft?.jobDescription?.trim() ?? "";
+      const sourceHasBriefText = Boolean(
+        currentSourceJobTitle || currentSourceJobDescription,
+      );
+      const nextHasBriefText = Boolean(nextJobTitle || nextJobDescription);
+      const canPreserveSourceIdentity =
+        !nextHasBriefText ||
+        (sourceHasBriefText &&
+          (!currentSourceJobTitle || currentSourceJobTitle === nextJobTitle) &&
+          (!currentSourceJobDescription ||
+            currentSourceJobDescription === nextJobDescription));
 
       return {
         jobTitle: values.jobTitle,
@@ -4330,8 +4377,8 @@ export function ProposalForge(): JSX.Element {
         toneTuning: values.toneTuning ?? null,
         characterLimitMode: values.characterLimitMode ?? null,
         characterLimitValue: values.characterLimitValue ?? null,
-        sourceUrl: preservedSourceUrl,
-        platform: preservedPlatform,
+        sourceUrl: canPreserveSourceIdentity ? preservedSourceUrl : null,
+        platform: canPreserveSourceIdentity ? preservedPlatform : null,
       };
     },
     [
@@ -4341,6 +4388,8 @@ export function ProposalForge(): JSX.Element {
       composePreviewValues?.sourceUrl,
       outputSourceComposeDraft?.platform,
       outputSourceComposeDraft?.sourceUrl,
+      resolvedProposalWorkspaceSourceDraft?.jobDescription,
+      resolvedProposalWorkspaceSourceDraft?.jobTitle,
       stickyImportedSource.platform,
       stickyImportedSource.sourceUrl,
       prefill?.platform,
@@ -5940,6 +5989,7 @@ export function ProposalForge(): JSX.Element {
       } else {
         params.delete("view");
         params.delete("id");
+        params.delete("jobId");
       }
       const nextSearch = params.toString();
       void navigate(nextSearch ? `/proposal?${nextSearch}` : "/proposal");
@@ -6125,13 +6175,14 @@ export function ProposalForge(): JSX.Element {
       try {
         const existingComposeDraft = readStoredProposalComposeDraft() ?? {};
         const composeDraft: StoredProposalComposeDraft = {
-          ...existingComposeDraft,
           jobTitle: restoredJobTitle,
           proposalType: savedProposalType ?? "cover_letter",
         };
 
         if (restoredSourceJobDescription) {
           composeDraft.jobDescription = restoredSourceJobDescription;
+        } else if (typeof existingComposeDraft.jobDescription === "string") {
+          composeDraft.jobDescription = existingComposeDraft.jobDescription;
         }
         if (restoredSourceUrl) {
           composeDraft.sourceUrl = restoredSourceUrl;
@@ -6627,33 +6678,18 @@ export function ProposalForge(): JSX.Element {
     };
   }, [isCompactComposeLayout, isSavedView, proposalContent]);
   const showComposePanel = isComposePanelVisible && !isSavedView;
-  const storedComposeDraft =
-    typeof window !== "undefined" ? readStoredProposalComposeDraft() : null;
   const briefJobDescription =
     canonicalJobRecord?.rawDescription?.trim() ||
-    composePreviewValues?.jobDescription?.trim() ||
+    resolvedProposalWorkspaceSourceDraft?.jobDescription?.trim() ||
     prefill?.jobDescription?.trim() ||
-    storedComposeDraft?.jobDescription?.trim() ||
     "";
   const briefSourceUrl =
     canonicalJobRecord?.sourceUrl ??
-    outputSourceComposeDraft?.sourceUrl ??
-    composePreviewValues?.sourceUrl ??
-    composeDraftInitialSeed?.sourceUrl ??
-    storedOutputDraft?.sourceComposeDraft?.sourceUrl ??
-    storedComposeDraft?.sourceUrl ??
-    stickyImportedSource.sourceUrl ??
-    prefill?.sourceUrl ??
+    resolvedProposalWorkspaceSourceDraft?.sourceUrl ??
     null;
   const briefSourcePlatform =
     canonicalJobRecord?.sourceDomain ??
-    outputSourceComposeDraft?.platform ??
-    composePreviewValues?.platform ??
-    composeDraftInitialSeed?.platform ??
-    storedOutputDraft?.sourceComposeDraft?.platform ??
-    storedComposeDraft?.platform ??
-    stickyImportedSource.platform ??
-    prefill?.platform ??
+    resolvedProposalWorkspaceSourceDraft?.platform ??
     null;
   const hasMeaningfulComposeDraft = Boolean(
     canonicalJobRecord?.title?.trim() ||
@@ -6675,7 +6711,7 @@ export function ProposalForge(): JSX.Element {
         jobId: canonicalJobId,
         title:
           canonicalJobRecord?.title?.trim() ||
-          composePreviewValues?.jobTitle?.trim() ||
+          resolvedProposalWorkspaceSourceDraft?.jobTitle?.trim() ||
           null,
         company: canonicalJobRecord?.company?.trim() || null,
         visibleSummary: canonicalJobRecord?.visibleSummary?.trim() || null,
@@ -6689,7 +6725,7 @@ export function ProposalForge(): JSX.Element {
       canonicalJobRecord?.visibleKeywords,
       canonicalJobRecord?.visibleRequirements,
       canonicalJobRecord?.visibleSummary,
-      composePreviewValues?.jobTitle,
+      resolvedProposalWorkspaceSourceDraft?.jobTitle,
     ]);
   const hasMeaningfulOutputDraft = Boolean(
     proposalContent?.trim() ||
@@ -7092,9 +7128,8 @@ export function ProposalForge(): JSX.Element {
   );
   const briefJobTitle = normalizeProposalRailJobTitle(
     canonicalJobRecord?.title?.trim() ||
+      resolvedProposalWorkspaceSourceDraft?.jobTitle?.trim() ||
       prefill?.jobTitle?.trim() ||
-      storedComposeDraft?.jobTitle?.trim() ||
-      composePreviewValues?.jobTitle?.trim() ||
       "",
   );
   const briefSummaryText = canonicalJobRecord?.summary?.trim() || null;
@@ -7205,8 +7240,8 @@ export function ProposalForge(): JSX.Element {
       proposalWorkspaceOutputShellInlineSize,
     "--proposal-compose-column-inline-size": proposalComposeColumnInlineSize,
   };
-  const proposalJobHref = canonicalJobId
-    ? `/jobs/${encodeURIComponent(canonicalJobId)}`
+  const proposalJobHref = resolvedProposalJobId
+    ? `/jobs/${encodeURIComponent(resolvedProposalJobId)}`
     : null;
   const activeCharacterLimitSelection = React.useMemo(
     () =>

@@ -26,6 +26,8 @@ const mockAuthState = {
   isSignedIn: true,
 };
 
+let mockThemeMode: "light" | "dark" = "light";
+
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
     isLoading: false,
@@ -86,7 +88,7 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
 
 vi.mock("../../lib/theme-mode", () => ({
   useThemeMode: () => ({
-    mode: "light",
+    mode: mockThemeMode,
     toggle: vi.fn(),
   }),
 }));
@@ -186,6 +188,7 @@ describe("Sidebar proposal navigation", () => {
   beforeEach(() => {
     window.localStorage.clear();
     setViewportWidth(1280);
+    mockThemeMode = "light";
     mockCvLibraryState.cvs = [];
     mockCvLibraryState.currentCv = null;
     mockCvLibraryState.currentCvId = null;
@@ -283,11 +286,13 @@ describe("Sidebar proposal navigation", () => {
     );
 
     const toggle = screen.getByRole("button", { name: "Open sidebar" });
-    expect(toggle.querySelector(".sb-toggle__collapsed-logo")).not.toBeNull();
-    expect(
-      (toggle.querySelector(".sb-toggle__collapsed-logo") as HTMLImageElement)
-        ?.getAttribute("src"),
-    ).toContain("twoweeks-logo-light.png");
+    const lightCollapsedLogo = toggle.querySelector(
+      ".sb-toggle__collapsed-logo",
+    ) as HTMLImageElement | null;
+    expect(lightCollapsedLogo).not.toBeNull();
+    expect(lightCollapsedLogo?.getAttribute("src")).toContain(
+      "twoweeks-pixel-bird-logo-light-mode-black-transparent.png",
+    );
     expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
 
     fireEvent.click(toggle);
@@ -299,6 +304,7 @@ describe("Sidebar proposal navigation", () => {
 
     unmount();
     setViewportWidth(640);
+    mockThemeMode = "dark";
     render(
       <MemoryRouter initialEntries={["/cv"]}>
         <Sidebar />
@@ -312,16 +318,13 @@ describe("Sidebar proposal navigation", () => {
     const collapsedToggle = screen.getByRole("button", {
       name: "Open sidebar",
     });
-    expect(
-      collapsedToggle.querySelector(".sb-toggle__collapsed-logo"),
-    ).not.toBeNull();
-    expect(
-      (
-        collapsedToggle.querySelector(
-          ".sb-toggle__collapsed-logo",
-        ) as HTMLImageElement
-      )?.getAttribute("src"),
-    ).toContain("twoweeks-logo-light.png");
+    const darkCollapsedLogo = collapsedToggle.querySelector(
+      ".sb-toggle__collapsed-logo",
+    ) as HTMLImageElement | null;
+    expect(darkCollapsedLogo).not.toBeNull();
+    expect(darkCollapsedLogo?.getAttribute("src")).toContain(
+      "twoweeks-pixel-bird-logo-dark-mode-white-transparent.png",
+    );
     expect(collapsedToggle.querySelector("svg")).toBeNull();
     expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
   });
