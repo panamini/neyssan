@@ -740,6 +740,8 @@ export function ProposalRail({
       {activeTab === "style" ? (
         <section className="forge__rail-section dasti-proposal-skeleton-rail__section dasti-proposal-skeleton-rail__style" data-rail-pane="style">
           <div className="dasti-proposal-skeleton-rail__style-note">
+            Style inherited from selected CV when available.
+            <br />
             Default settings{" "}
             <a className="dasti-proposal-skeleton-rail__link" href="/settings">
               → Document style
