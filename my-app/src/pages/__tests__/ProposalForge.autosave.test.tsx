@@ -143,6 +143,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
   default: ({
     proposalContent,
     documentTitle,
+    stylePreset,
     onContentChange,
     onDocumentTitleChange,
     railStartAddon,
@@ -151,6 +152,11 @@ vi.mock("../../components/ProposalDisplay", () => ({
   }: {
     proposalContent: string | null;
     documentTitle?: string | null;
+    stylePreset?: {
+      layout?: string | null;
+      typography?: string | null;
+      palette?: string | null;
+    } | null;
     onContentChange?: (value: string) => void;
     onDocumentTitleChange?: (value: string) => void;
     railStartAddon?: React.ReactNode;
@@ -160,6 +166,10 @@ vi.mock("../../components/ProposalDisplay", () => ({
     <div>
       <div data-testid="proposal-autosave-state">
         {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}
+      </div>
+      <div data-testid="proposal-autosave-style">
+        {stylePreset?.layout ?? "none"}|{stylePreset?.typography ?? "none"}|
+        {stylePreset?.palette ?? "none"}
       </div>
       <button
         type="button"
@@ -565,5 +575,36 @@ describe("ProposalForge autosave", () => {
         }),
       );
     });
+  });
+
+  it("keeps Style 3 selected and marks it custom immediately after a palette edit", () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Style 3" }));
+
+    expect(screen.getByRole("button", { name: "Style 3" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByTestId("proposal-autosave-style")).toHaveTextContent(
+      "|ink",
+    );
+    expect(screen.queryByText("Style 3 · Custom")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use Cobalt accent" }));
+
+    expect(screen.getByRole("button", { name: "Style 3" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText("Style 3 · Custom")).toBeInTheDocument();
+    expect(screen.getByTestId("proposal-autosave-style")).toHaveTextContent(
+      "|cobalt",
+    );
   });
 });
