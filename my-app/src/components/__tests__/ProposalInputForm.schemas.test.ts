@@ -35,4 +35,19 @@ describe("ProposalInputForm schema", () => {
       }),
     ).not.toThrow();
   });
+
+  it("accepts Mistral Medium as a model type", () => {
+    expect(() =>
+      formSchema.parse({
+        jobTitle: "Operations Associate",
+        jobDescription:
+          "Support recurring processes, update internal records, and coordinate communication across teams.",
+        proposalType: "cover_letter",
+        toneTuning: null,
+        characterLimitMode: "none",
+        characterLimitValue: 1500,
+        modelType: "mistral-medium-latest",
+      }),
+    ).not.toThrow();
+  });
 });

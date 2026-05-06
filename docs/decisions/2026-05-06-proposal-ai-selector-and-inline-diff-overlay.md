@@ -63,6 +63,26 @@ The selector work added a live model routing layer for helper actions and a defa
 - Job summary/keyword match synthesis is on the Ministral/Mistral path, not the proposal writer path.
 - The proposal editor now reviews text in place instead of in a detached suggestion card.
 
+## Case Note
+
+Security Guard Cover Letter Bench - Robert Cooper
+
+- `G` = GPT
+- `L` = Mistral Large
+- `M` = Mistral Medium
+
+Final ranking:
+
+1. `L` / Mistral Large
+2. `G` / GPT
+3. `M` / Mistral Medium
+
+Conclusion:
+
+Mistral Large won this case because it gave the best recruiter-safe balance: grounded, concise, relevant, and not overly AI-like.
+GPT was strongest for ATS coverage but too bloated.
+Mistral Medium was readable but underdeveloped or slightly inflated.
+
 ## Files
 
 - `my-app/config/llmConfig.ts`

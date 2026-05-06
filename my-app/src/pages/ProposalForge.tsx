@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { v4 as uuidv4 } from "uuid";
 import { ClipboardText, ShareFat, TrashSimple } from "@/lib/icons";
+import { BodyPortal } from "../components/ui/body-portal";
+import { LibraryFilterMenu } from "../components/LibraryFilterMenu";
 import ProposalExportActions from "../components/ProposalExportActions";
 import ProposalInputForm, {
   type ProposalGenerateControl,
@@ -201,6 +203,12 @@ type ProposalForgeHandoffRecord = {
   platform?: string;
   createdAt?: number;
 } | null;
+
+const PROPOSAL_MODEL_SELECTOR_OPTIONS = [
+  { value: "chatgpt", label: "GPT-5.5" },
+  { value: "mistral-medium-latest", label: "Med" },
+  { value: "mistral-large-latest", label: "Lrg" },
+] as const;
 
 type ProposalForgeReviewItem = {
   id: string;
@@ -1547,6 +1555,18 @@ export function ProposalForge(): JSX.Element {
         proposalVoicePreset: storedOutputDraft?.proposalVoicePreset,
       });
     });
+  const [composeToolbarModelType, setComposeToolbarModelType] = React.useState<
+    FormValues["modelType"]
+  >(() => {
+    const storedComposeDraft = readStoredProposalComposeDraft();
+    return storedComposeDraft?.modelType === "chatgpt" ||
+      storedComposeDraft?.modelType === "mistral-small-latest" ||
+      storedComposeDraft?.modelType === "mistral-medium-latest" ||
+      storedComposeDraft?.modelType === "mistral-large-latest" ||
+      storedComposeDraft?.modelType === "mistral-agent"
+      ? storedComposeDraft.modelType
+      : "chatgpt";
+  });
   const [cvPickerRequestKey, setCvPickerRequestKey] = React.useState(0);
   const [duplicateSourceJobId, setDuplicateSourceJobId] = React.useState<
     string | null
@@ -4373,6 +4393,7 @@ export function ProposalForge(): JSX.Element {
         jobTitle: values.jobTitle,
         jobDescription: values.jobDescription,
         proposalType: values.proposalType,
+        modelType: values.modelType,
         voicePreset: values.voicePreset ?? null,
         toneTuning: values.toneTuning ?? null,
         characterLimitMode: values.characterLimitMode ?? null,
@@ -4438,6 +4459,7 @@ export function ProposalForge(): JSX.Element {
   const handleProposalFormValuesChange = React.useCallback(
     (values: FormValues) => {
       scheduleComposeDraftSync(values);
+      setComposeToolbarModelType(values.modelType);
       setComposeToolbarVoicePreset(values.voicePreset ?? null);
     },
     [scheduleComposeDraftSync],
@@ -5276,6 +5298,7 @@ export function ProposalForge(): JSX.Element {
       setLastProposalRequest(values);
       setLoading(true);
       setProposalType(values.proposalType);
+      setComposeToolbarModelType(values.modelType);
       setProposalVoicePreset(resolvedVoicePreset);
       setProposalApplicantName(previewApplicantHeader.name ?? "");
       setProposalApplicantRole(previewApplicantHeader.role ?? "");
@@ -5341,6 +5364,7 @@ export function ProposalForge(): JSX.Element {
       setComposePreviewValues(submittedComposeDraft);
       setOutputSourceComposeDraft(submittedComposeDraft);
       setComposeDraftInitialSeed(submittedComposeDraft);
+      setComposeToolbarModelType(values.modelType);
       const signedProposal = ensureProposalSignatureName(
         proposal,
         previewApplicantHeader.name,
@@ -6177,6 +6201,14 @@ export function ProposalForge(): JSX.Element {
         const composeDraft: StoredProposalComposeDraft = {
           jobTitle: restoredJobTitle,
           proposalType: savedProposalType ?? "cover_letter",
+          modelType:
+            existingComposeDraft.modelType === "chatgpt" ||
+            existingComposeDraft.modelType === "mistral-small-latest" ||
+            existingComposeDraft.modelType === "mistral-medium-latest" ||
+            existingComposeDraft.modelType === "mistral-large-latest" ||
+            existingComposeDraft.modelType === "mistral-agent"
+              ? existingComposeDraft.modelType
+              : composeToolbarModelType,
         };
 
         if (restoredSourceJobDescription) {
@@ -6215,6 +6247,9 @@ export function ProposalForge(): JSX.Element {
 
     setProposalContent(savedProposalContent);
     setProposalType(savedProposalType);
+    setComposeToolbarModelType(
+      composeDraft.modelType ?? composeToolbarModelType,
+    );
     setProposalVoicePreset(savedProposalVoicePreset);
     setComposeToolbarVoicePreset(
       normalizeComposeToolbarVoicePreset(restoredRequestedVoicePreset),
@@ -7723,6 +7758,28 @@ export function ProposalForge(): JSX.Element {
           } as React.CSSProperties
         }
       >
+        {!isSavedView ? (
+          <BodyPortal>
+            <div
+              style={{
+                position: "fixed",
+                top: "calc(var(--space-3) + env(safe-area-inset-top))",
+                right: "var(--space-3)",
+                zIndex: 80,
+              }}
+            >
+              <LibraryFilterMenu
+                label="Debug model"
+                value={composeToolbarModelType}
+                onChange={setComposeToolbarModelType}
+                options={PROPOSAL_MODEL_SELECTOR_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+              />
+            </div>
+          </BodyPortal>
+        ) : null}
         {isSavedView ? (
           <section aria-hidden={false}>
             <ProposalsList
@@ -8039,6 +8096,7 @@ export function ProposalForge(): JSX.Element {
                           cvPickerRequestKey={cvPickerRequestKey}
                           suppressCvPicker
                           externalVoicePreset={composeToolbarVoicePreset}
+                          externalModelType={composeToolbarModelType}
                           externalCharacterLimitMode={draftCharacterLimitMode}
                           externalCharacterLimitValue={draftCharacterLimitValue}
                           headerLabel={null}

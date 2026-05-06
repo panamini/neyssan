@@ -108,6 +108,8 @@ interface ProposalInputFormProps {
   suppressToneControls?: boolean;
   /** Optional external tone source used by workspace-level toolbars. */
   externalVoicePreset?: FormValues["voicePreset"] | null;
+  /** Optional external model source used by workspace-level debug selectors. */
+  externalModelType?: FormValues["modelType"] | null;
   externalCharacterLimitMode?: FormValues["characterLimitMode"] | null;
   externalCharacterLimitValue?: FormValues["characterLimitValue"] | null;
   onActiveCvChange?: (cvId: string | null) => void;
@@ -145,6 +147,7 @@ const VISIBLE_MODEL_OPTIONS = [{ value: "chatgpt", label: "ChatGPT" }] as const;
 const PROPOSAL_FORM_MODEL_TYPES = [
   "chatgpt",
   "mistral-small-latest",
+  "mistral-medium-latest",
   "mistral-large-latest",
   "mistral-agent",
 ] as const;
@@ -234,6 +237,14 @@ function readStoredComposeDraft(
     toneTuning: null,
     characterLimitMode: DEFAULT_COMPOSE_CHARACTER_LIMIT_MODE,
     characterLimitValue: DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE,
+    modelType:
+      parsed.modelType === "chatgpt" ||
+      parsed.modelType === "mistral-small-latest" ||
+      parsed.modelType === "mistral-medium-latest" ||
+      parsed.modelType === "mistral-large-latest" ||
+      parsed.modelType === "mistral-agent"
+        ? parsed.modelType
+        : DEFAULT_PROPOSAL_MODEL_TYPE,
   };
 }
 
@@ -263,6 +274,7 @@ function normalizeProposalFormValues(values: Partial<FormValues>): FormValues {
     modelType:
       values.modelType === "chatgpt" ||
       values.modelType === "mistral-small-latest" ||
+      values.modelType === "mistral-medium-latest" ||
       values.modelType === "mistral-large-latest" ||
       values.modelType === "mistral-agent"
         ? values.modelType
@@ -361,6 +373,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   onCvPickerOpenChange,
   suppressToneControls = false,
   externalVoicePreset,
+  externalModelType,
   externalCharacterLimitMode,
   externalCharacterLimitValue,
   onActiveCvChange,
@@ -658,6 +671,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           jobTitle: normalizedValues.jobTitle,
           jobDescription: normalizedValues.jobDescription,
           proposalType: normalizedValues.proposalType,
+          modelType: normalizedValues.modelType,
           voicePreset: normalizedValues.voicePreset ?? undefined,
           toneTuning: normalizedValues.toneTuning ?? null,
           characterLimitMode: normalizedValues.characterLimitMode ?? null,
@@ -836,18 +850,39 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   ]);
 
   React.useEffect(() => {
+    if (externalModelType !== undefined) {
+      return;
+    }
+
     if (
       VISIBLE_MODEL_OPTIONS.some((option) => option.value === selectedModelType)
     ) {
       return;
     }
 
-    form.setValue("modelType", "chatgpt", {
+    form.setValue("modelType", DEFAULT_PROPOSAL_MODEL_TYPE, {
       shouldDirty: false,
       shouldTouch: false,
       shouldValidate: true,
     });
-  }, [form, selectedModelType]);
+  }, [externalModelType, form, selectedModelType]);
+
+  React.useEffect(() => {
+    if (externalModelType === undefined) {
+      return;
+    }
+
+    const currentFormModelType = form.getValues("modelType");
+    if (currentFormModelType === externalModelType) {
+      return;
+    }
+
+    form.setValue("modelType", externalModelType, {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: true,
+    });
+  }, [externalModelType, form]);
 
   React.useEffect(() => {
     if (

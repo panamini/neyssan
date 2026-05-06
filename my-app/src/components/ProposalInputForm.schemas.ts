@@ -49,6 +49,7 @@ export const formSchema = z.object({
       [
         "chatgpt",
         "mistral-small-latest",
+        "mistral-medium-latest",
         "mistral-large-latest",
         "mistral-agent",
       ],
