@@ -8308,6 +8308,7 @@
 
 @media (max-width: 1419px) {
   .dasti-proposal-skeleton-forge {
+    --proposal-workspace-stage-inline-size: min(100%, 210mm);
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -8347,6 +8348,10 @@
   .dasti-proposal-skeleton-stage__actions {
     padding-inline-start: var(--space-1);
     margin-inline-start: 0;
+  }
+
+  .dasti-proposal-output-shell--workspace {
+    --proposal-output-stage-frame-padding: 0px;
   }
 
   .dasti-proposal-output-shell--workspace .dasti-doc-viewer-shell,
