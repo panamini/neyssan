@@ -544,6 +544,7 @@
 }
 
 .dasti-cv-rail {
+  --cv-rail-row-active-bg: var(--sf1);
   width: var(--cv-workspace-rail-inline-size, 360px);
   max-width: 100%;
   min-width: 0;
@@ -781,7 +782,7 @@
 
 .dasti-cv-org-row[data-active="true"] {
   border-color: var(--proposal-chrome-control-active-border, var(--ac));
-  background: var(--proposal-chrome-control-active-bg, var(--sf1));
+  background: var(--proposal-chrome-control-active-bg, var(--cv-rail-row-active-bg));
   box-shadow: none;
 }
 
@@ -1449,10 +1450,10 @@
   .dasti-cv-rail {
     max-height: none;
     position: static;
-    border-left: 0;
-    border-top: 1px solid var(--border-soft);
-    padding-inline-start: 0;
-    padding-block-start: var(--space-3);
+    padding: var(--space-5);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-surface, var(--radius-card));
+    background: var(--sfr);
   }
 
   .dasti-cv-stage-bar {

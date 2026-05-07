@@ -24,6 +24,16 @@ function expectCssInOrder(snippets: string[]) {
 }
 
 describe("ProposalDisplay CSS contracts", () => {
+  it("orders the collapsed Proposal Forge stage before the rail panel", () => {
+    expectCssInOrder([
+      "@media (max-width: 1419px)",
+      ".dasti-proposal-skeleton-rail {",
+      "order: 2;",
+      ".dasti-proposal-skeleton-forge__stage {",
+      "order: 1;",
+    ]);
+  });
+
   it("keeps the proposal preview shell and document pages on A4 ratio", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-sheet__preview-page,\s*\.dasti-document-stage__canvas\[data-document-page="true"\][\s\S]*?aspect-ratio:\s*210\s*\/\s*297;/,

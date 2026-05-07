@@ -8367,7 +8367,7 @@
   }
 
   .dasti-proposal-skeleton-rail {
-    order: 1;
+    order: 2;
     position: static;
     width: min(100%, var(--proposal-workspace-stage-inline-size));
     margin-inline: auto;
@@ -8378,7 +8378,7 @@
   }
 
   .dasti-proposal-skeleton-forge__stage {
-    order: 2;
+    order: 1;
   }
 
   .dasti-proposal-skeleton-stage__bar {
