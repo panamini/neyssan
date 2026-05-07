@@ -50,7 +50,7 @@ describe("ProposalDisplay CSS contracts", () => {
 
   it("pads the document stage inside the proposal shell without legacy count badges", () => {
     expect(productCss).toMatch(
-      /\.dasti-proposal-sheet\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*box-sizing:\s*border-box;[\s\S]*border:\s*1px solid var\(--document-viewer-frame-border\);/,
+      /\.dasti-proposal-sheet\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*box-sizing:\s*border-box;[\s\S]*border:\s*none;/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-sheet__body--document-viewer\s+\.dasti-document-stage-chassis\s*\{[\s\S]*padding-block-start:\s*var\(--document-viewer-bleed-block\);[\s\S]*padding-inline:\s*var\(--document-viewer-bleed-inline\);[\s\S]*padding-block-end:\s*calc\(var\(--document-viewer-bleed-block\)\s*\+\s*var\(--space-2\)\);[\s\S]*box-sizing:\s*border-box;/,
@@ -175,10 +175,10 @@ describe("ProposalDisplay CSS contracts", () => {
       "background: transparent;",
       "box-shadow: none;",
       ".dasti-proposal-output-shell--workspace\n    .dasti-proposal-sheet__body--document-viewer {",
-      "border: 1px solid var(--document-viewer-frame-border);",
-      "border-radius: var(--document-viewer-radius);",
-      "background: var(--document-viewer-frame-surface);",
-      "box-shadow:",
+      "border: none;",
+      "border-radius: 0;",
+      "background: transparent;",
+      "box-shadow: none;",
     ]);
     expectCssInOrder([
       "@media (max-width: 520px)",
