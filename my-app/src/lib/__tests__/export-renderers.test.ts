@@ -754,6 +754,95 @@ describe("export-renderers", () => {
     expect(atsDocument.querySelector(".resume-main-stack")).toBeTruthy();
   });
 
+  it("places two-column workshop export fragments by committed lane before kind fallback", () => {
+    const currentCv = generateCvTemplate("Workshop two-column export lane");
+    currentCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+      resumeTemplateId: "workshop_resume_twocol_ats",
+    };
+    const exportSource = buildResumeExportSource({
+      currentCv,
+      stylePreset: currentCv.metadata.verbatiStyle,
+    });
+    const firstPage = exportSource?.committedPages?.[0];
+    expect(firstPage).toBeTruthy();
+    const laneForcedSource = {
+      ...exportSource!,
+      committedPages: [
+        {
+          ...firstPage!,
+          fragments: [
+            ...firstPage!.fragments,
+            {
+              fragmentId: "test-cert-main-lane",
+              kind: "certifications" as const,
+              lane: "main" as const,
+              sectionType: "certifications" as const,
+              sectionId: "certifications-test",
+              title: "Certifications",
+              continued: false,
+              items: [
+                {
+                  id: "cert-main-lane",
+                  name: "Detailed Architecture Certification",
+                  issuer: "Credential Board",
+                  meta: "License ABC-123",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          pageId: "test-page-2-no-header",
+          index: 1,
+          estimatedHeight: 12,
+          fragments: [
+            {
+              fragmentId: "test-skill-sidebar-lane",
+              kind: "skills" as const,
+              lane: "sidebar" as const,
+              sectionType: "skills" as const,
+              sectionId: "skills-test",
+              title: "Skills",
+              continued: false,
+              items: [{ id: "skill-sidebar-lane", name: "React" }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const styledDocument = parseExportHtml(
+      renderResumeStyledExportDocument({
+        data: laneForcedSource,
+        stylePreset: currentCv.metadata.verbatiStyle,
+      }),
+    );
+
+    expect(
+      styledDocument.querySelector(
+        '.resume-workshop-twocol-main [data-export-item-id="cert-main-lane"]',
+      ),
+    ).toBeTruthy();
+    expect(
+      styledDocument.querySelector(
+        '.resume-workshop-twocol-sidebar [data-export-item-id="cert-main-lane"]',
+      ),
+    ).toBeNull();
+    const continuationPage = styledDocument.querySelector(
+      '[data-export-page-id="test-page-2-no-header"]',
+    );
+    expect(continuationPage?.querySelector(".resume-workshop-twocol-header")).toBeNull();
+    expect(
+      continuationPage?.querySelector(
+        ".resume-workshop-twocol-sidebar .section--skills",
+      ),
+    ).toBeTruthy();
+  });
+
   it("renders the dense first workshop experience entry intact in export output when the committed planner no longer splits it", () => {
     const workshopStyle = {
       familyId: "workshop",

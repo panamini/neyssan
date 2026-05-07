@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import ResumeTemplateRenderer from "../ResumeTemplateRenderer";
@@ -427,6 +427,79 @@ describe("ResumeTemplateRenderer", () => {
     expect(container.querySelector('[data-resume-template-layout="workshop-two-column"]')).toBeTruthy();
     expect(container.querySelector('[data-resume-template-column="sidebar"]')).toBeTruthy();
     expect(container.querySelector('[data-resume-template-column="main"]')).toBeTruthy();
+  });
+
+  it("places two-column committed fragments by lane in the React preview", () => {
+    const committedPages = [
+      {
+        pageId: "react-lane-page-1",
+        index: 0,
+        estimatedHeight: 20,
+        fragments: [
+          {
+            fragmentId: "react-lane-profile",
+            kind: "profile" as const,
+            lane: "header" as const,
+            sectionType: "profile" as const,
+            sectionId: "profile-1",
+            title: "Profile",
+            continued: false,
+            profile: { name: resumeMock.name, title: resumeMock.title },
+            contact: [],
+            metadata: [],
+          },
+          {
+            fragmentId: "react-lane-cert-main",
+            kind: "certifications" as const,
+            lane: "main" as const,
+            sectionType: "certifications" as const,
+            sectionId: "certifications-1",
+            title: "Certifications",
+            continued: false,
+            items: [
+              {
+                id: "react-cert-main",
+                name: "Detailed Architecture Certification",
+                issuer: "Credential Board",
+                meta: "License ABC-123",
+              },
+            ],
+          },
+          {
+            fragmentId: "react-lane-skill-sidebar",
+            kind: "skills" as const,
+            lane: "sidebar" as const,
+            sectionType: "skills" as const,
+            sectionId: "skills-1",
+            title: "Skills",
+            continued: false,
+            items: [{ id: "react-skill-sidebar", name: "React" }],
+          },
+        ],
+      },
+    ];
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        }}
+        resumeTemplateId="workshop_resume_twocol_ats"
+        committedPages={committedPages}
+      />,
+    );
+
+    const sidebar = container.querySelector('[data-resume-template-column="sidebar"]');
+    const main = container.querySelector('[data-resume-template-column="main"]');
+    expect(sidebar).toBeTruthy();
+    expect(main).toBeTruthy();
+    expect(within(main as HTMLElement).getByText("Detailed Architecture Certification")).toBeTruthy();
+    expect(within(sidebar as HTMLElement).queryByText("Detailed Architecture Certification")).toBeNull();
+    expect(within(sidebar as HTMLElement).getByText("React")).toBeTruthy();
   });
 
   it("renders committed workshop experience rich content from committedPages with fallback-safe source data", () => {

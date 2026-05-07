@@ -19,6 +19,7 @@ import type { VerbatiStylePreset } from "../../features/verbati/types";
 import { normalizeResumePreviewTokens } from "../layout/documentTokenNormalizer";
 import { ptToMm } from "../layout/documentTokens";
 import {
+  isWorkshopTwoColumnResumeTemplateId,
   resolveWorkshopPreviewLayoutContract,
   type ResumeTemplateDefinition,
 } from "../layout/resumeTemplates";
@@ -45,6 +46,13 @@ const EXPERIENCE_MIN_PARTIAL_SPLIT_CHARS =
   EXPERIENCE_MIN_FRAGMENT_USEFUL_LINES * EXPERIENCE_USEFUL_CHARS_PER_LINE;
 const EXPERIENCE_DENSE_NUMERIC_CHARS_PER_LINE_MULTIPLIER = 1;
 const EXPERIENCE_DENSE_ALNUM_CHARS_PER_LINE_MULTIPLIER = 0.95;
+
+export type WorkshopTwoColumnLane = "header" | "main" | "sidebar";
+
+export const CERT_SIDEBAR_MAX_ITEMS = 6;
+export const CERT_SIDEBAR_MAX_TITLE_CHARS = 48;
+export const CERT_SIDEBAR_MAX_META_CHARS = 32;
+export const CERT_SIDEBAR_MAX_ESTIMATED_LINES_PER_ITEM = 2;
 
 export type WorkshopExperienceContentBlock = {
   kind: "text" | "bullet";
@@ -178,6 +186,7 @@ export type WorkshopPlannerEntry =
 export type WorkshopPlannerSection = {
   key: string;
   kind: WorkshopEntryKind;
+  lane?: WorkshopTwoColumnLane;
   sectionType: ResumePreviewSectionType;
   sectionId?: string;
   title?: string;
@@ -205,6 +214,7 @@ type WorkshopCommittedMetaItem = {
 
 type WorkshopCommittedProfileFragment = {
   fragmentId: string;
+  lane?: WorkshopTwoColumnLane;
   kind: "profile";
   sectionType: "profile";
   sectionId?: string;
@@ -220,6 +230,7 @@ type WorkshopCommittedProfileFragment = {
 
 type WorkshopCommittedSummaryFragment = {
   fragmentId: string;
+  lane?: WorkshopTwoColumnLane;
   kind: "summary";
   sectionType: "summary";
   sectionId?: string;
@@ -307,6 +318,7 @@ export type WorkshopResumeCommittedFragment =
   | WorkshopCommittedSummaryFragment
   | {
       fragmentId: string;
+      lane?: WorkshopTwoColumnLane;
       kind: "experience";
       sectionType: "experience";
       sectionId?: string;
@@ -316,6 +328,7 @@ export type WorkshopResumeCommittedFragment =
     }
   | {
       fragmentId: string;
+      lane?: WorkshopTwoColumnLane;
       kind: "education";
       sectionType: "education";
       sectionId?: string;
@@ -325,6 +338,7 @@ export type WorkshopResumeCommittedFragment =
     }
   | {
       fragmentId: string;
+      lane?: WorkshopTwoColumnLane;
       kind: "skills";
       sectionType: "skills";
       sectionId?: string;
@@ -334,6 +348,7 @@ export type WorkshopResumeCommittedFragment =
     }
   | {
       fragmentId: string;
+      lane?: WorkshopTwoColumnLane;
       kind: "selected_projects";
       sectionType: "selected_projects";
       sectionId?: string;
@@ -343,6 +358,7 @@ export type WorkshopResumeCommittedFragment =
     }
   | {
       fragmentId: string;
+      lane?: WorkshopTwoColumnLane;
       kind: "languages";
       sectionType: "languages";
       sectionId?: string;
@@ -352,6 +368,7 @@ export type WorkshopResumeCommittedFragment =
     }
   | {
       fragmentId: string;
+      lane?: WorkshopTwoColumnLane;
       kind: "certifications";
       sectionType: "certifications";
       sectionId?: string;
@@ -361,6 +378,7 @@ export type WorkshopResumeCommittedFragment =
     }
   | {
       fragmentId: string;
+      lane?: WorkshopTwoColumnLane;
       kind: "achievements";
       sectionType: "achievements";
       sectionId?: string;
@@ -370,6 +388,7 @@ export type WorkshopResumeCommittedFragment =
     }
   | {
       fragmentId: string;
+      lane?: WorkshopTwoColumnLane;
       kind: "affiliations";
       sectionType: "affiliations";
       sectionId?: string;
@@ -379,6 +398,7 @@ export type WorkshopResumeCommittedFragment =
     }
   | {
       fragmentId: string;
+      lane?: WorkshopTwoColumnLane;
       kind: "hobbies";
       sectionType: "hobbies";
       sectionId?: string;
@@ -388,6 +408,7 @@ export type WorkshopResumeCommittedFragment =
     }
   | {
       fragmentId: string;
+      lane?: WorkshopTwoColumnLane;
       kind: "additional_information";
       sectionType: "additional_information";
       sectionId?: string;
@@ -412,6 +433,7 @@ export type WorkshopResumePlan = {
 type PlannerSectionDefinition = {
   key: string;
   kind: WorkshopEntryKind;
+  lane?: WorkshopTwoColumnLane;
   sectionType: ResumePreviewSectionType;
   sectionId?: string;
   title?: string;
@@ -2116,6 +2138,111 @@ function buildFragmentId(
   return `workshop-fragment-${page.index + 1}-${section.key}-${firstEntryId}`;
 }
 
+function estimateCertificationLines(
+  item: ResumeCertificationItem,
+  metrics: WorkshopPlannerMetrics,
+): number {
+  return Math.max(
+    estimateUsefulLines(item.name, metrics.compactCharsPerLine),
+    estimateUsefulLines([item.issuer, item.meta].filter(Boolean).join(" "), metrics.compactCharsPerLine),
+  );
+}
+
+function hasDetailedCertificationContent(item: ResumeCertificationItem): boolean {
+  const maybeDetailed = item as ResumeCertificationItem & {
+    description?: string;
+    summary?: string;
+    responsibilities?: unknown;
+    rich?: unknown;
+    descriptionRich?: unknown;
+  };
+
+  return Boolean(
+    maybeDetailed.description?.trim() ||
+      maybeDetailed.summary?.trim() ||
+      maybeDetailed.responsibilities ||
+      maybeDetailed.rich ||
+      maybeDetailed.descriptionRich,
+  );
+}
+
+function isCompactCertificationSection(
+  section: PlannerSectionDefinition,
+  metrics: WorkshopPlannerMetrics,
+): boolean {
+  const certificationEntries = section.entries.filter(
+    (entry): entry is Extract<WorkshopPlannerEntry, { kind: "certifications" }> =>
+      entry.kind === "certifications",
+  );
+
+  if (
+    certificationEntries.length === 0 ||
+    certificationEntries.length > CERT_SIDEBAR_MAX_ITEMS
+  ) {
+    return false;
+  }
+
+  return certificationEntries.every((entry) => {
+    const item = entry.item;
+    const metaText = [item.issuer, item.meta].filter(Boolean).join(" ").trim();
+    return (
+      !hasDetailedCertificationContent(item) &&
+      item.name.trim().length <= CERT_SIDEBAR_MAX_TITLE_CHARS &&
+      metaText.length <= CERT_SIDEBAR_MAX_META_CHARS &&
+      estimateCertificationLines(item, metrics) <=
+        CERT_SIDEBAR_MAX_ESTIMATED_LINES_PER_ITEM
+    );
+  });
+}
+
+function resolveWorkshopTwoColumnSectionLane(
+  section: PlannerSectionDefinition,
+  metrics: WorkshopPlannerMetrics,
+): WorkshopTwoColumnLane {
+  if (section.kind === "profile" || section.kind === "summary") {
+    return "header";
+  }
+
+  if (
+    section.kind === "skills" ||
+    section.kind === "languages" ||
+    section.kind === "affiliations" ||
+    section.kind === "hobbies"
+  ) {
+    return "sidebar";
+  }
+
+  if (section.kind === "certifications") {
+    return isCompactCertificationSection(section, metrics) ? "sidebar" : "main";
+  }
+
+  return "main";
+}
+
+export function resolveWorkshopTwoColumnFragmentLane(
+  fragment: WorkshopResumeCommittedFragment,
+): WorkshopTwoColumnLane {
+  if (fragment.lane) {
+    return fragment.lane;
+  }
+
+  if (fragment.kind === "profile" || fragment.kind === "summary") {
+    return "header";
+  }
+
+  if (
+    fragment.kind === "skills" ||
+    fragment.kind === "languages" ||
+    fragment.kind === "certifications" ||
+    fragment.kind === "affiliations" ||
+    fragment.kind === "hobbies"
+  ) {
+    return "sidebar";
+  }
+
+  return "main";
+}
+
 function estimateSectionPlacementHeight(args: {
   currentPageHasSections: boolean;
   section: PlannerSectionDefinition;
@@ -2500,6 +2627,7 @@ function buildCommittedFragment(args: {
   const fragmentId = buildFragmentId(args.page, args.section);
   const base = {
     fragmentId,
+    lane: args.section.lane,
     sectionId: args.section.sectionId,
     title: args.section.title,
     continued: args.section.continued,
@@ -2691,6 +2819,181 @@ function buildCommittedFragment(args: {
   }
 }
 
+function buildTwoColumnWorkshopPlan(args: {
+  data: ResumeData;
+  metrics: WorkshopPlannerMetrics;
+  pageHeightBudget: number;
+}): WorkshopResumePlan {
+  const allSections = buildPlannerSections(args.data, args.metrics).map((section) => ({
+    ...section,
+    lane: resolveWorkshopTwoColumnSectionLane(section, args.metrics),
+  }));
+  const headerSections = allSections.filter((section) => section.lane === "header");
+  const mainSections = allSections.filter((section) => section.lane === "main");
+  const sidebarSections = allSections.filter((section) => section.lane === "sidebar");
+  const headerContentHeight = headerSections.reduce(
+    (sum, section, index) =>
+      sum +
+      estimateSectionPlacementHeight({
+        currentPageHasSections: index > 0,
+        section,
+        entries: section.entries,
+        metrics: args.metrics,
+      }),
+    0,
+  );
+  const headerToBodyGap = headerSections.length > 0 ? args.metrics.sectionGapMm : 0;
+  const firstPageHeaderHeight = headerContentHeight + headerToBodyGap;
+
+  const paginateLane = (
+    sections: PlannerSectionDefinition[],
+  ): Map<number, { height: number; sections: WorkshopPlannerSection[] }> => {
+    const pageMap = new Map<number, { height: number; sections: WorkshopPlannerSection[] }>();
+    let pageIndex = 0;
+    let currentHeight = 0;
+    let currentSections: WorkshopPlannerSection[] = [];
+
+    const capacityForPage = (index: number) =>
+      Math.max(0, args.pageHeightBudget - (index === 0 ? firstPageHeaderHeight : 0));
+    const commit = () => {
+      if (currentSections.length === 0) return;
+      pageMap.set(pageIndex, { height: currentHeight, sections: currentSections });
+      pageIndex += 1;
+      currentHeight = 0;
+      currentSections = [];
+    };
+
+    for (const section of sections) {
+      let sectionOnCurrentPage: WorkshopPlannerSection | null = null;
+      const hasPriorSectionOnAnyPage = () =>
+        Array.from(pageMap.values()).some((page) =>
+          page.sections.some((item) => item.key === section.key),
+        ) || currentSections.some((item) => item.key === section.key);
+
+      for (const entry of section.entries) {
+        const isNewSection = !sectionOnCurrentPage;
+        const sectionGap =
+          isNewSection && currentSections.length > 0 && section.kind !== "summary"
+            ? args.metrics.sectionGapMm
+            : 0;
+        const header = isNewSection && section.title ? section.headerHeight : 0;
+        const repeatedEntryGap =
+          sectionOnCurrentPage && section.kind === "experience"
+            ? args.metrics.sectionContentGapMm
+            : sectionOnCurrentPage &&
+                (section.kind === "languages" || section.kind === "hobbies")
+              ? args.metrics.listGapMm
+              : 0;
+        const addedHeight = sectionGap + header + repeatedEntryGap + entry.estimatedHeight;
+
+        const entryFitsCurrentPage = fitsWithinWorkshopAvailableHeight(
+          addedHeight,
+          capacityForPage(pageIndex) - currentHeight,
+          args.metrics.bottomFitSafetyMm,
+        );
+
+        if (currentSections.length > 0 && !entryFitsCurrentPage) {
+          commit();
+          sectionOnCurrentPage = null;
+        } else if (
+          currentSections.length === 0 &&
+          pageIndex === 0 &&
+          !entryFitsCurrentPage &&
+          fitsWithinWorkshopAvailableHeight(
+            addedHeight,
+            capacityForPage(1),
+            args.metrics.bottomFitSafetyMm,
+          )
+        ) {
+          pageIndex = 1;
+        }
+
+        if (!sectionOnCurrentPage) {
+          sectionOnCurrentPage = {
+            key: section.key,
+            kind: section.kind,
+            lane: section.lane,
+            sectionType: section.sectionType,
+            sectionId: section.sectionId,
+            title: section.title,
+            continued: hasPriorSectionOnAnyPage(),
+            entries: [],
+          };
+          if (currentSections.length > 0 && section.kind !== "summary") {
+            currentHeight += args.metrics.sectionGapMm;
+          }
+          if (section.title) {
+            currentHeight += section.headerHeight;
+          }
+          currentSections.push(sectionOnCurrentPage);
+        } else if (section.kind === "experience") {
+          currentHeight += args.metrics.sectionContentGapMm;
+        } else if (section.kind === "languages" || section.kind === "hobbies") {
+          currentHeight += args.metrics.listGapMm;
+        }
+
+        sectionOnCurrentPage.entries.push(entry);
+        currentHeight += entry.estimatedHeight;
+      }
+    }
+
+    commit();
+    return pageMap;
+  };
+
+  const mainPages = paginateLane(mainSections);
+  const sidebarPages = paginateLane(sidebarSections);
+  const maxLanePageIndex = Math.max(
+    -1,
+    ...Array.from(mainPages.keys()),
+    ...Array.from(sidebarPages.keys()),
+  );
+  const pageCount = Math.max(1, maxLanePageIndex + 1);
+  const pages: WorkshopResumePagePlan[] = [];
+
+  for (let index = 0; index < pageCount; index += 1) {
+    const mainPage = mainPages.get(index);
+    const sidebarPage = sidebarPages.get(index);
+    const pageSections: WorkshopPlannerSection[] = [
+      ...(index === 0
+        ? headerSections.map((section) => ({
+            key: section.key,
+            kind: section.kind,
+            lane: section.lane,
+            sectionType: section.sectionType,
+            sectionId: section.sectionId,
+            title: section.title,
+            continued: false,
+            entries: section.entries,
+          }))
+        : []),
+      ...(mainPage?.sections ?? []),
+      ...(sidebarPage?.sections ?? []),
+    ];
+    pages.push({
+      index,
+      estimatedHeight:
+        (index === 0 ? firstPageHeaderHeight : 0) +
+        Math.max(mainPage?.height ?? 0, sidebarPage?.height ?? 0),
+      entries: pageSections.flatMap((section) => section.entries),
+      sections: pageSections,
+    });
+  }
+
+  return {
+    pageCount: pages.length,
+    pages,
+    committedPages: pages.map((page) => ({
+      pageId: `workshop-page-${page.index + 1}`,
+      index: page.index,
+      estimatedHeight: page.estimatedHeight,
+      fragments: page.sections.map((section) =>
+        buildCommittedFragment({ data: args.data, page, section }),
+      ),
+    })),
+  };
+}
+
 export function planWorkshopResumePages(args: {
   data: ResumeData;
   template: ResumeTemplateDefinition;
@@ -2704,6 +3007,13 @@ export function planWorkshopResumePages(args: {
   const pageHeightBudget = metrics.pageHeightBudgetMm;
   if (args.debugTrace) {
     args.debugTrace.pageHeightBudgetMm = pageHeightBudget;
+  }
+  if (isWorkshopTwoColumnResumeTemplateId(args.template.id)) {
+    return buildTwoColumnWorkshopPlan({
+      data: args.data,
+      metrics,
+      pageHeightBudget,
+    });
   }
   const pages: WorkshopResumePagePlan[] = [];
   const sections = buildPlannerSections(args.data, metrics);
@@ -2756,6 +3066,7 @@ export function planWorkshopResumePages(args: {
     pageSection = {
       key: section.key,
       kind: section.kind,
+      lane: section.lane,
       sectionType: section.sectionType,
       sectionId: section.sectionId,
       title: section.title,

@@ -3,9 +3,10 @@ import React from "react";
 import type { ResumeActiveTarget } from "../resumeLinking";
 import type { ResumeData } from "./resume.types";
 import type { ResumeTemplateDefinition } from "../../../lib/layout/resumeTemplates";
-import type {
-  WorkshopResumeCommittedFragment,
-  WorkshopResumeCommittedPage,
+import {
+  resolveWorkshopTwoColumnFragmentLane,
+  type WorkshopResumeCommittedFragment,
+  type WorkshopResumeCommittedPage,
 } from "../../../lib/resume/resumePagination";
 import type { ResumeInlineEditing } from "./InlineEditableText";
 import {
@@ -24,15 +25,6 @@ type ResumeTwoColAtsPageProps = {
   paperAi?: ResumePaperAiState | null;
 };
 
-const SIDEBAR_FRAGMENT_KINDS = new Set<WorkshopResumeCommittedFragment["kind"]>([
-  "skills",
-  "languages",
-  "certifications",
-  "achievements",
-  "affiliations",
-  "hobbies",
-]);
-
 function partitionTwoColumnFragments(
   fragments: WorkshopResumeCommittedFragment[],
 ): {
@@ -46,9 +38,10 @@ function partitionTwoColumnFragments(
     main: WorkshopResumeCommittedFragment[];
   }>(
     (result, fragment) => {
-      if (fragment.kind === "profile" || fragment.kind === "summary") {
+      const lane = resolveWorkshopTwoColumnFragmentLane(fragment);
+      if (lane === "header") {
         result.header.push(fragment);
-      } else if (SIDEBAR_FRAGMENT_KINDS.has(fragment.kind)) {
+      } else if (lane === "sidebar") {
         result.sidebar.push(fragment);
       } else {
         result.main.push(fragment);
