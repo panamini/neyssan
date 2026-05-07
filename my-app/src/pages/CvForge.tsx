@@ -5168,7 +5168,8 @@ export function CvForge(): JSX.Element {
                     <span className="dasti-cv-import-progress__dot" />
                     <div>
                       <strong>
-                        Importing PDF<span className="ds-btn__period">.</span>
+                        Importing PDF
+                        <span className="dasti-loader-caret" aria-hidden="true" />
                       </strong>
                       <span>
                         Parsing is still pending. Parser errors will stay visible

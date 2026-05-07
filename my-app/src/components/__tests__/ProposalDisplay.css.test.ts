@@ -582,24 +582,28 @@ describe("ProposalDisplay CSS contracts", () => {
 
   it("keeps Proposal loading skeleton bands on the app skeleton shimmer without subject divider", () => {
     expect(productCss).toMatch(
-      /@keyframes ds-skel\s*\{[\s\S]*from\s*\{[\s\S]*background-position:\s*200%\s+0;[\s\S]*to\s*\{[\s\S]*background-position:\s*-200%\s+0;/,
+      /@keyframes tw-document-shimmer\s*\{[\s\S]*from\s*\{[\s\S]*transform:\s*translateX\(-120%\);[\s\S]*to\s*\{[\s\S]*transform:\s*translateX\(120%\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-loading-skeleton\s*\{[\s\S]*--proposal-skeleton-band:\s*var\(--sf2\);[\s\S]*--proposal-skeleton-band-highlight:\s*var\(--sf3\);/,
+      /@keyframes tw-document-caret-blink\s*\{[\s\S]*0%,[\s\S]*49%\s*\{[\s\S]*opacity:\s*1;[\s\S]*50%,[\s\S]*100%\s*\{[\s\S]*opacity:\s*0;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-loading-skeleton__eyebrow,[\s\S]*?\.dasti-proposal-loading-skeleton__paragraph span\s*\{[\s\S]*var\(--proposal-skeleton-band\)\s*0%,[\s\S]*var\(--proposal-skeleton-band-highlight\)\s*50%,[\s\S]*var\(--proposal-skeleton-band\)\s*100%[\s\S]*background-size:\s*200%\s*100%;[\s\S]*animation:\s*ds-skel\s+1400ms\s+linear\s+infinite;/,
+      /\.dasti-proposal-loading-skeleton\s*\{[\s\S]*--proposal-skeleton-band:\s*color-mix\([\s\S]*var\(--proposal-document-ink,\s*#15130f\)\s*7\.5%,[\s\S]*--proposal-skeleton-band-strong:\s*color-mix\([\s\S]*var\(--proposal-document-ink,\s*#15130f\)\s*13%,[\s\S]*position:\s*relative;[\s\S]*z-index:\s*1;/,
     );
-    expect(productCss).toContain(
-      ".dark .dasti-proposal-loading-skeleton__eyebrow,",
+    expect(productCss).not.toContain("tw-document-speckle-drift");
+    expect(productCss).not.toContain("--proposal-loader-speckle");
+    expect(productCss).toMatch(
+      /\.dasti-loader-caret\s*\{[\s\S]*background:\s*var\(--am,\s*#d97757\);[\s\S]*animation:\s*tw-document-caret-blink\s+900ms\s+steps\(1,\s*end\)\s+infinite;/,
     );
-    expect(productCss).toContain(
+    expect(productCss).toMatch(
+      /\.dasti-proposal-loading-skeleton__eyebrow,[\s\S]*?\.dasti-proposal-loading-skeleton__paragraph span\s*\{[\s\S]*position:\s*relative;[\s\S]*overflow:\s*hidden;[\s\S]*var\(--proposal-skeleton-band\)\s*0%,[\s\S]*var\(--proposal-skeleton-band-strong\)\s*52%,[\s\S]*var\(--proposal-skeleton-band\)\s*100%/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-loading-skeleton__eyebrow::after,[\s\S]*?\.dasti-proposal-loading-skeleton__paragraph span::after\s*\{[\s\S]*var\(--proposal-skeleton-shine\)\s*50%[\s\S]*animation:\s*tw-document-shimmer\s+1700ms\s+cubic-bezier\(0\.4,\s*0,\s*0\.2,\s*1\)\s+infinite;/,
+    );
+    expect(productCss).not.toContain(
       "--proposal-skeleton-dark-band: color-mix(in srgb, black 88%, var(--ti) 12%);",
     );
-    expect(productCss).toContain(
-      "--proposal-skeleton-dark-band-highlight: color-mix(",
-    );
-    expect(productCss).toContain("animation: ds-skel 1400ms linear infinite;");
     expect(productCss).toMatch(
       /\.dasti-proposal-loading-skeleton__subject\s*\{(?=[^}]*padding-block-end:\s*var\(--space-2\);)(?![^}]*border-bottom:)[^}]*\}/,
     );

@@ -165,6 +165,24 @@ describe("CvForge toolbar CSS contracts", () => {
     expect(cvForgeSource).toContain('"--cv-paper-visual-inline-size"');
   });
 
+  it("uses the shared document loader shimmer for CV PDF import progress", () => {
+    expect(cvForgeSource).toContain("dasti-cv-import-progress");
+    expect(cvForgeSource).toContain("dasti-loader-caret");
+    expect(productCss).toMatch(
+      /\.dasti-cv-import-progress\s*\{[\s\S]*--cv-import-loader-shine:\s*color-mix\([\s\S]*position:\s*relative;[\s\S]*isolation:\s*isolate;[\s\S]*overflow:\s*hidden;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-import-progress::after\s*\{[\s\S]*var\(--cv-import-loader-shine\)\s*50%[\s\S]*animation:\s*tw-document-shimmer\s+1700ms\s+cubic-bezier\(0\.4,\s*0,\s*0\.2,\s*1\)\s+infinite;/,
+    );
+    expect(productCss).toMatch(
+      /\.dark\s+\.dasti-cv-import-progress,[\s\S]*?\[data-theme="dark"\]\s+\.dasti-cv-import-progress\s*\{[\s\S]*--cv-import-loader-shine:\s*rgba\(242,\s*234,\s*219,\s*0\.16\);/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*\.dasti-cv-import-progress__dot,[\s\S]*\.dasti-cv-import-progress::after\s*\{[\s\S]*animation:\s*none;/,
+    );
+    expect(productCss).not.toContain("--cv-import-loader-speckle");
+  });
+
   it("collapses resume workspace export chrome at the tablet toolbar breakpoint", () => {
     expect(productCss).toMatch(
       /@media\s*\(max-width:\s*1180px\)\s*\{[\s\S]*\.dasti-document-rail--resume-workspace[\s\S]*\.dasti-resume-export-control[\s\S]*\.dasti-pill\s*\{[\s\S]*display:\s*none;/,
