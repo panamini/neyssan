@@ -1072,18 +1072,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      editablePageRef.current?.scrollIntoView({
-        block: "start",
-        inline: "nearest",
-      });
-      if (editableScrollContainerRef.current) {
-        editableScrollContainerRef.current.scrollTop = 0;
-        editableScrollContainerRef.current.scrollLeft = 0;
-      }
-      if (editableTextareaRef.current) {
-        editableTextareaRef.current.scrollTop = 0;
-        editableTextareaRef.current.scrollLeft = 0;
-      }
       syncEditableTextareaBlockSize();
       updateEditableScrollEdges();
     });
@@ -1091,7 +1079,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     return () => window.cancelAnimationFrame(frameId);
   }, [
     isEditable,
-    proposalContent,
     syncEditableTextareaBlockSize,
     updateEditableScrollEdges,
     usesDocumentRenderer,

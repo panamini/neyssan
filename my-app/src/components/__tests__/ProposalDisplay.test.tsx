@@ -198,6 +198,44 @@ describe("ProposalDisplay", () => {
     ]);
   });
 
+  it("does not recenter the editable proposal page on edit entry or typed change", async () => {
+    const scrollIntoViewSpy = vi.mocked(HTMLElement.prototype.scrollIntoView);
+
+    function Harness() {
+      const [content, setContent] = React.useState("First proposal draft.");
+
+      return (
+        <ProposalDisplay
+          proposalContent={content}
+          loading={false}
+          error={null}
+          proposalType="cover_letter"
+          mode="edit"
+          onContentChange={setContent}
+        />
+      );
+    }
+
+    render(<Harness />);
+    const textarea = screen.getByPlaceholderText(
+      "Content appears here",
+    ) as HTMLTextAreaElement;
+
+    await act(async () => {
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    });
+    expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+
+    fireEvent.change(textarea, {
+      target: { value: "First proposal draft with a typed update." },
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    });
+
+    expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+  });
+
   it("previews custom Ask AI suggestions without auto-applying", async () => {
     const telemetryEvents = captureAiTelemetryEvents();
     mockTransformEditorSelection.mockResolvedValue({
