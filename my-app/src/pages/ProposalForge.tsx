@@ -293,6 +293,24 @@ function compactStoredJobSummary(value: string | null | undefined): string | nul
   return compactRailText(normalized, 180);
 }
 
+const PROPOSAL_RAIL_ESTIMATED_CHARS_PER_PAGE = 2400;
+
+function estimateProposalRailPageCount(content: string | null | undefined): number | null {
+  const normalized = content?.trim() ?? "";
+  if (!normalized) return null;
+  return Math.max(
+    1,
+    Math.ceil(normalized.length / PROPOSAL_RAIL_ESTIMATED_CHARS_PER_PAGE),
+  );
+}
+
+function resolveLiveProposalLengthLabel(content: string | null | undefined): string {
+  const characterCount = content?.length ?? 0;
+  if (characterCount <= 1400) return "Concise";
+  if (characterCount <= 2600) return "Standard";
+  return "Detailed";
+}
+
 function normalizeProposalRailJobTitle(value: string | null | undefined): string {
   const normalized = value?.replace(/\s+/g, " ").trim() ?? "";
   if (!normalized) return "";
@@ -1516,6 +1534,19 @@ export function ProposalForge(): JSX.Element {
     composePreviewValues?.characterLimitValue ??
     storedOutputDraft?.characterLimitValue ??
     null;
+  const draftCharacterLimitRef = React.useRef<{
+    mode: ProposalCharacterLimitMode | null;
+    value: number | null;
+  }>({
+    mode: draftCharacterLimitMode,
+    value: draftCharacterLimitValue,
+  });
+  React.useEffect(() => {
+    draftCharacterLimitRef.current = {
+      mode: draftCharacterLimitMode,
+      value: draftCharacterLimitValue,
+    };
+  }, [draftCharacterLimitMode, draftCharacterLimitValue]);
   const [isConfirmingGeneratedDelete, setIsConfirmingGeneratedDelete] =
     React.useState(false);
   const [copyFeedback, setCopyFeedback] = React.useState<"idle" | "copied">(
@@ -4265,6 +4296,13 @@ export function ProposalForge(): JSX.Element {
     settingsStyleChoice,
   ]);
 
+  const handleNewProposalDraft = React.useCallback(() => {
+    resetProposalWorkspace();
+    setProposalContent("");
+    setProposalType("cover_letter");
+    setProposalOutputMode("edit");
+  }, [resetProposalWorkspace]);
+
   React.useEffect(() => {
     if (!proposalWorkspaceResetToken) {
       return;
@@ -4396,8 +4434,8 @@ export function ProposalForge(): JSX.Element {
         modelType: values.modelType,
         voicePreset: values.voicePreset ?? null,
         toneTuning: values.toneTuning ?? null,
-        characterLimitMode: values.characterLimitMode ?? null,
-        characterLimitValue: values.characterLimitValue ?? null,
+        characterLimitMode: draftCharacterLimitRef.current.mode,
+        characterLimitValue: draftCharacterLimitRef.current.value,
         sourceUrl: canPreserveSourceIdentity ? preservedSourceUrl : null,
         platform: canPreserveSourceIdentity ? preservedPlatform : null,
       };
@@ -7291,27 +7329,45 @@ export function ProposalForge(): JSX.Element {
     return [
       {
         id: "short" as const,
-        label: "Short",
-        description: "~1,200 chars",
+        label: "Concise",
+        description: "~1,200 chars · tight, no bloat",
         selected: activeValue !== null && activeValue <= 1400,
       },
       {
         id: "medium" as const,
-        label: "Medium",
-        description: "~2,000 chars",
+        label: "Standard",
+        description: "~2,000 chars · enough, no more",
         selected: activeValue === null || (activeValue > 1400 && activeValue <= 2600),
       },
       {
         id: "long" as const,
-        label: "Long",
-        description: "~3,200 chars",
+        label: "Detailed",
+        description: "~3,200 chars · room for context",
         selected: activeValue !== null && activeValue > 2600,
       },
     ];
   }, [activeCharacterLimitSelection.value]);
+  const proposalDraftStatusMeta = React.useMemo(() => {
+    const liveLengthLabel = resolveLiveProposalLengthLabel(proposalContent);
+    const pageCount = estimateProposalRailPageCount(proposalContent);
+    const pageMetric =
+      pageCount !== null && pageCount >= 2
+        ? `${pageCount.toLocaleString()} pages`
+        : null;
+    return [liveLengthLabel, pageMetric].filter(Boolean).join(" · ");
+  }, [proposalContent]);
+  const proposalDraftStatusTitle = React.useMemo(() => {
+    const characterCount = proposalContent?.length ?? 0;
+    return `Draft length: ${characterCount.toLocaleString()} chars`;
+  }, [proposalContent]);
   const handleProposalRailLengthSelect = React.useCallback(
     (lengthId: "short" | "medium" | "long") => {
       const nextValue = lengthId === "short" ? 1200 : lengthId === "long" ? 3200 : 2000;
+      draftCharacterLimitRef.current = {
+        mode: "custom",
+        value: nextValue,
+      };
+      cancelPendingComposeDraftSync();
       const nextDraft = {
         ...(composePreviewValues ?? readStoredProposalComposeDraft() ?? {}),
         characterLimitMode: "custom" as const,
@@ -7330,7 +7386,7 @@ export function ProposalForge(): JSX.Element {
         characterLimitValue: nextValue,
       }));
     },
-    [composePreviewValues],
+    [cancelPendingComposeDraftSync, composePreviewValues],
   );
   const proposalRailTonePreset = composeToolbarVoicePreset ?? proposalVoicePreset;
   const proposalRailToneLabel = getVoicePresetDisplayLabel(
@@ -7986,6 +8042,10 @@ export function ProposalForge(): JSX.Element {
                       generateDisabled={composeGenerateControl.disabled || loading || isLoadingHandoff}
                       generateState={composeGenerateControl.state}
                       onGenerateDraft={handleGenerateFromCollapsedToolbar}
+                      onNewProposal={handleNewProposalDraft}
+                      onDeleteProposal={() => {
+                        void handleDeleteOutput();
+                      }}
                       askAiValue={railAskAiValue}
                       askAiBusy={railAskAiBusy}
                       askAiDisabled={!proposalContent}
@@ -8121,6 +8181,8 @@ export function ProposalForge(): JSX.Element {
                     <div className="dasti-flow dasti-proposal-skeleton-forge__stage">
                       <ProposalDocumentStage
                         statusLabel={loading ? "Drafting" : "Draft"}
+                        statusMeta={proposalDraftStatusMeta}
+                        statusTitle={proposalDraftStatusTitle}
                         toneLabel={proposalRailToneLabel}
                         toneValue={proposalRailToneValue}
                         mode={proposalOutputMode}
@@ -8158,10 +8220,6 @@ export function ProposalForge(): JSX.Element {
                         onCopyText={() => {
                           void handleCopyOutput();
                         }}
-                        onDeleteDraft={() => {
-                          void handleDeleteOutput();
-                        }}
-                        onSaveToLibrary={handleOpenSaveDialog}
                         onExportPdf={(mode) => {
                           void handleExportProposalFile({
                             target: "compose",

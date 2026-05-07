@@ -48,15 +48,15 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toContain("box-shadow: var(--document-stage-halo);");
   });
 
-  it("pads the document stage inside the proposal shell and anchors the character badge to the shell corner", () => {
+  it("pads the document stage inside the proposal shell without legacy count badges", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-sheet\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*box-sizing:\s*border-box;[\s\S]*border:\s*1px solid var\(--document-viewer-frame-border\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-sheet__body--document-viewer\s+\.dasti-document-stage-chassis\s*\{[\s\S]*padding-block-start:\s*var\(--document-viewer-bleed-block\);[\s\S]*padding-inline:\s*var\(--document-viewer-bleed-inline\);[\s\S]*padding-block-end:\s*calc\(var\(--document-viewer-bleed-block\)\s*\+\s*var\(--space-2\)\);[\s\S]*box-sizing:\s*border-box;/,
     );
-    expect(productCss).toContain(".dasti-proposal-character-badge-wrap {");
-    expect(productCss).toContain(".dasti-proposal-page-count-badge {");
+    expect(productCss).not.toContain(".dasti-proposal-character-badge-wrap {");
+    expect(productCss).not.toContain(".dasti-proposal-page-count-badge {");
     expect(productCss).toContain("position: absolute;");
     expect(productCss).toContain(
       "var(--proposal-output-stage-frame-padding, 0px)",
@@ -210,7 +210,7 @@ describe("ProposalDisplay CSS contracts", () => {
     );
   });
 
-  it("gives document edit mode full-width paper, bottom-safe scrolling, and an anchored count pill", () => {
+  it("gives document edit mode full-width paper and bottom-safe scrolling", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-sheet__body--document-editor\s+\.dasti-document-stage-chassis\s*\{[\s\S]*justify-content:\s*center;[\s\S]*padding-block-start:\s*var\(--document-viewer-bleed-block\);/,
     );
@@ -229,7 +229,6 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-sheet__body--document-editor\s+\.dasti-proposal-editor-page__textarea\s*\{[\s\S]*-webkit-mask-image:\s*linear-gradient\([\s\S]*var\(--proposal-output-editor-fade-height\)[\s\S]*var\(--proposal-scroll-top-strength\)[\s\S]*var\(--proposal-scroll-bottom-strength\)/,
     );
-    expect(productCss).toContain(".dasti-proposal-character-badge-wrap {");
     expect(productCss).toContain("var(--document-shell-padding-inline)");
     expect(productCss).toContain(
       "var(--proposal-output-stage-frame-padding, 0px)",
@@ -240,48 +239,16 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toContain(
       "scroll-padding-block-end: calc(var(--control-sm) + var(--space-3));",
     );
-    expect(productCss).toMatch(
-      /\.dasti-proposal-character-badge-wrap\[data-overlap-hidden="true"\]\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*none;/,
-    );
-    expect(productCss).toMatch(
-      /\.dasti-proposal-character-badge\s*\{[\s\S]*background:\s*var\([\s\S]*--proposal-chrome-control-bg[\s\S]*--document-viewer-frame-surface/,
-    );
-    expect(productCss).toMatch(
-      /\.dasti-proposal-character-badge\s*\{[\s\S]*font-size:\s*var\(--text-caption-size\);[\s\S]*line-height:\s*var\(--text-caption-line\);/,
-    );
-    expect(productCss).toMatch(
-      /\.dasti-proposal-page-count-badge\s*\{[\s\S]*font-size:\s*var\(--text-caption-size\);[\s\S]*line-height:\s*var\(--text-caption-line\);/,
-    );
-    expect(productCss).toMatch(
-      /\.dasti-compose-toolbar__context-slot\s+\.dasti-pill--success,[\s\S]*\.dasti-proposal-character-badge\.dasti-pill--success\s*\{[\s\S]*var\(--color-success-soft\)[\s\S]*--proposal-chrome-control-bg/,
-    );
-    expect(productCss).toMatch(
-      /\.dasti-compose-toolbar__context-slot\s+\.dasti-pill--warning,[\s\S]*\.dasti-proposal-character-badge\.dasti-pill--warning\s*\{[\s\S]*var\(--color-warning-soft\)[\s\S]*--proposal-chrome-control-bg/,
-    );
+    expect(productCss).not.toContain(".dasti-proposal-character-badge");
+    expect(productCss).not.toContain(".dasti-length-signal");
   });
 
-  it("keeps proposal count pills readable and uses warning orange for semantic length", () => {
+  it("keeps compose toolbar context pills readable without proposal count badge selectors", () => {
     expect(productCss).toMatch(
-      /\.dasti-compose-toolbar__context-slot\s+\.dasti-pill,[\s\S]*\.dasti-proposal-character-badge\s*\{[\s\S]*font-size:\s*var\(--text-caption-size\);[\s\S]*line-height:\s*var\(--text-caption-line\);[\s\S]*font-weight:\s*var\(--font-label-weight\);[\s\S]*color:\s*var\(--ti\);/,
+      /\.dasti-compose-toolbar__context-slot\s+\.dasti-pill,\s*\.dasti-proposal-saved-view-toolbar\s+\.dasti-pill,\s*\.dasti-saved-proposal-forge-toolbar-preview\s+\.dasti-pill\s*\{[\s\S]*font-size:\s*var\(--text-caption-size\);[\s\S]*line-height:\s*var\(--text-caption-line\);[\s\S]*font-weight:\s*var\(--font-label-weight\);[\s\S]*color:\s*var\(--ti\);/,
     );
-    expect(productCss).toMatch(
-      /\.dasti-proposal-character-badge\s*\{[\s\S]*font-size:\s*var\(--text-caption-size\);[\s\S]*line-height:\s*var\(--text-caption-line\);[\s\S]*font-weight:\s*var\(--font-label-weight\);[\s\S]*color:\s*var\(--ti\);/,
-    );
-    expect(productCss).toMatch(
-      /\.dasti-length-signal\s*\{[\s\S]*background:\s*var\([\s\S]*--proposal-chrome-control-bg[\s\S]*border-color:\s*color-mix\(in srgb,\s*var\(--color-warning\)\s*34%,\s*transparent\);[\s\S]*color:\s*var\(--color-warning-ink\);/,
-    );
-    expect(productCss).toMatch(
-      /\.dasti-length-signal__bar::before\s*\{[\s\S]*background:\s*var\(--color-warning\);/,
-    );
-    expect(productCss).toMatch(
-      /\.dasti-length-signal__marker\s*\{[\s\S]*background:\s*var\(--color-warning\);/,
-    );
-    expect(productCss).toMatch(
-      /\.dasti-length-signal__label\s*\{[\s\S]*font-size:\s*inherit;[\s\S]*line-height:\s*inherit;[\s\S]*font-weight:\s*inherit;[\s\S]*color:\s*var\(--color-warning-ink\);/,
-    );
-    expect(productCss).not.toMatch(
-      /\.dasti-length-signal(?:__bar::before|__marker|--ideal|__label)?[\s\S]{0,220}var\(--ac\)/,
-    );
+    expect(productCss).not.toContain(".dasti-proposal-character-badge");
+    expect(productCss).not.toContain(".dasti-length-signal");
   });
 
   it("keeps inline AI proofing old text as document text with a strike instead of a filled error block", () => {

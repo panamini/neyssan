@@ -241,7 +241,7 @@ describe("ProposalDisplay stage behavior", () => {
     });
   });
 
-  it("shows the rendered page count as the preview chrome badge", async () => {
+  it("does not render the legacy preview page count badge", async () => {
     render(
       <ProposalDisplay
         proposalContent={"Page one[PAGE_BREAK]Page two"}
@@ -253,11 +253,14 @@ describe("ProposalDisplay stage behavior", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("two pages")).toBeInTheDocument();
+      expect(
+        document.querySelectorAll(".dasti-proposal-document__page"),
+      ).toHaveLength(2);
     });
+    expect(screen.queryByText("two pages")).not.toBeInTheDocument();
     expect(
       document.querySelector(".dasti-proposal-page-count-badge"),
-    ).toBeTruthy();
+    ).toBeNull();
   });
 
   it("hides the rendered page count for single-page previews", async () => {
@@ -306,7 +309,7 @@ describe("ProposalDisplay stage behavior", () => {
     ).toBeNull();
   });
 
-  it("formats preview page counts in words through six and numbers after six", async () => {
+  it("keeps legacy formatted preview page counts out of the document chrome", async () => {
     const { rerender } = render(
       <ProposalDisplay
         proposalContent={"[PAGES=6]"}
@@ -318,8 +321,11 @@ describe("ProposalDisplay stage behavior", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("six pages")).toBeInTheDocument();
+      expect(
+        document.querySelectorAll(".dasti-proposal-document__page"),
+      ).toHaveLength(6);
     });
+    expect(screen.queryByText("six pages")).not.toBeInTheDocument();
 
     rerender(
       <ProposalDisplay
@@ -332,8 +338,11 @@ describe("ProposalDisplay stage behavior", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("7 pages")).toBeInTheDocument();
+      expect(
+        document.querySelectorAll(".dasti-proposal-document__page"),
+      ).toHaveLength(7);
     });
+    expect(screen.queryByText("7 pages")).not.toBeInTheDocument();
   });
 
   it("keeps the rendered page count out of the paragraph-actions footer path", async () => {

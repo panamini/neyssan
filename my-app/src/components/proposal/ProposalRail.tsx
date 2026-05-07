@@ -1,5 +1,16 @@
 import React from "react";
-import { ArrowSquareOut, Briefcase, Check, ChevronDown, ColorWheel, FilePdf, FileUser, X } from "../../lib/icons";
+import {
+  ArrowSquareOut,
+  Briefcase,
+  Check,
+  ChevronDown,
+  ColorWheel,
+  FilePdf,
+  FileUser,
+  Plus,
+  TrashSimple,
+  X,
+} from "../../lib/icons";
 import {
   findProposalTemplateBundleIdByStylePreset,
   getProposalTemplateBundleDefinition,
@@ -239,6 +250,8 @@ type ProposalRailProps = {
   generateDisabled: boolean;
   generateState: "idle" | "loading" | "success" | "error";
   onGenerateDraft: () => void;
+  onNewProposal?: () => void;
+  onDeleteProposal?: () => void;
   cvOptions: ProposalRailCvOption[];
   onSelectCv: (cvId: string) => void;
   onClearCv: () => void;
@@ -288,6 +301,8 @@ export function ProposalRail({
   generateDisabled,
   generateState,
   onGenerateDraft,
+  onNewProposal,
+  onDeleteProposal,
   cvOptions,
   onSelectCv,
   onClearCv,
@@ -691,6 +706,37 @@ export function ProposalRail({
             >
               {generateLabel}
             </Button>
+            {onNewProposal || onDeleteProposal ? (
+              <div
+                className="dasti-proposal-skeleton-rail__draft-actions"
+                role="group"
+                aria-label="Draft actions"
+              >
+                {onNewProposal ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={onNewProposal}
+                    iconLeft={<Plus size={14} strokeWidth={1.8} />}
+                  >
+                    New proposal
+                  </Button>
+                ) : null}
+                {onDeleteProposal ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={onDeleteProposal}
+                    disabled={!hasProposalContent}
+                    iconLeft={<TrashSimple size={14} strokeWidth={1.8} />}
+                  >
+                    Delete proposal
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       </section>

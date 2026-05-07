@@ -25,6 +25,21 @@ function renderStage(props: Partial<React.ComponentProps<typeof ProposalDocument
 }
 
 describe("ProposalDocumentStage share and safe-send controls", () => {
+  it("renders length term in the top status pill and keeps character count in the tooltip", () => {
+    renderStage({
+      statusMeta: "Standard",
+      statusTitle: "Draft length: 742 chars",
+    });
+
+    const status = screen.getByText("Draft").closest(".ds-status");
+    expect(status).toHaveTextContent("Standard");
+    expect(status).not.toHaveAttribute("title");
+    expect(status).toHaveAttribute(
+      "data-toolbar-tooltip",
+      "Draft length: 742 chars",
+    );
+  });
+
   it("shows undo and redo only while editing", () => {
     const { rerender } = renderStage({ mode: "preview" });
 

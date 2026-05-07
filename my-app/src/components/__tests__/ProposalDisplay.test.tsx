@@ -687,6 +687,24 @@ describe("ProposalDisplay", () => {
     ).toBe("");
   });
 
+  it("renders a blank editable document when edit mode has empty content", () => {
+    const handleContentChange = vi.fn();
+
+    render(
+      <ProposalDisplay
+        proposalContent=""
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        mode="edit"
+        onContentChange={handleContentChange}
+      />,
+    );
+
+    expect(screen.queryByText("No draft yet. Generate one.")).toBeNull();
+    expect(screen.getByPlaceholderText("Content appears here")).toBeInTheDocument();
+  });
+
   it("renders document previews inside a fixed page stage when zoom controls are enabled", () => {
     render(
       <ProposalDisplay
@@ -985,7 +1003,7 @@ describe("ProposalDisplay", () => {
     ).toBeTruthy();
   });
 
-  it("keeps the edit-mode character capsule visible at the shell level", () => {
+  it("does not render the legacy edit-mode character capsule under the page", () => {
     const { container } = render(
       <ProposalDisplay
         proposalContent={
@@ -1007,9 +1025,7 @@ describe("ProposalDisplay", () => {
     ) as HTMLElement | null;
 
     expect(editablePage).toBeTruthy();
-    expect(badgeWrap).toBeTruthy();
-    expect(badgeWrap).toHaveAttribute("data-overlap-hidden", "false");
-    expect(editablePage?.contains(badgeWrap)).toBe(false);
+    expect(badgeWrap).toBeNull();
   });
 
   it("toggles the editable proposal header drawer in edit mode and forwards changes", () => {
