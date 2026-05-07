@@ -2357,6 +2357,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         aria-busy="true"
       >
         <div className="dasti-proposal-loading-skeleton" aria-hidden="true">
+          <div className="dasti-proposal-loading-skeleton__status">
+            <span>Generating proposal</span>
+            <span className="dasti-loader-caret" />
+          </div>
           <div className="dasti-proposal-loading-skeleton__masthead">
             <span className="dasti-proposal-loading-skeleton__eyebrow" />
             <span className="dasti-proposal-loading-skeleton__title" />

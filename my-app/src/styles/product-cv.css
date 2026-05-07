@@ -1126,6 +1126,11 @@
 }
 
 .dasti-cv-import-progress {
+  --cv-import-loader-shine: color-mix(
+    in srgb,
+    var(--color-surface-raised) 64%,
+    transparent
+  );
   width: min(760px, 100%);
   margin-inline: auto;
   display: grid;
@@ -1138,6 +1143,9 @@
   background: var(--sf1);
   color: var(--tm2);
   box-shadow: var(--shadow-sm);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
 }
 
 .dasti-cv-import-progress strong,
@@ -1146,8 +1154,46 @@
 }
 
 .dasti-cv-import-progress strong {
+  display: inline-flex;
+  align-items: center;
   color: var(--ti);
   font-size: var(--ts);
+}
+
+.dasti-cv-import-progress .dasti-loader-caret {
+  display: inline-block;
+}
+
+.dasti-cv-import-progress::after {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.dasti-cv-import-progress::after {
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 36%,
+    var(--cv-import-loader-shine) 50%,
+    transparent 64%,
+    transparent 100%
+  );
+  transform: translateX(-120%);
+  animation: tw-document-shimmer 1700ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.dasti-cv-import-progress > * {
+  position: relative;
+  z-index: 1;
+}
+
+.dark .dasti-cv-import-progress,
+.theme-dark .dasti-cv-import-progress,
+[data-theme="dark"] .dasti-cv-import-progress {
+  --cv-import-loader-shine: rgba(242, 234, 219, 0.16);
 }
 
 .dasti-cv-import-progress__dot {
@@ -1512,7 +1558,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dasti-cv-import-progress__dot {
+  .dasti-cv-import-progress__dot,
+  .dasti-cv-import-progress::after {
     animation: none;
   }
 }
