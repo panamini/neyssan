@@ -6772,7 +6772,9 @@
     padding: 0;
     border: none;
     background: transparent;
-    box-shadow: none;
+    box-shadow:
+      var(--document-viewer-frame-shadow),
+      0 12px 28px -24px color-mix(in srgb, var(--shadow-color) 92%, transparent);
   }
 
   .dasti-proposal-output-shell--workspace
