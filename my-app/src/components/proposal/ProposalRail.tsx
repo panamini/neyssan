@@ -65,6 +65,14 @@ type ProposalRailLengthOption = {
 
 type ProposalRailTab = "draft" | "ask" | "header" | "style";
 
+const JOB_SITE_LINKS = [
+  { label: "LinkedIn", href: "https://www.linkedin.com/jobs" },
+  { label: "Indeed", href: "https://www.indeed.com" },
+  { label: "Upwork", href: "https://www.upwork.com" },
+  { label: "ZipRecruiter", href: "https://www.ziprecruiter.com" },
+  { label: "Hellowork", href: "https://www.hellowork.com" },
+] as const;
+
 type ProposalRailStyleOption = {
   id: ProposalTemplateBundleId;
   label: string;
@@ -259,6 +267,10 @@ type ProposalRailProps = {
   onClearCv: () => void;
   onCreateCv: () => void;
   onImportCv: () => void;
+  jobOfferText?: string;
+  onJobOfferTextChange?: (value: string) => void;
+  onJobOfferTextCommit?: () => void;
+  onOpenJobs?: () => void;
   askAiValue: string;
   askAiBusy: boolean;
   askAiDisabled: boolean;
@@ -311,6 +323,10 @@ export function ProposalRail({
   onClearCv,
   onCreateCv,
   onImportCv,
+  jobOfferText = "",
+  onJobOfferTextChange,
+  onJobOfferTextCommit,
+  onOpenJobs,
   askAiValue,
   askAiBusy,
   askAiDisabled,
@@ -326,6 +342,16 @@ export function ProposalRail({
   const customColorSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const jobMeta = [company, location].filter(Boolean).join(" · ");
   const compactJobSummary = jobSummary?.trim() || jobMeta || null;
+  const hasLoadedJobContext = Boolean(
+    jobTitle?.trim() || compactJobSummary || jobHref || sourceUrl,
+  );
+
+  React.useEffect(() => {
+    if (!hasLoadedJobContext) {
+      setJobContextOpen(true);
+    }
+  }, [hasLoadedJobContext]);
+
   const cvMenuSections = React.useMemo<MenuSection[]>(() => {
     const cvItems = cvOptions.map((option) => ({
       id: option.id,
@@ -620,6 +646,40 @@ export function ProposalRail({
         </button>
         {jobContextOpen ? (
           <div id="proposal-rail-job-context" className="dasti-proposal-skeleton-rail__drawer-body">
+            {!hasLoadedJobContext ? (
+              <div className="dasti-proposal-skeleton-rail__empty-job-context">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={onOpenJobs}
+                  iconLeft={<Briefcase size={14} strokeWidth={1.8} />}
+                >
+                  Open Job Forge
+                </Button>
+                <textarea
+                  className="ds-field ds-field--textarea dasti-proposal-skeleton-rail__job-offer-input"
+                  value={jobOfferText}
+                  placeholder="Paste your job offer here"
+                  aria-label="Paste your job offer here"
+                  onChange={(event) => onJobOfferTextChange?.(event.target.value)}
+                  onBlur={onJobOfferTextCommit}
+                />
+                <div className="dasti-proposal-skeleton-rail__job-site-tokens" aria-label="Job sites">
+                  {JOB_SITE_LINKS.map((site) => (
+                    <a
+                      key={site.label}
+                      href={site.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="dasti-proposal-skeleton-rail__job-site-token"
+                    >
+                      {site.label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {jobHref || sourceUrl ? (
               <div className="dasti-proposal-skeleton-rail__job-links">
                 {sourceUrl ? (

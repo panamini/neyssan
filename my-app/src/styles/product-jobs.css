@@ -519,6 +519,44 @@
   min-width: 0;
 }
 
+.dasti-jobs-detail .dasti-brief-card--card {
+  gap: var(--space-3);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dasti-jobs-detail .dasti-proposal-sheet__header--brief {
+  padding: 0;
+  background: transparent;
+}
+
+.dasti-jobs-detail .dasti-brief-card__meta-row {
+  margin-top: 0;
+}
+
+.dasti-jobs-detail .dasti-brief-card__summary {
+  gap: var(--space-3);
+  padding: 0;
+}
+
+.dasti-jobs-detail .dasti-brief-card__workspace {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.dasti-jobs-detail .dasti-brief-card__review-column {
+  gap: var(--space-3);
+}
+
+.dasti-jobs-detail .dasti-brief-card__review-item {
+  border-color: var(--border-soft);
+  background: var(--sfr);
+  box-shadow: var(--sha);
+}
+
 .dasti-jobs-detail__match {
   position: sticky;
   top: 0;

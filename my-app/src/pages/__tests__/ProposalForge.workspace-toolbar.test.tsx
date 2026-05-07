@@ -493,6 +493,9 @@ describe("ProposalForge workbench layout", () => {
     expect(skeletonGrid?.style.getPropertyValue("--grid-columns")).toBe(
       "minmax(0, 1fr) 360px",
     );
+    expect(skeletonGrid?.style.getPropertyValue("--grid-gap")).toBe(
+      "var(--layout-card-grid)",
+    );
     expect(outputShell?.style.width).toBe("100%");
     const rail = screen.getByLabelText("Proposal rail");
     expect(rail).toHaveClass("forge__rail");
@@ -516,6 +519,7 @@ describe("ProposalForge workbench layout", () => {
     expect(skeletonGrid?.style.getPropertyValue("--grid-columns")).toBe(
       "minmax(0, 1fr)",
     );
+    expect(skeletonGrid?.style.getPropertyValue("--grid-gap")).toBe("0px");
   });
 
   it("keeps ProposalDisplay output actions out of the legacy output toolbar in preview mode", () => {

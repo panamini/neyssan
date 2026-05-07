@@ -64,6 +64,15 @@ describe("sidebar visual CSS contracts", () => {
     );
   });
 
+  it("keeps the topbar divider optically aligned with the sidebar divider", () => {
+    expect(productCss).toMatch(
+      /\.sb\s*\{[\s\S]*border-right:\s*1px solid\s*color-mix\(in srgb,\s*var\(--color-border\) 76%,\s*transparent\);/,
+    );
+    expect(productCss).toMatch(
+      /\.app-topbar\s*\{[\s\S]*border-bottom:\s*1px solid\s*color-mix\(in srgb,\s*var\(--color-border\) 76%,\s*transparent\);[\s\S]*box-shadow:\s*none;/,
+    );
+  });
+
   it("keeps DS sidebar active counts tied to accent tokens", () => {
     expect(dsCss).toMatch(
       /\.ds-sidebar__item--active\s*\{[\s\S]*position:\s*relative;[\s\S]*background:\s*linear-gradient\(90deg,\s*var\(--ap\),\s*transparent\);[\s\S]*color:\s*var\(--ti\);/,

@@ -124,6 +124,35 @@ describe("ProposalRail style tab", () => {
     expect(within(actions).getByRole("button", { name: "Delete proposal" })).toBeDisabled();
   });
 
+  it("opens the empty job context drawer and orders job site tokens for a new blank proposal", () => {
+    const onOpenJobs = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        jobTitle=""
+        company={null}
+        location={null}
+        jobHref={null}
+        sourceUrl={null}
+        jobSummary={null}
+        onOpenJobs={onOpenJobs}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText("Paste your job offer here")).toBeInTheDocument();
+
+    const jobSites = screen.getByLabelText("Job sites");
+    expect(
+      within(jobSites)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["LinkedIn", "Indeed", "Upwork", "ZipRecruiter", "Hellowork"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Job Forge" }));
+    expect(onOpenJobs).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the proposal Style tab and calls proposal-scoped style callbacks", () => {
     const onSelectStyleBundle = vi.fn();
     const onSelectStylePalette = vi.fn();
