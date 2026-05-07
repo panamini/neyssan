@@ -201,8 +201,14 @@ function getInlineProofingTextParts(
   replacement: string;
   after: string;
 } {
-  const start = Math.max(0, Math.min(suggestion.selection.start, content.length));
-  const end = Math.max(start, Math.min(suggestion.selection.end, content.length));
+  const start = Math.max(
+    0,
+    Math.min(suggestion.selection.start, content.length),
+  );
+  const end = Math.max(
+    start,
+    Math.min(suggestion.selection.end, content.length),
+  );
 
   if (suggestion.status === "accepted") {
     const replacementEnd = Math.max(
@@ -275,7 +281,10 @@ function ProposalInlineProofingOverlay({
         transform: `translateY(-${scrollTop}px)`,
       }}
     >
-      <span className="dasti-proposal-inline-proofing__text-run" style={textRunStyle}>
+      <span
+        className="dasti-proposal-inline-proofing__text-run"
+        style={textRunStyle}
+      >
         {parts.before}
       </span>
       {isAccepted ? (
@@ -301,7 +310,10 @@ function ProposalInlineProofingOverlay({
           </span>
         </>
       )}
-      <span className="dasti-proposal-inline-proofing__text-run" style={textRunStyle}>
+      <span
+        className="dasti-proposal-inline-proofing__text-run"
+        style={textRunStyle}
+      >
         {parts.after}
       </span>
     </div>
@@ -338,7 +350,10 @@ function ProposalInlineSelectionOverlay({
         transform: `translateY(-${scrollTop}px)`,
       }}
     >
-      <span className="dasti-proposal-inline-proofing__text-run" style={textRunStyle}>
+      <span
+        className="dasti-proposal-inline-proofing__text-run"
+        style={textRunStyle}
+      >
         {parts.before}
       </span>
       <span
@@ -347,7 +362,10 @@ function ProposalInlineSelectionOverlay({
       >
         {parts.selected}
       </span>
-      <span className="dasti-proposal-inline-proofing__text-run" style={textRunStyle}>
+      <span
+        className="dasti-proposal-inline-proofing__text-run"
+        style={textRunStyle}
+      >
         {parts.after}
       </span>
     </div>

@@ -198,10 +198,14 @@
   overflow: visible;
   min-block-size: var(--dasti-toolbar-shell-block-size);
   padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
-  border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  border: 1px solid var(--proposal-chrome-toolbar-border);
+  /* Anchor toolbar flush to paper top edge — top corners match paper radius,
+     square bottom, hairline divider only on bottom. Glassy fill via existing
+     --proposal-chrome-* + --frost-* tokens. */
+  border-radius: var(--document-paper-radius) var(--document-paper-radius) 0 0;
+  border: none;
+  border-bottom: 1px solid var(--border-soft);
   background: var(--proposal-chrome-toolbar-bg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   backdrop-filter: saturate(var(--frost-saturate, 1))
     blur(var(--frost-blur, 14px));
   -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
@@ -7444,6 +7448,21 @@
 
 .dasti-page-shell--proposal-forge {
   position: relative;
+  background:
+    radial-gradient(
+      120% 80% at 50% 0%,
+      color-mix(in srgb, var(--bg) 92%, white 8%),
+      var(--bg) 60%
+    );
+}
+
+.dark .dasti-page-shell--proposal-forge {
+  background:
+    radial-gradient(
+      120% 80% at 50% 0%,
+      color-mix(in srgb, var(--bg) 92%, black 8%),
+      var(--bg) 60%
+    );
 }
 
 .dasti-proposal-skeleton-forge {
@@ -7493,6 +7512,18 @@
 .dasti-proposal-skeleton-stage__actions {
   flex: 0 0 auto;
   align-items: center;
+  position: relative;
+  padding-inline-start: var(--space-2);
+  margin-inline-start: var(--space-1);
+}
+
+.dasti-proposal-skeleton-stage__actions::before {
+  content: "";
+  position: absolute;
+  inset-block: 6px;
+  inset-inline-start: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--ti) 10%, transparent);
 }
 
 .dasti-proposal-skeleton-stage__actions .dasti-icon-cluster__divider {
@@ -7660,6 +7691,10 @@
   font-size: var(--tx);
   font-weight: var(--font-label-weight);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .dasti-proposal-skeleton-rail__tab[data-active="true"],
@@ -8158,23 +8193,26 @@
 .dasti-proposal-skeleton-rail__variable-group {
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--polish-card-border, var(--color-border));
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--polish-card-highlight, none);
+  padding: var(--space-3) 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .dasti-proposal-skeleton-rail__variable-group + .dasti-proposal-skeleton-rail__variable-group {
-  margin-top: var(--space-1);
+  margin-top: 0;
+  border-top: 1px solid var(--border-soft);
 }
 
 .dasti-proposal-skeleton-rail__variable-group-title {
-  padding-bottom: 0;
+  padding-bottom: var(--space-1);
   border-bottom: 0;
-  color: var(--color-text);
-  font-size: var(--tx);
-  font-weight: 700;
+  color: var(--tm2);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .dasti-proposal-skeleton-rail__variable-group-fields {
@@ -8647,7 +8685,7 @@
 .dasti-proposal-skeleton-rail__variable-group--applicant .dasti-proposal-skeleton-rail__variable-group-fields,
 .dasti-proposal-skeleton-rail__variable-group--letter-formulas .dasti-proposal-skeleton-rail__variable-group-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
 }
 

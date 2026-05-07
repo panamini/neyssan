@@ -114,10 +114,10 @@
 
 .dasti-cv-paper-stage .dasti-doc-viewer-shell--resume-panel {
   padding: var(--space-4);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--r-surface, var(--radius-card));
-  background: color-mix(in srgb, var(--sf0) 72%, var(--sf1));
-  box-shadow: var(--shadow-sm);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .dasti-cv-paper-stage
@@ -3206,6 +3206,21 @@
 
 .dasti-page-shell--cv-forge {
   position: relative;
+  background:
+    radial-gradient(
+      120% 80% at 50% 0%,
+      color-mix(in srgb, var(--bg) 92%, white 8%),
+      var(--bg) 60%
+    );
+}
+
+.dark .dasti-page-shell--cv-forge {
+  background:
+    radial-gradient(
+      120% 80% at 50% 0%,
+      color-mix(in srgb, var(--bg) 92%, black 8%),
+      var(--bg) 60%
+    );
 }
 
 .dasti-workbench-top-left-slot--cv-edit {
