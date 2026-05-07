@@ -291,7 +291,7 @@ describe("Sidebar proposal navigation", () => {
     ) as HTMLImageElement | null;
     expect(lightCollapsedLogo).not.toBeNull();
     expect(lightCollapsedLogo?.getAttribute("src")).toContain(
-      "twoweeks-pixel-bird-logo-light-mode-black-transparent.png",
+      "favicon.png",
     );
     expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
 
@@ -323,7 +323,7 @@ describe("Sidebar proposal navigation", () => {
     ) as HTMLImageElement | null;
     expect(darkCollapsedLogo).not.toBeNull();
     expect(darkCollapsedLogo?.getAttribute("src")).toContain(
-      "twoweeks-pixel-bird-logo-dark-mode-white-transparent.png",
+      "d6efcd7d-91fb-4cc5-99dd-2a869964e24c.png",
     );
     expect(collapsedToggle.querySelector("svg")).toBeNull();
     expect(screen.queryByText("two weeks")).not.toBeInTheDocument();

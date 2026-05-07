@@ -101,6 +101,21 @@ describe("CvForge toolbar CSS contracts", () => {
     );
   });
 
+  it("matches Proposal paper geometry and material on the CV preview stage", () => {
+    expect(productCss).toMatch(
+      /\.dasti-cv-skeleton-forge__stage\s*\{[\s\S]*gap:\s*var\(--space-2\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-page-preview-stage\s+\.dasti-doc-viewer-shell--resume-panel\s*\{[\s\S]*padding:\s*0;[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-paper-stage\s+\.dasti-doc-viewer-shell--resume-panel\s*\{[\s\S]*padding:\s*0;[\s\S]*box-shadow:\s*[\s\S]*var\(--document-viewer-frame-shadow\),[\s\S]*0\s+12px\s+28px\s+-24px\s+color-mix\(in\s+srgb,\s*var\(--shadow-color\)\s+92%,\s*transparent\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-paper-stage\s+\.dasti-document-stage__canvas\[data-document-page="true"\]\s*\{[\s\S]*box-shadow:\s*var\(--document-stage-halo,\s*var\(--sh-paper\)\);/,
+    );
+  });
+
   it("uses proposal-like plain actions for the CV stage bar chrome", () => {
     expect(productCss).toMatch(
       /\.dasti-cv-stage-bar__plain-action\s*\{[\s\S]*border:\s*1px\s+solid\s+transparent;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,

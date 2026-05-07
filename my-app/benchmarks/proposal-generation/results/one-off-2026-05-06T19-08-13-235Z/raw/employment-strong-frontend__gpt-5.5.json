@@ -1,0 +1,73 @@
+{
+  "id": "resp_0030186594109dab0069fb9217d6d8819a91cbb6b9c9de6213",
+  "object": "response",
+  "created_at": 1778094615,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1778094620,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 900,
+  "max_tool_calls": null,
+  "model": "gpt-5.5-2026-04-23",
+  "moderation": null,
+  "output": [
+    {
+      "id": "msg_0030186594109dab0069fb9218a08c819ab73773c69686ccd8",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI’m excited to apply for the Senior Frontend Engineer role. My background is centered on React, TypeScript, design systems, and product-facing web applications, and I’m especially drawn to work that connects strong frontend architecture with a polished customer experience.\n\nAt BrightLayer, I led a design system migration used across four product squads, which gave me hands-on experience creating reusable UI foundations that support consistency and faster product development. I also improved page load time by 28 percent through bundle and rendering optimizations, an area I enjoy because it directly affects how users experience the product.\n\nIn my previous role at Northline Labs, I built experimentation dashboards for product and growth teams and partnered directly with design on customer-facing workflow improvements. I also helped improve signup conversion by 11 percent through iterative UI experiments, which shaped the way I think about frontend work: not just as implementation, but as a continuous loop between user behavior, design intent, and product goals.\n\nI’d be glad to bring that mix of React and TypeScript depth, design system experience, performance focus, and cross-functional collaboration to your SaaS platform. Thank you for considering my application.\n\nBest regards,  \nAlex Martin"
+        }
+      ],
+      "phase": "final_answer",
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": "24h",
+  "reasoning": {
+    "effort": "low",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 0.98,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 526,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 243,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 769
+  },
+  "user": null,
+  "metadata": {}
+}

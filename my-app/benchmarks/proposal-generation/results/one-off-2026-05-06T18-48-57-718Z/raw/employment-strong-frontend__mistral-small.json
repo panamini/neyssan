@@ -1,0 +1,25 @@
+{
+  "id": "c47ec60c01b24fa5a5d62ad5b188e356",
+  "created": 1778093453,
+  "model": "mistral-small-latest",
+  "usage": {
+    "prompt_tokens": 554,
+    "total_tokens": 791,
+    "completion_tokens": 237,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "tool_calls": null,
+        "content": "Dear Hiring Manager,\n\nI’m excited to apply for the Senior Frontend Engineer role. With deep experience in React and TypeScript, I’ve spent the last few years building and scaling design systems and customer-facing web applications. At BrightLayer, I led a design system migration that unified UI patterns across four product squads, improving consistency and reducing onboarding time for engineers. That work reinforced how reusable components and clear documentation can accelerate delivery without sacrificing quality.\n\nPerformance has been a recurring focus for me. At BrightLayer, I cut page load time by 28 percent by optimizing bundles, lazy-loading routes, and refining rendering strategies. I also enjoy collaborating closely with design and product teams to turn user insights into measurable improvements. At Northline Labs, I built experimentation dashboards that gave product and growth teams the tools to iterate quickly, and my UI experiments contributed to an 11 percent lift in signup conversion.\n\nI’d love to bring this blend of technical leadership and cross-functional partnership to your team. Whether it’s refining your design system, tightening performance budgets, or mentoring engineers, I’m eager to help ship better experiences for your customers.\n\nBest regards,\nAlex Martin"
+      }
+    }
+  ]
+}
