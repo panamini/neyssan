@@ -45,6 +45,7 @@ import {
   isWorkshopResumeTemplateId,
   isWorkshopTwoColumnResumeTemplateId,
 } from "./layout/resumeTemplates";
+import { resolveWorkshopTwoColumnFragmentLane } from "./resume/resumePagination";
 import {
   resolveDocxSafeColorHex,
   resolvePrimaryFontFamily,
@@ -128,7 +129,7 @@ function buildStyledResumeAppearanceCss(): string {
     }
 
     body.resume-export.resume--styled .resume-styled-page--workshop-twocol {
-      gap: var(--flow-header-gap);
+      gap: var(--flow-section-gap);
     }
 
     body.resume-export.resume--styled .resume-workshop-twocol-header,
@@ -1793,15 +1794,6 @@ function renderWorkshopFragment(args: {
   }
 }
 
-const WORKSHOP_TWOCOL_SIDEBAR_FRAGMENT_KINDS = new Set<string>([
-  "skills",
-  "languages",
-  "certifications",
-  "achievements",
-  "affiliations",
-  "hobbies",
-]);
-
 function renderWorkshopTwoColumnPage(args: {
   page: NonNullable<ResumePrintSource["committedPages"]>[number];
   locale?: string | null;
@@ -1812,17 +1804,22 @@ function renderWorkshopTwoColumnPage(args: {
 
   args.page.fragments.forEach((fragment) => {
     const markup = renderWorkshopFragment({ fragment, locale: args.locale });
-    if (fragment.kind === "profile" || fragment.kind === "summary") {
+    const lane = resolveWorkshopTwoColumnFragmentLane(fragment);
+    if (lane === "header") {
       header.push(markup);
-    } else if (WORKSHOP_TWOCOL_SIDEBAR_FRAGMENT_KINDS.has(fragment.kind)) {
+    } else if (lane === "sidebar") {
       sidebar.push(markup);
     } else {
       main.push(markup);
     }
   });
 
+  const headerMarkup = header.length > 0
+    ? `<div class="resume-workshop-twocol-header">${header.join("")}</div>`
+    : "";
+
   return `<article class="resume-styled-page resume-styled-page--workshop-twocol" data-export-page-id="${escapeHtml(args.page.pageId)}">
-    <div class="resume-workshop-twocol-header">${header.join("")}</div>
+    ${headerMarkup}
     <div class="resume-workshop-twocol-grid">
       <aside class="resume-workshop-twocol-sidebar">${sidebar.join("")}</aside>
       <main class="resume-workshop-twocol-main">${main.join("")}</main>
