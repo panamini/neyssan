@@ -7712,6 +7712,8 @@ export function ProposalForge(): JSX.Element {
     showBriefCard,
   ]);
 
+  const shouldShowSavedList = isSavedView && !selectedProposalId;
+
   return (
     <div
       className="dasti-page-scroll"
@@ -7721,14 +7723,14 @@ export function ProposalForge(): JSX.Element {
     >
       <div
         className={
-          isSavedView
+          shouldShowSavedList
             ? "dasti-page-shell dasti-page-shell--proposal-saved"
             : "dasti-page-shell dasti-page-shell--proposal-forge"
         }
         style={
           {
-            "--page-shell-max-width": isSavedView ? "100%" : "100%",
-            "--page-shell-gap": isSavedView
+            "--page-shell-max-width": shouldShowSavedList ? "100%" : "100%",
+            "--page-shell-gap": shouldShowSavedList
               ? "var(--layout-panel-stack)"
               : "0px",
             "--page-shell-pad-top": shouldRenderColdStartInlineOnly
@@ -7752,7 +7754,7 @@ export function ProposalForge(): JSX.Element {
           } as React.CSSProperties
         }
       >
-        {!isSavedView ? (
+        {!shouldShowSavedList ? (
           <BodyPortal>
             <div
               style={{
@@ -7774,7 +7776,7 @@ export function ProposalForge(): JSX.Element {
             </div>
           </BodyPortal>
         ) : null}
-        {isSavedView ? (
+        {shouldShowSavedList ? (
           <section aria-hidden={false}>
             <ProposalsList
               selectedProposalId={selectedProposalId}
