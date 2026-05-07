@@ -5040,11 +5040,7 @@ export function CvForge(): JSX.Element {
                   resumeOptions={resumeOptions}
                   onModeChange={setWorkspaceMode}
                   onOpenImportReview={() => setImportReviewOpen(true)}
-                  onImportCv={handleImportEntryCv}
                   onPickResume={handlePickResume}
-                  onNewCv={() => {
-                    void handleStartFreshEntryCv();
-                  }}
                   onExportPdf={() =>
                     void handleResumeExport({ format: "pdf", mode: "styled" })
                   }
@@ -5194,6 +5190,9 @@ export function CvForge(): JSX.Element {
                 onSelectTemplate={handleSelectTemplate}
                 onSelectFontPair={handleSelectFontPair}
                 onSelectAccent={handleSelectAccent}
+                onNewCv={() => {
+                  void handleStartFreshEntryCv();
+                }}
                 onImportPdf={handleImportEntryCv}
               />
             </div>

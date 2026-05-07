@@ -21,6 +21,7 @@ import {
   Eye,
   EyeClosed,
   GripHorizontal,
+  PenLine,
   Plus,
   TrashSimple,
   Upload,
@@ -108,6 +109,7 @@ type CvRailProps = {
   onSelectTemplate: (template: "editorial" | "minimal" | "classic") => void;
   onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
   onSelectAccent: (accent: CvAccentChoice) => void;
+  onNewCv: () => void;
   onImportPdf: () => void;
 };
 
@@ -469,6 +471,7 @@ export function CvRail({
   onSelectTemplate,
   onSelectFontPair,
   onSelectAccent,
+  onNewCv,
   onImportPdf,
 }: CvRailProps): JSX.Element {
   const activeSection = getActiveSection(sections, activeSectionId);
@@ -957,9 +960,20 @@ export function CvRail({
       ) : null}
 
       <div className="dasti-cv-rail-footer">
+        <span className="dasti-cv-rail-footer__label">Create</span>
         <Button
           type="button"
-          variant="ghost"
+          variant="primary"
+          size="sm"
+          onClick={onNewCv}
+          disabled={isImporting}
+          iconLeft={<PenLine size={14} strokeWidth={1.8} />}
+        >
+          New CV
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
           size="sm"
           onClick={onImportPdf}
           disabled={isImporting}

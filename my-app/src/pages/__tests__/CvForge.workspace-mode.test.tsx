@@ -1802,7 +1802,8 @@ describe("CvForge workspace mode", () => {
       screen.getByRole("complementary", { name: "CV forge rail" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Import CV" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Import CV" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import PDF" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New CV" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Sections" })).toHaveAttribute(
       "aria-selected",

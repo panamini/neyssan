@@ -75,13 +75,16 @@ describe("CvForge toolbar CSS contracts", () => {
     expect(cvForgeSource).not.toContain("<ProfileReviewCard");
     expect(cvForgeSource).not.toContain("<VerbatiCvPreviewPanel");
     expect(productCss).toMatch(
-      /\.dasti-cv-paper-stage\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--forge-page-inline-size\)\);[\s\S]*margin-inline:\s*auto;[\s\S]*min-width:\s*0;/,
+      /\.dasti-cv-skeleton-forge\s*\{[\s\S]*--cv-paper-visual-inline-size:\s*var\(--forge-page-inline-size\);[\s\S]*--cv-workspace-stage-inline-size:\s*var\(--cv-paper-visual-inline-size\);[\s\S]*--cv-workspace-rail-inline-size:\s*360px;[\s\S]*grid-template-columns:[\s\S]*minmax\(0,\s*var\(--cv-workspace-stage-inline-size\)\)[\s\S]*var\(--cv-workspace-rail-inline-size\);[\s\S]*justify-content:\s*center;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-cv-page-preview-stage\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--forge-page-inline-size\)\);/,
+      /\.dasti-cv-paper-stage\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--cv-paper-visual-inline-size\)\);[\s\S]*margin-inline:\s*auto;[\s\S]*min-width:\s*0;/,
     );
     expect(productCss).toMatch(
-      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-cv-paper-stage,[\s\S]*\.dasti-cv-page-preview-stage\s*\{[\s\S]*width:\s*var\(--forge-page-inline-size-mobile\);/,
+      /\.dasti-cv-page-preview-stage\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--cv-paper-visual-inline-size\)\);/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-cv-skeleton-forge\s*\{[\s\S]*--cv-paper-visual-inline-size:\s*var\(--forge-page-inline-size-mobile\);[\s\S]*\.dasti-cv-paper-stage,[\s\S]*\.dasti-cv-page-preview-stage\s*\{[\s\S]*width:\s*var\(--cv-paper-visual-inline-size\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-document-rail--resume-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/,
