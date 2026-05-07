@@ -474,7 +474,10 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toContain(".dasti-proposal-chrome-drawer {");
     expect(productCss).toContain("--dasti-toolbar-shell-edge-padding:");
     expect(productCss).toMatch(
-      /\.dasti-compose-toolbar__bar \[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-saved-view-toolbar \[data-toolbar-tooltip\],[\s\S]*\.dasti-artifact-inspector \[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-rail-cluster \[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-sheet__controls \[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-toolbar \[data-toolbar-tooltip\]\s*\{[\s\S]*--dasti-toolbar-tooltip-inset-block-start:/,
+      /\.dasti-compose-toolbar__bar \[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-saved-view-toolbar \[data-toolbar-tooltip\],[\s\S]*\.dasti-artifact-inspector \[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-rail-cluster \[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-sheet__controls \[data-toolbar-tooltip\],[\s\S]*\.dasti-cv-stage-bar \[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-toolbar \[data-toolbar-tooltip\]\s*\{[\s\S]*--dasti-toolbar-tooltip-inset-block-start:/,
+    );
+    expect(productCss).toMatch(
+      /\[data-toolbar-tooltip\]\[aria-expanded="true"\]::after\s*\{[\s\S]*display:\s*none;/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-library-card\s*\{[\s\S]*--document-rail-gap:\s*var\(--space-2\);[\s\S]*--proposal-sheet-edge-fade-height:\s*22px;[\s\S]*--proposal-chrome-shell-padding:\s*calc\(var\(--space-2\)\s*-\s*3px\);/,

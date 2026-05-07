@@ -164,7 +164,7 @@ export function CvStageBar({
 
   return (
     <>
-      <div className="dasti-cv-stage-bar">
+      <div className="dasti-cv-stage-bar dasti-toolbar--surface-tooltips">
         <span
           className={`ds-status ds-status--${exporting ? "accent" : hasCurrentCv ? "success" : "warning"} dasti-cv-stage-bar__status`}
         >
@@ -208,7 +208,6 @@ export function CvStageBar({
             data-selected={mode === "edit" ? "true" : undefined}
             onClick={() => onModeChange("edit")}
             aria-label="Edit"
-            title="Edit CV"
             data-toolbar-tooltip="Edit"
           >
             <PenLine size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -219,7 +218,6 @@ export function CvStageBar({
             data-selected={mode === "preview" ? "true" : undefined}
             onClick={() => onModeChange("preview")}
             aria-label="Page preview"
-            title="Preview CV"
             data-toolbar-tooltip="Preview"
           >
             <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -239,6 +237,7 @@ export function CvStageBar({
               className="dasti-cv-stage-bar__plain-action dasti-cv-stage-bar__pick-resume"
               disabled={exporting}
               aria-label="Pick resume"
+              data-toolbar-tooltip="Pick resume"
             >
               <span
                 className="dasti-cv-stage-bar__pick-icon dasti-cv-stage-bar__pick-icon--closed"
@@ -251,9 +250,6 @@ export function CvStageBar({
                 aria-hidden="true"
               >
                 <FolderOpen size={15} strokeWidth={1.8} />
-              </span>
-              <span className="dasti-cv-stage-bar__pick-label">
-                Pick resume
               </span>
             </button>
           }
@@ -312,7 +308,6 @@ export function CvStageBar({
               type="button"
               className="dasti-icon-button dasti-cv-stage-bar__plain-action dasti-cv-stage-bar__share"
               aria-label="Share"
-              title="Share CV"
               data-toolbar-tooltip="Share"
             >
               <ShareFat size={15} strokeWidth={1.8} aria-hidden="true" />

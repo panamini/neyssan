@@ -400,9 +400,9 @@
 }
 
 .dasti-cv-stage-bar__pick-resume {
-  width: auto;
+  width: 28px;
   min-width: 28px;
-  padding-inline: var(--space-2);
+  padding-inline: 0;
   margin-inline-start: auto;
   font: inherit;
   font-size: var(--tx);
@@ -429,7 +429,7 @@
 }
 
 .dasti-cv-stage-bar__pick-label {
-  min-width: 0;
+  display: none;
 }
 
 .dasti-cv-stage-bar__action-divider {
