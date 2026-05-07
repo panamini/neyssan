@@ -17,6 +17,10 @@ const cvForgeSource = readFileSync(
   resolve(process.cwd(), "src/pages/CvForge.tsx"),
   "utf8",
 );
+const cvRailSource = readFileSync(
+  resolve(process.cwd(), "src/components/cv/CvRail.tsx"),
+  "utf8",
+);
 
 describe("CvForge toolbar CSS contracts", () => {
   it("uses the shared proposal rail shell for the anchored CV edit toolbar", () => {
@@ -52,6 +56,13 @@ describe("CvForge toolbar CSS contracts", () => {
   it("keeps Manage sections on the same small label token as the toolbar buttons", () => {
     expect(productCss).toMatch(
       /\.dasti-add-section-trigger\s*\{[\s\S]*font-size:\s*var\(--text-caption-size\);[\s\S]*line-height:\s*1;[\s\S]*font-weight:\s*var\(--font-label-weight\);/,
+    );
+  });
+
+  it("keeps the CV organize helper copy short enough for one rail line", () => {
+    expect(cvRailSource).toContain("Open a section row to edit its items.");
+    expect(cvRailSource).not.toContain(
+      "Each section opens its own editor.",
     );
   });
 

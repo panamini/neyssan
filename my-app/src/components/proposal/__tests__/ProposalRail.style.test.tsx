@@ -75,14 +75,16 @@ const baseProps = {
 };
 
 describe("ProposalRail style tab", () => {
-  it("renders new and delete proposal actions under the generate button", () => {
+  it("renders new, save, and delete proposal actions under the generate button", () => {
     const onNewProposal = vi.fn();
+    const onSaveToLibrary = vi.fn();
     const onDeleteProposal = vi.fn();
 
     render(
       <ProposalRail
         {...baseProps}
         onNewProposal={onNewProposal}
+        onSaveToLibrary={onSaveToLibrary}
         onDeleteProposal={onDeleteProposal}
       />,
     );
@@ -92,14 +94,34 @@ describe("ProposalRail style tab", () => {
       "ds-btn--ghost",
     );
     expect(
+      within(actions).getByRole("button", { name: "Save proposal to library" }),
+    ).toHaveClass("ds-btn--ghost");
+    expect(
       within(actions).getByRole("button", { name: "Delete proposal" }),
     ).toHaveClass("ds-btn--ghost");
 
     fireEvent.click(within(actions).getByRole("button", { name: "New proposal" }));
+    fireEvent.click(within(actions).getByRole("button", { name: "Save proposal to library" }));
     fireEvent.click(within(actions).getByRole("button", { name: "Delete proposal" }));
 
     expect(onNewProposal).toHaveBeenCalledTimes(1);
+    expect(onSaveToLibrary).toHaveBeenCalledTimes(1);
     expect(onDeleteProposal).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables save and delete proposal actions when the draft has no content", () => {
+    render(
+      <ProposalRail
+        {...baseProps}
+        hasProposalContent={false}
+        onSaveToLibrary={vi.fn()}
+        onDeleteProposal={vi.fn()}
+      />,
+    );
+
+    const actions = screen.getByRole("group", { name: "Draft actions" });
+    expect(within(actions).getByRole("button", { name: "Save proposal to library" })).toBeDisabled();
+    expect(within(actions).getByRole("button", { name: "Delete proposal" })).toBeDisabled();
   });
 
   it("shows the proposal Style tab and calls proposal-scoped style callbacks", () => {
