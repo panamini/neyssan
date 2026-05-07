@@ -13,15 +13,13 @@ const baseProps = {
   tone: "natural" as const,
   onModeChange: vi.fn(),
   onOpenImportReview: vi.fn(),
-  onImportCv: vi.fn(),
   onPickResume: vi.fn(),
-  onNewCv: vi.fn(),
   onExportPdf: vi.fn(),
   onExportDocx: vi.fn(),
 };
 
 describe("CvStageBar", () => {
-  it("shows a pick resume menu next to import cv and selects saved resumes", async () => {
+  it("shows a compact pick resume menu and selects saved resumes", async () => {
     const user = userEvent.setup();
     const onPickResume = vi.fn();
 
@@ -47,7 +45,8 @@ describe("CvStageBar", () => {
     );
 
     expect(screen.getByRole("button", { name: /Pick resume/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Import CV/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Import CV/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /New CV/i })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Pick resume/i }));
     await user.click(await screen.findByRole("menuitemradio", { name: /Design resume/i }));

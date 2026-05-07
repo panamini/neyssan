@@ -1,5 +1,5 @@
 import React from "react";
-import { ClipboardText, FilePdf, PenLine, ShareFat, Upload } from "@/lib/icons";
+import { ClipboardText, Eye, FilePdf, PenLine, ShareFat } from "@/lib/icons";
 import { Button, Menu, Pill, Sheet, ToneBadge } from "../ui";
 import type { CvToneChoice } from "./CvRail";
 
@@ -30,9 +30,7 @@ type CvStageBarProps = {
   resumeOptions: CvStageBarResumeOption[];
   onModeChange: (mode: "edit" | "preview") => void;
   onOpenImportReview: () => void;
-  onImportCv: () => void;
   onPickResume: (cvId: string) => void;
-  onNewCv: () => void;
   onExportPdf: () => void;
   onExportDocx: () => void;
 };
@@ -47,9 +45,7 @@ export function CvStageBar({
   resumeOptions,
   onModeChange,
   onOpenImportReview,
-  onImportCv,
   onPickResume,
-  onNewCv,
   onExportPdf,
   onExportDocx,
 }: CvStageBarProps): JSX.Element {
@@ -182,12 +178,14 @@ export function CvStageBar({
           <span className="dasti-cv-ats__icon" aria-hidden="true">
             {hasTrustedExport ? "OK" : "!"}
           </span>
-          {hasTrustedExport ? "ATS-ready" : "ATS review"}
+          <span className="dasti-cv-ats__label">
+            {hasTrustedExport ? "ATS-ready" : "ATS review"}
+          </span>
         </span>
         <ToneBadge tone={tone}>
           {tone.charAt(0).toUpperCase() + tone.slice(1)} tone
         </ToneBadge>
-        <span className="dasti-cv-stage-bar__spacer" />
+        <span className="dasti-cv-stage-bar__divider" aria-hidden="true" />
         <div
           className="style-segmented dasti-cv-stage-bar__mode"
           role="group"
@@ -195,17 +193,25 @@ export function CvStageBar({
         >
           <button
             type="button"
+            className="dasti-cv-mode-toggle"
             data-selected={mode === "edit" ? "true" : undefined}
             onClick={() => onModeChange("edit")}
+            aria-label="Edit"
+            title="Edit CV"
+            data-toolbar-tooltip="Edit"
           >
-            Edit
+            <PenLine size={14} strokeWidth={1.8} aria-hidden="true" />
           </button>
           <button
             type="button"
+            className="dasti-cv-mode-toggle"
             data-selected={mode === "preview" ? "true" : undefined}
             onClick={() => onModeChange("preview")}
+            aria-label="Page preview"
+            title="Preview CV"
+            data-toolbar-tooltip="Preview"
           >
-            Page preview
+            <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
           </button>
         </div>
         <Button type="button" size="sm" variant="ghost" disabled>
@@ -228,26 +234,6 @@ export function CvStageBar({
             </button>
           }
         />
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          onClick={onImportCv}
-          disabled={exporting}
-          iconLeft={<Upload size={14} strokeWidth={1.8} />}
-        >
-          Import CV
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="primary"
-          onClick={onNewCv}
-          disabled={exporting}
-          iconLeft={<PenLine size={14} strokeWidth={1.8} />}
-        >
-          New CV
-        </Button>
         <Menu
           ariaLabel="Share CV"
           align="end"
@@ -290,11 +276,14 @@ export function CvStageBar({
             },
           ]}
           trigger={
-            <button type="button" className="ds-btn ds-btn--sm ds-btn--secondary">
-              <span aria-hidden="true">
-                <ShareFat size={15} strokeWidth={1.8} />
-              </span>
-              Share
+            <button
+              type="button"
+              className="dasti-icon-button dasti-cv-stage-bar__share"
+              aria-label="Share"
+              title="Share CV"
+              data-toolbar-tooltip="Share"
+            >
+              <ShareFat size={15} strokeWidth={1.8} aria-hidden="true" />
             </button>
           }
         />
