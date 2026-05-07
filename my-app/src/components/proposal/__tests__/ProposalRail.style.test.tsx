@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProposalRail } from "../ProposalRail";
 import {
@@ -75,6 +75,33 @@ const baseProps = {
 };
 
 describe("ProposalRail style tab", () => {
+  it("renders new and delete proposal actions under the generate button", () => {
+    const onNewProposal = vi.fn();
+    const onDeleteProposal = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        onNewProposal={onNewProposal}
+        onDeleteProposal={onDeleteProposal}
+      />,
+    );
+
+    const actions = screen.getByRole("group", { name: "Draft actions" });
+    expect(within(actions).getByRole("button", { name: "New proposal" })).toHaveClass(
+      "ds-btn--ghost",
+    );
+    expect(
+      within(actions).getByRole("button", { name: "Delete proposal" }),
+    ).toHaveClass("ds-btn--ghost");
+
+    fireEvent.click(within(actions).getByRole("button", { name: "New proposal" }));
+    fireEvent.click(within(actions).getByRole("button", { name: "Delete proposal" }));
+
+    expect(onNewProposal).toHaveBeenCalledTimes(1);
+    expect(onDeleteProposal).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the proposal Style tab and calls proposal-scoped style callbacks", () => {
     const onSelectStyleBundle = vi.fn();
     const onSelectStylePalette = vi.fn();

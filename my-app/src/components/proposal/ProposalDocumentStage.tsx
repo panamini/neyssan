@@ -29,6 +29,8 @@ type SafeSendRow = {
 
 type ProposalDocumentStageProps = {
   statusLabel: string;
+  statusMeta?: string | null;
+  statusTitle?: string | null;
   toneLabel: string;
   toneValue: "auto" | "warm" | "formal" | "natural";
   mode: "preview" | "edit";
@@ -268,6 +270,8 @@ function getPillTone(state: SafeSendState) {
 
 export function ProposalDocumentStage({
   statusLabel,
+  statusMeta,
+  statusTitle,
   toneLabel,
   toneValue,
   mode,
@@ -339,10 +343,18 @@ export function ProposalDocumentStage({
     >
       <div className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-toolbar--surface-tooltips">
         <span
-          className={`ds-status ds-status--${statusLabel === "Drafting" ? "warning" : "neutral"} dasti-proposal-skeleton-stage__status`}
+          className={`ds-status ds-status--${statusLabel === "Drafting" ? "warning" : "neutral"} dasti-proposal-skeleton-stage__status${statusTitle ? " dasti-toolbar-tooltip-trigger--below" : ""}`}
+          data-toolbar-tooltip={statusTitle ?? undefined}
         >
           <span className="ds-status__dot" aria-hidden="true" />
-          {statusLabel}
+          <span className="dasti-proposal-skeleton-stage__status-label">
+            {statusLabel}
+          </span>
+          {statusMeta ? (
+            <span className="dasti-proposal-skeleton-stage__status-meta">
+              {statusMeta}
+            </span>
+          ) : null}
         </span>
         <ToneBadge tone={toneValue}>{toneLabel}</ToneBadge>
         <div

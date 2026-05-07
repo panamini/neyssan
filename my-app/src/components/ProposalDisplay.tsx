@@ -444,85 +444,6 @@ function renderPlainPreviewBody(content: string) {
   );
 }
 
-function getCharacterCountTone(args: {
-  count: number;
-  limit: number | null;
-  advisory?: boolean;
-}): "default" | "warning" | "danger" {
-  if (args.advisory) {
-    return "default";
-  }
-
-  if (args.limit === null) {
-    return "default";
-  }
-
-  if (args.count > args.limit) {
-    return "danger";
-  }
-
-  if (args.count >= Math.floor(args.limit * 0.9)) {
-    return "warning";
-  }
-
-  return "default";
-}
-
-function formatCharacterCountLabel(args: {
-  count: number;
-  limit: number | null;
-  advisory?: boolean;
-}): string {
-  if (args.limit === null) {
-    return `${args.count.toLocaleString()} chars`;
-  }
-
-  return `${args.count.toLocaleString()} / ${args.advisory ? "~" : ""}${args.limit.toLocaleString()}`;
-}
-
-function formatPageCountLabel(count: number): string {
-  const wordLabels: Record<number, string> = {
-    2: "two",
-    3: "three",
-    4: "four",
-    5: "five",
-    6: "six",
-  };
-  const label = wordLabels[count] ?? count.toLocaleString();
-  return `${label} pages`;
-}
-
-const SEMANTIC_IDEAL_MIN = 800;
-const SEMANTIC_IDEAL_MAX = 1200;
-const SEMANTIC_SCALE_MAX = 2000;
-
-function getSemanticLengthZone(count: number): "brief" | "ideal" | "long" {
-  if (count < SEMANTIC_IDEAL_MIN) return "brief";
-  if (count <= SEMANTIC_IDEAL_MAX) return "ideal";
-  return "long";
-}
-
-function SemanticLengthBadge({ count }: { count: number }): JSX.Element {
-  const zone = getSemanticLengthZone(count);
-  const label =
-    zone === "brief" ? "Brief" : zone === "ideal" ? "Ideal" : "Long";
-  const markerPct = Math.min((count / SEMANTIC_SCALE_MAX) * 100, 100);
-  return (
-    <span
-      className={`dasti-pill dasti-proposal-character-badge dasti-length-signal dasti-length-signal--${zone}`}
-      title={`${count.toLocaleString()} chars · ${label}`}
-    >
-      <span className="dasti-length-signal__bar" aria-hidden="true">
-        <span
-          className="dasti-length-signal__marker"
-          style={{ left: `${markerPct}%` }}
-        />
-      </span>
-      <span className="dasti-length-signal__label">{label}</span>
-    </span>
-  );
-}
-
 export function getDisplayedProposalText(
   content: string,
   proposalType?: FormValues["proposalType"] | null,
@@ -644,10 +565,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   onSalutationChange,
   onHeaderVisibilityChange,
   showDocumentCaption = true,
-  characterLimit,
-  characterLimitAdvisory = false,
   showPreviewParagraphActions = true,
-  showPageCountBadge = true,
 }) => {
   const resolvedRenderState = React.useMemo(
     () =>
@@ -676,22 +594,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         : "",
     [proposalContent, proposalType],
   );
-  const resolvedCharacterLimitSelection = React.useMemo(() => {
-    if (characterLimit !== undefined || characterLimitAdvisory) {
-      return {
-        value: characterLimit ?? null,
-        advisory: characterLimitAdvisory,
-      };
-    }
-
-    return resolveProposalCharacterLimitSelection({});
-  }, [characterLimit, characterLimitAdvisory]);
-  const proposalCharacterCount = displayedProposalText.length;
-  const characterCountTone = getCharacterCountTone({
-    count: proposalCharacterCount,
-    limit: resolvedCharacterLimitSelection.value,
-    advisory: resolvedCharacterLimitSelection.advisory,
-  });
   const proposalDocumentThemeVars = React.useMemo(
     () => buildVerbatiProposalDocumentVars(resolvedStylePreset),
     [resolvedStylePreset],
@@ -750,12 +652,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const editableTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const editablePageRef = React.useRef<HTMLDivElement | null>(null);
   const viewerSurfaceRef = React.useRef<HTMLDivElement | null>(null);
-  const characterBadgeWrapRef = React.useRef<HTMLDivElement | null>(null);
   const selectionDebounceRef = React.useRef<number | null>(null);
   const queuedPreviewActionTimeoutRef = React.useRef<number | null>(null);
   const zoomMenuRef = React.useRef<HTMLDivElement | null>(null);
-  const [isCharacterBadgeOverlappingPage, setIsCharacterBadgeOverlappingPage] =
-    React.useState(false);
 
   React.useEffect(() => {
     if (
@@ -1037,20 +936,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     [usesDocumentRenderer],
   );
 
-  const shouldShowCharacterCountBadge = Boolean(
-    proposalContent && !loading && !error && isEditable,
-  );
-  const shouldShowPageCountBadge = Boolean(
-    proposalContent &&
-      !loading &&
-      !error &&
-      usesDocumentRenderer &&
-      !isEditable &&
-      !showPreviewParagraphActions &&
-      showPageCountBadge &&
-      documentPageCount >= 1,
-  );
-
   React.useEffect(() => {
     updateEditableScrollEdges();
     updatePreviewScrollEdges();
@@ -1067,70 +952,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     updateEditableScrollEdges,
     updatePreviewScrollEdges,
   ]);
-
-  React.useEffect(() => {
-    if (
-      !shouldShowCharacterCountBadge ||
-      !usesDocumentRenderer ||
-      isDocumentEditor
-    ) {
-      setIsCharacterBadgeOverlappingPage(false);
-      return undefined;
-    }
-
-    const measureOverlap = () => {
-      const badgeNode = characterBadgeWrapRef.current;
-      const pageNode = editablePageRef.current;
-      if (!badgeNode || !pageNode) {
-        setIsCharacterBadgeOverlappingPage(false);
-        return;
-      }
-
-      const badgeRect = badgeNode.getBoundingClientRect();
-      const pageRect = pageNode.getBoundingClientRect();
-      const overlaps =
-        badgeRect.left < pageRect.right - 1 &&
-        badgeRect.right > pageRect.left + 1 &&
-        badgeRect.top < pageRect.bottom - 1 &&
-        badgeRect.bottom > pageRect.top + 1;
-
-      setIsCharacterBadgeOverlappingPage((current) =>
-        current === overlaps ? current : overlaps,
-      );
-    };
-
-    let frameId: number | null = null;
-    if (typeof window !== "undefined" && window.requestAnimationFrame) {
-      frameId = window.requestAnimationFrame(measureOverlap);
-    } else {
-      measureOverlap();
-    }
-
-    const resizeObserver =
-      typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(measureOverlap)
-        : null;
-
-    if (viewerSurfaceRef.current) {
-      resizeObserver?.observe(viewerSurfaceRef.current);
-    }
-    if (editablePageRef.current) {
-      resizeObserver?.observe(editablePageRef.current);
-    }
-    if (characterBadgeWrapRef.current) {
-      resizeObserver?.observe(characterBadgeWrapRef.current);
-    }
-
-    window.addEventListener("resize", measureOverlap);
-
-    return () => {
-      if (frameId !== null && typeof window !== "undefined") {
-        window.cancelAnimationFrame(frameId);
-      }
-      resizeObserver?.disconnect();
-      window.removeEventListener("resize", measureOverlap);
-    };
-  }, [isDocumentEditor, shouldShowCharacterCountBadge, usesDocumentRenderer]);
 
   React.useEffect(() => {
     if (isZoomControlled) {
@@ -1611,49 +1432,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       )}
     </button>
   ) : null;
-
-  const characterCountBadge = shouldShowCharacterCountBadge ? (
-    resolvedCharacterLimitSelection.value === null &&
-    !resolvedCharacterLimitSelection.advisory ? (
-      <SemanticLengthBadge count={proposalCharacterCount} />
-    ) : (
-      <span
-        className={(() => {
-          if (resolvedCharacterLimitSelection.advisory) {
-            return "dasti-pill dasti-proposal-character-badge dasti-proposal-character-badge--advisory";
-          }
-          if (characterCountTone === "danger")
-            return "dasti-pill dasti-proposal-character-badge dasti-pill--danger";
-          if (characterCountTone === "warning")
-            return "dasti-pill dasti-proposal-character-badge dasti-pill--warning";
-          return "dasti-pill dasti-proposal-character-badge";
-        })()}
-        title={
-          resolvedCharacterLimitSelection.advisory
-            ? "Approximate target. Not a hard cap."
-            : "Draft length vs limit."
-        }
-      >
-        {formatCharacterCountLabel({
-          count: proposalCharacterCount,
-          limit: resolvedCharacterLimitSelection.value,
-          advisory: resolvedCharacterLimitSelection.advisory,
-        })}
-      </span>
-    )
-  ) : null;
-  const pageCountBadge = shouldShowPageCountBadge ? (
-    <span
-      className="dasti-pill dasti-proposal-character-badge dasti-proposal-page-count-badge"
-      title="Rendered proposal page count."
-    >
-      {formatPageCountLabel(documentPageCount)}
-    </span>
-  ) : null;
-  const documentChromeBadge = isEditable ? characterCountBadge : pageCountBadge;
-  const shouldRenderDocumentChromeBadge = Boolean(
-    documentChromeBadge && !(isDocumentEditor && isApplicantDrawerOpen),
-  );
 
   const shouldShowCopyButton = Boolean(
     onCopy && proposalContent && !loading && !error,
@@ -2612,7 +2390,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         </div>
       </div>
     );
-  } else if (!proposalContent) {
+  } else if (!proposalContent && !isEditable) {
     sheetBody = (
       <div
         className={resolveBodyClassName()}
@@ -2842,20 +2620,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           </div>
         </div>
         {previewParagraphActionsFooter}
-        {shouldRenderDocumentChromeBadge ? (
-          <div
-            ref={characterBadgeWrapRef}
-            className="dasti-proposal-character-badge-wrap"
-            data-badge-kind={isEditable ? "character-count" : "page-count"}
-            data-overlap-hidden={
-              isEditable && !isDocumentEditor && isCharacterBadgeOverlappingPage
-                ? "true"
-                : "false"
-            }
-          >
-            {documentChromeBadge}
-          </div>
-        ) : null}
       </div>
     </div>
   );
