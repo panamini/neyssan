@@ -149,6 +149,7 @@ import {
   readProposalPreviewDebugCapture,
   setStyledProposalExportContext,
 } from "../lib/document-export-debug";
+import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
 import { ensureProposalSignatureName } from "../lib/proposal-closing";
 import {
@@ -209,6 +210,8 @@ const PROPOSAL_MODEL_SELECTOR_OPTIONS = [
   { value: "mistral-medium-latest", label: "Med" },
   { value: "mistral-large-latest", label: "Lrg" },
 ] as const;
+
+const PROPOSAL_A4_PAGE_INLINE_SIZE = `${Math.round(A4_PAGE_WIDTH_PX * 100) / 100}px`;
 
 type ProposalForgeReviewItem = {
   id: string;
@@ -7959,7 +7962,9 @@ export function ProposalForge(): JSX.Element {
                     style={
                       {
                         "--proposal-workspace-stage-inline-size":
-                          "var(--forge-page-inline-size)",
+                          isCompactComposeLayout
+                            ? `min(100%, ${PROPOSAL_A4_PAGE_INLINE_SIZE})`
+                            : "var(--forge-page-inline-size)",
                         "--proposal-workspace-rail-inline-size": "360px",
                         "--grid-columns": isCompactComposeLayout
                           ? "minmax(0, 1fr)"
