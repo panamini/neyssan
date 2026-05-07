@@ -377,8 +377,9 @@
   }
 
   .ds-pill--warning {
-    background: var(--wab);
-    color: var(--wat);
+    background: color-mix(in srgb, var(--wa) 14%, var(--sfr));
+    color: color-mix(in srgb, var(--wa) 70%, var(--ti));
+    border-color: color-mix(in srgb, var(--wa) 32%, transparent);
   }
 
   .ds-pill--danger {
