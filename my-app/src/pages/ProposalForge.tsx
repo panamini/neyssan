@@ -211,7 +211,10 @@ const PROPOSAL_MODEL_SELECTOR_OPTIONS = [
   { value: "mistral-large-latest", label: "Lrg" },
 ] as const;
 
-const PROPOSAL_A4_PAGE_INLINE_SIZE = `${Math.round(A4_PAGE_WIDTH_PX * 100) / 100}px`;
+// Browser width-map audit confirmed the workspace's visible Proposal paper
+// matches the renderer A4 width at the current design scale (~793.7px), while
+// --forge-page-inline-size includes legacy frame/gutter space.
+const PROPOSAL_PAPER_VISUAL_INLINE_SIZE = `${Math.round(A4_PAGE_WIDTH_PX * 100) / 100}px`;
 
 type ProposalForgeReviewItem = {
   id: string;
@@ -593,6 +596,7 @@ type ProposalDocumentMetadata = {
 
 type ProposalWorkspaceCssVars = React.CSSProperties & {
   "--document-viewer-shell-inline-size"?: string;
+  "--proposal-paper-visual-inline-size"?: string;
   "--proposal-workspace-output-shell-inline-size"?: string;
   "--proposal-workspace-shell-block-size"?: string;
   "--proposal-compose-column-inline-size"?: string;
@@ -1190,9 +1194,6 @@ export function ProposalForge(): JSX.Element {
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
-  const liveOutputShellRef = React.useRef<HTMLDivElement | null>(null);
-  const [liveOutputFrameInlineSize, setLiveOutputFrameInlineSize] =
-    React.useState<number | null>(null);
   const handoffId = React.useMemo(
     () => new URLSearchParams(search).get("handoffId"),
     [search],
@@ -6698,64 +6699,19 @@ export function ProposalForge(): JSX.Element {
   }, [attachedCvId, attachedCvTitle]);
   // Page + rail + grid gap + page padding need room before two-pane mode is safe.
   const proposalTwoPaneMinViewportWidth = 1420;
+  const proposalPaperVisualInlineSize = `min(100%, ${PROPOSAL_PAPER_VISUAL_INLINE_SIZE})`;
   const proposalBaseWorkspaceOutputShellInlineSize =
-    "var(--forge-page-inline-size)";
+    "var(--proposal-paper-visual-inline-size)";
   const proposalWorkspaceShellBlockSize =
     "min(var(--document-viewer-shell-max-block), calc(100dvh - var(--header-height) - (var(--space-4) * 2) - var(--document-viewer-toolbar-block-size) - var(--space-2)))";
   const isCompactComposeLayout =
     viewportWidth < proposalTwoPaneMinViewportWidth;
   const proposalWorkspaceOutputShellInlineSize =
-    !isCompactComposeLayout && liveOutputFrameInlineSize !== null
-      ? `${liveOutputFrameInlineSize}px`
-      : proposalBaseWorkspaceOutputShellInlineSize;
+    proposalBaseWorkspaceOutputShellInlineSize;
   const proposalWorkbenchColumnInlineSize =
     "var(--proposal-workspace-output-shell-inline-size)";
   const proposalDesktopComposeWidth = proposalWorkbenchColumnInlineSize;
   const proposalComposeColumnInlineSize = proposalWorkbenchColumnInlineSize;
-  React.useLayoutEffect(() => {
-    if (
-      typeof window === "undefined" ||
-      typeof ResizeObserver === "undefined" ||
-      isSavedView ||
-      isCompactComposeLayout ||
-      !proposalContent
-    ) {
-      setLiveOutputFrameInlineSize(null);
-      return undefined;
-    }
-
-    const root = liveOutputShellRef.current;
-    if (!root) {
-      setLiveOutputFrameInlineSize(null);
-      return undefined;
-    }
-
-    let frame: HTMLElement | null = null;
-    const syncFrameWidth = () => {
-      frame = root.querySelector<HTMLElement>(".dasti-proposal-sheet-frame");
-      const nextWidth = frame
-        ? Math.round(frame.getBoundingClientRect().width * 100) / 100
-        : null;
-      setLiveOutputFrameInlineSize((current) => {
-        if (current === null || nextWidth === null) {
-          return nextWidth;
-        }
-        return Math.abs(current - nextWidth) > 0.5 ? nextWidth : current;
-      });
-    };
-
-    syncFrameWidth();
-
-    const observer = new ResizeObserver(syncFrameWidth);
-    observer.observe(root);
-    if (frame) {
-      observer.observe(frame);
-    }
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [isCompactComposeLayout, isSavedView, proposalContent]);
   const showComposePanel = isComposePanelVisible && !isSavedView;
   const briefJobDescription =
     canonicalJobRecord?.rawDescription?.trim() ||
@@ -7305,6 +7261,7 @@ export function ProposalForge(): JSX.Element {
         ? 0
         : "auto",
     minWidth: 0,
+    "--proposal-paper-visual-inline-size": proposalPaperVisualInlineSize,
     "--proposal-workspace-output-shell-inline-size":
       proposalWorkspaceOutputShellInlineSize,
     "--proposal-workspace-shell-block-size": proposalWorkspaceShellBlockSize,
@@ -7961,10 +7918,10 @@ export function ProposalForge(): JSX.Element {
                     className="dasti-proposal-skeleton-forge"
                     style={
                       {
+                        "--proposal-paper-visual-inline-size":
+                          proposalPaperVisualInlineSize,
                         "--proposal-workspace-stage-inline-size":
-                          isCompactComposeLayout
-                            ? `min(100%, ${PROPOSAL_A4_PAGE_INLINE_SIZE})`
-                            : "var(--forge-page-inline-size)",
+                          "var(--proposal-paper-visual-inline-size)",
                         "--proposal-workspace-rail-inline-size": "360px",
                         "--grid-columns": isCompactComposeLayout
                           ? "minmax(0, 1fr)"
@@ -8247,7 +8204,6 @@ export function ProposalForge(): JSX.Element {
                         }}
                       >
                       <div
-                        ref={liveOutputShellRef}
                         style={
                           {
                             ...stackedCardWidthStyle,
