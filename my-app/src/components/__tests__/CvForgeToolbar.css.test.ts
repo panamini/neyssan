@@ -82,6 +82,9 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-cv-skeleton-forge\s*\{[\s\S]*--cv-paper-visual-inline-size:\s*var\(--forge-page-inline-size\);[\s\S]*--cv-workspace-stage-inline-size:\s*var\(--cv-paper-visual-inline-size\);[\s\S]*--cv-workspace-rail-inline-size:\s*360px;[\s\S]*grid-template-columns:[\s\S]*minmax\(0,\s*var\(--cv-workspace-stage-inline-size\)\)[\s\S]*var\(--cv-workspace-rail-inline-size\);[\s\S]*justify-content:\s*center;/,
     );
     expect(productCss).toMatch(
+      /\.dasti-cv-skeleton-forge__stage\s*\{[\s\S]*gap:\s*var\(--document-rail-gap,\s*var\(--space-2\)\);/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-cv-paper-stage\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--cv-paper-visual-inline-size\)\);[\s\S]*margin-inline:\s*auto;[\s\S]*min-width:\s*0;/,
     );
     expect(productCss).toMatch(
@@ -94,6 +97,9 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-document-rail--resume-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/,
     );
     expect(productCss).toMatch(
+      /\.dasti-doc-viewer-shell--resume-workspace\s*\{[\s\S]*--document-rail-gap:\s*var\(--space-2\);[\s\S]*--resume-preview-toolbar-gap:\s*var\(--document-rail-gap\);/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-document-rail--resume-workspace\s+\.dasti-proposal-rail-cluster\s*\{[\s\S]*width:\s*100%;[\s\S]*min-width:\s*max-content;[\s\S]*max-width:\s*100%;/,
     );
     expect(productCss).toMatch(
@@ -102,6 +108,9 @@ describe("CvForge toolbar CSS contracts", () => {
   });
 
   it("uses proposal-like plain actions for the CV stage bar chrome", () => {
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-bar\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--cv-paper-visual-inline-size\)\);[\s\S]*margin-inline:\s*auto;/,
+    );
     expect(productCss).toMatch(
       /\.dasti-cv-stage-bar__plain-action\s*\{[\s\S]*border:\s*1px\s+solid\s+transparent;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
     );
@@ -125,6 +134,9 @@ describe("CvForge toolbar CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.dasti-cv-rail-tabs button\[data-active="true"\]\s*\{[\s\S]*background:\s*var\(--color-surface-raised\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-doc-viewer-shell--resume-workspace\s*\{[\s\S]*--document-stage-halo:\s*var\(--document-viewer-frame-shadow\),[\s\S]*0 12px 28px -24px color-mix\(in srgb,\s*var\(--shadow-color\) 92%,\s*transparent\);/,
     );
     expect(cvForgeSource).toContain("CV_PAPER_VISUAL_INLINE_SIZE");
     expect(cvForgeSource).toContain('"--cv-paper-visual-inline-size"');
