@@ -373,7 +373,6 @@ export function ProposalDocumentStage({
               data-selected={mode === "edit" ? "true" : undefined}
               onClick={() => onModeChange("edit")}
               aria-label="Edit proposal"
-              title="Edit proposal"
               data-toolbar-tooltip="Edit"
             >
               <PenLine size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -384,7 +383,6 @@ export function ProposalDocumentStage({
               data-selected={mode === "preview" ? "true" : undefined}
               onClick={() => onModeChange("preview")}
               aria-label="Preview proposal"
-              title="Preview proposal"
               data-toolbar-tooltip="Preview"
             >
               <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -538,7 +536,6 @@ export function ProposalDocumentStage({
               type="button"
               className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
               aria-label="Share proposal"
-              title="Share proposal"
               data-toolbar-tooltip="Share"
             >
               <ShareFat size={15} strokeWidth={1.8} aria-hidden="true" />

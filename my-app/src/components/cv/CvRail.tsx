@@ -705,8 +705,7 @@ export function CvRail({
           )}
           <CvAddSectionMenu sections={sections} onAddSection={onAddSection} />
           <div className="dasti-cv-rail-hint">
-            Click a section row to edit its items. Each section opens its own
-            editor.
+            Open a section row to edit its items.
           </div>
         </div>
       ) : null}

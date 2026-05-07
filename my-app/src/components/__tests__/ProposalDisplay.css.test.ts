@@ -34,6 +34,27 @@ describe("ProposalDisplay CSS contracts", () => {
     ]);
   });
 
+  it("lets Proposal stage toolbar token tooltips render outside the toolbar", () => {
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*overflow:\s*visible;/,
+    );
+  });
+
+  it("keeps Proposal rail heading groups tight and gives recipient details a two-line field", () => {
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-rail__variable-group-title\s*\{[\s\S]*padding-bottom:\s*var\(--space-1\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-rail__header-details\s+\.dasti-proposal-skeleton-rail__drawer-body\s*\{[\s\S]*padding-top:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-rail__header-details\s+\.dasti-proposal-skeleton-rail__variable-group:first-child\s*\{[\s\S]*padding-top:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-rail__variable-group--recipient[\s\S]*?\.dasti-proposal-skeleton-rail__variable-field--wide[\s\S]*?textarea\.ds-field\s*\{[\s\S]*min-height:\s*calc\(var\(--proposal-rail-control-block-size\)\s*\*\s*2\);[\s\S]*height:\s*calc\(var\(--proposal-rail-control-block-size\)\s*\*\s*2\);/,
+    );
+  });
+
   it("keeps the proposal preview shell and document pages on A4 ratio", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-sheet__preview-page,\s*\.dasti-document-stage__canvas\[data-document-page="true"\][\s\S]*?aspect-ratio:\s*210\s*\/\s*297;/,
@@ -90,6 +111,18 @@ describe("ProposalDisplay CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-sheet__body--document-viewer\s*\{[\s\S]*flex:\s*1 1 0%;[\s\S]*min-height:\s*0;[\s\S]*overflow:\s*hidden;/,
+    );
+  });
+
+  it("keeps compact preview mode scrollable by scoping auto-height collapse to the editor body", () => {
+    expect(productCss).toContain(
+      ".dasti-doc-viewer-shell:has(.dasti-proposal-sheet__body--document-editor)",
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-sheet__body--document-editor\s*\{[\s\S]*?height:\s*auto;[\s\S]*?min-height:\s*0;[\s\S]*?max-height:\s*none;/,
+    );
+    expect(productCss).not.toContain(
+      ".dasti-proposal-output-shell--workspace\n    .dasti-proposal-sheet__body--document-viewer,\n  .dasti-proposal-output-shell--workspace .dasti-document-stage-chassis",
     );
   });
 
@@ -477,6 +510,12 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-compose-toolbar__bar \[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-saved-view-toolbar \[data-toolbar-tooltip\],[\s\S]*\.dasti-artifact-inspector \[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-rail-cluster \[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-sheet__controls \[data-toolbar-tooltip\],[\s\S]*\.dasti-cv-stage-bar \[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-toolbar \[data-toolbar-tooltip\]\s*\{[\s\S]*--dasti-toolbar-tooltip-inset-block-start:/,
     );
     expect(productCss).toMatch(
+      /\[data-toolbar-tooltip\]\s*\{[\s\S]*--dasti-toolbar-tooltip-bg:\s*color-mix\([\s\S]*var\(--frost-bg\)[\s\S]*--dasti-toolbar-tooltip-border:\s*color-mix\([\s\S]*var\(--color-border\)[\s\S]*--dasti-toolbar-tooltip-shadow:\s*var\(--shadow-frost,\s*var\(--shadow-sm\)\);/,
+    );
+    expect(productCss).toMatch(
+      /\[data-toolbar-tooltip\]::after\s*\{[\s\S]*border:\s*1px\s+solid\s+var\(--dasti-toolbar-tooltip-border\);[\s\S]*background:\s*var\(--dasti-toolbar-tooltip-bg\);[\s\S]*box-shadow:\s*var\(--dasti-toolbar-tooltip-shadow\);/,
+    );
+    expect(productCss).toMatch(
       /\[data-toolbar-tooltip\]\[aria-expanded="true"\]::after\s*\{[\s\S]*display:\s*none;/,
     );
     expect(productCss).toMatch(
@@ -530,14 +569,45 @@ describe("ProposalDisplay CSS contracts", () => {
   });
 
   it("adds a structured header block for non-volk proposal templates", () => {
-    expect(productCss).toContain(
-      ".dasti-proposal-document__structured-header {",
+    expect(productCss).toMatch(
+      /\.dasti-proposal-document__structured-header\s*\{(?=[^}]*padding-block-end:\s*calc\(var\(--proposal-inline-mm\)\s*\*\s*1\.9\);)(?![^}]*border-block-end:)[^}]*\}/,
     );
     expect(productCss).toContain(
       ".dasti-proposal-document__structured-header-item--subject {",
     );
     expect(productCss).toContain(
       ".dasti-proposal-document__structured-header-value--multiline {",
+    );
+  });
+
+  it("keeps Proposal loading skeleton bands on the app skeleton shimmer without subject divider", () => {
+    expect(productCss).toMatch(
+      /@keyframes ds-skel\s*\{[\s\S]*from\s*\{[\s\S]*background-position:\s*200%\s+0;[\s\S]*to\s*\{[\s\S]*background-position:\s*-200%\s+0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-loading-skeleton\s*\{[\s\S]*--proposal-skeleton-band:\s*var\(--sf2\);[\s\S]*--proposal-skeleton-band-highlight:\s*var\(--sf3\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-loading-skeleton__eyebrow,[\s\S]*?\.dasti-proposal-loading-skeleton__paragraph span\s*\{[\s\S]*var\(--proposal-skeleton-band\)\s*0%,[\s\S]*var\(--proposal-skeleton-band-highlight\)\s*50%,[\s\S]*var\(--proposal-skeleton-band\)\s*100%[\s\S]*background-size:\s*200%\s*100%;[\s\S]*animation:\s*ds-skel\s+1400ms\s+linear\s+infinite;/,
+    );
+    expect(productCss).toContain(
+      ".dark .dasti-proposal-loading-skeleton__eyebrow,",
+    );
+    expect(productCss).toContain(
+      "--proposal-skeleton-dark-band: color-mix(in srgb, black 88%, var(--ti) 12%);",
+    );
+    expect(productCss).toContain(
+      "--proposal-skeleton-dark-band-highlight: color-mix(",
+    );
+    expect(productCss).toContain("animation: ds-skel 1400ms linear infinite;");
+    expect(productCss).toMatch(
+      /\.dasti-proposal-loading-skeleton__subject\s*\{(?=[^}]*padding-block-end:\s*var\(--space-2\);)(?![^}]*border-bottom:)[^}]*\}/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-loading-skeleton__subject-line\s*\{[\s\S]*block-size:\s*18px;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-loading-skeleton__paragraph span\s*\{[\s\S]*block-size:\s*16px;/,
     );
   });
 

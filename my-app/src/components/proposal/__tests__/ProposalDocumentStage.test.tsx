@@ -56,6 +56,22 @@ describe("ProposalDocumentStage share and safe-send controls", () => {
     expect(screen.getByRole("button", { name: "Redo" })).toBeInTheDocument();
   });
 
+  it("uses shared app tooltips without native titles for stage mode and share triggers", () => {
+    renderStage();
+
+    const edit = screen.getByRole("button", { name: "Edit proposal" });
+    const preview = screen.getByRole("button", { name: "Preview proposal" });
+    const share = screen.getByRole("button", { name: "Share proposal" });
+
+    expect(edit).toHaveAttribute("data-toolbar-tooltip", "Edit");
+    expect(preview).toHaveAttribute("data-toolbar-tooltip", "Preview");
+    expect(share).toHaveAttribute("data-toolbar-tooltip", "Share");
+    expect(edit).not.toHaveAttribute("title");
+    expect(preview).not.toHaveAttribute("title");
+    expect(share).not.toHaveAttribute("title");
+    expect(share.closest(".dasti-toolbar--surface-tooltips")).toBeTruthy();
+  });
+
   it("marks unavailable share actions explicitly and wires copy text", async () => {
     const onCopyText = vi.fn();
     renderStage({ onCopyText });

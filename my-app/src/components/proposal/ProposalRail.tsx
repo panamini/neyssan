@@ -7,6 +7,7 @@ import {
   ColorWheel,
   FilePdf,
   FileUser,
+  FloppyDisk,
   Plus,
   TrashSimple,
   X,
@@ -251,6 +252,7 @@ type ProposalRailProps = {
   generateState: "idle" | "loading" | "success" | "error";
   onGenerateDraft: () => void;
   onNewProposal?: () => void;
+  onSaveToLibrary?: () => void;
   onDeleteProposal?: () => void;
   cvOptions: ProposalRailCvOption[];
   onSelectCv: (cvId: string) => void;
@@ -302,6 +304,7 @@ export function ProposalRail({
   generateState,
   onGenerateDraft,
   onNewProposal,
+  onSaveToLibrary,
   onDeleteProposal,
   cvOptions,
   onSelectCv,
@@ -706,7 +709,7 @@ export function ProposalRail({
             >
               {generateLabel}
             </Button>
-            {onNewProposal || onDeleteProposal ? (
+            {onNewProposal || onSaveToLibrary || onDeleteProposal ? (
               <div
                 className="dasti-proposal-skeleton-rail__draft-actions"
                 role="group"
@@ -721,6 +724,20 @@ export function ProposalRail({
                     iconLeft={<Plus size={14} strokeWidth={1.8} />}
                   >
                     New proposal
+                  </Button>
+                ) : null}
+                {onSaveToLibrary ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={onSaveToLibrary}
+                    disabled={!hasProposalContent}
+                    aria-label="Save proposal to library"
+                    title="Save proposal to library"
+                    iconLeft={<FloppyDisk size={14} strokeWidth={1.8} />}
+                  >
+                    Save to library
                   </Button>
                 ) : null}
                 {onDeleteProposal ? (
