@@ -118,6 +118,9 @@ describe("CvForge toolbar CSS contracts", () => {
 
   it("uses proposal-like plain actions for the CV stage bar chrome", () => {
     expect(productCss).toMatch(
+      /\.dasti-cv-stage-bar\s*\{[\s\S]*overflow:\s*visible;/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-cv-stage-bar__plain-action\s*\{[\s\S]*border:\s*1px\s+solid\s+transparent;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
     );
     expect(productCss).toMatch(

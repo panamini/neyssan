@@ -281,7 +281,7 @@
   flex-wrap: nowrap;
   align-items: center;
   gap: var(--space-2);
-  overflow: hidden;
+  overflow: visible;
   padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
   border: 1px solid var(--proposal-chrome-toolbar-border);
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
