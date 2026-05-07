@@ -118,6 +118,7 @@ interface ProposalInputFormProps {
   headerAction?: React.ReactNode;
   jobDescriptionPlaceholder?: string;
   initialComposeDraft?: StoredProposalComposeDraft | null;
+  externalComposeDraft?: StoredProposalComposeDraft | null;
   onGenerateControlChange?: (control: ProposalGenerateControl | null) => void;
   sourceUrl?: string | null;
   sourcePlatform?: string | null;
@@ -382,6 +383,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   headerAction = null,
   jobDescriptionPlaceholder = "Paste job offer",
   initialComposeDraft = null,
+  externalComposeDraft = null,
   onGenerateControlChange,
   sourceUrl: liveSourceUrl = null,
   sourcePlatform: liveSourcePlatform = null,
@@ -657,6 +659,38 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const selectedModelType = form.watch("modelType");
   const selectedProposalType = form.watch("proposalType");
   const selectedVoicePreset = form.watch("voicePreset");
+
+  React.useEffect(() => {
+    if (!externalComposeDraft) {
+      return;
+    }
+
+    if (typeof externalComposeDraft.jobTitle === "string") {
+      const nextJobTitle = externalComposeDraft.jobTitle;
+      if (form.getValues("jobTitle") !== nextJobTitle) {
+        form.setValue("jobTitle", nextJobTitle, {
+          shouldDirty: true,
+          shouldTouch: false,
+          shouldValidate: true,
+        });
+      }
+    }
+
+    if (typeof externalComposeDraft.jobDescription === "string") {
+      const nextJobDescription = externalComposeDraft.jobDescription;
+      if (form.getValues("jobDescription") !== nextJobDescription) {
+        form.setValue("jobDescription", nextJobDescription, {
+          shouldDirty: true,
+          shouldTouch: false,
+          shouldValidate: true,
+        });
+      }
+    }
+  }, [
+    externalComposeDraft?.jobDescription,
+    externalComposeDraft?.jobTitle,
+    form,
+  ]);
 
   React.useEffect(() => {
     updateComposeScrollEdges();

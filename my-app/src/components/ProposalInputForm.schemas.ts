@@ -22,9 +22,15 @@ const PROPOSAL_CHARACTER_LIMIT_MODE_VALUES = [
 ] as const;
 
 export const formSchema = z.object({
-  jobTitle: z.string().min(2, {
-    message: "Job title must be at least 2 characters.",
-  }),
+  jobTitle: z.string().refine(
+    (value) => {
+      const normalized = value.trim();
+      return normalized.length === 0 || normalized.length >= 2;
+    },
+    {
+      message: "Job title must be at least 2 characters.",
+    },
+  ),
   jobDescription: z.string().min(10, {
     message: "Job description must be at least 10 characters.",
   }),
