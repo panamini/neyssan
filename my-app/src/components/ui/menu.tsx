@@ -161,6 +161,7 @@ export function Menu({
       requestAnimationFrame(() => {
         updatePosition();
         setMenuState("open");
+        requestAnimationFrame(updatePosition);
       });
       const selectedIndex = enabledIndexes.findIndex(({ sectionIndex, itemIndex }) => {
         return sections[sectionIndex]?.items[itemIndex]?.selected;

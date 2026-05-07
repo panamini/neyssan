@@ -44,12 +44,26 @@ describe("CvStageBar", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /Pick resume/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Import CV/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /New CV/i })).not.toBeInTheDocument();
+    const pickResumeTrigger = screen.getByRole("button", {
+      name: /Pick resume/i,
+    });
+    expect(pickResumeTrigger).toBeInTheDocument();
+    expect(pickResumeTrigger).toHaveClass("dasti-cv-stage-bar__plain-action");
+    expect(
+      screen.getByText("ATS", { selector: ".dasti-cv-ats__mark" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("OK")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Import CV/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /New CV/i }),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Pick resume/i }));
-    await user.click(await screen.findByRole("menuitemradio", { name: /Design resume/i }));
+    await user.click(
+      await screen.findByRole("menuitemradio", { name: /Design resume/i }),
+    );
 
     expect(onPickResume).toHaveBeenCalledWith("resume_beta");
   });

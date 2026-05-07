@@ -68,10 +68,14 @@ describe("CvForge toolbar CSS contracts", () => {
   });
 
   it("keeps CV page preview inside the PR4 forge shell and resume rail width", () => {
-    expect(cvForgeSource).toContain('"dasti-cv-paper-stage dasti-cv-page-preview-stage"');
+    expect(cvForgeSource).toContain(
+      '"dasti-cv-paper-stage dasti-cv-page-preview-stage"',
+    );
     expect(cvForgeSource).toContain('hostMode="panel"');
     expect(cvForgeSource).not.toContain('hostMode="workspace"');
-    expect(cvForgeSource).not.toContain('className="dasti-cv-preview-workbench"');
+    expect(cvForgeSource).not.toContain(
+      'className="dasti-cv-preview-workbench"',
+    );
     expect(cvForgeSource).not.toContain("<ProfileReviewCard");
     expect(cvForgeSource).not.toContain("<VerbatiCvPreviewPanel");
     expect(productCss).toMatch(
@@ -94,6 +98,18 @@ describe("CvForge toolbar CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.dasti-document-rail--resume-workspace\s+\.dasti-document-rail__section--start\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/,
+    );
+  });
+
+  it("uses proposal-like plain actions for the CV stage bar chrome", () => {
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-bar__plain-action\s*\{[\s\S]*border:\s*1px\s+solid\s+transparent;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-bar__action-divider\s*\{[\s\S]*width:\s*1px;[\s\S]*height:\s*24px;/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*1419px\)\s*\{[\s\S]*\.dasti-cv-ats__mark\s*\{[\s\S]*display:\s*inline-grid;[\s\S]*\.dasti-cv-ats__label,[\s\S]*\.dasti-cv-stage-bar__pick-label\s*\{[\s\S]*display:\s*none;/,
     );
   });
 
