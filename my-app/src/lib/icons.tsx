@@ -29,6 +29,8 @@ import {
   FilePdf as PhFilePdf,
   FileText as PhFileText,
   FloppyDisk as PhFloppyDisk,
+  FolderOpen as PhFolderOpen,
+  FolderSimple as PhFolderSimple,
   IdentificationCard as PhIdentificationCard,
   Layout as PhLayout,
   Lightning as PhLightning,
@@ -162,6 +164,8 @@ export const FileText = withCompat(PhFileText);
 export const FileUser = withCompat(PhIdentificationCard);
 export const ReadCvLogo = withCompat(PhIdentificationCard);
 export const FloppyDisk = withCompat(PhFloppyDisk);
+export const FolderOpen = withCompat(PhFolderOpen);
+export const FolderSimple = withCompat(PhFolderSimple);
 export const FolderTree = withCompat(PhTreeView);
 export const GripHorizontal = withCompat(PhDotsSixVertical);
 export const Italic = withCompat(PhTextItalic);

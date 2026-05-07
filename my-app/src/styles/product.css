@@ -1827,6 +1827,9 @@ body,
 
 .app-topbar__context .ds-pill {
   height: 22px;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
   font-size: var(--tx);
 }
 

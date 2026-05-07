@@ -1,5 +1,13 @@
 import React from "react";
-import { ClipboardText, Eye, FilePdf, PenLine, ShareFat } from "@/lib/icons";
+import {
+  ClipboardText,
+  Eye,
+  FilePdf,
+  FolderOpen,
+  FolderSimple,
+  PenLine,
+  ShareFat,
+} from "@/lib/icons";
 import { Button, Menu, Pill, Sheet, ToneBadge } from "../ui";
 import type { CvToneChoice } from "./CvRail";
 
@@ -111,7 +119,12 @@ export function CvStageBar({
       label: importIssueCount > 0 ? "Resolve" : "Clear",
       action:
         importIssueCount > 0 ? (
-          <Button type="button" size="sm" variant="secondary" onClick={onOpenImportReview}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={onOpenImportReview}
+          >
             Resolve
           </Button>
         ) : undefined,
@@ -175,8 +188,8 @@ export function CvStageBar({
               : "Use standard export until trusted parsing metadata is available."
           }
         >
-          <span className="dasti-cv-ats__icon" aria-hidden="true">
-            {hasTrustedExport ? "OK" : "!"}
+          <span className="dasti-cv-ats__mark" aria-hidden="true">
+            ATS
           </span>
           <span className="dasti-cv-ats__label">
             {hasTrustedExport ? "ATS-ready" : "ATS review"}
@@ -220,19 +233,38 @@ export function CvStageBar({
         <Menu
           ariaLabel="Pick resume"
           align="end"
-          matchTriggerWidth
           menuClassName="dasti-cv-stage-bar__resume-menu"
           sections={resumeMenuSections}
           trigger={
             <button
               type="button"
-              className="ds-btn ds-btn--sm ds-btn--secondary dasti-cv-stage-bar__pick-resume"
+              className="dasti-cv-stage-bar__plain-action dasti-cv-stage-bar__pick-resume"
               disabled={exporting}
+              aria-label="Pick resume"
+              title="Pick resume"
+              data-toolbar-tooltip="Pick resume"
             >
-              Pick resume
-              <span aria-hidden="true">▾</span>
+              <span
+                className="dasti-cv-stage-bar__pick-icon dasti-cv-stage-bar__pick-icon--closed"
+                aria-hidden="true"
+              >
+                <FolderSimple size={15} strokeWidth={1.8} />
+              </span>
+              <span
+                className="dasti-cv-stage-bar__pick-icon dasti-cv-stage-bar__pick-icon--open"
+                aria-hidden="true"
+              >
+                <FolderOpen size={15} strokeWidth={1.8} />
+              </span>
+              <span className="dasti-cv-stage-bar__pick-label">
+                Pick resume
+              </span>
             </button>
           }
+        />
+        <span
+          className="dasti-cv-stage-bar__action-divider"
+          aria-hidden="true"
         />
         <Menu
           ariaLabel="Share CV"
@@ -253,7 +285,11 @@ export function CvStageBar({
               items: [
                 { id: "email", label: "Send by email", disabled: true },
                 { id: "copy-link", label: "Copy link", disabled: true },
-                { id: "preview-link", label: "Public preview link", disabled: true },
+                {
+                  id: "preview-link",
+                  label: "Public preview link",
+                  disabled: true,
+                },
               ],
             },
             {
@@ -278,7 +314,7 @@ export function CvStageBar({
           trigger={
             <button
               type="button"
-              className="dasti-icon-button dasti-cv-stage-bar__share"
+              className="dasti-icon-button dasti-cv-stage-bar__plain-action dasti-cv-stage-bar__share"
               aria-label="Share"
               title="Share CV"
               data-toolbar-tooltip="Share"
@@ -295,14 +331,24 @@ export function CvStageBar({
         description="Trust gate for export, share, and send. Each row must be cleared before the package can leave your hands."
         footer={
           <>
-            <Button type="button" variant="ghost" size="md" onClick={() => setSafeSendOpen(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="md"
+              onClick={() => setSafeSendOpen(false)}
+            >
               Cancel
             </Button>
             <span className="dasti-proposal-safe-send__footer-spacer" />
             <Button type="button" variant="secondary" size="md" disabled>
               Review match
             </Button>
-            <Button type="button" variant="primary" size="md" disabled={blocked}>
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              disabled={blocked}
+            >
               Continue to send
             </Button>
           </>
@@ -332,7 +378,11 @@ export function CvStageBar({
                 data-state={row.state}
               >
                 <span className="dasti-proposal-safe-send__mark">
-                  {row.state === "clear" ? "OK" : row.state === "danger" ? "x" : "!"}
+                  {row.state === "clear"
+                    ? "OK"
+                    : row.state === "danger"
+                      ? "x"
+                      : "!"}
                 </span>
                 <span className="dasti-proposal-safe-send__copy">
                   <strong>{row.title}</strong>
