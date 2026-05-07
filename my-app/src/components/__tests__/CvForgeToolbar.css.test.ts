@@ -133,13 +133,19 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-cv-skeleton-forge\s*\{[\s\S]*background:\s*transparent;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-cv-rail\s*\{[\s\S]*padding:\s*var\(--space-5\);/,
+      /\.dasti-cv-rail\s*\{[\s\S]*--cv-rail-row-active-bg:\s*var\(--sf1\);[\s\S]*padding:\s*var\(--space-5\);[\s\S]*border:\s*1px\s+solid\s+var\(--border-soft\);[\s\S]*border-radius:\s*var\(--r-surface,\s*var\(--radius-card\)\);[\s\S]*background:\s*var\(--sfr\);/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*1419px\)\s*\{[\s\S]*\.dasti-cv-rail\s*\{[\s\S]*max-height:\s*none;[\s\S]*position:\s*static;[\s\S]*padding:\s*var\(--space-5\);[\s\S]*border:\s*1px\s+solid\s+var\(--border-soft\);[\s\S]*border-radius:\s*var\(--r-surface,\s*var\(--radius-card\)\);[\s\S]*background:\s*var\(--sfr\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-cv-rail-tabs\s*\{[\s\S]*padding:\s*var\(--space-1\);[\s\S]*\.dasti-cv-rail-tabs button\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*min-block-size:\s*var\(--control-sm\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-cv-rail-tabs button\[data-active="true"\]\s*\{[\s\S]*background:\s*var\(--color-surface-raised\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-org-row\[data-active="true"\]\s*\{[\s\S]*border-color:\s*var\(--proposal-chrome-control-active-border,\s*var\(--ac\)\);[\s\S]*background:\s*var\(--proposal-chrome-control-active-bg,\s*var\(--cv-rail-row-active-bg\)\);[\s\S]*box-shadow:\s*none;/,
     );
     expect(cvForgeSource).toContain("CV_PAPER_VISUAL_INLINE_SIZE");
     expect(cvForgeSource).toContain('"--cv-paper-visual-inline-size"');
