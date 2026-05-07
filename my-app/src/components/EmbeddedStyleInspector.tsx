@@ -16,6 +16,10 @@ import {
   resolveVerbatiStyleBundleId,
   VERBATI_STYLE_BUNDLE_DEFINITIONS,
 } from "../features/verbati/styleBundles";
+import {
+  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  type ResumeTemplateId,
+} from "../lib/layout/resumeTemplates";
 import type {
   VerbatiLayoutPreset,
   VerbatiPalettePreset,
@@ -41,7 +45,7 @@ type EmbeddedStyleInspectorProps = {
   showCustomizeControl?: boolean;
   showPromptControl?: boolean;
   onSelectBundle: (bundleId: VerbatiStyleBundleId) => void;
-  onSelectLayout: (layout: VerbatiLayoutPreset) => void;
+  onSelectLayout: (layout: VerbatiLayoutPreset, resumeTemplateId?: ResumeTemplateId) => void;
   onSelectTypography: (typography: VerbatiTypographyPreset) => void;
   onSelectPalette: (palette: Exclude<VerbatiPalettePreset, "custom">) => void;
   onSelectCustomAccent?: (hex: string) => void;
@@ -160,6 +164,26 @@ export function EmbeddedStyleInspector({
       ) ?? VERBATI_TYPOGRAPHY_OPTIONS[0],
     [stylePreset.typography],
   );
+  const activeResumeTemplateId =
+    stylePreset.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID;
+  const isActiveLayoutOption = (option: (typeof VERBATI_LAYOUT_OPTIONS)[number]) =>
+    option.resumeTemplateId
+      ? option.resumeTemplateId === activeResumeTemplateId
+      : option.id === stylePreset.layout && !stylePreset.resumeTemplateId;
+  const resolveLayoutOptionTemplateId = (
+    option: (typeof VERBATI_LAYOUT_OPTIONS)[number],
+  ) =>
+    option.resumeTemplateId === WORKSHOP_RESUME_ONECOL_TEMPLATE_ID
+      ? undefined
+      : option.resumeTemplateId;
+  const selectLayoutOption = (option: (typeof VERBATI_LAYOUT_OPTIONS)[number]) => {
+    const resumeTemplateId = resolveLayoutOptionTemplateId(option);
+    if (resumeTemplateId) {
+      onSelectLayout(option.id, resumeTemplateId);
+      return;
+    }
+    onSelectLayout(option.id);
+  };
   const hasOpenDrawer = activeDrawer !== null || isColorPickerOpen;
   const isTitleOnlyCopy = copyMode === "title-only";
   const isDirectControlMode = controlMode === "direct";
@@ -329,14 +353,14 @@ export function EmbeddedStyleInspector({
               sections={[
                 {
                   items: VERBATI_LAYOUT_OPTIONS.map((option) => ({
-                    id: option.id,
+                    id: `${option.id}:${option.resumeTemplateId ?? "default"}`,
                     role: "menuitemradio",
-                    selected: option.id === stylePreset.layout,
+                    selected: isActiveLayoutOption(option),
                     disabled: readOnly,
                     label: option.name,
                     description: option.description,
                     icon: <Layout size={14} strokeWidth={1.8} />,
-                    onSelect: () => onSelectLayout(option.id),
+                    onSelect: () => selectLayoutOption(option),
                   })),
                 },
               ]}
@@ -572,10 +596,10 @@ export function EmbeddedStyleInspector({
                     </div>
                     <div className="dasti-resume-style-inspector__choice-list">
                       {VERBATI_LAYOUT_OPTIONS.map((option) => {
-                        const active = option.id === stylePreset.layout;
+                        const active = isActiveLayoutOption(option);
                         return (
                           <button
-                            key={option.id}
+                            key={`${option.id}:${option.resumeTemplateId ?? "default"}`}
                             type="button"
                             className={[
                               "dasti-proposal-chrome-option",
@@ -587,7 +611,7 @@ export function EmbeddedStyleInspector({
                               .filter(Boolean)
                               .join(" ")}
                             aria-pressed={active}
-                            onClick={() => onSelectLayout(option.id)}
+                            onClick={() => selectLayoutOption(option)}
                             disabled={readOnly}
                           >
                             <span

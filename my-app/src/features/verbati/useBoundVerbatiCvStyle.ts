@@ -35,6 +35,7 @@ export function useBoundVerbatiCvStyle({
     persistedStylePreset.accentHex,
     persistedStylePreset.layout,
     persistedStylePreset.palette,
+    persistedStylePreset.resumeTemplateId,
     persistedStylePreset.typography,
   ]);
 

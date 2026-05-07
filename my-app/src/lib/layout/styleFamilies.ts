@@ -3,7 +3,10 @@ import type {
   StyleFamilyId,
   VerbatiStylePreset,
 } from "../../features/verbati/types";
-import type { ResumeTemplateId } from "./resumeTemplates";
+import {
+  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  type ResumeTemplateId,
+} from "./resumeTemplates";
 
 export type StyleFamilyDefinition = {
   id: StyleFamilyId;
@@ -77,7 +80,7 @@ export const STYLE_FAMILY_DEFINITIONS: readonly StyleFamilyDefinition[] = [
     description: "Family identity scaffold for the workshop paired templates.",
     defaultTypography: "geist-baskervville",
     defaultPalette: "sauge",
-    resumeTemplateId: "workshop_resume_onecol_ats",
+    resumeTemplateId: WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
     proposalTemplateId: "workshop_proposal_margin",
   },
 ] as const;

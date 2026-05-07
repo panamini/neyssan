@@ -252,7 +252,7 @@ describe("SettingsPage preview controls", () => {
     });
   });
 
-  it("shows only auto and workshop style cards", () => {
+  it("shows auto plus both Workshop style cards", () => {
     const { container } = renderSettings();
     const previewBadge = () =>
       container.querySelector(".dasti-settings-hero-preview__style-badge");
@@ -262,7 +262,7 @@ describe("SettingsPage preview controls", () => {
     const uniqueStyleCardLabels = Array.from(new Set(styleCardLabels));
 
     expect(previewBadge()).toHaveTextContent("Workshop");
-    expect(uniqueStyleCardLabels).toEqual(["Auto", "Workshop"]);
+    expect(uniqueStyleCardLabels).toEqual(["Auto", "Workshop", "Workshop 2-col"]);
   });
 
   it("saves workshop as canonical verbatiStyle on the preset slot", async () => {
@@ -298,6 +298,34 @@ describe("SettingsPage preview controls", () => {
     expect(previewBadge()).toHaveTextContent("Workshop");
   });
 
+  it("saves the two-column Workshop template id from settings", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    const workshopTwoColumnButton = screen
+      .getAllByRole("button", { name: /Workshop 2-col/ })
+      .find((element) => element.className.includes("layout-card"));
+
+    expect(workshopTwoColumnButton).toBeTruthy();
+
+    await user.click(workshopTwoColumnButton!);
+
+    await waitFor(() => {
+      expect(savePresetMock).toHaveBeenCalled();
+    });
+
+    expect(getLastSavePresetPayload()).toMatchObject({
+      slot: 1,
+      preset: expect.objectContaining({
+        styleChoice: "balanced",
+        verbatiStyle: expect.objectContaining({
+          familyId: "workshop",
+          layout: "workshop",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        }),
+      }),
+    });
+  });
+
   it("renders the layout style cards for the available presets", () => {
     const { container } = renderSettings();
 
@@ -305,7 +333,7 @@ describe("SettingsPage preview controls", () => {
       Array.from(container.querySelectorAll(".layout-card__name")).map(
         (element) => element.textContent,
       ),
-    ).toEqual(["Auto", "Workshop"]);
+    ).toEqual(["Auto", "Workshop", "Workshop 2-col"]);
   });
 
   it("updates the hero preview tilt when the pointer moves", async () => {

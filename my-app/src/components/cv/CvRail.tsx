@@ -43,6 +43,10 @@ import {
   type VerbatiFontPairId,
 } from "../../features/verbati/fontCatalog";
 import { PROPOSAL_PALETTE_OPTIONS } from "../../lib/proposal-style-display";
+import {
+  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
+} from "../../lib/layout/resumeTemplates";
 
 export type CvRailTab = "sections" | "ai" | "style";
 export type CvToneChoice = "warm" | "formal" | "natural";
@@ -106,7 +110,7 @@ type CvRailProps = {
   onAcceptListAiSuggestion: (value: string) => void;
   onDismissListAiSuggestion: (value: string) => void;
   onAddSection: (sectionKind: CvAddSectionKind) => void;
-  onSelectTemplate: (template: "editorial" | "minimal" | "classic") => void;
+  onSelectTemplate: (template: "workshop-onecol" | "workshop-twocol" | "editorial" | "minimal" | "classic") => void;
   onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
   onSelectAccent: (accent: CvAccentChoice) => void;
   onNewCv: () => void;
@@ -919,14 +923,57 @@ export function CvRail({
             </a>
             .
           </div>
+          <div className="dasti-cv-rail-label">Style</div>
+          <Menu
+            ariaLabel="CV style options"
+            matchTriggerWidth
+            sections={[
+              {
+                items: [
+                  {
+                    id: "workshop",
+                    role: "menuitemradio",
+                    selected: stylePreset.layout === "workshop",
+                    label: "Workshop ATS",
+                    description: "Clean Workshop document style.",
+                    onSelect: () => onSelectTemplate("workshop-onecol"),
+                  },
+                ],
+              },
+            ]}
+            trigger={
+              <button type="button" className="dasti-cv-style-menu-trigger">
+                <span>Workshop ATS</span>
+                <ChevronDown size={14} strokeWidth={1.8} />
+              </button>
+            }
+          />
           <div className="dasti-cv-rail-label">Template</div>
           <div className="dasti-cv-style-pills">
             <button
               type="button"
-              data-selected={stylePreset.layout === "workshop" ? "true" : undefined}
-              onClick={() => onSelectTemplate("editorial")}
+              data-selected={
+                stylePreset.layout === "workshop" &&
+                (stylePreset.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) ===
+                  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID
+                  ? "true"
+                  : undefined
+              }
+              onClick={() => onSelectTemplate("workshop-onecol")}
             >
               Workshop
+            </button>
+            <button
+              type="button"
+              data-selected={
+                stylePreset.layout === "workshop" &&
+                stylePreset.resumeTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+                  ? "true"
+                  : undefined
+              }
+              onClick={() => onSelectTemplate("workshop-twocol")}
+            >
+              Workshop 2-col
             </button>
           </div>
           <div className="dasti-cv-rail-label">Font pair</div>

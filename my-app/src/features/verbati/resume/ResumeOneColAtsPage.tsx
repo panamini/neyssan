@@ -1203,8 +1203,6 @@ function renderProfileFragment(args: {
         display: "grid",
         gap: "var(--header-row-gap)",
         paddingBottom: "var(--header-bottom-padding)",
-        borderBottom:
-          "0.3mm solid color-mix(in srgb, var(--color-accent) 42%, transparent)",
       }}
     >
       <div style={{ display: "grid", gap: "1.5mm" }}>
@@ -2526,7 +2524,7 @@ function renderFragmentContent(args: {
   }
 }
 
-function renderSectionFragment(args: {
+export function renderSectionFragment(args: {
   fragment: WorkshopResumeCommittedFragment;
   data: ResumeData;
   activeTarget?: ResumeActiveTarget | null;

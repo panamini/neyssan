@@ -2,9 +2,7 @@ import React from "react";
 
 import { buildVerbatiThemeVars } from "../features/verbati/style";
 import ResumePage from "../features/verbati/resume/ResumePage";
-import ResumeTemplateRenderer, {
-  WORKSHOP_TEMPLATE_RENDERER_ID,
-} from "../features/verbati/resume/ResumeTemplateRenderer";
+import ResumeTemplateRenderer from "../features/verbati/resume/ResumeTemplateRenderer";
 import type { DocumentStageLayout } from "../hooks/use-document-stage-layout";
 import {
   A4_PAGE_HEIGHT_PX,
@@ -13,6 +11,7 @@ import {
 import {
   type ResumePrintRoutePayload,
 } from "../lib/document-export-models";
+import { isWorkshopResumeTemplateId } from "../lib/layout/resumeTemplates";
 import {
   collectResumeFontDebugSnapshot,
   type ResumeFontDebugSnapshot,
@@ -115,6 +114,15 @@ function isResumePrintRoutePayload(
   );
 }
 
+function workshopPrintPayloadHasCommittedPages(
+  payload: ResumePrintRoutePayload,
+): boolean {
+  return (
+    !isWorkshopResumeTemplateId(payload.resumeTemplateId) ||
+    (Array.isArray(payload.committedPages) && payload.committedPages.length > 0)
+  );
+}
+
 function readPrintPayload(): ResumePrintRoutePayload | null {
   if (typeof window === "undefined") {
     return null;
@@ -146,6 +154,15 @@ export function ResumePrintPage(): JSX.Element {
         "Resume print payload is missing or invalid.",
         undefined,
         undefined,
+      );
+      return undefined;
+    }
+
+    if (!workshopPrintPayloadHasCommittedPages(payload)) {
+      setPrintStatus(
+        "error",
+        true,
+        "Committed workshop print pages are required for Workshop resume templates.",
       );
       return undefined;
     }
@@ -208,6 +225,24 @@ export function ResumePrintPage(): JSX.Element {
     );
   }
 
+  if (!workshopPrintPayloadHasCommittedPages(payload)) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          padding: "24px",
+          background: "#f7f4ec",
+          color: "#1f1d1a",
+          fontFamily: '"Source Sans 3", "Helvetica Neue", Helvetica, sans-serif',
+        }}
+      >
+        Committed workshop print pages are required.
+      </main>
+    );
+  }
+
   return (
     <main
       ref={routeRootRef}
@@ -218,7 +253,7 @@ export function ResumePrintPage(): JSX.Element {
       data-renderer-variant={payload.rendererVariantId}
       style={themeVars}
     >
-      {payload.resumeTemplateId === WORKSHOP_TEMPLATE_RENDERER_ID ? (
+      {isWorkshopResumeTemplateId(payload.resumeTemplateId) ? (
         <ResumeTemplateRenderer
           data={payload.resumeData}
           stylePreset={payload.stylePreset}

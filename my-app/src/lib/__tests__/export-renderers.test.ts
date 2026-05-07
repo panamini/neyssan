@@ -712,6 +712,48 @@ describe("export-renderers", () => {
     expect(styledDocument.querySelector(".resume-styled-page--workshop")).toBeNull();
   });
 
+  it("renders the two-column workshop styled PDF shell from committed pages", () => {
+    const currentCv = generateCvTemplate("Workshop two-column export");
+    currentCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+      resumeTemplateId: "workshop_resume_twocol_ats",
+    };
+
+    const exportSource = buildResumeExportSource({
+      currentCv,
+      stylePreset: currentCv.metadata.verbatiStyle,
+    });
+
+    expect(exportSource?.resumeTemplateId).toBe("workshop_resume_twocol_ats");
+    const styledDocument = parseExportHtml(
+      renderResumeStyledExportDocument({
+        data: exportSource!,
+        stylePreset: currentCv.metadata.verbatiStyle,
+      }),
+    );
+    const styledCss = getInlineStyles(styledDocument);
+
+    expect(
+      styledDocument.querySelector('[data-resume-template="workshop_resume_twocol_ats"]'),
+    ).toBeTruthy();
+    expect(styledDocument.querySelector(".resume-styled-page--workshop-twocol")).toBeTruthy();
+    expect(styledDocument.querySelector(".resume-workshop-twocol-sidebar")).toBeTruthy();
+    expect(styledDocument.querySelector(".resume-workshop-twocol-main")).toBeTruthy();
+    expect(styledCss).toContain("--page-gutter: 12mm;");
+    expect(styledCss).toContain("--page-sidebar: 45mm;");
+    expect(styledCss).toContain("--page-main: 100mm;");
+
+    const atsDocument = parseExportHtml(
+      renderResumeAtsExportDocument(exportSource!, currentCv.metadata.verbatiStyle),
+    );
+    expect(atsDocument.querySelector(".resume-styled-page--workshop-twocol")).toBeNull();
+    expect(atsDocument.querySelector(".robial-body")).toBeNull();
+    expect(atsDocument.querySelector(".resume-main-stack")).toBeTruthy();
+  });
+
   it("renders the dense first workshop experience entry intact in export output when the committed planner no longer splits it", () => {
     const workshopStyle = {
       familyId: "workshop",

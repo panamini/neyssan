@@ -10,7 +10,6 @@ import { useDocumentViewportCentering } from "../../hooks/use-document-viewport-
 import ResumePage from "./resume/ResumePage";
 import ResumeTemplateRenderer, {
   RESUME_TEMPLATE_PAGE_GAP_PX,
-  WORKSHOP_TEMPLATE_RENDERER_ID,
   getResumeTemplateCanvasHeight,
 } from "./resume/ResumeTemplateRenderer";
 import type { ResumeInlineEditing } from "./resume/InlineEditableText";
@@ -44,7 +43,10 @@ import {
 } from "../../lib/document-export-debug";
 import { collectResumeFontDebugSnapshot } from "../../lib/resume-font-debug";
 import type { VerbatiLayoutPreset, VerbatiStylePreset } from "./types";
-import { getResumeTemplateDefinition } from "../../lib/layout/resumeTemplates";
+import {
+  getResumeTemplateDefinition,
+  isWorkshopResumeTemplateId,
+} from "../../lib/layout/resumeTemplates";
 import type { ResumePreviewMetrics } from "./resume/ResumePage";
 import type {
   ResumePaperAiState,
@@ -348,7 +350,7 @@ export function VerbatiResumePreview({
   }, [fitPageScale, isWorkspaceMode, workspaceViewMode, zoomIndex]);
   const usesWorkshopTemplateRenderer =
     !compareLayouts &&
-    resolvedResumeTemplateId === WORKSHOP_TEMPLATE_RENDERER_ID &&
+    isWorkshopResumeTemplateId(resolvedResumeTemplateId) &&
     resolvedTemplateDefinition.supportsPlanner;
   const visiblePageCount = usesWorkshopTemplateRenderer
     ? stableWorkshopPageCount

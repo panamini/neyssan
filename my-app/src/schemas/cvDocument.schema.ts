@@ -343,6 +343,7 @@ const _CvMetadataBase = z.object({
       typography: z.string().optional(),
       palette: z.string().optional(),
       accentHex: z.string().optional(),
+      resumeTemplateId: z.string().optional(),
     })
     .strict()
     .optional(),

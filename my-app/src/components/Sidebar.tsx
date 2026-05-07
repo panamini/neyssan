@@ -32,8 +32,7 @@ import {
   readStoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { useThemeMode } from "../lib/theme-mode";
-import collapsedLogoLightModeUrl from "../assets/logo/favicon.png";
-import collapsedLogoDarkModeUrl from "../assets/logo/d6efcd7d-91fb-4cc5-99dd-2a869964e24c.png";
+import collapsedLogoUrl from "../assets/logo/two-weeks-logo.png";
 
 const MAX_RECENT_ITEMS = 3;
 const MAX_MIXED_RECENT_ITEMS = 4;
@@ -292,8 +291,6 @@ export const Sidebar: React.FC = () => {
     [],
   );
   const params = React.useMemo(() => new URLSearchParams(search), [search]);
-  const collapsedLogoUrl =
-    themeMode === "dark" ? collapsedLogoDarkModeUrl : collapsedLogoLightModeUrl;
   const proposalView =
     params.get("view") === "saved" || Boolean(params.get("id"))
       ? "saved"
@@ -906,12 +903,17 @@ export const Sidebar: React.FC = () => {
         >
           <span className="sb-toggle__label" aria-hidden="true">
             {sidebarCollapsed ? (
-              <img
-                className="sb-toggle__collapsed-logo"
-                src={collapsedLogoUrl}
-                alt=""
-                aria-hidden="true"
-              />
+              <span className="sb-toggle__collapsed-logo-shell">
+                <img
+                  className={clsx(
+                    "sb-toggle__collapsed-logo",
+                    themeMode === "dark" && "sb-toggle__collapsed-logo--dark",
+                  )}
+                  src={collapsedLogoUrl}
+                  alt=""
+                  aria-hidden="true"
+                />
+              </span>
             ) : (
               <>
                 two weeks
