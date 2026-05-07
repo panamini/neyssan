@@ -1,0 +1,78 @@
+{
+  "id": "resp_0bc015bcf02d772e0069fb8d1a3474819b8fcf1ccd862c3d1d",
+  "object": "response",
+  "created_at": 1778093338,
+  "status": "completed",
+  "background": false,
+  "billing": {
+    "payer": "developer"
+  },
+  "completed_at": 1778093344,
+  "error": null,
+  "frequency_penalty": 0,
+  "incomplete_details": null,
+  "instructions": null,
+  "max_output_tokens": 900,
+  "max_tool_calls": null,
+  "model": "gpt-5.5-2026-04-23",
+  "moderation": null,
+  "output": [
+    {
+      "id": "rs_0bc015bcf02d772e0069fb8d1b2140819b9b20ab080f182610",
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "id": "msg_0bc015bcf02d772e0069fb8d1bc01c819bab117a50103a4961",
+      "type": "message",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "Dear Hiring Manager,\n\nI’m excited to apply for the Senior Frontend Engineer role. My background is centered on React, TypeScript, design systems, and product-facing web applications, and I’m drawn to the opportunity to help lead frontend development for a customer-facing SaaS platform.\n\nAt BrightLayer, I led a design system migration used across four product squads, which gave me hands-on experience creating reusable UI patterns that support consistency and speed across teams. I also reduced page load time by 28 percent through bundle and rendering optimizations, and I enjoy the kind of performance work that makes a product feel noticeably better for customers.\n\nPreviously, as a Product Engineer at Northline Labs, I built experimentation dashboards for product and growth teams and partnered directly with design on customer-facing workflow improvements. That collaboration shaped how I approach frontend engineering: balancing technical quality with usability, iteration, and clear communication across product, design, and engineering.\n\nI would bring a practical, product-minded frontend perspective to your team, along with experience in React, TypeScript, design systems, performance optimization, and A/B testing. I’d be glad to contribute to reusable UI systems, thoughtful experimentation, and a healthy engineering culture where junior engineers can grow.\n\nSincerely,  \nAlex Martin"
+        }
+      ],
+      "phase": "final_answer",
+      "role": "assistant"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "presence_penalty": 0,
+  "previous_response_id": null,
+  "prompt_cache_key": null,
+  "prompt_cache_retention": "24h",
+  "reasoning": {
+    "effort": "low",
+    "summary": null
+  },
+  "safety_identifier": null,
+  "service_tier": "default",
+  "store": true,
+  "temperature": 1,
+  "text": {
+    "format": {
+      "type": "text"
+    },
+    "verbosity": "medium"
+  },
+  "tool_choice": "auto",
+  "tools": [],
+  "top_logprobs": 0,
+  "top_p": 0.98,
+  "truncation": "disabled",
+  "usage": {
+    "input_tokens": 526,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 280,
+    "output_tokens_details": {
+      "reasoning_tokens": 25
+    },
+    "total_tokens": 806
+  },
+  "user": null,
+  "metadata": {}
+}

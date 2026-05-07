@@ -1,0 +1,32 @@
+{
+  "id": "093c2f39-dd44-453f-9685-63f309322899",
+  "object": "chat.completion",
+  "created": 1778093443,
+  "model": "deepseek-v4-flash",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Dear Hiring Manager,\n\nI am writing to express my strong interest in the Senior Frontend Engineer role. My career has been centered on React and TypeScript, with a particular focus on building scalable, customer-facing SaaS applications. At BrightLayer, I led a design system migration that served four product squads—an experience that directly aligns with your need for reusable UI systems across a platform. I thrive in environments where frontend engineering intersects with product strategy and user experience.\n\nPerformance optimization is a core part of my approach. At BrightLayer, I reduced page load time by 28 percent through targeted bundle and rendering improvements. I also bring hands-on experience with experimentation and analytics: at Northline Labs, I built dashboards that product and growth teams used to track tests, and I iterated on UI changes that improved signup conversion by 11 percent. I understand how instrumenting the frontend can directly fuel product decisions.\n\nCollaboration with design and product has been a constant in my work. At Northline Labs, I partnered directly with design teams to refine customer-facing workflows, balancing technical feasibility with user needs. I enjoy the cross-functional rhythm of aligning on requirements, prototyping, and shipping polished interfaces.\n\nI would be excited to bring my experience in React, TypeScript, design systems, and performance tuning to your engineering team. Thank you for your consideration.\n\nAlex Martin",
+        "reasoning_content": "We need to write a cover letter for Alex Martin for Senior Frontend Engineer role. Use candidate background only. No invention. Salutation: Dear Hiring Manager. 3-4 short paragraphs, total 180-220 words. First person. End with simple closing and name.\n\nCandidate: Alex Martin. Skills: React, TypeScript, Design Systems, Performance Optimization, A/B Testing. Experience: BrightLayer - led design system migration across 4 squads, reduced page load time 28%. Northline Labs - built experimentation dashboards, partnered with design on customer-facing workflows. Standout: improved signup conversion 11% after iterative UI experiments.\n\nJob description mentions leading React/TS development for SaaS platform, building reusable UI systems, improving performance, collaborating with product/design, mentoring junior engineers, analytics instrumentation and experimentation a plus.\n\nWe can align: design system migration leadership, performance optimization, cross-functional with design, experimentation dashboards (ties to analytics/experimentation plus). Also mention mentoring? Background doesn't include mentoring explicitly, but job description mentions mentoring. We cannot claim mentoring if not in background. But we can say \"I enjoy mentoring\" only if background shows? Background doesn't mention mentoring. Avoid. Instead focus on what is in background. Perhaps mention working across squads implies collaboration. But don't invent. Stick to facts.\n\nPlan:\nPara1: Express interest, mention React/TypeScript, design systems, SaaS platform fit. Reference leading design system migration at BrightLayer.\n\nPara2: Performance optimization (28% reduction) and experimentation work (dashboards, conversion improvement). Tie to product growth.\n\nPara3: Cross-functional collaboration with design and product at Northline Labs. Enthusiasm for partnering with product and design teams.\n\nPara4: Closing - eager to bring experience to role, thanks. Sign off: Alex Martin.\n\nKeep tone neutral, medium creativity. Avoid bullet points. Natural."
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 531,
+    "completion_tokens": 661,
+    "total_tokens": 1192,
+    "prompt_tokens_details": {
+      "cached_tokens": 512
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 387
+    },
+    "prompt_cache_hit_tokens": 512,
+    "prompt_cache_miss_tokens": 19
+  },
+  "system_fingerprint": "fp_058df29938_prod0820_fp8_kvcache_20260402"
+}

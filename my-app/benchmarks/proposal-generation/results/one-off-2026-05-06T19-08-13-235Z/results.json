@@ -1,0 +1,154 @@
+{
+  "runId": "2026-05-06T19-08-13-235Z",
+  "case": {
+    "id": "employment-strong-frontend",
+    "label": "Strong employment match: senior frontend engineer",
+    "jobTitle": "Senior Frontend Engineer",
+    "jobDescription": "We are hiring a Senior Frontend Engineer to lead React and TypeScript development for a customer-facing SaaS platform. The role includes building reusable UI systems, improving performance, collaborating with product and design, and mentoring junior engineers. Experience with analytics instrumentation and experimentation is a plus.",
+    "proposalType": "cover_letter",
+    "formalityLevel": "neutral",
+    "creativity": "medium",
+    "personalizationMode": "default",
+    "personalizationRichness": "rich",
+    "candidateContext": {
+      "name": "Alex Martin",
+      "summary": "Frontend engineer focused on React, TypeScript, design systems, and product-facing web apps.",
+      "desiredPosition": "Senior Frontend Engineer",
+      "topSkills": [
+        "React",
+        "TypeScript",
+        "Design Systems",
+        "Performance Optimization",
+        "A/B Testing"
+      ],
+      "recentExperience": [
+        {
+          "company": "BrightLayer",
+          "position": "Frontend Engineer",
+          "highlights": [
+            "Led a design system migration used across 4 product squads.",
+            "Reduced page load time by 28 percent through bundle and rendering optimizations."
+          ]
+        },
+        {
+          "company": "Northline Labs",
+          "position": "Product Engineer",
+          "highlights": [
+            "Built experimentation dashboards used by product and growth teams.",
+            "Partnered directly with design on customer-facing workflow improvements."
+          ]
+        }
+      ],
+      "standoutAchievements": [
+        "Improved signup conversion by 11 percent after iterative UI experiments."
+      ]
+    },
+    "expectedGrounding": [
+      "Design system migration leadership",
+      "React and TypeScript experience",
+      "Performance optimization with a 28 percent improvement",
+      "Cross-functional work with design and product"
+    ],
+    "forbiddenClaims": [
+      "Do not claim staff-level leadership or people management beyond mentoring.",
+      "Do not invent backend ownership or mobile development."
+    ],
+    "notes": "Should feel confident and concrete without overstating scope."
+  },
+  "prompt": "Write a tailored employment cover letter for \"Senior Frontend Engineer\". Job description: We are hiring a Senior Frontend Engineer to lead React and TypeScript development for a customer-facing SaaS platform. The role includes building reusable UI systems, improving performance, collaborating with product and design, and mentoring junior engineers. Experience with analytics instrumentation and experimentation is a plus.. Output only the letter body. Start with a salutation line such as: Dear Hiring Manager, Write in first person. Write 3 to 4 short paragraphs. Keep the total length around 180 to 220 words. End with a simple professional closing and the candidate name on the final line. Do not use headings, bullet points, tables, subject lines, signature blocks, or postal/contact header lines. Keep it natural, specific, and human. Use the candidate background as the only source of claims about the candidate. Every qualification, achievement, or strength you mention must be grounded in the candidate background. Never treat the job description as evidence about the candidate. Do not invent employers, software tools, certifications, years of experience, measurable outcomes, degrees, or side projects. If an important requirement is missing from the candidate background, do not imply that the candidate already has it. Prefer fewer claims over invented claims. Use \"neutral\" formality and \"medium\" creativity only as tone guidance.\n\nCandidate background for personalization:\n- Name: Alex Martin\n- Professional summary: Frontend engineer focused on React, TypeScript, design systems, and product-facing web apps.\n- Target role / headline: Senior Frontend Engineer\n- Core skills: React, TypeScript, Design Systems, Performance Optimization, A/B Testing\n- Recent experience:\n  - Frontend Engineer at BrightLayer: Led a design system migration used across 4 product squads.; Reduced page load time by 28 percent through bundle and rendering optimizations.\n  - Product Engineer at Northline Labs: Built experimentation dashboards used by product and growth teams.; Partnered directly with design on customer-facing workflow improvements.\n- Standout achievements: Improved signup conversion by 11 percent after iterative UI experiments.\nUse this background only to tailor tone and relevance.\nDo not invent employers, achievements, years, or technical experience.\n\nGrounding priorities:\n- Design system migration leadership\n- React and TypeScript experience\n- Performance optimization with a 28 percent improvement\n- Cross-functional work with design and product\n\nForbidden claims:\n- Do not claim staff-level leadership or people management beyond mentoring.\n- Do not invent backend ownership or mobile development.\n\nCase notes: Should feel confident and concrete without overstating scope.",
+  "models": [
+    {
+      "id": "qwen-plus",
+      "provider": "qwen",
+      "model": "qwen3.6-plus"
+    },
+    {
+      "id": "qwen-flash",
+      "provider": "qwen",
+      "model": "qwen3.6-flash"
+    },
+    {
+      "id": "gpt-5.5",
+      "provider": "openai",
+      "model": "gpt-5.5"
+    },
+    {
+      "id": "mistral-large",
+      "provider": "mistral",
+      "model": "mistral-large-latest"
+    }
+  ],
+  "results": [
+    {
+      "status": "ok",
+      "id": "qwen-plus",
+      "provider": "qwen",
+      "model": "qwen3.6-plus",
+      "latencyMs": 88959,
+      "outputText": "Dear Hiring Manager,\n\nI am writing to express my interest in the Senior Frontend Engineer position. My background centers on building product-facing web applications with React and TypeScript, with a strong focus on scalable architecture and user experience. At BrightLayer, I led a comprehensive design system migration that unified component libraries across four product squads, establishing a consistent foundation for rapid feature development.\n\nBeyond component architecture, I prioritize measurable performance improvements and data-driven iteration. I reduced page load times by twenty-eight percent through targeted bundle and rendering optimizations, directly enhancing the customer experience. At Northline Labs, I partnered closely with design and product teams to refine customer-facing workflows and built internal experimentation dashboards that empowered growth teams to track key metrics.\n\nThrough iterative UI experiments, I helped improve signup conversion by eleven percent, demonstrating how thoughtful frontend engineering directly impacts business outcomes. I am eager to bring this blend of system design, performance tuning, and cross-functional collaboration to your SaaS platform. Thank you for considering my application. I look forward to discussing how my experience aligns with your team’s goals.\n\nSincerely,\nAlex Martin",
+      "usage": {
+        "prompt_tokens": 547,
+        "total_tokens": 5400,
+        "completion_tokens": 4853,
+        "completion_tokens_details": {
+          "reasoning_tokens": 4625
+        }
+      },
+      "rawPath": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/my-app/benchmarks/proposal-generation/results/one-off-2026-05-06T19-08-13-235Z/raw/employment-strong-frontend__qwen-plus.json"
+    },
+    {
+      "status": "ok",
+      "id": "qwen-flash",
+      "provider": "qwen",
+      "model": "qwen3.6-flash",
+      "latencyMs": 32811,
+      "outputText": "Dear Hiring Manager,\n\nI am writing to express my interest in the Senior Frontend Engineer position. As a frontend engineer focused on React, TypeScript, and product-facing web applications, I have spent my career building scalable interfaces that balance user experience with engineering rigor. Your emphasis on leading development for a customer-facing SaaS platform aligns closely with my background in shipping reliable, high-impact web products.\n\nAt BrightLayer, I led a comprehensive design system migration that standardized components across four product squads, ensuring consistency while accelerating feature delivery. I also prioritized performance, reducing page load times by 28 percent through targeted bundle and rendering optimizations. These efforts required deep familiarity with React and TypeScript, as well as a disciplined approach to component architecture and code maintainability.\n\nMy work consistently bridges engineering, product, and design. During my time at Northline Labs, I built experimentation dashboards used by product and growth teams, and partnered directly with designers to refine customer-facing workflows. By running iterative UI experiments, I helped improve signup conversion by 11 percent. I am eager to bring this same collaborative, data-informed mindset to your team as we continue refining the platform and driving measurable product outcomes.\n\nThank you for your time and consideration.\n\nSincerely,\nAlex Martin",
+      "usage": {
+        "prompt_tokens": 547,
+        "total_tokens": 4354,
+        "completion_tokens": 3807,
+        "completion_tokens_details": {
+          "reasoning_tokens": 3545
+        }
+      },
+      "rawPath": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/my-app/benchmarks/proposal-generation/results/one-off-2026-05-06T19-08-13-235Z/raw/employment-strong-frontend__qwen-flash.json"
+    },
+    {
+      "status": "ok",
+      "id": "gpt-5.5",
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "latencyMs": 6263,
+      "outputText": "Dear Hiring Manager,\n\nI’m excited to apply for the Senior Frontend Engineer role. My background is centered on React, TypeScript, design systems, and product-facing web applications, and I’m especially drawn to work that connects strong frontend architecture with a polished customer experience.\n\nAt BrightLayer, I led a design system migration used across four product squads, which gave me hands-on experience creating reusable UI foundations that support consistency and faster product development. I also improved page load time by 28 percent through bundle and rendering optimizations, an area I enjoy because it directly affects how users experience the product.\n\nIn my previous role at Northline Labs, I built experimentation dashboards for product and growth teams and partnered directly with design on customer-facing workflow improvements. I also helped improve signup conversion by 11 percent through iterative UI experiments, which shaped the way I think about frontend work: not just as implementation, but as a continuous loop between user behavior, design intent, and product goals.\n\nI’d be glad to bring that mix of React and TypeScript depth, design system experience, performance focus, and cross-functional collaboration to your SaaS platform. Thank you for considering my application.\n\nBest regards,  \nAlex Martin",
+      "usage": {
+        "input_tokens": 526,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens": 243,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 769
+      },
+      "rawPath": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/my-app/benchmarks/proposal-generation/results/one-off-2026-05-06T19-08-13-235Z/raw/employment-strong-frontend__gpt-5.5.json"
+    },
+    {
+      "status": "ok",
+      "id": "mistral-large",
+      "provider": "mistral",
+      "model": "mistral-large-latest",
+      "latencyMs": 6112,
+      "outputText": "Dear Hiring Manager,\n\nI’m excited to apply for the Senior Frontend Engineer role. My work at BrightLayer and Northline Labs has centered on React, TypeScript, and building scalable UI systems—exactly the focus your team needs for a customer-facing SaaS platform. Leading the migration of BrightLayer’s design system across four product squads gave me firsthand experience in creating reusable components that balance consistency with flexibility, while reducing page load time by 28% through targeted bundle and rendering optimizations.\n\nAt Northline Labs, I partnered closely with design and product teams to refine customer-facing workflows, including an experimentation dashboard that helped growth teams test and iterate on key features. That collaboration led to an 11% improvement in signup conversion after a series of UI experiments, reinforcing how small, data-driven changes can drive meaningful impact. I enjoy bridging the gap between technical execution and product goals, and I’d bring that same mindset to your platform.\n\nBeyond coding, I take pride in mentoring junior engineers, whether through code reviews or sharing best practices for performance and maintainability. I’d love to discuss how my experience in design systems, React, and cross-functional collaboration could support your team’s goals. Thank you for your time and consideration.\n\nBest regards,\nAlex Martin",
+      "usage": {
+        "prompt_tokens": 542,
+        "total_tokens": 801,
+        "completion_tokens": 259,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        }
+      },
+      "rawPath": "/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan/my-app/benchmarks/proposal-generation/results/one-off-2026-05-06T19-08-13-235Z/raw/employment-strong-frontend__mistral-large.json"
+    }
+  ]
+}
