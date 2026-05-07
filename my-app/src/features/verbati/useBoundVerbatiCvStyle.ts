@@ -50,6 +50,10 @@ export function useBoundVerbatiCvStyle({
       return;
     }
 
+    if (typeof persistStyle !== "function") {
+      return;
+    }
+
     const timeoutId = window.setTimeout(() => {
       void persistStyle(canonicalStylePreset).catch((error) => {
         console.error(`${logPrefix} Failed to persist style preset`, error);

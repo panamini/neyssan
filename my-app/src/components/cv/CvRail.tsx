@@ -110,6 +110,8 @@ type CvRailProps = {
   onAcceptListAiSuggestion: (value: string) => void;
   onDismissListAiSuggestion: (value: string) => void;
   onAddSection: (sectionKind: CvAddSectionKind) => void;
+  selectedStyleSlot: 1 | 2 | 3 | null;
+  onSelectStyleSlot: (slot: 1 | 2 | 3) => void;
   onSelectTemplate: (template: "workshop-onecol" | "workshop-twocol" | "editorial" | "minimal" | "classic") => void;
   onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
   onSelectAccent: (accent: CvAccentChoice) => void;
@@ -472,6 +474,8 @@ export function CvRail({
   onAcceptListAiSuggestion,
   onDismissListAiSuggestion,
   onAddSection,
+  selectedStyleSlot,
+  onSelectStyleSlot,
   onSelectTemplate,
   onSelectFontPair,
   onSelectAccent,
@@ -924,30 +928,19 @@ export function CvRail({
             .
           </div>
           <div className="dasti-cv-rail-label">Style</div>
-          <Menu
-            ariaLabel="CV style options"
-            matchTriggerWidth
-            sections={[
-              {
-                items: [
-                  {
-                    id: "workshop",
-                    role: "menuitemradio",
-                    selected: stylePreset.layout === "workshop",
-                    label: "Workshop ATS",
-                    description: "Clean Workshop document style.",
-                    onSelect: () => onSelectTemplate("workshop-onecol"),
-                  },
-                ],
-              },
-            ]}
-            trigger={
-              <button type="button" className="dasti-cv-style-menu-trigger">
-                <span>Workshop ATS</span>
-                <ChevronDown size={14} strokeWidth={1.8} />
+          <div className="dasti-cv-style-pills" aria-label="CV style presets">
+            {([1, 2, 3] as const).map((slot) => (
+              <button
+                key={slot}
+                type="button"
+                data-selected={selectedStyleSlot === slot ? "true" : undefined}
+                aria-pressed={selectedStyleSlot === slot}
+                onClick={() => onSelectStyleSlot(slot)}
+              >
+                {`Style ${slot}`}
               </button>
-            }
-          />
+            ))}
+          </div>
           <div className="dasti-cv-rail-label">Template</div>
           <div className="dasti-cv-style-pills">
             <button
@@ -958,6 +951,11 @@ export function CvRail({
                   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID
                   ? "true"
                   : undefined
+              }
+              aria-pressed={
+                stylePreset.layout === "workshop" &&
+                (stylePreset.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) ===
+                  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID
               }
               onClick={() => onSelectTemplate("workshop-onecol")}
             >
@@ -970,6 +968,10 @@ export function CvRail({
                 stylePreset.resumeTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
                   ? "true"
                   : undefined
+              }
+              aria-pressed={
+                stylePreset.layout === "workshop" &&
+                stylePreset.resumeTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
               }
               onClick={() => onSelectTemplate("workshop-twocol")}
             >

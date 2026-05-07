@@ -23,7 +23,7 @@ import type {
 } from "../features/verbati/resumeLinking";
 import { getCanonicalSectionType } from "../features/verbati/resumeLinking";
 import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvStyle";
-import { resolveVerbatiStyle } from "../features/verbati/style";
+import { resolveVerbatiStyle, stylesEqual } from "../features/verbati/style";
 import type { VerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import {
@@ -2076,6 +2076,36 @@ export function CvForge(): JSX.Element {
       "proposalSettings.getCurrent") as any,
     isConvexAuthenticated ? {} : "skip",
   ) as { voicePreset?: unknown; savedVoicePreset?: unknown } | undefined;
+  const documentStylePresets = useQuery(
+    ((api.proposalSettings as any)?.getPresets ??
+      "proposalSettings.getPresets") as any,
+    isConvexAuthenticated ? {} : "skip",
+  ) as
+    | {
+        preset1?: {
+          fontPairId?: unknown;
+          paletteOverride?: unknown;
+          accentHex?: unknown;
+          verbatiStyle?: unknown;
+          name?: unknown;
+        } | null;
+        preset2?: {
+          fontPairId?: unknown;
+          paletteOverride?: unknown;
+          accentHex?: unknown;
+          verbatiStyle?: unknown;
+          name?: unknown;
+        } | null;
+        preset3?: {
+          fontPairId?: unknown;
+          paletteOverride?: unknown;
+          accentHex?: unknown;
+          verbatiStyle?: unknown;
+          name?: unknown;
+        } | null;
+        activeSlot?: 1 | 2 | 3 | null;
+      }
+    | undefined;
   const cvImportInputRef = React.useRef<HTMLInputElement | null>(null);
   const consumedCvForgeActionRef = React.useRef<string | null>(null);
   const paperStageRef = React.useRef<HTMLDivElement | null>(null);
@@ -3948,6 +3978,65 @@ export function CvForge(): JSX.Element {
     );
   }, [currentCv?.id]);
 
+  const cvStyleSlotPresets = React.useMemo(() => {
+    type StyleSlotSource = {
+      fontPairId?: unknown;
+      paletteOverride?: unknown;
+      accentHex?: unknown;
+      verbatiStyle?: unknown;
+    } | null | undefined;
+
+    const buildSlotPreset = (
+      slot: 1 | 2 | 3,
+      source: StyleSlotSource,
+    ): VerbatiStylePreset => {
+      const sourceStyle = (source?.verbatiStyle as Partial<VerbatiStylePreset> | null | undefined) ?? null;
+      const typography =
+        (sourceStyle?.typography as VerbatiFontPairId | undefined) ??
+        (source?.fontPairId as VerbatiFontPairId | undefined) ??
+        (slot === 1 ? "quiet-editorial" : slot === 2 ? "geist-baskervville" : "ledger-sans");
+      const palette =
+        (sourceStyle?.palette as VerbatiStylePreset["palette"] | undefined) ??
+        (source?.paletteOverride as VerbatiStylePreset["palette"] | undefined) ??
+        stylePreset.palette;
+      const accentHex =
+        (sourceStyle?.accentHex as string | undefined) ??
+        (typeof source?.accentHex === "string" ? source.accentHex : undefined);
+
+      return resolveVerbatiStyle({
+        ...stylePreset,
+        typography,
+        palette,
+        ...(accentHex ? { accentHex } : {}),
+      });
+    };
+
+    return {
+      1: buildSlotPreset(1, documentStylePresets?.preset1),
+      2: buildSlotPreset(2, documentStylePresets?.preset2),
+      3: buildSlotPreset(3, documentStylePresets?.preset3),
+    };
+  }, [
+    documentStylePresets?.preset1,
+    documentStylePresets?.preset2,
+    documentStylePresets?.preset3,
+    stylePreset,
+  ]);
+
+  const selectedStyleSlot = React.useMemo<1 | 2 | 3 | null>(() => {
+    if (stylesEqual(stylePreset, cvStyleSlotPresets[1])) return 1;
+    if (stylesEqual(stylePreset, cvStyleSlotPresets[2])) return 2;
+    if (stylesEqual(stylePreset, cvStyleSlotPresets[3])) return 3;
+    return documentStylePresets?.activeSlot ?? null;
+  }, [cvStyleSlotPresets, documentStylePresets?.activeSlot, stylePreset]);
+
+  const handleSelectStyleSlot = React.useCallback(
+    (slot: 1 | 2 | 3) => {
+      setStylePreset(cvStyleSlotPresets[slot]);
+    },
+    [cvStyleSlotPresets, setStylePreset],
+  );
+
   const handleSelectTemplate = React.useCallback(
     (template: "workshop-onecol" | "workshop-twocol" | "editorial" | "minimal" | "classic") => {
       const layout = template === "minimal" || template === "classic" ? "swiss" : "workshop";
@@ -5206,6 +5295,8 @@ export function CvForge(): JSX.Element {
                 onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
                 onDismissListAiSuggestion={handleDismissListAiSuggestion}
                 onAddSection={handleAddSection}
+                selectedStyleSlot={selectedStyleSlot}
+                onSelectStyleSlot={handleSelectStyleSlot}
                 onSelectTemplate={handleSelectTemplate}
                 onSelectFontPair={handleSelectFontPair}
                 onSelectAccent={handleSelectAccent}

@@ -868,7 +868,7 @@ export function ProposalRail({
             </a>
             .
           </div>
-          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Template</div>
+          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Style</div>
           <div className="dasti-proposal-skeleton-rail__style-pills" aria-label="Proposal style presets">
             {PROPOSAL_STYLE_OPTIONS.map((option) => {
               const isSelected = activeTemplateBundleId === option.id;
