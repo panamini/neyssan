@@ -9,7 +9,6 @@
   --cv-paper-visual-inline-size: var(--forge-page-inline-size);
   --cv-workspace-stage-inline-size: var(--cv-paper-visual-inline-size);
   --cv-workspace-rail-inline-size: 360px;
-  --document-rail-gap: var(--space-2);
   display: grid;
   grid-template-columns:
     minmax(0, var(--cv-workspace-stage-inline-size))
@@ -28,7 +27,7 @@
 
 .dasti-cv-skeleton-forge__stage {
   display: grid;
-  gap: var(--document-rail-gap, var(--space-2));
+  gap: var(--space-2);
   width: min(100%, var(--cv-workspace-stage-inline-size));
   min-width: 0;
   justify-self: center;
@@ -272,10 +271,9 @@
 }
 
 .dasti-cv-stage-bar {
-  width: min(100%, var(--cv-paper-visual-inline-size));
+  width: 100%;
   max-width: 100%;
   min-width: 0;
-  margin-inline: auto;
   min-height: var(--document-viewer-toolbar-block-size);
   display: flex;
   flex-wrap: nowrap;
@@ -1556,12 +1554,10 @@
   --document-shell-padding-block: 0px;
   --document-viewer-bleed-inline: 0px;
   --document-viewer-bleed-block: 0px;
-  --document-rail-gap: var(--space-2);
+  --document-rail-gap: var(--space-1);
   --resume-preview-toolbar-gap: var(--document-rail-gap);
   --resume-preview-shell-padding: 0px;
   --document-viewer-frame-surface: var(--color-surface-muted);
-  --document-stage-halo: var(--document-viewer-frame-shadow),
-    0 12px 28px -24px color-mix(in srgb, var(--shadow-color) 92%, transparent);
   --document-viewer-frame-border: color-mix(
     in srgb,
     var(--color-border) 44%,
