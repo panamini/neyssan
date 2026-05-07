@@ -2963,7 +2963,6 @@ export function ProposalForge(): JSX.Element {
           pendingQueuedComposeSnapshotRef.current = null;
           isSavingComposeProposalRef.current = true;
           setComposeSaveStatus("saving");
-
           try {
             traceProposalStyle({
               step: "perform-proposal-save:before-write",
@@ -7299,7 +7298,8 @@ export function ProposalForge(): JSX.Element {
     !isComposePanelVisible &&
     !isSavedView &&
     canCollapseComposePanel;
-  const showComposeGridColumn = showComposePanel;
+  const showComposeGridColumn =
+    showComposePanel && !isCompactComposeLayout;
   const liveWorkbenchMaxWidth = isCompactComposeLayout
     ? "100%"
     : shouldRenderColdStartInlineOnly
@@ -7743,6 +7743,41 @@ export function ProposalForge(): JSX.Element {
     composeGenerateTriggerRef.current?.();
   }, []);
 
+  const handleRailJobOfferTextChange = React.useCallback(
+    (value: string) => {
+      const nextDraft: StoredProposalComposeDraft = {
+        ...(composePreviewValues ?? {}),
+        jobTitle: composePreviewValues?.jobTitle ?? "",
+        jobDescription: value,
+        sourceUrl: composePreviewValues?.sourceUrl ?? null,
+        platform: composePreviewValues?.platform ?? null,
+        proposalType: proposalType ?? composePreviewValues?.proposalType ?? "cover_letter",
+        voicePreset: proposalVoicePreset ?? composePreviewValues?.voicePreset ?? null,
+        characterLimitMode: draftCharacterLimitMode ?? undefined,
+        characterLimitValue: draftCharacterLimitValue ?? undefined,
+      };
+      setComposePreviewValues(nextDraft);
+      setOutputSourceComposeDraft(nextDraft);
+      setComposeDraftInitialSeed(nextDraft);
+      writeStoredProposalComposeDraft(nextDraft);
+    },
+    [
+      composePreviewValues,
+      draftCharacterLimitMode,
+      draftCharacterLimitValue,
+      proposalType,
+      proposalVoicePreset,
+    ],
+  );
+
+  const handleRailJobOfferTextCommit = React.useCallback(() => {
+    setComposeFormInstanceKey((currentKey) => currentKey + 1);
+  }, []);
+
+  const handleOpenJobsFromRail = React.useCallback(() => {
+    void navigate("/jobs");
+  }, [navigate]);
+
   React.useEffect(() => {
     if (!canCollapseComposePanel && !isComposePanelVisible) {
       setIsComposePanelVisible(true);
@@ -8086,6 +8121,10 @@ export function ProposalForge(): JSX.Element {
                       onClearCv={() => handleAttachedCvChange(null)}
                       onCreateCv={handleCreateCvInForge}
                       onImportCv={handleImportCvInForge}
+                      jobOfferText={composePreviewValues?.jobDescription ?? ""}
+                      onJobOfferTextChange={handleRailJobOfferTextChange}
+                      onJobOfferTextCommit={handleRailJobOfferTextCommit}
+                      onOpenJobs={handleOpenJobsFromRail}
                       hasProposalContent={Boolean(proposalContent)}
                       generateLabel={composeGenerateControl.label}
                       generateDisabled={composeGenerateControl.disabled || loading || isLoadingHandoff}

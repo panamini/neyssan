@@ -263,12 +263,25 @@ describe("ProposalForge save to library", () => {
       expect(screen.getByLabelText("Proposal rail")).toBeInTheDocument();
     });
 
-    expect(readStoredProposalComposeDraft()).toBeNull();
-    expect(readStoredProposalOutputDraft()).toBeNull();
+    expect(readStoredProposalComposeDraft()).toEqual(
+      expect.objectContaining({
+        jobTitle: "Operations Associate",
+        proposalType: "cover_letter",
+        voicePreset: "signature",
+      }),
+    );
+    expect(readStoredProposalOutputDraft()).toEqual(
+      expect.objectContaining({
+        generatedProposalId: "proposal_generated",
+        proposalContent: expect.stringContaining("Freshly generated proposal body."),
+        proposalDocumentTitle: "Operations Associate saved",
+      }),
+    );
     expect(mockShowToast).toHaveBeenCalledWith(
-      "Saved.",
+      "Saved to library.",
       expect.objectContaining({
         variant: "success",
+        description: "This proposal stays open and will keep autosaving.",
       }),
     );
   });
@@ -406,7 +419,21 @@ describe("ProposalForge save to library", () => {
       expect(screen.queryByText("Saved proposals")).not.toBeInTheDocument();
       expect(screen.getByLabelText("Proposal rail")).toBeInTheDocument();
     });
-    expect(readStoredProposalComposeDraft()).toBeNull();
-    expect(readStoredProposalOutputDraft()).toBeNull();
+    expect(readStoredProposalComposeDraft()).toEqual(
+      expect.objectContaining({
+        jobTitle: "Operations Associate",
+        proposalType: "cover_letter",
+        voicePreset: "signature",
+        sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+        platform: "linkedin",
+      }),
+    );
+    expect(readStoredProposalOutputDraft()).toEqual(
+      expect.objectContaining({
+        generatedProposalId: "proposal_saved_new",
+        proposalContent: expect.stringContaining("Edited detached draft."),
+        proposalDocumentTitle: "Detached proposal",
+      }),
+    );
   });
 });

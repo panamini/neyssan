@@ -7995,6 +7995,44 @@
   text-decoration: none;
 }
 
+.dasti-proposal-skeleton-rail__empty-job-context {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.dasti-proposal-skeleton-rail__job-offer-input {
+  min-block-size: 132px;
+  resize: vertical;
+}
+
+.dasti-proposal-skeleton-rail__job-site-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.dasti-proposal-skeleton-rail__job-site-token {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  color: var(--tm2);
+  background: var(--sf1);
+  font-size: var(--tx);
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.dasti-proposal-skeleton-rail__job-site-token:hover,
+.dasti-proposal-skeleton-rail__job-site-token:focus-visible {
+  border-color: var(--color-border-selected);
+  color: var(--ti);
+  text-decoration: none;
+}
+
 .dasti-proposal-skeleton-rail__match {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
