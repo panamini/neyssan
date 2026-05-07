@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -56,6 +56,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
     onSubmit,
     onValuesChange,
     initialComposeDraft,
+    externalComposeDraft,
   }: {
     onSubmit?: (
       values: any,
@@ -68,9 +69,14 @@ vi.mock("../../components/ProposalInputForm", () => ({
       jobTitle?: string;
       jobDescription?: string;
     } | null;
+    externalComposeDraft?: {
+      jobTitle?: string;
+      jobDescription?: string;
+    } | null;
   }) => {
     const navigate = useNavigate();
-    const storedDraft = (initialComposeDraft ??
+    const storedDraft = (externalComposeDraft ??
+      initialComposeDraft ??
       JSON.parse(
         window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
       )) as {
@@ -149,6 +155,47 @@ describe("ProposalForge draft persistence", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+  });
+
+  it("syncs pasted rail job offer text into the compose draft before blur", async () => {
+    const pastedJobOffer =
+      "Own proposal operations, coordinate client requirements, and prepare application documents from raw job briefs.";
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    const railJobOfferInput = screen.getByPlaceholderText(
+      "Paste your job offer here",
+    );
+    expect(railJobOfferInput).toBeInTheDocument();
+
+    const jobSites = screen.getByLabelText("Job sites");
+    expect(
+      within(jobSites)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["LinkedIn", "Indeed", "Upwork", "ZipRecruiter", "Hellowork"]);
+
+    fireEvent.change(railJobOfferInput, {
+      target: { value: pastedJobOffer },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
+        pastedJobOffer,
+      );
+    });
+    expect(
+      JSON.parse(
+        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
+      ),
+    ).toMatchObject({
+      jobTitle: "",
+      jobDescription: pastedJobOffer,
+    });
   });
 
   it("restores the generated draft after leaving the proposal workspace immediately", () => {

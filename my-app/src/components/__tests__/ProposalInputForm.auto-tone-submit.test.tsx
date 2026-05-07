@@ -237,4 +237,64 @@ describe("ProposalInputForm auto tone submit", () => {
       }),
     );
   });
+
+  it("generates from externally synced pasted job text without requiring blur", async () => {
+    const handleSubmit = vi.fn();
+    const pastedJobOffer =
+      "Lead proposal operations, coordinate stakeholder inputs, and turn messy job requirements into polished client-facing application documents.";
+    let generateControl: {
+      trigger: () => void;
+      disabled: boolean;
+    } | null = null;
+
+    const { rerender } = render(
+      <ProposalInputForm
+        onSubmit={handleSubmit}
+        onGenerateControlChange={(control) => {
+          generateControl = control;
+        }}
+      />,
+    );
+
+    expect(generateControl?.disabled).toBe(true);
+
+    rerender(
+      <ProposalInputForm
+        onSubmit={handleSubmit}
+        externalComposeDraft={{
+          jobTitle: "",
+          jobDescription: pastedJobOffer,
+          proposalType: "cover_letter",
+        }}
+        onGenerateControlChange={(control) => {
+          generateControl = control;
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(generateControl?.disabled).toBe(false);
+    });
+
+    generateControl?.trigger();
+
+    await waitFor(() => {
+      expect(mockGenerateProposalAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          jobTitle: "",
+          jobDescription: pastedJobOffer,
+          proposalType: "cover_letter",
+        }),
+      );
+    });
+    expect(handleSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobTitle: "",
+        jobDescription: pastedJobOffer,
+      }),
+      "Hello hiring team,\n\nI would love to contribute.",
+      expect.anything(),
+      "proposal_auto",
+    );
+  });
 });

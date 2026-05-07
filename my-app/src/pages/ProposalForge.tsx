@@ -8250,6 +8250,7 @@ export function ProposalForge(): JSX.Element {
                           externalCharacterLimitValue={draftCharacterLimitValue}
                           headerLabel={null}
                           initialComposeDraft={composeDraftInitialSeed}
+                          externalComposeDraft={composePreviewValues}
                           sourceUrl={briefSourceUrl}
                           sourcePlatform={briefSourcePlatform}
                           canonicalJobId={canonicalJobId}
