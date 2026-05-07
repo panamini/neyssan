@@ -261,6 +261,7 @@ describe("VerbatiResumePreview", () => {
           palette: "sauge",
         }}
         hostMode="workspace"
+        showPageCount
       />,
     );
 
@@ -287,6 +288,7 @@ describe("VerbatiResumePreview", () => {
           palette: "sauge",
         }}
         hostMode="panel"
+        showPageCount
       />,
     );
 
@@ -718,6 +720,7 @@ describe("VerbatiResumePreview", () => {
           palette: "sauge",
         }}
         hostMode="workspace"
+        showPageCount
       />,
     );
 

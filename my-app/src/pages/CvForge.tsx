@@ -5154,6 +5154,9 @@ export function CvForge(): JSX.Element {
                       inlineEditing={resumeInlineEditing}
                       sectionActions={resumeSectionActions}
                       paperAi={resumePaperAiState}
+                      showPageCount={
+                        workspaceMode === "preview" && Boolean(currentCv)
+                      }
                     />
                     {inlinePaperSelectionState ? (
                       <FloatingAiToolbar
