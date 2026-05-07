@@ -230,6 +230,12 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-sheet__body--document-editor\s+\.dasti-proposal-sheet__preview-stage\s*\{[\s\S]*max-height:\s*none;/,
     );
     expect(productCss).toMatch(
+      /\.dasti-proposal-output-shell--workspace\s+\.dasti-proposal-sheet__body--document-editor\s*\{[\s\S]*scrollbar-gutter:\s*auto;[\s\S]*scrollbar-width:\s*thin;[\s\S]*scrollbar-color:\s*color-mix\(in srgb, var\(--tm2\) 72%, transparent\) transparent;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-output-shell--workspace\s+\.dasti-proposal-sheet__body--document-editor::-webkit-scrollbar\s*\{[\s\S]*width:\s*7px;[\s\S]*height:\s*7px;/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-proposal-editor-page__textarea\s*\{[\s\S]*padding-block-start:\s*var\(--proposal-output-editor-block-start\);[\s\S]*padding-block-end:\s*var\(--proposal-output-editor-block-end\);/,
     );
     expect(productCss).toMatch(

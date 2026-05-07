@@ -1516,9 +1516,42 @@
 }
 
 .dasti-proposal-output-shell--workspace
+  .dasti-proposal-sheet__body--document-editor {
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--tm2) 72%, transparent) transparent;
+}
+
+.dasti-proposal-output-shell--workspace
+  .dasti-proposal-sheet__body--document-editor::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.dasti-proposal-output-shell--workspace
+  .dasti-proposal-sheet__body--document-editor::-webkit-scrollbar-track,
+.dasti-proposal-output-shell--workspace
+  .dasti-proposal-sheet__body--document-editor::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.dasti-proposal-output-shell--workspace
+  .dasti-proposal-sheet__body--document-editor::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--tm2) 62%, transparent);
+}
+
+.dasti-proposal-output-shell--workspace
   .dasti-proposal-sheet__body--document-editor
   .dasti-document-stage-chassis {
   padding: 0;
+}
+
+.dasti-proposal-output-shell--workspace
+  .dasti-proposal-sheet__body--document-editor
+  .dasti-proposal-editor-page__textarea {
+  overflow: hidden;
+  scrollbar-gutter: auto;
 }
 
 .dasti-proposal-output-shell--workspace .dasti-proposal-sheet-frame {

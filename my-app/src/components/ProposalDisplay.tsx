@@ -630,6 +630,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   } | null>(null);
   const [editableTextareaScrollTop, setEditableTextareaScrollTop] =
     React.useState(0);
+  const [editableTextareaBlockSize, setEditableTextareaBlockSize] =
+    React.useState(0);
   const isZoomControlled = typeof controlledZoomIndex === "number";
   const zoomIndex = isZoomControlled
     ? clampProposalZoomIndex(controlledZoomIndex)
@@ -731,7 +733,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     topStrength: editableScrollTopStrength,
     bottomStrength: editableScrollBottomStrength,
     update: updateEditableScrollEdges,
-  } = useScrollEdgeFades<HTMLTextAreaElement>();
+  } = useScrollEdgeFades<HTMLDivElement>();
   const {
     attach: attachPreviewScrollEdges,
     showTop: showPreviewScrollTop,
@@ -741,6 +743,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     update: updatePreviewScrollEdges,
   } = useScrollEdgeFades<HTMLDivElement>();
   const stageMeasureRef = React.useRef<HTMLDivElement | null>(null);
+  const editableScrollContainerRef = React.useRef<HTMLDivElement | null>(null);
   const showModeToggle = Boolean(
     allowModeToggle && onModeChange && proposalContent && !loading && !error,
   );
@@ -890,7 +893,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     usesDocumentRenderer && !isEditable
       ? stageLayout.pageHeight * Math.max(1, documentPageCount) +
         documentPageGapPx * Math.max(0, documentPageCount - 1)
-      : stageLayout.pageHeight;
+      : usesDocumentRenderer && isEditable
+        ? Math.max(stageLayout.pageHeight, editableTextareaBlockSize)
+        : stageLayout.pageHeight;
   const renderedUnscaledDocumentHeight =
     usesDocumentRenderer && !isEditable
       ? A4_PAGE_HEIGHT_PX * Math.max(1, documentPageCount) +
@@ -1042,6 +1047,19 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     }
   }, [textareaSelectionState]);
 
+  const syncEditableTextareaBlockSize = React.useCallback(() => {
+    const textarea = editableTextareaRef.current;
+    if (!textarea || !isEditable || !usesDocumentRenderer) {
+      setEditableTextareaBlockSize(0);
+      return;
+    }
+
+    const nextBlockSize = Math.ceil(textarea.scrollHeight);
+    setEditableTextareaBlockSize((current) =>
+      Math.abs(current - nextBlockSize) > 0.5 ? nextBlockSize : current,
+    );
+  }, [isEditable, usesDocumentRenderer]);
+
   React.useEffect(() => {
     if (isEditable) {
       setIsZoomMenuOpen(false);
@@ -1058,10 +1076,15 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         block: "start",
         inline: "nearest",
       });
+      if (editableScrollContainerRef.current) {
+        editableScrollContainerRef.current.scrollTop = 0;
+        editableScrollContainerRef.current.scrollLeft = 0;
+      }
       if (editableTextareaRef.current) {
         editableTextareaRef.current.scrollTop = 0;
         editableTextareaRef.current.scrollLeft = 0;
       }
+      syncEditableTextareaBlockSize();
       updateEditableScrollEdges();
     });
 
@@ -1069,6 +1092,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   }, [
     isEditable,
     proposalContent,
+    syncEditableTextareaBlockSize,
     updateEditableScrollEdges,
     usesDocumentRenderer,
   ]);
@@ -1078,6 +1102,34 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       setDocumentPageCount(1);
     }
   }, [isEditable, proposalContent, usesDocumentRenderer]);
+
+  React.useLayoutEffect(() => {
+    if (!isEditable || !usesDocumentRenderer) {
+      setEditableTextareaBlockSize(0);
+      return undefined;
+    }
+
+    const frame = window.requestAnimationFrame(syncEditableTextareaBlockSize);
+    const textarea = editableTextareaRef.current;
+    const resizeObserver =
+      textarea && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(syncEditableTextareaBlockSize)
+        : null;
+
+    if (textarea) {
+      resizeObserver?.observe(textarea);
+    }
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver?.disconnect();
+    };
+  }, [
+    isEditable,
+    proposalContent,
+    syncEditableTextareaBlockSize,
+    usesDocumentRenderer,
+  ]);
 
   const runTextareaSelectionCheck = React.useCallback(() => {
     if (isPrimaryPointerPressed()) {
@@ -1378,12 +1430,21 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     },
     [attachPreviewScrollEdges],
   );
-  const attachEditableTextarea = React.useCallback(
-    (node: HTMLTextAreaElement | null) => {
-      editableTextareaRef.current = node;
+  const attachEditableScrollContainer = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      editableScrollContainerRef.current = node;
       attachEditableScrollEdges(node);
     },
     [attachEditableScrollEdges],
+  );
+  const attachEditableTextarea = React.useCallback(
+    (node: HTMLTextAreaElement | null) => {
+      editableTextareaRef.current = node;
+      if (node) {
+        window.requestAnimationFrame(syncEditableTextareaBlockSize);
+      }
+    },
+    [syncEditableTextareaBlockSize],
   );
   const { attachViewport: attachPanViewport, viewportPanProps } =
     useDocumentPan({
@@ -1724,7 +1785,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         data-document-stage="true"
         style={{
           width: `${stageLayout.stageWidth}px`,
-          height: `${stageLayout.stageHeight}px`,
+          height: `${isEditable ? renderedDocumentHeight : stageLayout.stageHeight}px`,
         }}
         {...(!isEditable ? viewportPanProps : {})}
       >
@@ -1748,7 +1809,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               data-document-page="true"
               style={{
                 width: `${stageLayout.pageWidth}px`,
-                height: `${stageLayout.pageHeight}px`,
+                height: `${renderedDocumentHeight}px`,
               }}
               ref={editablePageRef}
             >
@@ -2190,6 +2251,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                     onChange={(event) => {
                       setAiSuggestion(null);
                       onContentChange?.(event.target.value);
+                      window.requestAnimationFrame(syncEditableTextareaBlockSize);
                     }}
                     onBlur={(event) => {
                       if (isInlineAiToolbarTarget(event.relatedTarget)) return;
@@ -2200,10 +2262,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                     onMouseUp={() => scheduleTextareaSelectionCheck(true)}
                     onKeyUp={() => scheduleTextareaSelectionCheck(true)}
                     onScroll={() => {
-                      setEditableTextareaScrollTop(
-                        editableTextareaRef.current?.scrollTop ?? 0,
-                      );
-                      updateEditableScrollEdges();
+                      if (editableTextareaRef.current?.scrollTop) {
+                        editableTextareaRef.current.scrollTop = 0;
+                      }
                       scheduleTextareaSelectionCheck();
                     }}
                     placeholder="Content appears here"
@@ -2229,7 +2290,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                       cursor: "text",
                       width: "100%",
                       outline: "none",
-                      height: "100%",
+                      minHeight: "100%",
+                      height:
+                        editableTextareaBlockSize > 0
+                          ? `${editableTextareaBlockSize}px`
+                          : "100%",
                       resize: "none",
                     }}
                   />
@@ -2413,6 +2478,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   } else if (isEditable) {
     sheetBody = usesDocumentRenderer ? (
       <div
+        ref={attachEditableScrollContainer}
         className={resolveBodyClassName({
           letterLike: isLetterLike,
           documentEditor: isDocumentEditor,
@@ -2420,6 +2486,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         data-scroll-top={activeScrollTop ? "true" : "false"}
         data-scroll-bottom={activeScrollBottom ? "true" : "false"}
         style={activeScrollFadeStyle}
+        onScroll={(event) => {
+          setEditableTextareaScrollTop(event.currentTarget.scrollTop);
+          updateEditableScrollEdges();
+          scheduleTextareaSelectionCheck();
+        }}
       >
         {queuedPreviewActionLabel ? (
           <div
