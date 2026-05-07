@@ -33,6 +33,7 @@ import {
 } from "./documentTokens";
 import {
   getResumeTemplateDefinition,
+  isWorkshopResumeTemplateId,
   resolveWorkshopPreviewHeadingContract,
   type ResumeTemplateDefinition,
   type ResumeTemplateId,
@@ -445,7 +446,7 @@ export function normalizeResumePreviewTokens(args: {
     padInlineMm: preview.skillPaddingInlineMm,
     padBlockMm: preview.skillPaddingBlockMm,
   };
-  if (template.id === "workshop_resume_onecol_ats") {
+  if (isWorkshopResumeTemplateId(template.id)) {
     const workshopHeading = resolveWorkshopPreviewHeadingContract(template);
     tokens.flow.component.main = {
       ...tokens.flow.component.main,
@@ -515,7 +516,7 @@ export function normalizeResumeExportTokens(args: {
               leftMm: template.export.leftMm,
             },
             columns:
-              template.exportShell === "split"
+              template.exportShell === "split" || template.export.sidebarMm > 0
                 ? {
                     sidebarMm: template.export.sidebarMm,
                     gutterMm: template.export.gutterMm,

@@ -3,6 +3,7 @@ import type {
   VerbatiTypographyPreset,
 } from "./fontCatalog";
 import type { CvDocument } from "../../types/cvDocument";
+import type { ResumeTemplateId } from "../../lib/layout/resumeTemplates";
 
 export type StyleFamilyId =
   | "swiss"
@@ -37,6 +38,7 @@ export interface VerbatiStylePreset {
   typography: VerbatiTypographyPreset;
   palette: VerbatiPalettePreset;
   accentHex?: string;
+  resumeTemplateId?: ResumeTemplateId;
 }
 
 export type { VerbatiFontPairId, VerbatiTypographyPreset };

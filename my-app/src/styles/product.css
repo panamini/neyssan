@@ -606,12 +606,29 @@ body,
   font-weight: var(--font-strong-weight);
 }
 
+.sb-toggle__collapsed-logo-shell {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 42%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-surface) 72%, transparent);
+  flex: 0 0 auto;
+}
+
 .sb-toggle__collapsed-logo {
   display: block;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
   flex: 0 0 auto;
+}
+
+.sb-toggle__collapsed-logo--dark {
+  filter: brightness(0.92);
 }
 
 .sb-toggle__period--active {

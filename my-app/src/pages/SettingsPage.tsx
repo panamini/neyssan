@@ -34,6 +34,11 @@ import {
   resolveVerbatiStyle,
   sanitizePersistedVerbatiStyle,
 } from "../features/verbati/style";
+import {
+  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
+  type ResumeTemplateId,
+} from "../lib/layout/resumeTemplates";
 import { getStyleFamilyDefinition } from "../lib/layout/styleFamilies";
 import type {
   StyleFamilyId,
@@ -220,15 +225,27 @@ const TONE_OPTIONS: Array<{
 // ─── Style options ─────────────────────────────────────────────────────────────
 
 type StyleOption = {
-  id: "auto" | "workshop";
+  id: "auto" | "workshop" | "workshop-twocol";
   label: string;
   description: string;
   isAuto?: boolean;
+  resumeTemplateId?: ResumeTemplateId;
 };
 
 const STYLE_OPTIONS = ([
-  { id: "auto",     label: "Auto",      description: "Matches the look to the role.",                   isAuto: true },
-  { id: "workshop", label: "Workshop", description: "Workshop ATS. Paired margin twin." },
+  { id: "auto", label: "Auto", description: "Matches the look to the role.", isAuto: true },
+  {
+    id: "workshop",
+    label: "Workshop",
+    description: "One-column Workshop ATS. Paired margin twin.",
+    resumeTemplateId: WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  },
+  {
+    id: "workshop-twocol",
+    label: "Workshop 2-col",
+    description: "Two-column Workshop grid with 17/18-inspired rhythm.",
+    resumeTemplateId: WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
+  },
 ] satisfies StyleOption[]);
 
 function buildPresetSlotStylePreset(preset: PresetSlot): VerbatiStylePreset {
@@ -258,6 +275,9 @@ function resolvePresetLayoutSelection(
   }
 
   const stylePreset = buildPresetSlotStylePreset(preset);
+  if (stylePreset.resumeTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID) {
+    return "workshop-twocol";
+  }
   return stylePreset.layout === "workshop" ? "workshop" : "auto";
 }
 
@@ -266,6 +286,7 @@ function resolveStyleChoiceForLayout(
 ): ProposalStyleChoice {
   switch (layoutId) {
     case "workshop":
+    case "workshop-twocol":
     default:
       return "balanced";
   }
@@ -275,11 +296,17 @@ function buildVerbatiStyleForLayout(args: {
   layoutId: Exclude<StyleOption["id"], "auto">;
   preset: PresetSlot;
 }): VerbatiStylePreset {
-  const family = getStyleFamilyDefinition(args.layoutId as StyleFamilyId);
+  const familyId: StyleFamilyId = "workshop";
+  const family = getStyleFamilyDefinition(familyId);
+  const resumeTemplateId =
+    args.layoutId === "workshop-twocol"
+      ? WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+      : WORKSHOP_RESUME_ONECOL_TEMPLATE_ID;
 
   return resolveVerbatiStyle({
-    familyId: args.layoutId as StyleFamilyId,
-    layout: args.layoutId as StyleFamilyId,
+    familyId,
+    layout: familyId,
+    resumeTemplateId,
     typography: args.preset.fontPairId ?? family.defaultTypography,
     ...(args.preset.accentHex
       ? {
@@ -377,7 +404,7 @@ function SettingsLayoutCard({
       onClick={onSelect}
     >
       <span className="layout-card__preview" data-layout={option.id} aria-hidden="true">
-        {option.id === "workshop" ? (
+        {option.id === "workshop" || option.id === "workshop-twocol" ? (
           <>
             <span className="layout-card__column">
               <span className="layout-card__line layout-card__line--title" />

@@ -666,7 +666,9 @@ function buildPlannerMetrics(args: {
       bodyLineHeightMm,
     ),
     compactCharsPerLine: resolveCharsPerLine(
-      tokens.flow.measure.resumeReadingWidthMm,
+      args.template.preview.sidebarMm > 0
+        ? args.template.preview.sidebarMm
+        : tokens.flow.measure.resumeReadingWidthMm,
       bodySmLineHeightMm,
     ),
     bodyLineHeightMm,

@@ -10,6 +10,7 @@ import {
   resolveVerbatiStyle,
   sanitizePersistedVerbatiStyle,
   serializeVerbatiStyle,
+  stylesEqual,
   VERBATI_LAYOUT_OPTIONS,
 } from "../style";
 
@@ -186,9 +187,35 @@ describe("verbati style normalization", () => {
     );
   });
 
-  it("exposes only workshop as the active layout option", () => {
+  it("treats Workshop template identity as part of style equality", () => {
+    expect(
+      stylesEqual(
+        {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_onecol_ats",
+        },
+        {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("exposes workshop one-column and two-column as active layout options", () => {
     expect(VERBATI_LAYOUT_OPTIONS.map((option) => option.id)).toEqual([
       "workshop",
+      "workshop",
+    ]);
+    expect(VERBATI_LAYOUT_OPTIONS.map((option) => option.resumeTemplateId)).toEqual([
+      "workshop_resume_onecol_ats",
+      "workshop_resume_twocol_ats",
     ]);
   });
 });

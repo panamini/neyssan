@@ -27,6 +27,10 @@ import { resolveVerbatiStyle } from "../features/verbati/style";
 import type { VerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import {
+  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
+} from "../lib/layout/resumeTemplates";
+import {
   ensurePlainTextRemirrorDoc,
   ensureRemirrorDoc,
 } from "../components/remirror-editor/utils/conversion";
@@ -3945,13 +3949,20 @@ export function CvForge(): JSX.Element {
   }, [currentCv?.id]);
 
   const handleSelectTemplate = React.useCallback(
-    (template: "editorial" | "minimal" | "classic") => {
-      const layout = template === "editorial" ? "workshop" : "swiss";
+    (template: "workshop-onecol" | "workshop-twocol" | "editorial" | "minimal" | "classic") => {
+      const layout = template === "minimal" || template === "classic" ? "swiss" : "workshop";
+      const resumeTemplateId =
+        template === "workshop-twocol"
+          ? WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+          : layout === "workshop"
+            ? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID
+            : undefined;
       setStylePreset((current) =>
         resolveVerbatiStyle({
           ...current,
           familyId: layout,
           layout,
+          resumeTemplateId,
         }),
       );
     },

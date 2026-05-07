@@ -112,6 +112,7 @@ function sanitizeBackendVerbatiStyle(
   typography?: string;
   palette?: string;
   accentHex?: string;
+  resumeTemplateId?: string;
 } | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
@@ -130,6 +131,10 @@ function sanitizeBackendVerbatiStyle(
     accentHex:
       typeof candidate.accentHex === "string"
         ? candidate.accentHex
+        : undefined,
+    resumeTemplateId:
+      typeof candidate.resumeTemplateId === "string"
+        ? candidate.resumeTemplateId
         : undefined,
   };
 

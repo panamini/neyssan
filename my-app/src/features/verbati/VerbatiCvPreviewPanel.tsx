@@ -402,12 +402,13 @@ export function VerbatiCvPreviewPanel({
                     const bundle = getVerbatiStyleBundleDefinition(bundleId);
                     setStylePreset(resolveVerbatiStyle(bundle.stylePreset));
                   }}
-                  onSelectLayout={(layout) =>
+                  onSelectLayout={(layout, resumeTemplateId) =>
                     setStylePreset((current) =>
                       resolveVerbatiStyle({
                         ...current,
                         familyId: layout,
                         layout,
+                        resumeTemplateId,
                       }),
                     )
                   }

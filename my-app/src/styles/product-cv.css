@@ -986,7 +986,8 @@
   background: var(--am-soft);
 }
 
-.dasti-cv-font-menu-trigger {
+.dasti-cv-font-menu-trigger,
+.dasti-cv-style-menu-trigger {
   width: 100%;
   min-height: var(--control-md);
   display: inline-flex;

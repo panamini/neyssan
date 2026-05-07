@@ -35,6 +35,7 @@ import {
 } from "./buildCanonicalResumeRenderModel";
 import {
   getResumeTemplateDefinition,
+  isWorkshopResumeTemplateId,
   type ResumeTemplateId,
 } from "./layout/resumeTemplates";
 import {
@@ -101,6 +102,9 @@ export type ResumePrintSource = {
   education: ResumePrintEducationItem[];
   achievements: string[];
   hobbies: string[];
+  certifications?: ResumePrintItem[];
+  affiliations?: ResumePrintItem[];
+  additionalInformation?: string[];
   resumeTemplateId: ResumeTemplateId;
   committedPages?: WorkshopResumeCommittedPage[];
 };
@@ -320,6 +324,25 @@ function normalizeResumeData(
     })),
     achievements: (data.achievements ?? []).map((item) => cleanString(item)).filter(Boolean),
     hobbies: data.hobbies.map((item) => cleanString(item)).filter(Boolean),
+    certifications: data.certifications.map((item) => ({
+      label: cleanString(item.name),
+      value: [cleanString(item.issuer), cleanString(item.meta)]
+        .filter(Boolean)
+        .join(" · "),
+    })).filter((item) => item.label || item.value),
+    affiliations: data.affiliations.map((item) => ({
+      label: cleanString(item.organizationName),
+      value: [
+        cleanString(item.roleOrMembershipType),
+        cleanString(item.dateRange),
+        cleanString(item.notes),
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    })).filter((item) => item.label || item.value),
+    additionalInformation: data.textSections
+      .map((item) => [cleanString(item.sectionTitle), cleanString(item.text)].filter(Boolean).join(" — "))
+      .filter(Boolean),
     resumeTemplateId,
     committedPages,
   };
@@ -330,7 +353,7 @@ function buildCommittedWorkshopPages(args: {
   resumeTemplateId: ResumeTemplateId;
   stylePreset?: VerbatiStylePreset | null;
 }): WorkshopResumeCommittedPage[] | undefined {
-  if (args.resumeTemplateId !== "workshop_resume_onecol_ats") {
+  if (!isWorkshopResumeTemplateId(args.resumeTemplateId)) {
     return undefined;
   }
 

@@ -26,6 +26,7 @@ type ResumeExportControlProps = {
 const EXPORT_MENU_ITEMS: ReadonlyArray<{
   key: string;
   label: string;
+  description?: string;
   request: ResumeExportRequest;
 }> = [
   {
@@ -33,7 +34,13 @@ const EXPORT_MENU_ITEMS: ReadonlyArray<{
     label: "Export ATS PDF",
     request: { format: "pdf", mode: "ats" },
   },
-  { key: "docx", label: "Export DOCX", request: { format: "docx" } },
+  {
+    key: "docx",
+    label: "Export DOCX",
+    description:
+      "DOCX exports as a one-column linear document; styled PDF preserves visual layout.",
+    request: { format: "docx" },
+  },
   {
     key: "markdown",
     label: "Export Markdown",
@@ -88,7 +95,7 @@ export function ResumeExportControl({
                 items: EXPORT_MENU_ITEMS.map((item) => ({
                   id: item.key,
                   label: item.label,
-                  description: statusDescription,
+                  description: item.description ?? statusDescription,
                   disabled: exportingFormat !== null,
                   onSelect: () => void onExport(item.request),
                 })),

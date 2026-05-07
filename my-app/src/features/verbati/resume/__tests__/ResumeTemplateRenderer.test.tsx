@@ -31,6 +31,9 @@ const WORKSHOP_ACTIVE_PREVIEW_LAYOUT_VAR_NAMES = [
   "--margin-right",
   "--margin-bottom",
   "--margin-left",
+  "--sidebar-width",
+  "--gutter-width",
+  "--main-width",
   "--header-row-gap",
   "--header-summary-width",
   "--header-bottom-padding",
@@ -397,6 +400,33 @@ describe("ResumeTemplateRenderer", () => {
     await waitFor(() => {
       expect(onStablePageCountChange).toHaveBeenCalledWith(expect.any(Number));
     });
+  });
+
+  it("renders the workshop two-column ATS page set with canonical column vars", () => {
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        }}
+        resumeTemplateId="workshop_resume_twocol_ats"
+      />,
+    );
+
+    const renderer = container.querySelector(
+      '[data-testid="resume-template-renderer"]',
+    ) as HTMLElement | null;
+    expect(screen.getAllByTestId("resume-template-page").length).toBeGreaterThan(0);
+    expect(renderer?.style.getPropertyValue("--sidebar-width")).toBe("45mm");
+    expect(renderer?.style.getPropertyValue("--gutter-width")).toBe("12mm");
+    expect(renderer?.style.getPropertyValue("--main-width")).toBe("100mm");
+    expect(container.querySelector('[data-resume-template-layout="workshop-two-column"]')).toBeTruthy();
+    expect(container.querySelector('[data-resume-template-column="sidebar"]')).toBeTruthy();
+    expect(container.querySelector('[data-resume-template-column="main"]')).toBeTruthy();
   });
 
   it("renders committed workshop experience rich content from committedPages with fallback-safe source data", () => {
