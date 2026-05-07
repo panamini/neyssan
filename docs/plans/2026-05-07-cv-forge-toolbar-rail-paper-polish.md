@@ -11,6 +11,8 @@ Screenshots show four remaining visual mismatches after the toolbar chrome pass:
 1. **Pick resume tooltip is dirty / redundant**
    - In expanded mode the button already has visible text (`Pick resume`), so the hover tooltip duplicates the label and visually collides with the menu/trigger.
    - Desired behavior: no tooltip while the text label is visible; only show tooltip in collapsed/icon-only mode.
+   - Also verify the canonical saved chip/button treatment from the app skeleton (same visual grammar as Proposal’s draft/saved controls), not a custom CV-only pill.
+   - Keep the tone badge, but shorten its text to the tone label only (`Natural`, `Warm`, `Formal`) instead of `Natural tone`, `Warm tone`, etc.
 
 2. **Collapsed ATS pill fill is not full-pill**
    - In collapsed mode the visible `ATS` mark is an inner mini-chip inside the ATS pill.
@@ -20,14 +22,64 @@ Screenshots show four remaining visual mismatches after the toolbar chrome pass:
    - CV rail tabs (`Sections / Ask / Style`) and Proposal rail tabs (`Draft / Ask / Heading / Style`) do not share the same block height / padding.
    - Screenshot comparison: CV tab bar is visibly shorter than Proposal.
 
-4. **Proposal Forge and CV Forge still do not feel like the same material system**
+4. **Page count pill is too noisy**
+   - CV currently shows a page-count pill even when the document is one page.
+   - Desired behavior: remove the page count pill by default.
+   - Only show page count when all are true:
+     - document is active/open,
+     - workspace is in preview mode,
+     - page count is greater than one.
+
+5. **Proposal Forge and CV Forge still do not feel like the same material system**
    - User perception: toolbar/panel color differs, and CV paper shadow quality differs from Proposal paper.
    - Also explicitly required: CV toolbar-to-paper distance must equal Proposal Forge, and CV toolbar width must equal paper width.
    - Review addition: audit inner workspace background/canvas material before choosing any new color.
+   - Additional polish: collapsed rail panel padding/margins should look as calm and proportional as Proposal’s collapsed rail.
+   - Confirm proposal-collapsed layout order remains `toolbar → page → panel/rail` and that CV follows the same page-first ordering when collapsed.
+
+## Current implementation status
+
+### Already done / verify only
+
+These items are no longer primary implementation work in the current branch; keep them as regression checks:
+
+- Pick resume tooltip removal:
+  - trigger keeps `aria-label="Pick resume"`
+  - no native `title`
+  - no `data-toolbar-tooltip` in expanded mode
+- Pick resume closed/open icon structure:
+  - closed: `FolderSimple`
+  - open: `FolderOpen`
+- Collapsed ATS full-pill behavior at `max-width: 1419px`.
+- CV rail tab geometry/material parity:
+  - wrapper padding uses `var(--space-1)`
+  - button block size uses `var(--control-sm)`
+  - active background uses `var(--color-surface-raised)`
+- CV rail panel padding uses `var(--space-5)`.
+- CV resume workspace document shell has the added Proposal-like shadow layer.
+
+### Still to implement / verify
+
+- Tone badge copy:
+  - keep the tone badge
+  - show only `Natural`, `Warm`, `Formal`
+  - do not show `Natural tone`, `Warm tone`, `Formal tone`
+- Page count pill gating:
+  - no `1 page` pill
+  - only show page count when document preview is active and `effectivePageCount > 1`
+  - implement by source-level render gating, not CSS-only hiding
+- Background/canvas slab:
+  - verify target branch/source has no broad `.dasti-cv-skeleton-forge { background: var(--sf1); }`
+  - if present, remove/demote to match Proposal’s transparent skeleton grid
+- Browser verification:
+  - actual CV toolbar width equals visible paper width
+  - actual CV toolbar-to-paper gap equals Proposal
+  - side-by-side paper/shadow/background comparison after layout renders real paper
+  - audit rail-panel button backgrounds in screenshots/current browser, especially the active tab/button material that appears weird/heavy in CV compared with Proposal
 
 ## Measured audit findings
 
-Measured at `1440x900` on current source.
+Historical measurements were taken at `1440x900`; update them after browser verification on current source.
 
 ### Toolbar shell
 
@@ -54,15 +106,15 @@ Confirmed from current CSS:
   - both use the radial gradient based on `var(--bg)`.
 - Therefore the top-level page background is not the main difference.
 
-Inner workspace difference:
+Inner workspace difference to verify:
 
 ```css
 .dasti-cv-skeleton-forge {
-  background: var(--sf1);
+  background: var(--sf1); /* should not be present in the final CV Forge workspace */
 }
 ```
 
-Proposal has no equivalent broad skeleton-grid background on `.dasti-proposal-skeleton-forge`; the grid itself is transparent and lets the page canvas remain visible.
+Proposal has no equivalent broad skeleton-grid background on `.dasti-proposal-skeleton-forge`; the grid itself is transparent and lets the page canvas remain visible. If current CV source already has `background: transparent`, treat this as verify-only.
 
 Likely root cause:
 
@@ -88,6 +140,15 @@ Acceptance:
 - Toolbar color perception matches Proposal without changing toolbar shell color.
 
 ### Toolbar/page geometry
+
+Confirmed feasible:
+
+- Yes, CV toolbar width can be scoped exactly to paper width.
+- It is not happening now because CV still derives its stage authority from `--forge-page-inline-size` (a broader legacy page/frame width token) while Proposal derives the visible paper width from an explicit A4-based visual width token and passes that through the workspace shell.
+- Proposal’s current model is effectively:
+  - JS computes the paper width token (`--proposal-paper-visual-inline-size`)
+  - that token feeds the stage width and shell width contract
+  - the visible paper and toolbar share the same width authority
 
 Proposal measured:
 
@@ -144,19 +205,70 @@ Recommended fix:
   - CV tab button min block size: `var(--control-sm)`
 - Consider aligning active background to `var(--color-surface-raised)` if visual parity is preferred over the current warmer active chip.
 
-### CV rail panel padding mismatch
+### CV rail panel padding / collapsed feel mismatch
 
 Computed panel metrics:
 
 - CV rail padding: `26.46px` (`var(--space-4)`)
 - Proposal rail padding: `34.02px` (`var(--space-5)`)
 
-This contributes to perceived different right-panel material and tab placement.
+This contributes to perceived different right-panel material and tab placement, especially once collapsed.
 
 Recommended fix:
 
 - Move `.dasti-cv-rail` padding to `var(--space-5)` if the goal is Proposal parity.
 - Re-check whether the denser CV organize rows still fit after this change.
+- If collapsed layout needs more room, prefer Proposal-like rail padding/margins over ad hoc spacing tweaks.
+
+### Tone badge wording mismatch
+
+Current source:
+
+```tsx
+<ToneBadge tone={tone}>
+  {tone.charAt(0).toUpperCase() + tone.slice(1)} tone
+</ToneBadge>
+```
+
+Desired behavior:
+
+- Keep the tone badge/control.
+- Remove the redundant word `tone` from the visible label.
+- Display only the canonical tone label:
+  - `Natural`
+  - `Warm`
+  - `Formal`
+
+Acceptance:
+
+- Toolbar says `Natural`, `Warm`, or `Formal`, not `Natural tone`, `Warm tone`, or `Formal tone`.
+- Do not remove the tone badge entirely.
+
+### Page count pill visibility mismatch
+
+Current source path:
+
+- `VerbatiResumePreview.tsx` renders `.dasti-doc-page-count--resume-panel` / `.dasti-doc-page-count--resume-workspace` near the resume preview.
+- It can show `1 page`, which adds visual noise near the paper.
+
+Desired behavior:
+
+- Hide page count by default.
+- Only render/show page count when:
+  - the document is active/open,
+  - the CV workspace is in preview mode,
+  - `effectivePageCount > 1`.
+
+Recommended implementation direction:
+
+- Prefer gating at render/source level rather than hiding with CSS.
+- Pass a workspace/preview flag down if needed, or derive from existing `hostMode` / `workspaceMode` props if already available.
+- Keep accessibility label when shown.
+
+Acceptance:
+
+- No `1 page` pill in normal one-page CV edit/preview.
+- Multi-page preview can still show `2 pages`, `3 pages`, etc. when document preview is active.
 
 ### Collapsed ATS fill mismatch
 
@@ -252,53 +364,52 @@ Expected fix direction:
 
 ## Implementation plan
 
-### 1. Remove dirty Pick resume tooltip in expanded mode
+### 1. Verify already-completed toolbar/rail polish
 
-- Remove `title="Pick resume"` from the trigger.
-- Remove or gate `data-toolbar-tooltip="Pick resume"` so it does not appear when `.dasti-cv-stage-bar__pick-label` is visible.
-- If adding compact-only tooltip, implement it with a source-level compact class or data attribute, not a hover hack.
+Do not rework these unless verification finds a regression:
 
-Acceptance:
+- Pick resume tooltip is removed in expanded mode.
+- Pick resume uses `FolderSimple` / `FolderOpen`.
+- Collapsed ATS is one full pill.
+- CV rail tabs use Proposal-like height/material tokens.
+- CV rail padding uses `var(--space-5)`.
+- CV document shell has the Proposal-like shadow layer.
 
-- Hovering expanded `Pick resume` does not show a tooltip.
-- The trigger remains accessible by `aria-label`.
-- Collapsed icon-only mode can show a tooltip, but it must not collide with the dropdown.
+### 2. Keep tone badge but shorten label
 
-### 2. Make collapsed ATS one full pill
-
-- At `max-width: 1419px`, move compact visual fill to `.dasti-cv-ats[data-state]`.
-- Make `.dasti-cv-ats__mark` transparent and centered.
-- Preserve ready/warn coloring and title text.
+- Change CV tone badge copy from `${Tone} tone` to just `${Tone}`.
+- Preserve the `ToneBadge` component and tone color semantics.
 
 Acceptance:
 
-- Collapsed ATS shows `ATS` centered in one pill.
-- No nested mini-chip background.
+- `Natural`, `Warm`, `Formal` only.
+- No `Natural tone`, `Warm tone`, `Formal tone`.
+- Tone badge remains visible.
 
-### 3. Align CV rail tab bar height with Proposal
+### 3. Gate page count pill
 
-- Change CV rail tabs to use Proposal's tab geometry:
+- Update the resume preview page count render path so page count is hidden by default.
+- Only show the page-count pill when document preview is active and `effectivePageCount > 1`.
+- Do not show `1 page`.
+
+Acceptance:
+
+- One-page CV has no page-count pill.
+- Multi-page active preview displays page count.
+
+### 4. Verify collapsed ATS and audit rail button material
+
+- Confirm collapsed ATS still shows `ATS` centered in one full pill.
+- Audit the rail-panel button backgrounds from the supplied screenshots and in-browser computed styles.
+- Specific concern: the CV selected rail tab/button background reads weird/heavy compared with Proposal’s rail button material.
+- Compare against app skeleton / Proposal tokens before deciding whether `var(--color-surface-raised)` is actually the right active material in this context.
+- If it is not canonical or looks visually wrong, fix it by choosing the canonical raised/selected surface token used by Proposal/app-skeleton, not by inventing a new CV-only color.
+- Confirm rail tab height/material still matches Proposal-like geometry:
   - wrapper padding `var(--space-1)`
   - button min-height / min-block-size `var(--control-sm)`
-- Keep CV's three-tab structure and labels.
-- Decide after screenshot whether active background should remain warm or match Proposal's raised white.
+- Confirm rail padding remains `var(--space-5)` and collapsed rail spacing feels aligned to Proposal.
 
-Acceptance:
-
-- CV and Proposal right-panel tab bars have the same block height.
-- CV rail does not regress to the previously rejected heavy tab treatment.
-
-### 4. Align CV rail panel material/spacing if needed
-
-- Change `.dasti-cv-rail` padding from `var(--space-4)` to `var(--space-5)` only if visual comparison confirms parity improves.
-- Re-check organizer row density.
-
-Acceptance:
-
-- Right panel feels like the same component family as Proposal.
-- CV-specific content still fits comfortably.
-
-### 5. Remove/demote the CV full-workspace background slab
+### 5. Verify/remove the CV full-workspace background slab
 
 - Remove or demote `.dasti-cv-skeleton-forge { background: var(--sf1); }` so the CV workspace grid follows Proposal's transparent grid model.
 - Keep raised backgrounds only on actual surfaces:
@@ -312,6 +423,7 @@ Acceptance:
 - CV and Proposal page canvases read as the same material.
 - CV toolbar shell still uses the existing matching toolbar styles.
 - The workspace no longer appears as one large `sf1` slab.
+- The visual order in collapsed mode still reads as a page-first stack, not a rail-first card stack.
 
 ### 6. Re-anchor CV toolbar to actual paper width
 
@@ -350,13 +462,18 @@ Acceptance:
 1. Browser screenshots/probes at `1440`, `1419`, `900`, `760`.
 2. Hover Pick resume expanded: no tooltip.
 3. Collapsed Pick resume: icon-only; optional tooltip only if non-colliding.
-4. Collapsed ATS: one filled pill, centered `ATS`.
-5. CV rail tab bar height equals Proposal rail tab bar height.
-6. CV toolbar width equals visible CV paper width.
-7. CV toolbar-to-paper gap equals Proposal.
-8. Background/canvas comparison: CV skeleton grid is transparent like Proposal; raised backgrounds remain only on real surfaces.
-9. Paper shadow/color comparison with side-by-side screenshots.
-10. Focused tests:
+4. Saved pill uses the canonical skeleton/app-skeleton saved/draft grammar.
+5. Tone badge remains but label is only `Natural`, `Warm`, or `Formal`.
+6. Page count pill is hidden for one-page documents; only multi-page active preview shows it.
+7. Collapsed ATS: one filled pill, centered `ATS`.
+8. CV rail tab bar height equals Proposal rail tab bar height.
+9. CV toolbar width equals visible CV paper width.
+10. CV toolbar-to-paper gap equals Proposal.
+11. Background/canvas comparison: CV skeleton grid is transparent like Proposal; raised backgrounds remain only on real surfaces.
+12. Rail button color/material comparison: audit the weird-looking CV rail selected button background against Proposal/app-skeleton and fix if non-canonical or visually heavy.
+13. Collapsed rail padding/margins feel aligned to Proposal.
+14. Paper shadow/color comparison with side-by-side screenshots.
+15. Focused tests:
    - `cd my-app && rtk npx vitest run src/components/cv/__tests__/CvStageBar.test.tsx src/components/__tests__/CvForgeToolbar.css.test.ts`
-11. TypeScript:
+16. TypeScript:
    - `cd my-app && rtk npx tsc --noEmit --pretty false`

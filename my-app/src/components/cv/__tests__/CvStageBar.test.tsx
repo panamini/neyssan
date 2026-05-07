@@ -51,6 +51,9 @@ describe("CvStageBar", () => {
     expect(pickResumeTrigger).toHaveClass("dasti-cv-stage-bar__plain-action");
     expect(pickResumeTrigger).not.toHaveAttribute("title");
     expect(pickResumeTrigger).not.toHaveAttribute("data-toolbar-tooltip");
+    expect(screen.getByText("Natural")).toBeInTheDocument();
+    expect(screen.queryByText("Natural tone")).not.toBeInTheDocument();
+    expect(screen.getByText("Saved").closest(".ds-status")).toBeTruthy();
     expect(
       screen.getByText("ATS", { selector: ".dasti-cv-ats__mark" }),
     ).toBeInTheDocument();

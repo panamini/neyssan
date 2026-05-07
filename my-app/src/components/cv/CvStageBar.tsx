@@ -165,20 +165,18 @@ export function CvStageBar({
   return (
     <>
       <div className="dasti-cv-stage-bar">
-        <Pill
-          tone={exporting ? "accent" : hasCurrentCv ? "success" : "warning"}
-          className="dasti-cv-stage-bar__status"
+        <span
+          className={`ds-status ds-status--${exporting ? "accent" : hasCurrentCv ? "success" : "warning"} dasti-cv-stage-bar__status`}
         >
-          {exporting ? (
-            <>
-              Exporting PDF<span className="ds-btn__period">.</span>
-            </>
-          ) : hasCurrentCv ? (
-            "Saved"
-          ) : (
-            "No CV"
-          )}
-        </Pill>
+          <span
+            className="ds-status__dot"
+            data-pulsing={exporting ? "true" : undefined}
+            aria-hidden="true"
+          />
+          <span className="dasti-cv-stage-bar__status-label">
+            {exporting ? "Exporting PDF" : hasCurrentCv ? "Saved" : "No CV"}
+          </span>
+        </span>
         <span
           className="dasti-cv-ats"
           data-state={hasTrustedExport ? "ready" : "warn"}
@@ -196,7 +194,7 @@ export function CvStageBar({
           </span>
         </span>
         <ToneBadge tone={tone}>
-          {tone.charAt(0).toUpperCase() + tone.slice(1)} tone
+          {tone.charAt(0).toUpperCase() + tone.slice(1)}
         </ToneBadge>
         <span className="dasti-cv-stage-bar__divider" aria-hidden="true" />
         <div

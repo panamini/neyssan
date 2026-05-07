@@ -67,6 +67,7 @@ type VerbatiResumePreviewProps = {
   inlineEditing?: ResumeInlineEditing | null;
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
+  showPageCount?: boolean;
   onRemoveSection?:
     | ((section: {
         sectionId: string;
@@ -248,6 +249,7 @@ export function VerbatiResumePreview({
   inlineEditing = null,
   sectionActions = null,
   paperAi = null,
+  showPageCount = false,
   onRemoveSection,
 }: VerbatiResumePreviewProps): JSX.Element {
   const previewRootRef = React.useRef<HTMLDivElement | null>(null);
@@ -360,6 +362,7 @@ export function VerbatiResumePreview({
   const effectivePageCount = usesWorkshopTemplateRenderer
     ? visiblePageCount
     : resumePreviewMetrics.pageCount;
+  const shouldShowPageCount = showPageCount && effectivePageCount > 1;
   const pageBreakMarkers = React.useMemo(() => {
     if (effectivePageCount <= 1) {
       return [];
@@ -898,12 +901,14 @@ export function VerbatiResumePreview({
             </div>
           ) : null}
           {documentStage}
-          <span
-            className="dasti-doc-page-count dasti-doc-page-count--resume-panel"
-            aria-label="Page count"
-          >
-            {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
-          </span>
+          {shouldShowPageCount ? (
+            <span
+              className="dasti-doc-page-count dasti-doc-page-count--resume-panel"
+              aria-label="Page count"
+            >
+              {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
+            </span>
+          ) : null}
         </div>
       </div>
     );
@@ -952,12 +957,14 @@ export function VerbatiResumePreview({
           </div>
         </div>
       </div>
-      <span
-        className="dasti-doc-page-count dasti-doc-page-count--resume-workspace"
-        aria-label="Page count"
-      >
-        {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
-      </span>
+      {shouldShowPageCount ? (
+        <span
+          className="dasti-doc-page-count dasti-doc-page-count--resume-workspace"
+          aria-label="Page count"
+        >
+          {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
+        </span>
+      ) : null}
     </div>
   );
 }
