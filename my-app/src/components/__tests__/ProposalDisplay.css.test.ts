@@ -102,9 +102,15 @@ describe("ProposalDisplay CSS contracts", () => {
       "--document-shell-padding-block: 0px;",
       "--document-viewer-bleed-inline: var(--s2);",
       "--document-viewer-bleed-block: var(--s2);",
-      "--proposal-output-stage-frame-padding: var(--s2);",
+      "--proposal-output-stage-frame-padding: 0px;",
       "--proposal-output-rail-inline-inset: 0px;",
       "--document-rail-gap: var(--space-2);",
+    ]);
+    expectCssInOrder([
+      ".dasti-proposal-skeleton-forge {",
+      "--proposal-paper-visual-inline-size: var(--forge-page-inline-size);",
+      "--proposal-workspace-stage-inline-size: var(--proposal-paper-visual-inline-size);",
+      "--proposal-workspace-rail-inline-size: 360px;",
     ]);
     expectCssInOrder([
       ".dasti-proposal-output-shell .dasti-document-rail {",
