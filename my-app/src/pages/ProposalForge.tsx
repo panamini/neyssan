@@ -4606,18 +4606,121 @@ export function ProposalForge(): JSX.Element {
     setSavedProposalDocumentTitle(
       openedSavedProposal.title || "Saved proposal",
     );
-    setSavedProposalDocumentMeta(
-      [
-        nextProposalType
-          ? formatProposalTypeLabel(nextProposalType)
-          : "Proposal",
-        buildProposalToneMetaLabel(
-          openedSavedProposal.metadata?.requestedVoicePreset,
-          nextVoicePreset,
-        ),
-      ].join(" · "),
-    );
+    const nextContent = resolveProposalStoredText({
+      content: openedSavedProposal.content,
+      sections: openedSavedProposal.sections,
+    });
+    const nextDocumentMeta = [
+      nextProposalType ? formatProposalTypeLabel(nextProposalType) : "Proposal",
+      buildProposalToneMetaLabel(
+        openedSavedProposal.metadata?.requestedVoicePreset,
+        nextVoicePreset,
+      ),
+    ].join(" · ");
+
+    setSavedProposalDocumentMeta(nextDocumentMeta);
     setSavedProposalOutputMode("preview");
+
+    if (requestedView === "saved" && selectedProposalId) {
+      const nextStyleLinkMode = resolveProposalStyleLinkMode(
+        openedSavedProposal.metadata?.styleLinkMode,
+      );
+      const nextStylePreset = storedRenderState.stylePreset;
+      const nextTemplateBundleId =
+        resolveProposalTemplateBundleId(openedSavedProposal.metadata?.templateBundleId) ??
+        findProposalTemplateBundleIdByStylePreset(nextStylePreset);
+      const nextPaletteOverride =
+        nextStylePreset?.palette &&
+        nextStylePreset.palette !== "custom" &&
+        isProposalPaletteId(nextStylePreset.palette)
+          ? nextStylePreset.palette
+          : null;
+      const nextCustomAccentHex =
+        nextStylePreset?.palette === "custom"
+          ? nextStylePreset.accentHex ?? null
+          : null;
+      const nextRecipientDetails =
+        resolveProposalHeadingText(openedSavedProposal.metadata, "recipientDetails") ?? "";
+      const nextHeaderVisibility = resolveProposalHeaderVisibility({
+        ...buildProposalHeaderVisibilityFromContent(nextRecipientDetails),
+        showSender: openedSavedProposal.metadata?.headerShowSender,
+        showDate: openedSavedProposal.metadata?.headerShowDate,
+        showSubject: openedSavedProposal.metadata?.headerShowSubject,
+        showRecipient: openedSavedProposal.metadata?.headerShowRecipient,
+        showRecipientDetails:
+          openedSavedProposal.metadata?.headerShowRecipientDetails,
+      });
+      const nextSourceComposeDraft: StoredProposalComposeDraft | null =
+        openedSavedProposal.metadata?.sourceJobDescription ||
+        openedSavedProposal.metadata?.sourceJobTitle ||
+        openedSavedProposal.metadata?.sourceUrl ||
+        openedSavedProposal.metadata?.platform
+          ? {
+              jobTitle:
+                openedSavedProposal.metadata?.sourceJobTitle ??
+                openedSavedProposal.title ??
+                "",
+              jobDescription:
+                openedSavedProposal.metadata?.sourceJobDescription ?? "",
+              sourceUrl: openedSavedProposal.metadata?.sourceUrl ?? null,
+              platform: openedSavedProposal.metadata?.platform ?? null,
+              proposalType: nextProposalType ?? undefined,
+              voicePreset: nextVoicePreset ?? null,
+            }
+          : null;
+
+      setProposalContent(nextContent);
+      setProposalType(nextProposalType);
+      setProposalLibraryStatus("saved");
+      setProposalVoicePreset(nextVoicePreset);
+      setProposalTemplateId(storedRenderState.templateId);
+      setProposalStylePreset(nextStylePreset);
+      setProposalStyleLinkMode(nextStyleLinkMode);
+      setProposalStyleChoice(
+        resolveProposalStyleChoice(
+          openedSavedProposal.metadata?.styleChoice ??
+            resolveProposalStyleChoiceFromRenderState({
+              templateId: storedRenderState.templateId,
+              stylePreset: nextStylePreset,
+            }) ??
+            "auto",
+        ),
+      );
+      setHasUserEditedStyle(Boolean(nextStyleLinkMode === "proposal_local" && nextStylePreset));
+      setProposalWorkspaceStyle(nextStylePreset ? resolveVerbatiStyle(nextStylePreset) : null);
+      setProposalPaletteOverride(nextPaletteOverride);
+      setProposalCustomAccentHex(nextCustomAccentHex);
+      setProposalTemplateBundleId(nextTemplateBundleId);
+      setOutputSourceComposeDraft(nextSourceComposeDraft);
+      setComposePreviewValues(nextSourceComposeDraft);
+      setComposeDraftInitialSeed(nextSourceComposeDraft);
+      setProposalApplicantName(
+        resolveProposalHeadingText(openedSavedProposal.metadata, "applicantName") ?? "",
+      );
+      setProposalApplicantRole(
+        resolveProposalHeadingText(openedSavedProposal.metadata, "applicantRole") ?? "",
+      );
+      setProposalContactLine(
+        resolveProposalHeadingText(openedSavedProposal.metadata, "contactLine") ?? "",
+      );
+      setProposalLetterDate(
+        resolveProposalHeadingText(openedSavedProposal.metadata, "letterDate") ?? "",
+      );
+      setProposalRecipientDetails(nextRecipientDetails);
+      setProposalHeaderVisibility(nextHeaderVisibility);
+      setProposalDocumentTitle(openedSavedProposal.title || "Saved proposal");
+      setProposalDocumentMeta(nextDocumentMeta);
+      setGeneratedProposalId(openedSavedProposal._id as Id<"proposals">);
+      generatedProposalIdRef.current = openedSavedProposal._id as Id<"proposals">;
+      setProposalOutputMode("preview");
+      setIsComposePanelVisible(true);
+      setIsBriefExpanded(false);
+      lastSavedProposalContentRef.current = nextContent;
+      lastSavedProposalTitleRef.current = openedSavedProposal.title || "Saved proposal";
+      lastPersistedComposeTokenRef.current = null;
+      composeAutosavePrimedRef.current = true;
+      setComposeSaveStatus("idle");
+    }
   }, [
     buildProposalToneMetaLabel,
     formatProposalToneLabel,
@@ -8127,7 +8230,7 @@ export function ProposalForge(): JSX.Element {
 
                     <div className="dasti-flow dasti-proposal-skeleton-forge__stage">
                       <ProposalDocumentStage
-                        statusLabel={loading ? "Drafting" : "Draft"}
+                        statusLabel={loading ? "Drafting" : proposalLibraryStatus === "saved" ? "Saved" : "Draft"}
                         statusMeta={proposalDraftStatusMeta}
                         statusTitle={proposalDraftStatusTitle}
                         toneLabel={proposalRailToneLabel}
