@@ -593,6 +593,8 @@ type ProposalWorkspaceCssVars = React.CSSProperties & {
   "--proposal-workspace-output-shell-inline-size"?: string;
   "--proposal-workspace-shell-block-size"?: string;
   "--proposal-compose-column-inline-size"?: string;
+  "--proposal-workspace-stage-inline-size"?: string;
+  "--proposal-workspace-rail-inline-size"?: string;
 };
 
 type SavedProposalRecord = {
@@ -6691,7 +6693,8 @@ export function ProposalForge(): JSX.Element {
       null
     );
   }, [attachedCvId, attachedCvTitle]);
-  const proposalTwoPaneMinViewportWidth = 1024;
+  // Page + rail + grid gap + page padding need room before two-pane mode is safe.
+  const proposalTwoPaneMinViewportWidth = 1420;
   const proposalBaseWorkspaceOutputShellInlineSize =
     "var(--forge-page-inline-size)";
   const proposalWorkspaceShellBlockSize =
@@ -7955,21 +7958,25 @@ export function ProposalForge(): JSX.Element {
                     className="dasti-proposal-skeleton-forge"
                     style={
                       {
+                        "--proposal-workspace-stage-inline-size":
+                          "var(--forge-page-inline-size)",
+                        "--proposal-workspace-rail-inline-size": "360px",
                         "--grid-columns": isCompactComposeLayout
                           ? "minmax(0, 1fr)"
                           : showComposeGridColumn
-                            ? "minmax(0, 1fr) 360px"
+                            ? "minmax(0, var(--proposal-workspace-stage-inline-size)) var(--proposal-workspace-rail-inline-size)"
                             : "minmax(0, 1fr)",
                         "--grid-gap": showComposeGridColumn
                           ? "var(--layout-card-grid)"
                           : "0px",
                         "--grid-align": "start",
-                        "--grid-justify": showComposeGridColumn
-                          ? "stretch"
-                          : shouldCenterOutputStage
+                        "--grid-justify":
+                          !isCompactComposeLayout && showComposeGridColumn
                             ? "center"
-                            : "start",
-                      } as React.CSSProperties
+                            : shouldCenterOutputStage
+                              ? "center"
+                              : "start",
+                      } as ProposalWorkspaceCssVars
                     }
                   >
                     <ProposalRail
