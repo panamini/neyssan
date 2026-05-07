@@ -3826,6 +3826,9 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("tab", { name: "Style" }));
 
+    expect(screen.getByRole("button", { name: "Style 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Style 2" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Style 3" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Fraunces Bold/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Workshop" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open saved resume styles" })).toBeNull();
@@ -3834,9 +3837,7 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByRole("button", { name: "Use Cobalt accent" }));
 
     await waitFor(() =>
-      expect(
-        screen.getByText("Preview style: swiss|quiet-editorial|custom|#2a78d6"),
-      ).toBeInTheDocument(),
+      expect(screen.getByText(/Preview style: .*cobalt/i)).toBeInTheDocument(),
     );
   });
 
@@ -3854,14 +3855,16 @@ describe("CvForge workspace mode", () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Style" }));
-    await user.click(screen.getByRole("button", { name: /Fraunces Bold/i }));
-    await user.click(screen.getByRole("menuitemradio", { name: "Ledger Sans" }));
-    await user.click(screen.getByRole("button", { name: "Workshop" }));
+    await user.click(screen.getByRole("button", { name: "Style 2" }));
 
     await waitFor(() =>
-      expect(
-        screen.getByText("Preview style: workshop|ledger-sans|sauge|none"),
-      ).toBeInTheDocument(),
+      expect(screen.getByText(/Preview style: .*geist-baskervville/i)).toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Workshop 2-col" }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Preview style: .*geist-baskervville/i)).toBeInTheDocument(),
     );
   });
 

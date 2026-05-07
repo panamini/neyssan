@@ -180,7 +180,7 @@ describe("ProposalRail style tab", () => {
     ).toBeGreaterThan(0);
     expect(screen.getByText(/Default settings/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "→ Document style" })).toBeInTheDocument();
-    expect(screen.getByText("Template")).toBeInTheDocument();
+    expect(screen.getByText("Style", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(screen.getByText("Font pair")).toBeInTheDocument();
     expect(screen.getByText("Accent")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Style 1" })).toHaveAttribute(
