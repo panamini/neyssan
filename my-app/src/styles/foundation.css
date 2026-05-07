@@ -276,7 +276,7 @@
     0 2px 12px rgba(0, 0, 0, 0.06);
   --document-viewer-bleed-inline: clamp(24px, 2.8vw, 40px);
   --document-viewer-bleed-block: clamp(28px, 3.2vw, 48px);
-  --document-viewer-radius: 12px;
+  --document-viewer-radius: var(--document-paper-radius); /* 4px — editorial, matches skeleton */
   --document-viewer-frame-surface: linear-gradient(
     180deg,
     color-mix(in srgb, var(--color-surface) 58%, var(--color-canvas) 42%),
@@ -287,9 +287,7 @@
     var(--color-border) 76%,
     transparent
   );
-  --document-viewer-frame-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.76),
-    0 2px 12px rgba(0, 0, 0, 0.06),
-    0 10px 24px color-mix(in srgb, var(--color-text) 2.4%, transparent);
+  --document-viewer-frame-shadow: var(--document-paper-shadow);
   --document-viewer-toolbar-block-size: calc(
     var(--hs) + (2 * (var(--space-2) - 2px)) + 2px
   );
@@ -329,7 +327,7 @@
   --proposal-grid-step-b-block: calc(var(--proposal-block-mm) * 18);
   --proposal-grid-half-step-block: calc(var(--proposal-block-mm) * 8.5);
   --proposal-template-left-zone-mm: 52;
-  --proposal-template-top-offset-mm: 35;
+  --proposal-template-top-offset-mm: 22;
   --proposal-template-body-start-mm: 95.5;
   --proposal-template-bottom-margin-mm: 18;
   --proposal-template-right-margin-mm: 18;
@@ -497,7 +495,7 @@
             background were wrong — those now use `var(--paper)` directly.
 */
 :root {
-  --bg: #FAF9F5;   /* app content canvas — lighter/cleaner */
+  --bg: #F8F7F3;   /* app content canvas — one step below paper (#FAF9F5) */
   --sf0: var(--bg); /* floor level — canvas alias, used for focus ring halos + sunken fills */
   --sf1: #F8F7F3;  /* sidebar chrome — slightly deeper than content */
   --sf2: #F0EEE6;  /* secondary surfaces + resume stage */
@@ -581,13 +579,13 @@
 /* --- §6 Mode Dark — dasti preview OLED -------------------- */
 .dark {
   color-scheme: dark;
-  --app-bg: #0D0D0D;
+  --app-bg: #0F0E0C;
   /* Resume preview canvas color is not defined in foundation tokens.
      Keep it on the workspace selector in product.css so the preview canvas
      can be changed without creating a parallel theme token. */
-  --bg: #0D0D0D;         /* INKWELL — page canvas */
+  --bg: #0F0E0C;         /* INKWELL — page canvas (warm-tinted OLED black) */
   --sf0: var(--bg);      /* floor level — canvas alias, focus ring halos + sunken fills */
-  --sf1: #0E0E0E;        /* sidebar chrome — fractionally above canvas */
+  --sf1: #100F0D;        /* sidebar chrome — fractionally above canvas */
   --sf2: #1A1918;        /* card rest, panels, secondary surfaces — subtle step up */
   --sf3: #161616;        /* subtle-fill input hover — between canvas and sf2 */
   --sfr: #222120;        /* raised: toolbars, cards, popovers, modals */
@@ -691,9 +689,7 @@
   --section-hover-lift: -1px;
   --document-viewer-frame-surface: var(--sf2);  /* document stage — clearly above bg */
   --document-viewer-frame-border: var(--border-field);
-  --document-viewer-frame-shadow: inset 0 1px 0
-      hsla(0, 0%, 100%, 0.10),
-    0 14px 26px -24px hsla(0, 0%, 0%, 0.8);
+  --document-viewer-frame-shadow: var(--document-paper-shadow);
   --paper: #E8E5DB;      /* warm cream — unified with sf1 at line 543 */
   --proposal-document-paper: var(--paper);
   --proposal-document-ink: var(--color-text);
