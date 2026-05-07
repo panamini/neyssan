@@ -63,6 +63,7 @@ import {
   readResumePreviewDebugCapture,
   setStyledResumeExportContext,
 } from "../lib/document-export-debug";
+import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
 import type { CvDocument } from "../types/cvDocument";
 import { buildCanonicalResumeRenderModelFromCv } from "../lib/buildCanonicalResumeRenderModel";
@@ -99,6 +100,8 @@ import {
   projectResponsibilitiesForWorkshop,
   responsibilityValueToDisplayLines,
 } from "../lib/resumeResponsibilityAuthority";
+
+const CV_PAPER_VISUAL_INLINE_SIZE = `${Math.round(A4_PAGE_WIDTH_PX * 100) / 100}px`;
 
 type CvForgeWorkspaceMode = "edit" | "preview";
 type CvForgeCanonicalJob = {
@@ -2681,11 +2684,13 @@ export function CvForge(): JSX.Element {
     ],
   );
 
-  const cvWorkbenchShellStyle: React.CSSProperties = {
+  const cvWorkbenchShellStyle = {
     width: "100%",
     maxWidth: "100%",
     marginInline: "auto",
-  };
+    "--cv-paper-visual-inline-size": `min(100%, ${CV_PAPER_VISUAL_INLINE_SIZE})`,
+    "--cv-workspace-stage-inline-size": "var(--cv-paper-visual-inline-size)",
+  } as React.CSSProperties;
   const showJobBriefContext = Boolean(requestedJobId);
   const isEntryPickerBusy = isCreatingEntryCv || isImportingEntryCv;
 

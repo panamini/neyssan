@@ -241,8 +241,6 @@ export function CvStageBar({
               className="dasti-cv-stage-bar__plain-action dasti-cv-stage-bar__pick-resume"
               disabled={exporting}
               aria-label="Pick resume"
-              title="Pick resume"
-              data-toolbar-tooltip="Pick resume"
             >
               <span
                 className="dasti-cv-stage-bar__pick-icon dasti-cv-stage-bar__pick-icon--closed"

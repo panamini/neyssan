@@ -21,7 +21,7 @@
   min-height: calc(100dvh - var(--header-height) - var(--space-4));
   padding: var(--space-4) var(--space-5);
   border-radius: var(--r-surface, var(--radius-card));
-  background: var(--sf1);
+  background: transparent;
   overflow: clip;
 }
 
@@ -358,7 +358,7 @@
 }
 
 .dasti-cv-stage-bar .style-segmented button[data-selected="true"] {
-  background: var(--sf0);
+  background: var(--color-surface-raised);
   color: var(--ti);
   box-shadow: var(--shadow-sm);
 }
@@ -552,7 +552,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  padding: var(--space-4);
+  padding: var(--space-5);
   border: 1px solid var(--border-soft);
   border-radius: var(--r-surface, var(--radius-card));
   background: var(--sfr);
@@ -562,7 +562,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-1);
-  padding: calc(var(--space-1) - 1px);
+  padding: var(--space-1);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
   background: var(--sf1);
@@ -570,7 +570,8 @@
 
 .dasti-cv-rail-tabs button {
   min-width: 0;
-  min-height: 28px;
+  min-height: var(--control-sm);
+  min-block-size: var(--control-sm);
   border: 0;
   border-radius: var(--radius-pill);
   background: transparent;
@@ -588,7 +589,7 @@
 }
 
 .dasti-cv-rail-tabs button[data-active="true"] {
-  background: var(--sf0);
+  background: var(--color-surface-raised);
   color: var(--ti);
   box-shadow: var(--shadow-sm);
 }
@@ -1458,12 +1459,29 @@
   }
 
   .dasti-cv-ats {
+    inline-size: 48px;
     max-width: 48px;
     justify-content: center;
+    padding-inline: 0;
+  }
+
+  .dasti-cv-ats[data-state="ready"] {
+    background: var(--okb);
+    border-color: color-mix(in srgb, var(--ok) 28%, transparent);
+    color: var(--okt);
+  }
+
+  .dasti-cv-ats[data-state="warn"] {
+    background: color-mix(in srgb, var(--wa) 14%, var(--sfr));
+    border-color: color-mix(in srgb, var(--wa) 32%, transparent);
+    color: color-mix(in srgb, var(--wa) 70%, var(--ti));
   }
 
   .dasti-cv-ats__mark {
     display: inline-grid;
+    width: 100%;
+    min-width: 0;
+    background: transparent;
   }
 
   .dasti-cv-ats__label,
@@ -1521,6 +1539,14 @@
 .dasti-proposal-sheet-frame--resume-workspace .dasti-proposal-sheet {
   min-height: 0;
   height: 100%;
+}
+
+.dasti-cv-paper-stage
+  .dasti-doc-viewer-shell--resume-workspace
+  .dasti-document-shell {
+  box-shadow:
+    var(--document-viewer-frame-shadow),
+    0 12px 28px -24px color-mix(in srgb, var(--shadow-color) 92%, transparent);
 }
 
 .dasti-doc-viewer-shell--resume-workspace {

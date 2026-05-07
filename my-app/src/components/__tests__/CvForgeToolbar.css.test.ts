@@ -109,8 +109,25 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-cv-stage-bar__action-divider\s*\{[\s\S]*width:\s*1px;[\s\S]*height:\s*24px;/,
     );
     expect(productCss).toMatch(
-      /@media\s*\(max-width:\s*1419px\)\s*\{[\s\S]*\.dasti-cv-ats__mark\s*\{[\s\S]*display:\s*inline-grid;[\s\S]*\.dasti-cv-ats__label,[\s\S]*\.dasti-cv-stage-bar__pick-label\s*\{[\s\S]*display:\s*none;/,
+      /@media\s*\(max-width:\s*1419px\)\s*\{[\s\S]*\.dasti-cv-ats\s*\{[\s\S]*inline-size:\s*48px;[\s\S]*padding-inline:\s*0;[\s\S]*\.dasti-cv-ats\[data-state="ready"\]\s*\{[\s\S]*background:\s*var\(--okb\);[\s\S]*\.dasti-cv-ats__mark\s*\{[\s\S]*display:\s*inline-grid;[\s\S]*background:\s*transparent;[\s\S]*\.dasti-cv-ats__label,[\s\S]*\.dasti-cv-stage-bar__pick-label\s*\{[\s\S]*display:\s*none;/,
     );
+  });
+
+  it("keeps CV forge canvas and rail tabs aligned with Proposal forge", () => {
+    expect(productCss).toMatch(
+      /\.dasti-cv-skeleton-forge\s*\{[\s\S]*background:\s*transparent;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-rail\s*\{[\s\S]*padding:\s*var\(--space-5\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-rail-tabs\s*\{[\s\S]*padding:\s*var\(--space-1\);[\s\S]*\.dasti-cv-rail-tabs button\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*min-block-size:\s*var\(--control-sm\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-rail-tabs button\[data-active="true"\]\s*\{[\s\S]*background:\s*var\(--color-surface-raised\);/,
+    );
+    expect(cvForgeSource).toContain("CV_PAPER_VISUAL_INLINE_SIZE");
+    expect(cvForgeSource).toContain('"--cv-paper-visual-inline-size"');
   });
 
   it("collapses resume workspace export chrome at the tablet toolbar breakpoint", () => {
