@@ -50,7 +50,25 @@ describe("CvStageBar", () => {
     expect(pickResumeTrigger).toBeInTheDocument();
     expect(pickResumeTrigger).toHaveClass("dasti-cv-stage-bar__plain-action");
     expect(pickResumeTrigger).not.toHaveAttribute("title");
-    expect(pickResumeTrigger).not.toHaveAttribute("data-toolbar-tooltip");
+    expect(pickResumeTrigger).toHaveAttribute(
+      "data-toolbar-tooltip",
+      "Pick resume",
+    );
+    expect(screen.queryByText("Pick resume")).not.toBeInTheDocument();
+    expect(
+      pickResumeTrigger.closest(".dasti-toolbar--surface-tooltips"),
+    ).toBeTruthy();
+    const editTrigger = screen.getByRole("button", { name: "Edit" });
+    const previewTrigger = screen.getByRole("button", {
+      name: "Page preview",
+    });
+    const shareTrigger = screen.getByRole("button", { name: "Share" });
+    expect(editTrigger).toHaveAttribute("data-toolbar-tooltip", "Edit");
+    expect(previewTrigger).toHaveAttribute("data-toolbar-tooltip", "Preview");
+    expect(shareTrigger).toHaveAttribute("data-toolbar-tooltip", "Share");
+    expect(editTrigger).not.toHaveAttribute("title");
+    expect(previewTrigger).not.toHaveAttribute("title");
+    expect(shareTrigger).not.toHaveAttribute("title");
     expect(screen.getByText("Natural")).toBeInTheDocument();
     expect(screen.queryByText("Natural tone")).not.toBeInTheDocument();
     expect(screen.getByText("Saved").closest(".ds-status")).toBeTruthy();
@@ -66,6 +84,7 @@ describe("CvStageBar", () => {
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Pick resume/i }));
+    expect(pickResumeTrigger).toHaveAttribute("aria-expanded", "true");
     await user.click(
       await screen.findByRole("menuitemradio", { name: /Design resume/i }),
     );
