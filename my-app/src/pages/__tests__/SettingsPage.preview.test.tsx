@@ -152,7 +152,7 @@ describe("SettingsPage preview controls", () => {
     renderSettings("/settings?tab=preferences");
 
     const themeToggle = screen.getByRole("button", {
-      name: "Toggle dark theme",
+      name: "Toggle theme",
     });
     await user.click(themeToggle);
     expect(themeToggle).toHaveAttribute(
@@ -806,10 +806,10 @@ describe("SettingsPage preview controls", () => {
     });
     renderSettings();
 
-    const signatureGroup = screen.getByRole("group", { name: "Signature" });
+    const signatureGroup = screen.getByRole("group", { name: "Printed name" });
     await user.click(
       within(signatureGroup).getByRole("button", {
-        name: "FD Garamond signature",
+        name: "FD Garamond printed name",
       }),
     );
 

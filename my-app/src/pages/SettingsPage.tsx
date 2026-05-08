@@ -966,7 +966,7 @@ function SignatureSelector({
     <div
       className="dasti-settings-signature"
       role="group"
-      aria-label="Signature"
+      aria-label="Printed name"
     >
       <div className="sig-grid">
         <button
@@ -1001,7 +1001,7 @@ function SignatureSelector({
               type="button"
               className="sig-card"
               data-selected={active ? "true" : "false"}
-              aria-label={`${option.label} signature`}
+              aria-label={`${option.label} printed name`}
               aria-pressed={active}
               onClick={() =>
                 onChange({
@@ -1018,7 +1018,7 @@ function SignatureSelector({
                 {SIGNATURE_SAMPLE_NAME}
               </span>
               <span className="sig-card__name">
-                {option.label} — signature font
+                {option.label} — printed name font
               </span>
             </button>
           );
@@ -1065,7 +1065,7 @@ function SignatureSelector({
 
       <div className="dasti-settings-signature-current" aria-live="polite">
         <span className="dasti-settings-signature-current__label">
-          Current signature
+          Current printed name
         </span>
         <span className="dasti-settings-signature-current__preview">
           {signatureRender.kind === "image" ? (
@@ -1749,11 +1749,11 @@ export function SettingsPage(): JSX.Element {
                           />
                         </div>
 
-                        {/* Signature */}
+                        {/* Printed name */}
                         <div className="dasti-settings-appearance-group dasti-settings-appearance-group--signature">
                           <div className="dasti-settings-appearance-group__header">
                             <div className="dasti-settings-appearance-label">
-                              Signature
+                              Printed name
                             </div>
                           </div>
                           <SignatureSelector
@@ -1925,10 +1925,9 @@ export function SettingsPage(): JSX.Element {
                   <div className="settings__row">
                     <div>
                       <div className="settings__row-label">Theme</div>
-                      <div className="settings__row-desc">Light or dark.</div>
                     </div>
                     <span
-                      className="settings-token-switch-shell"
+                      className="settings-theme-toggle-shell"
                       data-toolbar-tooltip={
                         themePreference === "dark"
                           ? "Switch to light theme"
@@ -1936,11 +1935,26 @@ export function SettingsPage(): JSX.Element {
                       }
                       data-toolbar-tooltip-placement="below"
                     >
+                      <span
+                        className={[
+                          "settings-theme-toggle__endpoint",
+                          themePreference === "light"
+                            ? "settings-theme-toggle__endpoint--active"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        aria-hidden="true"
+                      >
+                        <Sun className="settings-theme-toggle__icon" aria-hidden />
+                        <span>Sun</span>
+                      </span>
                       <button
                         type="button"
                         className={[
                           "dasti-theme-switch",
                           "settings-token-switch",
+                          "settings-theme-toggle__switch",
                           themePreference === "dark"
                             ? "dasti-theme-switch--dark settings-token-switch--active"
                             : "",
@@ -1948,7 +1962,7 @@ export function SettingsPage(): JSX.Element {
                           .filter(Boolean)
                           .join(" ")}
                         aria-pressed={themePreference === "dark"}
-                        aria-label="Toggle dark theme"
+                        aria-label="Toggle theme"
                         onClick={() =>
                           setThemePreference(
                             themePreference === "dark" ? "light" : "dark",
@@ -1958,15 +1972,21 @@ export function SettingsPage(): JSX.Element {
                         <span className="dasti-theme-switch__rail" aria-hidden="true">
                           <span className="dasti-theme-switch__thumb" />
                         </span>
-                        <span className="dasti-theme-switch__label">
-                          {themePreference === "dark" ? "Dark" : "Light"}
-                        </span>
-                        {themePreference === "dark" ? (
-                          <Moon className="dasti-theme-switch__glyph" aria-hidden />
-                        ) : (
-                          <Sun className="dasti-theme-switch__glyph" aria-hidden />
-                        )}
                       </button>
+                      <span
+                        className={[
+                          "settings-theme-toggle__endpoint",
+                          themePreference === "dark"
+                            ? "settings-theme-toggle__endpoint--active"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        aria-hidden="true"
+                      >
+                        <span>Moon</span>
+                        <Moon className="settings-theme-toggle__icon" aria-hidden />
+                      </span>
                     </span>
                   </div>
                   <div className="settings__row">
