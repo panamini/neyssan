@@ -35,17 +35,11 @@ const { api } = vi.hoisted(() => ({
 vi.mock("convex/react", () => ({
   useQuery: () => presetsQueryMock(),
   useMutation: (reference: unknown) => {
-    if (
-      reference ===
-      (api.proposalSettings.savePreset as unknown)
-    ) {
+    if (reference === (api.proposalSettings.savePreset as unknown)) {
       return savePresetMock;
     }
 
-    if (
-      reference ===
-      (api.proposalSettings.setCurrent as unknown)
-    ) {
+    if (reference === (api.proposalSettings.setCurrent as unknown)) {
       return setCurrentSettingsMock;
     }
 
@@ -69,10 +63,7 @@ vi.mock("../../components/ProposalColorPickerPopover", () => ({
     onHexChange: (hex: string) => void;
   }) =>
     isOpen ? (
-      <button
-        type="button"
-        onClick={() => onHexChange("#A1B2C3")}
-      >
+      <button type="button" onClick={() => onHexChange("#A1B2C3")}>
         Pick custom #A1B2C3
       </button>
     ) : null,
@@ -123,29 +114,16 @@ describe("SettingsPage preview controls", () => {
     });
   });
 
-  it("renders skeleton settings navigation and opens account by default", async () => {
-    const user = userEvent.setup();
+  it("opens account by default and routes to docstyle via tab query", () => {
     renderSettings("/settings");
 
-    expect(screen.getAllByRole("button").slice(0, 7).map((button) => button.textContent)).toEqual([
-      "Account",
-      "Preferences",
-      "Document style",
-      "Voice & tone",
-      "Billing",
-      "Team",
-      "Danger zone",
-    ]);
     expect(screen.getByText("Profile")).toBeInTheDocument();
     expect(screen.getByText("Connected accounts")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Document style" }));
-
-    expect(screen.getByRole("heading", { name: "Style profiles" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Document style" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    renderSettings("/settings?tab=docstyle");
+    expect(
+      screen.getByRole("heading", { name: "Style profiles" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps tone out of document style and saves it from Voice & tone", async () => {
@@ -156,7 +134,7 @@ describe("SettingsPage preview controls", () => {
       screen.queryByRole("group", { name: "Default tone" }),
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Voice & tone" }));
+    renderSettings("/settings?tab=voice");
     const toneGroup = screen.getByRole("group", { name: "Default tone" });
 
     await user.click(within(toneGroup).getByRole("button", { name: "Warm" }));
@@ -188,10 +166,9 @@ describe("SettingsPage preview controls", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
 
     await user.click(screen.getByRole("button", { name: "Reduce motion" }));
-    expect(screen.getByRole("button", { name: "Reduce motion" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(
+      screen.getByRole("button", { name: "Reduce motion" }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(document.documentElement.dataset.reduceMotion).toBe("true");
   });
 
@@ -205,12 +182,14 @@ describe("SettingsPage preview controls", () => {
 
     const { container } = renderSettings();
 
-    expect(container.querySelector(".dasti-settings-hero-preview__chip")).toHaveTextContent(
-      "Geist Bold / Baskervville",
-    );
+    expect(
+      container.querySelector(".dasti-settings-hero-preview__chip"),
+    ).toHaveTextContent("Geist Bold / Baskervville");
 
     const cards = Array.from(
-      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-slot-card",
+      ),
     );
 
     expect(cards[0]).toHaveTextContent("Style 1");
@@ -243,7 +222,9 @@ describe("SettingsPage preview controls", () => {
     const user = userEvent.setup();
     const { container } = renderSettings();
     const cards = Array.from(
-      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-slot-card",
+      ),
     );
 
     await user.click(cards[1]!);
@@ -280,7 +261,9 @@ describe("SettingsPage preview controls", () => {
     const user = userEvent.setup();
     const { container } = renderSettings();
     const cards = Array.from(
-      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-slot-card",
+      ),
     );
 
     await user.click(cards[1]!);
@@ -343,7 +326,9 @@ describe("SettingsPage preview controls", () => {
     const user = userEvent.setup();
     const { container } = renderSettings();
     const cards = Array.from(
-      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-slot-card",
+      ),
     );
 
     await user.click(cards[1]!);
@@ -352,7 +337,9 @@ describe("SettingsPage preview controls", () => {
         name: "Open custom color picker",
       }),
     );
-    await user.click(screen.getByRole("button", { name: "Pick custom #A1B2C3" }));
+    await user.click(
+      screen.getByRole("button", { name: "Pick custom #A1B2C3" }),
+    );
 
     const colorGroup = within(screen.getByRole("group", { name: "Color" }));
     expect(
@@ -406,7 +393,9 @@ describe("SettingsPage preview controls", () => {
     const user = userEvent.setup();
     const { container } = renderSettings();
     const cards = Array.from(
-      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-slot-card",
+      ),
     );
 
     await user.click(cards[1]!);
@@ -447,7 +436,9 @@ describe("SettingsPage preview controls", () => {
     const user = userEvent.setup();
     const { container } = renderSettings();
     const cards = Array.from(
-      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-slot-card",
+      ),
     );
 
     await user.click(cards[2]!);
@@ -491,7 +482,9 @@ describe("SettingsPage preview controls", () => {
       </MemoryRouter>,
     );
     const cards = Array.from(
-      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-slot-card",
+      ),
     );
 
     await user.click(cards[1]!);
@@ -555,7 +548,9 @@ describe("SettingsPage preview controls", () => {
     const { container } = renderSettings();
 
     const cards = Array.from(
-      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-slot-card",
+      ),
     );
 
     expect(cards[0]).toHaveTextContent("Default");
@@ -569,7 +564,9 @@ describe("SettingsPage preview controls", () => {
     expect(setActivePresetMock).not.toHaveBeenCalled();
     expect(cards[0]).toHaveTextContent("Default");
     expect(cards[1]).not.toHaveTextContent("Default");
-    expect(screen.getByRole("button", { name: "Set as default" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Set as default" }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Set as default" }));
 
@@ -587,7 +584,9 @@ describe("SettingsPage preview controls", () => {
 
     const getCards = () =>
       Array.from(
-        container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+        container.querySelectorAll<HTMLButtonElement>(
+          ".dasti-settings-slot-card",
+        ),
       );
     const getDefaultTexts = () =>
       Array.from(
@@ -646,7 +645,9 @@ describe("SettingsPage preview controls", () => {
 
     const getCards = () =>
       Array.from(
-        container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+        container.querySelectorAll<HTMLButtonElement>(
+          ".dasti-settings-slot-card",
+        ),
       );
     const getDefaultTexts = () =>
       Array.from(
@@ -687,8 +688,9 @@ describe("SettingsPage preview controls", () => {
     const { container } = renderSettings();
 
     expect(
-      within(screen.getByRole("group", { name: "Style preset slots" }))
-        .queryAllByText(/default/i),
+      within(
+        screen.getByRole("group", { name: "Style preset slots" }),
+      ).queryAllByText(/default/i),
     ).toHaveLength(0);
     expect(screen.queryByRole("button", { name: "Set as default" })).toBeNull();
     expect(
@@ -700,19 +702,25 @@ describe("SettingsPage preview controls", () => {
   });
 
   it("does not move the default badge when setting the active slot fails", async () => {
-    setActivePresetMock.mockRejectedValueOnce(new Error("Server rejected active slot"));
+    setActivePresetMock.mockRejectedValueOnce(
+      new Error("Server rejected active slot"),
+    );
     const user = userEvent.setup();
     const { container } = renderSettings();
 
     const cards = Array.from(
-      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-slot-card",
+      ),
     );
 
     await user.click(cards[1]!);
     await user.click(screen.getByRole("button", { name: "Set as default" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Server rejected active slot")).toBeInTheDocument();
+      expect(
+        screen.getByText("Server rejected active slot"),
+      ).toBeInTheDocument();
     });
     expect(cards[0]).toHaveTextContent("Default");
     expect(cards[1]).not.toHaveTextContent("Default");
@@ -809,7 +817,11 @@ describe("SettingsPage preview controls", () => {
     const uniqueStyleCardLabels = Array.from(new Set(styleCardLabels));
 
     expect(previewBadge()).toHaveTextContent("Workshop");
-    expect(uniqueStyleCardLabels).toEqual(["Auto", "Workshop", "Workshop 2-col"]);
+    expect(uniqueStyleCardLabels).toEqual([
+      "Auto",
+      "Workshop",
+      "Workshop 2-col",
+    ]);
   });
 
   it("saves workshop as canonical verbatiStyle on the preset slot", async () => {

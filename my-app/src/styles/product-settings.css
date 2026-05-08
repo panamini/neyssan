@@ -1671,13 +1671,59 @@
   --r-paper: 4px;
 
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s5);
   width: 100%;
-  max-width: 1280px;
+  max-width: 1080px;
   padding: var(--s6) var(--s5) var(--s8);
   margin: 0 auto;
   align-items: start;
+}
+
+/* Document style pane: slots + editor toolbar live in the main column;
+   the live preview docks as a side column so the cards stay at canonical
+   width. The editor's own 2-col grid is flattened via display: contents
+   so its children become direct grid items of the builder. */
+.settings__pane[data-pane="docstyle"] .dasti-settings-builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-rows: auto auto;
+  gap: var(--s4);
+  align-items: start;
+}
+
+.settings__pane[data-pane="docstyle"] .dasti-settings-builder__slots {
+  grid-column: 1 / 2;
+  grid-row: 1;
+}
+
+.settings__pane[data-pane="docstyle"] .dasti-settings-style-editor {
+  display: contents;
+}
+
+.settings__pane[data-pane="docstyle"] .dasti-settings-builder__left {
+  grid-column: 1 / 2;
+  grid-row: 2;
+}
+
+.settings__pane[data-pane="docstyle"] .dasti-settings-builder__right {
+  grid-column: 2 / 3;
+  grid-row: 1 / 3;
+  align-self: start;
+}
+
+@media (max-width: 920px) {
+  .settings__pane[data-pane="docstyle"] .dasti-settings-builder {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+  }
+
+  .settings__pane[data-pane="docstyle"] .dasti-settings-builder__slots,
+  .settings__pane[data-pane="docstyle"] .dasti-settings-builder__left,
+  .settings__pane[data-pane="docstyle"] .dasti-settings-builder__right {
+    grid-column: 1 / 2;
+    grid-row: auto;
+  }
 }
 
 .settings__nav {
@@ -2359,17 +2405,27 @@ html[data-reduce-motion="true"] *::after {
 
 @media (max-width: 920px) {
   .settings {
-    grid-template-columns: minmax(0, 1fr);
     padding-inline: var(--s4);
-  }
-
-  .settings__nav {
-    position: static;
   }
 
   .settings-contact-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Settings sidebar mode (Sidebar.tsx) — Back to app row */
+.sb__nav--settings .sb-section--settings-back {
+  padding-bottom: var(--s2);
+  margin-bottom: var(--s2);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+}
+
+.sb__nav--settings .sb-section__action--back {
+  color: var(--tm2);
+}
+
+.sb__nav--settings .sb-section__action--back:hover {
+  color: var(--ti);
 }
 
 .dasti-settings-builder-header {
@@ -2997,7 +3053,7 @@ button.dasti-settings-signature-tool:focus-visible {
 
 .dasti-settings-hero-preview__inner {
   display: grid;
-  grid-template-rows: auto auto 1px 1fr auto;
+  grid-template-rows: auto 1px 1fr auto auto;
   gap: var(--s3);
   padding: var(--s5) var(--s4) var(--s4);
   height: 100%;

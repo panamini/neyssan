@@ -1479,21 +1479,6 @@ export function SettingsPage(): JSX.Element {
         }
       >
         <div className="dasti-settings-layout settings">
-          <nav className="settings__nav" aria-label="Settings sections">
-            {SETTINGS_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className="settings__nav-item"
-                data-active={activeTab === tab.id ? "true" : "false"}
-                aria-current={activeTab === tab.id ? "page" : undefined}
-                onClick={() => selectSettingsTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-
           <div className="settings__content">
             {activeTab === "docstyle" ? (
               <div
