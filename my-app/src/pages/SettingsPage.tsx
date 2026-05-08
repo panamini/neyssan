@@ -770,9 +770,12 @@ async function readSignatureImageFile(file: File): Promise<string> {
 
 function SignatureDrawingPad({
   onImageReady,
+  initialImageDataUrl,
 }: {
   onImageReady: (imageDataUrl: string) => void;
+  initialImageDataUrl?: string | null;
 }) {
+  const STROKE_WIDTH = 4.0;
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const drawingRef = React.useRef(false);
   const lastPointRef = React.useRef<{ x: number; y: number } | null>(null);
@@ -796,7 +799,7 @@ function SignatureDrawingPad({
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.lineCap = "round";
     context.lineJoin = "round";
-    context.lineWidth = 2.2;
+    context.lineWidth = STROKE_WIDTH;
     context.strokeStyle =
       getComputedStyle(canvas).getPropertyValue("--signature-draw-ink").trim() ||
       "#20160f";
@@ -805,6 +808,42 @@ function SignatureDrawingPad({
   React.useEffect(() => {
     syncCanvasScale();
   }, [syncCanvasScale]);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    const context = canvas ? getCanvasContext(canvas) : null;
+    if (!canvas || !context) {
+      return;
+    }
+
+    syncCanvasScale();
+    context.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!initialImageDataUrl) {
+      return;
+    }
+
+    const image = new Image();
+    let cancelled = false;
+
+    image.onload = () => {
+      if (cancelled) return;
+      const activeContext = getCanvasContext(canvas);
+      if (!activeContext) return;
+      activeContext.drawImage(
+        image,
+        0,
+        0,
+        Math.max(0, canvas.clientWidth),
+        Math.max(0, canvas.clientHeight),
+      );
+    };
+    image.src = initialImageDataUrl;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialImageDataUrl, syncCanvasScale]);
 
   const getPoint = React.useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -1005,6 +1044,9 @@ function SignatureSelector({
           <Pen size={14} strokeWidth={1.8} aria-hidden="true" />
           Draw
           <SignatureDrawingPad
+            initialImageDataUrl={
+              settings.mode === "image" ? settings.imageDataUrl : null
+            }
             onImageReady={(imageDataUrl) =>
               onChange({
                 mode: "image",
