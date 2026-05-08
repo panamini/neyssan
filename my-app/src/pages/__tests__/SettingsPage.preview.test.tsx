@@ -152,7 +152,7 @@ describe("SettingsPage preview controls", () => {
     renderSettings("/settings?tab=preferences");
 
     const themeToggle = screen.getByRole("button", {
-      name: "Toggle theme",
+      name: "Toggle dark theme",
     });
     await user.click(themeToggle);
     expect(themeToggle).toHaveAttribute(
