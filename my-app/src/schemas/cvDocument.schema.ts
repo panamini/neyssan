@@ -5,16 +5,16 @@ import { z } from "zod";
 import type { CvDocument as CvDocumentType } from "../types/cvDocument";
 import type { RemirrorJSON } from "remirror";
 
-
 /* -------------------------------------------------------------------------- */
 /* Primitive / Utility Schemas                                                */
 /* -------------------------------------------------------------------------- */
 
 // ISODateString: permissive ISO 8601 string
-export const ISODateStringSchema = z.string().refine(
-  (val) => !Number.isNaN(Date.parse(val)),
-  { message: "Invalid ISO 8601 date string" }
-);
+export const ISODateStringSchema = z
+  .string()
+  .refine((val) => !Number.isNaN(Date.parse(val)), {
+    message: "Invalid ISO 8601 date string",
+  });
 export type ISODateStringType = z.infer<typeof ISODateStringSchema>;
 
 // Remirror JSON node schema (recursive, permissive)
@@ -27,7 +27,7 @@ const RemirrorNodeSchema: z.ZodTypeAny = z.lazy(() =>
       marks: z.array(z.any()).optional(),
       text: z.string().optional(),
     })
-    .passthrough()
+    .passthrough(),
 );
 export const RemirrorJSONSchema = RemirrorNodeSchema;
 export type RemirrorJSONType = z.infer<typeof RemirrorJSONSchema>;
@@ -67,12 +67,16 @@ export type SectionType = z.infer<typeof SectionTypeSchema>;
 export const DatePrecisionSchema = z.enum(["year", "month", "day"]);
 export type DatePrecision = z.infer<typeof DatePrecisionSchema>;
 
-
-
-export const LevelSchema = z.enum(["Beginner","Elementary","Intermediate","Advanced","Fluent"]);
+export const LevelSchema = z.enum([
+  "Beginner",
+  "Elementary",
+  "Intermediate",
+  "Advanced",
+  "Fluent",
+]);
 export type Level = z.infer<typeof LevelSchema>;
 
-export const SkillBucketSchema = z.enum(["core","secondary","familiar"]);
+export const SkillBucketSchema = z.enum(["core", "secondary", "familiar"]);
 export type SkillBucket = z.infer<typeof SkillBucketSchema>;
 
 /* -------------------------------------------------------------------------- */
@@ -110,7 +114,9 @@ const _IExperienceItemBase = z.object({
   /* Back-compat alias retained for old data */
   currentlyWorking: z.boolean().optional(),
   location: z.string().optional(),
-  responsibilities: z.union([RemirrorJSONSchema, z.string(), z.array(z.string())]).optional(),
+  responsibilities: z
+    .union([RemirrorJSONSchema, z.string(), z.array(z.string())])
+    .optional(),
   responsibilityBullets: z.array(z.string()).optional(),
   __draftResponsibilityBulletCount: z.number().optional(),
   achievements: z.array(z.string()).optional(),
@@ -347,6 +353,25 @@ const _CvMetadataBase = z.object({
     })
     .strict()
     .optional(),
+  verbatiStyleSlotId: z
+    .union([z.literal(1), z.literal(2), z.literal(3)])
+    .optional(),
+  verbatiStyleSlotSource: z
+    .union([z.literal("factory"), z.literal("settings")])
+    .optional(),
+  verbatiStyleSlotNameSnapshot: z.string().optional(),
+  verbatiStyleBaseSnapshot: z
+    .object({
+      familyId: z.string().optional(),
+      layout: z.string(),
+      typography: z.string(),
+      palette: z.string(),
+      accentHex: z.string().optional(),
+      resumeTemplateId: z.string().optional(),
+    })
+    .strict()
+    .optional(),
+  documentStyleVersion: z.literal(1).optional(),
 });
 export const CvMetadataSchema = _CvMetadataBase.passthrough();
 export const CvMetadataSchemaStrict = _CvMetadataBase.strict();
@@ -377,7 +402,9 @@ export const CvDocumentSchemaStrict: z.ZodType<CvDocumentType> =
   _CvDocumentBaseStrict.strict() as z.ZodType<CvDocumentType>;
 // Schema output types (avoid exporting names that clash with application TS interfaces)
 export type CvDocumentSchemaOutput = z.infer<typeof CvDocumentSchema>;
-export type CvDocumentSchemaStrictOutput = z.infer<typeof CvDocumentSchemaStrict>;
+export type CvDocumentSchemaStrictOutput = z.infer<
+  typeof CvDocumentSchemaStrict
+>;
 
 /* -------------------------------------------------------------------------- */
 /* Helper Parser Functions                                                     */
@@ -385,10 +412,11 @@ export type CvDocumentSchemaStrictOutput = z.infer<typeof CvDocumentSchemaStrict
 
 // Safe parse (returns { ok, value, error })
 export function safeParseCvDocument(
-  input: unknown
+  input: unknown,
 ): { ok: true; value: CvDocumentType } | { ok: false; error: z.ZodError } {
   const res = CvDocumentSchema.safeParse(input);
-  if (res.success) return { ok: true, value: res.data as unknown as CvDocumentType };
+  if (res.success)
+    return { ok: true, value: res.data as unknown as CvDocumentType };
   return { ok: false, error: res.error };
 }
 export function safeParseCvSection(input: unknown) {

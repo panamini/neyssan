@@ -60,6 +60,7 @@ import {
 } from "../lib/cv-local-storage";
 import { serializeVerbatiStyle } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
+import type { DocumentStyleMetadata } from "../lib/document-style-slots";
 
 /**
  * Small, safe deep equality check used for dirty detection.
@@ -473,7 +474,10 @@ export interface ICvLibraryContext {
   // This replaces the current CV with the provided document and schedules persistence.
   importCv: (doc: CvDocument) => Promise<void>;
   // Persist visual style metadata without sending the full cvDocument to Convex.
-  saveCurrentCvStyleOnly: (style: VerbatiStylePreset) => Promise<void>;
+  saveCurrentCvStyleOnly: (
+    style: VerbatiStylePreset,
+    styleMetadata?: DocumentStyleMetadata,
+  ) => Promise<void>;
   // Atomic actions for block-based editor
   updateSectionTitle: (sectionId: string, newTitle: string) => void;
   updateBlockTitle: (
@@ -1857,13 +1861,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             updatedAt: new Date().toISOString(),
             version: 1,
           }),
-          updatedAt:
-            options?.preserveVisibleUpdatedAt
-              ? options.preserveVisibleUpdatedAtValue ??
-                (typeof normalizedCore.metadata?.updatedAt === "string"
-                  ? normalizedCore.metadata.updatedAt
-                  : new Date().toISOString())
-              : new Date().toISOString(),
+          updatedAt: options?.preserveVisibleUpdatedAt
+            ? options.preserveVisibleUpdatedAtValue ??
+              (typeof normalizedCore.metadata?.updatedAt === "string"
+                ? normalizedCore.metadata.updatedAt
+                : new Date().toISOString())
+            : new Date().toISOString(),
           version: (normalizedCore.metadata?.version ?? 0) + 1,
         },
       };
@@ -2358,7 +2361,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                     ),
                   }),
                 );
-                if (deepEqual(stripMetadata(docNorm), stripMetadata(remoteNorm))) {
+                if (
+                  deepEqual(stripMetadata(docNorm), stripMetadata(remoteNorm))
+                ) {
                   return;
                 }
                 if (
@@ -2436,7 +2441,8 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                           title: String(parsed.title ?? "Untitled CV"),
                           metadata: (parsed as any).metadata ?? {
                             createdAt:
-                              visibleTargetCreatedAt ?? new Date().toISOString(),
+                              visibleTargetCreatedAt ??
+                              new Date().toISOString(),
                             updatedAt:
                               visibleTargetUpdatedAt ??
                               visibleTargetCreatedAt ??
@@ -2589,8 +2595,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         restoreId =
           [...cvs]
             .sort(
-              (a, b) =>
-                (readUpdatedAtMs(b) ?? 0) - (readUpdatedAtMs(a) ?? 0),
+              (a, b) => (readUpdatedAtMs(b) ?? 0) - (readUpdatedAtMs(a) ?? 0),
             )
             .find((doc) => doc?.id)?.id ?? "";
         restoreId = String(restoreId).trim();
@@ -2661,13 +2666,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         [...cvs]
           .filter(
             (doc) =>
-              doc?.id &&
-              !failedActiveRestoreIdsRef.current.has(String(doc.id)),
+              doc?.id && !failedActiveRestoreIdsRef.current.has(String(doc.id)),
           )
-          .sort(
-            (a, b) =>
-              (readUpdatedAtMs(b) ?? 0) - (readUpdatedAtMs(a) ?? 0),
-          )
+          .sort((a, b) => (readUpdatedAtMs(b) ?? 0) - (readUpdatedAtMs(a) ?? 0))
           .find((doc) => doc?.id)?.id ?? "";
       const cleanFallbackId = String(fallbackId).trim();
       if (cleanFallbackId) {
@@ -2971,18 +2972,23 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   }, [currentCv, adapter]);
 
   const saveCurrentCvStyleOnly = useCallback(
-    async (style: VerbatiStylePreset): Promise<void> => {
+    async (
+      style: VerbatiStylePreset,
+      styleMetadata: DocumentStyleMetadata = {},
+    ): Promise<void> => {
       const activeDoc = currentCvRef.current;
       if (!activeDoc) return;
 
       const verbatiStyle = serializeVerbatiStyle(style);
+      const nextMetadata = {
+        ...(activeDoc.metadata ?? {}),
+        updatedAt: new Date().toISOString(),
+        verbatiStyle,
+        ...styleMetadata,
+      };
       const nextDoc: CvDocument = {
         ...activeDoc,
-        metadata: {
-          ...(activeDoc.metadata ?? {}),
-          updatedAt: new Date().toISOString(),
-          verbatiStyle,
-        },
+        metadata: nextMetadata,
       };
 
       safeSetCurrentCv(nextDoc);
@@ -2993,7 +2999,10 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       );
       cacheDocumentLocally(nextDoc);
 
-      await adapter.saveMetadataPatch(nextDoc.id, { verbatiStyle } as any);
+      await adapter.saveMetadataPatch(nextDoc.id, {
+        verbatiStyle,
+        ...styleMetadata,
+      } as any);
     },
     [adapter],
   );
@@ -3752,10 +3761,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   function deleteCvCtx(id: string): void {
     try {
       if (typeof window !== "undefined" && (window as any).localStorage) {
-        if (
-          readStoredActiveCvId() ===
-          String(id)
-        ) {
+        if (readStoredActiveCvId() === String(id)) {
           writeStoredActiveCvId(null);
         }
         (window as any).localStorage.removeItem(

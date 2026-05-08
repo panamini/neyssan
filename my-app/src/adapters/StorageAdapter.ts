@@ -18,6 +18,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { convexClient } from "../lib/convex-client";
 import type { CvDocument } from "../types/cvDocument";
+import type { DocumentAppearanceSnapshot } from "../lib/document-style-slots";
 import dbg from "../lib/cv-debug";
 import {
   parseCvDocumentStrict,
@@ -37,7 +38,10 @@ import {
 
 function hasLocalStorage(): boolean {
   try {
-    return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+    return (
+      typeof window !== "undefined" &&
+      typeof window.localStorage !== "undefined"
+    );
   } catch {
     return false;
   }
@@ -51,12 +55,16 @@ function writeLocalCvCache(id: string, payload: string): void {
 }
 
 function readLocalCvCache(id: string): string | null {
-  const primaryRaw = window.localStorage.getItem(getLocalCvDocumentStorageKey(id));
+  const primaryRaw = window.localStorage.getItem(
+    getLocalCvDocumentStorageKey(id),
+  );
   if (primaryRaw) {
     return primaryRaw;
   }
 
-  const legacyRaw = window.localStorage.getItem(getLegacyLocalCvDocumentStorageKey(id));
+  const legacyRaw = window.localStorage.getItem(
+    getLegacyLocalCvDocumentStorageKey(id),
+  );
   if (!legacyRaw) {
     return null;
   }
@@ -105,23 +113,22 @@ function stripLargeBackendOnlyMetadata<T extends CvDocument>(cv: T): T {
   };
 }
 
-function sanitizeBackendVerbatiStyle(
-  value: unknown,
-): {
-  layout?: string;
-  typography?: string;
-  palette?: string;
-  accentHex?: string;
-  resumeTemplateId?: string;
-} | undefined {
+function sanitizeBackendVerbatiStyle(value: unknown):
+  | {
+      layout?: string;
+      typography?: string;
+      palette?: string;
+      accentHex?: string;
+      resumeTemplateId?: string;
+    }
+  | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
   }
 
   const candidate = value as Record<string, unknown>;
   const sanitized = {
-    layout:
-      typeof candidate.layout === "string" ? candidate.layout : undefined,
+    layout: typeof candidate.layout === "string" ? candidate.layout : undefined,
     typography:
       typeof candidate.typography === "string"
         ? candidate.typography
@@ -129,9 +136,7 @@ function sanitizeBackendVerbatiStyle(
     palette:
       typeof candidate.palette === "string" ? candidate.palette : undefined,
     accentHex:
-      typeof candidate.accentHex === "string"
-        ? candidate.accentHex
-        : undefined,
+      typeof candidate.accentHex === "string" ? candidate.accentHex : undefined,
     resumeTemplateId:
       typeof candidate.resumeTemplateId === "string"
         ? candidate.resumeTemplateId
@@ -141,6 +146,71 @@ function sanitizeBackendVerbatiStyle(
   return Object.values(sanitized).some((entry) => typeof entry === "string")
     ? sanitized
     : undefined;
+}
+
+function sanitizeBackendDocumentAppearanceSnapshot(
+  value: unknown,
+): DocumentAppearanceSnapshot | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.layout !== "string" ||
+    typeof candidate.typography !== "string" ||
+    typeof candidate.palette !== "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(typeof candidate.familyId === "string"
+      ? {
+          familyId:
+            candidate.familyId as DocumentAppearanceSnapshot["familyId"],
+        }
+      : null),
+    layout: candidate.layout as DocumentAppearanceSnapshot["layout"],
+    typography:
+      candidate.typography as DocumentAppearanceSnapshot["typography"],
+    palette: candidate.palette as DocumentAppearanceSnapshot["palette"],
+    ...(typeof candidate.accentHex === "string"
+      ? { accentHex: candidate.accentHex }
+      : null),
+  };
+}
+
+function assignDocumentStyleMetadataPatch(
+  metadata: Record<string, unknown>,
+  metadataPatch: CvDocument["metadata"],
+): void {
+  if (
+    metadataPatch.verbatiStyleSlotId === 1 ||
+    metadataPatch.verbatiStyleSlotId === 2 ||
+    metadataPatch.verbatiStyleSlotId === 3
+  ) {
+    metadata.verbatiStyleSlotId = metadataPatch.verbatiStyleSlotId;
+  }
+  if (
+    metadataPatch.verbatiStyleSlotSource === "factory" ||
+    metadataPatch.verbatiStyleSlotSource === "settings"
+  ) {
+    metadata.verbatiStyleSlotSource = metadataPatch.verbatiStyleSlotSource;
+  }
+  if (typeof metadataPatch.verbatiStyleSlotNameSnapshot === "string") {
+    metadata.verbatiStyleSlotNameSnapshot =
+      metadataPatch.verbatiStyleSlotNameSnapshot;
+  }
+  const baseSnapshot = sanitizeBackendDocumentAppearanceSnapshot(
+    metadataPatch.verbatiStyleBaseSnapshot,
+  );
+  if (baseSnapshot) {
+    metadata.verbatiStyleBaseSnapshot = baseSnapshot;
+  }
+  if (metadataPatch.documentStyleVersion === 1) {
+    metadata.documentStyleVersion = 1;
+  }
 }
 
 export function mapPersistedProfileToCvDocument(
@@ -153,7 +223,8 @@ export function mapPersistedProfileToCvDocument(
 
   const embeddedDocument = rawProfile.cvDocument;
   if (embeddedDocument && typeof embeddedDocument === "object") {
-    const decodedEmbeddedDocument = decodeCvDocumentFromConvex(embeddedDocument);
+    const decodedEmbeddedDocument =
+      decodeCvDocumentFromConvex(embeddedDocument);
     const embeddedResult = safeParseCvDocument(decodedEmbeddedDocument);
     if (embeddedResult.ok) {
       return embeddedResult.value;
@@ -166,12 +237,15 @@ export function mapPersistedProfileToCvDocument(
 /* -------------------- ConvexStorageAdapter -------------------- */
 
 export class ConvexStorageAdapter {
-  private readonly _patchMutation: (args: { profileId: string; patch: any }) => Promise<any>;
+  private readonly _patchMutation: (args: {
+    profileId: string;
+    patch: any;
+  }) => Promise<any>;
   private readonly _loadFn?: (profileId: string) => Promise<CvDocument | null>;
 
   constructor(
     patchMutation: (args: { profileId: string; patch: any }) => Promise<any>,
-    loadFn?: (profileId: string) => Promise<CvDocument | null>
+    loadFn?: (profileId: string) => Promise<CvDocument | null>,
   ) {
     this._patchMutation = patchMutation;
     this._loadFn = loadFn;
@@ -184,7 +258,17 @@ export class ConvexStorageAdapter {
    */
   public async saveMetadataPatch(
     cvId: string,
-    metadataPatch: Pick<CvDocument["metadata"], "verbatiStyle">,
+    metadataPatch: Partial<
+      Pick<
+        CvDocument["metadata"],
+        | "verbatiStyle"
+        | "verbatiStyleSlotId"
+        | "verbatiStyleSlotSource"
+        | "verbatiStyleSlotNameSnapshot"
+        | "verbatiStyleBaseSnapshot"
+        | "documentStyleVersion"
+      >
+    >,
   ): Promise<void> {
     const metadata: Record<string, unknown> = {};
     if (metadataPatch?.verbatiStyle !== undefined) {
@@ -192,6 +276,10 @@ export class ConvexStorageAdapter {
         metadataPatch.verbatiStyle,
       );
     }
+    assignDocumentStyleMetadataPatch(
+      metadata,
+      metadataPatch as CvDocument["metadata"],
+    );
 
     try {
       await this._patchMutation({
@@ -234,6 +322,11 @@ export class ConvexStorageAdapter {
       if ("verbatiStyle" in md) {
         md.verbatiStyle = sanitizeBackendVerbatiStyle(md.verbatiStyle);
       }
+      if ("verbatiStyleBaseSnapshot" in md) {
+        md.verbatiStyleBaseSnapshot = sanitizeBackendDocumentAppearanceSnapshot(
+          md.verbatiStyleBaseSnapshot,
+        );
+      }
       // Keep other allowed keys (source, importedAt, confidence, filename)
       backendPayload.metadata = md;
     }
@@ -243,9 +336,19 @@ export class ConvexStorageAdapter {
 
     // Instrument: record metadata keys and short stack to in-app debug stream before mutation
     try {
-      const keys = backendPayload.metadata && typeof backendPayload.metadata === "object" ? Object.keys(backendPayload.metadata) : [];
-      const stack = (new Error("convex-save-stack")).stack?.split("\n").slice(0, 6).map((s) => s.trim());
-      dbg("[ConvexStorageAdapter] save -> _patchMutation", { docId: cv.id, backendMetaKeys: keys, stack });
+      const keys =
+        backendPayload.metadata && typeof backendPayload.metadata === "object"
+          ? Object.keys(backendPayload.metadata)
+          : [];
+      const stack = new Error("convex-save-stack").stack
+        ?.split("\n")
+        .slice(0, 6)
+        .map((s) => s.trim());
+      dbg("[ConvexStorageAdapter] save -> _patchMutation", {
+        docId: cv.id,
+        backendMetaKeys: keys,
+        stack,
+      });
     } catch {
       /* noop */
     }
@@ -307,7 +410,8 @@ export class ConvexStorageAdapter {
         if (mapped) {
           try {
             parseCvDocumentStrict(mapped);
-            if (hasLocalStorage()) writeLocalCvCache(mapped.id, serialize(mapped));
+            if (hasLocalStorage())
+              writeLocalCvCache(mapped.id, serialize(mapped));
             return mapped;
           } catch {
             // invalid mapping, ignore
@@ -340,8 +444,11 @@ export class ConvexStorageAdapter {
    * Attempt to load and strictly validate a CvDocument
    */
   public async loadValidated(
-    id: string
-  ): Promise<{ ok: true; value: CvDocument } | { ok: false; error: string; loose?: CvDocument | null }> {
+    id: string,
+  ): Promise<
+    | { ok: true; value: CvDocument }
+    | { ok: false; error: string; loose?: CvDocument | null }
+  > {
     try {
       const loose = await this.load(id);
       if (!loose) return { ok: false, error: "not_found", loose: null };
@@ -349,10 +456,18 @@ export class ConvexStorageAdapter {
         const strict = parseCvDocumentStrict(loose);
         return { ok: true, value: strict };
       } catch (e) {
-        return { ok: false, error: e instanceof Error ? e.message : String(e), loose };
+        return {
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+          loose,
+        };
       }
     } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e), loose: null };
+      return {
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+        loose: null,
+      };
     }
   }
 }
@@ -360,21 +475,30 @@ export class ConvexStorageAdapter {
 /* -------------------- React Hook -------------------- */
 
 export function useConvexStorageAdapter(): ConvexStorageAdapter {
-  const patchMutation = useMutation(api.profiles.patch) as unknown as (args: { profileId: string; patch: any }) => Promise<any>;
-  const loadFn = useCallback(async (_profileId: string): Promise<CvDocument | null> => {
-    try {
-      const prof = await convexClient.query(api.profilesPublic.getByProfileId, {
-        profileId: _profileId,
-      });
-      if (!prof) return null;
-      return mapPersistedProfileToCvDocument(
-        prof as Record<string, unknown>,
-        _profileId,
-      );
-    } catch {
-      return null;
-    }
-  }, []);
+  const patchMutation = useMutation(api.profiles.patch) as unknown as (args: {
+    profileId: string;
+    patch: any;
+  }) => Promise<any>;
+  const loadFn = useCallback(
+    async (_profileId: string): Promise<CvDocument | null> => {
+      try {
+        const prof = await convexClient.query(
+          api.profilesPublic.getByProfileId,
+          {
+            profileId: _profileId,
+          },
+        );
+        if (!prof) return null;
+        return mapPersistedProfileToCvDocument(
+          prof as Record<string, unknown>,
+          _profileId,
+        );
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
   const patchMutationRef = useRef(patchMutation);
   const loadFnRef = useRef(loadFn);
   const adapterRef = useRef<ConvexStorageAdapter | null>(null);
@@ -489,7 +613,9 @@ export function extractTextFromRemirror(node: unknown): string {
 /**
  * Extract a human-readable summary string from CvDocument.summary
  */
-export function extractSummary(summary: CvDocument["summary"]): string | undefined {
+export function extractSummary(
+  summary: CvDocument["summary"],
+): string | undefined {
   if (!summary) return undefined;
   if (typeof summary === "string") return summary;
   try {

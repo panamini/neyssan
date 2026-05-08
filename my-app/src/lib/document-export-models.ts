@@ -422,7 +422,9 @@ export function buildStyledResumePrintSource(args: {
     return null;
   }
 
-  const stylePreset = resolveVerbatiStyle(args.stylePreset);
+  const stylePreset = resolveVerbatiStyle(
+    args.stylePreset ?? getVerbatiStyleFromCv(args.currentCv),
+  );
   const resumeData = buildCanonicalResumeRenderModelFromCv(args.currentCv);
   const resumeTemplateId = getResumeTemplateId(stylePreset);
 

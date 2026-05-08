@@ -1,5 +1,11 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
@@ -8,9 +14,7 @@ import {
   readStoredProposalOutputDraft,
   writeStoredProposalOutputDraft,
 } from "../../lib/proposal-output-draft";
-import {
-  PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-} from "../../lib/proposal-workspace-state";
+import { PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY } from "../../lib/proposal-workspace-state";
 import { PROPOSAL_ATTACHED_CV_STORAGE_KEY } from "../../lib/proposal-personalization";
 
 vi.mock("convex/react", () => ({
@@ -212,10 +216,15 @@ describe("ProposalForge draft persistence", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Generate and go to resume", hidden: true }),
+      screen.getByRole("button", {
+        name: "Generate and go to resume",
+        hidden: true,
+      }),
     );
 
-    expect(screen.getByRole("button", { name: "Back to proposal" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Back to proposal" }),
+    ).toBeInTheDocument();
     expect(readStoredProposalOutputDraft()?.proposalContent).toBe(
       "Freshly generated proposal body.",
     );
@@ -225,7 +234,8 @@ describe("ProposalForge draft persistence", () => {
       ),
     ).toMatchObject({
       jobTitle: "Operations Associate",
-      jobDescription: "Support recurring processes and coordinate communication.",
+      jobDescription:
+        "Support recurring processes and coordinate communication.",
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Back to proposal" }));
@@ -250,7 +260,8 @@ describe("ProposalForge draft persistence", () => {
       PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
       JSON.stringify({
         jobTitle: "Staff Product Designer",
-        jobDescription: "Shape product direction with engineering and research.",
+        jobDescription:
+          "Shape product direction with engineering and research.",
         proposalType: "cover_letter",
         voicePreset: "expert",
         characterLimitMode: "none",
@@ -296,6 +307,57 @@ describe("ProposalForge draft persistence", () => {
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "Saved editable proposal.|edit",
     );
+  });
+
+  it("recovers the proposal style bundle from slot-only draft metadata on plain proposal re-entry", async () => {
+    writeStoredProposalOutputDraft({
+      proposalContent: "Saved slot-only proposal.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: null,
+      proposalVerbatiStyle: null,
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "auto",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Product Designer",
+      proposalDocumentTitle: "Saved slot-only proposal",
+      proposalDocumentMeta: "Compose output",
+      generatedProposalId: null,
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      verbatiStyleSlotId: 2,
+      verbatiStyleSlotSource: "settings",
+      verbatiStyleSlotNameSnapshot: "Style 2",
+      verbatiStyleBaseSnapshot: {
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "soft-serif",
+        palette: "cobalt",
+      },
+      documentStyleVersion: 1,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: true,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Style 2" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
   });
 
   it("prefers the generated output source brief over later unsent compose edits on plain proposal re-entry", () => {

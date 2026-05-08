@@ -6,6 +6,7 @@ import {
   canonicalizeUserProfileMetadata,
   userProfileMetadataValidator,
 } from "./lib/userProfileMetadata";
+import type { UserProfileMetadata } from "./lib/userProfileMetadata";
 import {
   getPrimaryProfileForClerk,
   resolveCanonicalProfileKeywordsForWrite,
@@ -54,9 +55,7 @@ const publicUserProfileValidator = v.object({
   ),
   linkedIn: v.optional(v.string()),
   raw_text: v.optional(v.string()),
-  metadata: v.optional(
-    userProfileMetadataValidator,
-  ),
+  metadata: v.optional(userProfileMetadataValidator),
   cvDocument: v.optional(v.any()),
 });
 
@@ -95,51 +94,7 @@ type UserProfile = {
   }[];
   linkedIn?: string;
   raw_text?: string;
-  metadata?: {
-    source?: string;
-    importedAt?: number;
-    confidence?: number;
-    filename?: string;
-    verbatiStyle?: {
-      layout:
-        | "swiss"
-        | "volk-register"
-        | "two-column"
-        | "editorial"
-        | "modernist"
-        | "quire"
-        | "playful-photo"
-        | "soft-ribbon"
-        | "slate-column";
-      typography:
-        | "quiet-editorial"
-        | "geist-baskervville"
-        | "civic-correspondence"
-        | "ledger-sans"
-        | "mono-signal"
-        | "studio-grotesk"
-        | "soft-serif"
-        | "special-correspondence"
-        | "fd-garamond-geist"
-        | "poster-accent"
-        | "high-contrast-editorial"
-        | "bricolage-hepta"
-        | "nunito-ortica"
-        | "nunito-code"
-        | "doto-code"
-        | "signature"
-        | "engaging"
-        | "expert";
-      palette:
-        | "sauge"
-        | "ocre"
-        | "pierre"
-        | "bordeaux"
-        | "encre"
-        | "custom";
-      accentHex?: string;
-    };
-  };
+  metadata?: UserProfileMetadata;
   cvDocument?: unknown;
 } | null;
 
@@ -230,7 +185,8 @@ export const listMine = query({
 
     return rows
       .sort(
-        (a, b) => (b.updatedAt ?? b._creationTime) - (a.updatedAt ?? a._creationTime),
+        (a, b) =>
+          (b.updatedAt ?? b._creationTime) - (a.updatedAt ?? a._creationTime),
       )
       .map(projectProfileDoc);
   },
@@ -244,7 +200,7 @@ export const listMine = query({
  * (i.e., convex.mutation(api.profiles.ingestFromExtension, { profile }))
  */
 export default mutation({
-    args: {
+  args: {
     profile: v.object({
       name: v.optional(v.string()),
       summary: v.optional(v.string()),
@@ -262,8 +218,8 @@ export default mutation({
             startDate: v.optional(v.number()),
             endDate: v.optional(v.number()),
             description: v.optional(v.string()),
-          })
-        )
+          }),
+        ),
       ),
       education: v.optional(
         v.array(
@@ -273,12 +229,10 @@ export default mutation({
             fieldOfStudy: v.optional(v.string()),
             startDate: v.optional(v.number()),
             endDate: v.optional(v.number()),
-          })
-        )
+          }),
+        ),
       ),
-      metadata: v.optional(
-        userProfileMetadataValidator,
-      ),
+      metadata: v.optional(userProfileMetadataValidator),
     }),
   },
   returns: v.null(),
@@ -307,12 +261,17 @@ export default mutation({
     };
 
     if (args.profile.name !== undefined) updates.name = args.profile.name;
-    if (args.profile.summary !== undefined) updates.summary = args.profile.summary;
-    if (args.profile.raw_text !== undefined) updates.raw_text = args.profile.raw_text;
-    if (args.profile.linkedIn !== undefined) updates.linkedIn = args.profile.linkedIn;
+    if (args.profile.summary !== undefined)
+      updates.summary = args.profile.summary;
+    if (args.profile.raw_text !== undefined)
+      updates.raw_text = args.profile.raw_text;
+    if (args.profile.linkedIn !== undefined)
+      updates.linkedIn = args.profile.linkedIn;
     if (args.profile.skills !== undefined) updates.skills = args.profile.skills;
-    if (args.profile.experience !== undefined) updates.experience = args.profile.experience;
-    if (args.profile.education !== undefined) updates.education = args.profile.education;
+    if (args.profile.experience !== undefined)
+      updates.experience = args.profile.experience;
+    if (args.profile.education !== undefined)
+      updates.education = args.profile.education;
     if (args.profile.metadata !== undefined) {
       updates.metadata = canonicalizeUserProfileMetadata(args.profile.metadata);
     }

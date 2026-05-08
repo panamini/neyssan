@@ -41,6 +41,35 @@ describe("document-export-models", () => {
     );
   });
 
+  it("recovers styled resume print sources from slot-only CV metadata", () => {
+    const currentCv = generateCvTemplate("Slot-only styled CV");
+    currentCv.metadata.verbatiStyle = undefined;
+    currentCv.metadata.verbatiStyleSlotId = 2;
+    currentCv.metadata.verbatiStyleSlotSource = "factory";
+    currentCv.metadata.documentStyleVersion = 1;
+
+    const previewSource = buildStyledResumePrintSource({ currentCv });
+    const exportSource = buildResumeExportSource({ currentCv });
+
+    expect(previewSource).toEqual(
+      expect.objectContaining({
+        renderSource: "preview",
+        stylePreset: expect.objectContaining({
+          layout: "workshop",
+          typography: "civic-correspondence",
+          palette: "cobalt",
+        }),
+        resumeTemplateId: "workshop_resume_twocol_ats",
+      }),
+    );
+    expect(exportSource).toEqual(
+      expect.objectContaining({
+        resumeTemplateId: "workshop_resume_twocol_ats",
+        committedPages: expect.any(Array),
+      }),
+    );
+  });
+
   it("resolves the exact workshop resume template id for preview and export sources", () => {
     const currentCv = generateCvTemplate("Workshop CV");
     currentCv.metadata.verbatiStyle = {

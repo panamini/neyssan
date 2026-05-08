@@ -16,7 +16,9 @@ const richResponsibilitiesDoc = {
   content: [
     {
       type: "paragraph",
-      content: [{ type: "text", text: "Led delivery", marks: [{ type: "bold" }] }],
+      content: [
+        { type: "text", text: "Led delivery", marks: [{ type: "bold" }] },
+      ],
     },
     {
       type: "bullet_list",
@@ -27,7 +29,11 @@ const richResponsibilitiesDoc = {
             {
               type: "paragraph",
               content: [
-                { type: "text", text: "Shipped resilient workflows", marks: [{ type: "bold" }] },
+                {
+                  type: "text",
+                  text: "Shipped resilient workflows",
+                  marks: [{ type: "bold" }],
+                },
               ],
             },
           ],
@@ -53,7 +59,13 @@ function buildRichCv() {
             content: [
               {
                 type: "paragraph",
-                content: [{ type: "text", text: "Bold summary", marks: [{ type: "bold" }] }],
+                content: [
+                  {
+                    type: "text",
+                    text: "Bold summary",
+                    marks: [{ type: "bold" }],
+                  },
+                ],
               },
             ],
           },
@@ -90,7 +102,13 @@ function buildRichCv() {
             content: [
               {
                 type: "paragraph",
-                content: [{ type: "text", text: "Project detail", marks: [{ type: "italic" }] }],
+                content: [
+                  {
+                    type: "text",
+                    text: "Project detail",
+                    marks: [{ type: "italic" }],
+                  },
+                ],
               },
             ],
           },
@@ -136,8 +154,10 @@ describe("StorageAdapter persistence", () => {
 
     const payload = patchMutation.mock.calls[0][0].patch;
     const summary = payload.cvDocument.sections[0].structuredContent[0].summary;
-    const responsibilities = payload.cvDocument.sections[1].structuredContent[0].responsibilities;
-    const projectDescription = payload.cvDocument.sections[2].structuredContent[0].description;
+    const responsibilities =
+      payload.cvDocument.sections[1].structuredContent[0].responsibilities;
+    const projectDescription =
+      payload.cvDocument.sections[2].structuredContent[0].description;
 
     expect(isPersistedRemirrorJson(summary)).toBe(true);
     expect(isPersistedRemirrorJson(responsibilities)).toBe(true);
@@ -162,12 +182,12 @@ describe("StorageAdapter persistence", () => {
       cv.id,
     );
 
-    expect(restored?.sections[1].structuredContent?.[0].responsibilities).toEqual(
-      richResponsibilitiesDoc,
-    );
-    expect(oldRawRestored?.sections[1].structuredContent?.[0].responsibilities).toEqual(
-      richResponsibilitiesDoc,
-    );
+    expect(
+      restored?.sections[1].structuredContent?.[0].responsibilities,
+    ).toEqual(richResponsibilitiesDoc);
+    expect(
+      oldRawRestored?.sections[1].structuredContent?.[0].responsibilities,
+    ).toEqual(richResponsibilitiesDoc);
   });
 
   it("renders rich summary, project description, and responsibility bullets after save/load", () => {
@@ -180,7 +200,9 @@ describe("StorageAdapter persistence", () => {
     expect(restored).not.toBeNull();
     const resumeData = mapCvDocumentToResumeData(restored! as any);
     expect(resumeData.summary).toContain("Bold summary");
-    expect(JSON.stringify(resumeData.experience)).toContain("Shipped resilient workflows");
+    expect(JSON.stringify(resumeData.experience)).toContain(
+      "Shipped resilient workflows",
+    );
     expect(JSON.stringify(resumeData.projects)).toContain("Project detail");
   });
 
@@ -281,9 +303,9 @@ describe("StorageAdapter persistence", () => {
 
     await expect(adapter.save(cv)).resolves.toBeUndefined();
 
-    expect(
-      window.localStorage.getItem(`cv:${cv.id}`),
-    ).toContain("Unauthorized Remote CV");
+    expect(window.localStorage.getItem(`cv:${cv.id}`)).toContain(
+      "Unauthorized Remote CV",
+    );
   });
 
   it("prefers the embedded cvDocument snapshot on remote restore", () => {
@@ -390,9 +412,9 @@ describe("StorageAdapter persistence", () => {
     const cachedDocument = JSON.parse(
       window.localStorage.getItem(`cv:${cv.id}`) as string,
     );
-    expect(cachedDocument.metadata.authoritativeResume.normalized.raw).toHaveLength(
-      650_000,
-    );
+    expect(
+      cachedDocument.metadata.authoritativeResume.normalized.raw,
+    ).toHaveLength(650_000);
     expect(
       cachedDocument.metadata.importRecoverySession.baseSectionsSnapshot[0]
         .blocks[0].content.content[0].content[0].text,
@@ -412,6 +434,16 @@ describe("StorageAdapter persistence", () => {
           typography: "soft-serif",
           accentHex: "#9a2d45",
         },
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "settings",
+        verbatiStyleSlotNameSnapshot: "Style 2",
+        verbatiStyleBaseSnapshot: {
+          familyId: "workshop",
+          layout: "workshop",
+          palette: "cobalt",
+          typography: "civic-correspondence",
+        },
+        documentStyleVersion: 1,
       } as any),
     ).resolves.toBeUndefined();
 
@@ -423,6 +455,18 @@ describe("StorageAdapter persistence", () => {
       palette: "bordeaux",
       typography: "soft-serif",
       accentHex: "#9a2d45",
+    });
+    expect(payload.metadata).toMatchObject({
+      verbatiStyleSlotId: 2,
+      verbatiStyleSlotSource: "settings",
+      verbatiStyleSlotNameSnapshot: "Style 2",
+      verbatiStyleBaseSnapshot: {
+        familyId: "workshop",
+        layout: "workshop",
+        palette: "cobalt",
+        typography: "civic-correspondence",
+      },
+      documentStyleVersion: 1,
     });
   });
 

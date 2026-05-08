@@ -77,6 +77,25 @@ const proposalVerbatiStyleChoice = v.object({
   accentHex: v.optional(v.string()),
 });
 
+const documentStyleSlotIdChoice = v.union(
+  v.literal(1),
+  v.literal(2),
+  v.literal(3),
+);
+
+const documentStyleSlotSourceChoice = v.union(
+  v.literal("factory"),
+  v.literal("settings"),
+);
+
+const documentAppearanceSnapshotChoice = v.object({
+  familyId: v.optional(v.string()),
+  layout: v.string(),
+  typography: v.string(),
+  palette: v.string(),
+  accentHex: v.optional(v.string()),
+});
+
 export const storeProposal = internalMutation({
   args: {
     userId: v.id("userProfiles"),
@@ -125,6 +144,11 @@ export const storeProposal = internalMutation({
       creativity: v.optional(proposalCreativityChoice),
       templateId: v.optional(proposalTemplateChoice),
       verbatiStyle: v.optional(proposalVerbatiStyleChoice),
+      verbatiStyleSlotId: v.optional(documentStyleSlotIdChoice),
+      verbatiStyleSlotSource: v.optional(documentStyleSlotSourceChoice),
+      verbatiStyleSlotNameSnapshot: v.optional(v.string()),
+      verbatiStyleBaseSnapshot: v.optional(documentAppearanceSnapshotChoice),
+      documentStyleVersion: v.optional(v.literal(1)),
       styleLinkMode: v.optional(proposalStyleLinkModeChoice),
       styleChoice: v.optional(proposalStyleChoiceChoice),
       templateBundleId: v.optional(proposalTemplateBundleChoice),
@@ -225,6 +249,11 @@ export const updateProposal = internalMutation({
       creativity: v.optional(proposalCreativityChoice),
       templateId: v.optional(proposalTemplateChoice),
       verbatiStyle: v.optional(proposalVerbatiStyleChoice),
+      verbatiStyleSlotId: v.optional(documentStyleSlotIdChoice),
+      verbatiStyleSlotSource: v.optional(documentStyleSlotSourceChoice),
+      verbatiStyleSlotNameSnapshot: v.optional(v.string()),
+      verbatiStyleBaseSnapshot: v.optional(documentAppearanceSnapshotChoice),
+      documentStyleVersion: v.optional(v.literal(1)),
       styleLinkMode: v.optional(proposalStyleLinkModeChoice),
       styleChoice: v.optional(proposalStyleChoiceChoice),
       templateBundleId: v.optional(proposalTemplateBundleChoice),

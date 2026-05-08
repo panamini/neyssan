@@ -78,6 +78,12 @@ import {
 } from "../lib/proposal-style-display";
 import { type ProposalStyleChoice } from "../lib/proposal-style-choice";
 import { buildProposalSourceSummary } from "../lib/proposal-source-summary";
+import {
+  buildDocumentAppearanceSnapshot,
+  getDocumentStyleSlotIdForProposalBundle,
+  getProposalBundleForDocumentStyleSlot,
+  type DocumentStyleMetadata,
+} from "../lib/document-style-slots";
 
 type ProposalForgePrefill = {
   handoffId: string;
@@ -87,7 +93,7 @@ type ProposalForgePrefill = {
   platform?: string;
 } | null;
 
-type ProposalDocumentMetadata = {
+type ProposalDocumentMetadata = DocumentStyleMetadata & {
   sourceJobDescription?: string;
   proposalType?: FormValues["proposalType"];
   voicePreset?: FormValues["voicePreset"];
@@ -165,19 +171,24 @@ function resolveSavedAppearanceState(proposal: SavedProposalRecord | null): {
   }
 
   const storedStyle = proposal.metadata?.verbatiStyle ?? null;
+  const storedBaseSnapshot = proposal.metadata?.verbatiStyleBaseSnapshot ?? null;
+  const styleForAppearance = storedStyle ?? storedBaseSnapshot;
   const derivedBundleId =
     normalizeProposalNextBundleId(proposal.metadata?.templateBundleId) ??
-    (storedStyle?.layout === "editorial"
+    normalizeProposalNextBundleId(
+      getProposalBundleForDocumentStyleSlot(proposal.metadata?.verbatiStyleSlotId),
+    ) ??
+    (styleForAppearance?.layout === "editorial"
       ? "magazine_editorial"
-      : storedStyle?.layout === "modernist"
+      : styleForAppearance?.layout === "modernist"
         ? "grid_mono"
         : "swiss_serif");
   const customAccentHex =
-    storedStyle?.palette === "custom"
-      ? normalizeAccentHex(storedStyle.accentHex)
+    styleForAppearance?.palette === "custom"
+      ? normalizeAccentHex(styleForAppearance.accentHex)
       : normalizeAccentHex(proposal.metadata?.accentHex);
-  const storedPalette = isProposalPaletteId(storedStyle?.palette)
-    ? storedStyle.palette
+  const storedPalette = isProposalPaletteId(styleForAppearance?.palette)
+    ? styleForAppearance.palette
     : isProposalPaletteId(proposal.metadata?.paletteOverride)
       ? proposal.metadata.paletteOverride
       : null;
@@ -243,6 +254,13 @@ function resolveInitialTemplateBundleId(
 ): ProposalTemplateBundleId | null {
   if (storedOutputDraft?.templateBundleId) {
     return normalizeProposalNextBundleId(storedOutputDraft.templateBundleId);
+  }
+
+  const slotBundleId = normalizeProposalNextBundleId(
+    getProposalBundleForDocumentStyleSlot(storedOutputDraft?.verbatiStyleSlotId),
+  );
+  if (slotBundleId) {
+    return slotBundleId;
   }
 
   if (storedOutputDraft?.proposalVerbatiStyle) {
@@ -571,6 +589,12 @@ export function ProposalForgeNext(): JSX.Element {
         storedStylePreset: isSavedProposalRoute
           ? openedSavedProposal?.metadata?.verbatiStyle
           : undefined,
+        storedStyleBaseSnapshot: isSavedProposalRoute
+          ? openedSavedProposal?.metadata?.verbatiStyleBaseSnapshot
+          : undefined,
+        storedStyleSlotId: isSavedProposalRoute
+          ? openedSavedProposal?.metadata?.verbatiStyleSlotId
+          : undefined,
         activeCvStylePreset,
         defaultStylePreset,
         templateBundleId,
@@ -581,6 +605,8 @@ export function ProposalForgeNext(): JSX.Element {
       isSavedProposalRoute,
       openedSavedProposal?.metadata?.templateId,
       openedSavedProposal?.metadata?.verbatiStyle,
+      openedSavedProposal?.metadata?.verbatiStyleBaseSnapshot,
+      openedSavedProposal?.metadata?.verbatiStyleSlotId,
       templateBundleId,
     ],
   );
@@ -635,8 +661,21 @@ export function ProposalForgeNext(): JSX.Element {
       verbatiStyle: serializeVerbatiStyle(effectiveStylePresetWithPalette),
     };
 
-    if (templateBundleId) {
-      nextMetadata.templateBundleId = templateBundleId;
+    if (selectedStyleBundleId) {
+      nextMetadata.templateBundleId = selectedStyleBundleId;
+    }
+
+    const documentStyleSlotId = getDocumentStyleSlotIdForProposalBundle(
+      selectedStyleBundleId,
+    );
+    if (documentStyleSlotId) {
+      nextMetadata.verbatiStyleSlotId = documentStyleSlotId;
+      nextMetadata.verbatiStyleSlotSource = "settings";
+      nextMetadata.verbatiStyleSlotNameSnapshot = `Style ${documentStyleSlotId}`;
+      nextMetadata.verbatiStyleBaseSnapshot = buildDocumentAppearanceSnapshot(
+        effectiveStylePresetWithPalette,
+      );
+      nextMetadata.documentStyleVersion = 1;
     }
 
     if (lastProposalRequest?.voicePreset !== undefined) {
@@ -670,7 +709,7 @@ export function ProposalForgeNext(): JSX.Element {
     proposalType,
     proposalVoicePreset,
     resolvedRenderState.templateId,
-    templateBundleId,
+    selectedStyleBundleId,
   ]);
 
   const prefill: ProposalForgePrefill = React.useMemo(() => {
@@ -1001,7 +1040,15 @@ export function ProposalForgeNext(): JSX.Element {
       proposalOutputMode,
       paletteOverride,
       customAccentHex,
-      templateBundleId,
+      templateBundleId: selectedStyleBundleId,
+      verbatiStyleSlotId: proposalRenderMetadata?.verbatiStyleSlotId ?? null,
+      verbatiStyleSlotSource:
+        proposalRenderMetadata?.verbatiStyleSlotSource ?? null,
+      verbatiStyleSlotNameSnapshot:
+        proposalRenderMetadata?.verbatiStyleSlotNameSnapshot ?? null,
+      verbatiStyleBaseSnapshot:
+        proposalRenderMetadata?.verbatiStyleBaseSnapshot ?? null,
+      documentStyleVersion: proposalRenderMetadata?.documentStyleVersion ?? null,
       typographyOverride: null,
       layoutOverride: null,
       proposalDocumentTitleManual,
@@ -1024,7 +1071,8 @@ export function ProposalForgeNext(): JSX.Element {
     proposalType,
     proposalVoicePreset,
     resolvedRenderState.templateId,
-    templateBundleId,
+    selectedStyleBundleId,
+    proposalRenderMetadata,
     draftCharacterLimitMode,
     draftCharacterLimitValue,
     isSavedProposalRoute,
@@ -1091,7 +1139,15 @@ export function ProposalForgeNext(): JSX.Element {
         proposalOutputMode: "preview",
         paletteOverride,
         customAccentHex,
-        templateBundleId,
+        templateBundleId: selectedStyleBundleId,
+        verbatiStyleSlotId: proposalRenderMetadata?.verbatiStyleSlotId ?? null,
+        verbatiStyleSlotSource:
+          proposalRenderMetadata?.verbatiStyleSlotSource ?? null,
+        verbatiStyleSlotNameSnapshot:
+          proposalRenderMetadata?.verbatiStyleSlotNameSnapshot ?? null,
+        verbatiStyleBaseSnapshot:
+          proposalRenderMetadata?.verbatiStyleBaseSnapshot ?? null,
+        documentStyleVersion: proposalRenderMetadata?.documentStyleVersion ?? null,
         typographyOverride: null,
         layoutOverride: null,
         proposalDocumentTitleManual,
@@ -1106,8 +1162,9 @@ export function ProposalForgeNext(): JSX.Element {
       isSavedProposalRoute,
       paletteOverride,
       proposalDocumentTitleManual,
+      proposalRenderMetadata,
       resolvedRenderState.templateId,
-      templateBundleId,
+      selectedStyleBundleId,
     ],
   );
 
