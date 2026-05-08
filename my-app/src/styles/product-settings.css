@@ -1674,7 +1674,7 @@
   grid-template-columns: 220px minmax(0, 1fr);
   gap: var(--s5);
   width: 100%;
-  max-width: 1080px;
+  max-width: 1280px;
   padding: var(--s6) var(--s5) var(--s8);
   margin: 0 auto;
   align-items: start;
@@ -2393,7 +2393,7 @@ html[data-reduce-motion="true"] *::after {
 
 .dasti-settings-style-editor {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
   gap: var(--s4);
   align-items: start;
   min-width: 0;
@@ -3415,6 +3415,137 @@ button.dasti-settings-signature-tool:focus-visible {
 
 .dasti-settings-style-card {
   overflow: hidden;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Document style — unified ingredient panel (v3)
+   Single elevated surface, four hairline-separated rows.
+   Each row: narrow label column + content column.
+   Replaces the v2 four-card stack.
+   ───────────────────────────────────────────────────────────── */
+
+.dasti-settings-builder__left
+  .dasti-settings-appearance-toolbar--v3 {
+  display: block;
+  padding: 0;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--sfr);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 80%, transparent),
+    var(--sha);
+  overflow: hidden;
+}
+
+.dark .dasti-settings-builder__left
+  .dasti-settings-appearance-toolbar--v3 {
+  background: var(--sf2);
+  border-color: var(--color-border);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 4%, transparent),
+    var(--sha);
+}
+
+/* Reset the per-group card chrome inside v3 — they become stacked rows. */
+.dasti-settings-builder__left
+  .dasti-settings-appearance-toolbar--v3
+  .dasti-settings-appearance-group {
+  display: block;
+  gap: 0;
+  padding: var(--s3) var(--s4);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.dasti-settings-builder__left
+  .dasti-settings-appearance-toolbar--v3
+  .dasti-settings-appearance-group + .dasti-settings-appearance-group {
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.dark .dasti-settings-builder__left
+  .dasti-settings-appearance-toolbar--v3
+  .dasti-settings-appearance-group + .dasti-settings-appearance-group {
+  border-top-color: color-mix(in srgb, white 8%, transparent);
+}
+
+.dasti-settings-builder__left
+  .dasti-settings-appearance-toolbar--v3
+  .dasti-settings-appearance-group__header {
+  display: block;
+  margin: 0 0 var(--s2);
+  padding-top: 0;
+}
+
+.dasti-settings-builder__left
+  .dasti-settings-appearance-toolbar--v3
+  .dasti-settings-appearance-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tm2);
+}
+
+/* Color row — compact swatch grid, no orphan whitespace. */
+.dasti-settings-builder__left
+  .dasti-settings-appearance-toolbar--v3
+  .dasti-settings-appearance-group--color
+  .style-swatches {
+  gap: 8px;
+  align-content: flex-start;
+}
+
+.dasti-settings-builder__left
+  .dasti-settings-appearance-toolbar--v3
+  .dasti-settings-appearance-group--color
+  .style-swatch {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+}
+
+.dasti-settings-builder__left
+  .dasti-settings-appearance-toolbar--v3
+  .dasti-settings-appearance-group--color
+  .style-swatch__chip {
+  width: 22px;
+  height: 22px;
+}
+
+/* Layout row — keep cards horizontal, slimmer. */
+.dasti-settings-builder__left
+  .dasti-settings-appearance-toolbar--v3
+  .dasti-settings-appearance-group--layout
+  .layout-grid {
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: var(--s2);
+}
+
+.dasti-settings-builder__left
+  .dasti-settings-appearance-toolbar--v3
+  .dasti-settings-appearance-group--layout
+  .layout-card__preview {
+  max-height: 132px;
+}
+
+/* Mobile / narrow: collapse the row into stacked label-on-top. */
+@media (max-width: 880px) {
+  .dasti-settings-builder__left
+    .dasti-settings-appearance-toolbar--v3
+    .dasti-settings-appearance-group {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s2);
+    padding: var(--s3) var(--s3);
+  }
+
+  .dasti-settings-builder__left
+    .dasti-settings-appearance-toolbar--v3
+    .dasti-settings-appearance-group__header {
+    padding-top: 0;
+  }
 }
 
 .dasti-settings-style-card__description {
