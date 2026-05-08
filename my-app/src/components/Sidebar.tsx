@@ -1177,54 +1177,7 @@ export const Sidebar: React.FC = () => {
             </Link>
           )}
           {!sidebarCollapsed ? (
-            isSettingsRoute ? (
-              <button
-                type="button"
-                className={[
-                  "settings-theme-toggle",
-                  themeMode === "dark" ? "settings-theme-toggle--dark" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                onClick={toggleTheme}
-                aria-pressed={themeMode === "dark"}
-                aria-label={
-                  themeMode === "dark" ? "Toggle light theme" : "Toggle dark theme"
-                }
-                title={
-                  themeMode === "dark" ? "Toggle light theme" : "Toggle dark theme"
-                }
-              >
-                <span
-                  className="settings-theme-toggle__indicator"
-                  aria-hidden="true"
-                />
-                <span
-                  className={[
-                    "settings-theme-toggle__option",
-                    themeMode === "light"
-                      ? "settings-theme-toggle__option--active"
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
-                  <Sun aria-hidden="true" />
-                </span>
-                <span
-                  className={[
-                    "settings-theme-toggle__option",
-                    themeMode === "dark"
-                      ? "settings-theme-toggle__option--active"
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
-                  <Moon aria-hidden="true" />
-                </span>
-              </button>
-            ) : (
+            isSettingsRoute ? null : (
               <button
                 type="button"
                 className="sb-theme-toggle__single"
