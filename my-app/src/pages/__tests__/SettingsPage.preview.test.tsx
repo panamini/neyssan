@@ -172,6 +172,226 @@ describe("SettingsPage preview controls", () => {
     expect(cards[2]).toHaveTextContent("Style 3");
   });
 
+  it("selects a saved slot color from verbatiStyle when legacy top-level palette is null", async () => {
+    presetsQueryMock.mockReturnValue({
+      activeSlot: 2,
+      preset1: null,
+      preset2: {
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: null,
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 2",
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "ink",
+          accentHex: null,
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+      },
+      preset3: null,
+    });
+    const user = userEvent.setup();
+    const { container } = renderSettings();
+    const cards = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+    );
+
+    await user.click(cards[1]!);
+
+    expect(
+      within(screen.getByRole("group", { name: "Color" })).getByRole("button", {
+        name: "Ink",
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("saves Style 2 Cobalt into both top-level palette and verbatiStyle", async () => {
+    presetsQueryMock.mockReturnValue({
+      activeSlot: 2,
+      preset1: null,
+      preset2: {
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: "sauge",
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 2",
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          accentHex: null,
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+      },
+      preset3: null,
+    });
+    const user = userEvent.setup();
+    const { container } = renderSettings();
+    const cards = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+    );
+
+    await user.click(cards[1]!);
+    await user.click(
+      within(screen.getByRole("group", { name: "Color" })).getByRole("button", {
+        name: "Cobalt",
+      }),
+    );
+
+    const colorGroup = within(screen.getByRole("group", { name: "Color" }));
+    expect(colorGroup.getByRole("button", { name: "Cobalt" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(colorGroup.getByRole("button", { name: "Sage" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    await waitFor(() => {
+      expect(getLastSavePresetPayload()).toMatchObject({
+        slot: 2,
+        preset: expect.objectContaining({
+          paletteOverride: "cobalt",
+          accentHex: null,
+          verbatiStyle: expect.objectContaining({
+            palette: "cobalt",
+            accentHex: null,
+            typography: "quiet-editorial",
+            layout: "workshop",
+            resumeTemplateId: "workshop_resume_twocol_ats",
+          }),
+        }),
+      });
+    });
+  });
+
+  it("keeps Style 3 factory Ink when saving another field without an explicit palette override", async () => {
+    presetsQueryMock.mockReturnValue({
+      activeSlot: 3,
+      preset1: null,
+      preset2: null,
+      preset3: {
+        fontPairId: "ledger-sans",
+        styleChoice: "balanced",
+        paletteOverride: null,
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 3",
+      },
+    });
+    const user = userEvent.setup();
+    const { container } = renderSettings();
+    const cards = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+    );
+
+    await user.click(cards[2]!);
+
+    const colorGroup = within(screen.getByRole("group", { name: "Color" }));
+    expect(colorGroup.getByRole("button", { name: "Ink" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(colorGroup.getByRole("button", { name: "Sage" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    await user.click(
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-font-pair-card",
+      )[0]!,
+    );
+
+    await waitFor(() => {
+      expect(getLastSavePresetPayload()).toMatchObject({
+        slot: 3,
+        preset: expect.objectContaining({
+          paletteOverride: null,
+          verbatiStyle: expect.objectContaining({
+            palette: "ink",
+          }),
+        }),
+      });
+    });
+  });
+
+  it("does not let late preset hydration overwrite a local Style 2 color or font edit", async () => {
+    let presetsResponse: unknown;
+    presetsQueryMock.mockImplementation(() => presetsResponse);
+    const user = userEvent.setup();
+    const { container, rerender } = render(
+      <MemoryRouter initialEntries={["/settings?tab=docstyle"]}>
+        <SettingsPage />
+      </MemoryRouter>,
+    );
+    const cards = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+    );
+
+    await user.click(cards[1]!);
+    await user.click(
+      within(screen.getByRole("group", { name: "Color" })).getByRole("button", {
+        name: "Cobalt",
+      }),
+    );
+    await user.click(
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-font-pair-card",
+      )[0]!,
+    );
+
+    presetsResponse = {
+      activeSlot: 2,
+      preset1: null,
+      preset2: {
+        fontPairId: "classic-script",
+        styleChoice: "balanced",
+        paletteOverride: "sauge",
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 2",
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "classic-script",
+          palette: "sauge",
+          accentHex: null,
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+      },
+      preset3: null,
+    };
+    rerender(
+      <MemoryRouter initialEntries={["/settings?tab=docstyle"]}>
+        <SettingsPage />
+      </MemoryRouter>,
+    );
+
+    const colorGroup = within(screen.getByRole("group", { name: "Color" }));
+    expect(colorGroup.getByRole("button", { name: "Cobalt" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(colorGroup.getByRole("button", { name: "Sage" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(
+      container.querySelector(".dasti-settings-hero-preview__chip"),
+    ).toHaveTextContent("Fraunces Bold / Syne Regular");
+    expect(
+      container.querySelector(".dasti-settings-hero-preview__chip"),
+    ).not.toHaveTextContent("Parisienne");
+  });
+
   it("keeps the default badge pinned until the user sets a slot as default", async () => {
     const user = userEvent.setup();
     const { container } = renderSettings();

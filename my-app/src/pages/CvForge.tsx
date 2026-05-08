@@ -2394,10 +2394,49 @@ export function CvForge(): JSX.Element {
     },
     [],
   );
+  const activeSettingsCvStylePreset = React.useMemo(() => {
+    const activeSlot = resolveDocumentStyleSlotId(documentStylePresets?.activeSlot);
+    const source = activeSlot
+      ? documentStylePresets?.[`preset${activeSlot}`]
+      : null;
+    if (!activeSlot || !source) return null;
+
+    const factorySlot = getFactoryDocumentStyleSlot(activeSlot);
+    const sourceStyle =
+      (source.verbatiStyle as Partial<VerbatiStylePreset> | null | undefined) ??
+      null;
+    const typography =
+      (source.fontPairId as VerbatiFontPairId | undefined) ??
+      (sourceStyle?.typography as VerbatiFontPairId | undefined) ??
+      factorySlot.appearance.typography;
+    const palette =
+      (source.paletteOverride as VerbatiStylePreset["palette"] | undefined) ??
+      (sourceStyle?.palette as VerbatiStylePreset["palette"] | undefined) ??
+      factorySlot.appearance.palette;
+    const accentHex =
+      (typeof source.accentHex === "string" ? source.accentHex : undefined) ??
+      (sourceStyle?.accentHex as string | undefined);
+
+    return resolveVerbatiStyle({
+      ...factorySlot.appearance,
+      ...sourceStyle,
+      typography,
+      palette,
+      resumeTemplateId:
+        sourceStyle?.resumeTemplateId ?? factorySlot.defaultCvTemplateId,
+      ...(accentHex ? { accentHex } : {}),
+    });
+  }, [
+    documentStylePresets?.activeSlot,
+    documentStylePresets?.preset1,
+    documentStylePresets?.preset2,
+    documentStylePresets?.preset3,
+  ]);
   const { stylePreset, setStylePreset } = useBoundVerbatiCvStyle({
     currentCv,
     persistStyle: saveCurrentCvStyleOnly,
-    fallbackStylePreset: defaultProposalSettings?.verbatiStyle ?? null,
+    fallbackStylePreset:
+      activeSettingsCvStylePreset ?? defaultProposalSettings?.verbatiStyle ?? null,
     debounceMs: 700,
     logPrefix: "[CvForge]",
   });
@@ -4262,39 +4301,13 @@ export function CvForge(): JSX.Element {
   ]);
 
   const selectedStyleSlotIsCustom = React.useMemo(() => {
-    if (!selectedStyleSlot || !currentCv?.metadata?.verbatiStyleBaseSnapshot) {
+    if (!selectedStyleSlot) {
       return false;
     }
 
-    const baseSnapshot = currentCv.metadata.verbatiStyleBaseSnapshot as
-      | Partial<VerbatiStylePreset>
-      | null
-      | undefined;
-    const slotBaseStyle =
-      currentCv.metadata.verbatiStyleSlotSource === "settings" &&
-      documentStylePresets?.[`preset${selectedStyleSlot}`]
-        ? cvStyleSlotPresets[selectedStyleSlot]
-        : resolveVerbatiStyle({
-            ...stylePreset,
-            ...getFactoryDocumentStyleSlot(selectedStyleSlot).appearance,
-            resumeTemplateId:
-              getFactoryDocumentStyleSlot(selectedStyleSlot).defaultCvTemplateId,
-          });
-
-    return !stylesEqual(
-      stylePreset,
-      resolveVerbatiStyle({
-        ...stylePreset,
-        ...baseSnapshot,
-        resumeTemplateId:
-          baseSnapshot?.resumeTemplateId ?? slotBaseStyle.resumeTemplateId,
-      }),
-    );
+    return !stylesEqual(stylePreset, cvStyleSlotPresets[selectedStyleSlot]);
   }, [
-    currentCv?.metadata?.verbatiStyleBaseSnapshot,
-    currentCv?.metadata?.verbatiStyleSlotSource,
     cvStyleSlotPresets,
-    documentStylePresets,
     selectedStyleSlot,
     stylePreset,
   ]);
@@ -4356,10 +4369,8 @@ export function CvForge(): JSX.Element {
   const handleResetStyleSlot = React.useCallback(() => {
     if (!selectedStyleSlot) return;
 
-    const storedSource = currentCv?.metadata?.verbatiStyleSlotSource;
     const settingsSlot = documentStylePresets?.[`preset${selectedStyleSlot}`];
-    const resetSource =
-      storedSource === "settings" && settingsSlot ? "settings" : "factory";
+    const resetSource = settingsSlot ? "settings" : "factory";
     const nextStylePreset =
       resetSource === "settings"
         ? cvStyleSlotPresets[selectedStyleSlot]
@@ -4379,7 +4390,6 @@ export function CvForge(): JSX.Element {
     }
   }, [
     buildFactoryCvStylePreset,
-    currentCv?.metadata?.verbatiStyleSlotSource,
     cvStyleSlotPresets,
     documentStylePresets,
     getCvStyleSlotName,

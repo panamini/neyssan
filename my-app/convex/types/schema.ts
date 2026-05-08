@@ -140,7 +140,12 @@ export interface UserProfileDoc extends Doc<"userProfiles"> {
   proposalTemplateId?: ProposalTemplateId;
   proposalStyleChoice?: "auto" | "formal" | "warm" | "technical" | "balanced";
   proposalPaletteOverride?:
+    | "terre"
+    | "cobalt"
+    | "ink"
     | "sauge"
+    | "plum"
+    | "ochre"
     | "ocre"
     | "pierre"
     | "bordeaux"

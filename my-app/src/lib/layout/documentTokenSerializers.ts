@@ -33,6 +33,17 @@ function serializeFromDescriptors(
   }, {});
 }
 
+function formatProposalGridCalc(
+  axisVarName: "--proposal-inline-mm" | "--proposal-block-mm",
+  valueMm: number | undefined,
+): string | undefined {
+  if (valueMm === undefined) {
+    return undefined;
+  }
+
+  return `calc(var(${axisVarName}) * ${formatUnitless(valueMm)})`;
+}
+
 export const RESUME_PREVIEW_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
   {
     name: "--page-width",
@@ -580,6 +591,66 @@ export const RESUME_PREVIEW_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
 ];
 
 export const PROPOSAL_PREVIEW_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
+  {
+    name: "--proposal-grid-step-a-inline",
+    fieldPath: "geometry.primitives.robialStep.stepAMm",
+    classification: "canonical",
+    resolve: (tokens) =>
+      formatProposalGridCalc(
+        "--proposal-inline-mm",
+        tokens.geometry.primitives?.robialStep?.stepAMm,
+      ),
+  },
+  {
+    name: "--proposal-grid-step-b-inline",
+    fieldPath: "geometry.primitives.robialStep.stepBMm",
+    classification: "canonical",
+    resolve: (tokens) =>
+      formatProposalGridCalc(
+        "--proposal-inline-mm",
+        tokens.geometry.primitives?.robialStep?.stepBMm,
+      ),
+  },
+  {
+    name: "--proposal-grid-half-step-inline",
+    fieldPath: "geometry.primitives.robialStep.halfStepMm",
+    classification: "canonical",
+    resolve: (tokens) =>
+      formatProposalGridCalc(
+        "--proposal-inline-mm",
+        tokens.geometry.primitives?.robialStep?.halfStepMm,
+      ),
+  },
+  {
+    name: "--proposal-grid-step-a-block",
+    fieldPath: "geometry.primitives.robialStep.stepAMm",
+    classification: "canonical",
+    resolve: (tokens) =>
+      formatProposalGridCalc(
+        "--proposal-block-mm",
+        tokens.geometry.primitives?.robialStep?.stepAMm,
+      ),
+  },
+  {
+    name: "--proposal-grid-step-b-block",
+    fieldPath: "geometry.primitives.robialStep.stepBMm",
+    classification: "canonical",
+    resolve: (tokens) =>
+      formatProposalGridCalc(
+        "--proposal-block-mm",
+        tokens.geometry.primitives?.robialStep?.stepBMm,
+      ),
+  },
+  {
+    name: "--proposal-grid-half-step-block",
+    fieldPath: "geometry.primitives.robialStep.halfStepMm",
+    classification: "canonical",
+    resolve: (tokens) =>
+      formatProposalGridCalc(
+        "--proposal-block-mm",
+        tokens.geometry.primitives?.robialStep?.halfStepMm,
+      ),
+  },
   {
     name: "--proposal-template-left-zone-mm",
     fieldPath: "geometry.template.leftZoneMm",

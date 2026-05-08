@@ -443,7 +443,7 @@ describe("ProposalForge autosave", () => {
             templateId: expect.any(String),
             styleLinkMode: "proposal_local",
             verbatiStyle: expect.objectContaining({
-              palette: "ocre",
+              palette: "ochre",
             }),
           }),
         }),

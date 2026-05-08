@@ -617,12 +617,12 @@ export function normalizeProposalExportTokens(args: {
   const definition = resolvedTemplateId
     ? getProposalTemplateDefinition(resolvedTemplateId)
     : null;
-  const leftMarginMm = 17;
+  const leftMarginMm = definition?.leftMarginMm ?? 17;
   const topMm = definition?.topOffsetMm ?? 17;
   const rightMm = definition?.rightMarginMm ?? 35;
   const bottomMm = definition?.bottomMarginMm ?? 35;
   const leftZoneMm = definition?.leftZoneMm ?? 35;
-  const gutterMm = 18;
+  const gutterMm = definition?.gutterMm ?? 18;
   const liveArea = deriveLiveArea({
     topMm,
     rightMm,
@@ -658,9 +658,9 @@ export function normalizeProposalExportTokens(args: {
   };
   tokens.geometry.primitives = {
     robialStep: {
-      stepAMm: 17,
-      stepBMm: 18,
-      halfStepMm: 8.5,
+      stepAMm: definition?.gridStepAMm ?? 17,
+      stepBMm: definition?.gridStepBMm ?? 18,
+      halfStepMm: definition?.gridHalfStepMm ?? 8.5,
     },
     volkGrid: proposalVolkGridTokens(),
   };
@@ -696,9 +696,9 @@ export function normalizeProposalExportTokens(args: {
   return {
     id: resolvedTemplateId ?? "ats",
     shell:
-      args.mode === "ats" || definition?.id === "quire_margin"
+      args.mode === "ats"
         ? "onecol"
-        : "rail",
+        : definition?.exportShell ?? "rail",
     templateId: resolvedTemplateId,
     canonical: tokens,
   };
@@ -712,7 +712,7 @@ export function normalizeProposalPreviewTokens(
   const tokens = createEmptyCanonicalTokens();
   const resolvedStyle = normalizeStylePreset(args.stylePreset);
   tokens.appearance = resolvePreviewCanonicalAppearance(resolvedStyle);
-  const leftMarginMm = 17;
+  const leftMarginMm = definition.leftMarginMm;
   const rightMm = definition.rightMarginMm;
   const topMm = definition.topOffsetMm;
   const bottomMm = definition.bottomMarginMm;
@@ -742,15 +742,20 @@ export function normalizeProposalPreviewTokens(
   };
   tokens.geometry.columns = {
     sidebarMm: definition.leftZoneMm,
-    gutterMm: 18,
+    gutterMm: definition.gutterMm,
     mainMm:
       A4_PAGE_WIDTH_MM -
       leftMarginMm -
       definition.rightMarginMm -
       definition.leftZoneMm -
-      18,
+      definition.gutterMm,
   };
   tokens.geometry.primitives = {
+    robialStep: {
+      stepAMm: definition.gridStepAMm,
+      stepBMm: definition.gridStepBMm,
+      halfStepMm: definition.gridHalfStepMm,
+    },
     volkGrid: proposalVolkGridTokens(),
   };
   tokens.flow.type.title = {

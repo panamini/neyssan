@@ -10,7 +10,11 @@ import {
   isProposalTemplateId,
   resolveProposalTemplateId,
 } from "../../convex/lib/proposals/renderTemplates";
-import { getProposalBundleForDocumentStyleSlot } from "./document-style-slots";
+import {
+  getFactoryDocumentStyleSlot,
+  getProposalBundleForDocumentStyleSlot,
+  resolveDocumentStyleSlotId,
+} from "./document-style-slots";
 import { getProposalTemplateBundleDefinition } from "./proposal-template-bundles";
 
 type VerbatiStyleCandidate =
@@ -55,6 +59,14 @@ export function resolveProposalRenderState(
   const storedSlotBundleDefinition = storedSlotBundleId
     ? getProposalTemplateBundleDefinition(storedSlotBundleId)
     : null;
+  const storedSlotId = resolveDocumentStyleSlotId(input.storedStyleSlotId);
+  const storedSlotStylePreset = storedSlotId
+    ? resolveVerbatiStyle({
+        ...getFactoryDocumentStyleSlot(storedSlotId).appearance,
+        resumeTemplateId:
+          getFactoryDocumentStyleSlot(storedSlotId).defaultCvTemplateId,
+      })
+    : null;
 
   const stylePreset =
     (input.preferredStylePreset
@@ -69,7 +81,7 @@ export function resolveProposalRenderState(
       ? sanitizePersistedVerbatiStyle(input.storedStyleBaseSnapshot) ??
         resolveVerbatiStyle(input.storedStyleBaseSnapshot)
       : null) ??
-    storedSlotBundleDefinition?.stylePreset ??
+    storedSlotStylePreset ??
     (input.activeCvStylePreset
       ? resolveVerbatiStyle(input.activeCvStylePreset)
       : null) ??

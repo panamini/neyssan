@@ -1,11 +1,12 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { ProposalForge } from "../ProposalForge";
+import { PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY } from "../../lib/proposal-output-draft";
 
-const mockCurrentProposalSettings = {
+const defaultCurrentProposalSettings = {
   voicePreset: "signature",
   savedVoicePreset: "signature",
   templateId: "editorial_wide",
@@ -22,6 +23,30 @@ const mockCurrentProposalSettings = {
   sourceMode: "proposal_local",
 } as const;
 
+let mockCurrentProposalSettings: typeof defaultCurrentProposalSettings =
+  defaultCurrentProposalSettings;
+let mockProposalPresets = {
+  preset1: null,
+  preset2: {
+    fontPairId: "quiet-editorial",
+    styleChoice: "balanced",
+    paletteOverride: "cobalt",
+    accentHex: null,
+    voicePreset: null,
+    signatureSettings: null,
+    name: "Style 2",
+    verbatiStyle: {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "cobalt",
+      resumeTemplateId: "workshop_resume_twocol_ats",
+    },
+  },
+  preset3: null,
+  activeSlot: 2,
+};
+
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
     isLoading: false,
@@ -30,6 +55,9 @@ vi.mock("convex/react", () => ({
   useQuery: (query: string) => {
     if (query === "proposalSettings.getCurrent") {
       return mockCurrentProposalSettings;
+    }
+    if (query === "proposalSettings.getPresets") {
+      return mockProposalPresets;
     }
     return null;
   },
@@ -43,7 +71,10 @@ vi.mock("../../../convex/_generated/api", () => ({
       generateProposal: "functions.generateProposal",
     },
     proposalHandoffs: { get: "proposalHandoffs.get" },
-    proposalSettings: { getCurrent: "proposalSettings.getCurrent" },
+    proposalSettings: {
+      getCurrent: "proposalSettings.getCurrent",
+      getPresets: "proposalSettings.getPresets",
+    },
     proposalsPublic: { default: "proposalsPublic.default" },
     updateProposalPublic: { default: "updateProposalPublic.default" },
     deleteProposalPublic: { default: "deleteProposalPublic.default" },
@@ -138,6 +169,28 @@ describe("ProposalForge settings style round-trip", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    mockCurrentProposalSettings = defaultCurrentProposalSettings;
+    mockProposalPresets = {
+      preset1: null,
+      preset2: {
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: "cobalt",
+        accentHex: null,
+        voicePreset: null,
+        signatureSettings: null,
+        name: "Style 2",
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "cobalt",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+      },
+      preset3: null,
+      activeSlot: 2,
+    };
   });
 
   it("keeps workshop proposal settings stable across reloads", async () => {
@@ -149,7 +202,7 @@ describe("ProposalForge settings style round-trip", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
-        "workshop|doto-code|sauge|workshop_proposal_margin",
+        "workshop|quiet-editorial|cobalt|workshop_proposal_margin",
       );
     });
 
@@ -163,8 +216,212 @@ describe("ProposalForge settings style round-trip", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
-        "workshop|doto-code|sauge|workshop_proposal_margin",
+        "workshop|quiet-editorial|cobalt|workshop_proposal_margin",
       );
     });
+  });
+
+  it("lets Settings style win over an empty stale local output draft when no CV is attached", async () => {
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: null,
+        proposalVerbatiStyle: {
+          layout: "workshop",
+          typography: "geist-baskervville",
+          palette: "terre",
+        },
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "balanced",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "",
+        proposalDocumentMeta: "",
+        generatedProposalId: null,
+        proposalOutputMode: "preview",
+        paletteOverride: null,
+        customAccentHex: null,
+        templateBundleId: null,
+        typographyOverride: null,
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+        "workshop|quiet-editorial|cobalt|workshop_proposal_margin",
+      );
+    });
+  });
+
+  it("resets proposal Style 2 to the Settings slot color", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Style 2" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+        "workshop|quiet-editorial|cobalt|workshop_proposal_margin",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Use Sage accent" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+        "workshop|quiet-editorial|sauge|workshop_proposal_margin",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset Style 2" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+        "workshop|quiet-editorial|cobalt|workshop_proposal_margin",
+      );
+    });
+  });
+
+  it("reselects a custom selected Style 2 from latest Settings instead of preserving stale Sage", async () => {
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "Draft body",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: "workshop_proposal_margin",
+        proposalVerbatiStyle: {
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        },
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "balanced",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "Draft",
+        proposalDocumentMeta: "",
+        generatedProposalId: "draft-1",
+        proposalOutputMode: "preview",
+        paletteOverride: "sauge",
+        customAccentHex: null,
+        templateBundleId: "magazine_editorial",
+        typographyOverride: null,
+        layoutOverride: null,
+        verbatiStyleSlotId: 2,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Style 2 · Custom")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Style 2" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+        "workshop|quiet-editorial|cobalt|workshop_proposal_margin",
+      );
+    });
+    expect(screen.queryByText("Style 2 · Custom")).not.toBeInTheDocument();
+  });
+
+  it("does not let partial Settings Style 3 fall through to Sage when selecting Style 3", async () => {
+    mockProposalPresets = {
+      preset1: null,
+      preset2: null,
+      preset3: {
+        fontPairId: "ledger-sans",
+        styleChoice: "balanced",
+        paletteOverride: null,
+        accentHex: null,
+        voicePreset: null,
+        signatureSettings: null,
+        name: "Style 3",
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "ledger-sans",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+      },
+      activeSlot: 3,
+    };
+    mockCurrentProposalSettings = {
+      ...defaultCurrentProposalSettings,
+      paletteOverride: null,
+      verbatiStyle: {
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "ledger-sans",
+        palette: "sauge",
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Style 3" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+        "workshop|ledger-sans|ink|workshop_proposal_margin",
+      );
+    });
+    expect(screen.getByTestId("proposal-settings-style")).not.toHaveTextContent(
+      "sauge",
+    );
+  });
+
+  it("uses Settings slot typography when switching proposal Style 2", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Style 2" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+        "workshop|quiet-editorial|cobalt|workshop_proposal_margin",
+      );
+    });
+    expect(screen.getByTestId("proposal-settings-style")).not.toHaveTextContent(
+      "engaging",
+    );
   });
 });

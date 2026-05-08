@@ -79,7 +79,7 @@ import {
 import { type ProposalStyleChoice } from "../lib/proposal-style-choice";
 import { buildProposalSourceSummary } from "../lib/proposal-source-summary";
 import {
-  buildDocumentAppearanceSnapshot,
+  buildProposalDocumentAppearanceSnapshot,
   getDocumentStyleSlotIdForProposalBundle,
   getProposalBundleForDocumentStyleSlot,
   type DocumentStyleMetadata,
@@ -672,7 +672,7 @@ export function ProposalForgeNext(): JSX.Element {
       nextMetadata.verbatiStyleSlotId = documentStyleSlotId;
       nextMetadata.verbatiStyleSlotSource = "settings";
       nextMetadata.verbatiStyleSlotNameSnapshot = `Style ${documentStyleSlotId}`;
-      nextMetadata.verbatiStyleBaseSnapshot = buildDocumentAppearanceSnapshot(
+      nextMetadata.verbatiStyleBaseSnapshot = buildProposalDocumentAppearanceSnapshot(
         effectiveStylePresetWithPalette,
       );
       nextMetadata.documentStyleVersion = 1;

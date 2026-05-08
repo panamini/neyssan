@@ -6,8 +6,35 @@ import { MemoryRouter } from "react-router-dom";
 
 import { CvForge } from "../CvForge";
 
-const { useCvLibraryMock } = vi.hoisted(() => ({
+const { useCvLibraryMock, mockDocumentStylePresets } = vi.hoisted(() => ({
   useCvLibraryMock: vi.fn(),
+  mockDocumentStylePresets: {
+    current: {
+      preset1: null,
+      preset2: {
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: "cobalt",
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 2",
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "cobalt",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+        signatureSettings: {
+          mode: "auto",
+          fontId: null,
+          imageDataUrl: null,
+        },
+      },
+      preset3: null,
+      activeSlot: 2,
+    },
+  },
 }));
 
 vi.mock("../../../convex/_generated/api", () => ({
@@ -41,7 +68,7 @@ vi.mock("convex/react", () => ({
           familyId: "workshop",
           layout: "workshop",
           typography: "quiet-editorial",
-          palette: "ink",
+          palette: "sauge",
           resumeTemplateId: "workshop_resume_twocol_ats",
         },
         signatureSettings: {
@@ -53,31 +80,7 @@ vi.mock("convex/react", () => ({
     }
 
     if (reference === "proposalSettings.getPresets") {
-      return {
-        preset1: null,
-        preset2: {
-          fontPairId: "quiet-editorial",
-          styleChoice: "balanced",
-          paletteOverride: "ink",
-          accentHex: null,
-          voicePreset: null,
-          name: "Style 2",
-          verbatiStyle: {
-            familyId: "workshop",
-            layout: "workshop",
-            typography: "quiet-editorial",
-            palette: "ink",
-            resumeTemplateId: "workshop_resume_twocol_ats",
-          },
-          signatureSettings: {
-            mode: "auto",
-            fontId: null,
-            imageDataUrl: null,
-          },
-        },
-        preset3: null,
-        activeSlot: 2,
-      };
+      return mockDocumentStylePresets.current;
     }
 
     return args === "skip" ? undefined : undefined;
@@ -155,10 +158,48 @@ function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function getStyleSlotButton(slot: 1 | 2 | 3): HTMLButtonElement {
+  const label = `Style ${slot}`;
+  const button = screen
+    .getAllByRole("button")
+    .find((element): element is HTMLButtonElement =>
+      element.textContent?.startsWith(label) ?? false,
+    );
+  if (!button) {
+    throw new Error(`Missing ${label} button`);
+  }
+  return button;
+}
+
 describe("CvForge settings style fallback", () => {
   beforeEach(() => {
     window.localStorage.clear();
     useCvLibraryMock.mockReset();
+    mockDocumentStylePresets.current = {
+      preset1: null,
+      preset2: {
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: "cobalt",
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 2",
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "cobalt",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+        signatureSettings: {
+          mode: "auto",
+          fontId: null,
+          imageDataUrl: null,
+        },
+      },
+      preset3: null,
+      activeSlot: 2,
+    };
   });
 
   it("uses the active Settings style for a styleless CV instead of the factory default", async () => {
@@ -176,9 +217,170 @@ describe("CvForge settings style fallback", () => {
 
     await user.click(screen.getByRole("button", { name: "Page preview" }));
 
-    expect(screen.getByText(/Preview style: .*quiet-editorial.*ink/i)).toBeInTheDocument();
+    expect(screen.getByText(/Preview style: .*quiet-editorial.*cobalt/i)).toBeInTheDocument();
     expect(
       screen.queryByText(/Preview style: .*geist-baskervville/i),
     ).not.toBeInTheDocument();
+  });
+
+  it("applies Settings Style 2 Cobalt when selecting the Style 2 pill", async () => {
+    const user = userEvent.setup();
+    const currentCv = {
+      ...buildBlankCv("cv_sage"),
+      metadata: {
+        ...buildBlankCv("cv_sage").metadata,
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+      },
+    };
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({ currentCv, cvs: [currentCv] }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_sage"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    await user.click(screen.getByRole("tab", { name: "Style" }));
+    await user.click(getStyleSlotButton(2));
+
+    expect(screen.getByText(/Preview style: .*quiet-editorial.*cobalt/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Preview style: .*sauge/i)).not.toBeInTheDocument();
+  });
+
+  it("marks a selected Settings style custom after Settings changed and resets to the latest Settings style", async () => {
+    const user = userEvent.setup();
+    const saveCurrentCvStyleOnly = vi.fn(async () => undefined);
+    const currentCv = {
+      ...buildBlankCv("cv_old_style_2"),
+      metadata: {
+        ...buildBlankCv("cv_old_style_2").metadata,
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "settings",
+        verbatiStyleSlotNameSnapshot: "Style 2",
+        verbatiStyleBaseSnapshot: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+      },
+    };
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv,
+        cvs: [currentCv],
+        saveCurrentCvStyleOnly,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_old_style_2"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    await user.click(screen.getByRole("tab", { name: "Style" }));
+
+    expect(getStyleSlotButton(2)).toHaveTextContent(
+      "Style 2 · Custom",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Reset Style 2" }));
+
+    expect(screen.getByText(/Preview style: .*quiet-editorial.*cobalt/i)).toBeInTheDocument();
+    expect(saveCurrentCvStyleOnly).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typography: "quiet-editorial",
+        palette: "cobalt",
+        resumeTemplateId: "workshop_resume_twocol_ats",
+      }),
+      expect.objectContaining({
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "settings",
+      }),
+    );
+  });
+
+  it("reselects a custom selected Style 2 from latest Settings instead of preserving stale Sage", async () => {
+    const user = userEvent.setup();
+    const saveCurrentCvStyleOnly = vi.fn(async () => undefined);
+    const currentCv = {
+      ...buildBlankCv("cv_reselect_old_style_2"),
+      metadata: {
+        ...buildBlankCv("cv_reselect_old_style_2").metadata,
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "settings",
+        verbatiStyleSlotNameSnapshot: "Style 2",
+        verbatiStyleBaseSnapshot: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+      },
+    };
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv,
+        cvs: [currentCv],
+        saveCurrentCvStyleOnly,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_reselect_old_style_2"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    await user.click(screen.getByRole("tab", { name: "Style" }));
+
+    expect(getStyleSlotButton(2)).toHaveTextContent("Style 2 · Custom");
+
+    await user.click(getStyleSlotButton(2));
+
+    expect(screen.getByText(/Preview style: .*quiet-editorial.*cobalt/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Preview style: .*sauge/i)).not.toBeInTheDocument();
+    expect(saveCurrentCvStyleOnly).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typography: "quiet-editorial",
+        palette: "cobalt",
+        resumeTemplateId: "workshop_resume_twocol_ats",
+      }),
+      expect.objectContaining({
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "settings",
+        verbatiStyleBaseSnapshot: expect.objectContaining({
+          palette: "cobalt",
+        }),
+      }),
+    );
   });
 });

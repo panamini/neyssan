@@ -433,6 +433,7 @@ describe("StorageAdapter persistence", () => {
           palette: "bordeaux",
           typography: "soft-serif",
           accentHex: "#9a2d45",
+          resumeTemplateId: "workshop_resume_onecol_ats",
         },
         verbatiStyleSlotId: 2,
         verbatiStyleSlotSource: "settings",
@@ -480,6 +481,7 @@ describe("StorageAdapter persistence", () => {
       palette: "bordeaux",
       typography: "soft-serif",
       accentHex: "#9a2d45",
+      resumeTemplateId: "workshop_resume_onecol_ats",
     };
 
     await expect(adapter.save(cv)).resolves.toBeUndefined();
@@ -498,6 +500,7 @@ describe("StorageAdapter persistence", () => {
       palette: "bordeaux",
       typography: "soft-serif",
       accentHex: "#9a2d45",
+      resumeTemplateId: "workshop_resume_onecol_ats",
     });
   });
 

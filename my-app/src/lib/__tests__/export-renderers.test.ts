@@ -319,10 +319,25 @@ describe("export-renderers", () => {
         },
       }),
     );
+    const workshopStyledDocument = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          templateId: "workshop_proposal_margin",
+        },
+        stylePreset: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "expert",
+          palette: "cobalt",
+        },
+      }),
+    );
 
     const atsCss = getInlineStyles(atsDocument);
     const railCss = getInlineStyles(railStyledDocument);
     const quireCss = getInlineStyles(quireStyledDocument);
+    const workshopCss = getInlineStyles(workshopStyledDocument);
 
     expect(atsDocument.documentElement.lang).toBe("fr");
     expect(atsDocument.body.className).toContain("proposal-shell--onecol");
@@ -359,6 +374,18 @@ describe("export-renderers", () => {
     expect(quireCss).toContain("--decor-proposal-title-font-style: italic;");
     expect(quireCss).toContain("--decor-proposal-title-letter-spacing: -0.015em;");
     expect(quireCss).toContain("--decor-signature-font-variant-caps: normal;");
+
+    expect(workshopStyledDocument.body.className).toContain(
+      "proposal-template--workshop-proposal-margin",
+    );
+    expect(workshopStyledDocument.body.className).toContain(
+      "proposal-shell--onecol",
+    );
+    expect(workshopStyledDocument.querySelector(".robial-sidebar")).toBeNull();
+    expect(workshopCss).toContain("--page-margin-left: 35mm;");
+    expect(workshopCss).toContain("--page-margin-right: 18mm;");
+    expect(workshopCss).toContain("--robial-step-a: 17mm;");
+    expect(workshopCss).toContain("--robial-step-b: 18mm;");
   });
 
   it("keeps ATS and styled proposal closing blocks structurally aligned and casing-safe", () => {

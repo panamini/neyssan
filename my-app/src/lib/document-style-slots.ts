@@ -164,3 +164,12 @@ export function buildDocumentAppearanceSnapshot(
       : null),
   };
 }
+
+export function buildProposalDocumentAppearanceSnapshot(
+  style: Parameters<typeof buildDocumentAppearanceSnapshot>[0],
+): DocumentAppearanceSnapshot {
+  const { resumeTemplateId: _resumeTemplateId, ...proposalSnapshot } =
+    buildDocumentAppearanceSnapshot(style);
+
+  return proposalSnapshot;
+}
