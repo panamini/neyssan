@@ -76,7 +76,6 @@ import {
   stylesEqual,
 } from "../features/verbati/style";
 import {
-  PROPOSAL_CHARACTER_LIMIT_TOAST_THRESHOLDS,
   resolveProposalCharacterLimitSelection,
   type ProposalCharacterLimitMode,
 } from "../../convex/lib/proposals/generationControls";
@@ -163,6 +162,7 @@ import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
 import {
   ensureProposalSignatureName,
+  removeProposalSignatureNameFromClosing,
   resolveProposalClosingRef,
   type ProposalClosingRef,
 } from "../lib/proposal-closing";
@@ -378,9 +378,9 @@ function resolveLiveProposalLengthLabel(
   content: string | null | undefined,
 ): string {
   const characterCount = content?.length ?? 0;
-  if (characterCount <= 1400) return "Concise";
-  if (characterCount <= 2600) return "Standard";
-  return "Detailed";
+  if (characterCount <= 1400) return "concise";
+  if (characterCount <= 2600) return "standard";
+  return "detailed";
 }
 
 function normalizeProposalRailJobTitle(
@@ -1934,7 +1934,6 @@ export function ProposalForge(): JSX.Element {
   const [railAskAiBusy, setRailAskAiBusy] = React.useState(false);
   const copyFeedbackTimeoutRef = React.useRef<number | null>(null);
   const savedCopyFeedbackTimeoutRef = React.useRef<number | null>(null);
-  const lastCharacterLimitToastIdRef = React.useRef<string | null>(null);
   const lastSavedProposalContentRef = React.useRef<string | null>(
     storedOutputDraft?.proposalContent ?? null,
   );
@@ -6433,14 +6432,13 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
-    const signedProposal = ensureProposalSignatureName(
+    const contentWithoutLegacySignature = removeProposalSignatureNameFromClosing(
       proposalContent,
-      proposalApplicantName,
     );
-    if (signedProposal !== proposalContent) {
-      setProposalContent(signedProposal);
+    if (contentWithoutLegacySignature !== proposalContent) {
+      setProposalContent(contentWithoutLegacySignature);
     }
-  }, [isSavedView, loading, proposalApplicantName, proposalContent]);
+  }, [isSavedView, loading, proposalContent]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -6571,41 +6569,6 @@ export function ProposalForge(): JSX.Element {
     storedOutputProposalClosingToken,
     writeStoredOutputDraft,
   ]);
-
-  React.useEffect(() => {
-    if (
-      !proposalContent ||
-      !draftCharacterLimitMode ||
-      draftCharacterLimitMode === "none"
-    ) {
-      lastCharacterLimitToastIdRef.current = null;
-      return;
-    }
-
-    const displayedCount = getDisplayedProposalText(
-      proposalContent,
-      proposalType,
-    ).length;
-    const nextThreshold =
-      [...PROPOSAL_CHARACTER_LIMIT_TOAST_THRESHOLDS]
-        .reverse()
-        .find((threshold) => displayedCount >= threshold.limit) ?? null;
-
-    if (!nextThreshold) {
-      lastCharacterLimitToastIdRef.current = null;
-      return;
-    }
-
-    if (lastCharacterLimitToastIdRef.current === nextThreshold.id) {
-      return;
-    }
-
-    lastCharacterLimitToastIdRef.current = nextThreshold.id;
-    showToast(nextThreshold.title, {
-      variant: nextThreshold.advisory ? "warning" : "neutral",
-      description: nextThreshold.description,
-    });
-  }, [draftCharacterLimitMode, proposalContent, proposalType, showToast]);
 
   React.useEffect(() => {
     if (!composeAutosaveSnapshot) {
@@ -6739,23 +6702,37 @@ export function ProposalForge(): JSX.Element {
   }, [
     openedSavedProposal,
     proposalContent,
+    proposalOutputMode,
     proposalType,
     savedProposalContent,
     savedProposalType,
     showToast,
   ]);
 
-  const handleChooseSignature = React.useCallback(() => {
-    if (!proposalContent) {
-      return;
-    }
+  const handleProposalOutputModeChange = React.useCallback(
+    (nextMode: "preview" | "edit") => {
+      setProposalOutputMode(nextMode);
+      const latestStoredOutputDraft = readStoredProposalOutputDraft() ?? storedOutputDraft;
+      if (
+        latestStoredOutputDraft &&
+        latestStoredOutputDraft.proposalOutputMode !== nextMode
+      ) {
+        writeStoredOutputDraft({
+          ...latestStoredOutputDraft,
+          proposalOutputMode: nextMode,
+        });
+      }
+    },
+    [storedOutputDraft, writeStoredOutputDraft],
+  );
 
+  const handleChooseSignature = React.useCallback(() => {
     const applicantName = sanitizeProposalApplicantName(proposalApplicantName);
     const nextClosing = resolveProposalClosingRef({
       closing: storedOutputProposalClosing
-        ? { ...storedOutputProposalClosing, enabled: true }
+        ? { ...storedOutputProposalClosing, enabled: true, source: "settings" }
         : null,
-      content: proposalContent,
+      content: proposalContent || storedOutputDraft?.proposalContent || null,
       proposalType,
       applicantName,
       voicePreset: proposalVoicePreset,
@@ -6763,26 +6740,12 @@ export function ProposalForge(): JSX.Element {
     });
 
     if (!nextClosing?.signatureName) {
-      showToast("Signature needs a name.", {
-        variant: "warning",
-        description: "Add the applicant name in Heading, then insert the signature.",
-      });
       return;
     }
 
     const latestStoredOutputDraft = readStoredProposalOutputDraft() ?? storedOutputDraft;
     const nextClosingToken = JSON.stringify(nextClosing);
-    const currentClosingToken = JSON.stringify(
-      resolveProposalClosingRef({
-        closing: storedOutputProposalClosing,
-        content: proposalContent,
-        proposalType,
-        applicantName,
-        voicePreset: proposalVoicePreset,
-      }),
-    );
     const closingChanged =
-      currentClosingToken !== nextClosingToken &&
       JSON.stringify(latestStoredOutputDraft?.proposalClosing ?? null) !== nextClosingToken;
 
     if (!closingChanged) {
@@ -6790,24 +6753,26 @@ export function ProposalForge(): JSX.Element {
     }
 
     if (latestStoredOutputDraft) {
+      const nextProposalContent = removeProposalSignatureNameFromClosing(
+        latestStoredOutputDraft.proposalContent,
+      );
       writeStoredOutputDraft({
         ...latestStoredOutputDraft,
+        proposalContent: nextProposalContent,
         proposalClosing: nextClosing,
+        proposalOutputMode,
       });
+      if (nextProposalContent !== proposalContent) {
+        setProposalContent(nextProposalContent);
+      }
     }
 
-    if (closingChanged) {
-      showToast("Signature ready.", {
-        variant: "success",
-        description: "The proposal will render your Settings signature at the end.",
-      });
-    }
   }, [
     proposalApplicantName,
     proposalContent,
+    proposalOutputMode,
     proposalType,
     proposalVoicePreset,
-    showToast,
     storedOutputDraft,
     storedOutputProposalClosing,
     writeStoredOutputDraft,
@@ -6820,13 +6785,9 @@ export function ProposalForge(): JSX.Element {
         return;
       }
 
-      if (!proposalContent) {
-        return;
-      }
-
       const currentClosing = resolveProposalClosingRef({
         closing: storedOutputProposalClosing,
-        content: proposalContent,
+        content: proposalContent || storedOutputDraft?.proposalContent || null,
         proposalType,
         applicantName: sanitizeProposalApplicantName(proposalApplicantName),
         voicePreset: proposalVoicePreset,
@@ -6838,23 +6799,13 @@ export function ProposalForge(): JSX.Element {
 
       const nextClosing = {
         ...currentClosing,
-        enabled: true,
-        signatureName: "",
+        enabled: false,
+        source: "settings" as const,
         handwrittenSignatureEnabled: false,
       };
       const latestStoredOutputDraft = readStoredProposalOutputDraft() ?? storedOutputDraft;
       const nextClosingToken = JSON.stringify(nextClosing);
-      const currentClosingToken = JSON.stringify(
-        resolveProposalClosingRef({
-          closing: storedOutputProposalClosing,
-          content: proposalContent,
-          proposalType,
-          applicantName: sanitizeProposalApplicantName(proposalApplicantName),
-          voicePreset: proposalVoicePreset,
-        }),
-      );
       const closingChanged =
-        currentClosingToken !== nextClosingToken &&
         JSON.stringify(latestStoredOutputDraft?.proposalClosing ?? null) !== nextClosingToken;
 
       if (!closingChanged) {
@@ -6862,24 +6813,28 @@ export function ProposalForge(): JSX.Element {
       }
 
       if (latestStoredOutputDraft) {
+        const nextProposalContent = removeProposalSignatureNameFromClosing(
+          latestStoredOutputDraft.proposalContent,
+        );
         writeStoredOutputDraft({
           ...latestStoredOutputDraft,
+          proposalContent: nextProposalContent,
           proposalClosing: nextClosing,
+          proposalOutputMode,
         });
+        if (nextProposalContent !== proposalContent) {
+          setProposalContent(nextProposalContent);
+        }
       }
 
-      showToast("Signature removed.", {
-        variant: "success",
-        description: "The sign-off remains, but the structured signature is removed.",
-      });
     },
     [
       handleChooseSignature,
       proposalApplicantName,
       proposalContent,
+      proposalOutputMode,
       proposalType,
       proposalVoicePreset,
-      showToast,
       storedOutputDraft,
       storedOutputProposalClosing,
       writeStoredOutputDraft,
@@ -6892,20 +6847,13 @@ export function ProposalForge(): JSX.Element {
         return;
       }
 
-      if (
-        proposalSignatureSettings.mode !== "image" ||
-        !proposalSignatureSettings.imageDataUrl
-      ) {
-        showToast("Hand-drawn signature unavailable.", {
-          variant: "warning",
-          description: "Add or draw a signature image in Settings first.",
-        });
+      if (!proposalSignatureSettings.imageDataUrl) {
         return;
       }
 
       const nextClosing = resolveProposalClosingRef({
         closing: storedOutputProposalClosing
-          ? { ...storedOutputProposalClosing, enabled: true }
+          ? { ...storedOutputProposalClosing, enabled: true, source: "settings" }
           : null,
         content: proposalContent,
         proposalType,
@@ -6915,10 +6863,6 @@ export function ProposalForge(): JSX.Element {
       });
 
       if (!nextClosing?.signatureName) {
-        showToast("Signature needs a name.", {
-          variant: "warning",
-          description: "Add the applicant name in Heading, then enable hand-drawn signature.",
-        });
         return;
       }
 
@@ -6928,17 +6872,7 @@ export function ProposalForge(): JSX.Element {
       };
       const latestStoredOutputDraft = readStoredProposalOutputDraft() ?? storedOutputDraft;
       const nextClosingWithHandwrittenToken = JSON.stringify(nextClosingWithHandwritten);
-      const currentClosingToken = JSON.stringify(
-        resolveProposalClosingRef({
-          closing: storedOutputProposalClosing,
-          content: proposalContent,
-          proposalType,
-          applicantName: sanitizeProposalApplicantName(proposalApplicantName),
-          voicePreset: proposalVoicePreset,
-        }),
-      );
       const closingChanged =
-        currentClosingToken !== nextClosingWithHandwrittenToken &&
         JSON.stringify(latestStoredOutputDraft?.proposalClosing ?? null) !==
           nextClosingWithHandwrittenToken;
 
@@ -6950,24 +6884,18 @@ export function ProposalForge(): JSX.Element {
         writeStoredOutputDraft({
           ...latestStoredOutputDraft,
           proposalClosing: nextClosingWithHandwritten,
+          proposalOutputMode,
         });
       }
 
-      showToast(enabled ? "Hand-drawn signature enabled." : "Hand-drawn signature hidden.", {
-        variant: "success",
-        description: enabled
-          ? "The drawn signature will appear above the typed signature."
-          : "The typed signature remains visible.",
-      });
     },
     [
       proposalApplicantName,
       proposalContent,
+      proposalOutputMode,
       proposalSignatureSettings.imageDataUrl,
-      proposalSignatureSettings.mode,
       proposalType,
       proposalVoicePreset,
-      showToast,
       storedOutputDraft,
       storedOutputProposalClosing,
       writeStoredOutputDraft,
@@ -8158,20 +8086,20 @@ export function ProposalForge(): JSX.Element {
     return [
       {
         id: "short" as const,
-        label: "Concise",
+        label: "concise",
         description: "~1,200 chars · tight, no bloat",
         selected: activeValue !== null && activeValue <= 1400,
       },
       {
         id: "medium" as const,
-        label: "Standard",
+        label: "standard",
         description: "~2,000 chars · enough, no more",
         selected:
           activeValue === null || (activeValue > 1400 && activeValue <= 2600),
       },
       {
         id: "long" as const,
-        label: "Detailed",
+        label: "detailed",
         description: "~3,200 chars · room for context",
         selected: activeValue !== null && activeValue > 2600,
       },
@@ -8920,7 +8848,6 @@ export function ProposalForge(): JSX.Element {
                           effectiveProposalClosing.signatureName,
                       )}
                       handwrittenSignatureAvailable={
-                        proposalSignatureSettings.mode === "image" &&
                         Boolean(proposalSignatureSettings.imageDataUrl)
                       }
                       handwrittenSignatureEnabled={Boolean(
@@ -9144,7 +9071,7 @@ export function ProposalForge(): JSX.Element {
                         finalExportReviewed={Boolean(
                           proposalContent && proposalOutputMode === "preview",
                         )}
-                        onModeChange={setProposalOutputMode}
+                        onModeChange={handleProposalOutputModeChange}
                         onCopyText={() => {
                           void handleCopyOutput();
                         }}
@@ -9216,7 +9143,7 @@ export function ProposalForge(): JSX.Element {
                               null
                             }
                             mode={proposalOutputMode}
-                            onModeChange={setProposalOutputMode}
+                            onModeChange={handleProposalOutputModeChange}
                             editorAiJobContext={proposalEditorAiJobContext}
                             showDocumentCaption={false}
                             documentTitleEditable={
