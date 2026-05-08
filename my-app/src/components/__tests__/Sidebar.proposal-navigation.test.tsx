@@ -251,6 +251,23 @@ describe("Sidebar proposal navigation", () => {
     );
   });
 
+  it("does not render the footer theme toggle on the settings route", () => {
+    render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/settings" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole("button", {
+        name: /dark mode|light mode|toggle dark theme|toggle light theme/i,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("does not render authenticated recents when signed out", () => {
     mockAuthState.isSignedIn = false;
 
