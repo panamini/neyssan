@@ -1,5 +1,9 @@
 import type React from "react";
 import type { CvDocument } from "../../types/cvDocument";
+import {
+  getFactoryDocumentStyleSlot,
+  resolveDocumentStyleSlotId,
+} from "../../lib/document-style-slots";
 import type { ProposalTemplateId } from "../../../convex/lib/proposals/renderTemplates";
 import type { ResumeLayoutVariantId } from "./resume/resume.types";
 import {
@@ -167,10 +171,34 @@ export function getLayoutLabel(preset: VerbatiLayoutPreset): string {
 export function getVerbatiStyleFromCv(
   doc: CvDocument | null | undefined,
 ): VerbatiStylePreset {
-  const candidate = (doc?.metadata as Record<string, unknown> | undefined)
-    ?.verbatiStyle as Partial<VerbatiStylePreset> | undefined;
+  const metadata = doc?.metadata as Record<string, unknown> | undefined;
+  const candidate = metadata?.verbatiStyle as
+    | Partial<VerbatiStylePreset>
+    | undefined;
+  const sanitizedCandidate = sanitizePersistedVerbatiStyle(candidate);
+  if (sanitizedCandidate) return sanitizedCandidate;
 
-  return sanitizePersistedVerbatiStyle(candidate) ?? resolveVerbatiStyle(candidate);
+  const baseSnapshot = metadata?.verbatiStyleBaseSnapshot as
+    | Partial<VerbatiStylePreset>
+    | undefined;
+  const sanitizedBaseSnapshot = sanitizePersistedVerbatiStyle({
+    ...baseSnapshot,
+    ...(candidate?.resumeTemplateId
+      ? { resumeTemplateId: candidate.resumeTemplateId }
+      : null),
+  });
+  if (sanitizedBaseSnapshot) return sanitizedBaseSnapshot;
+
+  const slotId = resolveDocumentStyleSlotId(metadata?.verbatiStyleSlotId);
+  if (slotId) {
+    const factorySlot = getFactoryDocumentStyleSlot(slotId);
+    return resolveVerbatiStyle({
+      ...factorySlot.appearance,
+      resumeTemplateId: candidate?.resumeTemplateId ?? factorySlot.defaultCvTemplateId,
+    });
+  }
+
+  return resolveVerbatiStyle(candidate);
 }
 
 export function sanitizePersistedVerbatiStyle(

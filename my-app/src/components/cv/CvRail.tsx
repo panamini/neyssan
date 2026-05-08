@@ -111,7 +111,9 @@ type CvRailProps = {
   onDismissListAiSuggestion: (value: string) => void;
   onAddSection: (sectionKind: CvAddSectionKind) => void;
   selectedStyleSlot: 1 | 2 | 3 | null;
+  selectedStyleSlotIsCustom?: boolean;
   onSelectStyleSlot: (slot: 1 | 2 | 3) => void;
+  onResetStyleSlot?: () => void;
   onSelectTemplate: (template: "workshop-onecol" | "workshop-twocol" | "editorial" | "minimal" | "classic") => void;
   onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
   onSelectAccent: (accent: CvAccentChoice) => void;
@@ -475,7 +477,9 @@ export function CvRail({
   onDismissListAiSuggestion,
   onAddSection,
   selectedStyleSlot,
+  selectedStyleSlotIsCustom = false,
   onSelectStyleSlot,
+  onResetStyleSlot,
   onSelectTemplate,
   onSelectFontPair,
   onSelectAccent,
@@ -937,10 +941,19 @@ export function CvRail({
                 aria-pressed={selectedStyleSlot === slot}
                 onClick={() => onSelectStyleSlot(slot)}
               >
-                {`Style ${slot}`}
+                {`Style ${slot}${selectedStyleSlot === slot && selectedStyleSlotIsCustom ? " · Custom" : ""}`}
               </button>
             ))}
           </div>
+          {selectedStyleSlot && selectedStyleSlotIsCustom && onResetStyleSlot ? (
+            <button
+              type="button"
+              className="dasti-cv-rail-secondary-action"
+              onClick={onResetStyleSlot}
+            >
+              Reset Style {selectedStyleSlot}
+            </button>
+          ) : null}
           <div className="dasti-cv-rail-label">Template</div>
           <div className="dasti-cv-style-pills">
             <button

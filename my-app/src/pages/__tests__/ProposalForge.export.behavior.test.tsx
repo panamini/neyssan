@@ -131,7 +131,7 @@ describe("ProposalForge export behavior", () => {
     useQueryMock.mockReturnValue(null);
   });
 
-  it("exports compose ATS PDFs through the direct-download API", async () => {
+  it("exports compose styled PDFs through the stage share menu", async () => {
     const user = userEvent.setup();
 
     writeStoredProposalOutputDraft({
@@ -166,24 +166,24 @@ describe("ProposalForge export behavior", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Export proposal" }));
-    await user.click(screen.getByRole("menuitem", { name: "Export ATS PDF" }));
+    await user.click(screen.getByRole("button", { name: "Share proposal" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: "proposal",
         format: "pdf",
-        mode: "ats",
-        fileNameBase: "Proposal - ATS",
+        mode: "styled",
+        fileNameBase: "Proposal - Styled",
         stylePreset: expect.objectContaining({
           layout: "workshop",
           typography: "geist-baskervville",
-          palette: "pierre",
+          palette: "terre",
         }),
         data: expect.objectContaining({
           kind: "proposal",
           documentTitle: "Generated proposal",
-          body: expect.any(Array),
+          renderSource: "preview",
         }),
       }),
     );
@@ -229,8 +229,8 @@ describe("ProposalForge export behavior", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Export proposal" }));
-    await user.click(screen.getByRole("menuitem", { name: "Export Styled PDF" }));
+    await user.click(screen.getByRole("button", { name: "Share proposal" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -240,7 +240,7 @@ describe("ProposalForge export behavior", () => {
         stylePreset: expect.objectContaining({
           layout: "workshop",
           typography: "geist-baskervville",
-          palette: "pierre",
+          palette: "terre",
         }),
         data: expect.objectContaining({
           kind: "proposal",
@@ -249,7 +249,80 @@ describe("ProposalForge export behavior", () => {
           stylePreset: expect.objectContaining({
             layout: "workshop",
             typography: "geist-baskervville",
-            palette: "pierre",
+            palette: "terre",
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("exports compose styled PDFs from slot-only draft style metadata", async () => {
+    const user = userEvent.setup();
+
+    writeStoredProposalOutputDraft({
+      proposalContent:
+        "Dear Hiring Manager,\n\nGenerated proposal body.\n\nKind regards,\nAlex Martin",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: null,
+      proposalVerbatiStyle: null,
+      verbatiStyleSlotId: 2,
+      verbatiStyleSlotSource: "factory",
+      verbatiStyleSlotNameSnapshot: "Style 2",
+      verbatiStyleBaseSnapshot: {
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "soft-serif",
+        palette: "cobalt",
+      },
+      documentStyleVersion: 1,
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "auto",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Lead",
+      proposalContactLine: "alex@example.com · +33 6 00 00 00 00",
+      proposalLetterDate: "Paris, April 14, 2026",
+      proposalRecipientDetails: "Hiring Manager\nStudio North",
+      proposalDocumentTitle: "Generated proposal",
+      proposalDocumentMeta: "Compose output",
+      generatedProposalId: "proposal_live",
+      proposalOutputMode: "edit",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      characterLimitMode: "none",
+      characterLimitValue: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Share proposal" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
+
+    expect(exportDocumentFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "proposal",
+        format: "pdf",
+        mode: "styled",
+        stylePreset: expect.objectContaining({
+          layout: "workshop",
+          typography: "soft-serif",
+          palette: "cobalt",
+        }),
+        data: expect.objectContaining({
+          kind: "proposal",
+          renderSource: "preview",
+          templateId: "workshop_proposal_margin",
+          stylePreset: expect.objectContaining({
+            layout: "workshop",
+            typography: "soft-serif",
+            palette: "cobalt",
           }),
         }),
       }),
@@ -294,11 +367,11 @@ describe("ProposalForge export behavior", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Export proposal" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Share proposal" })).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: "Export proposal" }));
-    await user.click(screen.getByRole("menuitem", { name: "Export Styled PDF" }));
+    await user.click(screen.getByRole("button", { name: "Share proposal" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -324,7 +397,7 @@ describe("ProposalForge export behavior", () => {
       filename: "Proposal - Editable.docx",
     });
 
-    await user.click(screen.getByRole("button", { name: "Export proposal" }));
+    await user.click(screen.getByRole("button", { name: "Share proposal" }));
     await user.click(screen.getByRole("menuitem", { name: /Export DOCX/i }));
 
     expect(exportDocumentFileMock).toHaveBeenLastCalledWith(
@@ -386,24 +459,25 @@ describe("ProposalForge export behavior", () => {
       </MemoryRouter>,
     );
 
-    const exportButton = screen.getByRole("button", { name: "Export proposal" });
+    const exportButton = screen.getByRole("button", { name: "Share proposal" });
 
     await user.click(exportButton);
-    await user.click(screen.getByRole("menuitem", { name: "Export ATS PDF" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledTimes(1);
-    expect(exportButton).toBeDisabled();
 
     await user.click(exportButton);
+    expect(screen.getByRole("menuitem", { name: "Export PDF" })).toBeDisabled();
+    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledTimes(1);
 
     pendingExport.resolve({
-      filename: "Proposal - ATS.pdf",
+      filename: "Proposal - Styled.pdf",
     });
 
     await waitFor(() => {
-      expect(exportButton).not.toBeDisabled();
+      expect(screen.getByRole("button", { name: "Share proposal" })).toBeInTheDocument();
     });
 
     expect(showToastMock).toHaveBeenCalledWith("Exported.", {

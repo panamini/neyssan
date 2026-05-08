@@ -81,6 +81,50 @@ const proposalVerbatiStyleChoice = v.object({
   accentHex: v.optional(v.string()),
 });
 
+const documentStyleSlotIdChoice = v.union(
+  v.literal(1),
+  v.literal(2),
+  v.literal(3),
+);
+
+const documentStyleSlotSourceChoice = v.union(
+  v.literal("factory"),
+  v.literal("settings"),
+);
+
+const documentAppearanceSnapshotChoice = v.object({
+  familyId: v.optional(v.string()),
+  layout: v.string(),
+  typography: v.string(),
+  palette: v.string(),
+  accentHex: v.optional(v.string()),
+});
+
+function projectDocumentAppearanceSnapshot(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const snapshot = value as Record<string, unknown>;
+  if (
+    typeof snapshot.layout !== "string" ||
+    typeof snapshot.typography !== "string" ||
+    typeof snapshot.palette !== "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    familyId:
+      typeof snapshot.familyId === "string" ? snapshot.familyId : undefined,
+    layout: snapshot.layout,
+    typography: snapshot.typography,
+    palette: snapshot.palette,
+    accentHex:
+      typeof snapshot.accentHex === "string" ? snapshot.accentHex : undefined,
+  };
+}
+
 /**
  * Public query to list the most recent proposal library rows for the authenticated user.
  * Returns both autosaved drafts and finalized saved proposals.
@@ -135,6 +179,11 @@ export default query({
         creativity: v.optional(proposalCreativityChoice),
         templateId: v.optional(proposalTemplateChoice),
         verbatiStyle: v.optional(proposalVerbatiStyleChoice),
+        verbatiStyleSlotId: v.optional(documentStyleSlotIdChoice),
+        verbatiStyleSlotSource: v.optional(documentStyleSlotSourceChoice),
+        verbatiStyleSlotNameSnapshot: v.optional(v.string()),
+        verbatiStyleBaseSnapshot: v.optional(documentAppearanceSnapshotChoice),
+        documentStyleVersion: v.optional(v.literal(1)),
         styleLinkMode: v.optional(proposalStyleLinkModeChoice),
         styleChoice: v.optional(proposalStyleChoiceChoice),
         templateBundleId: v.optional(proposalTemplateBundleChoice),
@@ -195,7 +244,8 @@ export default query({
 
     const libraryProposals = proposals
       .filter(
-        (proposal) => proposal.status === "draft" || proposal.status === "saved",
+        (proposal) =>
+          proposal.status === "draft" || proposal.status === "saved",
       )
       .sort((left, right) => right._creationTime - left._creationTime)
       .slice(0, 30);
@@ -220,7 +270,8 @@ export default query({
         jobId: proposal.metadata.jobId ?? proposal.jobId ?? undefined,
         tags: proposal.metadata.tags ?? undefined,
         sourceJobTitle: proposal.metadata.sourceJobTitle ?? undefined,
-        sourceJobDescription: proposal.metadata.sourceJobDescription ?? undefined,
+        sourceJobDescription:
+          proposal.metadata.sourceJobDescription ?? undefined,
         sourceUrl: proposal.metadata.sourceUrl ?? undefined,
         sourceCvId: proposal.metadata.sourceCvId ?? undefined,
         planned_path: proposal.metadata.planned_path ?? undefined,
@@ -234,8 +285,7 @@ export default query({
         voicePreset: proposal.metadata.voicePreset ?? undefined,
         requestedVoicePreset:
           proposal.metadata.requestedVoicePreset ?? undefined,
-        resolvedVoicePreset:
-          proposal.metadata.resolvedVoicePreset ?? undefined,
+        resolvedVoicePreset: proposal.metadata.resolvedVoicePreset ?? undefined,
         autoToneDecisionVersion:
           proposal.metadata.autoToneDecisionVersion ?? undefined,
         autoToneReason: proposal.metadata.autoToneReason ?? undefined,
@@ -252,6 +302,16 @@ export default query({
               accentHex: proposal.metadata.verbatiStyle.accentHex ?? undefined,
             }
           : undefined,
+        verbatiStyleSlotId: proposal.metadata.verbatiStyleSlotId ?? undefined,
+        verbatiStyleSlotSource:
+          proposal.metadata.verbatiStyleSlotSource ?? undefined,
+        verbatiStyleSlotNameSnapshot:
+          proposal.metadata.verbatiStyleSlotNameSnapshot ?? undefined,
+        verbatiStyleBaseSnapshot: projectDocumentAppearanceSnapshot(
+          proposal.metadata.verbatiStyleBaseSnapshot,
+        ),
+        documentStyleVersion:
+          proposal.metadata.documentStyleVersion ?? undefined,
         styleLinkMode: proposal.metadata.styleLinkMode ?? undefined,
         styleChoice: proposal.metadata.styleChoice ?? undefined,
         templateBundleId: proposal.metadata.templateBundleId ?? undefined,
@@ -268,10 +328,8 @@ export default query({
         headerShowRecipient: proposal.metadata.headerShowRecipient ?? undefined,
         headerShowRecipientDetails:
           proposal.metadata.headerShowRecipientDetails ?? undefined,
-        characterLimitMode:
-          proposal.metadata.characterLimitMode ?? undefined,
-        characterLimitValue:
-          proposal.metadata.characterLimitValue ?? undefined,
+        characterLimitMode: proposal.metadata.characterLimitMode ?? undefined,
+        characterLimitValue: proposal.metadata.characterLimitValue ?? undefined,
         proposalType: proposal.metadata.proposalType ?? undefined,
       },
       metrics: {

@@ -10,6 +10,8 @@ import {
   isProposalTemplateId,
   resolveProposalTemplateId,
 } from "../../convex/lib/proposals/renderTemplates";
+import { getProposalBundleForDocumentStyleSlot } from "./document-style-slots";
+import { getProposalTemplateBundleDefinition } from "./proposal-template-bundles";
 
 type VerbatiStyleCandidate =
   | Partial<VerbatiStylePreset>
@@ -22,6 +24,8 @@ export type ProposalRenderStateInput = {
   preferredTemplateId?: ProposalTemplateId | null;
   storedStylePreset?: VerbatiStyleCandidate;
   storedTemplateId?: ProposalTemplateId | null;
+  storedStyleBaseSnapshot?: VerbatiStyleCandidate;
+  storedStyleSlotId?: unknown;
   activeCvStylePreset?: VerbatiStyleCandidate;
 };
 
@@ -45,6 +49,13 @@ function resolveExplicitProposalTemplateId(
 export function resolveProposalRenderState(
   input: ProposalRenderStateInput,
 ): ResolvedProposalRenderState {
+  const storedSlotBundleId = getProposalBundleForDocumentStyleSlot(
+    input.storedStyleSlotId,
+  );
+  const storedSlotBundleDefinition = storedSlotBundleId
+    ? getProposalTemplateBundleDefinition(storedSlotBundleId)
+    : null;
+
   const stylePreset =
     (input.preferredStylePreset
       ? sanitizePersistedVerbatiStyle(input.preferredStylePreset) ??
@@ -54,6 +65,11 @@ export function resolveProposalRenderState(
       ? sanitizePersistedVerbatiStyle(input.storedStylePreset) ??
         resolveVerbatiStyle(input.storedStylePreset)
       : null) ??
+    (input.storedStyleBaseSnapshot
+      ? sanitizePersistedVerbatiStyle(input.storedStyleBaseSnapshot) ??
+        resolveVerbatiStyle(input.storedStyleBaseSnapshot)
+      : null) ??
+    storedSlotBundleDefinition?.stylePreset ??
     (input.activeCvStylePreset
       ? resolveVerbatiStyle(input.activeCvStylePreset)
       : null) ??
@@ -63,6 +79,7 @@ export function resolveProposalRenderState(
     resolveExplicitProposalTemplateId(
       input.preferredTemplateId,
       input.storedTemplateId,
+      storedSlotBundleDefinition?.templateId,
     ) ?? getProposalTwinTemplateId(stylePreset);
 
   return {

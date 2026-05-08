@@ -11,10 +11,6 @@ import {
   PROPOSAL_TEMPLATE_IDS,
   resolveProposalTemplateId,
 } from "./lib/proposals/renderTemplates";
-import {
-  getPrimaryProfileForClerk,
-  listProfilesForClerk,
-} from "./lib/userProfiles";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -76,6 +72,9 @@ const proposalPresetVerbatiStyleValidator = v.object({
   typography: v.string(),
   palette: v.string(),
   accentHex: v.optional(v.union(v.string(), v.null())),
+  // CV-only template/layout choice for shared Settings style slots.
+  // Proposal renderers must map the slot to proposal-safe templates instead.
+  resumeTemplateId: v.optional(v.string()),
 });
 
 type ProposalSignatureSettingsData = {
@@ -159,24 +158,39 @@ export const getCurrent = query({
       };
     }
 
-    const user = await getPrimaryProfileForClerk(ctx, identity.subject);
+    const user = await getCurrentSettingsProfileForClerk(ctx, identity.subject);
+    const activeSlot =
+      (user?.proposalActivePresetSlot as 1 | 2 | 3 | undefined) ?? null;
+    const activePreset = activeSlot
+      ? (user?.[
+          `proposalPreset${activeSlot}` as
+            | "proposalPreset1"
+            | "proposalPreset2"
+            | "proposalPreset3"
+        ] as PresetSlotData | null | undefined) ?? null
+      : null;
+    const currentVerbatiStyle =
+      activePreset?.verbatiStyle ??
+      (user?.proposalVerbatiStyle && typeof user.proposalVerbatiStyle === "object"
+        ? (user.proposalVerbatiStyle as PresetSlotData["verbatiStyle"])
+        : undefined);
+    const currentVoicePreset =
+      resolveProposalVoicePreset(activePreset?.voicePreset) ??
+      resolveProposalVoicePreset(user?.proposalVoicePreset) ??
+      null;
 
     return {
-      voicePreset: resolveProposalVoicePreset(user?.proposalVoicePreset)
-        ?? DEFAULT_PROPOSAL_VOICE_PRESET,
-      savedVoicePreset: resolveProposalVoicePreset(user?.proposalVoicePreset) ?? null,
+      voicePreset: currentVoicePreset ?? DEFAULT_PROPOSAL_VOICE_PRESET,
+      savedVoicePreset: currentVoicePreset,
       templateId:
         resolveProposalTemplateId(user?.proposalTemplateId) ??
         DEFAULT_PROPOSAL_TEMPLATE_ID,
-      styleChoice: user?.proposalStyleChoice,
-      paletteOverride: user?.proposalPaletteOverride,
-      accentHex: user?.proposalAccentHex,
-      fontPairId: user?.proposalFontPairId,
-      verbatiStyle:
-        user?.proposalVerbatiStyle &&
-        typeof user.proposalVerbatiStyle === "object"
-          ? (user.proposalVerbatiStyle as PresetSlotData["verbatiStyle"])
-          : undefined,
+      styleChoice: activePreset?.styleChoice ?? user?.proposalStyleChoice,
+      paletteOverride:
+        activePreset !== null ? activePreset.paletteOverride : user?.proposalPaletteOverride,
+      accentHex: activePreset !== null ? activePreset.accentHex : user?.proposalAccentHex,
+      fontPairId: activePreset !== null ? activePreset.fontPairId : user?.proposalFontPairId,
+      verbatiStyle: currentVerbatiStyle,
       sourceMode: user?.proposalSourceMode,
       proposalDefaultContactEmail: user?.proposalDefaultContactEmail ?? null,
       proposalDefaultContactPhone: user?.proposalDefaultContactPhone ?? null,
@@ -184,7 +198,7 @@ export const getCurrent = query({
       proposalDefaultContactWebsite: user?.proposalDefaultContactWebsite ?? null,
       proposalDefaultContactLocation: user?.proposalDefaultContactLocation ?? null,
       signatureSettings: cleanProposalSignatureSettings(
-        user?.proposalSignatureSettings as
+        (activePreset?.signatureSettings ?? user?.proposalSignatureSettings) as
           | ProposalSignatureSettingsData
           | null
           | undefined,
@@ -228,6 +242,7 @@ type PresetSlotData = {
     typography: string;
     palette: string;
     accentHex?: string | null;
+    resumeTemplateId?: string;
   };
   voicePreset: "signature" | "expert" | "direct" | "engaging" | "storyteller" | null;
   signatureSettings?: ProposalSignatureSettingsData;
@@ -238,6 +253,47 @@ type UserProfileReplacement = Omit<
   Doc<"userProfiles">,
   "_id" | "_creationTime"
 >;
+
+type ClerkIdentity = {
+  subject: string;
+  email?: string | null;
+  name?: string | null;
+};
+
+async function getCurrentSettingsProfileForClerk(
+  ctx: any,
+  clerkId: string,
+): Promise<Doc<"userProfiles"> | null> {
+  const row = await ctx.db
+    .query("userProfiles")
+    .withIndex("by_clerk_updated_at", (q: any) => q.eq("clerkId", clerkId))
+    .order("desc")
+    .first();
+
+  return (row as Doc<"userProfiles"> | null) ?? null;
+}
+
+async function ensureCurrentSettingsProfile(
+  ctx: any,
+  identity: ClerkIdentity,
+): Promise<Doc<"userProfiles">> {
+  let user = await getCurrentSettingsProfileForClerk(ctx, identity.subject);
+
+  if (!user) {
+    await ctx.runMutation(internal.users.createOrUpdateUser, {
+      clerkId: identity.subject,
+      email: identity.email ?? "unknown@example.com",
+      name: identity.name,
+    });
+    user = await getCurrentSettingsProfileForClerk(ctx, identity.subject);
+  }
+
+  if (!user) {
+    throw new Error("User profile not found");
+  }
+
+  return user;
+}
 
 function applyPresetToCurrentProposalFields(
   nextReplacement: Record<string, unknown>,
@@ -296,7 +352,7 @@ export const getPresets = query({
     if (!identity) {
       return { preset1: null, preset2: null, preset3: null, activeSlot: null };
     }
-    const user = await getPrimaryProfileForClerk(ctx, identity.subject);
+    const user = await getCurrentSettingsProfileForClerk(ctx, identity.subject);
     return {
       preset1: (user?.proposalPreset1 as PresetSlotData | null | undefined) ?? null,
       preset2: (user?.proposalPreset2 as PresetSlotData | null | undefined) ?? null,
@@ -316,19 +372,7 @@ export const savePreset = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    let profiles = await listProfilesForClerk(ctx, identity.subject);
-    let user = profiles[0] ?? null;
-
-    if (!user) {
-      await ctx.runMutation(internal.users.createOrUpdateUser, {
-        clerkId: identity.subject,
-        email: identity.email ?? "unknown@example.com",
-        name: identity.name,
-      });
-      profiles = await listProfilesForClerk(ctx, identity.subject);
-      user = profiles[0] ?? null;
-    }
-    if (!user) throw new Error("User profile not found");
+    const user = await ensureCurrentSettingsProfile(ctx, identity);
 
     const fieldKey = `proposalPreset${args.slot}` as "proposalPreset1" | "proposalPreset2" | "proposalPreset3";
     const nextAccentHex =
@@ -348,22 +392,18 @@ export const savePreset = mutation({
     };
     const activeSlot = (user.proposalActivePresetSlot as 1 | 2 | 3 | undefined) ?? 1;
 
-    await Promise.all(
-      profiles.map((profile) => {
-        const { _creationTime, _id, ...rest } = profile as Doc<"userProfiles">;
-        const nextReplacement: UserProfileReplacement = {
-          ...rest,
-          [fieldKey]: cleanPreset,
-          updatedAt: Date.now(),
-          version: (profile.version ?? 1) + 1,
-        };
-        if (activeSlot === args.slot) {
-          applyPresetToCurrentProposalFields(nextReplacement, cleanPreset);
-        }
+    const { _creationTime, _id, ...rest } = user;
+    const nextReplacement: UserProfileReplacement = {
+      ...rest,
+      [fieldKey]: cleanPreset,
+      updatedAt: Date.now(),
+      version: (user.version ?? 1) + 1,
+    };
+    if (activeSlot === args.slot) {
+      applyPresetToCurrentProposalFields(nextReplacement, cleanPreset);
+    }
 
-        return ctx.db.replace(_id, nextReplacement);
-      }),
-    );
+    await ctx.db.replace(_id, nextReplacement);
     return null;
   },
 });
@@ -377,41 +417,25 @@ export const setActivePreset = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
-    let profiles = await listProfilesForClerk(ctx, identity.subject);
-    let user = profiles[0] ?? null;
-
-    if (!user) {
-      await ctx.runMutation(internal.users.createOrUpdateUser, {
-        clerkId: identity.subject,
-        email: identity.email ?? "unknown@example.com",
-        name: identity.name,
-      });
-      profiles = await listProfilesForClerk(ctx, identity.subject);
-      user = profiles[0] ?? null;
-    }
-    if (!user) throw new Error("User profile not found");
+    const user = await ensureCurrentSettingsProfile(ctx, identity);
 
     const fieldKey = `proposalPreset${args.slot}` as "proposalPreset1" | "proposalPreset2" | "proposalPreset3";
     const preset = (user[fieldKey] as PresetSlotData | null | undefined) ?? null;
 
-    await Promise.all(
-      profiles.map((profile) => {
-        const { _creationTime, _id, ...rest } = profile as Doc<"userProfiles">;
-        const nextReplacement: UserProfileReplacement = {
-          ...rest,
-          proposalActivePresetSlot: args.slot,
-          updatedAt: Date.now(),
-          version: (profile.version ?? 1) + 1,
-        };
+    const { _creationTime, _id, ...rest } = user;
+    const nextReplacement: UserProfileReplacement = {
+      ...rest,
+      proposalActivePresetSlot: args.slot,
+      updatedAt: Date.now(),
+      version: (user.version ?? 1) + 1,
+    };
 
-        // Mirror active preset into legacy single-default fields so ProposalForge continues to work
-        if (preset) {
-          applyPresetToCurrentProposalFields(nextReplacement, preset);
-        }
+    // Mirror active preset into legacy single-default fields so ProposalForge continues to work.
+    if (preset) {
+      applyPresetToCurrentProposalFields(nextReplacement, preset);
+    }
 
-        return ctx.db.replace(_id, nextReplacement);
-      }),
-    );
+    await ctx.db.replace(_id, nextReplacement);
     return null;
   },
 });
@@ -518,23 +542,7 @@ export const setCurrent = mutation({
       throw new Error("No proposal setting patch was provided");
     }
 
-    let profiles = await listProfilesForClerk(ctx, identity.subject);
-    let user = profiles[0] ?? null;
-
-    if (!user) {
-      await ctx.runMutation(internal.users.createOrUpdateUser, {
-        clerkId: identity.subject,
-        email: identity.email ?? "unknown@example.com",
-        name: identity.name,
-      });
-
-      profiles = await listProfilesForClerk(ctx, identity.subject);
-      user = profiles[0] ?? null;
-    }
-
-    if (!user) {
-      throw new Error("User profile not found");
-    }
+    const user = await ensureCurrentSettingsProfile(ctx, identity);
 
     const currentSavedVoicePreset =
       resolveProposalVoicePreset(user.proposalVoicePreset) ?? null;
@@ -600,65 +608,57 @@ export const setCurrent = mutation({
       user.proposalDefaultContactLocation !== nextContactLocation;
 
     if (needsWrite) {
-      const replacementByProfile = profiles.map((profile) => {
-        const { _creationTime, _id, ...rest } = profile as Doc<"userProfiles">;
-        const nextReplacement: UserProfileReplacement = {
-          ...rest,
-          proposalTemplateId: nextTemplateId,
-          updatedAt: Date.now(),
-          version: (profile.version ?? 1) + 1,
-        };
+      const { _creationTime, _id, ...rest } = user;
+      const nextReplacement: UserProfileReplacement = {
+        ...rest,
+        proposalTemplateId: nextTemplateId,
+        updatedAt: Date.now(),
+        version: (user.version ?? 1) + 1,
+      };
 
-        if (nextSavedVoicePreset) {
-          nextReplacement.proposalVoicePreset = nextSavedVoicePreset;
-        } else {
-          delete nextReplacement.proposalVoicePreset;
-        }
+      if (nextSavedVoicePreset) {
+        nextReplacement.proposalVoicePreset = nextSavedVoicePreset;
+      } else {
+        delete nextReplacement.proposalVoicePreset;
+      }
 
-        if (nextStyleChoice !== undefined) {
-          nextReplacement.proposalStyleChoice = nextStyleChoice;
-        } else {
-          delete nextReplacement.proposalStyleChoice;
-        }
+      if (nextStyleChoice !== undefined) {
+        nextReplacement.proposalStyleChoice = nextStyleChoice;
+      } else {
+        delete nextReplacement.proposalStyleChoice;
+      }
 
-        if (nextPaletteOverride !== undefined) {
-          nextReplacement.proposalPaletteOverride = nextPaletteOverride;
-        } else {
-          delete nextReplacement.proposalPaletteOverride;
-        }
+      if (nextPaletteOverride !== undefined) {
+        nextReplacement.proposalPaletteOverride = nextPaletteOverride;
+      } else {
+        delete nextReplacement.proposalPaletteOverride;
+      }
 
-        if (nextAccentHex !== undefined) {
-          nextReplacement.proposalAccentHex = nextAccentHex;
-        } else {
-          delete nextReplacement.proposalAccentHex;
-        }
+      if (nextAccentHex !== undefined) {
+        nextReplacement.proposalAccentHex = nextAccentHex;
+      } else {
+        delete nextReplacement.proposalAccentHex;
+      }
 
-        if (nextFontPairId !== undefined) {
-          nextReplacement.proposalFontPairId = nextFontPairId;
-        } else {
-          delete nextReplacement.proposalFontPairId;
-        }
+      if (nextFontPairId !== undefined) {
+        nextReplacement.proposalFontPairId = nextFontPairId;
+      } else {
+        delete nextReplacement.proposalFontPairId;
+      }
 
-        if (nextSourceMode !== undefined) {
-          nextReplacement.proposalSourceMode = nextSourceMode;
-        } else {
-          delete nextReplacement.proposalSourceMode;
-        }
+      if (nextSourceMode !== undefined) {
+        nextReplacement.proposalSourceMode = nextSourceMode;
+      } else {
+        delete nextReplacement.proposalSourceMode;
+      }
 
-        nextReplacement.proposalDefaultContactEmail = nextContactEmail ?? null;
-        nextReplacement.proposalDefaultContactPhone = nextContactPhone ?? null;
-        nextReplacement.proposalDefaultContactLinkedin = nextContactLinkedin ?? null;
-        nextReplacement.proposalDefaultContactWebsite = nextContactWebsite ?? null;
-        nextReplacement.proposalDefaultContactLocation = nextContactLocation ?? null;
+      nextReplacement.proposalDefaultContactEmail = nextContactEmail ?? null;
+      nextReplacement.proposalDefaultContactPhone = nextContactPhone ?? null;
+      nextReplacement.proposalDefaultContactLinkedin = nextContactLinkedin ?? null;
+      nextReplacement.proposalDefaultContactWebsite = nextContactWebsite ?? null;
+      nextReplacement.proposalDefaultContactLocation = nextContactLocation ?? null;
 
-        return { id: profile._id, replacement: nextReplacement };
-      });
-
-      await Promise.all(
-        replacementByProfile.map(({ id, replacement }) =>
-          ctx.db.replace(id, replacement),
-        ),
-      );
+      await ctx.db.replace(_id, nextReplacement);
     }
 
     return {

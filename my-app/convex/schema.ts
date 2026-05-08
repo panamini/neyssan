@@ -153,12 +153,32 @@ const proposalVerbatiStyleChoice = v.object({
   accentHex: v.optional(v.string()),
 });
 
+const documentStyleSlotIdChoice = v.union(
+  v.literal(1),
+  v.literal(2),
+  v.literal(3),
+);
+
+const documentStyleSlotSourceChoice = v.union(
+  v.literal("factory"),
+  v.literal("settings"),
+);
+
+const documentAppearanceSnapshotChoice = v.object({
+  familyId: v.optional(v.string()),
+  layout: v.string(),
+  typography: v.string(),
+  palette: v.string(),
+  accentHex: v.optional(v.string()),
+});
+
 const proposalPresetVerbatiStyleChoice = v.object({
   familyId: v.optional(v.string()),
   layout: v.string(),
   typography: v.string(),
   palette: v.string(),
   accentHex: v.optional(v.union(v.string(), v.null())),
+  resumeTemplateId: v.optional(v.string()),
 });
 
 const proposalSignatureFontChoice = v.union(
@@ -176,7 +196,19 @@ const proposalSignatureSettingsChoice = v.object({
 const proposalPresetSlotChoice = v.object({
   fontPairId: v.union(v.string(), v.null()),
   styleChoice: proposalStyleChoiceChoice,
-  paletteOverride: v.union(v.literal("terre"), v.literal("cobalt"), v.literal("ink"), v.literal("sauge"), v.literal("plum"), v.literal("ochre"), v.literal("ocre"), v.literal("pierre"), v.literal("bordeaux"), v.literal("encre"), v.null()),
+  paletteOverride: v.union(
+    v.literal("terre"),
+    v.literal("cobalt"),
+    v.literal("ink"),
+    v.literal("sauge"),
+    v.literal("plum"),
+    v.literal("ochre"),
+    v.literal("ocre"),
+    v.literal("pierre"),
+    v.literal("bordeaux"),
+    v.literal("encre"),
+    v.null(),
+  ),
   accentHex: v.union(v.string(), v.null()),
   verbatiStyle: v.optional(proposalPresetVerbatiStyleChoice),
   voicePreset: v.union(proposalVoicePresetChoice, v.null()),
@@ -264,6 +296,11 @@ export default defineSchema({
       creativity: v.optional(proposalCreativityChoice),
       templateId: v.optional(proposalTemplateChoice),
       verbatiStyle: v.optional(proposalVerbatiStyleChoice),
+      verbatiStyleSlotId: v.optional(documentStyleSlotIdChoice),
+      verbatiStyleSlotSource: v.optional(documentStyleSlotSourceChoice),
+      verbatiStyleSlotNameSnapshot: v.optional(v.string()),
+      verbatiStyleBaseSnapshot: v.optional(documentAppearanceSnapshotChoice),
+      documentStyleVersion: v.optional(v.literal(1)),
       styleLinkMode: v.optional(proposalStyleLinkModeChoice),
       styleChoice: v.optional(proposalStyleChoiceChoice),
       templateBundleId: v.optional(proposalTemplateBundleChoice),
@@ -339,7 +376,9 @@ export default defineSchema({
     summary: v.string(),
     summaryExtraction: v.optional(canonicalJobExtractionChoice),
     responsibilities: v.array(v.string()),
-    responsibilitiesExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
+    responsibilitiesExtraction: v.optional(
+      v.array(canonicalJobExtractionChoice),
+    ),
     keywords: v.array(v.string()),
     keywordsExtraction: v.optional(v.array(canonicalJobExtractionChoice)),
     mustHaves: v.array(v.string()),
@@ -382,13 +421,28 @@ export default defineSchema({
     model: v.string(),
     prompt_version: v.string(),
     latency_ms: v.number(),
-    model_confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
-    final_confidence: v.union(v.literal("high"), v.literal("medium"), v.literal("low"), v.null()),
+    model_confidence: v.union(
+      v.literal("high"),
+      v.literal("medium"),
+      v.literal("low"),
+      v.null(),
+    ),
+    final_confidence: v.union(
+      v.literal("high"),
+      v.literal("medium"),
+      v.literal("low"),
+      v.null(),
+    ),
     created_at: v.number(),
   })
     .index("by_job_id", ["job_id"])
     .index("by_job_text_hash", ["job_text_hash"])
-    .index("by_cache_identity", ["job_text_hash", "model", "prompt_version", "validation_status"])
+    .index("by_cache_identity", [
+      "job_text_hash",
+      "model",
+      "prompt_version",
+      "validation_status",
+    ])
     .index("by_hash_status", ["job_text_hash", "validation_status"]),
 
   structured_match_reviews: defineTable({
@@ -488,7 +542,9 @@ export default defineSchema({
     proposalPreset1: v.optional(v.union(proposalPresetSlotChoice, v.null())),
     proposalPreset2: v.optional(v.union(proposalPresetSlotChoice, v.null())),
     proposalPreset3: v.optional(v.union(proposalPresetSlotChoice, v.null())),
-    proposalActivePresetSlot: v.optional(v.union(v.literal(1), v.literal(2), v.literal(3))),
+    proposalActivePresetSlot: v.optional(
+      v.union(v.literal(1), v.literal(2), v.literal(3)),
+    ),
     defaultResumeId: v.optional(v.union(v.string(), v.null())),
     defaultResumeName: v.optional(v.union(v.string(), v.null())),
     // New optional profile fields for ingestion
@@ -540,7 +596,8 @@ export default defineSchema({
     achievements: v.optional(v.array(v.string())),
   })
     .index("by_profileId", ["profileId"])
-    .index("by_clerk_id", ["clerkId"]),
+    .index("by_clerk_id", ["clerkId"])
+    .index("by_clerk_updated_at", ["clerkId", "updatedAt"]),
 
   rateLimits: defineTable({
     userId: v.id("users"), // Changed to v.id("users") for proper referencing

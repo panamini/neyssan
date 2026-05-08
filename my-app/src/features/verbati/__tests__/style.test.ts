@@ -6,6 +6,7 @@ import {
   getProposalTwinTemplateId,
   getResumeTemplateId,
   getStyleFamilyId,
+  getVerbatiStyleFromCv,
   resolveLegacyResumeRendererVariantId,
   resolveVerbatiStyle,
   sanitizePersistedVerbatiStyle,
@@ -166,6 +167,48 @@ describe("verbati style normalization", () => {
     expect(resolveLegacyResumeRendererVariantId(familyResolved)).toBe(
       "robial",
     );
+  });
+
+  it("recovers CV visual style from base snapshot metadata when verbatiStyle is absent", () => {
+    expect(
+      getVerbatiStyleFromCv({
+        id: "cv-slot-base",
+        title: "Slot base CV",
+        metadata: {
+          verbatiStyleSlotId: 2,
+          verbatiStyleBaseSnapshot: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "civic-correspondence",
+            palette: "cobalt",
+          },
+        },
+        sections: [],
+      }),
+    ).toMatchObject({
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "civic-correspondence",
+      palette: "cobalt",
+    });
+  });
+
+  it("recovers CV visual style from factory slot metadata when snapshots are absent", () => {
+    expect(
+      getVerbatiStyleFromCv({
+        id: "cv-slot-only",
+        title: "Slot only CV",
+        metadata: {
+          verbatiStyleSlotId: 3,
+        },
+        sections: [],
+      }),
+    ).toMatchObject({
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "ledger-sans",
+      palette: "sauge",
+    });
   });
 
   it("resolves workshop family identity to the scaffolded paired templates", () => {

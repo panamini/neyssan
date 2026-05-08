@@ -46,7 +46,7 @@ vi.mock("convex/react", () => ({
 vi.mock("../../../convex/_generated/api", () => ({ api }));
 
 vi.mock("@clerk/clerk-react", () => ({
-  useAuth: () => ({ isLoaded: true, isSignedIn: false }),
+  useAuth: () => ({ isLoaded: true, isSignedIn: true }),
   useUser: () => ({ user: null }),
 }));
 
@@ -134,11 +134,12 @@ describe("SettingsPage preview controls", () => {
     );
     expect(document.documentElement.dataset.theme).toBe("dark");
 
-    await user.click(screen.getByRole("button", { name: "System" }));
-    expect(screen.getByRole("button", { name: "System" })).toHaveAttribute(
+    await user.click(screen.getByRole("button", { name: "Light" }));
+    expect(screen.getByRole("button", { name: "Light" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
+    expect(document.documentElement.dataset.theme).toBe("light");
 
     await user.click(screen.getByRole("button", { name: "Reduce motion" }));
     expect(screen.getByRole("button", { name: "Reduce motion" })).toHaveAttribute(
@@ -159,7 +160,7 @@ describe("SettingsPage preview controls", () => {
     const { container } = renderSettings();
 
     expect(container.querySelector(".dasti-settings-hero-preview__chip")).toHaveTextContent(
-      "Fraunces Bold / Syne Regular",
+      "Geist Bold / Baskervville",
     );
 
     const cards = Array.from(
@@ -169,6 +170,150 @@ describe("SettingsPage preview controls", () => {
     expect(cards[0]).toHaveTextContent("Style 1");
     expect(cards[1]).toHaveTextContent("Style 2");
     expect(cards[2]).toHaveTextContent("Style 3");
+  });
+
+  it("keeps the default badge pinned until the user sets a slot as default", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSettings();
+
+    const cards = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+    );
+
+    expect(cards[0]).toHaveTextContent("Default");
+    expect(cards[1]).not.toHaveTextContent("Default");
+    expect(
+      container.querySelector(".dasti-settings-builder__active-badge"),
+    ).toBeNull();
+
+    await user.click(cards[1]!);
+
+    expect(setActivePresetMock).not.toHaveBeenCalled();
+    expect(cards[0]).toHaveTextContent("Default");
+    expect(cards[1]).not.toHaveTextContent("Default");
+    expect(screen.getByRole("button", { name: "Set as default" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Set as default" }));
+
+    await waitFor(() => {
+      expect(setActivePresetMock).toHaveBeenCalledWith({ slot: 2 });
+    });
+    await waitFor(() => {
+      expect(cards[1]).toHaveTextContent("Default");
+    });
+  });
+
+  it("shows only one default label in the style rail while switching slots", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSettings();
+
+    const getCards = () =>
+      Array.from(
+        container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+      );
+    const getDefaultTexts = () =>
+      within(screen.getByRole("group", { name: "Style preset slots" }))
+        .queryAllByText(/default/i);
+
+    expect(getDefaultTexts()).toHaveLength(1);
+
+    await user.click(getCards()[1]!);
+
+    expect(getDefaultTexts()).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: "Set as default" }));
+
+    await waitFor(() => {
+      expect(getDefaultTexts()).toHaveLength(1);
+    });
+
+    await user.click(getCards()[2]!);
+
+    expect(getDefaultTexts()).toHaveLength(1);
+  });
+
+  it("keeps exactly one default after setting Style 2 then browsing other slots", async () => {
+    presetsQueryMock.mockReturnValue({
+      activeSlot: 3,
+      preset1: {
+        fontPairId: "geist-baskervville",
+        styleChoice: "balanced",
+        paletteOverride: null,
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 1",
+      },
+      preset2: {
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: null,
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 2",
+      },
+      preset3: {
+        fontPairId: "ledger-sans",
+        styleChoice: "balanced",
+        paletteOverride: null,
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 3",
+      },
+    });
+    const user = userEvent.setup();
+    const { container } = renderSettings();
+
+    const getCards = () =>
+      Array.from(
+        container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+      );
+    const getDefaultTexts = () =>
+      within(screen.getByRole("group", { name: "Style preset slots" }))
+        .queryAllByText(/default/i);
+
+    expect(getDefaultTexts()).toHaveLength(1);
+    expect(getCards()[2]).toHaveTextContent("Default");
+
+    await user.click(getCards()[1]!);
+    await user.click(screen.getByRole("button", { name: "Set as default" }));
+
+    await waitFor(() => {
+      expect(setActivePresetMock).toHaveBeenCalledWith({ slot: 2 });
+      expect(getDefaultTexts()).toHaveLength(1);
+      expect(getCards()[1]).toHaveTextContent("Default");
+    });
+
+    await user.click(getCards()[0]!);
+    await user.click(getCards()[2]!);
+
+    expect(getDefaultTexts()).toHaveLength(1);
+    expect(getCards()[1]).toHaveTextContent("Default");
+    expect(getCards()[2]).not.toHaveTextContent("Default");
+    expect(
+      container.querySelectorAll(".dasti-settings-slot-card--active"),
+    ).toHaveLength(1);
+    expect(
+      container.querySelectorAll(".dasti-settings-slot-card--editing"),
+    ).toHaveLength(1);
+  });
+
+  it("does not move the default badge when setting the active slot fails", async () => {
+    setActivePresetMock.mockRejectedValueOnce(new Error("Server rejected active slot"));
+    const user = userEvent.setup();
+    const { container } = renderSettings();
+
+    const cards = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+    );
+
+    await user.click(cards[1]!);
+    await user.click(screen.getByRole("button", { name: "Set as default" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Server rejected active slot")).toBeInTheDocument();
+    });
+    expect(cards[0]).toHaveTextContent("Default");
+    expect(cards[1]).not.toHaveTextContent("Default");
   });
 
   it("updates the live preview when selecting a different font pair", async () => {
@@ -323,6 +468,49 @@ describe("SettingsPage preview controls", () => {
           resumeTemplateId: "workshop_resume_twocol_ats",
         }),
       }),
+    });
+  });
+
+  it("keeps the selected CV layout when saving a font pair on a style slot", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSettings();
+    const workshopTwoColumnButton = screen
+      .getAllByRole("button", { name: /Workshop 2-col/ })
+      .find((element) => element.className.includes("layout-card"));
+
+    expect(workshopTwoColumnButton).toBeTruthy();
+
+    await user.click(workshopTwoColumnButton!);
+    await waitFor(() => {
+      expect(getLastSavePresetPayload()).toMatchObject({
+        preset: expect.objectContaining({
+          verbatiStyle: expect.objectContaining({
+            resumeTemplateId: "workshop_resume_twocol_ats",
+          }),
+        }),
+      });
+    });
+
+    savePresetMock.mockClear();
+    const fontCards = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(
+        ".dasti-settings-font-pair-card",
+      ),
+    );
+    await user.click(fontCards[0]!);
+
+    await waitFor(() => {
+      expect(getLastSavePresetPayload()).toMatchObject({
+        slot: 1,
+        preset: expect.objectContaining({
+          fontPairId: "quiet-editorial",
+          verbatiStyle: expect.objectContaining({
+            layout: "workshop",
+            typography: "quiet-editorial",
+            resumeTemplateId: "workshop_resume_twocol_ats",
+          }),
+        }),
+      });
     });
   });
 

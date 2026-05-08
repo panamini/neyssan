@@ -57,6 +57,7 @@ import {
   getLocalPersonalizationSourceByCvId,
   getProposalApplicantHeaderData,
 } from "../lib/proposal-personalization";
+import { getFactoryDocumentStyleSlot } from "../lib/document-style-slots";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -320,23 +321,23 @@ function buildVerbatiStyleForLayout(args: {
 }
 
 function buildDefaultPresetSlot(slot: SlotIndex): PresetSlot {
-  const fontPairIdBySlot: Record<SlotIndex, VerbatiFontPairId> = {
-    1: "quiet-editorial",
-    2: "geist-baskervville",
-    3: "ledger-sans",
-  };
-  const preset: PresetSlot = {
+  const factorySlot = getFactoryDocumentStyleSlot(slot);
+  return {
     ...EMPTY_PRESET,
-    fontPairId: fontPairIdBySlot[slot],
-    styleChoice: "auto",
-    paletteOverride: null,
-    accentHex: null,
+    fontPairId: factorySlot.appearance.typography,
+    styleChoice: "balanced",
+    paletteOverride: factorySlot.appearance.palette,
+    accentHex: factorySlot.appearance.accentHex ?? null,
     signatureSettings: DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
-    verbatiStyle: null,
-    name: DEFAULT_SLOT_NAMES[slot],
+    verbatiStyle: {
+      ...resolveVerbatiStyle({
+        ...factorySlot.appearance,
+        resumeTemplateId: factorySlot.defaultCvTemplateId,
+      }),
+      accentHex: factorySlot.appearance.accentHex ?? null,
+    },
+    name: factorySlot.label,
   };
-
-  return preset;
 }
 
 function buildPresetSavePayload(
@@ -578,14 +579,12 @@ function SlotCard({
   isEditing,
   isActive,
   onSelect,
-  onSetActive,
 }: {
   slotIndex: SlotIndex;
   preset: PresetSlot;
   isEditing: boolean;
   isActive: boolean;
   onSelect: () => void;
-  onSetActive: (e: React.MouseEvent) => void;
 }) {
   const fontPair = VERBATI_FONT_PAIR_OPTIONS.find((f) => f.id === preset.fontPairId)
     ?? DEFAULT_FONT_PAIR_OPTION;
@@ -615,18 +614,7 @@ function SlotCard({
             <Check size={9} strokeWidth={2.6} aria-hidden="true" />
             Default
           </span>
-        ) : (
-          <span
-            className="dasti-settings-slot-card__set-default"
-            role="button"
-            tabIndex={0}
-            onClick={onSetActive}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSetActive(e as unknown as React.MouseEvent); } }}
-            aria-label={`Set ${slotName} as default`}
-          >
-            Set default
-          </span>
-        )}
+        ) : null}
       </div>
 
       <div className="dasti-settings-slot-card__meta">
@@ -1062,7 +1050,10 @@ export function SettingsPage(): JSX.Element {
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const isAuthReady = isAuthLoaded !== false;
-  const presetsQuery = useQuery(api.proposalSettings.getPresets);
+  const presetsQuery = useQuery(
+    api.proposalSettings.getPresets,
+    isSignedIn ? {} : "skip",
+  );
   const currentProposalSettings = useQuery(
     api.proposalSettings.getCurrent,
     isSignedIn ? {} : "skip",
@@ -1080,6 +1071,7 @@ export function SettingsPage(): JSX.Element {
   });
   const [activeSlot, setActiveSlot] = React.useState<SlotIndex>(1);
   const [savedTick, setSavedTick] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
   const [contactFields, setContactFields] = React.useState<
     Record<ProposalContactField, string>
   >(EMPTY_PROPOSAL_CONTACT_FIELDS);
@@ -1099,23 +1091,42 @@ export function SettingsPage(): JSX.Element {
         | (typeof raw & { signatureSettings?: unknown })
         | null
         | undefined;
+      const sanitizedVerbatiStyle =
+        raw?.verbatiStyle === undefined
+          ? undefined
+          : raw.verbatiStyle === null
+            ? null
+            : sanitizePersistedVerbatiStyle(
+                raw.verbatiStyle as Partial<VerbatiStylePreset>,
+              ) ?? undefined;
 
       return {
         fontPairId:
-          (raw?.fontPairId as VerbatiFontPairId | null) ?? defaults.fontPairId,
-        styleChoice: (raw?.styleChoice as ProposalStyleChoice) ?? defaults.styleChoice,
+          raw?.fontPairId === undefined
+            ? defaults.fontPairId
+            : (raw.fontPairId as VerbatiFontPairId | null),
+        styleChoice:
+          raw?.styleChoice === undefined
+            ? defaults.styleChoice
+            : (raw.styleChoice as ProposalStyleChoice),
         paletteOverride:
-          (raw?.paletteOverride as ProposalPaletteId | null) ?? defaults.paletteOverride,
-        accentHex: raw?.accentHex ?? defaults.accentHex,
+          raw?.paletteOverride === undefined
+            ? defaults.paletteOverride
+            : (raw.paletteOverride as ProposalPaletteId | null),
+        accentHex: raw?.accentHex === undefined ? defaults.accentHex : raw.accentHex,
         verbatiStyle:
-          (sanitizePersistedVerbatiStyle(
-            raw?.verbatiStyle as Partial<VerbatiStylePreset> | null | undefined,
-          ) as StoredVerbatiStyle | null) ?? defaults.verbatiStyle,
-        voicePreset: (raw?.voicePreset as ToneId) ?? defaults.voicePreset,
-        signatureSettings: sanitizeProposalSignatureSettings(
-          rawRecord?.signatureSettings ?? defaults.signatureSettings,
-        ),
-        name: raw?.name ?? defaults.name,
+          sanitizedVerbatiStyle === undefined
+            ? defaults.verbatiStyle
+            : (sanitizedVerbatiStyle as StoredVerbatiStyle | null),
+        voicePreset:
+          raw?.voicePreset === undefined
+            ? defaults.voicePreset
+            : (raw.voicePreset as ToneId),
+        signatureSettings:
+          rawRecord?.signatureSettings === undefined
+            ? defaults.signatureSettings
+            : sanitizeProposalSignatureSettings(rawRecord.signatureSettings),
+        name: raw?.name === undefined ? defaults.name : raw.name,
       };
     };
 
@@ -1128,6 +1139,7 @@ export function SettingsPage(): JSX.Element {
   }, [presetsQuery]);
 
   const flashSaved = React.useCallback(() => {
+    setSaveError(null);
     setSavedTick(true);
     if (savedTickTimeoutRef.current !== null) clearTimeout(savedTickTimeoutRef.current);
     savedTickTimeoutRef.current = setTimeout(() => {
@@ -1166,12 +1178,18 @@ export function SettingsPage(): JSX.Element {
   // Update a field on the currently editing preset and debounce-save
   const updatePreset = React.useCallback(
     (patch: Partial<PresetSlot>) => {
+      setSaveError(null);
       setLocalPresets((prev) => {
         const next = { ...prev, [editingSlot]: { ...prev[editingSlot], ...patch } };
         const nextSavedPreset = buildPresetSavePayload(next[editingSlot]);
         // debounce save
         if (saveDebounceRef.current !== null) clearTimeout(saveDebounceRef.current);
         saveDebounceRef.current = setTimeout(() => {
+          if (!isSignedIn) {
+            setSaveError("Sign in to save document styles.");
+            saveDebounceRef.current = null;
+            return;
+          }
           void savePreset({
             slot: editingSlot,
             preset: {
@@ -1191,22 +1209,43 @@ export function SettingsPage(): JSX.Element {
                   }
                 : undefined,
             },
-          }).then(() => flashSaved());
+          })
+            .then(() => flashSaved())
+            .catch((error: unknown) => {
+              const message =
+                error instanceof Error && error.message
+                  ? error.message
+                  : "Could not save document style.";
+              setSaveError(message);
+            });
           saveDebounceRef.current = null;
         }, 400);
         return next;
       });
     },
-    [editingSlot, flashSaved, savePreset],
+    [editingSlot, flashSaved, isSignedIn, savePreset],
   );
 
   const handleSetActive = React.useCallback(
     async (slot: SlotIndex) => {
-      setActiveSlot(slot);
-      await setActivePreset({ slot });
-      flashSaved();
+      setSaveError(null);
+      if (!isSignedIn) {
+        setSaveError("Sign in to save document styles.");
+        return;
+      }
+      try {
+        await setActivePreset({ slot });
+        setActiveSlot(slot);
+        flashSaved();
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not set the default style.";
+        setSaveError(message);
+      }
     },
-    [flashSaved, setActivePreset],
+    [flashSaved, isSignedIn, setActivePreset],
   );
 
   const currentPreset = localPresets[editingSlot];
@@ -1287,6 +1326,11 @@ export function SettingsPage(): JSX.Element {
             <span className="dasti-settings-page__saved" aria-live="polite">
               <Check size={12} strokeWidth={2.4} aria-hidden="true" />
               Saved.
+            </span>
+          )}
+          {saveError && (
+            <span className="dasti-settings-page__saved" aria-live="assertive">
+              {saveError}
             </span>
           )}
         </div>
@@ -1444,18 +1488,11 @@ export function SettingsPage(): JSX.Element {
                   isEditing={editingSlot === slot}
                   isActive={activeSlot === slot}
                   onSelect={() => setEditingSlot(slot)}
-                  onSetActive={(e) => { e.stopPropagation(); void handleSetActive(slot); }}
                 />
               ))}
             </div>
             <div className="dasti-settings-builder__preview-label">
               {localPresets[editingSlot].name || DEFAULT_SLOT_NAMES[editingSlot]}
-              {activeSlot === editingSlot && (
-                <span className="dasti-settings-builder__active-badge" aria-label="Active default">
-                  <Check size={10} strokeWidth={2.6} aria-hidden="true" />
-                  Default
-                </span>
-              )}
             </div>
             <HeroPreview
               key={editingSlot}
