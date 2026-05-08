@@ -28,6 +28,10 @@ export type VisualStyleDiff = {
     from?: string;
     to?: string;
   };
+  resumeTemplateId?: {
+    from?: VerbatiStylePreset["resumeTemplateId"];
+    to?: VerbatiStylePreset["resumeTemplateId"];
+  };
 };
 
 export type VisualStyleDirtyField = keyof VisualStyleDiff;
@@ -138,6 +142,13 @@ export function deriveVisualStyleDiff(
     };
   }
 
+  if ((from.resumeTemplateId ?? undefined) !== (to.resumeTemplateId ?? undefined)) {
+    diff.resumeTemplateId = {
+      from: from.resumeTemplateId ?? undefined,
+      to: to.resumeTemplateId ?? undefined,
+    };
+  }
+
   return Object.keys(diff).length > 0 ? diff : null;
 }
 
@@ -149,7 +160,7 @@ export function deriveDirtyFields(
   }
 
   return (
-    ["layout", "typography", "palette", "accentHex"] as const
+    ["layout", "typography", "palette", "accentHex", "resumeTemplateId"] as const
   ).filter((field) => Boolean(diff[field]));
 }
 

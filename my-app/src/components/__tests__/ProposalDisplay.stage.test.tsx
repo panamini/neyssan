@@ -129,6 +129,22 @@ describe("ProposalDisplay stage behavior", () => {
     });
   });
 
+  it("uses a natural overflow stage for proposal preview mode when requested", () => {
+    const { container } = render(
+      <ProposalDisplay
+        proposalContent={"Dear team,\n\nSingle-page proposal.\n\nAlex"}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        previewScrollMode="natural"
+      />,
+    );
+
+    expect(
+      container.querySelector(".dasti-proposal-sheet__preview-stage"),
+    ).toHaveAttribute("data-stage-mode", "overflow");
+  });
+
   it("fits readonly previews from the stage content box instead of the padded parent", () => {
     render(
       <ProposalDisplay

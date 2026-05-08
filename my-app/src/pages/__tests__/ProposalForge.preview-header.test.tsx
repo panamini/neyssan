@@ -1,9 +1,14 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { ProposalForge } from "../ProposalForge";
+import { readStoredProposalOutputDraft } from "../../lib/proposal-output-draft";
+
+const toastMocks = vi.hoisted(() => ({
+  showToast: vi.fn(),
+}));
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
@@ -39,7 +44,7 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
 
 vi.mock("../../components/ui/toast", () => ({
   useToast: () => ({
-    showToast: vi.fn(),
+    showToast: toastMocks.showToast,
   }),
 }));
 
@@ -63,7 +68,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
           onValuesChange?.(values);
           onSubmit?.(
             values,
-            "Generated proposal body.",
+            "Generated proposal body.\n\nSincerely,\njo",
             undefined,
             "proposal_generated",
           );
@@ -80,13 +85,21 @@ vi.mock("../../components/ProposalDisplay", () => ({
     railTitle,
     railMeta,
     contactLine,
+    closing,
+    mode,
   }: {
     railTitle?: string | null;
     railMeta?: string | null;
     contactLine?: string | null;
+    closing?: { signatureName?: string | null } | null;
+    mode?: "preview" | "edit";
   }) => (
     <div data-testid="proposal-display-props">
       {railTitle ?? ""} | {railMeta ?? ""} | {contactLine ?? ""}
+      <span data-testid="proposal-display-closing">
+        {closing?.signatureName ?? ""}
+      </span>
+      <span data-testid="proposal-display-mode">{mode ?? ""}</span>
     </div>
   ),
   fallbackCopyText: () => "",
@@ -101,6 +114,115 @@ describe("ProposalForge preview applicant fallback", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    toastMocks.showToast.mockClear();
+  });
+
+  it("toggles the structured signature switch from the Proposal Forge Style tab", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Generate proposal", hidden: true }),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Heading" }));
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Alex Martin" },
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+
+    const signatureSwitch = await screen.findByRole("switch", {
+      name: "Printed name",
+    });
+    expect(signatureSwitch).toHaveAttribute("aria-checked", "true");
+
+    fireEvent.click(signatureSwitch);
+
+    await waitFor(() => {
+      expect(signatureSwitch).toHaveAttribute("aria-checked", "false");
+      expect(readStoredProposalOutputDraft()?.proposalClosing).toMatchObject({
+        enabled: false,
+        source: "settings",
+      });
+    });
+    expect(toastMocks.showToast).not.toHaveBeenCalledWith(
+      expect.stringMatching(/signature/i),
+      expect.anything(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit proposal" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-mode")).toHaveTextContent(
+        "edit",
+      );
+      expect(readStoredProposalOutputDraft()?.proposalOutputMode).toBe("edit");
+    });
+  });
+
+  it("keeps edit mode active when the structured signature is toggled", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Generate proposal", hidden: true }),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Heading" }));
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Alex Martin" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Edit proposal" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-mode")).toHaveTextContent(
+        "edit",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(await screen.findByRole("switch", { name: "Printed name" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-mode")).toHaveTextContent(
+        "edit",
+      );
+      expect(readStoredProposalOutputDraft()?.proposalOutputMode).toBe("edit");
+    });
+  });
+
+  it("updates a settings-owned structured signature when the Heading name changes", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Generate proposal", hidden: true }),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Heading" }));
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "A" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-closing")).toHaveTextContent("A");
+    });
+
+    fireEvent.change(screen.getByLabelText("Full name"), {
+      target: { value: "Alex Martin" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-closing")).toHaveTextContent(
+        "Alex Martin",
+      );
+    });
   });
 
   it("does not use the sample resume header when no CV is attached", () => {
@@ -110,7 +232,9 @@ describe("ProposalForge preview applicant fallback", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Generate proposal" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Generate proposal", hidden: true }),
+    );
 
     expect(screen.getByTestId("proposal-display-props")).toHaveTextContent(
       "| |",

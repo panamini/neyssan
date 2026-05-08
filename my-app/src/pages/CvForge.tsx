@@ -23,9 +23,19 @@ import type {
 } from "../features/verbati/resumeLinking";
 import { getCanonicalSectionType } from "../features/verbati/resumeLinking";
 import { useBoundVerbatiCvStyle } from "../features/verbati/useBoundVerbatiCvStyle";
-import { resolveVerbatiStyle } from "../features/verbati/style";
+import { resolveVerbatiStyle, stylesEqual } from "../features/verbati/style";
 import type { VerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
+import {
+  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
+} from "../lib/layout/resumeTemplates";
+import {
+  DOCUMENT_STYLE_VERSION,
+  buildDocumentAppearanceSnapshot,
+  getFactoryDocumentStyleSlot,
+  resolveDocumentStyleSlotId,
+} from "../lib/document-style-slots";
 import {
   ensurePlainTextRemirrorDoc,
   ensureRemirrorDoc,
@@ -115,7 +125,9 @@ type InlinePaperSelectionState = {
   editTarget: ActivePaperEditTarget;
   range: Range | null;
 };
-type PaperTextAiSuggestion = NonNullable<ResumePaperAiState["textSuggestion"]> & {
+type PaperTextAiSuggestion = NonNullable<
+  ResumePaperAiState["textSuggestion"]
+> & {
   afterDoc?: unknown;
   responsibilityBullets?: string[];
   previousSection?: CvSection;
@@ -124,7 +136,8 @@ type PaperTextAiSuggestion = NonNullable<ResumePaperAiState["textSuggestion"]> &
 
 const CV_FORGE_WORKSPACE_MODE_STORAGE_KEY = "dasti:cv-forge-workspace-mode:v1";
 const ENTRY_PICKER_PENDING_ROUTE_ID = "__entry-picker-pending-route__";
-const DRAFT_EMPTY_RESPONSIBILITY_BULLET = "__draft_empty_responsibility_bullet__";
+const DRAFT_EMPTY_RESPONSIBILITY_BULLET =
+  "__draft_empty_responsibility_bullet__";
 
 function mapDefaultVoicePresetToCvTone(value: unknown): CvToneChoice {
   if (value === "engaging") return "warm";
@@ -132,13 +145,18 @@ function mapDefaultVoicePresetToCvTone(value: unknown): CvToneChoice {
   return "natural";
 }
 
-function cleanCvMetadataForImport(metadata: CvDocument["metadata"]): CvDocument["metadata"] {
+function cleanCvMetadataForImport(
+  metadata: CvDocument["metadata"],
+): CvDocument["metadata"] {
   const nextMetadata = { ...metadata } as Record<string, unknown>;
   delete nextMetadata.cvTone;
   return nextMetadata as CvDocument["metadata"];
 }
 
-function buildUpdatedCvMetadata(cv: CvDocument, updatedAt: string): CvDocument["metadata"] {
+function buildUpdatedCvMetadata(
+  cv: CvDocument,
+  updatedAt: string,
+): CvDocument["metadata"] {
   return {
     ...cleanCvMetadataForImport(cv.metadata),
     updatedAt,
@@ -164,7 +182,9 @@ function collectPlainText(value: unknown): string {
     .join("\n");
 }
 
-function getStructuredItems(section: CvSection): Array<Record<string, unknown>> {
+function getStructuredItems(
+  section: CvSection,
+): Array<Record<string, unknown>> {
   return Array.isArray(section.structuredContent)
     ? (section.structuredContent as Array<Record<string, unknown>>)
     : [];
@@ -205,7 +225,10 @@ function getListSectionItems(section: CvSection): string[] {
     .filter(Boolean);
 }
 
-function filterNewListSuggestions(suggestions: string[], existingItems: string[]): string[] {
+function filterNewListSuggestions(
+  suggestions: string[],
+  existingItems: string[],
+): string[] {
   const existing = new Set(existingItems.map(normalizeListName));
   return dedupeTextList(suggestions).filter(
     (suggestion) => !existing.has(normalizeListName(suggestion)),
@@ -217,7 +240,9 @@ function getCurrentCvSummaryText(cv: CvDocument | null | undefined): string {
     (section) => String(section.type) === "summary",
   ) as CvSection | undefined;
   const item = summarySection ? getStructuredItems(summarySection)[0] : null;
-  return collectPlainText(item?.summary ?? summarySection?.blocks?.[0]?.content);
+  return collectPlainText(
+    item?.summary ?? summarySection?.blocks?.[0]?.content,
+  );
 }
 
 function getCurrentCvSkills(cv: CvDocument | null | undefined): string[] {
@@ -242,9 +267,7 @@ function getCurrentCvLanguages(
     .filter((item) => item.name || item.level);
 }
 
-function getCurrentCvExperiences(
-  cv: CvDocument | null | undefined,
-): Array<{
+function getCurrentCvExperiences(cv: CvDocument | null | undefined): Array<{
   company?: string;
   position?: string;
   description?: string;
@@ -254,18 +277,19 @@ function getCurrentCvExperiences(
     .filter((section) => String(section.type) === "experience")
     .flatMap((section) =>
       getStructuredItems(section as CvSection).map((item) => ({
-        company: typeof item.company === "string" ? item.company.trim() : undefined,
+        company:
+          typeof item.company === "string" ? item.company.trim() : undefined,
         position:
           typeof item.position === "string" ? item.position.trim() : undefined,
-        description: collectPlainText(item.responsibilities ?? item.description),
+        description: collectPlainText(
+          item.responsibilities ?? item.description,
+        ),
         bullets: splitAiListText(collectPlainText(item.responsibilities)),
       })),
     );
 }
 
-function getCurrentCvEducations(
-  cv: CvDocument | null | undefined,
-): Array<{
+function getCurrentCvEducations(cv: CvDocument | null | undefined): Array<{
   institution?: string;
   degree?: string;
   fieldOfStudy?: string;
@@ -276,10 +300,15 @@ function getCurrentCvEducations(
     .flatMap((section) =>
       getStructuredItems(section as CvSection).map((item) => ({
         institution:
-          typeof item.institution === "string" ? item.institution.trim() : undefined,
-        degree: typeof item.degree === "string" ? item.degree.trim() : undefined,
+          typeof item.institution === "string"
+            ? item.institution.trim()
+            : undefined,
+        degree:
+          typeof item.degree === "string" ? item.degree.trim() : undefined,
         fieldOfStudy:
-          typeof item.fieldOfStudy === "string" ? item.fieldOfStudy.trim() : undefined,
+          typeof item.fieldOfStudy === "string"
+            ? item.fieldOfStudy.trim()
+            : undefined,
         description: collectPlainText(item.description),
       })),
     );
@@ -318,7 +347,11 @@ function buildCvContextForSummaryAskAi(
       ? `Education:\n${educations
           .map((item, index) =>
             [
-              `${index + 1}. ${[item.degree, item.fieldOfStudy, item.institution]
+              `${index + 1}. ${[
+                item.degree,
+                item.fieldOfStudy,
+                item.institution,
+              ]
                 .filter(Boolean)
                 .join(", ")}`,
               item.description,
@@ -410,7 +443,9 @@ function splitAiListText(text: string): string[] {
 function readAiResultText(result: unknown): string {
   if (typeof result === "string") return result.trim();
   const record =
-    result && typeof result === "object" ? (result as Record<string, unknown>) : null;
+    result && typeof result === "object"
+      ? (result as Record<string, unknown>)
+      : null;
   if (!record) return "";
   if (typeof record.text === "string") return record.text.trim();
   return "";
@@ -447,7 +482,8 @@ function replaceSelectedInlineText(
 ): string {
   const normalizedCurrentText = normalizeInlinePlainText(currentText);
   const normalizedSelectedText = normalizeInlinePlainText(selectedText).trim();
-  const normalizedReplacementText = normalizeInlinePlainText(replacementText).trim();
+  const normalizedReplacementText =
+    normalizeInlinePlainText(replacementText).trim();
   if (!normalizedSelectedText) return normalizedReplacementText;
   const index = normalizedCurrentText.indexOf(normalizedSelectedText);
   if (index < 0) return normalizedReplacementText;
@@ -464,14 +500,18 @@ function readInlineFieldCanonicalText(
     return collectPlainText(getStructuredItems(section)[0]?.summary);
   }
   if (target.fieldPath === "blocks.0.plainText") {
-    return collectPlainText(section.blocks[0]?.plainText ?? section.blocks[0]?.content);
+    return collectPlainText(
+      section.blocks[0]?.plainText ?? section.blocks[0]?.content,
+    );
   }
   if (target.fieldPath.startsWith("structuredContent.0.")) {
     const field = target.fieldPath.slice("structuredContent.0.".length);
     return collectPlainText(getStructuredItems(section)[0]?.[field]);
   }
 
-  const itemMatch = target.fieldPath.match(/^structuredContent\.item:([^.]*)\.(.+)$/);
+  const itemMatch = target.fieldPath.match(
+    /^structuredContent\.item:([^.]*)\.(.+)$/,
+  );
   if (!itemMatch) return "";
   const [, itemId, itemFieldPath] = itemMatch;
   const item = getStructuredItemById(section, itemId);
@@ -523,7 +563,12 @@ function applyInlineAiTextToSectionField(args: {
       nextText,
     );
   }
-  return updateStructuredItemField(args.section, itemId, itemFieldPath, nextText);
+  return updateStructuredItemField(
+    args.section,
+    itemId,
+    itemFieldPath,
+    nextText,
+  );
 }
 
 function readInlinePaperEditTarget(
@@ -554,7 +599,10 @@ function readInlinePaperEditTarget(
   };
 }
 
-function updateSummaryStructuredDoc(section: CvSection, doc: RemirrorJSON): CvSection {
+function updateSummaryStructuredDoc(
+  section: CvSection,
+  doc: RemirrorJSON,
+): CvSection {
   const items = getStructuredItems(section);
   const item = items[0] ?? { id: `summary-${section.id ?? "section"}-0` };
 
@@ -567,7 +615,10 @@ function updateSummaryStructuredDoc(section: CvSection, doc: RemirrorJSON): CvSe
   };
 }
 
-function updateSummaryStructuredText(section: CvSection, text: string): CvSection {
+function updateSummaryStructuredText(
+  section: CvSection,
+  text: string,
+): CvSection {
   return updateSummaryStructuredDoc(section, ensurePlainTextRemirrorDoc(text));
 }
 
@@ -581,14 +632,24 @@ function updateStructuredItemField(
   const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
   if (itemIndex < 0) return section;
   const item = items[itemIndex]!;
-  const richTextFields = new Set(["summary", "description", "responsibilities", "notes"]);
+  const richTextFields = new Set([
+    "summary",
+    "description",
+    "responsibilities",
+    "notes",
+  ]);
   const nextItem: Record<string, unknown> = {
     ...item,
-    [field]: richTextFields.has(field) ? ensurePlainTextRemirrorDoc(text) : text,
+    [field]: richTextFields.has(field)
+      ? ensurePlainTextRemirrorDoc(text)
+      : text,
   };
 
   if (field === "responsibilities") {
-    const nextDoc = updateResponsibilityParagraphDoc(item.responsibilities, text);
+    const nextDoc = updateResponsibilityParagraphDoc(
+      item.responsibilities,
+      text,
+    );
     const bullets = responsibilityBulletCacheFromDoc(nextDoc);
     nextItem.responsibilities = nextDoc;
     nextItem.__draftResponsibilityBulletCount = bullets.length;
@@ -622,7 +683,11 @@ function addStructuredItemDraftDescription(
     ...section,
     structuredContent: [
       ...items.slice(0, itemIndex),
-      { ...item, responsibilities: ensureRemirrorDoc(""), __draftDescription: true },
+      {
+        ...item,
+        responsibilities: ensureRemirrorDoc(""),
+        __draftDescription: true,
+      },
       ...items.slice(itemIndex + 1),
     ] as CvSection["structuredContent"],
   };
@@ -720,17 +785,22 @@ function remirrorInlineNodesFromRuns(
   const nodes: MutableRemirrorNode[] = [];
   runs.forEach((run) => {
     const text = typeof run.text === "string" ? run.text : "";
-    text.replace(/\r\n?/g, "\n").split("\n").forEach((line, index) => {
-      if (index > 0) {
-        nodes.push({ type: "hardBreak" } as MutableRemirrorNode);
-      }
-      if (!line) return;
-      nodes.push({
-        type: "text",
-        text: line,
-        ...(remirrorMarksFromRun(run) ? { marks: remirrorMarksFromRun(run) } : {}),
-      } as MutableRemirrorNode);
-    });
+    text
+      .replace(/\r\n?/g, "\n")
+      .split("\n")
+      .forEach((line, index) => {
+        if (index > 0) {
+          nodes.push({ type: "hardBreak" } as MutableRemirrorNode);
+        }
+        if (!line) return;
+        nodes.push({
+          type: "text",
+          text: line,
+          ...(remirrorMarksFromRun(run)
+            ? { marks: remirrorMarksFromRun(run) }
+            : {}),
+        } as MutableRemirrorNode);
+      });
   });
   return nodes;
 }
@@ -765,7 +835,8 @@ function responsibilitiesSourceToRemirrorDoc(source: unknown): RemirrorJSON {
 
   return {
     type: "doc",
-    content: content.length > 0 ? content : [{ type: "paragraph", content: [] }],
+    content:
+      content.length > 0 ? content : [{ type: "paragraph", content: [] }],
   } as RemirrorJSON;
 }
 
@@ -773,11 +844,15 @@ function updateResponsibilityParagraphDoc(
   source: unknown,
   text: string,
 ): RemirrorJSON {
-  const doc = responsibilitiesSourceToRemirrorDoc(source) as MutableRemirrorNode;
+  const doc = responsibilitiesSourceToRemirrorDoc(
+    source,
+  ) as MutableRemirrorNode;
   const nextDoc = cloneRemirrorNode(doc);
   const paragraph = remirrorParagraphFromPlainText(text);
   const content = nextDoc.content ?? [];
-  const firstParagraphIndex = content.findIndex((node) => node.type === "paragraph");
+  const firstParagraphIndex = content.findIndex(
+    (node) => node.type === "paragraph",
+  );
   const withoutParagraphs = content.filter((node) => node.type !== "paragraph");
 
   if (text.trim()) {
@@ -788,9 +863,10 @@ function updateResponsibilityParagraphDoc(
       ...withoutParagraphs.slice(insertAt),
     ];
   } else {
-    nextDoc.content = withoutParagraphs.length > 0
-      ? withoutParagraphs
-      : [{ type: "paragraph", content: [] } as MutableRemirrorNode];
+    nextDoc.content =
+      withoutParagraphs.length > 0
+        ? withoutParagraphs
+        : [{ type: "paragraph", content: [] } as MutableRemirrorNode];
   }
 
   return nextDoc as RemirrorJSON;
@@ -801,7 +877,9 @@ function updateResponsibilityBulletDoc(
   bulletIndex: number,
   text: string,
 ): RemirrorJSON {
-  const doc = responsibilitiesSourceToRemirrorDoc(source) as MutableRemirrorNode;
+  const doc = responsibilitiesSourceToRemirrorDoc(
+    source,
+  ) as MutableRemirrorNode;
   const nextDoc = cloneRemirrorNode(doc);
   let cursor = 0;
   let updated = false;
@@ -850,7 +928,9 @@ function removeResponsibilityBulletDoc(
   source: unknown,
   bulletIndex: number,
 ): RemirrorJSON {
-  const doc = responsibilitiesSourceToRemirrorDoc(source) as MutableRemirrorNode;
+  const doc = responsibilitiesSourceToRemirrorDoc(
+    source,
+  ) as MutableRemirrorNode;
   const nextDoc = cloneRemirrorNode(doc);
   let cursor = 0;
 
@@ -889,9 +969,15 @@ function removeResponsibilityBulletDoc(
     return { ...node, content: nextContent } as MutableRemirrorNode;
   };
 
-  const prunedDoc = prune(nextDoc) ?? ({ type: "doc", content: [] } as MutableRemirrorNode);
-  if (prunedDoc.type === "doc" && (!prunedDoc.content || prunedDoc.content.length === 0)) {
-    prunedDoc.content = [{ type: "paragraph", content: [] } as MutableRemirrorNode];
+  const prunedDoc =
+    prune(nextDoc) ?? ({ type: "doc", content: [] } as MutableRemirrorNode);
+  if (
+    prunedDoc.type === "doc" &&
+    (!prunedDoc.content || prunedDoc.content.length === 0)
+  ) {
+    prunedDoc.content = [
+      { type: "paragraph", content: [] } as MutableRemirrorNode,
+    ];
   }
   return prunedDoc as RemirrorJSON;
 }
@@ -920,12 +1006,15 @@ function responsibilityBulletCacheFromDoc(doc: unknown): string[] {
   return bullets;
 }
 
-function countCanonicalResponsibilityBullets(item: Record<string, unknown>): number {
+function countCanonicalResponsibilityBullets(
+  item: Record<string, unknown>,
+): number {
   if (typeof item.responsibilities !== "undefined") {
     if (isRemirrorNode(item.responsibilities)) {
       return responsibilityBulletCacheFromDoc(item.responsibilities).length;
     }
-    return projectResponsibilitiesForWorkshop(item.responsibilities).bullets.length;
+    return projectResponsibilitiesForWorkshop(item.responsibilities).bullets
+      .length;
   }
 
   return Array.isArray(item.responsibilityBullets)
@@ -974,7 +1063,9 @@ function updateStructuredItemBullet(
     );
     bullets[bulletIndex] = storedText;
     const draftBulletCount = Math.max(
-      Number((item as Record<string, unknown>).__draftResponsibilityBulletCount ?? 0),
+      Number(
+        (item as Record<string, unknown>).__draftResponsibilityBulletCount ?? 0,
+      ),
       bulletIndex + 1,
     );
     return {
@@ -991,10 +1082,14 @@ function updateStructuredItemBullet(
     };
   }
 
-  const bullets = splitAiListText(collectPlainText(item.responsibilityBullets ?? item.responsibilities));
+  const bullets = splitAiListText(
+    collectPlainText(item.responsibilityBullets ?? item.responsibilities),
+  );
   bullets[bulletIndex] = storedText;
   const draftBulletCount = Math.max(
-    Number((item as Record<string, unknown>).__draftResponsibilityBulletCount ?? 0),
+    Number(
+      (item as Record<string, unknown>).__draftResponsibilityBulletCount ?? 0,
+    ),
     bulletIndex + 1,
   );
 
@@ -1013,20 +1108,21 @@ function updateStructuredItemBullet(
 }
 
 function getStructuredItemById(section: CvSection, itemId: string) {
-  return getStructuredItems(section).find((item) => String(item.id ?? "") === itemId);
+  return getStructuredItems(section).find(
+    (item) => String(item.id ?? "") === itemId,
+  );
 }
 
 function getResponsibilitySource(item: Record<string, unknown>) {
-  if (typeof item.responsibilities !== "undefined") return item.responsibilities;
+  if (typeof item.responsibilities !== "undefined")
+    return item.responsibilities;
   if (typeof item.responsibilityBullets !== "undefined") {
     return item.responsibilityBullets;
   }
   return item.description;
 }
 
-function plainResponsibilityRunsText(
-  runs: Array<{ text?: unknown }>,
-): string {
+function plainResponsibilityRunsText(runs: Array<{ text?: unknown }>): string {
   return runs
     .map((run) => (typeof run.text === "string" ? run.text : ""))
     .join("")
@@ -1040,12 +1136,16 @@ function getResponsibilityReplacementItems(result: {
   responsibilityBullets?: string[];
 }): string[] {
   if (Array.isArray(result.responsibilityBullets)) {
-    return result.responsibilityBullets.map((item) => String(item ?? "").trim()).filter(Boolean);
+    return result.responsibilityBullets
+      .map((item) => String(item ?? "").trim())
+      .filter(Boolean);
   }
   return responsibilityValueToDisplayLines(result.doc);
 }
 
-function getResponsibilitySourceShape(source: unknown): "empty" | "paragraph" | "list" | "mixed" {
+function getResponsibilitySourceShape(
+  source: unknown,
+): "empty" | "paragraph" | "list" | "mixed" {
   const blocks = projectResponsibilitiesForWorkshop(source).rich.blocks;
   const hasParagraph = blocks.some((block) => block.kind === "paragraph");
   const hasList = blocks.some((block) => block.kind === "bullet_list");
@@ -1065,7 +1165,9 @@ function readResponsibilityAiSourceText(source: unknown): string {
       const items = block.items
         .map((item) => plainResponsibilityRunsText(item.runs))
         .filter(Boolean);
-      return items.length > 0 ? items.map((item) => `• ${item}`).join("\n") : "";
+      return items.length > 0
+        ? items.map((item) => `• ${item}`).join("\n")
+        : "";
     })
     .filter(Boolean);
 
@@ -1161,7 +1263,10 @@ function removeStructuredItemBullet(
   if (itemIndex < 0) return section;
   const item = items[itemIndex]!;
   if (typeof item.responsibilities !== "undefined") {
-    const nextDoc = removeResponsibilityBulletDoc(item.responsibilities, bulletIndex);
+    const nextDoc = removeResponsibilityBulletDoc(
+      item.responsibilities,
+      bulletIndex,
+    );
     const nextBullets = responsibilityBulletCacheFromDoc(nextDoc);
     const nextItem: Record<string, unknown> = {
       ...item,
@@ -1188,7 +1293,9 @@ function removeStructuredItemBullet(
     entries
       .map((entry) => collectPlainText(entry))
       .filter((_, index) => index !== bulletIndex)
-      .filter((entry) => entry.trim() && entry !== DRAFT_EMPTY_RESPONSIBILITY_BULLET);
+      .filter(
+        (entry) => entry.trim() && entry !== DRAFT_EMPTY_RESPONSIBILITY_BULLET,
+      );
   const currentBullets = Array.isArray(item.responsibilityBullets)
     ? item.responsibilityBullets
     : splitAiListText(collectPlainText(item.responsibilityBullets));
@@ -1212,7 +1319,9 @@ function removeStructuredItem(section: CvSection, itemId: string): CvSection {
   const items = getStructuredItems(section);
   return {
     ...section,
-    structuredContent: items.filter((item) => String(item.id ?? "") !== itemId) as CvSection["structuredContent"],
+    structuredContent: items.filter(
+      (item) => String(item.id ?? "") !== itemId,
+    ) as CvSection["structuredContent"],
   };
 }
 
@@ -1253,7 +1362,9 @@ function isStructuredItemEmptyAfterFieldChange(
   const fields = fieldsBySectionType[canonicalType] ?? [];
   if (fields.length === 0) return false;
 
-  return fields.every((candidate) => !collectPlainText(nextItem[candidate]).trim());
+  return fields.every(
+    (candidate) => !collectPlainText(nextItem[candidate]).trim(),
+  );
 }
 
 function updateProfileStructuredField(
@@ -1272,7 +1383,10 @@ function updateProfileStructuredField(
   };
 }
 
-function addProfileDraftContactField(section: CvSection, field: string): CvSection {
+function addProfileDraftContactField(
+  section: CvSection,
+  field: string,
+): CvSection {
   const items = getStructuredItems(section);
   const item = items[0] ?? { id: `profile-${section.id ?? "section"}-0` };
   const existing = Array.isArray(item.__draftContactFields)
@@ -1308,7 +1422,10 @@ function readOptionalProfileContactField(
   return field && OPTIONAL_PROFILE_CONTACT_FIELDS.has(field) ? field : null;
 }
 
-function removeProfileDraftContactField(section: CvSection, field: string): CvSection {
+function removeProfileDraftContactField(
+  section: CvSection,
+  field: string,
+): CvSection {
   const items = getStructuredItems(section);
   const item = items[0];
   if (!item) return section;
@@ -1326,7 +1443,10 @@ function removeProfileDraftContactField(section: CvSection, field: string): CvSe
   }
   return {
     ...section,
-    structuredContent: [nextItem, ...items.slice(1)] as CvSection["structuredContent"],
+    structuredContent: [
+      nextItem,
+      ...items.slice(1),
+    ] as CvSection["structuredContent"],
   };
 }
 
@@ -1339,8 +1459,9 @@ type InlinePaperHighlightRegistry = {
 
 function getCssHighlights(): InlinePaperHighlightRegistry | null {
   if (typeof CSS === "undefined") return null;
-  const highlights = (CSS as typeof CSS & { highlights?: InlinePaperHighlightRegistry })
-    .highlights;
+  const highlights = (
+    CSS as typeof CSS & { highlights?: InlinePaperHighlightRegistry }
+  ).highlights;
   return highlights ?? null;
 }
 
@@ -1438,7 +1559,10 @@ function applyAiTextToSection(section: CvSection, text: string): CvSection {
   }
 }
 
-function appendListSuggestionToSection(section: CvSection, value: string): CvSection {
+function appendListSuggestionToSection(
+  section: CvSection,
+  value: string,
+): CvSection {
   const clean = value.trim();
   if (!clean) return section;
   const items = getStructuredItems(section).filter((item) =>
@@ -1480,7 +1604,10 @@ function appendListSuggestionToSection(section: CvSection, value: string): CvSec
     };
   }
 
-  if (String(section.type) === "hobbies" || section.title.trim().toLowerCase() === "hobbies") {
+  if (
+    String(section.type) === "hobbies" ||
+    section.title.trim().toLowerCase() === "hobbies"
+  ) {
     return {
       ...section,
       structuredContent: [
@@ -1545,10 +1672,14 @@ function getCvSectionId(section: CvSection, index: number): string {
   return String(section.id ?? `${section.type}-${index}`);
 }
 
-function findSectionById(sections: CvSection[], sectionId: string): CvSection | null {
+function findSectionById(
+  sections: CvSection[],
+  sectionId: string,
+): CvSection | null {
   return (
-    sections.find((section, index) => getCvSectionId(section, index) === sectionId) ??
-    null
+    sections.find(
+      (section, index) => getCvSectionId(section, index) === sectionId,
+    ) ?? null
   );
 }
 
@@ -1618,7 +1749,8 @@ function focusInlinePaperEditTarget(target: ActivePaperEditTarget): void {
       focusPreviewSection(target.sectionId);
       return;
     }
-    const focusTarget = editable.querySelector<HTMLElement>(".ProseMirror") ?? editable;
+    const focusTarget =
+      editable.querySelector<HTMLElement>(".ProseMirror") ?? editable;
     focusTarget.focus({ preventScroll: false });
     if (focusTarget instanceof HTMLTextAreaElement) {
       const caretPosition = focusTarget.value.length;
@@ -1745,13 +1877,17 @@ function getInitialEditTargetForSection(
       return {
         sectionId,
         sectionType:
-          section.title.trim().toLowerCase() === "hobbies" ? "hobbies" : "custom",
+          section.title.trim().toLowerCase() === "hobbies"
+            ? "hobbies"
+            : "custom",
         fieldPath:
           section.title.trim().toLowerCase() === "hobbies"
             ? `structuredContent.item:${itemId}.name`
             : "blocks.0.plainText",
         fieldKind:
-          section.title.trim().toLowerCase() === "hobbies" ? "chip" : "paragraph",
+          section.title.trim().toLowerCase() === "hobbies"
+            ? "chip"
+            : "paragraph",
       };
     default:
       return null;
@@ -2011,7 +2147,9 @@ function makeDraftSection(sectionKind: CvAddSectionKind): CvSection {
   };
 }
 
-function resolveAccentStyle(accent: CvAccentChoice): Partial<VerbatiStylePreset> {
+function resolveAccentStyle(
+  accent: CvAccentChoice,
+): Partial<VerbatiStylePreset> {
   switch (accent) {
     case "terre":
       return { palette: "terre", accentHex: undefined };
@@ -2071,7 +2209,43 @@ export function CvForge(): JSX.Element {
     ((api.proposalSettings as any)?.getCurrent ??
       "proposalSettings.getCurrent") as any,
     isConvexAuthenticated ? {} : "skip",
-  ) as { voicePreset?: unknown; savedVoicePreset?: unknown } | undefined;
+  ) as
+    | {
+        voicePreset?: unknown;
+        savedVoicePreset?: unknown;
+        verbatiStyle?: VerbatiStylePreset | null;
+      }
+    | undefined;
+  const documentStylePresets = useQuery(
+    ((api.proposalSettings as any)?.getPresets ??
+      "proposalSettings.getPresets") as any,
+    isConvexAuthenticated ? {} : "skip",
+  ) as
+    | {
+        preset1?: {
+          fontPairId?: unknown;
+          paletteOverride?: unknown;
+          accentHex?: unknown;
+          verbatiStyle?: unknown;
+          name?: unknown;
+        } | null;
+        preset2?: {
+          fontPairId?: unknown;
+          paletteOverride?: unknown;
+          accentHex?: unknown;
+          verbatiStyle?: unknown;
+          name?: unknown;
+        } | null;
+        preset3?: {
+          fontPairId?: unknown;
+          paletteOverride?: unknown;
+          accentHex?: unknown;
+          verbatiStyle?: unknown;
+          name?: unknown;
+        } | null;
+        activeSlot?: 1 | 2 | 3 | null;
+      }
+    | undefined;
   const cvImportInputRef = React.useRef<HTMLInputElement | null>(null);
   const consumedCvForgeActionRef = React.useRef<string | null>(null);
   const paperStageRef = React.useRef<HTMLDivElement | null>(null);
@@ -2087,7 +2261,8 @@ export function CvForge(): JSX.Element {
   const [hiddenSectionIds, setHiddenSectionIds] = React.useState<string[]>([]);
   const [cvRailTab, setCvRailTab] = React.useState<CvRailTab>("sections");
   const cvTone = mapDefaultVoicePresetToCvTone(
-    defaultProposalSettings?.savedVoicePreset ?? defaultProposalSettings?.voicePreset,
+    defaultProposalSettings?.savedVoicePreset ??
+      defaultProposalSettings?.voicePreset,
   );
   const [cvRailAiSuggestion, setCvRailAiSuggestion] =
     React.useState<CvRailAiSuggestion | null>(null);
@@ -2127,7 +2302,7 @@ export function CvForge(): JSX.Element {
   const [dismissedImportReviewCvIds, setDismissedImportReviewCvIds] =
     React.useState<string[]>([]);
   const currentSections = React.useMemo<CvSection[]>(
-    () => ((currentCv?.sections ?? []) as CvSection[]),
+    () => (currentCv?.sections ?? []) as CvSection[],
     [currentCv?.sections],
   );
   const optimisticSections = React.useMemo<CvSection[]>(() => {
@@ -2166,15 +2341,20 @@ export function CvForge(): JSX.Element {
     (intent: ResumeLinkIntent) => {
       setInlineEditTarget(null);
       const matchedSection =
-        (intent.sectionId ? findSectionById(currentSections, intent.sectionId) : null) ??
+        (intent.sectionId
+          ? findSectionById(currentSections, intent.sectionId)
+          : null) ??
         currentSections.find(
           (section) => getCanonicalSectionType(section) === intent.sectionType,
         ) ??
         null;
-      const matchedSectionId = matchedSection?.id ? String(matchedSection.id) : null;
+      const matchedSectionId = matchedSection?.id
+        ? String(matchedSection.id)
+        : null;
       if (
         workspaceMode === "edit" &&
-        (intent.source === "preview-panel" || intent.source === "preview-workspace")
+        (intent.source === "preview-panel" ||
+          intent.source === "preview-workspace")
       ) {
         if (matchedSectionId) {
           setActiveSectionId(matchedSectionId);
@@ -2214,9 +2394,49 @@ export function CvForge(): JSX.Element {
     },
     [],
   );
+  const activeSettingsCvStylePreset = React.useMemo(() => {
+    const activeSlot = resolveDocumentStyleSlotId(documentStylePresets?.activeSlot);
+    const source = activeSlot
+      ? documentStylePresets?.[`preset${activeSlot}`]
+      : null;
+    if (!activeSlot || !source) return null;
+
+    const factorySlot = getFactoryDocumentStyleSlot(activeSlot);
+    const sourceStyle =
+      (source.verbatiStyle as Partial<VerbatiStylePreset> | null | undefined) ??
+      null;
+    const typography =
+      (source.fontPairId as VerbatiFontPairId | undefined) ??
+      (sourceStyle?.typography as VerbatiFontPairId | undefined) ??
+      factorySlot.appearance.typography;
+    const palette =
+      (source.paletteOverride as VerbatiStylePreset["palette"] | undefined) ??
+      (sourceStyle?.palette as VerbatiStylePreset["palette"] | undefined) ??
+      factorySlot.appearance.palette;
+    const accentHex =
+      (typeof source.accentHex === "string" ? source.accentHex : undefined) ??
+      (sourceStyle?.accentHex as string | undefined);
+
+    return resolveVerbatiStyle({
+      ...factorySlot.appearance,
+      ...sourceStyle,
+      typography,
+      palette,
+      resumeTemplateId:
+        sourceStyle?.resumeTemplateId ?? factorySlot.defaultCvTemplateId,
+      ...(accentHex ? { accentHex } : {}),
+    });
+  }, [
+    documentStylePresets?.activeSlot,
+    documentStylePresets?.preset1,
+    documentStylePresets?.preset2,
+    documentStylePresets?.preset3,
+  ]);
   const { stylePreset, setStylePreset } = useBoundVerbatiCvStyle({
     currentCv,
     persistStyle: saveCurrentCvStyleOnly,
+    fallbackStylePreset:
+      activeSettingsCvStylePreset ?? defaultProposalSettings?.verbatiStyle ?? null,
     debounceMs: 700,
     logPrefix: "[CvForge]",
   });
@@ -2251,25 +2471,22 @@ export function CvForge(): JSX.Element {
     () => sanitizeHiddenSectionIds(currentCv?.sections ?? [], hiddenSectionIds),
     [currentCv?.sections, hiddenSectionIds],
   );
-  const activeSection = React.useMemo(
-    () => {
-      if (
-        pendingActiveSection?.id &&
-        String(pendingActiveSection.id) === activeSectionId
-      ) {
-        return pendingActiveSection;
-      }
-      return (
-        currentSections.find(
-          (section, index) => getCvSectionId(section, index) === activeSectionId,
-        ) ??
-        pendingActiveSection ??
-        currentSections[0] ??
-        null
-      );
-    },
-    [activeSectionId, currentSections, pendingActiveSection],
-  );
+  const activeSection = React.useMemo(() => {
+    if (
+      pendingActiveSection?.id &&
+      String(pendingActiveSection.id) === activeSectionId
+    ) {
+      return pendingActiveSection;
+    }
+    return (
+      currentSections.find(
+        (section, index) => getCvSectionId(section, index) === activeSectionId,
+      ) ??
+      pendingActiveSection ??
+      currentSections[0] ??
+      null
+    );
+  }, [activeSectionId, currentSections, pendingActiveSection]);
   const importReviewBlocks = React.useMemo(
     () => buildImportReviewBlocks(currentCv),
     [currentCv],
@@ -2358,7 +2575,9 @@ export function CvForge(): JSX.Element {
     () =>
       cvs.map((cv) => {
         const cvId = String(cv.id);
-        const sectionCount = Array.isArray(cv.sections) ? cv.sections.length : 0;
+        const sectionCount = Array.isArray(cv.sections)
+          ? cv.sections.length
+          : 0;
         return {
           id: cvId,
           title:
@@ -2473,7 +2692,12 @@ export function CvForge(): JSX.Element {
       setPendingFocusEditTarget(null);
     }, 80);
     return () => window.clearTimeout(timeoutId);
-  }, [pendingFocusEditTarget, resumePreviewData, sectionEditorOpen, workspaceMode]);
+  }, [
+    pendingFocusEditTarget,
+    resumePreviewData,
+    sectionEditorOpen,
+    workspaceMode,
+  ]);
 
   React.useEffect(() => {
     writeStoredHiddenSectionIds(
@@ -2489,7 +2713,9 @@ export function CvForge(): JSX.Element {
     }
 
     const currentActiveSection =
-      activeSectionId !== null ? findSectionById(currentSections, activeSectionId) : null;
+      activeSectionId !== null
+        ? findSectionById(currentSections, activeSectionId)
+        : null;
     const hasActiveSection =
       activeSectionId !== null && currentActiveSection !== null;
     if (!hasActiveSection) {
@@ -2510,7 +2736,8 @@ export function CvForge(): JSX.Element {
     } else if (
       pendingActiveSection &&
       currentActiveSection &&
-      JSON.stringify(currentActiveSection) === JSON.stringify(pendingActiveSection)
+      JSON.stringify(currentActiveSection) ===
+        JSON.stringify(pendingActiveSection)
     ) {
       setPendingActiveSection(null);
     }
@@ -2586,17 +2813,16 @@ export function CvForge(): JSX.Element {
               const pdfMode =
                 request.format === "pdf" ? request.mode : undefined;
               const isStyledPdf = pdfMode === "styled";
-              const source =
-                isStyledPdf
-                  ? buildStyledResumePrintSource({
-                      currentCv: exportCurrentCv,
-                      stylePreset,
-                    })
-                  : buildResumeExportSource({
-                      currentCv: exportCurrentCv,
-                      authoritativeResume,
-                      stylePreset,
-                    });
+              const source = isStyledPdf
+                ? buildStyledResumePrintSource({
+                    currentCv: exportCurrentCv,
+                    stylePreset,
+                  })
+                : buildResumeExportSource({
+                    currentCv: exportCurrentCv,
+                    authoritativeResume,
+                    stylePreset,
+                  });
 
               if (!source) {
                 throw new Error("Resume export source is unavailable.");
@@ -2605,8 +2831,8 @@ export function CvForge(): JSX.Element {
               const styledMetadata =
                 isStyledPdf && "renderSource" in source
                   ? {
-                      resumeTypographyAudit:
-                        buildResumeTypographyAuditMetadata({
+                      resumeTypographyAudit: buildResumeTypographyAuditMetadata(
+                        {
                           cvId: String(currentCv.id),
                           cvUrl:
                             typeof window !== "undefined"
@@ -2616,7 +2842,8 @@ export function CvForge(): JSX.Element {
                           stylePreset: source.stylePreset,
                           previewCapture: readResumePreviewDebugCapture(),
                           timestamp: Date.now(),
-                        }),
+                        },
+                      ),
                     }
                   : undefined;
 
@@ -2718,22 +2945,27 @@ export function CvForge(): JSX.Element {
     [currentSections],
   );
 
-  const handleAskAiForSection = React.useCallback((sectionId: string) => {
-    setInlineEditTarget(null);
-    const section = findSectionById(currentSections, sectionId);
-    setCvRailAiSuggestion(null);
-    setActiveSectionId(sectionId);
-    setResumeActiveTarget(getSectionTarget(section));
-    focusPreviewSection(sectionId);
-    setCvRailTab("ai");
-  }, [currentSections]);
+  const handleAskAiForSection = React.useCallback(
+    (sectionId: string) => {
+      setInlineEditTarget(null);
+      const section = findSectionById(currentSections, sectionId);
+      setCvRailAiSuggestion(null);
+      setActiveSectionId(sectionId);
+      setResumeActiveTarget(getSectionTarget(section));
+      focusPreviewSection(sectionId);
+      setCvRailTab("ai");
+    },
+    [currentSections],
+  );
 
   const handleSectionChange = React.useCallback(
     (nextSection: CvSection) => {
       if (!currentCv || !activeSectionId) return;
       const now = new Date().toISOString();
       const nextSections = currentSections.map((section, index) =>
-        getCvSectionId(section, index) === activeSectionId ? nextSection : section,
+        getCvSectionId(section, index) === activeSectionId
+          ? nextSection
+          : section,
       );
       setPendingActiveSection(nextSection);
       setActiveSectionId(activeSectionId);
@@ -2818,7 +3050,10 @@ export function CvForge(): JSX.Element {
       }
 
       const canonicalType = getCanonicalSectionType(textSection);
-      if (canonicalType !== "additional_information" && canonicalType !== "custom") {
+      if (
+        canonicalType !== "additional_information" &&
+        canonicalType !== "custom"
+      ) {
         return;
       }
 
@@ -2843,8 +3078,11 @@ export function CvForge(): JSX.Element {
     (target: ActivePaperEditTarget, text: string) => {
       const nextText = normalizeInlinePlainText(text);
       const focusedEditable =
-        typeof document !== "undefined" && document.activeElement instanceof Element
-          ? document.activeElement.closest('[data-inline-paper-editable="true"]')
+        typeof document !== "undefined" &&
+        document.activeElement instanceof Element
+          ? document.activeElement.closest(
+              '[data-inline-paper-editable="true"]',
+            )
           : null;
       const focusedTarget = readInlinePaperEditTarget(focusedEditable);
       const baseSections =
@@ -2889,7 +3127,10 @@ export function CvForge(): JSX.Element {
         }
       }
 
-      if (!nextSection || JSON.stringify(nextSection) === JSON.stringify(section)) {
+      if (
+        !nextSection ||
+        JSON.stringify(nextSection) === JSON.stringify(section)
+      ) {
         return;
       }
 
@@ -2974,7 +3215,9 @@ export function CvForge(): JSX.Element {
         if (!nextSection && itemMatch && target.sectionType === "projects") {
           const itemId = itemMatch[1] ?? "";
           const items = getStructuredItems(section);
-          const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
+          const itemIndex = items.findIndex(
+            (item) => String(item.id ?? "") === itemId,
+          );
           if (itemIndex >= 0) {
             nextSection = {
               ...section,
@@ -3188,7 +3431,8 @@ export function CvForge(): JSX.Element {
           let parent = parentItemId
             ? items.find(
                 (item) =>
-                  String((item as Record<string, unknown>).id ?? "") === parentItemId,
+                  String((item as Record<string, unknown>).id ?? "") ===
+                  parentItemId,
               )
             : undefined;
           if (!parent && items.length > 0) {
@@ -3219,7 +3463,8 @@ export function CvForge(): JSX.Element {
           let parent = parentItemId
             ? items.find(
                 (item) =>
-                  String((item as Record<string, unknown>).id ?? "") === parentItemId,
+                  String((item as Record<string, unknown>).id ?? "") ===
+                  parentItemId,
               )
             : undefined;
           if (!parent && items.length > 0) {
@@ -3291,9 +3536,10 @@ export function CvForge(): JSX.Element {
           : currentNode instanceof HTMLTextAreaElement
             ? currentNode.value
             : (currentNode?.textContent ?? "").trim()
-            ? currentNode?.textContent ?? ""
-            : "";
-        const optionalProfileContactField = readOptionalProfileContactField(target);
+              ? currentNode?.textContent ?? ""
+              : "";
+        const optionalProfileContactField =
+          readOptionalProfileContactField(target);
 
         if (target && optionalProfileContactField && !currentText.trim()) {
           pendingInlineFieldChangeRef.current = null;
@@ -3350,10 +3596,11 @@ export function CvForge(): JSX.Element {
                   itemId,
                   Number(bulletIndex),
                 );
-                const nextSections = baseSections.map((currentSection, index) =>
-                  getCvSectionId(currentSection, index) === target.sectionId
-                    ? nextSection
-                    : currentSection,
+                const nextSections = baseSections.map(
+                  (currentSection, index) =>
+                    getCvSectionId(currentSection, index) === target.sectionId
+                      ? nextSection
+                      : currentSection,
                 );
                 latestInlineSectionsRef.current = nextSections;
                 setPendingActiveSection(nextSection);
@@ -3362,8 +3609,8 @@ export function CvForge(): JSX.Element {
               }
             }
           } else {
-          flushPendingInlineFieldChange();
-        }
+            flushPendingInlineFieldChange();
+          }
         } else if (!currentText.trim()) {
           const itemMatch = target?.fieldPath.match(
             /^structuredContent\.item:([^.]*)\.([^.]+)$/,
@@ -3372,13 +3619,20 @@ export function CvForge(): JSX.Element {
             latestInlineSectionsRef.current.length > 0
               ? latestInlineSectionsRef.current
               : currentSections;
-          const section = target ? findSectionById(baseSections, target.sectionId) : null;
+          const section = target
+            ? findSectionById(baseSections, target.sectionId)
+            : null;
           if (
             target &&
             section &&
             itemMatch &&
             getStructuredItems(section).length > 1 &&
-            isStructuredItemEmptyAfterFieldChange(section, itemMatch[1], itemMatch[2], "")
+            isStructuredItemEmptyAfterFieldChange(
+              section,
+              itemMatch[1],
+              itemMatch[2],
+              "",
+            )
           ) {
             pendingInlineFieldChangeRef.current = null;
             if (inlineFieldChangeTimerRef.current !== null) {
@@ -3439,7 +3693,8 @@ export function CvForge(): JSX.Element {
 
     const root = paperStageRef.current;
     const selectionState = getDomSelectionState(root);
-    const selection = typeof window !== "undefined" ? window.getSelection() : null;
+    const selection =
+      typeof window !== "undefined" ? window.getSelection() : null;
     const focusElement =
       selection?.focusNode instanceof Element
         ? selection.focusNode
@@ -3528,9 +3783,11 @@ export function CvForge(): JSX.Element {
     editableElement?.setAttribute("data-inline-ai-selection-active", "true");
     const HighlightCtor =
       typeof window !== "undefined"
-        ? (window as typeof window & {
-            Highlight?: new (...ranges: Range[]) => unknown;
-          }).Highlight
+        ? (
+            window as typeof window & {
+              Highlight?: new (...ranges: Range[]) => unknown;
+            }
+          ).Highlight
         : undefined;
     const highlights = getCssHighlights();
     if (highlights && HighlightCtor && inlinePaperSelectionState.range) {
@@ -3601,7 +3858,9 @@ export function CvForge(): JSX.Element {
           requestedActionId: args.actionId,
         });
         if (!merged.ok) {
-          showToast("AI returned unusable responsibilities.", { variant: "warning" });
+          showToast("AI returned unusable responsibilities.", {
+            variant: "warning",
+          });
           return true;
         }
         nextSection = updateStructuredItemResponsibilities(
@@ -3717,8 +3976,10 @@ export function CvForge(): JSX.Element {
         }
 
         if (
-          pendingInlineFieldChangeRef.current?.target.sectionId === target.sectionId &&
-          pendingInlineFieldChangeRef.current?.target.fieldPath === target.fieldPath
+          pendingInlineFieldChangeRef.current?.target.sectionId ===
+            target.sectionId &&
+          pendingInlineFieldChangeRef.current?.target.fieldPath ===
+            target.fieldPath
         ) {
           pendingInlineFieldChangeRef.current = null;
         }
@@ -3817,36 +4078,42 @@ export function CvForge(): JSX.Element {
     [currentCv, currentSections, importCv, showToast],
   );
 
-  const handleToggleHiddenSection = React.useCallback((sectionId: string) => {
-    const isCurrentlyHidden = hiddenSectionIds.includes(sectionId);
-    const nextHiddenSectionIds = isCurrentlyHidden
-      ? hiddenSectionIds.filter((id) => id !== sectionId)
-      : [...hiddenSectionIds, sectionId];
+  const handleToggleHiddenSection = React.useCallback(
+    (sectionId: string) => {
+      const isCurrentlyHidden = hiddenSectionIds.includes(sectionId);
+      const nextHiddenSectionIds = isCurrentlyHidden
+        ? hiddenSectionIds.filter((id) => id !== sectionId)
+        : [...hiddenSectionIds, sectionId];
 
-    setHiddenSectionIds(nextHiddenSectionIds);
+      setHiddenSectionIds(nextHiddenSectionIds);
 
-    if (isCurrentlyHidden) {
-      setActiveSectionId(sectionId);
-      focusPreviewSection(sectionId);
-      return;
-    }
+      if (isCurrentlyHidden) {
+        setActiveSectionId(sectionId);
+        focusPreviewSection(sectionId);
+        return;
+      }
 
-    if (activeSectionId !== sectionId) return;
+      if (activeSectionId !== sectionId) return;
 
-    const nextVisibleSection = currentSections.find((section, index) => {
-      const candidateId = getCvSectionId(section, index);
-      return candidateId !== sectionId && !nextHiddenSectionIds.includes(candidateId);
-    });
-    const nextVisibleSectionId = nextVisibleSection?.id
-      ? String(nextVisibleSection.id)
-      : null;
+      const nextVisibleSection = currentSections.find((section, index) => {
+        const candidateId = getCvSectionId(section, index);
+        return (
+          candidateId !== sectionId &&
+          !nextHiddenSectionIds.includes(candidateId)
+        );
+      });
+      const nextVisibleSectionId = nextVisibleSection?.id
+        ? String(nextVisibleSection.id)
+        : null;
 
-    setActiveSectionId(nextVisibleSectionId);
-    setResumeActiveTarget(getSectionTarget(nextVisibleSection));
-    if (nextVisibleSectionId) {
-      focusPreviewSection(nextVisibleSectionId);
-    }
-  }, [activeSectionId, currentSections, hiddenSectionIds]);
+      setActiveSectionId(nextVisibleSectionId);
+      setResumeActiveTarget(getSectionTarget(nextVisibleSection));
+      if (nextVisibleSectionId) {
+        focusPreviewSection(nextVisibleSectionId);
+      }
+    },
+    [activeSectionId, currentSections, hiddenSectionIds],
+  );
 
   const handleDeleteSection = React.useCallback(
     (sectionId: string) => {
@@ -3857,11 +4124,16 @@ export function CvForge(): JSX.Element {
       if (sectionIndex < 0) return;
 
       const removedSection = currentSections[sectionIndex];
-      const nextSections = currentSections.filter((_, index) => index !== sectionIndex);
+      const nextSections = currentSections.filter(
+        (_, index) => index !== sectionIndex,
+      );
       persistSections(nextSections);
-      setHiddenSectionIds((current) => current.filter((id) => id !== sectionId));
+      setHiddenSectionIds((current) =>
+        current.filter((id) => id !== sectionId),
+      );
 
-      const nextActiveSection = nextSections[Math.min(sectionIndex, nextSections.length - 1)] ?? null;
+      const nextActiveSection =
+        nextSections[Math.min(sectionIndex, nextSections.length - 1)] ?? null;
       const nextActiveSectionId = nextActiveSection?.id
         ? String(nextActiveSection.id)
         : null;
@@ -3882,7 +4154,10 @@ export function CvForge(): JSX.Element {
               ...nextSections.slice(sectionIndex),
             ];
             persistSections(restoredSections);
-            const restoredSectionId = getCvSectionId(removedSection, sectionIndex);
+            const restoredSectionId = getCvSectionId(
+              removedSection,
+              sectionIndex,
+            );
             setActiveSectionId(restoredSectionId);
             setResumeActiveTarget(getSectionTarget(removedSection));
             focusPreviewSection(restoredSectionId);
@@ -3924,7 +4199,11 @@ export function CvForge(): JSX.Element {
         (section, index) => getCvSectionId(section, index) === sectionId,
       );
       const nextIndex = currentIndex + direction;
-      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= currentSections.length) {
+      if (
+        currentIndex < 0 ||
+        nextIndex < 0 ||
+        nextIndex >= currentSections.length
+      ) {
         return;
       }
       handleReorderSections(
@@ -3944,14 +4223,204 @@ export function CvForge(): JSX.Element {
     );
   }, [currentCv?.id]);
 
+  const cvStyleSlotPresets = React.useMemo(() => {
+    type StyleSlotSource =
+      | {
+          fontPairId?: unknown;
+          paletteOverride?: unknown;
+          accentHex?: unknown;
+          verbatiStyle?: unknown;
+          name?: unknown;
+        }
+      | null
+      | undefined;
+
+    const buildSlotPreset = (
+      slot: 1 | 2 | 3,
+      source: StyleSlotSource,
+    ): VerbatiStylePreset => {
+      const factorySlot = getFactoryDocumentStyleSlot(slot);
+      const sourceStyle =
+        (source?.verbatiStyle as
+          | Partial<VerbatiStylePreset>
+          | null
+          | undefined) ?? null;
+      const typography =
+        (source?.fontPairId as VerbatiFontPairId | undefined) ??
+        (sourceStyle?.typography as VerbatiFontPairId | undefined) ??
+        factorySlot.appearance.typography;
+      const palette =
+        (source?.paletteOverride as
+          | VerbatiStylePreset["palette"]
+          | undefined) ??
+        (sourceStyle?.palette as VerbatiStylePreset["palette"] | undefined) ??
+        factorySlot.appearance.palette;
+      const accentHex =
+        (typeof source?.accentHex === "string" ? source.accentHex : undefined) ??
+        (sourceStyle?.accentHex as string | undefined);
+      const resumeTemplateId =
+        sourceStyle?.resumeTemplateId ?? factorySlot.defaultCvTemplateId;
+
+      return resolveVerbatiStyle({
+        ...factorySlot.appearance,
+        ...sourceStyle,
+        typography,
+        palette,
+        resumeTemplateId,
+        ...(accentHex ? { accentHex } : {}),
+      });
+    };
+
+    return {
+      1: buildSlotPreset(1, documentStylePresets?.preset1),
+      2: buildSlotPreset(2, documentStylePresets?.preset2),
+      3: buildSlotPreset(3, documentStylePresets?.preset3),
+    };
+  }, [
+    documentStylePresets?.preset1,
+    documentStylePresets?.preset2,
+    documentStylePresets?.preset3,
+    stylePreset,
+  ]);
+
+  const selectedStyleSlot = React.useMemo<1 | 2 | 3 | null>(() => {
+    const persistedSlotId = resolveDocumentStyleSlotId(
+      currentCv?.metadata?.verbatiStyleSlotId,
+    );
+    if (persistedSlotId) return persistedSlotId;
+
+    if (stylesEqual(stylePreset, cvStyleSlotPresets[1])) return 1;
+    if (stylesEqual(stylePreset, cvStyleSlotPresets[2])) return 2;
+    if (stylesEqual(stylePreset, cvStyleSlotPresets[3])) return 3;
+    return documentStylePresets?.activeSlot ?? null;
+  }, [
+    currentCv?.metadata?.verbatiStyleSlotId,
+    cvStyleSlotPresets,
+    documentStylePresets?.activeSlot,
+    stylePreset,
+  ]);
+
+  const selectedStyleSlotIsCustom = React.useMemo(() => {
+    if (!selectedStyleSlot) {
+      return false;
+    }
+
+    return !stylesEqual(stylePreset, cvStyleSlotPresets[selectedStyleSlot]);
+  }, [
+    cvStyleSlotPresets,
+    selectedStyleSlot,
+    stylePreset,
+  ]);
+
+  const getCvStyleSlotName = React.useCallback(
+    (slot: 1 | 2 | 3, source: "factory" | "settings") => {
+      if (source === "settings") {
+        const settingsName = documentStylePresets?.[`preset${slot}`]?.name;
+        if (typeof settingsName === "string" && settingsName.trim()) {
+          return settingsName;
+        }
+      }
+      return getFactoryDocumentStyleSlot(slot).label;
+    },
+    [documentStylePresets],
+  );
+
+  const buildFactoryCvStylePreset = React.useCallback(
+    (slot: 1 | 2 | 3) => {
+      const factorySlot = getFactoryDocumentStyleSlot(slot);
+      return resolveVerbatiStyle({
+        ...stylePreset,
+        ...factorySlot.appearance,
+        resumeTemplateId: factorySlot.defaultCvTemplateId,
+      });
+    },
+    [stylePreset],
+  );
+
+  const handleSelectStyleSlot = React.useCallback(
+    (slot: 1 | 2 | 3) => {
+      const nextStylePreset = cvStyleSlotPresets[slot];
+      const slotSource = documentStylePresets?.[`preset${slot}`]
+        ? "settings"
+        : "factory";
+      const slotName = getCvStyleSlotName(slot, slotSource);
+
+      setStylePreset(nextStylePreset);
+      if (typeof saveCurrentCvStyleOnly === "function") {
+        void saveCurrentCvStyleOnly(nextStylePreset, {
+          verbatiStyleSlotId: slot,
+          verbatiStyleSlotSource: slotSource,
+          verbatiStyleSlotNameSnapshot: slotName,
+          verbatiStyleBaseSnapshot:
+            buildDocumentAppearanceSnapshot(nextStylePreset),
+          documentStyleVersion: DOCUMENT_STYLE_VERSION,
+        });
+      }
+    },
+    [
+      cvStyleSlotPresets,
+      documentStylePresets,
+      getCvStyleSlotName,
+      saveCurrentCvStyleOnly,
+      setStylePreset,
+    ],
+  );
+
+  const handleResetStyleSlot = React.useCallback(() => {
+    if (!selectedStyleSlot) return;
+
+    const settingsSlot = documentStylePresets?.[`preset${selectedStyleSlot}`];
+    const resetSource = settingsSlot ? "settings" : "factory";
+    const nextStylePreset =
+      resetSource === "settings"
+        ? cvStyleSlotPresets[selectedStyleSlot]
+        : buildFactoryCvStylePreset(selectedStyleSlot);
+    const slotName = getCvStyleSlotName(selectedStyleSlot, resetSource);
+
+    setStylePreset(nextStylePreset);
+    if (typeof saveCurrentCvStyleOnly === "function") {
+      void saveCurrentCvStyleOnly(nextStylePreset, {
+        verbatiStyleSlotId: selectedStyleSlot,
+        verbatiStyleSlotSource: resetSource,
+        verbatiStyleSlotNameSnapshot: slotName,
+        verbatiStyleBaseSnapshot:
+          buildDocumentAppearanceSnapshot(nextStylePreset),
+        documentStyleVersion: DOCUMENT_STYLE_VERSION,
+      });
+    }
+  }, [
+    buildFactoryCvStylePreset,
+    cvStyleSlotPresets,
+    documentStylePresets,
+    getCvStyleSlotName,
+    saveCurrentCvStyleOnly,
+    selectedStyleSlot,
+    setStylePreset,
+  ]);
+
   const handleSelectTemplate = React.useCallback(
-    (template: "editorial" | "minimal" | "classic") => {
-      const layout = template === "editorial" ? "workshop" : "swiss";
+    (
+      template:
+        | "workshop-onecol"
+        | "workshop-twocol"
+        | "editorial"
+        | "minimal"
+        | "classic",
+    ) => {
+      const layout =
+        template === "minimal" || template === "classic" ? "swiss" : "workshop";
+      const resumeTemplateId =
+        template === "workshop-twocol"
+          ? WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+          : layout === "workshop"
+            ? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID
+            : undefined;
       setStylePreset((current) =>
         resolveVerbatiStyle({
           ...current,
           familyId: layout,
           layout,
+          resumeTemplateId,
         }),
       );
     },
@@ -3982,6 +4451,19 @@ export function CvForge(): JSX.Element {
     [setStylePreset],
   );
 
+  const handleSelectCustomAccent = React.useCallback(
+    (hex: string) => {
+      setStylePreset((current) =>
+        resolveVerbatiStyle({
+          ...current,
+          palette: "custom",
+          accentHex: hex,
+        }),
+      );
+    },
+    [setStylePreset],
+  );
+
   const handleRunAskAiForSection = React.useCallback(
     async ({
       sectionId,
@@ -4002,10 +4484,15 @@ export function CvForge(): JSX.Element {
       const isHobbiesSection =
         String(section.type) === "hobbies" ||
         section.title.trim().toLowerCase() === "hobbies";
-      if (section.type === "skills" || section.type === "languages" || isHobbiesSection) {
+      if (
+        section.type === "skills" ||
+        section.type === "languages" ||
+        isHobbiesSection
+      ) {
         const existingItems = getListSectionItems(section);
-        const excludedItems =
-          isHobbiesSection ? getCurrentCvSkills(currentCv) : [];
+        const excludedItems = isHobbiesSection
+          ? getCurrentCvSkills(currentCv)
+          : [];
         const beforeText = existingItems.join("\n");
         const interactionId = createAiInteractionId();
         recordAiInteractionEvent({
@@ -4332,7 +4819,10 @@ export function CvForge(): JSX.Element {
       itemIndex?: number;
       field: "responsibilities" | "achievement" | "education";
     }) => {
-      if (request.sectionType !== "experience" || request.field !== "responsibilities") {
+      if (
+        request.sectionType !== "experience" ||
+        request.field !== "responsibilities"
+      ) {
         return;
       }
       const baseSections =
@@ -4340,15 +4830,20 @@ export function CvForge(): JSX.Element {
           ? latestInlineSectionsRef.current
           : currentSections;
       const section = findSectionById(baseSections, request.sectionId);
-      const item = section ? getStructuredItemById(section, request.itemId) : undefined;
+      const item = section
+        ? getStructuredItemById(section, request.itemId)
+        : undefined;
       if (!section || !item) return;
 
       const source = getResponsibilitySource(item);
       const beforeText = readResponsibilityAiSourceText(source);
       if (!beforeText.trim()) {
-        showToast("This experience has no responsibilities for AI to improve.", {
-          variant: "warning",
-        });
+        showToast(
+          "This experience has no responsibilities for AI to improve.",
+          {
+            variant: "warning",
+          },
+        );
         return;
       }
 
@@ -4389,7 +4884,8 @@ export function CvForge(): JSX.Element {
             result?.kind === "list" && Array.isArray(result.items)
               ? result.items
               : undefined,
-          rawText: result?.kind === "text" ? result.text : readAiResultText(result),
+          rawText:
+            result?.kind === "text" ? result.text : readAiResultText(result),
           requestedActionId: "improve_experience_responsibilities",
         });
 
@@ -4550,7 +5046,11 @@ export function CvForge(): JSX.Element {
   const handleUndoPaperTextAiSuggestion = React.useCallback(
     (key: string) => {
       const suggestion = paperTextAiSuggestion;
-      if (!suggestion || suggestion.key !== key || !suggestion.previousSection) {
+      if (
+        !suggestion ||
+        suggestion.key !== key ||
+        !suggestion.previousSection
+      ) {
         return;
       }
       const baseSections =
@@ -4604,14 +5104,17 @@ export function CvForge(): JSX.Element {
       !cvRailAiSuggestion ||
       cvRailAiSuggestion.kind === "list" ||
       cvRailAiSuggestion.state !== "ready"
-    ) return;
+    )
+      return;
 
     const inlineTarget = cvRailAiSuggestion.inlineTarget;
     if (inlineTarget) {
       const target = inlineTarget.editTarget;
       if (
-        pendingInlineFieldChangeRef.current?.target.sectionId === target.sectionId &&
-        pendingInlineFieldChangeRef.current?.target.fieldPath === target.fieldPath
+        pendingInlineFieldChangeRef.current?.target.sectionId ===
+          target.sectionId &&
+        pendingInlineFieldChangeRef.current?.target.fieldPath ===
+          target.fieldPath
       ) {
         pendingInlineFieldChangeRef.current = null;
       }
@@ -4626,7 +5129,8 @@ export function CvForge(): JSX.Element {
       ) {
         recordAiInteractionEvent({
           name: "ai_accepted",
-          interactionId: cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
+          interactionId:
+            cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
           surface: "section_editor",
           actionId: inlineTarget.actionId,
         });
@@ -4658,7 +5162,8 @@ export function CvForge(): JSX.Element {
       persistSections(nextSections);
       recordAiInteractionEvent({
         name: "ai_accepted",
-        interactionId: cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
+        interactionId:
+          cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
         surface: "section_editor",
         actionId: inlineTarget.actionId,
       });
@@ -4684,7 +5189,8 @@ export function CvForge(): JSX.Element {
     persistSections(nextSections);
     recordAiInteractionEvent({
       name: "ai_accepted",
-      interactionId: cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
+      interactionId:
+        cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
       surface: "section_editor",
       actionId: "custom",
     });
@@ -4700,7 +5206,10 @@ export function CvForge(): JSX.Element {
 
   const handleUndoAiSuggestion = React.useCallback(() => {
     if (!cvRailAppliedAiEdit || !currentCv) return;
-    const section = findSectionById(currentSections, cvRailAppliedAiEdit.sectionId);
+    const section = findSectionById(
+      currentSections,
+      cvRailAppliedAiEdit.sectionId,
+    );
     if (!section) return;
 
     const nextSections = currentSections.map((currentSection, index) =>
@@ -4717,7 +5226,8 @@ export function CvForge(): JSX.Element {
 
   const handleDiscardAiSuggestion = React.useCallback(() => {
     if (cvRailAiSuggestion) {
-      const interactionId = cvRailAiSuggestion.interactionId ?? createAiInteractionId();
+      const interactionId =
+        cvRailAiSuggestion.interactionId ?? createAiInteractionId();
       if (
         cvRailAiSuggestion.inlineTarget &&
         activeInlinePaperAiRequestIdRef.current === interactionId
@@ -4761,7 +5271,8 @@ export function CvForge(): JSX.Element {
       });
       recordAiInteractionEvent({
         name: "ai_accepted",
-        interactionId: cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
+        interactionId:
+          cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
         surface: "section_editor",
         actionId: "custom",
       });
@@ -4788,8 +5299,8 @@ export function CvForge(): JSX.Element {
         ? {
             sectionId: cvRailAiSuggestion.sectionId,
             sectionType:
-              findSectionById(currentSections, cvRailAiSuggestion.sectionId)?.type ??
-              "skills",
+              findSectionById(currentSections, cvRailAiSuggestion.sectionId)
+                ?.type ?? "skills",
             items: cvRailAiSuggestion.items,
             state: cvRailAiSuggestion.state,
             errorMessage: cvRailAiSuggestion.errorMessage,
@@ -4987,17 +5498,18 @@ export function CvForge(): JSX.Element {
     >
       <div
         className="dasti-page-shell dasti-page-shell--cv-forge"
-        style={{
-          "--page-shell-max-width": "100%",
-          "--page-shell-gap": "0px",
-          "--page-shell-pad-top": "var(--space-2)",
-          "--page-shell-pad-inline": "var(--space-4)",
-          "--page-shell-pad-bottom": "0px",
-          "--cv-preview-toolbar-inset": "0px",
-          "--page-shell-pad-top-mobile": "var(--space-2)",
-          "--page-shell-pad-inline-mobile": "var(--space-4)",
-          "--page-shell-pad-bottom-mobile": "0px",
-        } as React.CSSProperties
+        style={
+          {
+            "--page-shell-max-width": "100%",
+            "--page-shell-gap": "0px",
+            "--page-shell-pad-top": "var(--space-2)",
+            "--page-shell-pad-inline": "var(--space-4)",
+            "--page-shell-pad-bottom": "0px",
+            "--cv-preview-toolbar-inset": "0px",
+            "--page-shell-pad-top-mobile": "var(--space-2)",
+            "--page-shell-pad-inline-mobile": "var(--space-4)",
+            "--page-shell-pad-bottom-mobile": "0px",
+          } as React.CSSProperties
         }
       >
         {showJobBriefContext ? (
@@ -5033,200 +5545,209 @@ export function CvForge(): JSX.Element {
           </div>
         ) : null}
         <>
-            <div className="dasti-cv-skeleton-forge" style={cvWorkbenchShellStyle}>
-              <div className="dasti-cv-skeleton-forge__stage">
-                <CvStageBar
-                  mode={workspaceMode}
-                  hasCurrentCv={Boolean(currentCv)}
-                  hasTrustedExport={hasTrustedExport}
-                  importIssueCount={importReviewBlocks.length}
-                  exporting={exportingFormat !== null}
-                  tone={cvTone}
-                  resumeOptions={resumeOptions}
-                  onModeChange={setWorkspaceMode}
-                  onOpenImportReview={() => setImportReviewOpen(true)}
-                  onPickResume={handlePickResume}
-                  onExportPdf={() =>
-                    void handleResumeExport({ format: "pdf", mode: "styled" })
-                  }
-                  onExportDocx={() => void handleResumeExport({ format: "docx" })}
-                />
-                {!isImportReviewBannerDismissed ? (
-                  <CvReviewBanner
-                    issueCount={importReviewBlocks.length}
-                    summary={importReviewSummary}
-                    onOpenReview={() => setImportReviewOpen(true)}
-                    onDismiss={handleDismissImportReviewBanner}
-                  />
-                ) : null}
-                {isImportingEntryCv ? (
-                  <div
-                    className="dasti-cv-import-progress"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <span className="dasti-cv-import-progress__dot" />
-                    <div>
-                      <strong>
-                        Importing PDF<span className="ds-btn__period">.</span>
-                      </strong>
-                      <span>
-                        Parsing is still pending. Parser errors will stay visible
-                        here and will not be treated as a successful import.
-                      </span>
-                    </div>
-                  </div>
-                ) : null}
-                {shouldShowCvRestorePending ? (
-                  <div
-                    className="dasti-cv-import-card"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <p className="dasti-hint">
-                      {lastLibraryFetchFailed
-                        ? "CV library unavailable. Retrying restore."
-                        : "Loading CV."}
-                    </p>
-                  </div>
-                ) : shouldShowEmptyCvChoice ? (
-                  <div className="dasti-cv-import-card">
-                    <button
-                      type="button"
-                      className="dasti-cv-import-choice"
-                      onClick={handleImportEntryCv}
-                      disabled={isEntryPickerBusy}
-                    >
-                      <Upload size={18} strokeWidth={1.8} aria-hidden="true" />
-                      <span className="dasti-cv-import-choice__title">
-                        Upload PDF
-                      </span>
-                      <span className="dasti-cv-import-choice__desc">
-                        Mistral parses it. Sections appear in seconds.
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="dasti-cv-import-choice"
-                      onClick={() => {
-                        void handleStartFreshEntryCv();
-                      }}
-                      disabled={isEntryPickerBusy}
-                    >
-                      <PenLine size={18} strokeWidth={1.8} aria-hidden="true" />
-                      <span className="dasti-cv-import-choice__title">
-                        Start blank
-                      </span>
-                      <span className="dasti-cv-import-choice__desc">
-                        Build it section by section.
-                      </span>
-                    </button>
-                  </div>
-                ) : (
-                  <div
-                    ref={paperStageRef}
-                    className={
-                      workspaceMode === "preview"
-                        ? "dasti-cv-paper-stage dasti-cv-page-preview-stage"
-                        : "dasti-cv-paper-stage"
-                    }
-                    data-cv-workspace-mode={workspaceMode}
-                    data-active-paper-edit-section-id={
-                      inlineEditTarget?.sectionId
-                    }
-                    data-active-paper-edit-section-type={
-                      inlineEditTarget?.sectionType
-                    }
-                    data-active-paper-edit-field-path={
-                      inlineEditTarget?.fieldPath
-                    }
-                    data-active-paper-edit-field-kind={
-                      inlineEditTarget?.fieldKind
-                    }
-                  >
-                    <VerbatiResumePreview
-                      data={resumePreviewData}
-                      stylePreset={stylePreset}
-                      hostMode="panel"
-                      scrollMode="natural"
-                      activeTarget={resumeActiveTarget}
-                      onLinkIntent={handleResumeLinkIntent}
-                      inlineEditing={resumeInlineEditing}
-                      sectionActions={resumeSectionActions}
-                      paperAi={resumePaperAiState}
-                      showPageCount={
-                        workspaceMode === "preview" && Boolean(currentCv)
-                      }
-                    />
-                    {inlinePaperSelectionState ? (
-                      <FloatingAiToolbar
-                        open
-                        anchor={inlinePaperSelectionState.anchor}
-                        isLoading={isApplyingInlinePaperAi}
-                        pendingActionId={pendingInlinePaperAiActionId}
-                        onClose={() => setInlinePaperSelectionState(null)}
-                        onRunAction={handleRunInlinePaperAiAction}
-                      />
-                    ) : null}
-                  </div>
-                )}
-              </div>
-              <CvRail
-                sections={currentSections}
-                hiddenSectionIds={hiddenSectionIds}
-                activeSectionId={activeSectionId}
-                activeTab={cvRailTab}
-                stylePreset={stylePreset}
-                selectedTone={cvTone}
-                aiSuggestion={cvRailAiSuggestion}
-                appliedAiEdit={cvRailAppliedAiEdit}
-                isImporting={isImportingEntryCv}
-                onActiveTabChange={setCvRailTab}
-                onSelectSection={handleSelectSection}
-                onToggleHiddenSection={handleToggleHiddenSection}
-                onDeleteSection={handleDeleteSection}
-                onReorderSections={handleReorderSections}
-                onMoveSection={handleMoveSection}
-                onAskAiForSection={handleAskAiForSection}
-                onRunAskAiForSection={handleRunAskAiForSection}
-                onAcceptAiSuggestion={handleAcceptAiSuggestion}
-                onDiscardAiSuggestion={handleDiscardAiSuggestion}
-                onUndoAiSuggestion={handleUndoAiSuggestion}
-                onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
-                onDismissListAiSuggestion={handleDismissListAiSuggestion}
-                onAddSection={handleAddSection}
-                onSelectTemplate={handleSelectTemplate}
-                onSelectFontPair={handleSelectFontPair}
-                onSelectAccent={handleSelectAccent}
-                onNewCv={() => {
-                  void handleStartFreshEntryCv();
-                }}
-                onImportPdf={handleImportEntryCv}
+          <div
+            className="dasti-cv-skeleton-forge"
+            style={cvWorkbenchShellStyle}
+          >
+            <div className="dasti-cv-skeleton-forge__stage">
+              <CvStageBar
+                mode={workspaceMode}
+                hasCurrentCv={Boolean(currentCv)}
+                hasTrustedExport={hasTrustedExport}
+                importIssueCount={importReviewBlocks.length}
+                exporting={exportingFormat !== null}
+                tone={cvTone}
+                resumeOptions={resumeOptions}
+                onModeChange={setWorkspaceMode}
+                onOpenImportReview={() => setImportReviewOpen(true)}
+                onPickResume={handlePickResume}
+                onExportPdf={() =>
+                  void handleResumeExport({ format: "pdf", mode: "styled" })
+                }
+                onExportDocx={() => void handleResumeExport({ format: "docx" })}
               />
+              {!isImportReviewBannerDismissed ? (
+                <CvReviewBanner
+                  issueCount={importReviewBlocks.length}
+                  summary={importReviewSummary}
+                  onOpenReview={() => setImportReviewOpen(true)}
+                  onDismiss={handleDismissImportReviewBanner}
+                />
+              ) : null}
+              {isImportingEntryCv ? (
+                <div
+                  className="dasti-cv-import-progress"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span className="dasti-cv-import-progress__dot" />
+                  <div>
+                    <strong>
+                      Importing PDF
+                      <span className="dasti-loader-caret" aria-hidden="true" />
+                    </strong>
+                    <span>
+                      Parsing is still pending. Parser errors will stay visible
+                      here and will not be treated as a successful import.
+                    </span>
+                  </div>
+                </div>
+              ) : null}
+              {shouldShowCvRestorePending ? (
+                <div
+                  className="dasti-cv-import-card"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <p className="dasti-hint">
+                    {lastLibraryFetchFailed
+                      ? "CV library unavailable. Retrying restore."
+                      : "Loading CV."}
+                  </p>
+                </div>
+              ) : shouldShowEmptyCvChoice ? (
+                <div className="dasti-cv-import-card">
+                  <button
+                    type="button"
+                    className="dasti-cv-import-choice"
+                    onClick={handleImportEntryCv}
+                    disabled={isEntryPickerBusy}
+                  >
+                    <Upload size={18} strokeWidth={1.8} aria-hidden="true" />
+                    <span className="dasti-cv-import-choice__title">
+                      Upload PDF
+                    </span>
+                    <span className="dasti-cv-import-choice__desc">
+                      Mistral parses it. Sections appear in seconds.
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="dasti-cv-import-choice"
+                    onClick={() => {
+                      void handleStartFreshEntryCv();
+                    }}
+                    disabled={isEntryPickerBusy}
+                  >
+                    <PenLine size={18} strokeWidth={1.8} aria-hidden="true" />
+                    <span className="dasti-cv-import-choice__title">
+                      Start blank
+                    </span>
+                    <span className="dasti-cv-import-choice__desc">
+                      Build it section by section.
+                    </span>
+                  </button>
+                </div>
+              ) : (
+                <div
+                  ref={paperStageRef}
+                  className={
+                    workspaceMode === "preview"
+                      ? "dasti-cv-paper-stage dasti-cv-page-preview-stage"
+                      : "dasti-cv-paper-stage"
+                  }
+                  data-cv-workspace-mode={workspaceMode}
+                  data-active-paper-edit-section-id={
+                    inlineEditTarget?.sectionId
+                  }
+                  data-active-paper-edit-section-type={
+                    inlineEditTarget?.sectionType
+                  }
+                  data-active-paper-edit-field-path={
+                    inlineEditTarget?.fieldPath
+                  }
+                  data-active-paper-edit-field-kind={
+                    inlineEditTarget?.fieldKind
+                  }
+                >
+                  <VerbatiResumePreview
+                    data={resumePreviewData}
+                    stylePreset={stylePreset}
+                    hostMode="panel"
+                    scrollMode="natural"
+                    activeTarget={resumeActiveTarget}
+                    onLinkIntent={handleResumeLinkIntent}
+                    inlineEditing={resumeInlineEditing}
+                    sectionActions={resumeSectionActions}
+                    paperAi={resumePaperAiState}
+                    showPageCount={
+                      workspaceMode === "preview" && Boolean(currentCv)
+                    }
+                  />
+                  {inlinePaperSelectionState ? (
+                    <FloatingAiToolbar
+                      open
+                      anchor={inlinePaperSelectionState.anchor}
+                      isLoading={isApplyingInlinePaperAi}
+                      pendingActionId={pendingInlinePaperAiActionId}
+                      onClose={() => setInlinePaperSelectionState(null)}
+                      onRunAction={handleRunInlinePaperAiAction}
+                    />
+                  ) : null}
+                </div>
+              )}
             </div>
-            <SectionEditorSheet
-              open={sectionEditorOpen}
-              section={activeSection}
+            <CvRail
+              sections={currentSections}
+              hiddenSectionIds={hiddenSectionIds}
+              activeSectionId={activeSectionId}
+              activeTab={cvRailTab}
+              stylePreset={stylePreset}
+              selectedTone={cvTone}
               aiSuggestion={cvRailAiSuggestion}
-              isAiRunning={cvRailAiSuggestion?.state === "loading"}
-              onOpenChange={setSectionEditorOpen}
-              onSave={handleSectionEditorSave}
-              summaryAiEvidence={{
-                summary: getCurrentCvSummaryText(currentCv),
-                skills: getCurrentCvSkills(currentCv),
-                experiences: getCurrentCvExperiences(currentCv),
-                educations: getCurrentCvEducations(currentCv),
-                languages: getCurrentCvLanguages(currentCv),
-              }}
-              onRunListAiSuggestion={handleRunListAiSuggestion}
+              appliedAiEdit={cvRailAppliedAiEdit}
+              isImporting={isImportingEntryCv}
+              onActiveTabChange={setCvRailTab}
+              onSelectSection={handleSelectSection}
+              onToggleHiddenSection={handleToggleHiddenSection}
+              onDeleteSection={handleDeleteSection}
+              onReorderSections={handleReorderSections}
+              onMoveSection={handleMoveSection}
+              onAskAiForSection={handleAskAiForSection}
+              onRunAskAiForSection={handleRunAskAiForSection}
+              onAcceptAiSuggestion={handleAcceptAiSuggestion}
+              onDiscardAiSuggestion={handleDiscardAiSuggestion}
+              onUndoAiSuggestion={handleUndoAiSuggestion}
               onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
               onDismissListAiSuggestion={handleDismissListAiSuggestion}
+              onAddSection={handleAddSection}
+              selectedStyleSlot={selectedStyleSlot}
+              selectedStyleSlotIsCustom={selectedStyleSlotIsCustom}
+              onSelectStyleSlot={handleSelectStyleSlot}
+              onResetStyleSlot={handleResetStyleSlot}
+              onSelectTemplate={handleSelectTemplate}
+              onSelectFontPair={handleSelectFontPair}
+              onSelectAccent={handleSelectAccent}
+              onSelectCustomAccent={handleSelectCustomAccent}
+              onNewCv={() => {
+                void handleStartFreshEntryCv();
+              }}
+              onImportPdf={handleImportEntryCv}
             />
-            <ImportReviewSheet
-              open={importReviewOpen}
-              blocks={importReviewBlocks}
-              onOpenChange={setImportReviewOpen}
-            />
+          </div>
+          <SectionEditorSheet
+            open={sectionEditorOpen}
+            section={activeSection}
+            aiSuggestion={cvRailAiSuggestion}
+            isAiRunning={cvRailAiSuggestion?.state === "loading"}
+            onOpenChange={setSectionEditorOpen}
+            onSave={handleSectionEditorSave}
+            summaryAiEvidence={{
+              summary: getCurrentCvSummaryText(currentCv),
+              skills: getCurrentCvSkills(currentCv),
+              experiences: getCurrentCvExperiences(currentCv),
+              educations: getCurrentCvEducations(currentCv),
+              languages: getCurrentCvLanguages(currentCv),
+            }}
+            onRunListAiSuggestion={handleRunListAiSuggestion}
+            onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
+            onDismissListAiSuggestion={handleDismissListAiSuggestion}
+          />
+          <ImportReviewSheet
+            open={importReviewOpen}
+            blocks={importReviewBlocks}
+            onOpenChange={setImportReviewOpen}
+          />
         </>
         <input
           ref={cvImportInputRef}

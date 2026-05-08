@@ -94,7 +94,8 @@ vi.mock("../../lib/proposal-personalization", () => ({
     mockAttachedCvId === "cv_alpha"
       ? [{ id: "cv_alpha", title: "Alex Martin Resume", isActive: true }]
       : [],
-  getLocalCvDocumentById: (id: string) => (id === "cv_alpha" ? mockSourceCv : null),
+  getLocalCvDocumentById: (id: string) =>
+    id === "cv_alpha" ? mockSourceCv : null,
   getProposalApplicantHeaderData: () => ({
     name: "Alex Martin",
     role: "Operations Associate",
@@ -161,7 +162,8 @@ vi.mock("../../components/ProposalDisplay", () => ({
   }) => (
     <div>
       <div data-testid="proposal-display-state">
-        {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}|{mode ?? "preview"}
+        {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}|
+        {mode ?? "preview"}
       </div>
       <div data-testid="proposal-display-actions">{actions}</div>
     </div>
@@ -273,7 +275,9 @@ describe("ProposalForge save to library", () => {
     expect(readStoredProposalOutputDraft()).toEqual(
       expect.objectContaining({
         generatedProposalId: "proposal_generated",
-        proposalContent: expect.stringContaining("Freshly generated proposal body."),
+        proposalContent: expect.stringContaining(
+          "Freshly generated proposal body.",
+        ),
         proposalDocumentTitle: "Operations Associate saved",
       }),
     );
@@ -310,7 +314,7 @@ describe("ProposalForge save to library", () => {
         proposalOutputMode: "preview",
         paletteOverride: null,
         customAccentHex: null,
-        templateBundleId: null,
+        templateBundleId: "magazine_editorial",
         typographyOverride: null,
         layoutOverride: null,
         proposalDocumentTitleManual: false,
@@ -342,6 +346,16 @@ describe("ProposalForge save to library", () => {
             verbatiStyle: expect.objectContaining({
               palette: "bordeaux",
             }),
+            templateBundleId: "magazine_editorial",
+            verbatiStyleSlotId: 2,
+            verbatiStyleSlotSource: "factory",
+            verbatiStyleSlotNameSnapshot: "Style 2",
+            verbatiStyleBaseSnapshot: expect.objectContaining({
+              layout: "workshop",
+              typography: "soft-serif",
+              palette: "cobalt",
+            }),
+            documentStyleVersion: 1,
           }),
         }),
       );

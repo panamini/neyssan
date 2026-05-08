@@ -735,7 +735,7 @@
 }
 
 .dasti-cv-rail-label {
-  color: var(--am);
+  color: var(--tm2);
   font-size: var(--tx);
   line-height: var(--lx);
   font-weight: var(--font-label-weight);
@@ -986,7 +986,39 @@
   background: var(--am-soft);
 }
 
-.dasti-cv-font-menu-trigger {
+.dasti-cv-rail-secondary-action {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-control);
+  background: var(--sfr);
+  color: var(--tm2);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: 650;
+  transition:
+    background-color var(--dur-2) var(--ease-standard),
+    border-color var(--dur-2) var(--ease-standard),
+    color var(--dur-2) var(--ease-standard),
+    transform var(--dur-2) var(--ease-standard);
+}
+
+.dasti-cv-rail-secondary-action:hover,
+.dasti-cv-rail-secondary-action:focus-visible {
+  outline: none;
+  border-color: var(--border-strong);
+  background: var(--sf0);
+  color: var(--ti);
+  transform: translateY(-1px);
+}
+
+.dasti-cv-font-menu-trigger,
+.dasti-cv-style-menu-trigger {
   width: 100%;
   min-height: var(--control-md);
   display: inline-flex;
@@ -1074,6 +1106,25 @@
   background: var(--cv-accent-swatch);
 }
 
+.dasti-cv-style-swatch--custom {
+  color: var(--ti);
+  background:
+    conic-gradient(
+      from 0deg,
+      #d95843,
+      #d9a441,
+      #4f9d68,
+      #2a78d6,
+      #7a4fa0,
+      #d95843
+    );
+}
+
+.dasti-cv-style-swatch--custom[data-selected="true"] {
+  background: var(--cv-accent-swatch);
+  color: var(--paper);
+}
+
 .dasti-cv-style-swatch[data-selected="true"] {
   border-color: var(--ac);
   box-shadow:
@@ -1091,7 +1142,7 @@
 }
 
 .dasti-cv-rail-footer__label {
-  color: var(--am);
+  color: var(--tm2);
   font-size: var(--tx);
   line-height: var(--lx);
   font-weight: 750;
@@ -1125,6 +1176,11 @@
 }
 
 .dasti-cv-import-progress {
+  --cv-import-loader-shine: color-mix(
+    in srgb,
+    var(--color-surface-raised) 64%,
+    transparent
+  );
   width: min(760px, 100%);
   margin-inline: auto;
   display: grid;
@@ -1137,6 +1193,9 @@
   background: var(--sf1);
   color: var(--tm2);
   box-shadow: var(--shadow-sm);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
 }
 
 .dasti-cv-import-progress strong,
@@ -1145,8 +1204,46 @@
 }
 
 .dasti-cv-import-progress strong {
+  display: inline-flex;
+  align-items: center;
   color: var(--ti);
   font-size: var(--ts);
+}
+
+.dasti-cv-import-progress .dasti-loader-caret {
+  display: inline-block;
+}
+
+.dasti-cv-import-progress::after {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.dasti-cv-import-progress::after {
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 36%,
+    var(--cv-import-loader-shine) 50%,
+    transparent 64%,
+    transparent 100%
+  );
+  transform: translateX(-120%);
+  animation: tw-document-shimmer 1700ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.dasti-cv-import-progress > * {
+  position: relative;
+  z-index: 1;
+}
+
+.dark .dasti-cv-import-progress,
+.theme-dark .dasti-cv-import-progress,
+[data-theme="dark"] .dasti-cv-import-progress {
+  --cv-import-loader-shine: rgba(242, 234, 219, 0.16);
 }
 
 .dasti-cv-import-progress__dot {
@@ -1511,7 +1608,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dasti-cv-import-progress__dot {
+  .dasti-cv-import-progress__dot,
+  .dasti-cv-import-progress::after {
     animation: none;
   }
 }
@@ -5070,4 +5168,23 @@
 }
 .section-container.ds-card[data-state="collapsed"] {
   background: var(--sf1);
+}
+
+/* Dark anti-blooming: soften chrome/UI labels, titles, and badges without changing paper content. */
+.dark .dasti-cv-review-banner__title,
+.dark .dasti-cv-ai-list-card__title,
+.dark .dasti-cv-ai-list-chip button,
+.dark .dasti-cv-import-choice__title,
+.dark .dasti-cv-pill-editor__chip button,
+.dark .dasti-cv-pill-suggestions__title,
+.dark .dasti-cv-pill-suggestions__chip button,
+.dark .dasti-cv-rail-label,
+.dark .dasti-cv-rail-footer__label,
+.dark .dasti-resume-style-inspector__layout-badge,
+.dark .dasti-compose-toolbar__cv-kicker,
+.dark .dasti-import-warning-banner__eyebrow,
+.dark .dasti-inline-review__eyebrow,
+.dark .dasti-import-recovery__drawer-title,
+.dark .dasti-photo-upload-trigger__tooltip strong {
+  font-weight: 640;
 }

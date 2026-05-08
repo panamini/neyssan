@@ -45,6 +45,10 @@ import type {
 import { resolveProposalRenderState } from "../lib/proposal-render-state";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import {
+  getProposalBundleForDocumentStyleSlot,
+  type DocumentStyleMetadata,
+} from "../lib/document-style-slots";
+import {
   getProposalTemplateBundleDefinition,
   type ProposalTemplateBundleId,
 } from "../lib/proposal-template-bundles";
@@ -61,6 +65,10 @@ import {
   resolveProposalHeadingText,
 } from "../lib/proposal-heading-state";
 import type { ProposalSignatureSettings } from "../lib/proposal-signature-settings";
+import {
+  resolveProposalClosingRef,
+  type ProposalClosingRef,
+} from "../lib/proposal-closing";
 
 type SavedProposalLayoutId = Extract<
   VerbatiLayoutPreset,
@@ -82,7 +90,7 @@ type SavedProposalRecord = {
     type?: string;
     content?: string;
   }>;
-  metadata?: {
+  metadata?: DocumentStyleMetadata & {
     sourceJobTitle?: string;
     sourceJobDescription?: string;
     proposalType?: SavedProposalType;
@@ -102,6 +110,7 @@ type SavedProposalRecord = {
     layoutOverride?: SavedProposalLayoutId | null;
     characterLimitMode?: ProposalCharacterLimitMode;
     characterLimitValue?: number | null;
+    closing?: ProposalClosingRef;
     applicantName?: string;
     applicantRole?: string;
     contactLine?: string;
@@ -201,10 +210,15 @@ function resolveSavedAppearanceState(proposal: SavedProposalRecord | null): {
     };
   }
 
-  const storedStyle = proposal.metadata?.verbatiStyle ?? null;
-  const explicitBundleId = normalizeSavedBundleId(
-    proposal.metadata?.templateBundleId,
-  );
+  const storedStyle =
+    proposal.metadata?.verbatiStyle ??
+    proposal.metadata?.verbatiStyleBaseSnapshot ??
+    null;
+  const explicitBundleId =
+    normalizeSavedBundleId(proposal.metadata?.templateBundleId) ??
+    getProposalBundleForDocumentStyleSlot(
+      proposal.metadata?.verbatiStyleSlotId,
+    );
   const customAccentHex =
     storedStyle?.palette === "custom"
       ? normalizeAccentHex(storedStyle.accentHex)
@@ -378,10 +392,14 @@ function getStoredRequestedVoicePreset(
 function getStoredProposalRenderInput(proposal: SavedProposalRecord): {
   storedTemplateId?: ProposalTemplateId;
   storedStylePreset?: Partial<VerbatiStylePreset>;
+  storedStyleBaseSnapshot?: Partial<VerbatiStylePreset>;
+  storedStyleSlotId?: unknown;
 } {
   return {
     storedTemplateId: proposal.metadata?.templateId,
     storedStylePreset: proposal.metadata?.verbatiStyle,
+    storedStyleBaseSnapshot: proposal.metadata?.verbatiStyleBaseSnapshot,
+    storedStyleSlotId: proposal.metadata?.verbatiStyleSlotId,
   };
 }
 
@@ -389,7 +407,10 @@ function hasSavedProposalArtifactSnapshot(
   proposal: SavedProposalRecord | null,
 ): boolean {
   return Boolean(
-    proposal?.metadata?.verbatiStyle || proposal?.metadata?.templateId,
+    proposal?.metadata?.verbatiStyle ||
+      proposal?.metadata?.templateId ||
+      proposal?.metadata?.verbatiStyleBaseSnapshot ||
+      proposal?.metadata?.verbatiStyleSlotId,
   );
 }
 
@@ -551,8 +572,7 @@ export default function ProposalsList({
                 proposal.updatedAt ??
                 proposal.createdAt ??
                 0,
-              metadata:
-                proposal.metadata as SavedProposalRecord["metadata"],
+              metadata: proposal.metadata as SavedProposalRecord["metadata"],
             }),
           )
         : [],
@@ -578,14 +598,17 @@ export default function ProposalsList({
 
     return [...mergedProposals.values()]
       .filter(
-        (proposal) => proposal.status === "draft" || proposal.status === "saved",
+        (proposal) =>
+          proposal.status === "draft" || proposal.status === "saved",
       )
       .sort((left, right) => {
         const leftRank = left.status === "saved" ? 0 : 1;
         const rightRank = right.status === "saved" ? 0 : 1;
         if (leftRank !== rightRank) return leftRank - rightRank;
-        return (right.updatedAt ?? right._creationTime ?? 0) -
-          (left.updatedAt ?? left._creationTime ?? 0);
+        return (
+          (right.updatedAt ?? right._creationTime ?? 0) -
+          (left.updatedAt ?? left._creationTime ?? 0)
+        );
       });
   }, [fallbackProposals, optimisticSavedProposal, proposals]);
   const deleteProposal = useMutation(
@@ -989,8 +1012,20 @@ export default function ProposalsList({
       }
     }
 
+    const closing = resolveProposalClosingRef({
+      closing: selected.metadata?.closing,
+      content: editContent,
+      proposalType: getStoredProposalType(selected),
+      applicantName: buildSavedApplicantHeader(selected)?.name,
+      voicePreset: getStoredVoicePreset(selected),
+    });
+    if (closing) {
+      nextMetadata.closing = closing;
+    }
+
     return nextMetadata;
   }, [
+    editContent,
     selected,
     selectedHasExplicitStyleEdit,
     selectedLayoutOverride,
@@ -1460,6 +1495,16 @@ export default function ProposalsList({
         delete nextMetadata.voicePreset;
         delete nextMetadata.resolvedVoicePreset;
       }
+      const regeneratedClosing = resolveProposalClosingRef({
+        closing: selected.metadata?.closing,
+        content: res.proposalContent,
+        proposalType,
+        applicantName: nextMetadata.applicantName,
+        voicePreset: voicePreset ?? nextMetadata.resolvedVoicePreset,
+      });
+      if (regeneratedClosing) {
+        nextMetadata.closing = regeneratedClosing;
+      }
       if (selectedStyleBundleId) {
         nextMetadata.templateBundleId = selectedStyleBundleId;
       } else {
@@ -1621,7 +1666,9 @@ export default function ProposalsList({
           {selectedToneLabel ? (
             <div className="dasti-proposal-library-sidebar__tone-row">
               <ToneBadge
-                tone={toneBadgeTone(selected ? getStoredVoicePreset(selected) : null)}
+                tone={toneBadgeTone(
+                  selected ? getStoredVoicePreset(selected) : null,
+                )}
                 className="dasti-proposal-tone-badge"
               >
                 {selectedToneLabel}
@@ -1819,7 +1866,9 @@ export default function ProposalsList({
                           <div className="dasti-doc-card__title-frame dasti-doc-card__title-frame--top">
                             <h3 className="ds-card__title dasti-doc-card__title">
                               {(proposal.title || "").trim() ||
-                                (isDraftProposal ? "Draft proposal" : "Saved proposal")}
+                                (isDraftProposal
+                                  ? "Draft proposal"
+                                  : "Saved proposal")}
                             </h3>
                             <span className="dasti-count-pill">
                               {isDraftProposal ? "Draft" : "Saved"}
@@ -1840,7 +1889,9 @@ export default function ProposalsList({
                         <div className="ds-card__footer dasti-doc-card__footer dasti-doc-card__footer--stamp-only">
                           <div className="dasti-doc-card__footer-meta">
                             <ToneBadge
-                              tone={toneBadgeTone(getStoredVoicePreset(proposal))}
+                              tone={toneBadgeTone(
+                                getStoredVoicePreset(proposal),
+                              )}
                               className="dasti-proposal-tone-badge dasti-proposal-tone-badge--compact"
                             >
                               {proposalToneLabel}
@@ -1903,6 +1954,13 @@ export default function ProposalsList({
                     templateId={selectedRenderState?.templateId ?? null}
                     stylePreset={selectedRenderState?.stylePreset ?? null}
                     signatureSettings={signatureSettings}
+                    closing={resolveProposalClosingRef({
+                      closing: selected?.metadata?.closing,
+                      content: editContent,
+                      proposalType: selected ? getStoredProposalType(selected) : null,
+                      applicantName: selectedApplicantHeader?.name,
+                      voicePreset: selected ? getStoredVoicePreset(selected) : null,
+                    })}
                     railTitle={resolveProposalHeadingText(
                       selected?.metadata,
                       "applicantName",
@@ -1981,6 +2039,13 @@ export default function ProposalsList({
                           templateId={proposalRenderState?.templateId ?? null}
                           stylePreset={proposalRenderState?.stylePreset ?? null}
                           signatureSettings={signatureSettings}
+                          closing={resolveProposalClosingRef({
+                            closing: proposal.metadata?.closing,
+                            content: getProposalDisplayText(proposal),
+                            proposalType: getStoredProposalType(proposal),
+                            applicantName: buildSavedApplicantHeader(proposal)?.name,
+                            voicePreset: getStoredVoicePreset(proposal),
+                          })}
                           railTitle={resolveProposalHeadingText(
                             proposal.metadata,
                             "applicantName",

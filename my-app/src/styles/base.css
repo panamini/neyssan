@@ -150,9 +150,9 @@ input,
 textarea,
 select {
   transition:
-    box-shadow 0.12s var(--ez),
-    border-color 0.12s var(--ez),
-    color 0.12s var(--ez);
+    box-shadow var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
   -webkit-tap-highlight-color: transparent;
 }
 

@@ -15,6 +15,9 @@ import { resolveWorkshopHeadingFitContract } from "../workshopHeadingContract";
 const workshopTemplate = getResumeTemplateDefinition(
   "workshop_resume_onecol_ats",
 );
+const workshopTwoColumnTemplate = getResumeTemplateDefinition(
+  "workshop_resume_twocol_ats",
+);
 
 function buildWorkshopTemplateOverride(
   overrides: Partial<typeof workshopTemplate.preview>,
@@ -2007,5 +2010,139 @@ describe("resumePagination", () => {
     expect(JSON.parse(JSON.stringify(result.committedPages))).toEqual(
       result.committedPages,
     );
+  });
+
+  it("keeps compact sidebar skills on page one when main content overflows in two-column Workshop", () => {
+    const result = planWorkshopResumePages({
+      data: {
+        ...buildPlannerData(),
+        summary: "Compact summary.",
+        experience: Array.from({ length: 5 }, (_, index) => ({
+          ...resumeMock.experience[0]!,
+          id: `lane-exp-${index + 1}`,
+          role: `Role ${index + 1}`,
+          company: `Company ${index + 1}`,
+          description: makeDenseTokenBlock(`lane${index + 1}`, 26),
+          bullets: [],
+        })),
+        skillItems: Array.from({ length: 6 }, (_, index) => ({
+          ...resumeMock.skillItems[index % resumeMock.skillItems.length]!,
+          id: `lane-skill-${index + 1}`,
+          name: `Skill ${index + 1}`,
+        })),
+      },
+      template: workshopTwoColumnTemplate,
+    });
+
+    expect(result.committedPages.length).toBeGreaterThan(1);
+    expect(result.committedPages[0]?.fragments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "skills", lane: "sidebar" }),
+      ]),
+    );
+    expect(result.committedPages[0]?.fragments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "experience", lane: "main" }),
+      ]),
+    );
+  });
+
+  it("moves first main-lane body entry to page two when page-one header leaves no room", () => {
+    const result = planWorkshopResumePages({
+      data: {
+        ...buildPlannerData(),
+        summary: makeDenseTokenBlock("header", 130),
+        experience: [
+          {
+            ...resumeMock.experience[0]!,
+            id: "lane-first-main-overflow",
+            role: "Principal Designer",
+            company: "Studio",
+            description: "Small body entry that fits on a fresh page.",
+            bullets: [],
+          },
+        ],
+      },
+      template: workshopTwoColumnTemplate,
+    });
+
+    expect(result.committedPages[0]?.fragments.some((fragment) => fragment.kind === "experience")).toBe(false);
+    expect(result.committedPages[1]?.fragments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "experience", lane: "main" }),
+      ]),
+    );
+  });
+
+  it("assigns education and achievements to the main lane for two-column Workshop", () => {
+    const result = planWorkshopResumePages({
+      data: {
+        ...buildPlannerData(),
+        education: [resumeMock.education[0]!],
+        achievementItems: [
+          {
+            id: "lane-achievement-1",
+            text: "Raised qualified conversion by 24% through calmer onboarding.",
+            sectionId: "achievements-1",
+            sectionType: "achievements",
+            sectionTitle: "Achievements",
+          },
+        ],
+        achievements: ["Raised qualified conversion by 24% through calmer onboarding."],
+      },
+      template: workshopTwoColumnTemplate,
+    });
+    const fragments = result.committedPages.flatMap((page) => page.fragments);
+
+    expect(fragments.find((fragment) => fragment.kind === "education")).toEqual(
+      expect.objectContaining({ lane: "main" }),
+    );
+    expect(fragments.find((fragment) => fragment.kind === "achievements")).toEqual(
+      expect.objectContaining({ lane: "main" }),
+    );
+  });
+
+  it("keeps compact certifications in sidebar and promotes detailed certifications to main", () => {
+    const compact = planWorkshopResumePages({
+      data: {
+        ...buildPlannerData(),
+        certifications: [
+          {
+            id: "cert-compact-1",
+            name: "AWS SAA",
+            issuer: "AWS",
+            meta: "2026",
+            sectionId: "certifications-1",
+            sectionType: "certifications",
+            sectionTitle: "Certifications",
+          },
+        ],
+      },
+      template: workshopTwoColumnTemplate,
+    });
+    const detailed = planWorkshopResumePages({
+      data: {
+        ...buildPlannerData(),
+        certifications: [
+          {
+            id: "cert-detailed-1",
+            name: "Enterprise Architecture Certification With Long Credential Title",
+            issuer: "International Architecture Credentialing Board",
+            meta: "License ID ABC-123-456-789 · expires December 2028",
+            sectionId: "certifications-1",
+            sectionType: "certifications",
+            sectionTitle: "Certifications",
+          },
+        ],
+      },
+      template: workshopTwoColumnTemplate,
+    });
+
+    expect(
+      compact.committedPages.flatMap((page) => page.fragments).find((fragment) => fragment.kind === "certifications"),
+    ).toEqual(expect.objectContaining({ lane: "sidebar" }));
+    expect(
+      detailed.committedPages.flatMap((page) => page.fragments).find((fragment) => fragment.kind === "certifications"),
+    ).toEqual(expect.objectContaining({ lane: "main" }));
   });
 });

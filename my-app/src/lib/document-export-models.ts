@@ -26,7 +26,11 @@ import type {
   ResumeLayoutVariantId,
 } from "../features/verbati/resume/resume.types";
 import { normalizeExportLocale } from "./export-locale";
-import { extractProposalClosingBlockFromParagraphs } from "./proposal-closing";
+import {
+  extractProposalClosingBlockFromParagraphs,
+  sanitizeProposalClosingRef,
+  type ProposalClosingRef,
+} from "./proposal-closing";
 import { getProposalDocumentTypography } from "./proposal-document-typography";
 import { resolveProposalOutputLanguage } from "../../convex/lib/proposals/proposalOutput";
 import {
@@ -35,6 +39,7 @@ import {
 } from "./buildCanonicalResumeRenderModel";
 import {
   getResumeTemplateDefinition,
+  isWorkshopResumeTemplateId,
   type ResumeTemplateId,
 } from "./layout/resumeTemplates";
 import {
@@ -101,6 +106,9 @@ export type ResumePrintSource = {
   education: ResumePrintEducationItem[];
   achievements: string[];
   hobbies: string[];
+  certifications?: ResumePrintItem[];
+  affiliations?: ResumePrintItem[];
+  additionalInformation?: string[];
   resumeTemplateId: ResumeTemplateId;
   committedPages?: WorkshopResumeCommittedPage[];
 };
@@ -163,6 +171,7 @@ export type ProposalPrintBlock =
       type: "closing";
       signOff: string;
       signatureName: string;
+      handwrittenSignatureEnabled?: boolean;
     };
 
 export type ProposalPrintApplicantHeader = {
@@ -195,6 +204,7 @@ export type ProposalPrintSource = {
   headerVisibility: ProposalHeaderVisibility;
   templateId: ProposalTemplateId | null;
   signatureSettings?: ProposalSignatureSettings | null;
+  closing?: ProposalClosingRef | null;
   body: ProposalPrintBlock[];
 };
 
@@ -218,6 +228,7 @@ export type ProposalPreviewPrintSource = {
   templateId: ProposalTemplateId;
   stylePreset: VerbatiStylePreset;
   signatureSettings?: ProposalSignatureSettings | null;
+  closing?: ProposalClosingRef | null;
 };
 
 export type ProposalPrintRoutePayload = {
@@ -239,6 +250,7 @@ export type ProposalPrintRoutePayload = {
   templateId: ProposalTemplateId;
   stylePreset: VerbatiStylePreset;
   signatureSettings?: ProposalSignatureSettings | null;
+  closing?: ProposalClosingRef | null;
 };
 
 export type ProposalPrintDebugSnapshot = {
@@ -320,6 +332,25 @@ function normalizeResumeData(
     })),
     achievements: (data.achievements ?? []).map((item) => cleanString(item)).filter(Boolean),
     hobbies: data.hobbies.map((item) => cleanString(item)).filter(Boolean),
+    certifications: data.certifications.map((item) => ({
+      label: cleanString(item.name),
+      value: [cleanString(item.issuer), cleanString(item.meta)]
+        .filter(Boolean)
+        .join(" · "),
+    })).filter((item) => item.label || item.value),
+    affiliations: data.affiliations.map((item) => ({
+      label: cleanString(item.organizationName),
+      value: [
+        cleanString(item.roleOrMembershipType),
+        cleanString(item.dateRange),
+        cleanString(item.notes),
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    })).filter((item) => item.label || item.value),
+    additionalInformation: data.textSections
+      .map((item) => [cleanString(item.sectionTitle), cleanString(item.text)].filter(Boolean).join(" — "))
+      .filter(Boolean),
     resumeTemplateId,
     committedPages,
   };
@@ -330,7 +361,7 @@ function buildCommittedWorkshopPages(args: {
   resumeTemplateId: ResumeTemplateId;
   stylePreset?: VerbatiStylePreset | null;
 }): WorkshopResumeCommittedPage[] | undefined {
-  if (args.resumeTemplateId !== "workshop_resume_onecol_ats") {
+  if (!isWorkshopResumeTemplateId(args.resumeTemplateId)) {
     return undefined;
   }
 
@@ -399,7 +430,9 @@ export function buildStyledResumePrintSource(args: {
     return null;
   }
 
-  const stylePreset = resolveVerbatiStyle(args.stylePreset);
+  const stylePreset = resolveVerbatiStyle(
+    args.stylePreset ?? getVerbatiStyleFromCv(args.currentCv),
+  );
   const resumeData = buildCanonicalResumeRenderModelFromCv(args.currentCv);
   const resumeTemplateId = getResumeTemplateId(stylePreset);
 
@@ -472,6 +505,7 @@ export function buildProposalPreviewPrintSource(args: {
   templateId?: ProposalTemplateId | null;
   stylePreset?: VerbatiStylePreset | null;
   signatureSettings?: ProposalSignatureSettings | null;
+  closing?: ProposalClosingRef | null;
 }): ProposalPreviewPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
   const normalizedContent = cleanString(args.content);
@@ -512,6 +546,7 @@ export function buildProposalPreviewPrintSource(args: {
     signatureSettings: sanitizeProposalSignatureSettings(
       args.signatureSettings,
     ),
+    closing: sanitizeProposalClosingRef(args.closing),
   };
 }
 
@@ -539,6 +574,7 @@ export function buildProposalPrintRoutePayload(args: {
     signatureSettings: sanitizeProposalSignatureSettings(
       args.data.signatureSettings,
     ),
+    closing: sanitizeProposalClosingRef(args.data.closing),
   };
 }
 
@@ -577,6 +613,7 @@ function splitProposalParagraphs(content: string): string[] {
 export function buildProposalBodyBlocks(
   content: string | null | undefined,
   recipientDetails?: string | null,
+  closing?: ProposalClosingRef | null,
 ): ProposalPrintBlock[] {
   const normalizedContent = cleanString(content);
   if (!normalizedContent) {
@@ -598,17 +635,37 @@ export function buildProposalBodyBlocks(
     startIndex = 1;
   }
 
+  const structuredClosing = closing
+    ? sanitizeProposalClosingRef(closing)
+    : null;
   const extractedClosingBlock =
     startIndex < paragraphs.length
       ? extractProposalClosingBlockFromParagraphs(paragraphs)
       : null;
-  const closingBlock: ProposalPrintBlock | null = extractedClosingBlock
+  const structuredClosingBlock: ProposalPrintBlock | null = structuredClosing &&
+    (structuredClosing.signOff ||
+      (structuredClosing.enabled && structuredClosing.signatureName))
     ? {
         type: "closing",
-        signOff: extractedClosingBlock.block.signOff ?? "",
-        signatureName: extractedClosingBlock.block.signatureName ?? "",
+        signOff: structuredClosing.signOff,
+        signatureName: structuredClosing.enabled
+          ? structuredClosing.signatureName
+          : "",
+        ...(structuredClosing.enabled &&
+        structuredClosing.handwrittenSignatureEnabled
+          ? { handwrittenSignatureEnabled: true }
+          : null),
       }
     : null;
+  const closingBlock: ProposalPrintBlock | null = structuredClosing
+    ? structuredClosingBlock
+    : extractedClosingBlock
+      ? {
+          type: "closing",
+          signOff: extractedClosingBlock.block.signOff ?? "",
+          signatureName: extractedClosingBlock.block.signatureName ?? "",
+        }
+      : null;
   const endIndex = extractedClosingBlock
     ? extractedClosingBlock.startIndex
     : paragraphs.length;
@@ -639,6 +696,7 @@ export function buildProposalExportSource(args: {
   headerVisibility?: Partial<ProposalHeaderVisibility> | null;
   templateId?: ProposalTemplateId | null;
   signatureSettings?: ProposalSignatureSettings | null;
+  closing?: ProposalClosingRef | null;
 }): ProposalPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
   const inferredLocale =
@@ -674,6 +732,11 @@ export function buildProposalExportSource(args: {
     signatureSettings: sanitizeProposalSignatureSettings(
       args.signatureSettings,
     ),
-    body: buildProposalBodyBlocks(args.content, args.recipientDetails),
+    closing: sanitizeProposalClosingRef(args.closing),
+    body: buildProposalBodyBlocks(
+      args.content,
+      args.recipientDetails,
+      sanitizeProposalClosingRef(args.closing),
+    ),
   };
 }

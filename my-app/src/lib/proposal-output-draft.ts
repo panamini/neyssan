@@ -4,9 +4,7 @@ import {
   resolveProposalTemplateId,
   type ProposalTemplateId,
 } from "../../convex/lib/proposals/renderTemplates";
-import {
-  sanitizePersistedVerbatiStyle,
-} from "../features/verbati/style";
+import { sanitizePersistedVerbatiStyle } from "../features/verbati/style";
 import { resolveVerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import type { ProposalStyleLinkMode } from "./proposal-style-link";
@@ -14,7 +12,10 @@ import {
   resolveProposalStyleChoice,
   type ProposalStyleChoice,
 } from "./proposal-style-choice";
-import { isProposalPaletteId, type ProposalPaletteId } from "./proposal-style-display";
+import {
+  isProposalPaletteId,
+  type ProposalPaletteId,
+} from "./proposal-style-display";
 import {
   resolveProposalTemplateBundleId,
   type ProposalTemplateBundleId,
@@ -25,6 +26,17 @@ import type {
 } from "../features/verbati/types";
 import type { ProposalCharacterLimitMode } from "../../convex/lib/proposals/generationControls";
 import type { StoredProposalComposeDraft } from "./proposal-workspace-state";
+import {
+  sanitizeProposalClosingRef,
+  type ProposalClosingRef,
+} from "./proposal-closing";
+import {
+  DOCUMENT_STYLE_VERSION,
+  isDocumentStyleSlotSource,
+  resolveDocumentStyleSlotId,
+  type DocumentAppearanceSnapshot,
+  type DocumentStyleSlotSource,
+} from "./document-style-slots";
 
 export const PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY =
   "dasti:proposal-output-draft:v1";
@@ -42,6 +54,11 @@ export type StoredProposalOutputDraft = {
   proposalVoicePreset: FormValues["voicePreset"] | null;
   proposalTemplateId: ProposalTemplateId | null;
   proposalVerbatiStyle: VerbatiStylePreset | null;
+  verbatiStyleSlotId?: 1 | 2 | 3 | null;
+  verbatiStyleSlotSource?: DocumentStyleSlotSource | null;
+  verbatiStyleSlotNameSnapshot?: string | null;
+  verbatiStyleBaseSnapshot?: DocumentAppearanceSnapshot | null;
+  documentStyleVersion?: 1 | null;
   proposalStyleLinkMode: ProposalStyleLinkMode;
   proposalStyleChoice: ProposalStyleChoice;
   proposalApplicantName: string;
@@ -67,6 +84,7 @@ export type StoredProposalOutputDraft = {
     "swiss" | "editorial" | "modernist"
   > | null;
   proposalDocumentTitleManual: boolean;
+  proposalClosing?: ProposalClosingRef | null;
   characterLimitMode: ProposalCharacterLimitMode | null;
   characterLimitValue: number | null;
   sourceComposeDraft?: StoredProposalComposeDraft | null;
@@ -81,20 +99,57 @@ export function resolveProposalStoredText(input: {
   content?: string | null;
   sections?: StoredProposalTextSection[] | null;
 }): string {
-  const directContent = typeof input.content === "string" ? input.content.trim() : "";
+  const directContent =
+    typeof input.content === "string" ? input.content.trim() : "";
   if (directContent) {
     return directContent;
   }
 
   const sections = Array.isArray(input.sections) ? input.sections : [];
   const sectionText = sections
-    .filter((section) => section.type === "text" && typeof section.content === "string")
+    .filter(
+      (section) =>
+        section.type === "text" && typeof section.content === "string",
+    )
     .map((section) => section.content.trim())
     .filter(Boolean)
     .join("\n\n")
     .trim();
 
   return sectionText;
+}
+
+function normalizeDocumentAppearanceSnapshot(
+  value: unknown,
+): DocumentAppearanceSnapshot | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.layout !== "string" ||
+    typeof candidate.typography !== "string" ||
+    typeof candidate.palette !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    ...(typeof candidate.familyId === "string"
+      ? {
+          familyId:
+            candidate.familyId as DocumentAppearanceSnapshot["familyId"],
+        }
+      : null),
+    layout: candidate.layout as DocumentAppearanceSnapshot["layout"],
+    typography:
+      candidate.typography as DocumentAppearanceSnapshot["typography"],
+    palette: candidate.palette as DocumentAppearanceSnapshot["palette"],
+    ...(typeof candidate.accentHex === "string"
+      ? { accentHex: candidate.accentHex }
+      : null),
+  };
 }
 
 function normalizeStoredProposalComposeDraft(
@@ -107,7 +162,9 @@ function normalizeStoredProposalComposeDraft(
   const parsed = value as Partial<StoredProposalComposeDraft>;
 
   return {
-    ...(typeof parsed.jobTitle === "string" ? { jobTitle: parsed.jobTitle } : null),
+    ...(typeof parsed.jobTitle === "string"
+      ? { jobTitle: parsed.jobTitle }
+      : null),
     ...(typeof parsed.jobDescription === "string"
       ? { jobDescription: parsed.jobDescription }
       : null),
@@ -155,7 +212,9 @@ function readProposalOutputDraftRaw(): string | null {
   }
 
   try {
-    const localRaw = window.localStorage.getItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
+    const localRaw = window.localStorage.getItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+    );
     if (localRaw) {
       return localRaw;
     }
@@ -226,11 +285,30 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
               parsed.proposalVerbatiStyle as Partial<VerbatiStylePreset>,
             )
           : null,
+      verbatiStyleSlotId: resolveDocumentStyleSlotId(parsed.verbatiStyleSlotId),
+      verbatiStyleSlotSource: isDocumentStyleSlotSource(
+        parsed.verbatiStyleSlotSource,
+      )
+        ? parsed.verbatiStyleSlotSource
+        : null,
+      verbatiStyleSlotNameSnapshot:
+        typeof parsed.verbatiStyleSlotNameSnapshot === "string"
+          ? parsed.verbatiStyleSlotNameSnapshot
+          : null,
+      verbatiStyleBaseSnapshot: normalizeDocumentAppearanceSnapshot(
+        parsed.verbatiStyleBaseSnapshot,
+      ),
+      documentStyleVersion:
+        parsed.documentStyleVersion === DOCUMENT_STYLE_VERSION
+          ? DOCUMENT_STYLE_VERSION
+          : null,
       proposalStyleLinkMode:
         parsed.proposalStyleLinkMode === "proposal_local"
           ? "proposal_local"
           : "inherit_cv",
-      proposalStyleChoice: resolveProposalStyleChoice(parsed.proposalStyleChoice),
+      proposalStyleChoice: resolveProposalStyleChoice(
+        parsed.proposalStyleChoice,
+      ),
       proposalApplicantName:
         typeof parsed.proposalApplicantName === "string"
           ? parsed.proposalApplicantName
@@ -293,7 +371,9 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
         /^#[0-9a-fA-F]{6}$/.test(parsed.customAccentHex)
           ? parsed.customAccentHex
           : null,
-      templateBundleId: resolveProposalTemplateBundleId(parsed.templateBundleId),
+      templateBundleId: resolveProposalTemplateBundleId(
+        parsed.templateBundleId,
+      ),
       typographyOverride:
         typeof parsed.typographyOverride === "string"
           ? resolveVerbatiFontPairId(parsed.typographyOverride)
@@ -305,6 +385,7 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
           ? parsed.layoutOverride
           : null,
       proposalDocumentTitleManual: parsed.proposalDocumentTitleManual === true,
+      proposalClosing: sanitizeProposalClosingRef(parsed.proposalClosing),
       characterLimitMode:
         parsed.characterLimitMode === "none" ||
         parsed.characterLimitMode === "linkedin_note_200" ||
@@ -354,6 +435,23 @@ function buildSanitizedStoredProposalOutputDraft(
         ? sanitizePersistedVerbatiStyle(
             draft.proposalVerbatiStyle as Partial<VerbatiStylePreset>,
           )
+        : null,
+    verbatiStyleSlotId: resolveDocumentStyleSlotId(draft.verbatiStyleSlotId),
+    verbatiStyleSlotSource: isDocumentStyleSlotSource(
+      draft.verbatiStyleSlotSource,
+    )
+      ? draft.verbatiStyleSlotSource
+      : null,
+    verbatiStyleSlotNameSnapshot:
+      typeof draft.verbatiStyleSlotNameSnapshot === "string"
+        ? draft.verbatiStyleSlotNameSnapshot
+        : null,
+    verbatiStyleBaseSnapshot: normalizeDocumentAppearanceSnapshot(
+      draft.verbatiStyleBaseSnapshot,
+    ),
+    documentStyleVersion:
+      draft.documentStyleVersion === DOCUMENT_STYLE_VERSION
+        ? DOCUMENT_STYLE_VERSION
         : null,
     proposalStyleLinkMode:
       draft.proposalStyleLinkMode === "proposal_local"
@@ -412,7 +510,8 @@ function buildSanitizedStoredProposalOutputDraft(
       typeof draft.generatedProposalId === "string"
         ? draft.generatedProposalId
         : null,
-    proposalOutputMode: draft.proposalOutputMode === "edit" ? "edit" : "preview",
+    proposalOutputMode:
+      draft.proposalOutputMode === "edit" ? "edit" : "preview",
     paletteOverride: isProposalPaletteId(draft.paletteOverride)
       ? draft.paletteOverride
       : null,
@@ -433,6 +532,7 @@ function buildSanitizedStoredProposalOutputDraft(
         ? draft.layoutOverride
         : null,
     proposalDocumentTitleManual: draft.proposalDocumentTitleManual === true,
+    proposalClosing: sanitizeProposalClosingRef(draft.proposalClosing),
     characterLimitMode:
       draft.characterLimitMode === "none" ||
       draft.characterLimitMode === "linkedin_note_200" ||
@@ -474,7 +574,9 @@ export function writeStoredProposalOutputDraft(
 
   try {
     if (draft) {
-      fallbackRaw = JSON.stringify(buildSanitizedStoredProposalOutputDraft(draft));
+      fallbackRaw = JSON.stringify(
+        buildSanitizedStoredProposalOutputDraft(draft),
+      );
       if (nextRaw === null) {
         nextRaw = fallbackRaw;
       }
@@ -510,10 +612,7 @@ export function writeStoredProposalOutputDraft(
         if (nextRaw === null) {
           return;
         }
-        window.localStorage.setItem(
-          PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
-          nextRaw,
-        );
+        window.localStorage.setItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY, nextRaw);
         preferSessionStorageForProposalOutputDraft = false;
         hasWarnedSessionFallbackForProposalOutputDraft = false;
         try {

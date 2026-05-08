@@ -61,7 +61,7 @@ const TONE_OPTIONS: ToneOption[] = [
   {
     id: null,
     label: getVoicePresetDisplayLabel(null),
-    description: "System picks the tone.",
+    description: "Chooses from the job and selected CV at generation time.",
     Icon: Wand2,
     tone: "auto",
   },

@@ -15,6 +15,7 @@ export type ProposalSignatureRender =
   | {
       kind: "text";
       fontFamily: string;
+      imageDataUrl?: string | null;
     }
   | {
       kind: "image";
@@ -96,7 +97,15 @@ export function sanitizeProposalSignatureSettings(
     return {
       mode: "font",
       fontId,
-      imageDataUrl: null,
+      imageDataUrl,
+    };
+  }
+
+  if (record.mode === "auto") {
+    return {
+      mode: "auto",
+      fontId: null,
+      imageDataUrl,
     };
   }
 
@@ -124,6 +133,7 @@ export function resolveProposalSignatureRender(args: {
       return {
         kind: "text",
         fontFamily: option.fontFamily,
+        imageDataUrl: settings.imageDataUrl,
       };
     }
   }
@@ -131,5 +141,6 @@ export function resolveProposalSignatureRender(args: {
   return {
     kind: "text",
     fontFamily: args.bodyFontFamily,
+    imageDataUrl: settings.imageDataUrl,
   };
 }

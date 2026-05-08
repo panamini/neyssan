@@ -20,6 +20,7 @@ import {
   Copy as PhCopy,
   DotsThree as PhDotsThree,
   DotsSixVertical as PhDotsSixVertical,
+  Eraser as PhEraser,
   Eye as PhEye,
   EyeClosed as PhEyeClosed,
   EyeSlash as PhEyeSlash,
@@ -79,6 +80,8 @@ import {
   TextUnderline as PhTextUnderline,
   TrashSimple as PhTrashSimple,
   TreeView as PhTreeView,
+  ToggleLeft as PhToggleLeft,
+  ToggleRight as PhToggleRight,
   Upload as PhUpload,
   User as PhUser,
   UserCircle as PhUserCircle,
@@ -157,6 +160,7 @@ export const Eye = withCompat(PhEye);
 export const EyeClosed = withCompat(PhEyeClosed);
 export const EyeSlash = withCompat(PhEyeSlash);
 export const EyeDropper = withCompat(PhEyedropper);
+export const Eraser = withCompat(PhEraser);
 export const Feather = withCompat(PhFeather);
 export const FileImage = withCompat(PhFileImage);
 export const FilePdf = withCompat(PhFilePdf);
@@ -215,6 +219,8 @@ export const Sunglasses = withCompat(PhSunglasses);
 export const Stamp = withCompat(PhStamp);
 export const TrashSimple = withCompat(PhTrashSimple);
 export const Underline = withCompat(PhTextUnderline);
+export const ToggleLeft = withCompat(PhToggleLeft);
+export const ToggleRight = withCompat(PhToggleRight);
 export const Upload = withCompat(PhUpload);
 export const User = withCompat(PhUser);
 export const UserRound = withCompat(PhUserCircle);

@@ -42,6 +42,11 @@ import {
   resolveResumeDocxSurfaceTokens,
 } from "./layout/documentTokenSerializers";
 import {
+  isWorkshopResumeTemplateId,
+  isWorkshopTwoColumnResumeTemplateId,
+} from "./layout/resumeTemplates";
+import { resolveWorkshopTwoColumnFragmentLane } from "./resume/resumePagination";
+import {
   resolveDocxSafeColorHex,
   resolvePrimaryFontFamily,
 } from "./layout/documentAppearance";
@@ -121,6 +126,36 @@ function buildStyledResumeAppearanceCss(): string {
 
     body.resume-export.resume--styled .resume-styled-columns {
       align-items: start;
+    }
+
+    body.resume-export.resume--styled .resume-styled-page--workshop-twocol {
+      gap: var(--flow-section-gap);
+    }
+
+    body.resume-export.resume--styled .resume-workshop-twocol-header,
+    body.resume-export.resume--styled .resume-workshop-twocol-sidebar,
+    body.resume-export.resume--styled .resume-workshop-twocol-main {
+      display: grid;
+      gap: var(--flow-stack-gap);
+      align-content: start;
+      min-width: 0;
+    }
+
+    body.resume-export.resume--styled .resume-workshop-twocol-grid {
+      display: grid;
+      grid-template-columns: var(--page-sidebar) var(--page-main);
+      column-gap: var(--page-gutter);
+      align-items: start;
+      min-width: 0;
+    }
+
+    body.resume-export.resume--styled .resume-workshop-twocol-sidebar .entry-title {
+      font-size: var(--flow-body-size);
+    }
+
+    body.resume-export.resume--styled .resume-workshop-twocol-sidebar .section {
+      break-inside: avoid;
+      page-break-inside: avoid;
     }
 
     body.resume-export.resume--styled .resume-styled-contact-lines {
@@ -1246,11 +1281,14 @@ ${buildCssVarBlock(layoutProfileVars)}
 
     .proposal-signature-image {
       display: block;
-      max-width: min(42mm, 56%);
-      max-height: 16mm;
+      max-width: min(48mm, 64%);
+      max-height: 18mm;
       width: auto;
       height: auto;
       object-fit: contain;
+      opacity: 1;
+      filter: contrast(1.35) saturate(0.15) brightness(0.75);
+      mix-blend-mode: multiply;
       margin-top: var(--flow-closing-name-gap);
     }
 
@@ -1387,7 +1425,7 @@ function renderSection(args: {
 function getCommittedWorkshopPagesOrThrow(
   data: ResumePrintSource,
 ): NonNullable<ResumePrintSource["committedPages"]> {
-  if (data.resumeTemplateId !== "workshop_resume_onecol_ats") {
+  if (!isWorkshopResumeTemplateId(data.resumeTemplateId)) {
     return [];
   }
 
@@ -1759,6 +1797,39 @@ function renderWorkshopFragment(args: {
   }
 }
 
+function renderWorkshopTwoColumnPage(args: {
+  page: NonNullable<ResumePrintSource["committedPages"]>[number];
+  locale?: string | null;
+}): string {
+  const header: string[] = [];
+  const sidebar: string[] = [];
+  const main: string[] = [];
+
+  args.page.fragments.forEach((fragment) => {
+    const markup = renderWorkshopFragment({ fragment, locale: args.locale });
+    const lane = resolveWorkshopTwoColumnFragmentLane(fragment);
+    if (lane === "header") {
+      header.push(markup);
+    } else if (lane === "sidebar") {
+      sidebar.push(markup);
+    } else {
+      main.push(markup);
+    }
+  });
+
+  const headerMarkup = header.length > 0
+    ? `<div class="resume-workshop-twocol-header">${header.join("")}</div>`
+    : "";
+
+  return `<article class="resume-styled-page resume-styled-page--workshop-twocol" data-export-page-id="${escapeHtml(args.page.pageId)}">
+    ${headerMarkup}
+    <div class="resume-workshop-twocol-grid">
+      <aside class="resume-workshop-twocol-sidebar">${sidebar.join("")}</aside>
+      <main class="resume-workshop-twocol-main">${main.join("")}</main>
+    </div>
+  </article>`;
+}
+
 function renderResumeHtml(args: {
   data: ResumePrintSource;
   mode: ExportMode;
@@ -1770,12 +1841,18 @@ function renderResumeHtml(args: {
     resumeTemplateId: args.data.resumeTemplateId,
     stylePreset: args.stylePreset,
   });
-  if (args.data.resumeTemplateId === "workshop_resume_onecol_ats") {
+  if (
+    isWorkshopResumeTemplateId(args.data.resumeTemplateId) &&
+    !(isWorkshopTwoColumnResumeTemplateId(args.data.resumeTemplateId) && args.mode === "ats")
+  ) {
     const committedPages = getCommittedWorkshopPagesOrThrow(args.data);
     const workshopBodyMarkup = committedPages
-      .map(
-        (page) => `<main class="export-page" data-export-doc="resume" data-export-page-index="${page.index + 1}" data-resume-template="workshop_resume_onecol_ats">
-          <article class="resume-styled-page" data-export-page-id="${escapeHtml(page.pageId)}">
+      .map((page) => {
+        const pageMarkup = isWorkshopTwoColumnResumeTemplateId(
+          args.data.resumeTemplateId,
+        )
+          ? renderWorkshopTwoColumnPage({ page, locale })
+          : `<article class="resume-styled-page" data-export-page-id="${escapeHtml(page.pageId)}">
             ${page.fragments
               .map((fragment) =>
                 renderWorkshopFragment({
@@ -1784,9 +1861,12 @@ function renderResumeHtml(args: {
                 }),
               )
               .join("")}
-          </article>
-        </main>`,
-      )
+          </article>`;
+
+        return `<main class="export-page" data-export-doc="resume" data-export-page-index="${page.index + 1}" data-resume-template="${escapeHtml(args.data.resumeTemplateId)}">
+          ${pageMarkup}
+        </main>`;
+      })
       .join("");
 
     return buildHtmlDocument({
@@ -2029,16 +2109,24 @@ function renderProposalBlocks(
         const signatureName = block.signatureName
           ? formatProposalSignatureName(block.signatureName)
           : "";
-        const signatureMarkup =
-          signatureName && signatureRender?.kind === "image"
-            ? `<img class="proposal-signature-image" src="${escapeHtml(signatureRender.imageDataUrl)}" alt="${escapeHtml(signatureName)}" />`
-            : signatureName
-              ? `<p class="proposal-signature" style="${escapeHtml(`--proposal-signature-font-family: ${
-                  signatureRender?.kind === "text"
-                    ? signatureRender.fontFamily
-                    : "var(--body-font)"
-                };`)}">${escapeHtml(signatureName)}</p>`
-              : "";
+        const signatureImageDataUrl =
+          signatureRender?.kind === "image"
+            ? signatureRender.imageDataUrl
+            : signatureRender?.imageDataUrl;
+        const handwrittenSignatureMarkup =
+          signatureName &&
+          block.handwrittenSignatureEnabled &&
+          signatureImageDataUrl
+            ? `<img class="proposal-signature-image" src="${escapeHtml(signatureImageDataUrl)}" alt="${escapeHtml(signatureName)}" />`
+            : "";
+        const typedSignatureMarkup = signatureName
+          ? `<p class="proposal-signature" style="${escapeHtml(`--proposal-signature-font-family: ${
+              signatureRender?.kind === "text"
+                ? signatureRender.fontFamily
+                : "var(--body-font)"
+            };`)}">${escapeHtml(signatureName)}</p>`
+          : "";
+        const signatureMarkup = `${handwrittenSignatureMarkup}${typedSignatureMarkup}`;
 
         return `<div class="proposal-block proposal-block--closing" data-block="closing">
           ${
@@ -2577,6 +2665,53 @@ export async function buildResumeDocxBuffer(args: {
               color: docxInk,
             }),
           ],
+        }),
+      );
+    });
+  }
+
+  if ((args.data.certifications ?? []).length > 0) {
+    pushSectionHeading("certifications");
+    (args.data.certifications ?? []).forEach((item) => {
+      bodyParagraphs.push(
+        buildDocxParagraph(
+          [item.label, item.value].filter(Boolean).join(" — "),
+          docxDefaults,
+          {
+            font: bodyFont,
+            line: docxTokens.bodyLineTwip,
+            spacingAfter: docxTokens.compactGapTwip,
+          },
+        ),
+      );
+    });
+  }
+
+  if ((args.data.affiliations ?? []).length > 0) {
+    pushSectionHeading("affiliations");
+    (args.data.affiliations ?? []).forEach((item) => {
+      bodyParagraphs.push(
+        buildDocxParagraph(
+          [item.label, item.value].filter(Boolean).join(" — "),
+          docxDefaults,
+          {
+            font: bodyFont,
+            line: docxTokens.bodyLineTwip,
+            spacingAfter: docxTokens.compactGapTwip,
+          },
+        ),
+      );
+    });
+  }
+
+  if ((args.data.additionalInformation ?? []).length > 0) {
+    pushSectionHeading("additional_information");
+    (args.data.additionalInformation ?? []).forEach((item) => {
+      bodyParagraphs.push(
+        buildDocxParagraph(item, docxDefaults, {
+          font: bodyFont,
+          line: docxTokens.bodyLineTwip,
+          spacingAfter: docxTokens.bodyGapTwip,
         }),
       );
     });

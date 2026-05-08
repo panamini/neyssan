@@ -3,6 +3,7 @@ import clsx from "clsx";
 import type { FunctionReference } from "convex/server";
 import type { Id } from "../../convex/_generated/dataModel";
 import {
+  ArrowLeft,
   Briefcase,
   FileText,
   FileUser,
@@ -18,9 +19,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
-import {
-  formatCvDisplayTitle,
-} from "../lib/proposal-personalization";
+import { formatCvDisplayTitle } from "../lib/proposal-personalization";
 import {
   PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
   readStoredProposalOutputDraft,
@@ -32,11 +31,20 @@ import {
   readStoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { useThemeMode } from "../lib/theme-mode";
-import collapsedLogoLightModeUrl from "../assets/logo/favicon.png";
-import collapsedLogoDarkModeUrl from "../assets/logo/d6efcd7d-91fb-4cc5-99dd-2a869964e24c.png";
+import collapsedLogoUrl from "../assets/logo/two-weeks-logo.png";
 
 const MAX_RECENT_ITEMS = 3;
 const MAX_MIXED_RECENT_ITEMS = 4;
+
+const SETTINGS_NAV_ITEMS: Array<{ id: string; label: string }> = [
+  { id: "account", label: "Account" },
+  { id: "preferences", label: "Preferences" },
+  { id: "docstyle", label: "Document style" },
+  { id: "voice", label: "Voice & tone" },
+  { id: "billing", label: "Billing" },
+  { id: "team", label: "Team" },
+  { id: "danger", label: "Danger zone" },
+];
 
 type ProposalRecord = {
   _id: Id<"proposals">;
@@ -265,35 +273,37 @@ export const Sidebar: React.FC = () => {
   );
   const proposalsQueryReference = React.useMemo(
     () =>
-      (api as unknown as {
-        proposalsPublic: {
-          default: FunctionReference<
-            "query",
-            "public",
-            Record<string, never>,
-            ProposalRecord[]
-          >;
-        };
-      }).proposalsPublic.default,
+      (
+        api as unknown as {
+          proposalsPublic: {
+            default: FunctionReference<
+              "query",
+              "public",
+              Record<string, never>,
+              ProposalRecord[]
+            >;
+          };
+        }
+      ).proposalsPublic.default,
     [],
   );
   const proposalCountQueryReference = React.useMemo(
     () =>
-      (api as unknown as {
-        proposalsCountPublic: {
-          default: FunctionReference<
-            "query",
-            "public",
-            Record<string, never>,
-            number
-          >;
-        };
-      }).proposalsCountPublic.default,
+      (
+        api as unknown as {
+          proposalsCountPublic: {
+            default: FunctionReference<
+              "query",
+              "public",
+              Record<string, never>,
+              number
+            >;
+          };
+        }
+      ).proposalsCountPublic.default,
     [],
   );
   const params = React.useMemo(() => new URLSearchParams(search), [search]);
-  const collapsedLogoUrl =
-    themeMode === "dark" ? collapsedLogoDarkModeUrl : collapsedLogoLightModeUrl;
   const proposalView =
     params.get("view") === "saved" || Boolean(params.get("id"))
       ? "saved"
@@ -325,43 +335,37 @@ export const Sidebar: React.FC = () => {
     };
 
     window.addEventListener("storage", refreshDraft);
-    window.addEventListener(
-      PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
-      refreshDraft,
-    );
-    window.addEventListener(
-      PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
-      refreshDraft,
-    );
+    window.addEventListener(PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT, refreshDraft);
+    window.addEventListener(PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT, refreshDraft);
     window.addEventListener("focus", refreshDraft);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () =>
-      {
-        window.removeEventListener("storage", refreshDraft);
-        window.removeEventListener(
-          PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
-          refreshDraft,
-        );
-        window.removeEventListener(
-          PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
-          refreshDraft,
-        );
-        window.removeEventListener("focus", refreshDraft);
-        document.removeEventListener(
-          "visibilitychange",
-          handleVisibilityChange,
-        );
-      };
+    return () => {
+      window.removeEventListener("storage", refreshDraft);
+      window.removeEventListener(
+        PROPOSAL_OUTPUT_DRAFT_UPDATED_EVENT,
+        refreshDraft,
+      );
+      window.removeEventListener(
+        PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
+        refreshDraft,
+      );
+      window.removeEventListener("focus", refreshDraft);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   const proposals = useQuery(
     proposalsQueryReference,
-    isLoaded && isSignedIn && isConvexAuthenticated && !isConvexAuthLoading ? {} : "skip",
+    isLoaded && isSignedIn && isConvexAuthenticated && !isConvexAuthLoading
+      ? {}
+      : "skip",
   );
 
   const proposalCount = useQuery(
     proposalCountQueryReference,
-    isLoaded && isSignedIn && isConvexAuthenticated && !isConvexAuthLoading ? {} : "skip",
+    isLoaded && isSignedIn && isConvexAuthenticated && !isConvexAuthLoading
+      ? {}
+      : "skip",
   );
   const deleteProposal = useMutation(api.deleteProposalPublic.default);
 
@@ -369,9 +373,25 @@ export const Sidebar: React.FC = () => {
     (base: string) => pathname === base || pathname.startsWith(`${base}/`),
     [pathname],
   );
+  const isSettingsRoute = matchesRoute("/settings");
+  const settingsTab = React.useMemo(() => {
+    const value = new URLSearchParams(search).get("tab");
+    return value && SETTINGS_NAV_ITEMS.some((item) => item.id === value)
+      ? value
+      : "account";
+  }, [search]);
+  const lastNonSettingsPathRef = React.useRef<string>("/dashboard");
+  React.useEffect(() => {
+    if (!isSettingsRoute) {
+      lastNonSettingsPathRef.current = `${pathname}${search}`;
+    }
+  }, [isSettingsRoute, pathname, search]);
+  const handleBackToApp = React.useCallback(() => {
+    navigate(lastNonSettingsPathRef.current || "/dashboard");
+  }, [navigate]);
   const forcedCollapsed = false;
   const hideSidebar = viewportWidth < 480;
-  const sidebarCollapsed = !sidebarPinned;
+  const sidebarCollapsed = !sidebarPinned && !isSettingsRoute;
   const [renderCollapsedContent, setRenderCollapsedContent] = React.useState(
     () => sidebarCollapsed,
   );
@@ -383,7 +403,9 @@ export const Sidebar: React.FC = () => {
   const isProposalLibraryRoute = matchesRoute("/proposals");
   const isTemplatesRoute = matchesRoute("/style") || matchesRoute("/templates");
   const isDocumentsRoute =
-    matchesRoute("/documents") || isProposalLibraryRoute || isResumeLibraryRoute;
+    matchesRoute("/documents") ||
+    isProposalLibraryRoute ||
+    isResumeLibraryRoute;
 
   React.useEffect(() => {
     if (!sidebarCollapsed) {
@@ -404,7 +426,8 @@ export const Sidebar: React.FC = () => {
   }, [navigate]);
 
   const handleDeleteProposalWorkspace = React.useCallback(async () => {
-    const generatedProposalId = proposalOutputDraft?.generatedProposalId ?? null;
+    const generatedProposalId =
+      proposalOutputDraft?.generatedProposalId ?? null;
 
     if (generatedProposalId && isConvexAuthenticated) {
       await deleteProposal({ id: generatedProposalId });
@@ -554,16 +577,14 @@ export const Sidebar: React.FC = () => {
     : "/cv";
   const recentResumeItems = React.useMemo(
     () =>
-      resumeDocs
-        .slice(0, MAX_RECENT_ITEMS)
-        .map((doc) => ({
-          key: doc.key,
-          title: resumeTitles.get(doc.key) ?? "Untitled resume",
-          href: `/cv?id=${encodeURIComponent(doc.key)}`,
-          onFollow: doc.onOpen,
-          onDelete: () => handleDeleteResume(doc.key),
-          isActive: isResumeRoute && activeResumeKey === doc.key,
-        })),
+      resumeDocs.slice(0, MAX_RECENT_ITEMS).map((doc) => ({
+        key: doc.key,
+        title: resumeTitles.get(doc.key) ?? "Untitled resume",
+        href: `/cv?id=${encodeURIComponent(doc.key)}`,
+        onFollow: doc.onOpen,
+        onDelete: () => handleDeleteResume(doc.key),
+        isActive: isResumeRoute && activeResumeKey === doc.key,
+      })),
     [
       activeResumeKey,
       handleDeleteResume,
@@ -619,7 +640,9 @@ export const Sidebar: React.FC = () => {
       })),
     [sortedProposals],
   );
-  const composeJobTitle = normalizeLabel(effectiveProposalComposeDraft?.jobTitle);
+  const composeJobTitle = normalizeLabel(
+    effectiveProposalComposeDraft?.jobTitle,
+  );
   const hasStoredProposalComposeDraft = effectiveProposalComposeDraft !== null;
   const outputDraftTitle = normalizeLabel(
     effectiveProposalOutputDraft?.proposalDocumentTitle,
@@ -654,8 +677,9 @@ export const Sidebar: React.FC = () => {
     activeProposalKey = selectedDraftProposalId;
     activeProposalRawTitle =
       normalizeLabel(
-        proposalDocs.find((proposal) => proposal.key === selectedDraftProposalId)
-          ?.rawTitle,
+        proposalDocs.find(
+          (proposal) => proposal.key === selectedDraftProposalId,
+        )?.rawTitle,
       ) || "";
     activeProposalHref = `/proposal?draftId=${encodeURIComponent(selectedDraftProposalId)}`;
   } else if (hasEditableProposalDraft) {
@@ -678,7 +702,10 @@ export const Sidebar: React.FC = () => {
         rawTitle: outputDraftTitle || composeJobTitle,
       });
     }
-    if (activeProposalKey && !docs.some((doc) => doc.key === activeProposalKey)) {
+    if (
+      activeProposalKey &&
+      !docs.some((doc) => doc.key === activeProposalKey)
+    ) {
       docs.unshift({
         key: activeProposalKey,
         rawTitle: activeProposalRawTitle,
@@ -708,14 +735,14 @@ export const Sidebar: React.FC = () => {
     ? proposalTitles.get(activeProposalKey) ?? "Untitled cover letter"
     : null;
   const activeProposalServerStatus = activeProposalKey
-    ? proposalDocs.find((proposal) => proposal.key === activeProposalKey)?.status ?? null
+    ? proposalDocs.find((proposal) => proposal.key === activeProposalKey)
+        ?.status ?? null
     : null;
 
   const recentProposalItems = React.useMemo(
     () =>
-      proposalDocsForTitles
-        .slice(0, MAX_RECENT_ITEMS)
-        .map((doc): SidebarListItem => ({
+      proposalDocsForTitles.slice(0, MAX_RECENT_ITEMS).map(
+        (doc): SidebarListItem => ({
           key: doc.key,
           title: proposalTitles.get(doc.key) ?? "Untitled cover letter",
           href:
@@ -748,7 +775,8 @@ export const Sidebar: React.FC = () => {
             doc.key === "__draft__" && activeProposalKey !== "__draft__"
               ? "muted"
               : undefined,
-        })),
+        }),
+      ),
     [
       activeProposalKey,
       handleDeleteSavedProposal,
@@ -763,8 +791,7 @@ export const Sidebar: React.FC = () => {
     ],
   );
 
-  const proposalTotalCount =
-    proposalCount ?? proposalDocs.length;
+  const proposalTotalCount = proposalCount ?? proposalDocs.length;
 
   const handleCreateResume = React.useCallback(async () => {
     await createNewCv(undefined, { forceV1: true });
@@ -780,7 +807,8 @@ export const Sidebar: React.FC = () => {
         key: `proposal:${activeProposalKey}`,
         title: activeProposalTitle,
         meta:
-          activeProposalKey === "__draft__" || activeProposalServerStatus === "draft"
+          activeProposalKey === "__draft__" ||
+          activeProposalServerStatus === "draft"
             ? "proposal draft"
             : "saved proposal",
         href: activeProposalHref,
@@ -806,7 +834,9 @@ export const Sidebar: React.FC = () => {
     }
 
     const savedProposal = recentProposalItems.find(
-      (item) => item.key !== "__draft__" && !items.some((recent) => recent.href === item.href),
+      (item) =>
+        item.key !== "__draft__" &&
+        !items.some((recent) => recent.href === item.href),
     );
     if (savedProposal) {
       items.push({
@@ -906,12 +936,17 @@ export const Sidebar: React.FC = () => {
         >
           <span className="sb-toggle__label" aria-hidden="true">
             {sidebarCollapsed ? (
-              <img
-                className="sb-toggle__collapsed-logo"
-                src={collapsedLogoUrl}
-                alt=""
-                aria-hidden="true"
-              />
+              <span className="sb-toggle__collapsed-logo-shell">
+                <img
+                  className={clsx(
+                    "sb-toggle__collapsed-logo",
+                    themeMode === "dark" && "sb-toggle__collapsed-logo--dark",
+                  )}
+                  src={collapsedLogoUrl}
+                  alt=""
+                  aria-hidden="true"
+                />
+              </span>
             ) : (
               <>
                 two weeks
@@ -929,11 +964,48 @@ export const Sidebar: React.FC = () => {
         </button>
       </div>
 
-      {renderCollapsedContent ? (
+      {isSettingsRoute ? (
+        <nav
+          className="sb__nav sb__nav--stack sb__nav--settings"
+          aria-label="Settings sections"
+        >
+          <div className="sb-section sb-section--settings-back">
+            <button
+              type="button"
+              onClick={handleBackToApp}
+              className="sb-section__action sb-section__action--back"
+              aria-label="Back to app"
+            >
+              <ArrowLeft size={15} strokeWidth={1.6} aria-hidden="true" />
+              <span>Back to app</span>
+            </button>
+          </div>
+          <div className="sb-section" aria-label="Settings">
+            {SETTINGS_NAV_ITEMS.map((item) => {
+              const active = settingsTab === item.id;
+              return (
+                <Link
+                  key={item.id}
+                  to={`/settings?tab=${item.id}`}
+                  className={clsx(
+                    "sb-section__action",
+                    active && "sb-section__action--active",
+                  )}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      ) : renderCollapsedContent ? (
         <nav className="sb__nav sb__nav--rail" aria-label="Primary sidebar">
           <SidebarRailLink
             label="Dashboard"
-            icon={<SquaresFour size={16} strokeWidth={1.5} aria-hidden="true" />}
+            icon={
+              <SquaresFour size={16} strokeWidth={1.5} aria-hidden="true" />
+            }
             active={isDashboardRoute}
             href="/dashboard"
           />
@@ -952,9 +1024,7 @@ export const Sidebar: React.FC = () => {
           {hasResumeDocuments ? (
             <SidebarRailLink
               label="CV forge"
-              icon={
-                <FileUser size={16} strokeWidth={1.5} aria-hidden="true" />
-              }
+              icon={<FileUser size={16} strokeWidth={1.5} aria-hidden="true" />}
               active={isResumeRoute || isResumeLibraryRoute}
               href={activeResumeHref}
               onFollow={() => {
@@ -966,9 +1036,7 @@ export const Sidebar: React.FC = () => {
           ) : (
             <SidebarRailButton
               label="CV forge"
-              icon={
-                <FileUser size={16} strokeWidth={1.5} aria-hidden="true" />
-              }
+              icon={<FileUser size={16} strokeWidth={1.5} aria-hidden="true" />}
               active={isResumeRoute || isResumeLibraryRoute}
               onClick={handleCreateResume}
             />
@@ -976,7 +1044,10 @@ export const Sidebar: React.FC = () => {
         </nav>
       ) : (
         <nav className="sb__nav sb__nav--stack" aria-label="Primary sidebar">
-          <div className="sb-section sb-section--primary-nav" aria-label="Workspace">
+          <div
+            className="sb-section sb-section--primary-nav"
+            aria-label="Workspace"
+          >
             <Link
               to="/dashboard"
               className={clsx(
@@ -1084,7 +1155,6 @@ export const Sidebar: React.FC = () => {
               ))}
             </ul>
           </section>
-
         </nav>
       )}
 
@@ -1095,33 +1165,34 @@ export const Sidebar: React.FC = () => {
         )}
       >
         <div className="sb-footer__tools">
-          <Link
-            to="/settings"
-            className={clsx(
-              "sb-section__action",
-              matchesRoute("/settings") && "sb-section__action--active",
-            )}
-            title="Settings"
-            aria-label="Settings"
-          >
-            <Gear size={14} strokeWidth={1.6} aria-hidden="true" />
-            <span className="sb-footer__tool-label">Settings</span>
-          </Link>
-          {!sidebarCollapsed ? (
-            <button
-              type="button"
-              className="sb-theme-toggle__single"
-              onClick={toggleTheme}
-              aria-pressed={themeMode === "dark"}
-              aria-label={themeMode === "dark" ? "Light mode" : "Dark mode"}
-              title={themeMode === "dark" ? "Light mode" : "Dark mode"}
+          {isSettingsRoute ? null : (
+            <Link
+              to="/settings"
+              className="sb-section__action"
+              title="Settings"
+              aria-label="Settings"
             >
-              {themeMode === "dark" ? (
-                <Sun size={14} strokeWidth={1.8} aria-hidden="true" />
-              ) : (
-                <Moon size={14} strokeWidth={1.8} aria-hidden="true" />
-              )}
-            </button>
+              <Gear size={14} strokeWidth={1.6} aria-hidden="true" />
+              <span className="sb-footer__tool-label">Settings</span>
+            </Link>
+          )}
+          {!sidebarCollapsed ? (
+            isSettingsRoute ? null : (
+              <button
+                type="button"
+                className="sb-theme-toggle__single"
+                onClick={toggleTheme}
+                aria-pressed={themeMode === "dark"}
+                aria-label={themeMode === "dark" ? "Light mode" : "Dark mode"}
+                title={themeMode === "dark" ? "Light mode" : "Dark mode"}
+              >
+                {themeMode === "dark" ? (
+                  <Sun size={14} strokeWidth={1.8} aria-hidden="true" />
+                ) : (
+                  <Moon size={14} strokeWidth={1.8} aria-hidden="true" />
+                )}
+              </button>
+            )
           ) : null}
         </div>
       </div>

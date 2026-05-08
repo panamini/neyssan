@@ -131,7 +131,7 @@ body,
 .sb-section__editing-label {
   font-size: var(--tx);
   font-weight: 600;
-  color: var(--am);
+  color: var(--tm2);
 }
 
 .sb-workspace-card {
@@ -562,8 +562,8 @@ body,
   flex-shrink: 0;
   box-shadow: none;
   transition:
-    background 0.12s var(--ez),
-    color 0.12s var(--ez);
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
 }
 
 .sb-toggle--collapse {
@@ -606,12 +606,29 @@ body,
   font-weight: var(--font-strong-weight);
 }
 
+.sb-toggle__collapsed-logo-shell {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 42%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-surface) 72%, transparent);
+  flex: 0 0 auto;
+}
+
 .sb-toggle__collapsed-logo {
   display: block;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
   flex: 0 0 auto;
+}
+
+.sb-toggle__collapsed-logo--dark {
+  filter: brightness(0.92);
 }
 
 .sb-toggle__period--active {
@@ -1075,8 +1092,8 @@ body,
   white-space: nowrap;
   font-family: inherit;
   transition:
-    background 0.1s var(--ez),
-    color 0.1s var(--ez);
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
 }
 
 .sb-doc-confirm__yes {
@@ -2691,4 +2708,12 @@ body,
   .dash-stats {
     grid-template-columns: 1fr;
   }
+}
+
+/* Dark anti-blooming: soften chrome/UI labels and badges without changing light mode. */
+.dark .sb-section__editing-label,
+.dark .sb-workspace-card__eyebrow,
+.dark .sb-recent__badge,
+.dark .onb-replay__supported-sites-head strong {
+  font-weight: 640;
 }

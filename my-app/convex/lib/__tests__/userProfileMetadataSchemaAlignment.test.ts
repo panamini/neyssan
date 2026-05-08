@@ -12,7 +12,9 @@ function getPropertyName(name: ts.PropertyName): string {
   ) {
     return name.text;
   }
-  throw new Error(`Unsupported property name kind: ${ts.SyntaxKind[name.kind]}`);
+  throw new Error(
+    `Unsupported property name kind: ${ts.SyntaxKind[name.kind]}`,
+  );
 }
 
 function parseSourceFile(filePath: string): ts.SourceFile {
@@ -104,26 +106,38 @@ function getMetadataFieldsFromProfilesLegacyArgs(filePath: string): string[] {
   if (!ts.isObjectLiteralExpression(argsProperty.initializer)) {
     throw new Error("Expected patch args to be an object literal.");
   }
-  const profileProperty = getPropertyAssignment(argsProperty.initializer, "profile");
+  const profileProperty = getPropertyAssignment(
+    argsProperty.initializer,
+    "profile",
+  );
   if (!ts.isCallExpression(profileProperty.initializer)) {
     throw new Error("Expected profile validator to be a call expression.");
   }
-  const profileArg = getObjectLiteralFromNestedCall(profileProperty.initializer);
+  const profileArg = getObjectLiteralFromNestedCall(
+    profileProperty.initializer,
+  );
   const metadataProperty = getPropertyAssignment(profileArg, "metadata");
   if (!ts.isCallExpression(metadataProperty.initializer)) {
     throw new Error("Expected metadata validator to be a call expression.");
   }
   const [metadataArg] = metadataProperty.initializer.arguments;
   if (!metadataArg || !ts.isIdentifier(metadataArg)) {
-    throw new Error("Expected metadata validator to reuse a shared identifier.");
+    throw new Error(
+      "Expected metadata validator to reuse a shared identifier.",
+    );
   }
   return [metadataArg.text];
 }
 
-function getMetadataFieldsFromDefaultMutationProfileArgs(filePath: string): string[] {
+function getMetadataFieldsFromDefaultMutationProfileArgs(
+  filePath: string,
+): string[] {
   const sourceFile = parseSourceFile(filePath);
   for (const statement of sourceFile.statements) {
-    if (!ts.isExportAssignment(statement) || !ts.isCallExpression(statement.expression)) {
+    if (
+      !ts.isExportAssignment(statement) ||
+      !ts.isCallExpression(statement.expression)
+    ) {
       continue;
     }
     const [configArg] = statement.expression.arguments;
@@ -132,23 +146,36 @@ function getMetadataFieldsFromDefaultMutationProfileArgs(filePath: string): stri
     }
     const argsProperty = getPropertyAssignment(configArg, "args");
     if (!ts.isObjectLiteralExpression(argsProperty.initializer)) {
-      throw new Error("Expected default mutation args to be an object literal.");
+      throw new Error(
+        "Expected default mutation args to be an object literal.",
+      );
     }
-    const profileProperty = getPropertyAssignment(argsProperty.initializer, "profile");
+    const profileProperty = getPropertyAssignment(
+      argsProperty.initializer,
+      "profile",
+    );
     if (!ts.isCallExpression(profileProperty.initializer)) {
-      throw new Error("Expected default mutation profile validator to be a call expression.");
+      throw new Error(
+        "Expected default mutation profile validator to be a call expression.",
+      );
     }
     const [profileArg] = profileProperty.initializer.arguments;
     if (!profileArg || !ts.isObjectLiteralExpression(profileArg)) {
-      throw new Error("Expected default mutation profile validator to contain an object literal.");
+      throw new Error(
+        "Expected default mutation profile validator to contain an object literal.",
+      );
     }
     const metadataProperty = getPropertyAssignment(profileArg, "metadata");
     if (!ts.isCallExpression(metadataProperty.initializer)) {
-      throw new Error("Expected default mutation metadata validator to be a call expression.");
+      throw new Error(
+        "Expected default mutation metadata validator to be a call expression.",
+      );
     }
     const [metadataArg] = metadataProperty.initializer.arguments;
     if (!metadataArg || !ts.isIdentifier(metadataArg)) {
-      throw new Error("Expected default mutation metadata validator to reuse a shared identifier.");
+      throw new Error(
+        "Expected default mutation metadata validator to reuse a shared identifier.",
+      );
     }
     return [metadataArg.text];
   }
@@ -157,8 +184,28 @@ function getMetadataFieldsFromDefaultMutationProfileArgs(filePath: string): stri
 
 function getMetadataFieldsFromSchema(filePath: string): string[] {
   const sourceFile = parseSourceFile(filePath);
+  const tableArg = getUserProfilesTableObject(sourceFile);
+  const metadataProperty = getPropertyAssignment(tableArg, "metadata");
+  if (!ts.isCallExpression(metadataProperty.initializer)) {
+    throw new Error("Expected metadata validator to be a call expression.");
+  }
+  const [metadataArg] = metadataProperty.initializer.arguments;
+  if (!metadataArg || !ts.isIdentifier(metadataArg)) {
+    throw new Error(
+      "Expected schema metadata validator to reuse a shared identifier.",
+    );
+  }
+  return [metadataArg.text];
+}
+
+function getUserProfilesTableObject(
+  sourceFile: ts.SourceFile,
+): ts.ObjectLiteralExpression {
   for (const statement of sourceFile.statements) {
-    if (!ts.isExportAssignment(statement) || !ts.isCallExpression(statement.expression)) {
+    if (
+      !ts.isExportAssignment(statement) ||
+      !ts.isCallExpression(statement.expression)
+    ) {
       continue;
     }
     const [schemaArg] = statement.expression.arguments;
@@ -169,18 +216,27 @@ function getMetadataFieldsFromSchema(filePath: string): string[] {
     if (!ts.isCallExpression(userProfiles.initializer)) {
       throw new Error("Expected userProfiles to be defined via defineTable.");
     }
-    const tableArg = getObjectLiteralFromNestedCall(userProfiles.initializer);
-    const metadataProperty = getPropertyAssignment(tableArg, "metadata");
-    if (!ts.isCallExpression(metadataProperty.initializer)) {
-      throw new Error("Expected metadata validator to be a call expression.");
-    }
-    const [metadataArg] = metadataProperty.initializer.arguments;
-    if (!metadataArg || !ts.isIdentifier(metadataArg)) {
-      throw new Error("Expected schema metadata validator to reuse a shared identifier.");
-    }
-    return [metadataArg.text];
+    return getObjectLiteralFromNestedCall(userProfiles.initializer);
   }
-  throw new Error("Unable to locate userProfiles metadata schema validator.");
+  throw new Error("Unable to locate userProfiles schema table.");
+}
+
+function collectValidatorLiteralValues(expression: ts.Expression): string[] {
+  if (ts.isStringLiteral(expression)) {
+    return [expression.text];
+  }
+  if (expression.kind === ts.SyntaxKind.NullKeyword) {
+    return ["null"];
+  }
+  if (ts.isCallExpression(expression)) {
+    return expression.arguments.flatMap((arg) =>
+      collectValidatorLiteralValues(arg),
+    );
+  }
+  if (ts.isParenthesizedExpression(expression)) {
+    return collectValidatorLiteralValues(expression.expression);
+  }
+  return [];
 }
 
 function getMetadataFieldsFromUsersMutation(filePath: string): string[] {
@@ -202,15 +258,21 @@ function getMetadataFieldsFromUsersMutation(filePath: string): string[] {
   }
   const [profileDataArg] = profileDataProperty.initializer.arguments;
   if (!profileDataArg || !ts.isObjectLiteralExpression(profileDataArg)) {
-    throw new Error("Expected profileData validator to contain an object literal.");
+    throw new Error(
+      "Expected profileData validator to contain an object literal.",
+    );
   }
   const metadataProperty = getPropertyAssignment(profileDataArg, "metadata");
   if (!ts.isCallExpression(metadataProperty.initializer)) {
-    throw new Error("Expected users metadata validator to be a call expression.");
+    throw new Error(
+      "Expected users metadata validator to be a call expression.",
+    );
   }
   const [metadataArg] = metadataProperty.initializer.arguments;
   if (!metadataArg || !ts.isIdentifier(metadataArg)) {
-    throw new Error("Expected users metadata validator to reuse a shared identifier.");
+    throw new Error(
+      "Expected users metadata validator to reuse a shared identifier.",
+    );
   }
   return [metadataArg.text];
 }
@@ -219,7 +281,10 @@ describe("user profile metadata schema alignment", () => {
   it("reuses the shared metadata validator across schema and strict profile mutations", () => {
     const schemaFile = path.resolve(process.cwd(), "convex/schema.ts");
     const profilesFile = path.resolve(process.cwd(), "convex/profiles.ts");
-    const profilesPublicFile = path.resolve(process.cwd(), "convex/profilesPublic.ts");
+    const profilesPublicFile = path.resolve(
+      process.cwd(),
+      "convex/profilesPublic.ts",
+    );
     const usersFile = path.resolve(process.cwd(), "convex/users.ts");
 
     expect(getMetadataFieldsFromSchema(schemaFile)).toEqual([
@@ -228,16 +293,18 @@ describe("user profile metadata schema alignment", () => {
     expect(getMetadataFieldsFromProfilesLegacyArgs(profilesFile)).toEqual([
       "userProfileMetadataValidator",
     ]);
-    expect(getMetadataFieldsFromDefaultMutationProfileArgs(profilesPublicFile)).toEqual([
-      "userProfileMetadataValidator",
-    ]);
+    expect(
+      getMetadataFieldsFromDefaultMutationProfileArgs(profilesPublicFile),
+    ).toEqual(["userProfileMetadataValidator"]);
     expect(getMetadataFieldsFromUsersMutation(usersFile)).toEqual([
       "userProfileMetadataValidator",
     ]);
   });
 
   it("keeps the shared metadata validator field set stable", async () => {
-    const { userProfileMetadataValidator } = await import("../userProfileMetadata");
+    const { userProfileMetadataValidator } = await import(
+      "../userProfileMetadata"
+    );
     expect(
       getMetadataFieldNamesFromObjectLiteral(
         findObjectLiteralByVariableName(
@@ -253,6 +320,11 @@ describe("user profile metadata schema alignment", () => {
       "confidence",
       "filename",
       "verbatiStyle",
+      "verbatiStyleSlotId",
+      "verbatiStyleSlotSource",
+      "verbatiStyleSlotNameSnapshot",
+      "verbatiStyleBaseSnapshot",
+      "documentStyleVersion",
     ]);
     expect(Object.keys(userProfileMetadataValidator.fields)).toEqual([
       "source",
@@ -260,6 +332,38 @@ describe("user profile metadata schema alignment", () => {
       "confidence",
       "filename",
       "verbatiStyle",
+      "verbatiStyleSlotId",
+      "verbatiStyleSlotSource",
+      "verbatiStyleSlotNameSnapshot",
+      "verbatiStyleBaseSnapshot",
+      "documentStyleVersion",
     ]);
+  });
+
+  it("keeps saved proposal preset palettes accepted by the user profile row schema", () => {
+    const sourceFile = parseSourceFile(
+      path.resolve(process.cwd(), "convex/schema.ts"),
+    );
+    const presetSlotChoice = findObjectLiteralByVariableName(
+      sourceFile,
+      "proposalPresetSlotChoice",
+    );
+    const presetPaletteProperty = getPropertyAssignment(
+      presetSlotChoice,
+      "paletteOverride",
+    );
+    const userProfilesTable = getUserProfilesTableObject(sourceFile);
+    const profilePaletteProperty = getPropertyAssignment(
+      userProfilesTable,
+      "proposalPaletteOverride",
+    );
+
+    expect(
+      collectValidatorLiteralValues(
+        profilePaletteProperty.initializer,
+      ).sort(),
+    ).toEqual(
+      collectValidatorLiteralValues(presetPaletteProperty.initializer).sort(),
+    );
   });
 });

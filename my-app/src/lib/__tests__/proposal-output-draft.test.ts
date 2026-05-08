@@ -102,6 +102,116 @@ describe("readStoredProposalOutputDraft", () => {
     );
   });
 
+  it("round-trips document style slot identity fields", () => {
+    writeStoredProposalOutputDraft({
+      proposalContent: "Generated proposal body.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: "editorial_wide",
+      proposalVerbatiStyle: {
+        layout: "workshop",
+        typography: "civic-correspondence",
+        palette: "cobalt",
+      },
+      verbatiStyleSlotId: 2,
+      verbatiStyleSlotSource: "settings",
+      verbatiStyleSlotNameSnapshot: "Style 2",
+      verbatiStyleBaseSnapshot: {
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "civic-correspondence",
+        palette: "cobalt",
+      },
+      documentStyleVersion: 1,
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "warm",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Operations Associate Proposal",
+      proposalDocumentMeta: "Cover letter · Signature",
+      generatedProposalId: "proposal_live",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: "magazine_editorial",
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    });
+
+    expect(readStoredProposalOutputDraft()).toEqual(
+      expect.objectContaining({
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "settings",
+        verbatiStyleSlotNameSnapshot: "Style 2",
+        verbatiStyleBaseSnapshot: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "civic-correspondence",
+          palette: "cobalt",
+        },
+        documentStyleVersion: 1,
+      }),
+    );
+  });
+
+  it("preserves slot identity even when the compatibility template bundle alias is absent", () => {
+    writeStoredProposalOutputDraft({
+      proposalContent: "Generated proposal body.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: "editorial_wide",
+      proposalVerbatiStyle: {
+        layout: "workshop",
+        typography: "civic-correspondence",
+        palette: "cobalt",
+      },
+      verbatiStyleSlotId: 2,
+      verbatiStyleSlotSource: "settings",
+      verbatiStyleSlotNameSnapshot: "Style 2",
+      verbatiStyleBaseSnapshot: {
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "civic-correspondence",
+        palette: "cobalt",
+      },
+      documentStyleVersion: 1,
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "warm",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Operations Associate Proposal",
+      proposalDocumentMeta: "Cover letter · Signature",
+      generatedProposalId: "proposal_live",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    });
+
+    expect(readStoredProposalOutputDraft()).toEqual(
+      expect.objectContaining({
+        templateBundleId: null,
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "settings",
+        verbatiStyleSlotNameSnapshot: "Style 2",
+        verbatiStyleBaseSnapshot: expect.objectContaining({
+          layout: "workshop",
+          typography: "civic-correspondence",
+          palette: "cobalt",
+        }),
+        documentStyleVersion: 1,
+      }),
+    );
+  });
+
   it("does not drift after repeated output-draft read and write cycles", () => {
     const initialDraft = {
       proposalContent: "Generated proposal body.",
@@ -246,7 +356,9 @@ describe("readStoredProposalOutputDraft", () => {
       characterLimitValue: 1500,
     });
 
-    expect(window.localStorage.getItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY)).toBeTruthy();
+    expect(
+      window.localStorage.getItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY),
+    ).toBeTruthy();
     expect(readStoredProposalOutputDraft()).toEqual(
       expect.objectContaining({
         proposalContent: "Generated proposal body.",
@@ -274,7 +386,8 @@ describe("readStoredProposalOutputDraft", () => {
         proposalOutputMode: "preview",
         sourceComposeDraft: {
           jobTitle: "Social Media Marketing Intern",
-          jobDescription: "Own content planning, reporting, and campaign support.",
+          jobDescription:
+            "Own content planning, reporting, and campaign support.",
           proposalType: "cover_letter",
           voicePreset: "engaging",
         },
@@ -363,7 +476,9 @@ describe("readStoredProposalOutputDraft", () => {
 
   it("falls back to sessionStorage when localStorage persistence exceeds quota", () => {
     const originalSetItem = Storage.prototype.setItem;
-    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const consoleWarnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
 
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(
       function mockStorageSetItem(this: Storage, key: string, value: string) {
@@ -405,7 +520,8 @@ describe("readStoredProposalOutputDraft", () => {
       characterLimitValue: 1500,
       sourceComposeDraft: {
         jobTitle: "Social Media Marketing Intern",
-        jobDescription: "Own content planning, reporting, and campaign support.",
+        jobDescription:
+          "Own content planning, reporting, and campaign support.",
         proposalType: "cover_letter",
         voicePreset: "engaging",
         toneTuning: null,
@@ -414,7 +530,9 @@ describe("readStoredProposalOutputDraft", () => {
       },
     });
 
-    expect(window.localStorage.getItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY)).toBeNull();
+    expect(
+      window.localStorage.getItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY),
+    ).toBeNull();
     expect(
       window.sessionStorage.getItem(PROPOSAL_OUTPUT_DRAFT_SESSION_STORAGE_KEY),
     ).toBeTruthy();
@@ -429,7 +547,9 @@ describe("readStoredProposalOutputDraft", () => {
 
   it("stops retrying localStorage writes after quota fallback succeeds once", () => {
     const originalSetItem = Storage.prototype.setItem;
-    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const consoleWarnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
     let localProposalOutputWriteCount = 0;
 
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(

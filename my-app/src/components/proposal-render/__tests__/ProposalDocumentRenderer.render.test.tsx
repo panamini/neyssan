@@ -131,6 +131,233 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(container.textContent).not.toContain("35 mm register");
   });
 
+  it("renders structured closing when body text has no sign-off", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I support delivery operations with careful written communication."
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        railTitle="Jane Doe"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        signatureSettings={{
+          mode: "font",
+          fontId: "fd-garamond",
+          imageDataUrl: null,
+        }}
+        closing={{
+          enabled: true,
+          signOff: "Sincerely,",
+          signatureName: "Jane Doe",
+          source: "settings",
+        }}
+      />,
+    );
+
+    const closing = container.querySelector(
+      ".dasti-proposal-document__closing",
+    );
+    const signature = container.querySelector(
+      ".dasti-proposal-document__signature",
+    );
+
+    expect(closing?.textContent).toContain("Sincerely,");
+    expect(signature?.textContent).toBe("jane doe");
+    expect(signature?.getAttribute("style")).toContain("FD Garamond");
+  });
+
+  it("keeps the sign-off when the structured signature is disabled", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I support delivery operations with careful written communication."
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        railTitle="Jane Doe"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        signatureSettings={{
+          mode: "font",
+          fontId: "fd-garamond",
+          imageDataUrl: null,
+        }}
+        closing={{
+          enabled: false,
+          signOff: "Sincerely,",
+          signatureName: "Jane Doe",
+          source: "settings",
+        }}
+      />,
+    );
+
+    const closing = container.querySelector(
+      ".dasti-proposal-document__closing",
+    );
+    const signature = container.querySelector(
+      ".dasti-proposal-document__signature",
+    );
+
+    expect(closing?.textContent).toContain("Sincerely,");
+    expect(signature).toBeNull();
+  });
+
+  it("renders hand-drawn signature above the typed signature when enabled", () => {
+    const imageDataUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mP8z8AARQAHAQGByp7K7wAAAABJRU5ErkJggg==";
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I support delivery operations with careful written communication."
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        railTitle="Jane Doe"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        signatureSettings={{
+          mode: "image",
+          fontId: null,
+          imageDataUrl,
+        }}
+        closing={{
+          enabled: true,
+          signOff: "Sincerely,",
+          signatureName: "Jane Doe",
+          source: "settings",
+          handwrittenSignatureEnabled: true,
+        }}
+      />,
+    );
+
+    const closing = container.querySelector(
+      ".dasti-proposal-document__closing",
+    );
+    const image = closing?.querySelector(
+      ".dasti-proposal-document__signature-image",
+    );
+    const typed = closing?.querySelector(".dasti-proposal-document__signature");
+
+    expect(image?.getAttribute("src")).toBe(imageDataUrl);
+    expect(typed?.textContent).toBe("jane doe");
+    expect(
+      image?.compareDocumentPosition(typed as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+  });
+
+  it("renders typed signature without image when hand-drawn is disabled", () => {
+    const imageDataUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mP8z8AARQAHAQGByp7K7wAAAABJRU5ErkJggg==";
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I support delivery operations with careful written communication."
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        railTitle="Jane Doe"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        signatureSettings={{
+          mode: "image",
+          fontId: null,
+          imageDataUrl,
+        }}
+        closing={{
+          enabled: true,
+          signOff: "Sincerely,",
+          signatureName: "Jane Doe",
+          source: "settings",
+          handwrittenSignatureEnabled: false,
+        }}
+      />,
+    );
+
+    expect(
+      container.querySelector(".dasti-proposal-document__signature-image"),
+    ).toBeNull();
+    expect(
+      container.querySelector(".dasti-proposal-document__signature")?.textContent,
+    ).toBe("jane doe");
+  });
+
+  it("renders latest applicant name for stale settings-owned structured signatures", () => {
+    const imageDataUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mP8z8AARQAHAQGByp7K7wAAAABJRU5ErkJggg==";
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I support delivery operations with careful written communication."
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        railTitle="john"
+        applicantHeader={{
+          name: "john",
+          role: "",
+          email: "",
+          phone: "",
+          linkedin: "",
+          website: "",
+          location: "",
+          tag: "",
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        signatureSettings={{
+          mode: "image",
+          fontId: null,
+          imageDataUrl,
+        }}
+        closing={{
+          enabled: true,
+          signOff: "Sincerely,",
+          signatureName: "b",
+          source: "settings",
+          handwrittenSignatureEnabled: true,
+        }}
+      />,
+    );
+
+    const closing = container.querySelector(
+      ".dasti-proposal-document__closing",
+    );
+    const signoff = closing?.querySelector(".dasti-proposal-document__signoff");
+    const image = closing?.querySelector(
+      ".dasti-proposal-document__signature-image",
+    );
+    const typed = closing?.querySelector(".dasti-proposal-document__signature");
+
+    expect(container.textContent).toContain("john");
+    expect(typed?.textContent).toBe("john");
+    expect(container.textContent).not.toContain("b");
+    expect(
+      signoff?.compareDocumentPosition(image as Node) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+    expect(
+      image?.compareDocumentPosition(typed as Node) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+  });
+
   it("respects header visibility flags in non-volk templates", () => {
     const { container } = render(
       <ProposalDocumentRenderer

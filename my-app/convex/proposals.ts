@@ -70,7 +70,38 @@ const proposalCharacterLimitModeChoice = v.union(
   v.literal("custom"),
 );
 
+const proposalClosingChoice = v.object({
+  enabled: v.boolean(),
+  signOff: v.string(),
+  signatureName: v.string(),
+  source: v.union(
+    v.literal("settings"),
+    v.literal("document"),
+    v.literal("legacy"),
+  ),
+  handwrittenSignatureEnabled: v.optional(v.boolean()),
+});
+
 const proposalVerbatiStyleChoice = v.object({
+  layout: v.string(),
+  typography: v.string(),
+  palette: v.string(),
+  accentHex: v.optional(v.string()),
+});
+
+const documentStyleSlotIdChoice = v.union(
+  v.literal(1),
+  v.literal(2),
+  v.literal(3),
+);
+
+const documentStyleSlotSourceChoice = v.union(
+  v.literal("factory"),
+  v.literal("settings"),
+);
+
+const documentAppearanceSnapshotChoice = v.object({
+  familyId: v.optional(v.string()),
   layout: v.string(),
   typography: v.string(),
   palette: v.string(),
@@ -125,6 +156,11 @@ export const storeProposal = internalMutation({
       creativity: v.optional(proposalCreativityChoice),
       templateId: v.optional(proposalTemplateChoice),
       verbatiStyle: v.optional(proposalVerbatiStyleChoice),
+      verbatiStyleSlotId: v.optional(documentStyleSlotIdChoice),
+      verbatiStyleSlotSource: v.optional(documentStyleSlotSourceChoice),
+      verbatiStyleSlotNameSnapshot: v.optional(v.string()),
+      verbatiStyleBaseSnapshot: v.optional(documentAppearanceSnapshotChoice),
+      documentStyleVersion: v.optional(v.literal(1)),
       styleLinkMode: v.optional(proposalStyleLinkModeChoice),
       styleChoice: v.optional(proposalStyleChoiceChoice),
       templateBundleId: v.optional(proposalTemplateBundleChoice),
@@ -148,6 +184,7 @@ export const storeProposal = internalMutation({
         v.union(proposalCharacterLimitModeChoice, v.null()),
       ),
       characterLimitValue: v.optional(v.union(v.number(), v.null())),
+      closing: v.optional(proposalClosingChoice),
       proposalType: v.optional(
         v.union(
           v.literal("cover_letter"),
@@ -225,6 +262,11 @@ export const updateProposal = internalMutation({
       creativity: v.optional(proposalCreativityChoice),
       templateId: v.optional(proposalTemplateChoice),
       verbatiStyle: v.optional(proposalVerbatiStyleChoice),
+      verbatiStyleSlotId: v.optional(documentStyleSlotIdChoice),
+      verbatiStyleSlotSource: v.optional(documentStyleSlotSourceChoice),
+      verbatiStyleSlotNameSnapshot: v.optional(v.string()),
+      verbatiStyleBaseSnapshot: v.optional(documentAppearanceSnapshotChoice),
+      documentStyleVersion: v.optional(v.literal(1)),
       styleLinkMode: v.optional(proposalStyleLinkModeChoice),
       styleChoice: v.optional(proposalStyleChoiceChoice),
       templateBundleId: v.optional(proposalTemplateBundleChoice),
@@ -248,6 +290,7 @@ export const updateProposal = internalMutation({
         v.union(proposalCharacterLimitModeChoice, v.null()),
       ),
       characterLimitValue: v.optional(v.union(v.number(), v.null())),
+      closing: v.optional(proposalClosingChoice),
       proposalType: v.optional(
         v.union(
           v.literal("cover_letter"),
