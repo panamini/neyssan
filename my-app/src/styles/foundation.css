@@ -596,7 +596,7 @@
   --ti: #D8D0C2;
   --tm2: #918677;
   --tg2: #62584C;
-  --border-soft: rgba(218, 217, 211, 0.08);
+  --border-soft: rgba(255, 240, 220, 0.075);
   --border-field: rgba(218, 217, 211, 0.06);
   --border-strong: rgba(255, 240, 220, 0.135);
   --border-selected: color-mix(in srgb, var(--ac) 65%, transparent);

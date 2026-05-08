@@ -735,7 +735,7 @@
 }
 
 .dasti-cv-rail-label {
-  color: var(--am);
+  color: var(--tm2);
   font-size: var(--tx);
   line-height: var(--lx);
   font-weight: var(--font-label-weight);
@@ -1147,7 +1147,7 @@
 }
 
 .dasti-cv-rail-footer__label {
-  color: var(--am);
+  color: var(--tm2);
   font-size: var(--tx);
   line-height: var(--lx);
   font-weight: 750;
