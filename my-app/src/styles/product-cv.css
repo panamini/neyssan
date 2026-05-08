@@ -556,9 +556,17 @@
   flex-direction: column;
   gap: var(--space-5);
   padding: var(--space-5);
-  border: 1px solid var(--border-soft);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 68%, transparent);
   border-radius: var(--r-surface, var(--radius-card));
-  background: var(--sfr);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 96%, white 4%) 0%,
+    color-mix(in srgb, var(--sf1) 96%, white 4%) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 38%, transparent),
+    0 24px 50px -42px rgb(0 0 0 / 34%);
+
 }
 
 .dasti-cv-rail-tabs {
@@ -568,7 +576,13 @@
   padding: var(--space-1);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
-  background: var(--sf1);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 76%, white 24%) 0%,
+    color-mix(in srgb, var(--sf1) 96%, white 4%) 100%
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 36%, transparent);
+
 }
 
 .dasti-cv-rail-tabs button {
@@ -582,6 +596,12 @@
   font: inherit;
   font-size: var(--tx);
   font-weight: 650;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+
 }
 
 .dasti-cv-rail-tabs button:hover,
@@ -592,9 +612,16 @@
 }
 
 .dasti-cv-rail-tabs button[data-active="true"] {
-  background: var(--color-surface-raised);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 98%, white 2%) 0%,
+    color-mix(in srgb, var(--sf2) 96%, white 4%) 100%
+  );
   color: var(--ti);
-  box-shadow: var(--shadow-sm);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 48%, transparent),
+    var(--shadow-sm);
+
 }
 
 .dasti-cv-ai-stream {
@@ -606,11 +633,17 @@
   padding: 0 var(--space-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-card);
-  background: var(--sf1);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 94%, white 6%) 0%,
+    color-mix(in srgb, var(--sf1) 96%, white 4%) 100%
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 36%, transparent);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
+
 }
 
 .dasti-cv-ai-stream__dot {
@@ -663,7 +696,12 @@
   border: 1px solid var(--border-soft);
   border-block-start: 0;
   border-radius: 0 0 var(--radius-card) var(--radius-card);
-  background: var(--sf1);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 92%, white 8%) 0%,
+    color-mix(in srgb, var(--sf1) 96%, white 4%) 100%
+  );
+
 }
 
 .dasti-cv-ai-stage {
