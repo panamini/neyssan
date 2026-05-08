@@ -273,6 +273,7 @@ describe("SettingsPage preview controls", () => {
 
     expect(getDefaultTexts()).toHaveLength(1);
     expect(getCards()[2]).toHaveTextContent("Default");
+    expect(getCards()[2]).toHaveAttribute("aria-pressed", "true");
 
     await user.click(getCards()[1]!);
     await user.click(screen.getByRole("button", { name: "Set as default" }));
@@ -295,6 +296,23 @@ describe("SettingsPage preview controls", () => {
     expect(
       container.querySelectorAll(".dasti-settings-slot-card--editing"),
     ).toHaveLength(1);
+  });
+
+  it("does not show a fallback default while saved presets are loading", () => {
+    presetsQueryMock.mockReturnValue(undefined);
+    const { container } = renderSettings();
+
+    expect(
+      within(screen.getByRole("group", { name: "Style preset slots" }))
+        .queryAllByText(/default/i),
+    ).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "Set as default" })).toBeNull();
+    expect(
+      container.querySelectorAll(".dasti-settings-slot-card--active"),
+    ).toHaveLength(0);
+    expect(
+      container.querySelectorAll(".dasti-settings-slot-card--editing"),
+    ).toHaveLength(0);
   });
 
   it("does not move the default badge when setting the active slot fails", async () => {
