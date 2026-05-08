@@ -1135,8 +1135,7 @@ export function SettingsPage(): JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = normalizeSettingsTab(searchParams.get("tab"));
   const { currentCvId } = useCvLibrary();
-  const { preference: themePreference, setPreference: setThemePreference } =
-    useThemeMode();
+  const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
   const { preference: motionPreference, setPreference: setMotionPreference } =
     useMotionPreference();
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
@@ -1927,66 +1926,65 @@ export function SettingsPage(): JSX.Element {
                       <div className="settings__row-label">Theme</div>
                     </div>
                     <span
-                      className="settings-theme-toggle-shell"
+                      className="settings-token-switch-shell"
                       data-toolbar-tooltip={
-                        themePreference === "dark"
+                        themeMode === "dark"
                           ? "Switch to light theme"
                           : "Switch to dark theme"
                       }
                       data-toolbar-tooltip-placement="below"
-                    >
-                      <span
-                        className={[
-                          "settings-theme-toggle__endpoint",
-                          themePreference === "light"
-                            ? "settings-theme-toggle__endpoint--active"
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        aria-hidden="true"
                       >
-                        <Sun className="settings-theme-toggle__icon" aria-hidden />
-                        <span>Sun</span>
-                      </span>
                       <button
                         type="button"
                         className={[
-                          "dasti-theme-switch",
-                          "settings-token-switch",
-                          "settings-theme-toggle__switch",
-                          themePreference === "dark"
-                            ? "dasti-theme-switch--dark settings-token-switch--active"
+                          "settings-theme-toggle",
+                          themeMode === "dark"
+                            ? "settings-theme-toggle--dark"
                             : "",
                         ]
                           .filter(Boolean)
                           .join(" ")}
-                        aria-pressed={themePreference === "dark"}
-                        aria-label="Toggle theme"
+                        aria-pressed={themeMode === "dark"}
+                        aria-label={
+                          themeMode === "dark"
+                            ? "Toggle light theme"
+                            : "Toggle dark theme"
+                        }
                         onClick={() =>
-                          setThemePreference(
-                            themePreference === "dark" ? "light" : "dark",
+                          setThemeMode(
+                            themeMode === "dark" ? "light" : "dark",
                           )
                         }
                       >
-                        <span className="dasti-theme-switch__rail" aria-hidden="true">
-                          <span className="dasti-theme-switch__thumb" />
+                        <span
+                          className="settings-theme-toggle__indicator"
+                          aria-hidden="true"
+                        />
+                        <span
+                          className={[
+                            "settings-theme-toggle__option",
+                            themeMode === "light"
+                              ? "settings-theme-toggle__option--active"
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          <Sun aria-hidden />
+                        </span>
+                        <span
+                          className={[
+                            "settings-theme-toggle__option",
+                            themeMode === "dark"
+                              ? "settings-theme-toggle__option--active"
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          <Moon aria-hidden />
                         </span>
                       </button>
-                      <span
-                        className={[
-                          "settings-theme-toggle__endpoint",
-                          themePreference === "dark"
-                            ? "settings-theme-toggle__endpoint--active"
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        aria-hidden="true"
-                      >
-                        <span>Moon</span>
-                        <Moon className="settings-theme-toggle__icon" aria-hidden />
-                      </span>
                     </span>
                   </div>
                   <div className="settings__row">
