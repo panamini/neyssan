@@ -182,7 +182,10 @@ describe("ProposalRail style tab", () => {
       ).length,
     ).toBeGreaterThan(0);
     expect(screen.getByText(/Default settings/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "→ Document style" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "→ Document style" })).toHaveAttribute(
+      "href",
+      "/settings?tab=docstyle",
+    );
     expect(screen.getByText("35 mm Robial")).toBeInTheDocument();
     expect(screen.getByText("Layout", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(

@@ -899,7 +899,7 @@ export function ProposalRail({
             Style inherited from selected CV when available.
             <br />
             Default settings{" "}
-            <a className="dasti-proposal-skeleton-rail__link" href="/settings">
+            <a className="dasti-proposal-skeleton-rail__link" href="/settings?tab=docstyle">
               → Document style
             </a>
             .

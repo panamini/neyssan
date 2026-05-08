@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -6,14 +6,12 @@ import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   Check,
-  Feather,
-  FileImage,
+  Eraser,
+  Moon,
   Pen,
-  PenNib,
-  Stamp,
+  Sun,
   TrashSimple,
   Upload,
-  Wand2,
 } from "@/lib/icons";
 import {
   getProposalStyleDefinition,
@@ -46,7 +44,7 @@ import type {
   VerbatiStylePreset,
 } from "../features/verbati/types";
 import { useMotionPreference } from "../lib/motion-preference";
-import { useThemeMode, type ThemePreference } from "../lib/theme-mode";
+import { useThemeMode } from "../lib/theme-mode";
 import {
   DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
   PROPOSAL_SIGNATURE_FONT_OPTIONS,
@@ -60,6 +58,7 @@ import {
 } from "../lib/proposal-personalization";
 import { getFactoryDocumentStyleSlot } from "../lib/document-style-slots";
 import { ProposalColorPickerPopover } from "../components/ProposalColorPickerPopover";
+import type { ToneBadgeTone } from "../components/ui/tone-badge";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -178,11 +177,6 @@ const EMPTY_PRESET: PresetSlot = {
   signatureSettings: DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
 };
 
-const SETTINGS_THEME_OPTIONS: Array<{ id: ThemePreference; label: string }> = [
-  { id: "light", label: "Light" },
-  { id: "dark", label: "Dark" },
-];
-
 const SETTINGS_ACCENT_OPTIONS: SettingsAccentOption[] = [
   ...PROPOSAL_PALETTE_OPTIONS.map((option) => ({
     id: option.id,
@@ -207,33 +201,35 @@ const TONE_OPTIONS: Array<{
   id: ToneId;
   label: string;
   description: string;
-  Icon: typeof Wand2;
 }> = [
   {
     id: null,
     label: getVoicePresetDisplayLabel(null),
-    description: "Adapts to the role.",
-    Icon: Wand2,
+    description: "Chooses from the job and selected CV at generation time.",
   },
   {
     id: "engaging",
     label: getVoicePresetDisplayLabel("engaging"),
     description: "Approachable. Personal touches.",
-    Icon: Feather,
   },
   {
     id: "signature",
     label: getVoicePresetDisplayLabel("signature"),
     description: "Conversational. Like you wrote it.",
-    Icon: PenNib,
   },
   {
     id: "expert",
     label: getVoicePresetDisplayLabel("expert"),
     description: "Composed. Measured pacing.",
-    Icon: Stamp,
   },
 ];
+
+function settingsToneBadgeTone(id: ToneId): ToneBadgeTone {
+  if (id === "engaging") return "warm";
+  if (id === "expert") return "formal";
+  if (id === "signature") return "natural";
+  return "auto";
+}
 
 // ─── Style options ─────────────────────────────────────────────────────────────
 
@@ -515,59 +511,8 @@ function HeroPreview({
       ? PROPOSAL_AUTO_STYLE_PREVIEW
       : PROPOSAL_STYLE_PREVIEW_DEFINITIONS.balanced;
 
-  const cardRef = useRef<HTMLElement>(null);
-  const rafRef = useRef(0);
-
-  useEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-    const previewCard: HTMLElement = card;
-    const MAX = 5;
-
-    function move(clientX: number, clientY: number) {
-      previewCard.classList.remove("is-resetting");
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => {
-        const r = previewCard.getBoundingClientRect();
-        const px = (clientX - r.left) / r.width;
-        const py = (clientY - r.top) / r.height;
-        const x = Math.min(Math.max(px, 0), 1);
-        const y = Math.min(Math.max(py, 0), 1);
-        previewCard.style.setProperty(
-          "--rx",
-          `${((0.5 - y) * MAX * 2).toFixed(2)}deg`,
-        );
-        previewCard.style.setProperty(
-          "--ry",
-          `${((x - 0.5) * MAX * 2).toFixed(2)}deg`,
-        );
-        previewCard.style.setProperty("--mx", `${(x * 100).toFixed(1)}%`);
-        previewCard.style.setProperty("--my", `${(y * 100).toFixed(1)}%`);
-      });
-    }
-
-    function reset() {
-      cancelAnimationFrame(rafRef.current);
-      previewCard.classList.add("is-resetting");
-      previewCard.style.setProperty("--rx", "0deg");
-      previewCard.style.setProperty("--ry", "0deg");
-      previewCard.style.setProperty("--mx", "50%");
-      previewCard.style.setProperty("--my", "50%");
-    }
-
-    const onMove = (e: MouseEvent) => move(e.clientX, e.clientY);
-    previewCard.addEventListener("mousemove", onMove);
-    previewCard.addEventListener("mouseleave", reset);
-    return () => {
-      previewCard.removeEventListener("mousemove", onMove);
-      previewCard.removeEventListener("mouseleave", reset);
-      cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
-
   return (
     <article
-      ref={cardRef}
       className={`dasti-settings-hero-preview dasti-settings-hero-preview--${styleOption.id}`}
       style={{ "--hero-accent": accentColor } as React.CSSProperties}
     >
@@ -852,7 +797,9 @@ function SignatureDrawingPad({
     context.lineCap = "round";
     context.lineJoin = "round";
     context.lineWidth = 2.2;
-    context.strokeStyle = "#20160f";
+    context.strokeStyle =
+      getComputedStyle(canvas).getPropertyValue("--signature-draw-ink").trim() ||
+      "#20160f";
   }, []);
 
   React.useEffect(() => {
@@ -927,11 +874,11 @@ function SignatureDrawingPad({
       />
       <button
         type="button"
-        className="dasti-settings-signature-clear"
+        className="dasti-settings-signature-action dasti-settings-signature-clear"
         onClick={clearDrawing}
       >
-        <TrashSimple size={12} strokeWidth={1.8} aria-hidden="true" />
-        Clear drawing
+        <Eraser size={14} strokeWidth={1.8} aria-hidden="true" />
+        Clear
       </button>
     </div>
   );
@@ -1085,10 +1032,10 @@ function SignatureSelector({
         {settings.mode === "image" ? (
           <button
             type="button"
-            className="dasti-settings-signature-current__reset"
+            className="dasti-settings-signature-action dasti-settings-signature-current__reset"
             onClick={() => onChange(DEFAULT_PROPOSAL_SIGNATURE_SETTINGS)}
           >
-            <FileImage size={12} strokeWidth={1.8} aria-hidden="true" />
+            <TrashSimple size={14} strokeWidth={1.8} aria-hidden="true" />
             Remove image
           </button>
         ) : null}
@@ -1486,36 +1433,6 @@ export function SettingsPage(): JSX.Element {
                 data-pane="docstyle"
                 data-active="true"
               >
-                {/* ── Header ── */}
-                <div className="dasti-settings-builder-header">
-                  <div>
-                    <h1 className="dasti-settings-page__title">
-                      Style profiles
-                    </h1>
-                    <p className="dasti-settings-page__subtitle">
-                      Assemble up to 3 style presets. The active one applies to
-                      new cover letters.
-                    </p>
-                  </div>
-                  {savedTick && (
-                    <span
-                      className="dasti-settings-page__saved"
-                      aria-live="polite"
-                    >
-                      <Check size={12} strokeWidth={2.4} aria-hidden="true" />
-                      Saved.
-                    </span>
-                  )}
-                  {saveError && (
-                    <span
-                      className="dasti-settings-page__saved"
-                      aria-live="assertive"
-                    >
-                      {saveError}
-                    </span>
-                  )}
-                </div>
-
                 {/* ── Style preset workspace ── */}
                 <div className="dasti-settings-builder">
                   <div
@@ -1523,6 +1440,38 @@ export function SettingsPage(): JSX.Element {
                     aria-live="polite"
                     aria-atomic="true"
                   >
+                    <div className="dasti-settings-slot-picker__header">
+                      <div>
+                        <h1 className="dasti-settings-page__title">
+                          Style profiles
+                        </h1>
+                        <p className="dasti-settings-page__subtitle">
+                          Assemble up to 3 style presets. The active one
+                          applies to new cover letters.
+                        </p>
+                      </div>
+                      {savedTick && (
+                        <span
+                          className="dasti-settings-page__saved"
+                          aria-live="polite"
+                        >
+                          <Check
+                            size={12}
+                            strokeWidth={2.4}
+                            aria-hidden="true"
+                          />
+                          Saved.
+                        </span>
+                      )}
+                      {saveError && (
+                        <span
+                          className="dasti-settings-page__saved"
+                          aria-live="assertive"
+                        >
+                          {saveError}
+                        </span>
+                      )}
+                    </div>
                     <div
                       className="dasti-settings-slot-rail"
                       role="group"
@@ -1585,11 +1534,11 @@ export function SettingsPage(): JSX.Element {
                     {/* Left — ingredient panel */}
                     <div className="dasti-settings-builder__left">
                       <div className="dasti-settings-appearance-toolbar dasti-toolbar-drawer-surface dasti-settings-appearance-toolbar--v3">
-                        {/* Typography */}
+                        {/* Font */}
                         <div className="dasti-settings-appearance-group dasti-settings-appearance-group--wide dasti-settings-appearance-group--typography">
                           <div className="dasti-settings-appearance-group__header">
                             <div className="dasti-settings-appearance-label">
-                              Typography
+                              Font
                             </div>
                           </div>
                           <FontPairGrid
@@ -1597,29 +1546,6 @@ export function SettingsPage(): JSX.Element {
                               currentPreset.fontPairId as VerbatiFontPairId | null
                             }
                             onChange={(id) => updatePreset({ fontPairId: id })}
-                          />
-                        </div>
-
-                        {/* Signature */}
-                        <div className="dasti-settings-appearance-group dasti-settings-appearance-group--signature">
-                          <div className="dasti-settings-appearance-group__header">
-                            <div className="dasti-settings-appearance-label">
-                              Signature
-                            </div>
-                          </div>
-                          <SignatureSelector
-                            settings={currentPreset.signatureSettings}
-                            bodyFontFamily={
-                              currentFontPair?.bodyFamily ?? "inherit"
-                            }
-                            onChange={(signatureSettings) =>
-                              updatePreset({
-                                signatureSettings:
-                                  sanitizeProposalSignatureSettings(
-                                    signatureSettings,
-                                  ),
-                              })
-                            }
                           />
                         </div>
 
@@ -1767,6 +1693,29 @@ export function SettingsPage(): JSX.Element {
                                 accentHex: hex,
                               });
                             }}
+                          />
+                        </div>
+
+                        {/* Signature */}
+                        <div className="dasti-settings-appearance-group dasti-settings-appearance-group--signature">
+                          <div className="dasti-settings-appearance-group__header">
+                            <div className="dasti-settings-appearance-label">
+                              Signature
+                            </div>
+                          </div>
+                          <SignatureSelector
+                            settings={currentPreset.signatureSettings}
+                            bodyFontFamily={
+                              currentFontPair?.bodyFamily ?? "inherit"
+                            }
+                            onChange={(signatureSettings) =>
+                              updatePreset({
+                                signatureSettings:
+                                  sanitizeProposalSignatureSettings(
+                                    signatureSettings,
+                                  ),
+                              })
+                            }
                           />
                         </div>
                       </div>
@@ -1925,22 +1874,47 @@ export function SettingsPage(): JSX.Element {
                       <div className="settings__row-label">Theme</div>
                       <div className="settings__row-desc">Light or dark.</div>
                     </div>
-                    <div
-                      className="theme-switch"
-                      role="group"
-                      aria-label="Theme"
+                    <span
+                      className="settings-token-switch-shell"
+                      data-toolbar-tooltip={
+                        themePreference === "dark"
+                          ? "Switch to light theme"
+                          : "Switch to dark theme"
+                      }
+                      data-toolbar-tooltip-placement="below"
                     >
-                      {SETTINGS_THEME_OPTIONS.map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          aria-pressed={themePreference === option.id}
-                          onClick={() => setThemePreference(option.id)}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
+                      <button
+                        type="button"
+                        className={[
+                          "dasti-theme-switch",
+                          "settings-token-switch",
+                          themePreference === "dark"
+                            ? "dasti-theme-switch--dark settings-token-switch--active"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        aria-pressed={themePreference === "dark"}
+                        aria-label="Toggle dark theme"
+                        onClick={() =>
+                          setThemePreference(
+                            themePreference === "dark" ? "light" : "dark",
+                          )
+                        }
+                      >
+                        <span className="dasti-theme-switch__rail" aria-hidden="true">
+                          <span className="dasti-theme-switch__thumb" />
+                        </span>
+                        <span className="dasti-theme-switch__label">
+                          {themePreference === "dark" ? "Dark" : "Light"}
+                        </span>
+                        {themePreference === "dark" ? (
+                          <Moon className="dasti-theme-switch__glyph" aria-hidden />
+                        ) : (
+                          <Sun className="dasti-theme-switch__glyph" aria-hidden />
+                        )}
+                      </button>
+                    </span>
                   </div>
                   <div className="settings__row">
                     <div>
@@ -1949,27 +1923,42 @@ export function SettingsPage(): JSX.Element {
                         Disable animations and transitions.
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="settings-motion-toggle"
-                      aria-pressed={motionPreference === "reduced"}
-                      aria-label="Reduce motion"
-                      onClick={() =>
-                        setMotionPreference(
-                          motionPreference === "reduced" ? "system" : "reduced",
-                        )
+                    <span
+                      className="settings-token-switch-shell"
+                      data-toolbar-tooltip={
+                        motionPreference === "reduced"
+                          ? "Use normal motion"
+                          : "Reduce interface motion"
                       }
+                      data-toolbar-tooltip-placement="below"
                     >
-                      <span
-                        className="settings-motion-toggle__check"
-                        aria-hidden="true"
+                      <button
+                        type="button"
+                        className={[
+                          "dasti-theme-switch",
+                          "settings-token-switch",
+                          motionPreference === "reduced"
+                            ? "dasti-theme-switch--dark settings-token-switch--active"
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        aria-pressed={motionPreference === "reduced"}
+                        aria-label="Reduce motion"
+                        onClick={() =>
+                          setMotionPreference(
+                            motionPreference === "reduced" ? "system" : "reduced",
+                          )
+                        }
                       >
-                        {motionPreference === "reduced" ? (
-                          <Check size={12} strokeWidth={2.4} />
-                        ) : null}
-                      </span>
-                      Use reduce motion
-                    </button>
+                        <span className="dasti-theme-switch__rail" aria-hidden="true">
+                          <span className="dasti-theme-switch__thumb" />
+                        </span>
+                        <span className="dasti-theme-switch__label">
+                          {motionPreference === "reduced" ? "Reduced" : "Motion"}
+                        </span>
+                      </button>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1988,7 +1977,7 @@ export function SettingsPage(): JSX.Element {
                     </div>
                   </div>
                   <div
-                    className="settings__tone-row settings__tone-row--selectable"
+                    className="settings__tone-row settings__tone-row--selectable dasti-toolbar--surface-tooltips"
                     role="group"
                     aria-label="Default tone"
                   >
@@ -2000,30 +1989,19 @@ export function SettingsPage(): JSX.Element {
                           type="button"
                           className={[
                             "settings__tone-option",
+                            "ds-tone",
+                            `ds-tone--${settingsToneBadgeTone(option.id)}`,
                             active ? "settings__tone-option--active" : "",
                           ]
                             .filter(Boolean)
                             .join(" ")}
                           aria-pressed={active}
+                          data-toolbar-tooltip={option.description}
                           onClick={() =>
                             void handleSetDefaultVoicePreset(option.id)
                           }
-                          title={option.description}
                         >
-                          {active ? (
-                            <Check
-                              size={13}
-                              strokeWidth={2.4}
-                              aria-hidden="true"
-                            />
-                          ) : (
-                            <option.Icon
-                              size={14}
-                              strokeWidth={1.8}
-                              aria-hidden="true"
-                            />
-                          )}
-                          <span>{option.label}</span>
+                          {option.label}
                         </button>
                       );
                     })}
