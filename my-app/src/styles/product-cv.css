@@ -986,6 +986,37 @@
   background: var(--am-soft);
 }
 
+.dasti-cv-rail-secondary-action {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-control);
+  background: var(--sfr);
+  color: var(--tm2);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: 650;
+  transition:
+    background-color var(--dur-2) var(--ease-standard),
+    border-color var(--dur-2) var(--ease-standard),
+    color var(--dur-2) var(--ease-standard),
+    transform var(--dur-2) var(--ease-standard);
+}
+
+.dasti-cv-rail-secondary-action:hover,
+.dasti-cv-rail-secondary-action:focus-visible {
+  outline: none;
+  border-color: var(--border-strong);
+  background: var(--sf0);
+  color: var(--ti);
+  transform: translateY(-1px);
+}
+
 .dasti-cv-font-menu-trigger,
 .dasti-cv-style-menu-trigger {
   width: 100%;
@@ -1073,6 +1104,30 @@
 
 .dasti-cv-style-swatch--ochre {
   background: var(--cv-accent-swatch);
+}
+
+.dasti-cv-style-swatch--custom {
+  background: var(--cv-accent-swatch);
+}
+
+.dasti-cv-style-swatch--icon {
+  color: var(--ti);
+  background:
+    conic-gradient(
+      from 0deg,
+      #d95843,
+      #d9a441,
+      #4f9d68,
+      #2a78d6,
+      #7a4fa0,
+      #d95843
+    );
+}
+
+.dasti-cv-style-swatch-wheel {
+  width: 14px;
+  height: 14px;
+  color: currentColor;
 }
 
 .dasti-cv-style-swatch[data-selected="true"] {

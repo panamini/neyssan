@@ -59,6 +59,7 @@ import {
   getProposalApplicantHeaderData,
 } from "../lib/proposal-personalization";
 import { getFactoryDocumentStyleSlot } from "../lib/document-style-slots";
+import { ProposalColorPickerPopover } from "../components/ProposalColorPickerPopover";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,8 @@ type SettingsAccentOption = {
 type StoredVerbatiStyle = Omit<VerbatiStylePreset, "accentHex"> & {
   accentHex?: string | null;
 };
+
+type ToneId = "signature" | "expert" | "engaging" | null;
 
 type PresetSlot = {
   fontPairId: VerbatiFontPairId | null;
@@ -93,6 +96,7 @@ type ProposalContactSettings = {
   proposalDefaultContactLinkedin?: string | null;
   proposalDefaultContactWebsite?: string | null;
   proposalDefaultContactLocation?: string | null;
+  savedVoicePreset?: ToneId;
 };
 
 type ProposalContactField = keyof ProposalContactSettings;
@@ -189,9 +193,18 @@ const SETTINGS_ACCENT_OPTIONS: SettingsAccentOption[] = [
   })),
 ];
 
-// ─── Tone options ──────────────────────────────────────────────────────────────
+const SETTINGS_CUSTOM_ACCENT_STARTER_HEX = "#8A8176";
 
-type ToneId = "signature" | "expert" | "engaging" | null;
+function normalizeSettingsAccentHex(
+  value: string | null | undefined,
+): string | null {
+  const normalized = value?.trim() ?? "";
+  return /^#[0-9a-fA-F]{6}$/.test(normalized)
+    ? normalized.toLowerCase()
+    : null;
+}
+
+// ─── Tone options ──────────────────────────────────────────────────────────────
 const TONE_OPTIONS: Array<{
   id: ToneId;
   label: string;
@@ -1099,11 +1112,18 @@ export function SettingsPage(): JSX.Element {
   const [contactFields, setContactFields] = React.useState<
     Record<ProposalContactField, string>
   >(EMPTY_PROPOSAL_CONTACT_FIELDS);
+  const [defaultVoicePreset, setDefaultVoicePreset] =
+    React.useState<ToneId>(null);
   const savedTickTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const customColorAnchorRef = React.useRef<HTMLButtonElement | null>(null);
+  const customColorSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const hydrated = React.useRef(false);
   const localPresetInteractionRef = React.useRef(false);
   const contactHydrated = React.useRef(false);
+  const voiceHydrated = React.useRef(false);
+  const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] =
+    React.useState(false);
 
   // Sync from server once
   React.useEffect(() => {
@@ -1203,6 +1223,15 @@ export function SettingsPage(): JSX.Element {
     });
   }, [currentProposalSettings]);
 
+  React.useEffect(() => {
+    if (currentProposalSettings === undefined || voiceHydrated.current) {
+      return;
+    }
+
+    voiceHydrated.current = true;
+    setDefaultVoicePreset(currentProposalSettings.savedVoicePreset ?? null);
+  }, [currentProposalSettings]);
+
   // Update a field on the currently editing preset and debounce-save
   const updatePreset = React.useCallback(
     (patch: Partial<PresetSlot>) => {
@@ -1281,8 +1310,21 @@ export function SettingsPage(): JSX.Element {
     [flashSaved, isSignedIn, setActivePreset],
   );
 
+  const handleResetPresetToFactory = React.useCallback((slot?: SlotIndex) => {
+    const targetSlot = slot ?? editingSlot ?? activeSlot ?? 1;
+    setIsCustomColorPickerOpen(false);
+    localPresetInteractionRef.current = true;
+    setEditingSlot(targetSlot);
+    updatePreset(buildDefaultPresetSlot(targetSlot));
+  }, [activeSlot, editingSlot, updatePreset]);
+
   const effectiveEditingSlot = editingSlot ?? activeSlot ?? 1;
   const currentPreset = localPresets[effectiveEditingSlot];
+  const currentCustomAccentHex = normalizeSettingsAccentHex(
+    currentPreset.accentHex,
+  );
+  const customAccentColor =
+    currentCustomAccentHex ?? SETTINGS_CUSTOM_ACCENT_STARTER_HEX;
   const currentFontPair =
     VERBATI_FONT_PAIR_OPTIONS.find((fontPair) => fontPair.id === currentPreset.fontPairId) ??
     DEFAULT_FONT_PAIR_OPTION;
@@ -1310,6 +1352,28 @@ export function SettingsPage(): JSX.Element {
     [flashSaved, setCurrentProposalSettings],
   );
 
+  const handleSetDefaultVoicePreset = React.useCallback(
+    async (voicePreset: ToneId) => {
+      setSaveError(null);
+      setDefaultVoicePreset(voicePreset);
+      if (!isSignedIn) {
+        setSaveError("Sign in to save voice settings.");
+        return;
+      }
+      try {
+        await setCurrentProposalSettings({ voicePreset });
+        flashSaved();
+      } catch (error) {
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : "Could not save voice settings.";
+        setSaveError(message);
+      }
+    },
+    [flashSaved, isSignedIn, setCurrentProposalSettings],
+  );
+
   const selectSettingsTab = (tab: SettingsTab) => {
     setSearchParams({ tab });
   };
@@ -1323,7 +1387,7 @@ export function SettingsPage(): JSX.Element {
         className="dasti-page-shell"
         style={
           {
-            "--page-shell-max-width": "1080px",
+            "--page-shell-max-width": "1320px",
             "--page-shell-gap": "var(--s5)",
             "--page-shell-pad-top": "var(--s6)",
           } as React.CSSProperties
@@ -1369,15 +1433,72 @@ export function SettingsPage(): JSX.Element {
           )}
         </div>
 
-        {/* ── 2-column builder ── */}
+        {/* ── Style preset workspace ── */}
         <div className="dasti-settings-builder">
+          <div
+            className="dasti-settings-builder__slots"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <div
+              className="dasti-settings-slot-rail"
+              role="group"
+              aria-label="Style preset slots"
+            >
+              {([1, 2, 3] as SlotIndex[]).map((slot) => {
+                const isEditingSlot = editingSlot === slot;
+                const isActiveSlot = activeSlot === slot;
+                return (
+                  <div className="dasti-settings-slot-stack" key={slot}>
+                    <div
+                      className="dasti-settings-slot-stack__actions"
+                      aria-hidden={isEditingSlot ? undefined : "true"}
+                    >
+                      {isEditingSlot ? (
+                        <>
+                          {!isActiveSlot ? (
+                            <button
+                              type="button"
+                              className="dasti-settings-slot-action dasti-settings-slot-action--default"
+                              onClick={() => void handleSetActive(slot)}
+                            >
+                              <Check size={12} strokeWidth={2.4} aria-hidden="true" />
+                              Set as default
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="dasti-settings-slot-action"
+                            onClick={() => handleResetPresetToFactory(slot)}
+                          >
+                            Reset Style {slot}
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                    <SlotCard
+                      slotIndex={slot}
+                      preset={localPresets[slot]}
+                      isEditing={isEditingSlot}
+                      isActive={isActiveSlot}
+                      onSelect={() => {
+                        localPresetInteractionRef.current = true;
+                        setEditingSlot(slot);
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
+          <div className="dasti-settings-style-editor">
           {/* Left — ingredient panel */}
           <div className="dasti-settings-builder__left">
             <div className="dasti-settings-appearance-toolbar dasti-toolbar-drawer-surface">
 
               {/* Typography */}
-              <div className="dasti-settings-appearance-group">
+              <div className="dasti-settings-appearance-group dasti-settings-appearance-group--wide dasti-settings-appearance-group--typography">
                 <div className="dasti-settings-appearance-label">Typography</div>
                 <FontPairGrid
                   selectedId={currentPreset.fontPairId as VerbatiFontPairId | null}
@@ -1386,7 +1507,7 @@ export function SettingsPage(): JSX.Element {
               </div>
 
               {/* Signature */}
-              <div className="dasti-settings-appearance-group">
+              <div className="dasti-settings-appearance-group dasti-settings-appearance-group--signature">
                 <div className="dasti-settings-appearance-label">Signature</div>
                 <SignatureSelector
                   settings={currentPreset.signatureSettings}
@@ -1435,7 +1556,12 @@ export function SettingsPage(): JSX.Element {
               {/* Color */}
               <div className="dasti-settings-appearance-group">
                 <div className="dasti-settings-appearance-label">Color</div>
-                <div className="style-swatches" role="group" aria-label="Color">
+                <div
+                  ref={customColorSurfaceRef}
+                  className="style-swatches"
+                  role="group"
+                  aria-label="Color"
+                >
                   {SETTINGS_ACCENT_OPTIONS.map((option) => {
                     const selectedPalette = resolvePresetPaletteSelection(currentPreset);
                     const active = option.accentHex
@@ -1451,10 +1577,13 @@ export function SettingsPage(): JSX.Element {
                         aria-label={option.label}
                         aria-pressed={active}
                         onClick={() =>
+                          {
+                            setIsCustomColorPickerOpen(false);
                           updatePreset({
                             paletteOverride: option.paletteOverride,
                             accentHex: option.accentHex,
-                          })
+                          });
+                          }
                         }
                         title={option.label}
                         style={{ "--swatch-color": option.swatch } as React.CSSProperties}
@@ -1462,74 +1591,54 @@ export function SettingsPage(): JSX.Element {
                         <span className="style-swatch__chip" aria-hidden="true">
                           {active ? <Check size={13} strokeWidth={2.4} /> : null}
                         </span>
-                        <span className="style-swatch__label">{option.label}</span>
                       </button>
                     );
                   })}
+                  <button
+                    ref={customColorAnchorRef}
+                    type="button"
+                    className="style-swatch style-swatch--custom"
+                    data-selected={currentCustomAccentHex ? "true" : "false"}
+                    aria-label="Open custom color picker"
+                    aria-pressed={Boolean(currentCustomAccentHex)}
+                    onClick={() => setIsCustomColorPickerOpen(true)}
+                    title={
+                      currentCustomAccentHex
+                        ? `Custom accent ${customAccentColor}`
+                        : "Open custom color picker"
+                    }
+                    style={
+                      { "--swatch-color": customAccentColor } as React.CSSProperties
+                    }
+                  >
+                    <span className="style-swatch__chip" aria-hidden="true">
+                      {currentCustomAccentHex ? (
+                        <Check size={13} strokeWidth={2.4} />
+                      ) : null}
+                    </span>
+                  </button>
                 </div>
+                <ProposalColorPickerPopover
+                  currentHex={customAccentColor}
+                  anchorRef={customColorAnchorRef}
+                  surfaceAnchorRef={customColorSurfaceRef}
+                  horizontalAlign="center"
+                  isOpen={isCustomColorPickerOpen}
+                  onClose={() => setIsCustomColorPickerOpen(false)}
+                  onHexChange={(hex) => {
+                    updatePreset({
+                      paletteOverride: null,
+                      accentHex: hex,
+                    });
+                  }}
+                />
               </div>
 
-              {/* Tone */}
-              <div className="dasti-settings-appearance-group">
-                <div className="dasti-settings-appearance-label">Default tone</div>
-                <div
-                  className="dasti-settings-section__row"
-                  role="group"
-                  aria-label="Default tone"
-                >
-                  {TONE_OPTIONS.map((option) => {
-                    const active = currentPreset.voicePreset === option.id;
-                    return (
-                      <button
-                        key={option.id ?? "auto"}
-                        type="button"
-                        className={[
-                          "dasti-settings-pill",
-                          active ? "dasti-settings-pill--active" : "",
-                        ].filter(Boolean).join(" ")}
-                        aria-pressed={active}
-                        onClick={() => updatePreset({ voicePreset: option.id as ToneId })}
-                        title={option.description}
-                      >
-                        {active ? (
-                          <span className="dasti-settings-pill__check" aria-hidden="true">
-                            <Check size={12} strokeWidth={2.4} />
-                          </span>
-                        ) : (
-                          <span className="dasti-settings-pill__icon" aria-hidden="true">
-                            <option.Icon size={13} strokeWidth={1.7} />
-                          </span>
-                        )}
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
             </div>
           </div>
 
-          {/* Right — sticky preset rail + hero preview */}
-          <div className="dasti-settings-builder__right" aria-live="polite" aria-atomic="true">
-            <div
-              className="dasti-settings-slot-rail"
-              role="group"
-              aria-label="Style preset slots"
-            >
-              {([1, 2, 3] as SlotIndex[]).map((slot) => (
-                <SlotCard
-                  key={slot}
-                  slotIndex={slot}
-                  preset={localPresets[slot]}
-                  isEditing={editingSlot === slot}
-                  isActive={activeSlot === slot}
-                  onSelect={() => {
-                    localPresetInteractionRef.current = true;
-                    setEditingSlot(slot);
-                  }}
-                />
-              ))}
-            </div>
+          {/* Right — live preview */}
+          <div className="dasti-settings-builder__right">
             <div className="dasti-settings-builder__preview-label">
               {currentPreset.name || DEFAULT_SLOT_NAMES[effectiveEditingSlot]}
             </div>
@@ -1538,16 +1647,7 @@ export function SettingsPage(): JSX.Element {
               preset={currentPreset}
               slotName={currentPreset.name || DEFAULT_SLOT_NAMES[effectiveEditingSlot]}
             />
-            {activeSlot !== null && editingSlot !== null && activeSlot !== editingSlot && (
-              <button
-                type="button"
-                className="dasti-button dasti-button--sm dasti-settings-builder__set-default-btn"
-                onClick={() => void handleSetActive(editingSlot)}
-              >
-                <Check size={12} strokeWidth={2.4} aria-hidden="true" />
-                Set as default
-              </button>
-            )}
+          </div>
           </div>
         </div>
               </div>
@@ -1682,10 +1782,34 @@ export function SettingsPage(): JSX.Element {
                     <div className="settings__group-title">Default tone</div>
                     <div className="settings__group-desc">Used when generating new proposals. You can override per document.</div>
                   </div>
-                  <div className="settings__tone-row">
-                    <span className="ds-tone ds-tone--warm">Warm</span>
-                    <span className="ds-tone ds-tone--formal">Formal</span>
-                    <span className="ds-tone ds-tone--natural">Natural</span>
+                  <div
+                    className="settings__tone-row settings__tone-row--selectable"
+                    role="group"
+                    aria-label="Default tone"
+                  >
+                    {TONE_OPTIONS.map((option) => {
+                      const active = defaultVoicePreset === option.id;
+                      return (
+                        <button
+                          key={option.id ?? "auto"}
+                          type="button"
+                          className={[
+                            "settings__tone-option",
+                            active ? "settings__tone-option--active" : "",
+                          ].filter(Boolean).join(" ")}
+                          aria-pressed={active}
+                          onClick={() => void handleSetDefaultVoicePreset(option.id)}
+                          title={option.description}
+                        >
+                          {active ? (
+                            <Check size={13} strokeWidth={2.4} aria-hidden="true" />
+                          ) : (
+                            <option.Icon size={14} strokeWidth={1.8} aria-hidden="true" />
+                          )}
+                          <span>{option.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

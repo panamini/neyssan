@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Check,
   ChevronDown,
+  ColorWheel,
   Eye,
   EyeClosed,
   GripHorizontal,
@@ -43,6 +44,7 @@ import {
   type VerbatiFontPairId,
 } from "../../features/verbati/fontCatalog";
 import { PROPOSAL_PALETTE_OPTIONS } from "../../lib/proposal-style-display";
+import { ProposalColorPickerPopover } from "../ProposalColorPickerPopover";
 import {
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
@@ -117,6 +119,7 @@ type CvRailProps = {
   onSelectTemplate: (template: "workshop-onecol" | "workshop-twocol" | "editorial" | "minimal" | "classic") => void;
   onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
   onSelectAccent: (accent: CvAccentChoice) => void;
+  onSelectCustomAccent: (hex: string) => void;
   onNewCv: () => void;
   onImportPdf: () => void;
 };
@@ -178,6 +181,15 @@ const ACCENT_OPTIONS: Array<{
   palette: option.id,
   accentHex: option.color,
 }));
+
+const CV_CUSTOM_ACCENT_STARTER_HEX = "#8A8176";
+
+function normalizeCvAccentHex(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? "";
+  return /^#[0-9a-fA-F]{6}$/.test(normalized)
+    ? normalized.toLowerCase()
+    : null;
+}
 
 function getSectionId(section: CvSection, index: number): string {
   return String(section.id ?? `${section.type}-${index}`);
@@ -483,12 +495,17 @@ export function CvRail({
   onSelectTemplate,
   onSelectFontPair,
   onSelectAccent,
+  onSelectCustomAccent,
   onNewCv,
   onImportPdf,
 }: CvRailProps): JSX.Element {
   const activeSection = getActiveSection(sections, activeSectionId);
   const [aiPrompt, setAiPrompt] = React.useState("");
   const [streamExpanded, setStreamExpanded] = React.useState(false);
+  const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] =
+    React.useState(false);
+  const customColorAnchorRef = React.useRef<HTMLButtonElement | null>(null);
+  const customColorSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const activeSectionLabel = activeSection
     ? formatSectionDisplayTitle(activeSection, { fallback: "Section" })
     : "";
@@ -515,10 +532,25 @@ export function CvRail({
     if (option.palette === stylePreset.palette) return !stylePreset.accentHex;
     return (
       stylePreset.palette === "custom" &&
-      String(stylePreset.accentHex ?? "").toLowerCase() ===
-      option.accentHex.toLowerCase()
+      normalizeCvAccentHex(stylePreset.accentHex) ===
+      normalizeCvAccentHex(option.accentHex)
     );
   });
+  const customAccentHex =
+    stylePreset.palette === "custom"
+      ? normalizeCvAccentHex(stylePreset.accentHex)
+      : null;
+  const fixedAccentHexMatch = ACCENT_OPTIONS.some(
+    (option) =>
+      stylePreset.palette === "custom" &&
+      customAccentHex === normalizeCvAccentHex(option.accentHex),
+  );
+  const isCustomAccentSelected =
+    Boolean(customAccentHex) && !fixedAccentHexMatch;
+  const customAccentColor =
+    isCustomAccentSelected && customAccentHex
+      ? customAccentHex
+      : CV_CUSTOM_ACCENT_STARTER_HEX;
   const isAiRunning = aiSuggestion?.state === "loading";
   const streamState = "active";
   const streamCount = "2 of 3";
@@ -997,7 +1029,11 @@ export function CvRail({
             onSelectFontPair={onSelectFontPair}
           />
           <div className="dasti-cv-rail-label">Accent</div>
-          <div className="dasti-cv-style-swatches" aria-label="Accent colors">
+          <div
+            ref={customColorSurfaceRef}
+            className="dasti-cv-style-swatches"
+            aria-label="Accent colors"
+          >
             {ACCENT_OPTIONS.map((swatch) => (
               <button
                 key={swatch.id}
@@ -1011,12 +1047,58 @@ export function CvRail({
                 aria-label={`Use ${swatch.label} accent`}
                 aria-pressed={activeAccent?.id === swatch.id}
                 data-selected={activeAccent?.id === swatch.id ? "true" : undefined}
-                onClick={() => onSelectAccent(swatch.id)}
+                onClick={() => {
+                  setIsCustomColorPickerOpen(false);
+                  onSelectAccent(swatch.id);
+                }}
               >
                 {activeAccent?.id === swatch.id ? <Check size={12} strokeWidth={1.9} /> : null}
               </button>
             ))}
+            <button
+              ref={customColorAnchorRef}
+              type="button"
+              className={[
+                "dasti-cv-style-swatch",
+                "dasti-cv-style-swatch--custom",
+                isCustomAccentSelected ? "" : "dasti-cv-style-swatch--icon",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              style={
+                {
+                  "--cv-accent-swatch": customAccentColor,
+                } as React.CSSProperties
+              }
+              aria-label="Open custom color picker"
+              aria-pressed={isCustomAccentSelected}
+              data-selected={isCustomAccentSelected ? "true" : undefined}
+              title={
+                isCustomAccentSelected
+                  ? `Custom accent ${customAccentColor}`
+                  : "Open custom color picker"
+              }
+              onClick={() => setIsCustomColorPickerOpen(true)}
+            >
+              {isCustomAccentSelected ? (
+                <Check size={12} strokeWidth={1.9} />
+              ) : (
+                <ColorWheel
+                  className="dasti-cv-style-swatch-wheel"
+                  aria-hidden="true"
+                />
+              )}
+            </button>
           </div>
+          <ProposalColorPickerPopover
+            currentHex={customAccentColor}
+            anchorRef={customColorAnchorRef}
+            surfaceAnchorRef={customColorSurfaceRef}
+            horizontalAlign="center"
+            isOpen={isCustomColorPickerOpen}
+            onClose={() => setIsCustomColorPickerOpen(false)}
+            onHexChange={onSelectCustomAccent}
+          />
         </div>
       ) : null}
 

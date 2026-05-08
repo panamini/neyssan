@@ -93,6 +93,24 @@ vi.mock("../../components/ProfileReviewCard", () => ({
   ),
 }));
 
+vi.mock("../../components/ProposalColorPickerPopover", () => ({
+  ProposalColorPickerPopover: ({
+    isOpen,
+    onHexChange,
+  }: {
+    isOpen: boolean;
+    onHexChange: (hex: string) => void;
+  }) =>
+    isOpen ? (
+      <button
+        type="button"
+        onClick={() => onHexChange("#A1B2C3")}
+      >
+        Pick custom #A1B2C3
+      </button>
+    ) : null,
+}));
+
 vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
   VerbatiResumePreview: ({
     stylePreset,
@@ -382,5 +400,38 @@ describe("CvForge settings style fallback", () => {
         }),
       }),
     );
+  });
+
+  it("lets CV Forge pick a custom color for a selected Settings style", async () => {
+    const user = userEvent.setup();
+    const saveCurrentCvStyleOnly = vi.fn(async () => undefined);
+    const currentCv = buildBlankCv("cv_custom_color");
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv,
+        cvs: [currentCv],
+        saveCurrentCvStyleOnly,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_custom_color"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    await user.click(screen.getByRole("tab", { name: "Style" }));
+    await user.click(getStyleSlotButton(2));
+    await user.click(
+      screen.getByRole("button", { name: "Open custom color picker" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Pick custom #A1B2C3" }));
+
+    expect(getStyleSlotButton(2)).toHaveTextContent("Style 2 · Custom");
+    expect(screen.getByText(/Preview style: .*custom.*#A1B2C3/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open custom color picker" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 });
