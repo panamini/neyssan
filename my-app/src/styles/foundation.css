@@ -495,12 +495,12 @@
             background were wrong — those now use `var(--paper)` directly.
 */
 :root {
-  --bg: #EFEBE2;   /* app content canvas — warm parchment, clearly below paper (#FAF9F5) */
+  --bg: #F1EEE7;   /* app content canvas — warm parchment, clearly below paper (#FAF9F5) */
   --sf0: var(--bg); /* floor level — canvas alias, used for focus ring halos + sunken fills */
-  --sf1: #F4F1E9;  /* sidebar chrome — between canvas and paper */
-  --sf2: #F0EEE6;  /* secondary surfaces + resume stage */
-  --sf3: #F5F4EF;  /* subtle-fill input hover */
-  --sfr: #FFFFFF;  /* raised: toolbars, cards, popovers — white for clear elevation */
+  --sf1: #F6F4EF;  /* sidebar chrome — between canvas and paper */
+  --sf2: #E9E5DC;  /* secondary surfaces + resume stage */
+  --sf3: #F8F6F2;  /* subtle-fill input hover */
+  --sfr: #FFFDF8;  /* raised: toolbars, cards, popovers */
   --ti: #0F0C08;
   --tm2: rgba(15, 12, 8, 0.64);
   --tg2: rgba(15, 12, 8, 0.60);

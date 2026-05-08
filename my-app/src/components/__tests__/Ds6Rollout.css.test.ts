@@ -67,7 +67,7 @@ describe("DS-6 rollout contracts", () => {
     expect(proposalsLibrarySource).toContain("<Input");
     expect(cvsLibrarySource).toContain('import { Input } from "../components/ui";');
     expect(cvsLibrarySource).toContain("<Input");
-    expect(foundationCss).toContain("--sf3: #F5F4EF;");
+    expect(foundationCss).toContain("--sf3: #F8F6F2;");
     expect(foundationCss).toContain("--sf3: #161616;");
     expect(foundationCss).toContain("--field-focus-shadow: none;");
     expect(dsCss).toMatch(
@@ -181,21 +181,21 @@ describe("DS-6 rollout contracts", () => {
     );
   });
 
-  it("uses the DS sidebar active gradient and stripe", () => {
+  it("uses the DS sidebar active surface and stripe", () => {
     expect(productCss).toMatch(
-      /\.sb-section__action--active\s*\{[\s\S]*background:\s*linear-gradient\(90deg,\s*var\(--ap\),\s*transparent\);[\s\S]*color:\s*var\(--sidebar-active-ink\);/,
+      /\.sb-section__action--active\s*\{[\s\S]*background:\s*var\(--sf2\);[\s\S]*color:\s*var\(--sidebar-active-ink\);/,
     );
     expect(productCss).toMatch(
       /\.sb-section__action--active::before\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*scaleY\(1\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-section__document--active\s*\{[\s\S]*background:\s*linear-gradient\(90deg,\s*var\(--ap\),\s*transparent\);[\s\S]*color:\s*var\(--ti\);/,
+      /\.sb-section__document--active\s*\{[\s\S]*background:\s*var\(--sf2\);[\s\S]*color:\s*var\(--ti\);/,
     );
     expect(productCss).toMatch(
       /\.sb-section__document--active::before\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*scaleY\(1\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-rail-button--active\s*\{[\s\S]*background:\s*linear-gradient\(90deg,\s*var\(--ap\)\s*0%,\s*transparent\s*70%\);/,
+      /\.sb-rail-button--active\s*\{[\s\S]*background:\s*var\(--sf2\);/,
     );
     expect(productCss).toMatch(
       /\.sb-rail-button--active::before\s*\{[\s\S]*top:\s*10px;[\s\S]*bottom:\s*10px;[\s\S]*width:\s*2px;[\s\S]*background:\s*var\(--ac\);/,
