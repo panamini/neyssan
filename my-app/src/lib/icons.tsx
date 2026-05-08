@@ -80,6 +80,8 @@ import {
   TextUnderline as PhTextUnderline,
   TrashSimple as PhTrashSimple,
   TreeView as PhTreeView,
+  ToggleLeft as PhToggleLeft,
+  ToggleRight as PhToggleRight,
   Upload as PhUpload,
   User as PhUser,
   UserCircle as PhUserCircle,
@@ -217,6 +219,8 @@ export const Sunglasses = withCompat(PhSunglasses);
 export const Stamp = withCompat(PhStamp);
 export const TrashSimple = withCompat(PhTrashSimple);
 export const Underline = withCompat(PhTextUnderline);
+export const ToggleLeft = withCompat(PhToggleLeft);
+export const ToggleRight = withCompat(PhToggleRight);
 export const Upload = withCompat(PhUpload);
 export const User = withCompat(PhUser);
 export const UserRound = withCompat(PhUserCircle);
