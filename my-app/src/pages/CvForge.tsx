@@ -2209,7 +2209,13 @@ export function CvForge(): JSX.Element {
     ((api.proposalSettings as any)?.getCurrent ??
       "proposalSettings.getCurrent") as any,
     isConvexAuthenticated ? {} : "skip",
-  ) as { voicePreset?: unknown; savedVoicePreset?: unknown } | undefined;
+  ) as
+    | {
+        voicePreset?: unknown;
+        savedVoicePreset?: unknown;
+        verbatiStyle?: VerbatiStylePreset | null;
+      }
+    | undefined;
   const documentStylePresets = useQuery(
     ((api.proposalSettings as any)?.getPresets ??
       "proposalSettings.getPresets") as any,
@@ -2391,6 +2397,7 @@ export function CvForge(): JSX.Element {
   const { stylePreset, setStylePreset } = useBoundVerbatiCvStyle({
     currentCv,
     persistStyle: saveCurrentCvStyleOnly,
+    fallbackStylePreset: defaultProposalSettings?.verbatiStyle ?? null,
     debounceMs: 700,
     logPrefix: "[CvForge]",
   });
