@@ -7658,18 +7658,25 @@
   flex-direction: column;
   gap: var(--space-5);
   padding: var(--space-5);
-  border: 1px solid var(--border-soft);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 68%, transparent);
   border-radius: var(--r-surface, var(--radius-card));
-  background: var(--sfr);
-  box-shadow: none;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 96%, white 4%) 0%,
+    color-mix(in srgb, var(--sf1) 96%, white 4%) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 38%, transparent),
+    0 24px 50px -42px rgb(0 0 0 / 34%);
 }
 
 .dasti-proposal-skeleton-rail__section {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding-block: 0 var(--space-5);
-  border-bottom: 1px solid var(--border-soft);
+  padding-block: 0 var(--space-4);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-soft) 82%, transparent);
+
 }
 
 .dasti-proposal-skeleton-rail__section:first-child {
@@ -7715,9 +7722,15 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-1);
   padding: var(--space-1);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
-  background: var(--color-surface);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 76%, white 24%) 0%,
+    color-mix(in srgb, var(--sf1) 96%, white 4%) 100%
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 36%, transparent);
+
 }
 
 .dasti-proposal-skeleton-rail__tab {
@@ -7726,22 +7739,44 @@
   border: 0;
   border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--tm2);
   font: inherit;
   font-size: var(--tx);
-  font-weight: var(--font-label-weight);
+  font-weight: 650;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   text-align: center;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+
+}
+
+.dasti-proposal-skeleton-rail__tab:hover,
+.dasti-proposal-skeleton-rail__tab:focus-visible {
+  background: color-mix(in srgb, var(--sf0) 72%, transparent);
+  color: var(--ti);
+  outline: none;
 }
 
 .dasti-proposal-skeleton-rail__tab[data-active="true"],
 .dasti-proposal-skeleton-rail__tab[aria-selected="true"] {
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  box-shadow: var(--shadow-sm);
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 98%, white 2%) 0%,
+    color-mix(in srgb, var(--sf2) 96%, white 4%) 100%
+  );
+  color: var(--ti);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 48%, transparent),
+    var(--shadow-sm);
+
 }
 
 .dasti-proposal-skeleton-rail__style {
@@ -7790,12 +7825,23 @@
   padding-inline: var(--space-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
-  background: var(--sf1);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 92%, white 8%) 0%,
+    color-mix(in srgb, var(--sf1) 96%, white 4%) 100%
+  );
   color: var(--tm2);
   font: inherit;
   font-size: var(--tx);
   font-weight: 650;
   cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+
 }
 
 .dasti-proposal-skeleton-rail__style-pills button:hover,
@@ -7803,12 +7849,19 @@
   border-color: var(--color-border-selected, var(--ac));
   background: var(--proposal-rail-control-bg-hover);
   outline: none;
+
 }
 
 .dasti-proposal-skeleton-rail__style-pills button[data-selected="true"] {
   color: var(--ac);
   border-color: var(--ac);
-  background: var(--am-soft);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--am-soft) 92%, white 8%) 0%,
+    color-mix(in srgb, var(--am-soft) 84%, var(--sfr) 16%) 100%
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 42%, transparent);
+
 }
 
 .dasti-proposal-font-menu-trigger {
@@ -7879,6 +7932,15 @@
   cursor: pointer;
   position: relative;
   overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 42%, transparent),
+    0 4px 10px -8px rgb(0 0 0 / 34%);
+  transition:
+    transform var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+
 }
 
 .dasti-proposal-skeleton-rail__style-swatch:hover,
@@ -7886,13 +7948,20 @@
 .dasti-proposal-skeleton-rail__style-swatch:focus-within {
   outline: none;
   border-color: var(--color-border-selected, var(--ac));
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 58%, transparent),
+    0 8px 16px -10px rgb(0 0 0 / 44%);
+
 }
 
 .dasti-proposal-skeleton-rail__style-swatch[data-selected="true"] {
   border-color: var(--ac);
   box-shadow:
-    0 0 0 2px var(--sf0),
-    0 0 0 4px color-mix(in srgb, var(--ac) 42%, transparent);
+    inset 0 1px 0 color-mix(in srgb, white 58%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--ac) 60%, transparent),
+    0 8px 20px -12px color-mix(in srgb, var(--ac) 36%, transparent);
+
 }
 
 .dasti-proposal-skeleton-rail__style-swatch--custom {
@@ -7928,9 +7997,14 @@
   text-align: left;
   border: 1px solid var(--proposal-rail-control-border);
   border-radius: var(--proposal-rail-control-radius);
-  background: var(--proposal-rail-control-bg);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--proposal-rail-control-bg) 94%, white 6%) 0%,
+    var(--proposal-rail-control-bg) 100%
+  );
   color: var(--ti);
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 40%, transparent);
+
 }
 
 .dasti-proposal-skeleton-rail__cv-button > span:first-child {
@@ -7946,8 +8020,13 @@
 .dasti-proposal-skeleton-rail__cv-button:hover:not(:disabled),
 .dasti-proposal-skeleton-rail__cv-button:focus-visible {
   border-color: var(--color-border-selected, var(--ac));
-  background: var(--proposal-rail-control-bg-hover);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--proposal-rail-control-bg-hover) 92%, white 8%) 0%,
+    var(--proposal-rail-control-bg-hover) 100%
+  );
   box-shadow: var(--focus-shadow-soft);
+
 }
 
 .dasti-proposal-skeleton-rail__summary-row,
@@ -8027,11 +8106,16 @@
   padding: 0 var(--space-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
-  background: var(--sf1);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sfr) 92%, white 8%) 0%,
+    color-mix(in srgb, var(--sf1) 96%, white 4%) 100%
+  );
   color: var(--ti);
   font-size: var(--tx);
   font-weight: 600;
   text-decoration: none;
+
 }
 
 .dasti-proposal-skeleton-rail__link-icon {
@@ -8046,6 +8130,8 @@
   border-color: var(--color-border-selected);
   box-shadow: var(--field-focus-shadow);
   text-decoration: none;
+  transform: translateY(-1px);
+
 }
 
 .dasti-proposal-skeleton-rail__empty-job-context {
