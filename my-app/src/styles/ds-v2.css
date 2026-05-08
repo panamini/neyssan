@@ -1516,3 +1516,10 @@
       transform: none;
     }
   }
+
+/* Dark anti-blooming: soften chrome/UI labels without changing light mode. */
+.dark .ds-field-label,
+.dark .ds-card__eyebrow,
+.dark .ds-ai-card__overline {
+  font-weight: 640;
+}

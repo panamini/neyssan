@@ -2709,3 +2709,11 @@ body,
     grid-template-columns: 1fr;
   }
 }
+
+/* Dark anti-blooming: soften chrome/UI labels and badges without changing light mode. */
+.dark .sb-section__editing-label,
+.dark .sb-workspace-card__eyebrow,
+.dark .sb-recent__badge,
+.dark .onb-replay__supported-sites-head strong {
+  font-weight: 640;
+}

@@ -1107,10 +1107,6 @@
 }
 
 .dasti-cv-style-swatch--custom {
-  background: var(--cv-accent-swatch);
-}
-
-.dasti-cv-style-swatch--icon {
   color: var(--ti);
   background:
     conic-gradient(
@@ -1124,10 +1120,9 @@
     );
 }
 
-.dasti-cv-style-swatch-wheel {
-  width: 14px;
-  height: 14px;
-  color: currentColor;
+.dasti-cv-style-swatch--custom[data-selected="true"] {
+  background: var(--cv-accent-swatch);
+  color: var(--paper);
 }
 
 .dasti-cv-style-swatch[data-selected="true"] {
@@ -5173,4 +5168,23 @@
 }
 .section-container.ds-card[data-state="collapsed"] {
   background: var(--sf1);
+}
+
+/* Dark anti-blooming: soften chrome/UI labels, titles, and badges without changing paper content. */
+.dark .dasti-cv-review-banner__title,
+.dark .dasti-cv-ai-list-card__title,
+.dark .dasti-cv-ai-list-chip button,
+.dark .dasti-cv-import-choice__title,
+.dark .dasti-cv-pill-editor__chip button,
+.dark .dasti-cv-pill-suggestions__title,
+.dark .dasti-cv-pill-suggestions__chip button,
+.dark .dasti-cv-rail-label,
+.dark .dasti-cv-rail-footer__label,
+.dark .dasti-resume-style-inspector__layout-badge,
+.dark .dasti-compose-toolbar__cv-kicker,
+.dark .dasti-import-warning-banner__eyebrow,
+.dark .dasti-inline-review__eyebrow,
+.dark .dasti-import-recovery__drawer-title,
+.dark .dasti-photo-upload-trigger__tooltip strong {
+  font-weight: 640;
 }
