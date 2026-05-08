@@ -1180,19 +1180,48 @@ export const Sidebar: React.FC = () => {
             isSettingsRoute ? (
               <button
                 type="button"
-                className="sb-section__action"
+                className={[
+                  "settings-theme-toggle",
+                  themeMode === "dark" ? "settings-theme-toggle--dark" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 onClick={toggleTheme}
                 aria-pressed={themeMode === "dark"}
-                aria-label={themeMode === "dark" ? "Light mode" : "Dark mode"}
-                title={themeMode === "dark" ? "Light mode" : "Dark mode"}
+                aria-label={
+                  themeMode === "dark" ? "Toggle light theme" : "Toggle dark theme"
+                }
+                title={
+                  themeMode === "dark" ? "Toggle light theme" : "Toggle dark theme"
+                }
               >
-                {themeMode === "dark" ? (
-                  <Sun size={14} strokeWidth={1.6} aria-hidden="true" />
-                ) : (
-                  <Moon size={14} strokeWidth={1.6} aria-hidden="true" />
-                )}
-                <span className="sb-footer__tool-label">
-                  {themeMode === "dark" ? "Light mode" : "Dark mode"}
+                <span
+                  className="settings-theme-toggle__indicator"
+                  aria-hidden="true"
+                />
+                <span
+                  className={[
+                    "settings-theme-toggle__option",
+                    themeMode === "light"
+                      ? "settings-theme-toggle__option--active"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  <Sun aria-hidden="true" />
+                </span>
+                <span
+                  className={[
+                    "settings-theme-toggle__option",
+                    themeMode === "dark"
+                      ? "settings-theme-toggle__option--active"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  <Moon aria-hidden="true" />
                 </span>
               </button>
             ) : (
