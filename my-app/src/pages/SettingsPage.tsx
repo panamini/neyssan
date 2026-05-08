@@ -1063,13 +1063,13 @@ export function SettingsPage(): JSX.Element {
   const setCurrentProposalSettings = useMutation(api.proposalSettings.setCurrent);
 
   // Local state
-  const [editingSlot, setEditingSlot] = React.useState<SlotIndex>(1);
+  const [editingSlot, setEditingSlot] = React.useState<SlotIndex | null>(null);
   const [localPresets, setLocalPresets] = React.useState<Record<SlotIndex, PresetSlot>>({
     1: buildDefaultPresetSlot(1),
     2: buildDefaultPresetSlot(2),
     3: buildDefaultPresetSlot(3),
   });
-  const [activeSlot, setActiveSlot] = React.useState<SlotIndex>(1);
+  const [activeSlot, setActiveSlot] = React.useState<SlotIndex | null>(null);
   const [savedTick, setSavedTick] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [contactFields, setContactFields] = React.useState<
@@ -1130,12 +1130,15 @@ export function SettingsPage(): JSX.Element {
       };
     };
 
+    const hydratedActiveSlot = (presetsQuery.activeSlot as SlotIndex | null) ?? 1;
+
     setLocalPresets({
       1: serverPreset(1, presetsQuery.preset1),
       2: serverPreset(2, presetsQuery.preset2),
       3: serverPreset(3, presetsQuery.preset3),
     });
-    setActiveSlot((presetsQuery.activeSlot as SlotIndex | null) ?? 1);
+    setActiveSlot(hydratedActiveSlot);
+    setEditingSlot(hydratedActiveSlot);
   }, [presetsQuery]);
 
   const flashSaved = React.useCallback(() => {
@@ -1180,8 +1183,9 @@ export function SettingsPage(): JSX.Element {
     (patch: Partial<PresetSlot>) => {
       setSaveError(null);
       setLocalPresets((prev) => {
-        const next = { ...prev, [editingSlot]: { ...prev[editingSlot], ...patch } };
-        const nextSavedPreset = buildPresetSavePayload(next[editingSlot]);
+        const targetSlot = editingSlot ?? activeSlot ?? 1;
+        const next = { ...prev, [targetSlot]: { ...prev[targetSlot], ...patch } };
+        const nextSavedPreset = buildPresetSavePayload(next[targetSlot]);
         // debounce save
         if (saveDebounceRef.current !== null) clearTimeout(saveDebounceRef.current);
         saveDebounceRef.current = setTimeout(() => {
@@ -1191,7 +1195,7 @@ export function SettingsPage(): JSX.Element {
             return;
           }
           void savePreset({
-            slot: editingSlot,
+            slot: targetSlot,
             preset: {
               ...nextSavedPreset,
               voicePreset: nextSavedPreset.voicePreset ?? null,
@@ -1223,7 +1227,7 @@ export function SettingsPage(): JSX.Element {
         return next;
       });
     },
-    [editingSlot, flashSaved, isSignedIn, savePreset],
+    [activeSlot, editingSlot, flashSaved, isSignedIn, savePreset],
   );
 
   const handleSetActive = React.useCallback(
@@ -1248,7 +1252,8 @@ export function SettingsPage(): JSX.Element {
     [flashSaved, isSignedIn, setActivePreset],
   );
 
-  const currentPreset = localPresets[editingSlot];
+  const effectiveEditingSlot = editingSlot ?? activeSlot ?? 1;
+  const currentPreset = localPresets[effectiveEditingSlot];
   const currentFontPair =
     VERBATI_FONT_PAIR_OPTIONS.find((fontPair) => fontPair.id === currentPreset.fontPairId) ??
     DEFAULT_FONT_PAIR_OPTION;
@@ -1492,14 +1497,14 @@ export function SettingsPage(): JSX.Element {
               ))}
             </div>
             <div className="dasti-settings-builder__preview-label">
-              {localPresets[editingSlot].name || DEFAULT_SLOT_NAMES[editingSlot]}
+              {currentPreset.name || DEFAULT_SLOT_NAMES[effectiveEditingSlot]}
             </div>
             <HeroPreview
-              key={editingSlot}
+              key={effectiveEditingSlot}
               preset={currentPreset}
-              slotName={currentPreset.name || DEFAULT_SLOT_NAMES[editingSlot]}
+              slotName={currentPreset.name || DEFAULT_SLOT_NAMES[effectiveEditingSlot]}
             />
-            {activeSlot !== editingSlot && (
+            {activeSlot !== null && editingSlot !== null && activeSlot !== editingSlot && (
               <button
                 type="button"
                 className="dasti-button dasti-button--sm dasti-settings-builder__set-default-btn"
