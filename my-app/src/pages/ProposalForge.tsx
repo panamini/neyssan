@@ -8965,6 +8965,7 @@ export function ProposalForge(): JSX.Element {
                             zoomStorageKey={null}
                             previewAnchor="top"
                             previewFitMode="width"
+                            previewScrollMode="natural"
                             size="default"
                             documentHeaderMode="hidden"
                             copyFeedback={copyFeedback}

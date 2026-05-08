@@ -112,6 +112,7 @@ interface ProposalDisplayProps {
   size?: "default" | "focused";
   previewAnchor?: "top" | "body";
   previewFitMode?: "contain" | "width";
+  previewScrollMode?: "contained" | "natural";
   hideDocumentHeader?: boolean;
   documentHeaderMode?: "full" | "actions-only" | "hidden";
   showZoomControls?: boolean;
@@ -539,6 +540,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   size = "default",
   previewAnchor = "top",
   previewFitMode = "contain",
+  previewScrollMode = "contained",
   hideDocumentHeader = false,
   documentHeaderMode = "full",
   showZoomControls = false,
@@ -904,12 +906,14 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const isMultiPagePreview =
     usesDocumentRenderer && !isEditable && documentPageCount > 1;
   const previewStageMode =
-    usesDocumentRenderer &&
-    !isEditable &&
-    (renderedDocumentHeight > stageLayout.stageHeight + 1 ||
-      stageLayout.overflowX ||
-      stageLayout.overflowY)
-      ? "overflow"
+    usesDocumentRenderer && !isEditable
+      ? previewScrollMode === "natural"
+        ? "overflow"
+        : renderedDocumentHeight > stageLayout.stageHeight + 1 ||
+            stageLayout.overflowX ||
+            stageLayout.overflowY
+          ? "overflow"
+          : "fit"
       : "fit";
   const resolveBodyClassName = React.useCallback(
     ({
@@ -1441,7 +1445,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const { attachViewport: attachAnchorViewport } = useDocumentViewportCentering(
     {
       enabled: enablesDocumentZoom,
-      layoutKey: `${effectiveZoomLevel}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${resolvedTemplateId}:${proposalContent?.length ?? 0}:${mode}:${previewAnchor}:${previewFitMode}`,
+      layoutKey: `${effectiveZoomLevel}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${resolvedTemplateId}:${proposalContent?.length ?? 0}:${mode}:${previewAnchor}:${previewFitMode}:${previewScrollMode}`,
       recenterKey: fitRequestCount,
       defaultCenterX: previewAnchor === "body" ? 0.5 : 0,
       defaultCenterY: previewAnchor === "body" ? 0.46 : 0,
