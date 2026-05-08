@@ -7938,7 +7938,7 @@ export function ProposalForge(): JSX.Element {
       {
         id: null,
         label: getVoicePresetDisplayLabel(null),
-        description: "Auto-fit tone to the role and source CV.",
+        description: "Chooses from the job and selected CV at generation time.",
         tone: "auto" as const,
         selected:
           proposalRailTonePreset === null ||

@@ -1944,7 +1944,7 @@ describe("CvForge workspace mode", () => {
     );
     expect(
       screen.getByRole("link", { name: "→ Document style" }),
-    ).toHaveAttribute("href", "/settings");
+    ).toHaveAttribute("href", "/settings?tab=docstyle");
   });
 
   it("opens a non-empty section editor from the paper in preview mode and highlights the rail row", async () => {
@@ -4292,9 +4292,9 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("tab", { name: "Style" }));
 
-    expect(screen.getByRole("button", { name: "Style 1" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Style 2" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Style 3" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Style 1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Style 2/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Style 3/ })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Fraunces Bold/i }),
     ).toBeInTheDocument();

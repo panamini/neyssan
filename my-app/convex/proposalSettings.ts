@@ -175,9 +175,7 @@ export const getCurrent = query({
         ? (user.proposalVerbatiStyle as PresetSlotData["verbatiStyle"])
         : undefined);
     const currentVoicePreset =
-      resolveProposalVoicePreset(activePreset?.voicePreset) ??
-      resolveProposalVoicePreset(user?.proposalVoicePreset) ??
-      null;
+      resolveProposalVoicePreset(user?.proposalVoicePreset) ?? null;
 
     return {
       voicePreset: currentVoicePreset ?? DEFAULT_PROPOSAL_VOICE_PRESET,
@@ -299,12 +297,6 @@ function applyPresetToCurrentProposalFields(
   nextReplacement: Record<string, unknown>,
   preset: PresetSlotData,
 ) {
-  if (preset.voicePreset) {
-    nextReplacement.proposalVoicePreset = preset.voicePreset;
-  } else {
-    delete nextReplacement.proposalVoicePreset;
-  }
-
   if (preset.styleChoice && preset.styleChoice !== "auto") {
     nextReplacement.proposalStyleChoice = preset.styleChoice;
   } else {

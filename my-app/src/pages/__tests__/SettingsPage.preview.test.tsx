@@ -151,17 +151,20 @@ describe("SettingsPage preview controls", () => {
     const user = userEvent.setup();
     renderSettings("/settings?tab=preferences");
 
-    await user.click(screen.getByRole("button", { name: "Dark" }));
-    expect(screen.getByRole("button", { name: "Dark" })).toHaveAttribute(
+    const themeToggle = screen.getByRole("button", {
+      name: "Toggle dark theme",
+    });
+    await user.click(themeToggle);
+    expect(themeToggle).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     expect(document.documentElement.dataset.theme).toBe("dark");
 
-    await user.click(screen.getByRole("button", { name: "Light" }));
-    expect(screen.getByRole("button", { name: "Light" })).toHaveAttribute(
+    await user.click(themeToggle);
+    expect(themeToggle).toHaveAttribute(
       "aria-pressed",
-      "true",
+      "false",
     );
     expect(document.documentElement.dataset.theme).toBe("light");
 

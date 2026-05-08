@@ -20,6 +20,7 @@ import {
   Copy as PhCopy,
   DotsThree as PhDotsThree,
   DotsSixVertical as PhDotsSixVertical,
+  Eraser as PhEraser,
   Eye as PhEye,
   EyeClosed as PhEyeClosed,
   EyeSlash as PhEyeSlash,
@@ -157,6 +158,7 @@ export const Eye = withCompat(PhEye);
 export const EyeClosed = withCompat(PhEyeClosed);
 export const EyeSlash = withCompat(PhEyeSlash);
 export const EyeDropper = withCompat(PhEyedropper);
+export const Eraser = withCompat(PhEraser);
 export const Feather = withCompat(PhFeather);
 export const FileImage = withCompat(PhFileImage);
 export const FilePdf = withCompat(PhFilePdf);

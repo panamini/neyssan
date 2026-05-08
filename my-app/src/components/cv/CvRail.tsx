@@ -958,7 +958,7 @@ export function CvRail({
         <div className="dasti-cv-rail-pane" data-rail-pane="style">
           <div className="dasti-cv-style-note">
             Default settings{" "}
-            <a className="dasti-cv-rail-link" href="/settings">
+            <a className="dasti-cv-rail-link" href="/settings?tab=docstyle">
               → Document style
             </a>
             .
