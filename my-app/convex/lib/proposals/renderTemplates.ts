@@ -208,7 +208,7 @@ export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[
     },
     {
       id: CANONICAL_PROPOSAL_TEMPLATE_ID,
-      name: "Canonical Workshop Proposal",
+      name: "Workshop",
       shortLabel: "35 mm Robial",
       description:
         "A generic workshop proposal sheet on the Robial 17/18 grid with a 35 mm left margin and a content-first body cadence.",

@@ -134,7 +134,7 @@ describe("ProposalForge preview applicant fallback", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Style" }));
 
     const signatureSwitch = await screen.findByRole("switch", {
-      name: "Signature",
+      name: "Printed name",
     });
     expect(signatureSwitch).toHaveAttribute("aria-checked", "true");
 
@@ -185,7 +185,7 @@ describe("ProposalForge preview applicant fallback", () => {
     });
 
     fireEvent.click(screen.getByRole("tab", { name: "Style" }));
-    fireEvent.click(await screen.findByRole("switch", { name: "Signature" }));
+    fireEvent.click(await screen.findByRole("switch", { name: "Printed name" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-display-mode")).toHaveTextContent(

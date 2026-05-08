@@ -4,7 +4,6 @@ import {
   Briefcase,
   Check,
   ChevronDown,
-  ColorWheel,
   FilePdf,
   FileUser,
   FloppyDisk,
@@ -1027,7 +1026,6 @@ export function ProposalRail({
                   className={[
                     "dasti-proposal-skeleton-rail__style-swatch",
                     "dasti-proposal-skeleton-rail__style-swatch--custom",
-                    isSelected ? "" : "dasti-proposal-skeleton-rail__style-swatch--icon",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -1042,14 +1040,7 @@ export function ProposalRail({
                   data-selected={isSelected ? "true" : undefined}
                   onClick={() => setIsCustomColorPickerOpen(true)}
                 >
-                  {isSelected ? (
-                    <Check size={12} strokeWidth={1.9} />
-                  ) : (
-                    <ColorWheel
-                      className="dasti-proposal-skeleton-rail__style-swatch-wheel"
-                      aria-hidden="true"
-                    />
-                  )}
+                  {isSelected ? <Check size={12} strokeWidth={1.9} aria-hidden="true" /> : null}
                 </button>
               );
             })}
@@ -1071,7 +1062,7 @@ export function ProposalRail({
                 : undefined
             }
           />
-          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Signature</div>
+          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Printed name</div>
           <div className="dasti-proposal-skeleton-rail__signature-toggles">
             <button
               type="button"
@@ -1087,12 +1078,12 @@ export function ProposalRail({
                 .filter(Boolean)
                 .join(" ")}
               disabled={!onChooseSignature && !onToggleSignature}
-              aria-label="Signature"
+              aria-label="Printed name"
               aria-checked={signaturePresent}
               title={
                 signaturePresent
-                  ? "Signature is enabled for this proposal. Click to hide it from this proposal."
-                  : "Insert the applicant signature using your Settings signature style."
+                  ? "Printed name is enabled for this proposal. Click to hide it from this proposal."
+                  : "Insert the applicant printed name using your Settings name style."
               }
               onClick={() => {
                 setIsCustomColorPickerOpen(false);
@@ -1106,7 +1097,7 @@ export function ProposalRail({
               <span className="dasti-theme-switch__rail" aria-hidden="true">
                 <span className="dasti-theme-switch__thumb" />
               </span>
-              <span className="dasti-theme-switch__label">Signature</span>
+              <span className="dasti-theme-switch__label">Printed name</span>
             </button>
             <button
               type="button"
@@ -1126,11 +1117,11 @@ export function ProposalRail({
                 !handwrittenSignatureAvailable ||
                 !onToggleHandwrittenSignature
               }
-              aria-label="Hand-drawn signature"
+              aria-label="Signature"
               aria-checked={handwrittenSignatureEnabled}
               title={
                 handwrittenSignatureAvailable
-                  ? "Place your Settings hand-drawn signature above the typed signature."
+                  ? "Place your Settings signature above the printed name."
                   : "Add or draw a signature image in Settings to enable this option."
               }
               onClick={() => {
@@ -1141,7 +1132,7 @@ export function ProposalRail({
               <span className="dasti-theme-switch__rail" aria-hidden="true">
                 <span className="dasti-theme-switch__thumb" />
               </span>
-              <span className="dasti-theme-switch__label">Hand-drawn</span>
+              <span className="dasti-theme-switch__label">Signature</span>
             </button>
           </div>
         </section>
