@@ -6772,8 +6772,17 @@ export function ProposalForge(): JSX.Element {
 
     const latestStoredOutputDraft = readStoredProposalOutputDraft() ?? storedOutputDraft;
     const nextClosingToken = JSON.stringify(nextClosing);
+    const currentClosingToken = JSON.stringify(
+      resolveProposalClosingRef({
+        closing: storedOutputProposalClosing,
+        content: proposalContent,
+        proposalType,
+        applicantName,
+        voicePreset: proposalVoicePreset,
+      }),
+    );
     const closingChanged =
-      effectiveProposalClosingToken !== nextClosingToken &&
+      currentClosingToken !== nextClosingToken &&
       JSON.stringify(latestStoredOutputDraft?.proposalClosing ?? null) !== nextClosingToken;
 
     if (!closingChanged) {
@@ -6798,7 +6807,6 @@ export function ProposalForge(): JSX.Element {
     proposalContent,
     proposalType,
     proposalVoicePreset,
-    effectiveProposalClosingToken,
     showToast,
     storedOutputDraft,
     storedOutputProposalClosing,
@@ -6836,8 +6844,17 @@ export function ProposalForge(): JSX.Element {
       };
       const latestStoredOutputDraft = readStoredProposalOutputDraft() ?? storedOutputDraft;
       const nextClosingToken = JSON.stringify(nextClosing);
+      const currentClosingToken = JSON.stringify(
+        resolveProposalClosingRef({
+          closing: storedOutputProposalClosing,
+          content: proposalContent,
+          proposalType,
+          applicantName: sanitizeProposalApplicantName(proposalApplicantName),
+          voicePreset: proposalVoicePreset,
+        }),
+      );
       const closingChanged =
-        effectiveProposalClosingToken !== nextClosingToken &&
+        currentClosingToken !== nextClosingToken &&
         JSON.stringify(latestStoredOutputDraft?.proposalClosing ?? null) !== nextClosingToken;
 
       if (!closingChanged) {
@@ -6862,7 +6879,6 @@ export function ProposalForge(): JSX.Element {
       proposalContent,
       proposalType,
       proposalVoicePreset,
-      effectiveProposalClosingToken,
       showToast,
       storedOutputDraft,
       storedOutputProposalClosing,
@@ -6912,8 +6928,17 @@ export function ProposalForge(): JSX.Element {
       };
       const latestStoredOutputDraft = readStoredProposalOutputDraft() ?? storedOutputDraft;
       const nextClosingWithHandwrittenToken = JSON.stringify(nextClosingWithHandwritten);
+      const currentClosingToken = JSON.stringify(
+        resolveProposalClosingRef({
+          closing: storedOutputProposalClosing,
+          content: proposalContent,
+          proposalType,
+          applicantName: sanitizeProposalApplicantName(proposalApplicantName),
+          voicePreset: proposalVoicePreset,
+        }),
+      );
       const closingChanged =
-        effectiveProposalClosingToken !== nextClosingWithHandwrittenToken &&
+        currentClosingToken !== nextClosingWithHandwrittenToken &&
         JSON.stringify(latestStoredOutputDraft?.proposalClosing ?? null) !==
           nextClosingWithHandwrittenToken;
 
@@ -6938,7 +6963,6 @@ export function ProposalForge(): JSX.Element {
     [
       proposalApplicantName,
       proposalContent,
-      effectiveProposalClosingToken,
       proposalSignatureSettings.imageDataUrl,
       proposalSignatureSettings.mode,
       proposalType,
