@@ -13,6 +13,7 @@ import { SettingsPage } from "../SettingsPage";
 
 const savePresetMock = vi.fn(() => Promise.resolve(null));
 const setActivePresetMock = vi.fn(() => Promise.resolve(null));
+const setCurrentSettingsMock = vi.fn(() => Promise.resolve(null));
 const presetsQueryMock = vi.fn();
 
 function getLastSavePresetPayload(): unknown {
@@ -23,8 +24,10 @@ const { api } = vi.hoisted(() => ({
   api: {
     proposalSettings: {
       getPresets: {},
+      getCurrent: {},
       savePreset: {},
       setActivePreset: {},
+      setCurrent: {},
     },
   },
 }));
@@ -39,6 +42,13 @@ vi.mock("convex/react", () => ({
       return savePresetMock;
     }
 
+    if (
+      reference ===
+      (api.proposalSettings.setCurrent as unknown)
+    ) {
+      return setCurrentSettingsMock;
+    }
+
     return setActivePresetMock;
   },
 }));
@@ -51,7 +61,21 @@ vi.mock("@clerk/clerk-react", () => ({
 }));
 
 vi.mock("../../components/ProposalColorPickerPopover", () => ({
-  ProposalColorPickerPopover: () => null,
+  ProposalColorPickerPopover: ({
+    isOpen,
+    onHexChange,
+  }: {
+    isOpen: boolean;
+    onHexChange: (hex: string) => void;
+  }) =>
+    isOpen ? (
+      <button
+        type="button"
+        onClick={() => onHexChange("#A1B2C3")}
+      >
+        Pick custom #A1B2C3
+      </button>
+    ) : null,
 }));
 
 function renderSettings(initialEntry = "/settings?tab=docstyle") {
@@ -66,6 +90,7 @@ describe("SettingsPage preview controls", () => {
   beforeEach(() => {
     savePresetMock.mockClear();
     setActivePresetMock.mockClear();
+    setCurrentSettingsMock.mockClear();
     window.localStorage.clear();
     document.documentElement.dataset.theme = "light";
     document.documentElement.dataset.reduceMotion = "false";
@@ -121,6 +146,27 @@ describe("SettingsPage preview controls", () => {
       "aria-current",
       "page",
     );
+  });
+
+  it("keeps tone out of document style and saves it from Voice & tone", async () => {
+    const user = userEvent.setup();
+    renderSettings("/settings?tab=docstyle");
+
+    expect(
+      screen.queryByRole("group", { name: "Default tone" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Voice & tone" }));
+    const toneGroup = screen.getByRole("group", { name: "Default tone" });
+
+    await user.click(within(toneGroup).getByRole("button", { name: "Warm" }));
+
+    await waitFor(() => {
+      expect(setCurrentSettingsMock).toHaveBeenCalledWith({
+        voicePreset: "engaging",
+      });
+    });
+    expect(savePresetMock).not.toHaveBeenCalled();
   });
 
   it("activates theme and reduce-motion preferences from preferences", async () => {
@@ -265,6 +311,118 @@ describe("SettingsPage preview controls", () => {
             accentHex: null,
             typography: "quiet-editorial",
             layout: "workshop",
+            resumeTemplateId: "workshop_resume_twocol_ats",
+          }),
+        }),
+      });
+    });
+  });
+
+  it("saves a custom Style 2 color through accentHex and custom verbatiStyle", async () => {
+    presetsQueryMock.mockReturnValue({
+      activeSlot: 2,
+      preset1: null,
+      preset2: {
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: "cobalt",
+        accentHex: null,
+        voicePreset: null,
+        name: "Style 2",
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "cobalt",
+          accentHex: null,
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+      },
+      preset3: null,
+    });
+    const user = userEvent.setup();
+    const { container } = renderSettings();
+    const cards = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+    );
+
+    await user.click(cards[1]!);
+    await user.click(
+      within(screen.getByRole("group", { name: "Color" })).getByRole("button", {
+        name: "Open custom color picker",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Pick custom #A1B2C3" }));
+
+    const colorGroup = within(screen.getByRole("group", { name: "Color" }));
+    expect(
+      colorGroup.getByRole("button", { name: "Open custom color picker" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(colorGroup.getByRole("button", { name: "Cobalt" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    await waitFor(() => {
+      expect(getLastSavePresetPayload()).toMatchObject({
+        slot: 2,
+        preset: expect.objectContaining({
+          paletteOverride: null,
+          accentHex: "#A1B2C3",
+          verbatiStyle: expect.objectContaining({
+            palette: "custom",
+            accentHex: "#a1b2c3",
+            typography: "quiet-editorial",
+            layout: "workshop",
+            resumeTemplateId: "workshop_resume_twocol_ats",
+          }),
+        }),
+      });
+    });
+  });
+
+  it("resets the edited Settings style slot back to factory defaults", async () => {
+    presetsQueryMock.mockReturnValue({
+      activeSlot: 2,
+      preset1: null,
+      preset2: {
+        fontPairId: "studio-grotesk",
+        styleChoice: "balanced",
+        paletteOverride: null,
+        accentHex: "#A1B2C3",
+        voicePreset: null,
+        name: "Style 2",
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "studio-grotesk",
+          palette: "custom",
+          accentHex: "#A1B2C3",
+          resumeTemplateId: "workshop_resume_onecol_ats",
+        },
+      },
+      preset3: null,
+    });
+    const user = userEvent.setup();
+    const { container } = renderSettings();
+    const cards = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
+    );
+
+    await user.click(cards[1]!);
+    await user.click(screen.getByRole("button", { name: "Reset Style 2" }));
+
+    await waitFor(() => {
+      expect(getLastSavePresetPayload()).toMatchObject({
+        slot: 2,
+        preset: expect.objectContaining({
+          fontPairId: "quiet-editorial",
+          paletteOverride: "ink",
+          accentHex: null,
+          verbatiStyle: expect.objectContaining({
+            palette: "ink",
+            accentHex: null,
+            typography: "quiet-editorial",
             resumeTemplateId: "workshop_resume_twocol_ats",
           }),
         }),
@@ -432,8 +590,11 @@ describe("SettingsPage preview controls", () => {
         container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
       );
     const getDefaultTexts = () =>
-      within(screen.getByRole("group", { name: "Style preset slots" }))
-        .queryAllByText(/default/i);
+      Array.from(
+        screen
+          .getByRole("group", { name: "Style preset slots" })
+          .querySelectorAll(".dasti-settings-slot-card__active-badge"),
+      );
 
     expect(getDefaultTexts()).toHaveLength(1);
 
@@ -488,8 +649,11 @@ describe("SettingsPage preview controls", () => {
         container.querySelectorAll<HTMLButtonElement>(".dasti-settings-slot-card"),
       );
     const getDefaultTexts = () =>
-      within(screen.getByRole("group", { name: "Style preset slots" }))
-        .queryAllByText(/default/i);
+      Array.from(
+        screen
+          .getByRole("group", { name: "Style preset slots" })
+          .querySelectorAll(".dasti-settings-slot-card__active-badge"),
+      );
 
     expect(getDefaultTexts()).toHaveLength(1);
     expect(getCards()[2]).toHaveTextContent("Default");

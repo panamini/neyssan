@@ -4451,6 +4451,19 @@ export function CvForge(): JSX.Element {
     [setStylePreset],
   );
 
+  const handleSelectCustomAccent = React.useCallback(
+    (hex: string) => {
+      setStylePreset((current) =>
+        resolveVerbatiStyle({
+          ...current,
+          palette: "custom",
+          accentHex: hex,
+        }),
+      );
+    },
+    [setStylePreset],
+  );
+
   const handleRunAskAiForSection = React.useCallback(
     async ({
       sectionId,
@@ -5705,6 +5718,7 @@ export function CvForge(): JSX.Element {
               onSelectTemplate={handleSelectTemplate}
               onSelectFontPair={handleSelectFontPair}
               onSelectAccent={handleSelectAccent}
+              onSelectCustomAccent={handleSelectCustomAccent}
               onNewCv={() => {
                 void handleStartFreshEntryCv();
               }}
