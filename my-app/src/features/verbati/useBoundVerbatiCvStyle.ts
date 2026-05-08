@@ -7,6 +7,7 @@ import { canonicalizeVisualStyle } from "./styleState";
 type UseBoundVerbatiCvStyleArgs = {
   currentCv: CvDocument | null | undefined;
   persistStyle: (style: VerbatiStylePreset) => Promise<void>;
+  fallbackStylePreset?: VerbatiStylePreset | null;
   debounceMs?: number;
   logPrefix?: string;
 };
@@ -19,13 +20,27 @@ type UseBoundVerbatiCvStyleResult = {
 export function useBoundVerbatiCvStyle({
   currentCv,
   persistStyle,
+  fallbackStylePreset = null,
   debounceMs = 700,
   logPrefix = "[useBoundVerbatiCvStyle]",
 }: UseBoundVerbatiCvStyleArgs): UseBoundVerbatiCvStyleResult {
-  const persistedStylePreset = React.useMemo(
-    () => canonicalizeVisualStyle(getVerbatiStyleFromCv(currentCv)),
-    [currentCv],
-  );
+  const persistedStylePreset = React.useMemo(() => {
+    const metadata = currentCv?.metadata as Record<string, unknown> | undefined;
+    const hasStyleSignals = Boolean(
+      metadata &&
+        (metadata.verbatiStyle ||
+          metadata.verbatiStyleBaseSnapshot ||
+          metadata.verbatiStyleSlotId ||
+          metadata.verbatiStyleSlotSource ||
+          metadata.verbatiStyleSlotNameSnapshot),
+    );
+
+    if (!hasStyleSignals && fallbackStylePreset) {
+      return canonicalizeVisualStyle(fallbackStylePreset);
+    }
+
+    return canonicalizeVisualStyle(getVerbatiStyleFromCv(currentCv));
+  }, [currentCv, fallbackStylePreset]);
   const [stylePreset, setStylePreset] = React.useState(persistedStylePreset);
 
   React.useEffect(() => {
