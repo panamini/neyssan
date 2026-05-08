@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { CANONICAL_PROPOSAL_TEMPLATE_ID } from "../../../convex/lib/proposals/renderTemplates";
 import { getProposalTwinTemplateId } from "../../features/verbati/style";
 import {
   PROPOSAL_LAYOUT_OPTIONS,
@@ -20,6 +21,13 @@ describe("proposal-template-bundles pairing", () => {
       expect(definition.templateId).toBe(
         getProposalTwinTemplateId(definition.stylePreset),
       );
+    }
+  });
+
+  it("routes every workshop proposal bundle through the canonical proposal template", () => {
+    for (const definition of PROPOSAL_TEMPLATE_BUNDLE_DEFINITIONS) {
+      expect(definition.stylePreset.layout).toBe("workshop");
+      expect(definition.templateId).toBe(CANONICAL_PROPOSAL_TEMPLATE_ID);
     }
   });
 

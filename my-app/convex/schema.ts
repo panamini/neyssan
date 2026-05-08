@@ -520,7 +520,12 @@ export default defineSchema({
     proposalStyleChoice: v.optional(proposalStyleChoiceChoice),
     proposalPaletteOverride: v.optional(
       v.union(
+        v.literal("terre"),
+        v.literal("cobalt"),
+        v.literal("ink"),
         v.literal("sauge"),
+        v.literal("plum"),
+        v.literal("ochre"),
         v.literal("ocre"),
         v.literal("pierre"),
         v.literal("bordeaux"),

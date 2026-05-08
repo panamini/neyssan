@@ -256,7 +256,7 @@ describe("ProposalForge export behavior", () => {
     );
   });
 
-  it("exports compose styled PDFs from slot-only draft style metadata", async () => {
+  it("exports compose styled PDFs from native Style 2 slot metadata", async () => {
     const user = userEvent.setup();
 
     writeStoredProposalOutputDraft({
@@ -312,8 +312,8 @@ describe("ProposalForge export behavior", () => {
         mode: "styled",
         stylePreset: expect.objectContaining({
           layout: "workshop",
-          typography: "soft-serif",
-          palette: "cobalt",
+          typography: "quiet-editorial",
+          palette: "ink",
         }),
         data: expect.objectContaining({
           kind: "proposal",
@@ -321,8 +321,8 @@ describe("ProposalForge export behavior", () => {
           templateId: "workshop_proposal_margin",
           stylePreset: expect.objectContaining({
             layout: "workshop",
-            typography: "soft-serif",
-            palette: "cobalt",
+            typography: "quiet-editorial",
+            palette: "ink",
           }),
         }),
       }),

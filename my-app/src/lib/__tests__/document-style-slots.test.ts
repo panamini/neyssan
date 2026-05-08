@@ -5,6 +5,7 @@ import {
   PROPOSAL_BUNDLE_BY_DOCUMENT_STYLE_SLOT,
   getFactoryDocumentStyleSlot,
   getProposalBundleForDocumentStyleSlot,
+  buildProposalDocumentAppearanceSnapshot,
   resolveDocumentStyleSlotId,
 } from "../document-style-slots";
 
@@ -38,5 +39,22 @@ describe("document-style-slots", () => {
     expect(resolveDocumentStyleSlotId(1)).toBe(1);
     expect(resolveDocumentStyleSlotId(4)).toBeNull();
     expect(resolveDocumentStyleSlotId("1")).toBeNull();
+  });
+
+  it("strips CV-only resume templates from proposal appearance snapshots", () => {
+    expect(
+      buildProposalDocumentAppearanceSnapshot({
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "ledger-sans",
+        palette: "sauge",
+        resumeTemplateId: "workshop_resume_onecol_ats",
+      }),
+    ).toEqual({
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "ledger-sans",
+      palette: "sauge",
+    });
   });
 });

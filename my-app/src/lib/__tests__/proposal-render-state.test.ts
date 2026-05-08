@@ -114,7 +114,7 @@ describe("resolveProposalRenderState", () => {
     expect(result.templateId).toBe("workshop_proposal_margin");
   });
 
-  it("falls back from a valid stored slot id to its proposal bundle default", () => {
+  it("falls back from a valid stored slot id to its native document style while using a proposal-safe template", () => {
     const result = resolveProposalRenderState({
       storedStyleSlotId: 3,
       activeCvStylePreset: {
@@ -126,7 +126,9 @@ describe("resolveProposalRenderState", () => {
 
     expect(result.stylePreset).toMatchObject({
       layout: "workshop",
+      typography: "ledger-sans",
       palette: "ink",
+      resumeTemplateId: "workshop_resume_twocol_ats",
     });
     expect(result.templateId).toBe("workshop_proposal_margin");
   });

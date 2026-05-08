@@ -19,6 +19,11 @@ import {
   type ProposalTemplateBundleId,
 } from "../../lib/proposal-template-bundles";
 import {
+  CANONICAL_PROPOSAL_TEMPLATE_ID,
+  getProposalTemplateDefinition,
+  type ProposalTemplateId,
+} from "../../../convex/lib/proposals/renderTemplates";
+import {
   PROPOSAL_PALETTE_OPTIONS,
   type ProposalPaletteId,
 } from "../../lib/proposal-style-display";
@@ -79,6 +84,13 @@ type ProposalRailStyleOption = {
   description: string;
 };
 
+type ProposalRailLayoutOption = {
+  id: ProposalTemplateId;
+  eyebrow: string;
+  label: string;
+  description: string;
+};
+
 type ProposalRailAccentOption = {
   id: string;
   label: string;
@@ -107,6 +119,18 @@ const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
     description:
       PROPOSAL_TEMPLATE_BUNDLE_DEFINITIONS.find((definition) => definition.id === "grid_mono")
         ?.description ?? "Workshopped technical proposal style.",
+  },
+];
+
+const CANONICAL_PROPOSAL_TEMPLATE_DEFINITION =
+  getProposalTemplateDefinition(CANONICAL_PROPOSAL_TEMPLATE_ID);
+
+const PROPOSAL_LAYOUT_OPTIONS: ProposalRailLayoutOption[] = [
+  {
+    id: CANONICAL_PROPOSAL_TEMPLATE_ID,
+    eyebrow: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.shortLabel,
+    label: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.name,
+    description: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.description,
   },
 ];
 
@@ -243,7 +267,10 @@ type ProposalRailProps = {
   onSelectTone: (toneId: string | null) => void;
   lengthOptions: ProposalRailLengthOption[];
   onSelectLength: (lengthId: ProposalRailLengthOption["id"]) => void;
+  proposalTemplateId?: ProposalTemplateId | null;
+  onSelectProposalLayout?: (templateId: ProposalTemplateId) => void;
   stylePreset: VerbatiStylePreset;
+  styleTemplateBundleBaseStyle?: VerbatiStylePreset | null;
   styleTemplateBundleId: ProposalTemplateBundleId | null;
   onSelectStyleBundle: (bundleId: ProposalTemplateBundleId) => void;
   onResetStyleBundle?: (bundleId: ProposalTemplateBundleId) => void;
@@ -300,7 +327,10 @@ export function ProposalRail({
   onSelectTone,
   lengthOptions,
   onSelectLength,
+  proposalTemplateId,
+  onSelectProposalLayout,
   stylePreset,
+  styleTemplateBundleBaseStyle,
   styleTemplateBundleId,
   onSelectStyleBundle,
   onResetStyleBundle,
@@ -428,9 +458,15 @@ export function ProposalRail({
   );
   const activeTemplateBundleDefinition =
     getProposalTemplateBundleDefinition(activeTemplateBundleId);
+  const activeTemplateBundleBaseStyle =
+    styleTemplateBundleBaseStyle ?? activeTemplateBundleDefinition.stylePreset;
+  const activeLayoutDefinition = getProposalTemplateDefinition(
+    proposalTemplateId ?? CANONICAL_PROPOSAL_TEMPLATE_ID,
+  );
+  const resolvedProposalTemplateId =
+    proposalTemplateId ?? CANONICAL_PROPOSAL_TEMPLATE_ID;
   const isActiveTemplateBundleCustomized = Boolean(
-    styleTemplateBundleId &&
-      !railStylesEqual(stylePreset, activeTemplateBundleDefinition.stylePreset),
+    !railStylesEqual(stylePreset, activeTemplateBundleBaseStyle),
   );
   const activeTemplateBundleLabel =
     PROPOSAL_STYLE_OPTIONS.find((option) => option.id === activeTemplateBundleId)
@@ -868,6 +904,32 @@ export function ProposalRail({
             </a>
             .
           </div>
+          <div className="dasti-proposal-skeleton-rail__layout-eyebrow">
+            {activeLayoutDefinition.shortLabel}
+          </div>
+          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Layout</div>
+          <div className="dasti-proposal-skeleton-rail__style-pills" aria-label="Proposal layout presets">
+            {PROPOSAL_LAYOUT_OPTIONS.map((option) => {
+              const isSelected = resolvedProposalTemplateId === option.id;
+
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-label={`${option.label} layout`}
+                  data-selected={isSelected ? "true" : undefined}
+                  aria-pressed={isSelected}
+                  title={option.description}
+                  onClick={() => {
+                    setIsCustomColorPickerOpen(false);
+                    onSelectProposalLayout?.(option.id);
+                  }}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
           <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Style</div>
           <div className="dasti-proposal-skeleton-rail__style-pills" aria-label="Proposal style presets">
             {PROPOSAL_STYLE_OPTIONS.map((option) => {
@@ -899,7 +961,7 @@ export function ProposalRail({
                 type="button"
                 className="dasti-proposal-skeleton-rail__style-reset"
                 aria-label={`Reset ${activeTemplateBundleLabel}`}
-                title={`Reset ${activeTemplateBundleLabel} to its original color, font, and layout.`}
+                title={`Reset ${activeTemplateBundleLabel} to the current Settings color, font, and layout.`}
                 onClick={() => {
                   setIsCustomColorPickerOpen(false);
                   onResetStyleBundle(activeTemplateBundleId);

@@ -23,6 +23,7 @@ import {
   PROPOSAL_PALETTE_OPTIONS,
   PROPOSAL_STYLE_PREVIEW_DEFINITIONS,
   PROPOSAL_AUTO_STYLE_PREVIEW,
+  isProposalPaletteId,
   type ProposalPaletteId,
 } from "../lib/proposal-style-display";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
@@ -268,6 +269,19 @@ function buildPresetSlotStylePreset(preset: PresetSlot): VerbatiStylePreset {
   });
 }
 
+function resolvePresetPaletteSelection(
+  preset: PresetSlot,
+): ProposalPaletteId | null {
+  if (preset.paletteOverride) {
+    return preset.paletteOverride;
+  }
+
+  const stylePreset = buildPresetSlotStylePreset(preset);
+  return stylePreset.palette !== "custom" && isProposalPaletteId(stylePreset.palette)
+    ? stylePreset.palette
+    : null;
+}
+
 function resolvePresetLayoutSelection(
   preset: PresetSlot,
 ): StyleOption["id"] {
@@ -296,9 +310,17 @@ function resolveStyleChoiceForLayout(
 function buildVerbatiStyleForLayout(args: {
   layoutId: Exclude<StyleOption["id"], "auto">;
   preset: PresetSlot;
+  slot: SlotIndex;
 }): VerbatiStylePreset {
   const familyId: StyleFamilyId = "workshop";
   const family = getStyleFamilyDefinition(familyId);
+  const factorySlot = getFactoryDocumentStyleSlot(args.slot);
+  const existingPalette =
+    args.preset.verbatiStyle?.palette &&
+    args.preset.verbatiStyle.palette !== "custom" &&
+    isProposalPaletteId(args.preset.verbatiStyle.palette)
+      ? args.preset.verbatiStyle.palette
+      : factorySlot.appearance.palette;
   const resumeTemplateId =
     args.layoutId === "workshop-twocol"
       ? WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
@@ -316,7 +338,7 @@ function buildVerbatiStyleForLayout(args: {
         }
       : args.preset.paletteOverride
         ? { palette: args.preset.paletteOverride }
-        : { palette: family.defaultPalette }),
+        : { palette: existingPalette }),
   });
 }
 
@@ -342,6 +364,7 @@ function buildDefaultPresetSlot(slot: SlotIndex): PresetSlot {
 
 function buildPresetSavePayload(
   preset: PresetSlot,
+  slot: SlotIndex,
 ): PresetSlot {
   const layoutSelection = resolvePresetLayoutSelection(preset);
   const nextVerbatiStyle =
@@ -350,6 +373,7 @@ function buildPresetSavePayload(
       : buildVerbatiStyleForLayout({
           layoutId: layoutSelection,
           preset,
+          slot,
         });
 
   return {
@@ -1078,11 +1102,12 @@ export function SettingsPage(): JSX.Element {
   const savedTickTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydrated = React.useRef(false);
+  const localPresetInteractionRef = React.useRef(false);
   const contactHydrated = React.useRef(false);
 
   // Sync from server once
   React.useEffect(() => {
-    if (!presetsQuery || hydrated.current) return;
+    if (!presetsQuery || hydrated.current || localPresetInteractionRef.current) return;
     hydrated.current = true;
 
     const serverPreset = (slot: SlotIndex, raw: typeof presetsQuery.preset1): PresetSlot => {
@@ -1182,10 +1207,14 @@ export function SettingsPage(): JSX.Element {
   const updatePreset = React.useCallback(
     (patch: Partial<PresetSlot>) => {
       setSaveError(null);
+      localPresetInteractionRef.current = true;
       setLocalPresets((prev) => {
         const targetSlot = editingSlot ?? activeSlot ?? 1;
         const next = { ...prev, [targetSlot]: { ...prev[targetSlot], ...patch } };
-        const nextSavedPreset = buildPresetSavePayload(next[targetSlot]);
+        const nextSavedPreset = buildPresetSavePayload(
+          next[targetSlot],
+          targetSlot,
+        );
         // debounce save
         if (saveDebounceRef.current !== null) clearTimeout(saveDebounceRef.current);
         saveDebounceRef.current = setTimeout(() => {
@@ -1393,6 +1422,7 @@ export function SettingsPage(): JSX.Element {
                                 verbatiStyle: buildVerbatiStyleForLayout({
                                   layoutId: option.id,
                                   preset: currentPreset,
+                                  slot: effectiveEditingSlot,
                                 }),
                               },
                         )
@@ -1407,9 +1437,10 @@ export function SettingsPage(): JSX.Element {
                 <div className="dasti-settings-appearance-label">Color</div>
                 <div className="style-swatches" role="group" aria-label="Color">
                   {SETTINGS_ACCENT_OPTIONS.map((option) => {
+                    const selectedPalette = resolvePresetPaletteSelection(currentPreset);
                     const active = option.accentHex
                       ? currentPreset.accentHex === option.accentHex
-                      : currentPreset.paletteOverride === option.paletteOverride;
+                      : selectedPalette === option.paletteOverride;
 
                     return (
                       <button
@@ -1492,7 +1523,10 @@ export function SettingsPage(): JSX.Element {
                   preset={localPresets[slot]}
                   isEditing={editingSlot === slot}
                   isActive={activeSlot === slot}
-                  onSelect={() => setEditingSlot(slot)}
+                  onSelect={() => {
+                    localPresetInteractionRef.current = true;
+                    setEditingSlot(slot);
+                  }}
                 />
               ))}
             </div>

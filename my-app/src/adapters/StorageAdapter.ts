@@ -119,7 +119,6 @@ function sanitizeBackendVerbatiStyle(value: unknown):
       typography?: string;
       palette?: string;
       accentHex?: string;
-      resumeTemplateId?: string;
     }
   | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -137,10 +136,6 @@ function sanitizeBackendVerbatiStyle(value: unknown):
       typeof candidate.palette === "string" ? candidate.palette : undefined,
     accentHex:
       typeof candidate.accentHex === "string" ? candidate.accentHex : undefined,
-    resumeTemplateId:
-      typeof candidate.resumeTemplateId === "string"
-        ? candidate.resumeTemplateId
-        : undefined,
   };
 
   return Object.values(sanitized).some((entry) => typeof entry === "string")

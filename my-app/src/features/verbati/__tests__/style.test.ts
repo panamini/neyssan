@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveProposalTemplateId } from "../../../../convex/lib/proposals/renderTemplates";
+import {
+  CANONICAL_PROPOSAL_TEMPLATE_ID,
+  resolveProposalTemplateId,
+} from "../../../../convex/lib/proposals/renderTemplates";
 import {
   DEFAULT_VERBATI_STYLE,
   getProposalTwinTemplateId,
@@ -107,6 +110,7 @@ describe("verbati style normalization", () => {
   });
 
   it("keeps legacy proposal template aliases resolving to active templates", () => {
+    expect(resolveProposalTemplateId(null)).toBe(CANONICAL_PROPOSAL_TEMPLATE_ID);
     expect(resolveProposalTemplateId("editorial_left_rail")).toBe(
       "editorial_wide",
     );
@@ -207,7 +211,7 @@ describe("verbati style normalization", () => {
       familyId: "workshop",
       layout: "workshop",
       typography: "ledger-sans",
-      palette: "sauge",
+      palette: "ink",
     });
   });
 

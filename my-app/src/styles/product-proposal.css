@@ -7751,6 +7751,18 @@
   line-height: var(--lx);
 }
 
+.dasti-proposal-skeleton-rail__layout-eyebrow {
+  width: fit-content;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--sf1);
+  color: var(--tm2);
+  font-size: var(--t2);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
 .dasti-proposal-skeleton-rail__link {
   color: var(--ac);
   text-decoration: none;
