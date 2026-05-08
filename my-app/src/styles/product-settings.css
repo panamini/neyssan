@@ -543,7 +543,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--am);
+  color: var(--tm2);
 }
 
 .dasti-settings-preview-card__body {
@@ -2084,10 +2084,10 @@ html[data-reduce-motion="true"] *::after {
   height: 32px;
   cursor: pointer;
   transition:
-    border-color 0.12s var(--ez),
-    background 0.12s var(--ez),
-    color 0.12s var(--ez),
-    box-shadow 0.12s var(--ez);
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
 .settings__tone-option:hover,
@@ -2545,9 +2545,9 @@ html[data-reduce-motion="true"] *::after {
   cursor: pointer;
   text-align: left;
   transition:
-    border-color 0.12s var(--ez),
-    box-shadow 0.12s var(--ez),
-    background 0.12s var(--ez);
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-settings-slot-card:hover {
@@ -2669,9 +2669,9 @@ html[data-reduce-motion="true"] *::after {
   cursor: pointer;
   text-align: left;
   transition:
-    border-color 0.12s var(--ez),
-    background 0.12s var(--ez),
-    box-shadow 0.12s var(--ez);
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-settings-font-pair-card:hover {
@@ -2761,9 +2761,9 @@ html[data-reduce-motion="true"] *::after {
   text-align: left;
   cursor: pointer;
   transition:
-    border-color 0.12s var(--ez),
-    box-shadow 0.12s var(--ez),
-    transform 0.12s var(--ez);
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-settings-signature-card:hover,
@@ -3335,10 +3335,10 @@ button.dasti-settings-signature-tool:focus-visible {
 
 .dasti-settings-font-pair-card {
   transition:
-    border-color 0.12s var(--ez),
-    background 0.12s var(--ez),
-    box-shadow 0.12s var(--ez),
-    transform 0.12s var(--ez);
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-settings-style-card--active {
@@ -3363,10 +3363,10 @@ button.dasti-settings-signature-tool:focus-visible {
 
 .dasti-settings-slot-card {
   transition:
-    border-color 0.12s var(--ez),
-    box-shadow 0.12s var(--ez),
-    background 0.12s var(--ez),
-    transform 0.12s var(--ez);
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-settings-slot-card:active:not(.dasti-settings-slot-card--editing) {
@@ -3718,7 +3718,7 @@ button.dasti-settings-signature-tool:focus-visible {
   font-weight: var(--font-label-weight);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
-  color: var(--am);
+  color: var(--tm2);
 }
 .styleforge-active-color-card__hex {
   font-family: var(--font-mono-family);

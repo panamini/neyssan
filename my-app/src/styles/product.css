@@ -131,7 +131,7 @@ body,
 .sb-section__editing-label {
   font-size: var(--tx);
   font-weight: 600;
-  color: var(--am);
+  color: var(--tm2);
 }
 
 .sb-workspace-card {
@@ -562,8 +562,8 @@ body,
   flex-shrink: 0;
   box-shadow: none;
   transition:
-    background 0.12s var(--ez),
-    color 0.12s var(--ez);
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
 }
 
 .sb-toggle--collapse {
@@ -1092,8 +1092,8 @@ body,
   white-space: nowrap;
   font-family: inherit;
   transition:
-    background 0.1s var(--ez),
-    color 0.1s var(--ez);
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
 }
 
 .sb-doc-confirm__yes {

@@ -806,10 +806,10 @@
   color: var(--tm2);
   cursor: pointer;
   transition:
-    background 0.12s var(--ez),
-    border-color 0.12s var(--ez),
-    color 0.12s var(--ez),
-    box-shadow 0.12s var(--ez);
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-doc-zoom-fit:hover {
@@ -1000,7 +1000,7 @@
   text-decoration: underline;
   text-decoration-thickness: 1.5px;
   text-underline-offset: 3px;
-  transition: color 0.12s var(--ez);
+  transition: color var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-proposal-source-summary__origin-link:hover,
@@ -3823,10 +3823,10 @@
   cursor: pointer;
   flex-shrink: 0;
   transition:
-    background 0.12s var(--ez),
-    border-color 0.12s var(--ez),
-    box-shadow 0.12s var(--ez),
-    color 0.12s var(--ez);
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
   font-family: inherit;
   box-shadow: var(--shadow-sm);
   overflow: visible;
@@ -4092,8 +4092,8 @@
   border-radius: var(--radius-pill);
   color: var(--tm2);
   transition:
-    background 0.12s var(--ez),
-    color 0.12s var(--ez);
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-proposal-context-chip:hover,
@@ -4116,7 +4116,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.12s var(--ez);
+  transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-proposal-context-chip__glyph--hover {
@@ -4992,7 +4992,7 @@
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--am);
+  color: var(--tm2);
 }
 
 .dasti-brief-card__document-title {
@@ -5069,7 +5069,7 @@
   text-decoration: underline;
   text-decoration-thickness: 1.5px;
   text-underline-offset: 3px;
-  transition: color 0.12s var(--ez);
+  transition: color var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-brief-card__source-link:hover,
@@ -5267,7 +5267,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--am);
+  color: var(--tm2);
 }
 
 .dasti-brief-card__summary-copy {
@@ -5420,7 +5420,7 @@
 .dasti-brief-card__review-label {
   font-size: var(--ts);
   font-weight: 700;
-  color: var(--am);
+  color: var(--tm2);
 }
 
 .dasti-brief-card__section-edit {
@@ -7686,7 +7686,7 @@
   line-height: var(--text-overline-line);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
-  color: var(--am, var(--tm2));
+  color: var(--tm2);
   font-weight: var(--font-label-weight);
 }
 
