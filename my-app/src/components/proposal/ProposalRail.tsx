@@ -279,6 +279,12 @@ type ProposalRailProps = {
   onSelectStyleFixedAccent?: (hex: string) => void;
   onSelectStyleCustomAccent: (hex: string) => void;
   onClearStyleCustomAccent?: () => void;
+  signaturePresent?: boolean;
+  handwrittenSignatureAvailable?: boolean;
+  handwrittenSignatureEnabled?: boolean;
+  onChooseSignature?: () => void;
+  onToggleSignature?: (enabled: boolean) => void;
+  onToggleHandwrittenSignature?: (enabled: boolean) => void;
   aiStream: React.ReactNode;
   variableFields: ProposalRailVariableField[];
   hasProposalContent: boolean;
@@ -338,6 +344,12 @@ export function ProposalRail({
   onSelectStylePalette,
   onSelectStyleCustomAccent,
   onClearStyleCustomAccent,
+  signaturePresent = false,
+  handwrittenSignatureAvailable = false,
+  handwrittenSignatureEnabled = false,
+  onChooseSignature,
+  onToggleSignature,
+  onToggleHandwrittenSignature,
   aiStream,
   variableFields,
   hasProposalContent,
@@ -460,9 +472,6 @@ export function ProposalRail({
     getProposalTemplateBundleDefinition(activeTemplateBundleId);
   const activeTemplateBundleBaseStyle =
     styleTemplateBundleBaseStyle ?? activeTemplateBundleDefinition.stylePreset;
-  const activeLayoutDefinition = getProposalTemplateDefinition(
-    proposalTemplateId ?? CANONICAL_PROPOSAL_TEMPLATE_ID,
-  );
   const resolvedProposalTemplateId =
     proposalTemplateId ?? CANONICAL_PROPOSAL_TEMPLATE_ID;
   const isActiveTemplateBundleCustomized = Boolean(
@@ -904,9 +913,6 @@ export function ProposalRail({
             </a>
             .
           </div>
-          <div className="dasti-proposal-skeleton-rail__layout-eyebrow">
-            {activeLayoutDefinition.shortLabel}
-          </div>
           <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Layout</div>
           <div className="dasti-proposal-skeleton-rail__style-pills" aria-label="Proposal layout presets">
             {PROPOSAL_LAYOUT_OPTIONS.map((option) => {
@@ -1065,6 +1071,79 @@ export function ProposalRail({
                 : undefined
             }
           />
+          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Signature</div>
+          <div className="dasti-proposal-skeleton-rail__signature-toggles">
+            <button
+              type="button"
+              role="switch"
+              className={[
+                "dasti-theme-switch",
+                "settings-token-switch",
+                "dasti-proposal-skeleton-rail__signature-toggle",
+                signaturePresent
+                  ? "dasti-theme-switch--dark settings-token-switch--active"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              disabled={!onChooseSignature && !onToggleSignature}
+              aria-label="Signature"
+              aria-checked={signaturePresent}
+              title={
+                signaturePresent
+                  ? "Signature is enabled for this proposal. Click to hide it from this proposal."
+                  : "Insert the applicant signature using your Settings signature style."
+              }
+              onClick={() => {
+                setIsCustomColorPickerOpen(false);
+                if (signaturePresent && onToggleSignature) {
+                  onToggleSignature(false);
+                  return;
+                }
+                onChooseSignature?.();
+              }}
+            >
+              <span className="dasti-theme-switch__rail" aria-hidden="true">
+                <span className="dasti-theme-switch__thumb" />
+              </span>
+              <span className="dasti-theme-switch__label">Signature</span>
+            </button>
+            <button
+              type="button"
+              role="switch"
+              className={[
+                "dasti-theme-switch",
+                "settings-token-switch",
+                "dasti-proposal-skeleton-rail__signature-toggle",
+                handwrittenSignatureEnabled
+                  ? "dasti-theme-switch--dark settings-token-switch--active"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              disabled={
+                !signaturePresent ||
+                !handwrittenSignatureAvailable ||
+                !onToggleHandwrittenSignature
+              }
+              aria-label="Hand-drawn signature"
+              aria-checked={handwrittenSignatureEnabled}
+              title={
+                handwrittenSignatureAvailable
+                  ? "Place your Settings hand-drawn signature above the typed signature."
+                  : "Add or draw a signature image in Settings to enable this option."
+              }
+              onClick={() => {
+                setIsCustomColorPickerOpen(false);
+                onToggleHandwrittenSignature?.(!handwrittenSignatureEnabled);
+              }}
+            >
+              <span className="dasti-theme-switch__rail" aria-hidden="true">
+                <span className="dasti-theme-switch__thumb" />
+              </span>
+              <span className="dasti-theme-switch__label">Hand-drawn</span>
+            </button>
+          </div>
         </section>
       ) : null}
 

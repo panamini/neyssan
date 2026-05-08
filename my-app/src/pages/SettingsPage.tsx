@@ -947,8 +947,8 @@ function SignatureSelector({
         const imageDataUrl = await readSignatureImageFile(file);
         setError(null);
         onChange({
-          mode: "image",
-          fontId: null,
+          mode: settings.mode === "font" ? "font" : "image",
+          fontId: settings.mode === "font" ? settings.fontId : null,
           imageDataUrl,
         });
       } catch (nextError) {
@@ -959,7 +959,7 @@ function SignatureSelector({
         );
       }
     },
-    [onChange],
+    [onChange, settings.fontId, settings.mode],
   );
 
   return (
@@ -974,7 +974,12 @@ function SignatureSelector({
           className="sig-card"
           data-selected={settings.mode === "auto" ? "true" : "false"}
           aria-pressed={settings.mode === "auto"}
-          onClick={() => onChange(DEFAULT_PROPOSAL_SIGNATURE_SETTINGS)}
+          onClick={() =>
+            onChange({
+              ...DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
+              imageDataUrl: settings.imageDataUrl,
+            })
+          }
         >
           <span
             className="sig-card__sig sig-card__sig--auto"
@@ -1002,7 +1007,7 @@ function SignatureSelector({
                 onChange({
                   mode: "font",
                   fontId: option.id,
-                  imageDataUrl: null,
+                  imageDataUrl: settings.imageDataUrl,
                 })
               }
             >
@@ -1045,12 +1050,12 @@ function SignatureSelector({
           Draw
           <SignatureDrawingPad
             initialImageDataUrl={
-              settings.mode === "image" ? settings.imageDataUrl : null
+              settings.imageDataUrl
             }
             onImageReady={(imageDataUrl) =>
               onChange({
-                mode: "image",
-                fontId: null,
+                mode: settings.mode === "font" ? "font" : "image",
+                fontId: settings.mode === "font" ? settings.fontId : null,
                 imageDataUrl,
               })
             }
@@ -1071,11 +1076,17 @@ function SignatureSelector({
             </span>
           )}
         </span>
-        {settings.mode === "image" ? (
+        {settings.imageDataUrl ? (
           <button
             type="button"
             className="dasti-settings-signature-action dasti-settings-signature-current__reset"
-            onClick={() => onChange(DEFAULT_PROPOSAL_SIGNATURE_SETTINGS)}
+            onClick={() =>
+              onChange({
+                mode: settings.mode === "image" ? "auto" : settings.mode,
+                fontId: settings.mode === "font" ? settings.fontId : null,
+                imageDataUrl: null,
+              })
+            }
           >
             <TrashSimple size={14} strokeWidth={1.8} aria-hidden="true" />
             Remove image

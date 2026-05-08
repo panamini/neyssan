@@ -56,6 +56,7 @@ import {
 } from "../lib/proposal-header";
 import { collectProposalFontDebugSnapshot } from "../lib/proposal-font-debug";
 import type { ProposalSignatureSettings } from "../lib/proposal-signature-settings";
+import type { ProposalClosingRef } from "../lib/proposal-closing";
 import {
   createAiUndoSnapshot,
   normalizeEditorAiTextResult,
@@ -89,6 +90,7 @@ interface ProposalDisplayProps {
   templateId?: ProposalTemplateId | null;
   stylePreset?: Partial<VerbatiStylePreset> | VerbatiStylePreset | null;
   signatureSettings?: ProposalSignatureSettings | null;
+  closing?: ProposalClosingRef | null;
   railTitle?: string | null;
   railMeta?: string | null;
   contactLine?: string | null;
@@ -517,6 +519,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   templateId = null,
   stylePreset = null,
   signatureSettings = null,
+  closing = null,
   railTitle = null,
   railMeta = null,
   contactLine = null,
@@ -2339,6 +2342,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   headerVisibility={resolvedHeaderVisibility}
                   documentTypography={documentTypography}
                   signatureSettings={signatureSettings}
+                  closing={closing}
                   pageWidth={A4_PAGE_WIDTH_PX}
                   pageGapPx={unscaledDocumentPageGapPx}
                   onPageCountChange={setDocumentPageCount}

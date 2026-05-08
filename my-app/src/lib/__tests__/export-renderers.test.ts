@@ -465,13 +465,44 @@ describe("export-renderers", () => {
         ?.getAttribute("style"),
     ).toContain("FD Garamond");
     expect(
-      imageDocument
+      imageDocument.querySelector('[data-block="closing"] .proposal-signature-image'),
+    ).toBeNull();
+    expect(
+      imageDocument.querySelector('[data-block="closing"] .proposal-signature')
+        ?.textContent,
+    ).toBe("alex mercer");
+
+    const stackedImageDocument = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          body: proposalFixture.body.map((block) =>
+            block.type === "closing"
+              ? { ...block, handwrittenSignatureEnabled: true }
+              : block,
+          ),
+          signatureSettings: {
+            mode: "image",
+            fontId: null,
+            imageDataUrl,
+          },
+        },
+        stylePreset: {
+          layout: "editorial",
+          typography: "fd-garamond-geist",
+          palette: "pierre",
+        },
+      }),
+    );
+    expect(
+      stackedImageDocument
         .querySelector('[data-block="closing"] .proposal-signature-image')
         ?.getAttribute("src"),
     ).toBe(imageDataUrl);
     expect(
-      imageDocument.querySelector('[data-block="closing"] .proposal-signature'),
-    ).toBeNull();
+      stackedImageDocument.querySelector('[data-block="closing"] .proposal-signature')
+        ?.textContent,
+    ).toBe("alex mercer");
   });
 
   it("builds resume and proposal DOCX exports as editable one-column documents with selected fonts", async () => {

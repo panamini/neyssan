@@ -11,6 +11,7 @@ import {
   extractProposalClosingBlockFromParagraphs,
   formatProposalSignatureName,
   parseProposalClosingBlock,
+  resolveProposalClosingRef,
 } from "../proposal-closing";
 
 function buildProposalSource(content: string) {
@@ -104,6 +105,90 @@ describe("proposal closing parser", () => {
     expect(formatProposalSignatureName("Alex Mercer")).toBe("alex mercer");
   });
 
+  it("updates legacy structured signatures from the latest applicant name once structured closing is active", () => {
+    expect(
+      resolveProposalClosingRef({
+        closing: {
+          enabled: true,
+          signOff: "Sincerely,",
+          signatureName: "jo",
+          source: "legacy",
+        },
+        content: "Generated proposal body.\n\nSincerely,\njo",
+        proposalType: "cover_letter",
+        applicantName: "john",
+        voicePreset: "signature",
+      }),
+    ).toMatchObject({
+      signOff: "Sincerely,",
+      signatureName: "john",
+      source: "legacy",
+    });
+  });
+
+  it("updates settings-owned structured signatures from the latest applicant name", () => {
+    expect(
+      resolveProposalClosingRef({
+        closing: {
+          enabled: true,
+          signOff: "Sincerely,",
+          signatureName: "A",
+          source: "settings",
+        },
+        content: "Generated proposal body.",
+        proposalType: "cover_letter",
+        applicantName: "Alex Martin",
+        voicePreset: "signature",
+      }),
+    ).toMatchObject({
+      signOff: "Sincerely,",
+      signatureName: "Alex Martin",
+      source: "settings",
+    });
+  });
+
+  it("resolves stale settings-owned structured signatures from the latest applicant name", () => {
+    expect(
+      resolveProposalClosingRef({
+        closing: {
+          enabled: true,
+          signOff: "Sincerely,",
+          signatureName: "b",
+          source: "settings",
+        },
+        content: "Generated proposal body.",
+        proposalType: "cover_letter",
+        applicantName: "john",
+        voicePreset: "signature",
+      }),
+    ).toMatchObject({
+      enabled: true,
+      signOff: "Sincerely,",
+      signatureName: "john",
+      source: "settings",
+    });
+  });
+
+  it("preserves document-owned structured signatures over applicant name changes", () => {
+    expect(
+      resolveProposalClosingRef({
+        closing: {
+          enabled: true,
+          signOff: "Sincerely,",
+          signatureName: "Jordan Lee",
+          source: "document",
+        },
+        content: "Generated proposal body.",
+        proposalType: "cover_letter",
+        applicantName: "Alex Martin",
+        voicePreset: "signature",
+      }),
+    ).toMatchObject({
+      signatureName: "Jordan Lee",
+      source: "document",
+    });
+  });
+
   it("does not invent a signature block when the content has no closing sign-off", () => {
     expect(
       ensureProposalSignatureName(
@@ -119,6 +204,120 @@ describe("proposal closing parser", () => {
         "I would welcome the opportunity to discuss the role further.\nAlex Mercer",
       ),
     ).toBeNull();
+  });
+
+  it("builds export closing from structured metadata when body has no sign-off", () => {
+    const source = buildProposalExportSource({
+      content: "I build reliable exports.",
+      proposalType: "cover_letter",
+      documentTitle: "Application",
+      documentMeta: "",
+      contactLine: "",
+      letterDate: "",
+      recipientDetails: "",
+      applicantHeader: {
+        name: "Alex Mercer",
+        role: "Designer",
+      },
+      headerVisibility: {
+        showSender: true,
+        showDate: true,
+        showRecipient: true,
+        showRecipientDetails: true,
+        showSubject: true,
+      },
+      templateId: "swiss_margin",
+      closing: {
+        enabled: true,
+        signOff: "Sincerely,",
+        signatureName: "Alex Mercer",
+        source: "settings",
+      },
+    });
+
+    expect(getClosingBlock(source.body)).toEqual({
+      type: "closing",
+      signOff: "Sincerely,",
+      signatureName: "Alex Mercer",
+    });
+  });
+
+  it("removes legacy typed signature from export when structured closing is disabled", () => {
+    const source = buildProposalExportSource({
+      content: "I build reliable exports.\n\nSincerely,\nAlex Mercer",
+      proposalType: "cover_letter",
+      documentTitle: "Application",
+      documentMeta: "",
+      contactLine: "",
+      letterDate: "",
+      recipientDetails: "",
+      applicantHeader: {
+        name: "Alex Mercer",
+        role: "Designer",
+      },
+      headerVisibility: {
+        showSender: true,
+        showDate: true,
+        showRecipient: true,
+        showRecipientDetails: true,
+        showSubject: true,
+      },
+      templateId: "swiss_margin",
+      closing: {
+        enabled: false,
+        signOff: "Sincerely,",
+        signatureName: "Alex Mercer",
+        source: "document",
+      },
+    });
+
+    expect(source.body).toEqual([
+      { type: "paragraph", text: "I build reliable exports." },
+      {
+        type: "closing",
+        signOff: "Sincerely,",
+        signatureName: "",
+      },
+    ]);
+  });
+
+  it("keeps structured sign-off in export when structured signature is disabled", () => {
+    const source = buildProposalExportSource({
+      content: "I build reliable exports.\n\nSincerely,\nAlex Mercer",
+      proposalType: "cover_letter",
+      documentTitle: "Application",
+      documentMeta: "",
+      contactLine: "",
+      letterDate: "",
+      recipientDetails: "",
+      applicantHeader: {
+        name: "Alex Mercer",
+        role: "Designer",
+      },
+      headerVisibility: {
+        showSender: true,
+        showDate: true,
+        showRecipient: true,
+        showRecipientDetails: true,
+        showSubject: true,
+      },
+      templateId: "swiss_margin",
+      closing: {
+        enabled: false,
+        signOff: "Sincerely,",
+        signatureName: "Alex Mercer",
+        source: "settings",
+      },
+    });
+
+    expect(source.body).toEqual([
+      { type: "paragraph", text: "I build reliable exports." },
+      {
+        type: "closing",
+        signOff: "Sincerely,",
+        signatureName: "",
+      },
+    ]);
   });
 
   it("keeps preview and export in parity for French closing blocks", () => {
