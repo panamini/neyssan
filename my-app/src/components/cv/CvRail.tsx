@@ -18,7 +18,6 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Check,
   ChevronDown,
-  ColorWheel,
   Eye,
   EyeClosed,
   GripHorizontal,
@@ -1055,16 +1054,15 @@ export function CvRail({
                 {activeAccent?.id === swatch.id ? <Check size={12} strokeWidth={1.9} /> : null}
               </button>
             ))}
-            <button
-              ref={customColorAnchorRef}
-              type="button"
-              className={[
-                "dasti-cv-style-swatch",
-                "dasti-cv-style-swatch--custom",
-                isCustomAccentSelected ? "" : "dasti-cv-style-swatch--icon",
-              ]
-                .filter(Boolean)
-                .join(" ")}
+              <button
+                ref={customColorAnchorRef}
+                type="button"
+                className={[
+                  "dasti-cv-style-swatch",
+                  "dasti-cv-style-swatch--custom",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
               style={
                 {
                   "--cv-accent-swatch": customAccentColor,
@@ -1078,18 +1076,11 @@ export function CvRail({
                   ? `Custom accent ${customAccentColor}`
                   : "Open custom color picker"
               }
-              onClick={() => setIsCustomColorPickerOpen(true)}
-            >
-              {isCustomAccentSelected ? (
-                <Check size={12} strokeWidth={1.9} />
-              ) : (
-                <ColorWheel
-                  className="dasti-cv-style-swatch-wheel"
-                  aria-hidden="true"
-                />
-              )}
-            </button>
-          </div>
+                onClick={() => setIsCustomColorPickerOpen(true)}
+              >
+                {isCustomAccentSelected ? <Check size={12} strokeWidth={1.9} aria-hidden="true" /> : null}
+              </button>
+            </div>
           <ProposalColorPickerPopover
             currentHex={customAccentColor}
             anchorRef={customColorAnchorRef}

@@ -168,7 +168,7 @@ describe("ProposalRail style tab", () => {
     );
 
     fireEvent.click(screen.getByRole("tab", { name: "Style" }));
-    fireEvent.click(screen.getByRole("switch", { name: "Signature" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Printed name" }));
 
     expect(onChooseSignature).toHaveBeenCalledTimes(1);
   });
@@ -186,7 +186,7 @@ describe("ProposalRail style tab", () => {
     );
 
     fireEvent.click(screen.getByRole("tab", { name: "Style" }));
-    const signatureSwitch = screen.getByRole("switch", { name: "Signature" });
+    const signatureSwitch = screen.getByRole("switch", { name: "Printed name" });
 
     expect(signatureSwitch).not.toBeDisabled();
     fireEvent.click(signatureSwitch);
@@ -204,7 +204,7 @@ describe("ProposalRail style tab", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Style" }));
 
-    expect(screen.getByRole("switch", { name: "Signature" })).toHaveAttribute(
+    expect(screen.getByRole("switch", { name: "Printed name" })).toHaveAttribute(
       "aria-checked",
       "true",
     );
@@ -224,7 +224,7 @@ describe("ProposalRail style tab", () => {
     );
 
     fireEvent.click(screen.getByRole("tab", { name: "Style" }));
-    fireEvent.click(screen.getByRole("switch", { name: "Signature" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Printed name" }));
 
     expect(onToggleSignature).toHaveBeenCalledWith(false);
     expect(onChooseSignature).not.toHaveBeenCalled();
@@ -245,7 +245,7 @@ describe("ProposalRail style tab", () => {
     );
 
     fireEvent.click(screen.getByRole("tab", { name: "Style" }));
-    fireEvent.click(screen.getByRole("switch", { name: "Hand-drawn signature" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Signature" }));
 
     expect(onToggleHandwrittenSignature).toHaveBeenCalledWith(true);
   });
@@ -283,15 +283,15 @@ describe("ProposalRail style tab", () => {
     expect(screen.getByText("Layout", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: "Canonical Workshop Proposal layout",
+        name: "Workshop layout",
       }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Style", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(screen.getByText("Font pair")).toBeInTheDocument();
     expect(screen.getByText("Accent", { selector: ".forge__rail-label" })).toBeInTheDocument();
-    expect(screen.getByText("Signature", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    expect(screen.getByText("Printed name", { selector: ".forge__rail-label" })).toBeInTheDocument();
     const accentLabel = screen.getByText("Accent", { selector: ".forge__rail-label" });
-    const signatureLabel = screen.getByText("Signature", { selector: ".forge__rail-label" });
+    const signatureLabel = screen.getByText("Printed name", { selector: ".forge__rail-label" });
     expect(
       accentLabel.compareDocumentPosition(signatureLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeGreaterThan(0);
@@ -337,7 +337,7 @@ describe("ProposalRail style tab", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Style" }));
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Canonical Workshop Proposal layout",
+        name: "Workshop layout",
       }),
     );
 
