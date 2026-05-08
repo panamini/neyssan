@@ -27,6 +27,10 @@ import type {
 import type { ProposalCharacterLimitMode } from "../../convex/lib/proposals/generationControls";
 import type { StoredProposalComposeDraft } from "./proposal-workspace-state";
 import {
+  sanitizeProposalClosingRef,
+  type ProposalClosingRef,
+} from "./proposal-closing";
+import {
   DOCUMENT_STYLE_VERSION,
   isDocumentStyleSlotSource,
   resolveDocumentStyleSlotId,
@@ -80,6 +84,7 @@ export type StoredProposalOutputDraft = {
     "swiss" | "editorial" | "modernist"
   > | null;
   proposalDocumentTitleManual: boolean;
+  proposalClosing?: ProposalClosingRef | null;
   characterLimitMode: ProposalCharacterLimitMode | null;
   characterLimitValue: number | null;
   sourceComposeDraft?: StoredProposalComposeDraft | null;
@@ -380,6 +385,7 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
           ? parsed.layoutOverride
           : null,
       proposalDocumentTitleManual: parsed.proposalDocumentTitleManual === true,
+      proposalClosing: sanitizeProposalClosingRef(parsed.proposalClosing),
       characterLimitMode:
         parsed.characterLimitMode === "none" ||
         parsed.characterLimitMode === "linkedin_note_200" ||
@@ -526,6 +532,7 @@ function buildSanitizedStoredProposalOutputDraft(
         ? draft.layoutOverride
         : null,
     proposalDocumentTitleManual: draft.proposalDocumentTitleManual === true,
+    proposalClosing: sanitizeProposalClosingRef(draft.proposalClosing),
     characterLimitMode:
       draft.characterLimitMode === "none" ||
       draft.characterLimitMode === "linkedin_note_200" ||

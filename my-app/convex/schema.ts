@@ -71,6 +71,18 @@ const proposalCharacterLimitModeChoice = v.union(
   v.literal("custom"),
 );
 
+const proposalClosingChoice = v.object({
+  enabled: v.boolean(),
+  signOff: v.string(),
+  signatureName: v.string(),
+  source: v.union(
+    v.literal("settings"),
+    v.literal("document"),
+    v.literal("legacy"),
+  ),
+  handwrittenSignatureEnabled: v.optional(v.boolean()),
+});
+
 const canonicalJobParseStatusChoice = v.union(
   v.literal("imported"),
   v.literal("parsing"),
@@ -324,6 +336,7 @@ export default defineSchema({
         v.union(proposalCharacterLimitModeChoice, v.null()),
       ),
       characterLimitValue: v.optional(v.union(v.number(), v.null())),
+      closing: v.optional(proposalClosingChoice),
       proposalType: v.optional(
         v.union(
           v.literal("cover_letter"),

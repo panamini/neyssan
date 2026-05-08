@@ -1281,11 +1281,14 @@ ${buildCssVarBlock(layoutProfileVars)}
 
     .proposal-signature-image {
       display: block;
-      max-width: min(42mm, 56%);
-      max-height: 16mm;
+      max-width: min(48mm, 64%);
+      max-height: 18mm;
       width: auto;
       height: auto;
       object-fit: contain;
+      opacity: 1;
+      filter: contrast(1.35) saturate(0.15) brightness(0.75);
+      mix-blend-mode: multiply;
       margin-top: var(--flow-closing-name-gap);
     }
 
@@ -2106,16 +2109,24 @@ function renderProposalBlocks(
         const signatureName = block.signatureName
           ? formatProposalSignatureName(block.signatureName)
           : "";
-        const signatureMarkup =
-          signatureName && signatureRender?.kind === "image"
-            ? `<img class="proposal-signature-image" src="${escapeHtml(signatureRender.imageDataUrl)}" alt="${escapeHtml(signatureName)}" />`
-            : signatureName
-              ? `<p class="proposal-signature" style="${escapeHtml(`--proposal-signature-font-family: ${
-                  signatureRender?.kind === "text"
-                    ? signatureRender.fontFamily
-                    : "var(--body-font)"
-                };`)}">${escapeHtml(signatureName)}</p>`
-              : "";
+        const signatureImageDataUrl =
+          signatureRender?.kind === "image"
+            ? signatureRender.imageDataUrl
+            : signatureRender?.imageDataUrl;
+        const handwrittenSignatureMarkup =
+          signatureName &&
+          block.handwrittenSignatureEnabled &&
+          signatureImageDataUrl
+            ? `<img class="proposal-signature-image" src="${escapeHtml(signatureImageDataUrl)}" alt="${escapeHtml(signatureName)}" />`
+            : "";
+        const typedSignatureMarkup = signatureName
+          ? `<p class="proposal-signature" style="${escapeHtml(`--proposal-signature-font-family: ${
+              signatureRender?.kind === "text"
+                ? signatureRender.fontFamily
+                : "var(--body-font)"
+            };`)}">${escapeHtml(signatureName)}</p>`
+          : "";
+        const signatureMarkup = `${handwrittenSignatureMarkup}${typedSignatureMarkup}`;
 
         return `<div class="proposal-block proposal-block--closing" data-block="closing">
           ${

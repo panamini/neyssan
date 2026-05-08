@@ -17,7 +17,9 @@ import {
 import {
   extractProposalClosingBlockFromParagraphs,
   formatProposalSignatureName,
+  resolveProposalClosingRef,
   stripInlineProposalMarkdown,
+  type ProposalClosingRef,
 } from "../../lib/proposal-closing";
 import { normalizeProposalPreviewTokens } from "../../lib/layout/documentTokenNormalizer";
 import {
@@ -51,6 +53,7 @@ type ProposalDocumentRendererProps = {
   pageGapPx?: number;
   stylePreset?: VerbatiStylePreset | null;
   signatureSettings?: ProposalSignatureSettings | null;
+  closing?: ProposalClosingRef | null;
   onPageCountChange?: (count: number) => void;
 };
 
@@ -81,6 +84,7 @@ type ProposalDocumentBlock =
       type: "closing";
       signOff: string | null;
       signatureName: string | null;
+      handwrittenSignatureEnabled?: boolean;
     };
 
 type VolkRegisterMetaEntry = {
@@ -401,6 +405,7 @@ function parseProposalDocumentContent(
 
 function buildProposalDocumentBlocks(
   parsedDocument: ParsedProposalDocument,
+  closing?: ProposalClosingRef | null,
 ): ProposalDocumentBlock[] {
   const blocks: ProposalDocumentBlock[] = [];
 
@@ -426,7 +431,21 @@ function buildProposalDocumentBlocks(
     );
   });
 
-  if (parsedDocument.signOff || parsedDocument.signatureName) {
+  if (closing) {
+    const signOff = closing.signOff || null;
+    const signatureName = closing.enabled ? closing.signatureName || null : null;
+    if (signOff || signatureName) {
+      blocks.push({
+        id: "closing",
+        type: "closing",
+        signOff,
+        signatureName,
+        handwrittenSignatureEnabled: closing.enabled
+          ? closing.handwrittenSignatureEnabled
+          : false,
+      });
+    }
+  } else if (parsedDocument.signOff || parsedDocument.signatureName) {
     blocks.push({
       id: "closing",
       type: "closing",
@@ -528,6 +547,7 @@ export function ProposalDocumentRenderer({
   pageGapPx = 0,
   stylePreset = null,
   signatureSettings = null,
+  closing = null,
   onPageCountChange,
 }: ProposalDocumentRendererProps): JSX.Element {
   const resolvedTemplateId = resolveProposalTemplateId(templateId);
@@ -563,9 +583,26 @@ export function ProposalDocumentRenderer({
     () => parseProposalDocumentContent(content, proposalType),
     [content, proposalType],
   );
+  const effectiveClosing = React.useMemo(
+    () =>
+      resolveProposalClosingRef({
+        closing,
+        content,
+        proposalType,
+        applicantName: applicantHeader?.name ?? resolvedRailTitle,
+        defaultEnabled: false,
+      }),
+    [
+      applicantHeader?.name,
+      closing,
+      content,
+      proposalType,
+      resolvedRailTitle,
+    ],
+  );
   const documentBlocks = React.useMemo(
-    () => buildProposalDocumentBlocks(parsedDocument),
-    [parsedDocument],
+    () => buildProposalDocumentBlocks(parsedDocument, effectiveClosing),
+    [effectiveClosing, parsedDocument],
   );
   const signatureRender = React.useMemo(
     () =>
@@ -576,36 +613,56 @@ export function ProposalDocumentRenderer({
     [documentTypography.fontFamily, signatureSettings],
   );
   const renderSignature = React.useCallback(
-    (signatureName: string | null | undefined) => {
+    (
+      signatureName: string | null | undefined,
+      handwrittenSignatureEnabled = false,
+    ) => {
       if (!signatureName) {
         return null;
       }
 
       const formattedName = formatProposalSignatureName(signatureName);
-      if (signatureRender.kind === "image") {
-        return (
-          <img
-            className="dasti-proposal-document__signature-image"
-            src={signatureRender.imageDataUrl}
-            alt={formattedName}
-          />
-        );
-      }
-
-      return (
+      const typedSignatureFontFamily =
+        signatureRender.kind === "text"
+          ? signatureRender.fontFamily
+          : documentTypography.fontFamily;
+      const typedSignature = (
         <p
           className="dasti-proposal-document__signature"
           style={
             {
-              "--proposal-signature-font-family": signatureRender.fontFamily,
+              "--proposal-signature-font-family": typedSignatureFontFamily,
             } as React.CSSProperties
           }
         >
           {formattedName}
         </p>
       );
+      const signatureImageDataUrl =
+        signatureRender.kind === "image"
+          ? signatureRender.imageDataUrl
+          : signatureRender.imageDataUrl;
+
+      if (handwrittenSignatureEnabled && signatureImageDataUrl) {
+        const imageSignature = (
+          <img
+            className="dasti-proposal-document__signature-image"
+            src={signatureImageDataUrl}
+            alt={formattedName}
+          />
+        );
+
+        return (
+          <>
+            {imageSignature}
+            {typedSignature}
+          </>
+        );
+      }
+
+      return typedSignature;
     },
-    [signatureRender],
+    [documentTypography.fontFamily, signatureRender],
   );
 
   // --proposal-inline-mm / --proposal-block-mm are defined on :root as
@@ -808,7 +865,10 @@ export function ProposalDocumentRenderer({
                   {block.signOff}
                 </p>
               ) : null}
-              {renderSignature(block.signatureName)}
+              {renderSignature(
+                block.signatureName,
+                block.handwrittenSignatureEnabled,
+              )}
             </div>
           );
       }

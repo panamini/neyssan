@@ -156,6 +156,100 @@ describe("ProposalRail style tab", () => {
     expect(onOpenJobs).toHaveBeenCalledTimes(1);
   });
 
+  it("shows signature action in the Style tab and calls the callback", () => {
+    const onChooseSignature = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        signaturePresent={false}
+        onChooseSignature={onChooseSignature}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Signature" }));
+
+    expect(onChooseSignature).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the signature switch active when the draft content has not hydrated yet", () => {
+    const onChooseSignature = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        hasProposalContent={false}
+        signaturePresent={false}
+        onChooseSignature={onChooseSignature}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    const signatureSwitch = screen.getByRole("switch", { name: "Signature" });
+
+    expect(signatureSwitch).not.toBeDisabled();
+    fireEvent.click(signatureSwitch);
+    expect(onChooseSignature).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows when the structured signature is already present", () => {
+    render(
+      <ProposalRail
+        {...baseProps}
+        signaturePresent
+        onChooseSignature={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+
+    expect(screen.getByRole("switch", { name: "Signature" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+  });
+
+  it("toggles off the structured signature when already present", () => {
+    const onChooseSignature = vi.fn();
+    const onToggleSignature = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        signaturePresent
+        onChooseSignature={onChooseSignature}
+        onToggleSignature={onToggleSignature}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Signature" }));
+
+    expect(onToggleSignature).toHaveBeenCalledWith(false);
+    expect(onChooseSignature).not.toHaveBeenCalled();
+  });
+
+  it("toggles hand-drawn signature placement when an image signature is available", () => {
+    const onToggleHandwrittenSignature = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        signaturePresent
+        handwrittenSignatureAvailable
+        handwrittenSignatureEnabled={false}
+        onChooseSignature={vi.fn()}
+        onToggleHandwrittenSignature={onToggleHandwrittenSignature}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Hand-drawn signature" }));
+
+    expect(onToggleHandwrittenSignature).toHaveBeenCalledWith(true);
+  });
+
   it("shows the proposal Style tab and calls proposal-scoped style callbacks", () => {
     const onSelectStyleBundle = vi.fn();
     const onSelectStylePalette = vi.fn();
@@ -186,7 +280,6 @@ describe("ProposalRail style tab", () => {
       "href",
       "/settings?tab=docstyle",
     );
-    expect(screen.getByText("35 mm Robial")).toBeInTheDocument();
     expect(screen.getByText("Layout", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
@@ -195,7 +288,13 @@ describe("ProposalRail style tab", () => {
     ).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Style", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(screen.getByText("Font pair")).toBeInTheDocument();
-    expect(screen.getByText("Accent")).toBeInTheDocument();
+    expect(screen.getByText("Accent", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    expect(screen.getByText("Signature", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    const accentLabel = screen.getByText("Accent", { selector: ".forge__rail-label" });
+    const signatureLabel = screen.getByText("Signature", { selector: ".forge__rail-label" });
+    expect(
+      accentLabel.compareDocumentPosition(signatureLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Style 1" })).toHaveAttribute(
       "aria-pressed",
       "true",

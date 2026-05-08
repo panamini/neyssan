@@ -784,6 +784,26 @@ describe("SettingsPage preview controls", () => {
 
   it("saves an explicit signature font on the current preset", async () => {
     const user = userEvent.setup();
+    const imageDataUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mP8z8AARQAHAQGByp7K7wAAAABJRU5ErkJggg==";
+    presetsQueryMock.mockReturnValue({
+      activeSlot: 1,
+      preset1: {
+        fontPairId: "geist-baskervville",
+        styleChoice: "balanced",
+        paletteOverride: null,
+        accentHex: null,
+        voicePreset: null,
+        signatureSettings: {
+          mode: "image",
+          fontId: null,
+          imageDataUrl,
+        },
+        name: "Style 1",
+      },
+      preset2: null,
+      preset3: null,
+    });
     renderSettings();
 
     const signatureGroup = screen.getByRole("group", { name: "Signature" });
@@ -804,7 +824,7 @@ describe("SettingsPage preview controls", () => {
         signatureSettings: {
           mode: "font",
           fontId: "fd-garamond",
-          imageDataUrl: null,
+          imageDataUrl,
         },
       }),
     });

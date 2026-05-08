@@ -115,7 +115,23 @@ function cleanProposalSignatureSettings(
     return {
       mode: "font",
       fontId: value.fontId,
-      imageDataUrl: null,
+      imageDataUrl:
+        typeof value.imageDataUrl === "string" &&
+        SIGNATURE_IMAGE_DATA_URL_PATTERN.test(value.imageDataUrl.trim())
+          ? value.imageDataUrl.trim()
+          : null,
+    };
+  }
+
+  if (value.mode === "auto") {
+    return {
+      mode: "auto",
+      fontId: null,
+      imageDataUrl:
+        typeof value.imageDataUrl === "string" &&
+        SIGNATURE_IMAGE_DATA_URL_PATTERN.test(value.imageDataUrl.trim())
+          ? value.imageDataUrl.trim()
+          : null,
     };
   }
 
@@ -446,6 +462,7 @@ export const setCurrent = mutation({
     proposalDefaultContactLinkedin: v.optional(proposalContactTextValidator),
     proposalDefaultContactWebsite: v.optional(proposalContactTextValidator),
     proposalDefaultContactLocation: v.optional(proposalContactTextValidator),
+    signatureSettings: v.optional(proposalSignatureSettingsValidator),
   },
   returns: v.object({
     voicePreset: proposalVoicePresetChoice,
@@ -461,6 +478,7 @@ export const setCurrent = mutation({
     proposalDefaultContactLinkedin: v.optional(proposalContactTextValidator),
     proposalDefaultContactWebsite: v.optional(proposalContactTextValidator),
     proposalDefaultContactLocation: v.optional(proposalContactTextValidator),
+    signatureSettings: proposalSignatureSettingsValidator,
   }),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -516,6 +534,10 @@ export const setCurrent = mutation({
       args,
       "proposalDefaultContactLocation",
     );
+    const hasSignatureSettingsPatch = Object.prototype.hasOwnProperty.call(
+      args,
+      "signatureSettings",
+    );
 
     if (
       !hasVoicePresetPatch &&
@@ -529,7 +551,8 @@ export const setCurrent = mutation({
       !hasContactPhonePatch &&
       !hasContactLinkedinPatch &&
       !hasContactWebsitePatch &&
-      !hasContactLocationPatch
+      !hasContactLocationPatch &&
+      !hasSignatureSettingsPatch
     ) {
       throw new Error("No proposal setting patch was provided");
     }
@@ -584,6 +607,14 @@ export const setCurrent = mutation({
     const nextContactLocation = hasContactLocationPatch
       ? cleanProposalContactText(args.proposalDefaultContactLocation)
       : user.proposalDefaultContactLocation;
+    const currentSignatureSettings = cleanProposalSignatureSettings(
+      user.proposalSignatureSettings as ProposalSignatureSettingsData | null | undefined,
+    );
+    const nextSignatureSettings = hasSignatureSettingsPatch
+      ? cleanProposalSignatureSettings(
+          args.signatureSettings as ProposalSignatureSettingsData | null | undefined,
+        )
+      : currentSignatureSettings;
 
     const needsWrite =
       currentSavedVoicePreset !== nextSavedVoicePreset ||
@@ -597,7 +628,8 @@ export const setCurrent = mutation({
       user.proposalDefaultContactPhone !== nextContactPhone ||
       user.proposalDefaultContactLinkedin !== nextContactLinkedin ||
       user.proposalDefaultContactWebsite !== nextContactWebsite ||
-      user.proposalDefaultContactLocation !== nextContactLocation;
+      user.proposalDefaultContactLocation !== nextContactLocation ||
+      JSON.stringify(currentSignatureSettings) !== JSON.stringify(nextSignatureSettings);
 
     if (needsWrite) {
       const { _creationTime, _id, ...rest } = user;
@@ -649,6 +681,7 @@ export const setCurrent = mutation({
       nextReplacement.proposalDefaultContactLinkedin = nextContactLinkedin ?? null;
       nextReplacement.proposalDefaultContactWebsite = nextContactWebsite ?? null;
       nextReplacement.proposalDefaultContactLocation = nextContactLocation ?? null;
+      nextReplacement.proposalSignatureSettings = nextSignatureSettings;
 
       await ctx.db.replace(_id, nextReplacement);
     }
@@ -667,6 +700,7 @@ export const setCurrent = mutation({
       proposalDefaultContactLinkedin: nextContactLinkedin ?? null,
       proposalDefaultContactWebsite: nextContactWebsite ?? null,
       proposalDefaultContactLocation: nextContactLocation ?? null,
+      signatureSettings: nextSignatureSettings,
     };
   },
 });

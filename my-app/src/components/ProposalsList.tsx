@@ -65,6 +65,10 @@ import {
   resolveProposalHeadingText,
 } from "../lib/proposal-heading-state";
 import type { ProposalSignatureSettings } from "../lib/proposal-signature-settings";
+import {
+  resolveProposalClosingRef,
+  type ProposalClosingRef,
+} from "../lib/proposal-closing";
 
 type SavedProposalLayoutId = Extract<
   VerbatiLayoutPreset,
@@ -106,6 +110,7 @@ type SavedProposalRecord = {
     layoutOverride?: SavedProposalLayoutId | null;
     characterLimitMode?: ProposalCharacterLimitMode;
     characterLimitValue?: number | null;
+    closing?: ProposalClosingRef;
     applicantName?: string;
     applicantRole?: string;
     contactLine?: string;
@@ -1007,8 +1012,20 @@ export default function ProposalsList({
       }
     }
 
+    const closing = resolveProposalClosingRef({
+      closing: selected.metadata?.closing,
+      content: editContent,
+      proposalType: getStoredProposalType(selected),
+      applicantName: buildSavedApplicantHeader(selected)?.name,
+      voicePreset: getStoredVoicePreset(selected),
+    });
+    if (closing) {
+      nextMetadata.closing = closing;
+    }
+
     return nextMetadata;
   }, [
+    editContent,
     selected,
     selectedHasExplicitStyleEdit,
     selectedLayoutOverride,
@@ -1478,6 +1495,16 @@ export default function ProposalsList({
         delete nextMetadata.voicePreset;
         delete nextMetadata.resolvedVoicePreset;
       }
+      const regeneratedClosing = resolveProposalClosingRef({
+        closing: selected.metadata?.closing,
+        content: res.proposalContent,
+        proposalType,
+        applicantName: nextMetadata.applicantName,
+        voicePreset: voicePreset ?? nextMetadata.resolvedVoicePreset,
+      });
+      if (regeneratedClosing) {
+        nextMetadata.closing = regeneratedClosing;
+      }
       if (selectedStyleBundleId) {
         nextMetadata.templateBundleId = selectedStyleBundleId;
       } else {
@@ -1927,6 +1954,13 @@ export default function ProposalsList({
                     templateId={selectedRenderState?.templateId ?? null}
                     stylePreset={selectedRenderState?.stylePreset ?? null}
                     signatureSettings={signatureSettings}
+                    closing={resolveProposalClosingRef({
+                      closing: selected?.metadata?.closing,
+                      content: editContent,
+                      proposalType: selected ? getStoredProposalType(selected) : null,
+                      applicantName: selectedApplicantHeader?.name,
+                      voicePreset: selected ? getStoredVoicePreset(selected) : null,
+                    })}
                     railTitle={resolveProposalHeadingText(
                       selected?.metadata,
                       "applicantName",
@@ -2005,6 +2039,13 @@ export default function ProposalsList({
                           templateId={proposalRenderState?.templateId ?? null}
                           stylePreset={proposalRenderState?.stylePreset ?? null}
                           signatureSettings={signatureSettings}
+                          closing={resolveProposalClosingRef({
+                            closing: proposal.metadata?.closing,
+                            content: getProposalDisplayText(proposal),
+                            proposalType: getStoredProposalType(proposal),
+                            applicantName: buildSavedApplicantHeader(proposal)?.name,
+                            voicePreset: getStoredVoicePreset(proposal),
+                          })}
                           railTitle={resolveProposalHeadingText(
                             proposal.metadata,
                             "applicantName",
