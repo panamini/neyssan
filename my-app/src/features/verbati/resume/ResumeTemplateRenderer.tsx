@@ -3,6 +3,9 @@ import React from "react";
 import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../../../lib/document-stage";
 import { normalizeResumePreviewTokens } from "../../../lib/layout/documentTokenNormalizer";
 import {
+  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  isWorkshopResumeTemplateId,
+  isWorkshopTwoColumnResumeTemplateId,
   getResumeTemplateDefinition,
   type ResumeTemplateDefinition,
   type ResumeTemplateId,
@@ -20,10 +23,11 @@ import ResumeOneColAtsPage, {
   type ResumePaperAiState,
   type ResumeSectionActions,
 } from "./ResumeOneColAtsPage";
+import ResumeTwoColAtsPage from "./ResumeTwoColAtsPage";
 import type { ResumeData } from "./resume.types";
 import type { ResumeInlineEditing } from "./InlineEditableText";
 
-export const WORKSHOP_TEMPLATE_RENDERER_ID = "workshop_resume_onecol_ats";
+export const WORKSHOP_TEMPLATE_RENDERER_ID = WORKSHOP_RESUME_ONECOL_TEMPLATE_ID;
 export const RESUME_TEMPLATE_PAGE_GAP_PX = 24;
 
 const WORKSHOP_PREVIEW_THEME_VAR_NAMES = [
@@ -47,6 +51,9 @@ const WORKSHOP_PREVIEW_LAYOUT_VAR_NAMES = [
   "--margin-right",
   "--margin-bottom",
   "--margin-left",
+  "--sidebar-width",
+  "--gutter-width",
+  "--main-width",
   "--header-row-gap",
   "--header-summary-width",
   "--header-bottom-padding",
@@ -155,7 +162,7 @@ export function ResumeTemplateRenderer({
 }: ResumeTemplateRendererProps) {
   const templateDefinition = getResumeTemplateDefinition(resumeTemplateId);
   const isWorkshopTemplateRenderer =
-    resumeTemplateId === WORKSHOP_TEMPLATE_RENDERER_ID &&
+    isWorkshopResumeTemplateId(resumeTemplateId) &&
     templateDefinition.supportsPlanner;
   const plannedPages = React.useMemo(
     () =>
@@ -271,15 +278,27 @@ export function ResumeTemplateRenderer({
               left: 0,
             }}
           >
-            <ResumeOneColAtsPage
-              data={data}
-              page={page}
-              template={templateDefinition}
-              activeTarget={activeTarget}
-              inlineEditing={inlineEditing}
-              sectionActions={sectionActions}
-              paperAi={paperAi}
-            />
+            {isWorkshopTwoColumnResumeTemplateId(templateDefinition.id) ? (
+              <ResumeTwoColAtsPage
+                data={data}
+                page={page}
+                template={templateDefinition}
+                activeTarget={activeTarget}
+                inlineEditing={inlineEditing}
+                sectionActions={sectionActions}
+                paperAi={paperAi}
+              />
+            ) : (
+              <ResumeOneColAtsPage
+                data={data}
+                page={page}
+                template={templateDefinition}
+                activeTarget={activeTarget}
+                inlineEditing={inlineEditing}
+                sectionActions={sectionActions}
+                paperAi={paperAi}
+              />
+            )}
           </div>
         </div>
       ))}

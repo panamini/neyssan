@@ -31,6 +31,7 @@ import {
   hasRenderableResumeData,
 } from "./cvDocumentToResumeData";
 import { buildCanonicalResumeRenderModelFromCv } from "../../lib/buildCanonicalResumeRenderModel";
+import { WORKSHOP_RESUME_ONECOL_TEMPLATE_ID } from "../../lib/layout/resumeTemplates";
 import { formatUiDate } from "../../lib/ui-date";
 import { VerbatiProposalWorkspace } from "./VerbatiProposalWorkspace";
 
@@ -501,15 +502,22 @@ export function VerbatiStyleWorkspace(): JSX.Element {
 
         <div style={{ display: "grid", gap: "var(--s3)" }}>
           {VERBATI_LAYOUT_OPTIONS.map((option) => {
-            const active = option.id === stylePreset.layout;
+            const active = option.resumeTemplateId
+              ? option.resumeTemplateId ===
+                  (stylePreset.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID)
+              : option.id === stylePreset.layout && !stylePreset.resumeTemplateId;
             return (
               <button
-                key={option.id}
+                key={`${option.id}:${option.resumeTemplateId ?? "default"}`}
                 type="button"
                 onClick={() => {
                   queueStylePreset((previous) => ({
                     ...previous,
+                    familyId: option.id,
                     layout: option.id,
+                    ...(option.resumeTemplateId
+                      ? { resumeTemplateId: option.resumeTemplateId }
+                      : { resumeTemplateId: undefined }),
                   }));
                   setCompareLayouts(false);
                 }}

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_RESUME_TEMPLATE_ID,
   getResumeTemplateDefinition,
+  isWorkshopResumeTemplateId,
+  isWorkshopTwoColumnResumeTemplateId,
   RESUME_TEMPLATE_DEFINITIONS,
 } from "../resumeTemplates";
 
@@ -37,7 +39,33 @@ describe("resumeTemplates", () => {
         "modernist_resume_legacy",
         "quire_resume_legacy",
         "workshop_resume_onecol_ats",
+        "workshop_resume_twocol_ats",
       ]),
     );
+  });
+
+  it("defines the two-column workshop template with canonical Workshop geometry", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_twocol_ats");
+
+    expect(template).toEqual(
+      expect.objectContaining({
+        id: "workshop_resume_twocol_ats",
+        familyId: "workshop",
+        supportsPlanner: true,
+      }),
+    );
+    expect(template.preview).toEqual(
+      expect.objectContaining({
+        topMm: 17,
+        leftMm: 18,
+        rightMm: 35,
+        bottomMm: 18,
+        gutterMm: 12,
+        sidebarMm: 45,
+        mainMm: 100,
+      }),
+    );
+    expect(isWorkshopResumeTemplateId(template.id)).toBe(true);
+    expect(isWorkshopTwoColumnResumeTemplateId(template.id)).toBe(true);
   });
 });

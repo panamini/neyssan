@@ -8,6 +8,22 @@ export type ProposalClosingBlock = {
   signatureName: string | null;
 };
 
+export type ProposalClosingSource = "settings" | "document" | "legacy";
+
+export type ProposalClosingRef = {
+  enabled: boolean;
+  signOff: string;
+  signatureName: string;
+  source: ProposalClosingSource;
+  handwrittenSignatureEnabled?: boolean;
+};
+
+const PROPOSAL_CLOSING_SOURCE_VALUES = new Set<ProposalClosingSource>([
+  "settings",
+  "document",
+  "legacy",
+]);
+
 export type ExtractedProposalClosingBlock = {
   block: ProposalClosingBlock;
   startIndex: number;
@@ -140,6 +156,183 @@ export function extractProposalClosingBlockFromParagraphs(
     },
     startIndex: paragraphs.length - 2,
   };
+}
+
+function cleanProposalClosingText(value: unknown): string {
+  return typeof value === "string" ? stripInlineProposalMarkdown(value) : "";
+}
+
+function normalizeProposalClosingSource(
+  value: unknown,
+): ProposalClosingSource | null {
+  return typeof value === "string" &&
+    PROPOSAL_CLOSING_SOURCE_VALUES.has(value as ProposalClosingSource)
+    ? (value as ProposalClosingSource)
+    : null;
+}
+
+function isFrenchLocale(value: unknown): boolean {
+  return typeof value === "string" && /^fr(?:-|$)/i.test(value.trim());
+}
+
+function normalizeVoicePresetForSignOff(value: unknown): keyof typeof ENGLISH_SIGNOFFS {
+  return typeof value === "string" && value in ENGLISH_SIGNOFFS
+    ? (value as keyof typeof ENGLISH_SIGNOFFS)
+    : "signature";
+}
+
+export function resolveDefaultProposalSignOff(args: {
+  locale?: string | null;
+  voicePreset?: string | null;
+}): string {
+  const voicePreset = normalizeVoicePresetForSignOff(args.voicePreset);
+  return isFrenchLocale(args.locale)
+    ? FRENCH_SIGNOFFS[voicePreset]
+    : ENGLISH_SIGNOFFS[voicePreset];
+}
+
+export function sanitizeProposalClosingRef(
+  value: unknown,
+): ProposalClosingRef | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Partial<ProposalClosingRef>;
+  const signOff = cleanProposalClosingText(record.signOff);
+  const signatureName = cleanProposalClosingText(record.signatureName);
+  const source = normalizeProposalClosingSource(record.source) ?? "document";
+
+  return {
+    enabled: record.enabled !== false,
+    signOff,
+    signatureName,
+    source,
+    handwrittenSignatureEnabled: record.handwrittenSignatureEnabled === true,
+  };
+}
+
+export function getLegacyProposalClosingRefFromContent(
+  content: string | null | undefined,
+): ProposalClosingRef | null {
+  if (!content) {
+    return null;
+  }
+
+  const paragraphs = content
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+  const extracted = extractProposalClosingBlockFromParagraphs(paragraphs);
+  if (!extracted?.block.signOff && !extracted?.block.signatureName) {
+    return null;
+  }
+
+  return {
+    enabled: true,
+    signOff: extracted?.block.signOff ?? "",
+    signatureName: extracted?.block.signatureName ?? "",
+    source: "legacy",
+    handwrittenSignatureEnabled: false,
+  };
+}
+
+export function resolveProposalClosingRef(args: {
+  closing?: unknown;
+  content?: string | null;
+  proposalType?: string | null;
+  applicantName?: string | null;
+  locale?: string | null;
+  voicePreset?: string | null;
+  defaultEnabled?: boolean;
+}): ProposalClosingRef | null {
+  const sanitized = sanitizeProposalClosingRef(args.closing);
+  const legacy = getLegacyProposalClosingRefFromContent(args.content);
+  const applicantSignatureName = cleanProposalClosingText(args.applicantName);
+  const defaultEnabled =
+    typeof args.defaultEnabled === "boolean"
+      ? args.defaultEnabled
+      : args.proposalType === "cover_letter" || !args.proposalType;
+
+  if (sanitized) {
+    return {
+      ...sanitized,
+      signOff:
+        sanitized.signOff ||
+        legacy?.signOff ||
+        resolveDefaultProposalSignOff({
+          locale: args.locale,
+          voicePreset: args.voicePreset,
+        }),
+      signatureName:
+        sanitized.source === "document"
+          ? sanitized.signatureName ||
+            applicantSignatureName ||
+            legacy?.signatureName ||
+            ""
+          : applicantSignatureName ||
+            sanitized.signatureName ||
+            legacy?.signatureName ||
+            "",
+    };
+  }
+
+  if (legacy) {
+    return {
+      ...legacy,
+      signOff:
+        legacy.signOff ||
+        resolveDefaultProposalSignOff({
+          locale: args.locale,
+          voicePreset: args.voicePreset,
+        }),
+      signatureName: legacy.signatureName || applicantSignatureName,
+    };
+  }
+
+  if (!defaultEnabled) {
+    return null;
+  }
+
+  return {
+    enabled: true,
+    signOff: resolveDefaultProposalSignOff({
+      locale: args.locale,
+      voicePreset: args.voicePreset,
+    }),
+    signatureName: applicantSignatureName,
+    source: "settings",
+    handwrittenSignatureEnabled: false,
+  };
+}
+
+export function removeProposalSignatureNameFromClosing(
+  content: string | null | undefined,
+): string {
+  if (!content) {
+    return "";
+  }
+
+  const normalizedContent = content.replace(/\r\n/g, "\n").trimEnd();
+  if (!normalizedContent) {
+    return content;
+  }
+
+  const paragraphs = normalizedContent
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+  const closingBlock = extractProposalClosingBlockFromParagraphs(paragraphs);
+  if (!closingBlock?.block.signOff || !closingBlock.block.signatureName) {
+    return content;
+  }
+
+  return [
+    ...paragraphs.slice(0, closingBlock.startIndex),
+    closingBlock.block.signOff,
+  ].join("\n\n");
 }
 
 export function ensureProposalSignatureName(

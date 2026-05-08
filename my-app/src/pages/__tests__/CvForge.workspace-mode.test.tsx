@@ -1,7 +1,13 @@
 import React from "react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach } from "vitest";
 import { describe, expect, it, vi } from "vitest";
@@ -165,7 +171,9 @@ vi.mock("../../lib/buildCanonicalResumeRenderModel", () => ({
     }
 
     const sections = cv.sections ?? [];
-    const profileSection = sections.find((section) => section.type === "profile");
+    const profileSection = sections.find(
+      (section) => section.type === "profile",
+    );
     const profileItem = Array.isArray(profileSection?.structuredContent)
       ? profileSection.structuredContent[0] ?? {}
       : {};
@@ -189,7 +197,9 @@ vi.mock("../../lib/buildCanonicalResumeRenderModel", () => ({
           : null;
       })
       .filter(Boolean);
-    const summarySection = sections.find((section) => section.type === "summary");
+    const summarySection = sections.find(
+      (section) => section.type === "summary",
+    );
     const summaryItem = Array.isArray(summarySection?.structuredContent)
       ? summarySection.structuredContent[0]
       : null;
@@ -208,19 +218,25 @@ vi.mock("../../lib/buildCanonicalResumeRenderModel", () => ({
             : "custom",
         sectionTitle: String(section.title ?? "Custom section"),
         sectionOrder: index,
-        text: readMockPlainText(section.blocks?.[0]?.plainText ?? section.blocks?.[0]?.content),
+        text: readMockPlainText(
+          section.blocks?.[0]?.plainText ?? section.blocks?.[0]?.content,
+        ),
       }));
-    const projectsSection = sections.find((section) => section.type === "projects");
+    const projectsSection = sections.find(
+      (section) => section.type === "projects",
+    );
     const projects = Array.isArray(projectsSection?.structuredContent)
-      ? projectsSection.structuredContent.map((item: Record<string, unknown>) => ({
-          id: String(item.id ?? "project"),
-          sectionId: String(projectsSection?.id ?? "projects-cv_123"),
-          sectionType: "projects",
-          name: String(item.title ?? item.name ?? ""),
-          meta: String(item.meta ?? item.subtitle ?? ""),
-          description: readMockPlainText(item.description ?? item.summary),
-          descriptionRich: item.description,
-        }))
+      ? projectsSection.structuredContent.map(
+          (item: Record<string, unknown>) => ({
+            id: String(item.id ?? "project"),
+            sectionId: String(projectsSection?.id ?? "projects-cv_123"),
+            sectionType: "projects",
+            name: String(item.title ?? item.name ?? ""),
+            meta: String(item.meta ?? item.subtitle ?? ""),
+            description: readMockPlainText(item.description ?? item.summary),
+            descriptionRich: item.description,
+          }),
+        )
       : [];
 
     return {
@@ -356,7 +372,13 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
         sectionId: string;
         sectionType: string;
         fieldPath: string;
-        fieldKind: "paragraph" | "heading" | "bullet" | "chip" | "date" | "meta";
+        fieldKind:
+          | "paragraph"
+          | "heading"
+          | "bullet"
+          | "chip"
+          | "date"
+          | "meta";
         itemIndex?: number;
         bulletIndex?: number;
         chipIndex?: number;
@@ -365,7 +387,13 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
         sectionId: string;
         sectionType: string;
         fieldPath: string;
-        fieldKind: "paragraph" | "heading" | "bullet" | "chip" | "date" | "meta";
+        fieldKind:
+          | "paragraph"
+          | "heading"
+          | "bullet"
+          | "chip"
+          | "date"
+          | "meta";
         itemIndex?: number;
         bulletIndex?: number;
         chipIndex?: number;
@@ -374,7 +402,13 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
         sectionId: string;
         sectionType: string;
         fieldPath: string;
-        fieldKind: "paragraph" | "heading" | "bullet" | "chip" | "date" | "meta";
+        fieldKind:
+          | "paragraph"
+          | "heading"
+          | "bullet"
+          | "chip"
+          | "date"
+          | "meta";
         itemIndex?: number;
         bulletIndex?: number;
         chipIndex?: number;
@@ -386,7 +420,13 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
           sectionId: string;
           sectionType: string;
           fieldPath: string;
-          fieldKind: "paragraph" | "heading" | "bullet" | "chip" | "date" | "meta";
+          fieldKind:
+            | "paragraph"
+            | "heading"
+            | "bullet"
+            | "chip"
+            | "date"
+            | "meta";
           itemIndex?: number;
           bulletIndex?: number;
           chipIndex?: number;
@@ -398,7 +438,13 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
           sectionId: string;
           sectionType: string;
           fieldPath: string;
-          fieldKind: "paragraph" | "heading" | "bullet" | "chip" | "date" | "meta";
+          fieldKind:
+            | "paragraph"
+            | "heading"
+            | "bullet"
+            | "chip"
+            | "date"
+            | "meta";
           itemIndex?: number;
           bulletIndex?: number;
           chipIndex?: number;
@@ -441,7 +487,10 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
     const hasMark = (value: unknown, markType: string): boolean => {
       if (!value || typeof value !== "object") return false;
       const record = value as Record<string, any>;
-      if (Array.isArray(record.marks) && record.marks.some((mark: any) => mark?.type === markType)) {
+      if (
+        Array.isArray(record.marks) &&
+        record.marks.some((mark: any) => mark?.type === markType)
+      ) {
         return true;
       }
       return Array.isArray(record.content)
@@ -458,461 +507,479 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
     };
 
     return (
-    <div>
-      Preview host: {hostMode ?? "panel"}
-      <div data-testid="preview-active-section">
-        {activeTarget?.sectionId ?? "none"}
-      </div>
-      <div data-testid="paper-contact-row">
-        {(data?.contact ?? []).map((item) => {
-          const editTarget = {
-            sectionId: item.sectionId,
-            sectionType: "profile",
-            fieldPath: `structuredContent.0.${item.itemId}`,
-            fieldKind: "meta" as const,
-          };
-          const isContactEditable = Boolean(inlineEditing?.enabled);
-
-          return (
-            <span
-              key={item.itemId}
-              aria-label={`Paper ${item.label}`}
-              data-testid={`paper-contact-${item.itemId}`}
-              contentEditable={isContactEditable ? "plaintext-only" : undefined}
-              suppressContentEditableWarning={isContactEditable}
-              role={isContactEditable ? "textbox" : undefined}
-              tabIndex={isContactEditable ? 0 : undefined}
-              data-inline-paper-editable={isContactEditable ? "true" : undefined}
-              data-paper-section-id={editTarget.sectionId}
-              data-paper-section-type={editTarget.sectionType}
-              data-paper-field-path={editTarget.fieldPath}
-              data-paper-field-kind={editTarget.fieldKind}
-              onFocus={() => inlineEditing?.onActivate(editTarget)}
-              onInput={(event) => {
-                inlineEditing?.onActivate(editTarget);
-                inlineEditing?.onFieldChange?.(
-                  editTarget,
-                  event.currentTarget.textContent ?? "",
-                );
-              }}
-              onBlur={() => inlineEditing?.onDeactivate(editTarget)}
-            >
-              {item.value}
-            </span>
-          );
-        })}
-      </div>
-      <p
-        aria-label="Paper Summary paragraph"
-        data-testid="paper-summary-paragraph"
-        contentEditable={isSummaryEditable ? "plaintext-only" : undefined}
-        suppressContentEditableWarning={isSummaryEditable}
-        role={isSummaryEditable ? "textbox" : undefined}
-        tabIndex={isSummaryEditable ? 0 : undefined}
-        data-inline-paper-editable={isSummaryEditable ? "true" : undefined}
-        data-paper-section-id={summaryEditTarget.sectionId}
-        data-paper-section-type={summaryEditTarget.sectionType}
-        data-paper-field-path={summaryEditTarget.fieldPath}
-        data-paper-field-kind={summaryEditTarget.fieldKind}
-        onFocus={() => inlineEditing?.onActivate(summaryEditTarget)}
-        onClick={(event) => {
-          if (inlineEditing?.enabled) {
-            event.stopPropagation();
-            inlineEditing.onActivate(summaryEditTarget);
-            return;
-          }
-          onLinkIntent?.({
-            requestId: "paper-summary",
-            sectionType: "summary",
-            sectionId: data?.summarySectionId ?? "summary-cv_123",
-            source: "preview-panel",
-            shouldOpenModal: false,
-          });
-        }}
-        onInput={(event) =>
-          {
-            inlineEditing?.onActivate(summaryEditTarget);
-            inlineEditing?.onSummaryChange(event.currentTarget.textContent ?? "");
-          }
-        }
-      >
-        {hasMark(data?.summaryRich, "bold") ? (
-          <strong data-testid="paper-summary-rich-bold">{data?.summary ?? ""}</strong>
-        ) : (
-          data?.summary ?? ""
-        )}
-      </p>
-      {(data?.projects ?? []).map((project) => (
-        <div key={project.id} data-testid={`paper-project-${project.id}`}>
-          <p>{project.name}</p>
-          <p data-testid={`paper-project-description-${project.id}`}>
-            {hasMark(project.descriptionRich, "bold") ? (
-              <strong data-testid={`paper-project-rich-bold-${project.id}`}>
-                {project.description}
-              </strong>
-            ) : (
-              project.description
-            )}
-          </p>
-          {hasNode(project.descriptionRich, "bulletList") ? (
-            <ul data-testid={`paper-project-rich-bullets-${project.id}`}>
-              <li>{project.description}</li>
-            </ul>
-          ) : null}
+      <div>
+        Preview host: {hostMode ?? "panel"}
+        <div data-testid="preview-active-section">
+          {activeTarget?.sectionId ?? "none"}
         </div>
-      ))}
-      {(data?.textSections ?? []).map((section) => (
-        (() => {
-          const textEditTarget = {
-            sectionId: section.sectionId,
-            sectionType: section.sectionType,
-            fieldPath: "blocks.0.plainText",
-            fieldKind: "paragraph" as const,
-          };
-          const isTextSectionEditable = Boolean(inlineEditing?.enabled);
+        <div data-testid="paper-contact-row">
+          {(data?.contact ?? []).map((item) => {
+            const editTarget = {
+              sectionId: item.sectionId,
+              sectionType: "profile",
+              fieldPath: `structuredContent.0.${item.itemId}`,
+              fieldKind: "meta" as const,
+            };
+            const isContactEditable = Boolean(inlineEditing?.enabled);
 
-          return (
-            <p
-              key={section.id}
-              aria-label={`Paper ${section.sectionTitle} paragraph`}
-              data-testid={`paper-text-section-${section.sectionId}`}
-              contentEditable={
-                isTextSectionEditable ? "plaintext-only" : undefined
-              }
-              suppressContentEditableWarning={isTextSectionEditable}
-              role={isTextSectionEditable ? "textbox" : undefined}
-              tabIndex={isTextSectionEditable ? 0 : undefined}
-              data-inline-paper-editable={
-                isTextSectionEditable ? "true" : undefined
-              }
-              data-paper-section-id={textEditTarget.sectionId}
-              data-paper-section-type={textEditTarget.sectionType}
-              data-paper-field-path={textEditTarget.fieldPath}
-              data-paper-field-kind={textEditTarget.fieldKind}
-              onFocus={() => inlineEditing?.onActivate(textEditTarget)}
-              onClick={(event) => {
-                if (inlineEditing?.enabled) {
-                  event.stopPropagation();
-                  inlineEditing.onActivate(textEditTarget);
-                  return;
+            return (
+              <span
+                key={item.itemId}
+                aria-label={`Paper ${item.label}`}
+                data-testid={`paper-contact-${item.itemId}`}
+                contentEditable={
+                  isContactEditable ? "plaintext-only" : undefined
                 }
-                onLinkIntent?.({
-                  requestId: `paper-${section.sectionId}`,
-                  sectionType: section.sectionType,
-                  sectionId: section.sectionId,
-                  source: "preview-panel",
-                  shouldOpenModal: false,
-                });
-              }}
-              onInput={(event) =>
-                {
+                suppressContentEditableWarning={isContactEditable}
+                role={isContactEditable ? "textbox" : undefined}
+                tabIndex={isContactEditable ? 0 : undefined}
+                data-inline-paper-editable={
+                  isContactEditable ? "true" : undefined
+                }
+                data-paper-section-id={editTarget.sectionId}
+                data-paper-section-type={editTarget.sectionType}
+                data-paper-field-path={editTarget.fieldPath}
+                data-paper-field-kind={editTarget.fieldKind}
+                onFocus={() => inlineEditing?.onActivate(editTarget)}
+                onInput={(event) => {
+                  inlineEditing?.onActivate(editTarget);
+                  inlineEditing?.onFieldChange?.(
+                    editTarget,
+                    event.currentTarget.textContent ?? "",
+                  );
+                }}
+                onBlur={() => inlineEditing?.onDeactivate(editTarget)}
+              >
+                {item.value}
+              </span>
+            );
+          })}
+        </div>
+        <p
+          aria-label="Paper Summary paragraph"
+          data-testid="paper-summary-paragraph"
+          contentEditable={isSummaryEditable ? "plaintext-only" : undefined}
+          suppressContentEditableWarning={isSummaryEditable}
+          role={isSummaryEditable ? "textbox" : undefined}
+          tabIndex={isSummaryEditable ? 0 : undefined}
+          data-inline-paper-editable={isSummaryEditable ? "true" : undefined}
+          data-paper-section-id={summaryEditTarget.sectionId}
+          data-paper-section-type={summaryEditTarget.sectionType}
+          data-paper-field-path={summaryEditTarget.fieldPath}
+          data-paper-field-kind={summaryEditTarget.fieldKind}
+          onFocus={() => inlineEditing?.onActivate(summaryEditTarget)}
+          onClick={(event) => {
+            if (inlineEditing?.enabled) {
+              event.stopPropagation();
+              inlineEditing.onActivate(summaryEditTarget);
+              return;
+            }
+            onLinkIntent?.({
+              requestId: "paper-summary",
+              sectionType: "summary",
+              sectionId: data?.summarySectionId ?? "summary-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: false,
+            });
+          }}
+          onInput={(event) => {
+            inlineEditing?.onActivate(summaryEditTarget);
+            inlineEditing?.onSummaryChange(
+              event.currentTarget.textContent ?? "",
+            );
+          }}
+        >
+          {hasMark(data?.summaryRich, "bold") ? (
+            <strong data-testid="paper-summary-rich-bold">
+              {data?.summary ?? ""}
+            </strong>
+          ) : (
+            data?.summary ?? ""
+          )}
+        </p>
+        {(data?.projects ?? []).map((project) => (
+          <div key={project.id} data-testid={`paper-project-${project.id}`}>
+            <p>{project.name}</p>
+            <p data-testid={`paper-project-description-${project.id}`}>
+              {hasMark(project.descriptionRich, "bold") ? (
+                <strong data-testid={`paper-project-rich-bold-${project.id}`}>
+                  {project.description}
+                </strong>
+              ) : (
+                project.description
+              )}
+            </p>
+            {hasNode(project.descriptionRich, "bulletList") ? (
+              <ul data-testid={`paper-project-rich-bullets-${project.id}`}>
+                <li>{project.description}</li>
+              </ul>
+            ) : null}
+          </div>
+        ))}
+        {(data?.textSections ?? []).map((section) =>
+          (() => {
+            const textEditTarget = {
+              sectionId: section.sectionId,
+              sectionType: section.sectionType,
+              fieldPath: "blocks.0.plainText",
+              fieldKind: "paragraph" as const,
+            };
+            const isTextSectionEditable = Boolean(inlineEditing?.enabled);
+
+            return (
+              <p
+                key={section.id}
+                aria-label={`Paper ${section.sectionTitle} paragraph`}
+                data-testid={`paper-text-section-${section.sectionId}`}
+                contentEditable={
+                  isTextSectionEditable ? "plaintext-only" : undefined
+                }
+                suppressContentEditableWarning={isTextSectionEditable}
+                role={isTextSectionEditable ? "textbox" : undefined}
+                tabIndex={isTextSectionEditable ? 0 : undefined}
+                data-inline-paper-editable={
+                  isTextSectionEditable ? "true" : undefined
+                }
+                data-paper-section-id={textEditTarget.sectionId}
+                data-paper-section-type={textEditTarget.sectionType}
+                data-paper-field-path={textEditTarget.fieldPath}
+                data-paper-field-kind={textEditTarget.fieldKind}
+                onFocus={() => inlineEditing?.onActivate(textEditTarget)}
+                onClick={(event) => {
+                  if (inlineEditing?.enabled) {
+                    event.stopPropagation();
+                    inlineEditing.onActivate(textEditTarget);
+                    return;
+                  }
+                  onLinkIntent?.({
+                    requestId: `paper-${section.sectionId}`,
+                    sectionType: section.sectionType,
+                    sectionId: section.sectionId,
+                    source: "preview-panel",
+                    shouldOpenModal: false,
+                  });
+                }}
+                onInput={(event) => {
                   inlineEditing?.onActivate(textEditTarget);
                   inlineEditing?.onTextSectionChange(
                     section.sectionId,
                     event.currentTarget.textContent ?? "",
                   );
-                }
+                }}
+              >
+                {section.text}
+              </p>
+            );
+          })(),
+        )}
+        <div data-testid="paper-structured-sections">
+          {(data?.experience ?? []).map((item) => (
+            <p
+              key={item.role}
+              data-preview-section-id={item.sectionId}
+              tabIndex={-1}
+            >
+              {item.role}
+            </p>
+          ))}
+          {(data?.education ?? []).map((item) => (
+            <p
+              key={item.degree}
+              data-preview-section-id={item.sectionId}
+              tabIndex={-1}
+            >
+              {item.degree}
+            </p>
+          ))}
+          {(data?.skillItems ?? []).map((item) => (
+            <span key={item.name}>{item.name}</span>
+          ))}
+          {(data?.languages ?? []).map((item) => (
+            <span key={item.name}>{item.name}</span>
+          ))}
+          {(data?.hobbyItems ?? []).map((item) => (
+            <span key={item.name}>{item.name}</span>
+          ))}
+          {(data?.achievementItems ?? []).map((item) => (
+            <p key={item.text}>{item.text}</p>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            onLinkIntent?.({
+              requestId: "paper-experience",
+              sectionType: "experience",
+              sectionId: "experience-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: true,
+            })
+          }
+        >
+          Paper Experience
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onLinkIntent?.({
+              requestId: "paper-education",
+              sectionType: "education",
+              sectionId: "education-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: true,
+            })
+          }
+        >
+          Paper Education
+        </button>
+        {inlineEditing?.enabled ? (
+          <>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onAddItem?.({
+                  sectionId: "experience-cv_123",
+                  sectionType: "experience",
+                  itemKind: "bullet",
+                  parentItemId: "experience-item-cv_123",
+                })
               }
             >
-              {section.text}
-            </p>
-          );
-        })()
-      ))}
-      <div data-testid="paper-structured-sections">
-        {(data?.experience ?? []).map((item) => (
-          <p
-            key={item.role}
-            data-preview-section-id={item.sectionId}
-            tabIndex={-1}
-          >
-            {item.role}
-          </p>
-        ))}
-        {(data?.education ?? []).map((item) => (
-          <p
-            key={item.degree}
-            data-preview-section-id={item.sectionId}
-            tabIndex={-1}
-          >
-            {item.degree}
-          </p>
-        ))}
-        {(data?.skillItems ?? []).map((item) => (
-          <span key={item.name}>{item.name}</span>
-        ))}
-        {(data?.languages ?? []).map((item) => (
-          <span key={item.name}>{item.name}</span>
-        ))}
-        {(data?.hobbyItems ?? []).map((item) => (
-          <span key={item.name}>{item.name}</span>
-        ))}
-        {(data?.achievementItems ?? []).map((item) => (
-          <p key={item.text}>{item.text}</p>
-        ))}
-      </div>
-      <button
-        type="button"
-        onClick={() =>
-          onLinkIntent?.({
-            requestId: "paper-experience",
-            sectionType: "experience",
-            sectionId: "experience-cv_123",
-            source: "preview-panel",
-            shouldOpenModal: true,
-          })
-        }
-      >
-        Paper Experience
-      </button>
-      <button
-        type="button"
-        onClick={() =>
-          onLinkIntent?.({
-            requestId: "paper-education",
-            sectionType: "education",
-            sectionId: "education-cv_123",
-            source: "preview-panel",
-            shouldOpenModal: true,
-          })
-        }
-      >
-        Paper Education
-      </button>
-      {inlineEditing?.enabled ? (
-        <>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onAddItem?.({
-                sectionId: "experience-cv_123",
-                sectionType: "experience",
-                itemKind: "bullet",
-                parentItemId: "experience-item-cv_123",
-              })
-            }
-          >
-            + Add bullet
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onFieldChange?.(
-                {
+              + Add bullet
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onFieldChange?.(
+                  {
+                    sectionId: "experience-cv_123",
+                    sectionType: "experience",
+                    fieldPath:
+                      "structuredContent.item:experience-item-cv_123.position",
+                    fieldKind: "heading",
+                  },
+                  "Principal designer",
+                )
+              }
+            >
+              Update inline experience position
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onFieldChange?.(
+                  {
+                    sectionId: "experience-cv_123",
+                    sectionType: "experience",
+                    fieldPath:
+                      "structuredContent.item:experience-item-cv_123.company",
+                    fieldKind: "meta",
+                  },
+                  "Design systems inc.",
+                )
+              }
+            >
+              Update inline experience company
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onFieldChange?.(
+                  {
+                    sectionId: "experience-cv_123",
+                    sectionType: "experience",
+                    fieldPath:
+                      "structuredContent.item:experience-item-cv_123.location",
+                    fieldKind: "meta",
+                  },
+                  "Remote city",
+                )
+              }
+            >
+              Update inline experience location
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onFieldChange?.(
+                  {
+                    sectionId: "experience-cv_123",
+                    sectionType: "experience",
+                    fieldPath:
+                      "structuredContent.item:experience-item-cv_123.startDate",
+                    fieldKind: "date",
+                  },
+                  "2024",
+                )
+              }
+            >
+              Update inline experience start date
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onFieldChange?.(
+                  {
+                    sectionId: "experience-cv_123",
+                    sectionType: "experience",
+                    fieldPath:
+                      "structuredContent.item:experience-item-cv_123.endDate",
+                    fieldKind: "date",
+                  },
+                  "Present",
+                )
+              }
+            >
+              Update inline experience end date
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onFieldChange?.(
+                  {
+                    sectionId: "education-cv_123",
+                    sectionType: "education",
+                    fieldPath:
+                      "structuredContent.item:education-item-cv_123.degree",
+                    fieldKind: "heading",
+                  },
+                  "PhD",
+                )
+              }
+            >
+              Update inline education degree
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onFieldChange?.(
+                  {
+                    sectionId: "education-cv_123",
+                    sectionType: "education",
+                    fieldPath:
+                      "structuredContent.item:education-item-cv_123.fieldOfStudy",
+                    fieldKind: "heading",
+                  },
+                  "Human-Computer Interaction",
+                )
+              }
+            >
+              Update inline education field of study
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onFieldChange?.(
+                  {
+                    sectionId: "education-cv_123",
+                    sectionType: "education",
+                    fieldPath:
+                      "structuredContent.item:education-item-cv_123.institution",
+                    fieldKind: "meta",
+                  },
+                  "Design Academy",
+                )
+              }
+            >
+              Update inline education institution
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onFieldChange?.(
+                  {
+                    sectionId: "experience-cv_123",
+                    sectionType: "experience",
+                    fieldPath:
+                      "structuredContent.item:experience-item-cv_123.responsibilityBullets.0",
+                    fieldKind: "bullet",
+                    bulletIndex: 0,
+                  },
+                  "Typed bullet.",
+                )
+              }
+            >
+              Test type first bullet
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onDeactivate({
                   sectionId: "experience-cv_123",
                   sectionType: "experience",
-                  fieldPath: "structuredContent.item:experience-item-cv_123.position",
-                  fieldKind: "heading",
-                },
-                "Principal designer",
-              )
-            }
-          >
-            Update inline experience position
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onFieldChange?.(
-                {
-                  sectionId: "experience-cv_123",
-                  sectionType: "experience",
-                  fieldPath: "structuredContent.item:experience-item-cv_123.company",
-                  fieldKind: "meta",
-                },
-                "Design systems inc.",
-              )
-            }
-          >
-            Update inline experience company
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onFieldChange?.(
-                {
-                  sectionId: "experience-cv_123",
-                  sectionType: "experience",
-                  fieldPath: "structuredContent.item:experience-item-cv_123.location",
-                  fieldKind: "meta",
-                },
-                "Remote city",
-              )
-            }
-          >
-            Update inline experience location
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onFieldChange?.(
-                {
-                  sectionId: "experience-cv_123",
-                  sectionType: "experience",
-                  fieldPath: "structuredContent.item:experience-item-cv_123.startDate",
-                  fieldKind: "date",
-                },
-                "2024",
-              )
-            }
-          >
-            Update inline experience start date
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onFieldChange?.(
-                {
-                  sectionId: "experience-cv_123",
-                  sectionType: "experience",
-                  fieldPath: "structuredContent.item:experience-item-cv_123.endDate",
-                  fieldKind: "date",
-                },
-                "Present",
-              )
-            }
-          >
-            Update inline experience end date
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onFieldChange?.(
-                {
-                  sectionId: "education-cv_123",
-                  sectionType: "education",
-                  fieldPath: "structuredContent.item:education-item-cv_123.degree",
-                  fieldKind: "heading",
-                },
-                "PhD",
-              )
-            }
-          >
-            Update inline education degree
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onFieldChange?.(
-                {
-                  sectionId: "education-cv_123",
-                  sectionType: "education",
-                  fieldPath: "structuredContent.item:education-item-cv_123.fieldOfStudy",
-                  fieldKind: "heading",
-                },
-                "Human-Computer Interaction",
-              )
-            }
-          >
-            Update inline education field of study
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onFieldChange?.(
-                {
-                  sectionId: "education-cv_123",
-                  sectionType: "education",
-                  fieldPath: "structuredContent.item:education-item-cv_123.institution",
-                  fieldKind: "meta",
-                },
-                "Design Academy",
-              )
-            }
-          >
-            Update inline education institution
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onFieldChange?.(
-                {
-                  sectionId: "experience-cv_123",
-                  sectionType: "experience",
-                  fieldPath: "structuredContent.item:experience-item-cv_123.responsibilityBullets.0",
+                  fieldPath:
+                    "structuredContent.item:experience-item-cv_123.responsibilityBullets.0",
                   fieldKind: "bullet",
                   bulletIndex: 0,
-                },
-                "Typed bullet.",
-              )
-            }
-          >
-            Test type first bullet
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onDeactivate({
-                sectionId: "experience-cv_123",
-                sectionType: "experience",
-                fieldPath: "structuredContent.item:experience-item-cv_123.responsibilityBullets.0",
-                fieldKind: "bullet",
-                bulletIndex: 0,
-              })
-            }
-          >
-            Test blur first bullet
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onDeactivate({
-                sectionId: "experience-cv_123",
-                sectionType: "experience",
-                fieldPath: "structuredContent.item:experience-item-cv_123.responsibilityBullets.1",
-                fieldKind: "bullet",
-                bulletIndex: 1,
-              })
-            }
-          >
-            Test blur second bullet
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              inlineEditing.onFieldDocChange?.(
-                {
+                })
+              }
+            >
+              Test blur first bullet
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onDeactivate({
                   sectionId: "experience-cv_123",
                   sectionType: "experience",
-                  fieldPath: "structuredContent.item:experience-item-cv_123.responsibilities",
-                  fieldKind: "paragraph",
-                },
-                {
-                  type: "doc",
-                  content: [
-                    {
-                      type: "paragraph",
-                      content: [{ type: "text", text: "Edited paragraph." }],
-                    },
-                    {
-                      type: "bulletList",
-                      content: [
-                        {
-                          type: "listItem",
-                          content: [
-                            {
-                              type: "paragraph",
-                              content: [{ type: "text", text: "Edited bullet." }],
-                            },
-                          ],
-                        },
-                      ],
-                    },
-                  ],
-                },
-              )
-            }
-          >
-            Test edit rich responsibilities doc
-          </button>
-        </>
-      ) : null}
-      <div>
-        Preview style: {stylePreset?.layout ?? "none"}|
-        {stylePreset?.typography ?? "none"}|{stylePreset?.palette ?? "none"}|
-        {stylePreset?.accentHex ?? "none"}
+                  fieldPath:
+                    "structuredContent.item:experience-item-cv_123.responsibilityBullets.1",
+                  fieldKind: "bullet",
+                  bulletIndex: 1,
+                })
+              }
+            >
+              Test blur second bullet
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                inlineEditing.onFieldDocChange?.(
+                  {
+                    sectionId: "experience-cv_123",
+                    sectionType: "experience",
+                    fieldPath:
+                      "structuredContent.item:experience-item-cv_123.responsibilities",
+                    fieldKind: "paragraph",
+                  },
+                  {
+                    type: "doc",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "Edited paragraph." }],
+                      },
+                      {
+                        type: "bulletList",
+                        content: [
+                          {
+                            type: "listItem",
+                            content: [
+                              {
+                                type: "paragraph",
+                                content: [
+                                  { type: "text", text: "Edited bullet." },
+                                ],
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                )
+              }
+            >
+              Test edit rich responsibilities doc
+            </button>
+          </>
+        ) : null}
+        <div>
+          Preview style: {stylePreset?.layout ?? "none"}|
+          {stylePreset?.typography ?? "none"}|{stylePreset?.palette ?? "none"}|
+          {stylePreset?.accentHex ?? "none"}
+        </div>
       </div>
-    </div>
     );
   },
 }));
@@ -962,7 +1029,9 @@ function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
         type: "summary",
         title: "Summary",
         blocks: [],
-        structuredContent: [{ id: "summary-item-cv_123", summary: "Focused builder." }],
+        structuredContent: [
+          { id: "summary-item-cv_123", summary: "Focused builder." },
+        ],
       },
       {
         id: "experience-cv_123",
@@ -1013,7 +1082,9 @@ function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
         type: "certifications",
         title: "Certifications",
         blocks: [],
-        structuredContent: [{ id: "cert-cv_123", certificationName: "UX cert" }],
+        structuredContent: [
+          { id: "cert-cv_123", certificationName: "UX cert" },
+        ],
       },
       {
         id: "achievements-cv_123",
@@ -1026,14 +1097,26 @@ function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
         id: "additional-cv_123",
         type: "text",
         title: "Additional information",
-        blocks: [{ id: "additional-block-cv_123", type: "text", plainText: "Open to remote." }],
+        blocks: [
+          {
+            id: "additional-block-cv_123",
+            type: "text",
+            plainText: "Open to remote.",
+          },
+        ],
         structuredContent: null,
       },
       {
         id: "custom-cv_123",
         type: "text",
         title: "Community",
-        blocks: [{ id: "custom-block-cv_123", type: "text", plainText: "Mentors operators." }],
+        blocks: [
+          {
+            id: "custom-block-cv_123",
+            type: "text",
+            plainText: "Mentors operators.",
+          },
+        ],
         structuredContent: null,
       },
       {
@@ -1327,7 +1410,10 @@ function getLastSavedEducationItem(importCv: ReturnType<typeof vi.fn>) {
 function docHasMark(value: unknown, markType: string): boolean {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, any>;
-  if (Array.isArray(record.marks) && record.marks.some((mark) => mark?.type === markType)) {
+  if (
+    Array.isArray(record.marks) &&
+    record.marks.some((mark) => mark?.type === markType)
+  ) {
     return true;
   }
   return Array.isArray(record.content)
@@ -1386,10 +1472,9 @@ describe("CvForge workspace mode", () => {
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
     const saved = getLastSavedExperienceItem(importCv);
-    expect(saved.responsibilities.content.map((node: any) => node.type)).toEqual([
-      "paragraph",
-      "bulletList",
-    ]);
+    expect(
+      saved.responsibilities.content.map((node: any) => node.type),
+    ).toEqual(["paragraph", "bulletList"]);
     expect(readSavedPlainText(saved.responsibilities.content[0])).toBe(
       "Led product design.",
     );
@@ -1416,16 +1501,19 @@ describe("CvForge workspace mode", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /\+ Add bullet/i }));
-    await user.click(screen.getByRole("button", { name: "Test type first bullet" }));
+    await user.click(
+      screen.getByRole("button", { name: "Test type first bullet" }),
+    );
 
     await waitFor(() => expect(importCv).toHaveBeenCalledTimes(2));
     const saved = getLastSavedExperienceItem(importCv);
-    expect(saved.responsibilities.content.map((node: any) => node.type)).toEqual([
-      "paragraph",
-      "bulletList",
-    ]);
+    expect(
+      saved.responsibilities.content.map((node: any) => node.type),
+    ).toEqual(["paragraph", "bulletList"]);
     expect(saved.responsibilities.content[1].content).toHaveLength(1);
-    expect(readSavedPlainText(saved.responsibilities.content[1])).toBe("Typed bullet.");
+    expect(readSavedPlainText(saved.responsibilities.content[1])).toBe(
+      "Typed bullet.",
+    );
     expect(saved.responsibilityBullets).toEqual(["Typed bullet."]);
   });
 
@@ -1435,7 +1523,9 @@ describe("CvForge workspace mode", () => {
       id: "experience-item-cv_123",
       position: "Lead designer",
       company: "Studio",
-      responsibilities: mixedResponsibilityDoc("Original paragraph.", ["Original bullet."]),
+      responsibilities: mixedResponsibilityDoc("Original paragraph.", [
+        "Original bullet.",
+      ]),
     });
     useCvLibraryMock.mockReturnValue(state);
 
@@ -1445,7 +1535,11 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Test edit rich responsibilities doc" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Test edit rich responsibilities doc",
+      }),
+    );
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
     const saved = getLastSavedExperienceItem(importCv);
@@ -1453,7 +1547,9 @@ describe("CvForge workspace mode", () => {
       "Edited paragraph.",
     );
     expect(saved.responsibilities.content[1].type).toBe("bulletList");
-    expect(readSavedPlainText(saved.responsibilities.content[1])).toBe("Edited bullet.");
+    expect(readSavedPlainText(saved.responsibilities.content[1])).toBe(
+      "Edited bullet.",
+    );
     expect(saved.responsibilityBullets).toEqual(["Edited bullet."]);
   });
 
@@ -1504,12 +1600,16 @@ describe("CvForge workspace mode", () => {
     await user.click(
       screen.getByRole("button", { name: "Update inline experience position" }),
     );
-    expect(getLastSavedExperienceItem(importCv).position).toBe("Principal designer");
+    expect(getLastSavedExperienceItem(importCv).position).toBe(
+      "Principal designer",
+    );
 
     await user.click(
       screen.getByRole("button", { name: "Update inline experience company" }),
     );
-    expect(getLastSavedExperienceItem(importCv).company).toBe("Design systems inc.");
+    expect(getLastSavedExperienceItem(importCv).company).toBe(
+      "Design systems inc.",
+    );
 
     await user.click(
       screen.getByRole("button", { name: "Update inline experience location" }),
@@ -1517,7 +1617,9 @@ describe("CvForge workspace mode", () => {
     expect(getLastSavedExperienceItem(importCv).location).toBe("Remote city");
 
     await user.click(
-      screen.getByRole("button", { name: "Update inline experience start date" }),
+      screen.getByRole("button", {
+        name: "Update inline experience start date",
+      }),
     );
     expect(getLastSavedExperienceItem(importCv).startDate).toBe("2024");
 
@@ -1532,16 +1634,22 @@ describe("CvForge workspace mode", () => {
     expect(getLastSavedEducationItem(importCv).degree).toBe("PhD");
 
     await user.click(
-      screen.getByRole("button", { name: "Update inline education field of study" }),
+      screen.getByRole("button", {
+        name: "Update inline education field of study",
+      }),
     );
     expect(getLastSavedEducationItem(importCv).fieldOfStudy).toBe(
       "Human-Computer Interaction",
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Update inline education institution" }),
+      screen.getByRole("button", {
+        name: "Update inline education institution",
+      }),
     );
-    expect(getLastSavedEducationItem(importCv).institution).toBe("Design Academy");
+    expect(getLastSavedEducationItem(importCv).institution).toBe(
+      "Design Academy",
+    );
   });
 
   it("removes an empty draft bullet on blur without deleting paragraph text", async () => {
@@ -1561,13 +1669,15 @@ describe("CvForge workspace mode", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /\+ Add bullet/i }));
-    await user.click(screen.getByRole("button", { name: "Test blur first bullet" }));
+    await user.click(
+      screen.getByRole("button", { name: "Test blur first bullet" }),
+    );
 
     await waitFor(() => expect(importCv).toHaveBeenCalledTimes(2));
     const saved = getLastSavedExperienceItem(importCv);
-    expect(saved.responsibilities.content.map((node: any) => node.type)).toEqual([
-      "paragraph",
-    ]);
+    expect(
+      saved.responsibilities.content.map((node: any) => node.type),
+    ).toEqual(["paragraph"]);
     expect(readSavedPlainText(saved.responsibilities.content[0])).toBe(
       "Led product design.",
     );
@@ -1598,14 +1708,15 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Test blur second bullet" }));
+    await user.click(
+      screen.getByRole("button", { name: "Test blur second bullet" }),
+    );
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
     const saved = getLastSavedExperienceItem(importCv);
-    expect(saved.responsibilities.content.map((node: any) => node.type)).toEqual([
-      "paragraph",
-      "bulletList",
-    ]);
+    expect(
+      saved.responsibilities.content.map((node: any) => node.type),
+    ).toEqual(["paragraph", "bulletList"]);
     expect(readSavedPlainText(saved.responsibilities.content[0])).toBe(
       "Led product design.",
     );
@@ -1653,9 +1764,9 @@ describe("CvForge workspace mode", () => {
     expect(
       editPageShell?.style.getPropertyValue("--page-shell-pad-top-mobile"),
     ).toBe("var(--space-2)");
-    expect(editPageShell?.style.getPropertyValue("--cv-preview-toolbar-inset")).toBe(
-      "0px",
-    );
+    expect(
+      editPageShell?.style.getPropertyValue("--cv-preview-toolbar-inset"),
+    ).toBe("0px");
     expect(
       editPageShell?.style.getPropertyValue("--page-shell-pad-inline"),
     ).toBe("var(--space-4)");
@@ -1663,22 +1774,16 @@ describe("CvForge workspace mode", () => {
       editPageShell?.style.getPropertyValue("--page-shell-pad-inline-mobile"),
     ).toBe("var(--space-4)");
 
-    await user.click(
-      screen.getByRole("button", { name: "Page preview" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
 
     expect(screen.getByText("Preview host: panel")).toBeInTheDocument();
     expect(screen.queryByText("Loaded")).not.toBeInTheDocument();
     expect(container.querySelector(".dasti-cv-active-toolbar-pill")).toBeNull();
-    expect(
-      container.querySelector(".dasti-cv-skeleton-forge"),
-    ).toBeTruthy();
+    expect(container.querySelector(".dasti-cv-skeleton-forge")).toBeTruthy();
     expect(
       container.querySelector(".dasti-cv-page-preview-stage"),
     ).toBeTruthy();
-    expect(
-      container.querySelector(".dasti-cv-preview-workbench"),
-    ).toBeNull();
+    expect(container.querySelector(".dasti-cv-preview-workbench")).toBeNull();
     expect(
       container.querySelector(".dasti-cv-edit-workbench-shell"),
     ).toBeFalsy();
@@ -1694,12 +1799,12 @@ describe("CvForge workspace mode", () => {
     expect(pageShell?.style.getPropertyValue("--page-shell-pad-top")).toBe(
       "var(--space-2)",
     );
-    expect(pageShell?.style.getPropertyValue("--page-shell-pad-top-mobile")).toBe(
-      "var(--space-2)",
-    );
-    expect(pageShell?.style.getPropertyValue("--cv-preview-toolbar-inset")).toBe(
-      "0px",
-    );
+    expect(
+      pageShell?.style.getPropertyValue("--page-shell-pad-top-mobile"),
+    ).toBe("var(--space-2)");
+    expect(
+      pageShell?.style.getPropertyValue("--cv-preview-toolbar-inset"),
+    ).toBe("0px");
     expect(pageShell?.style.getPropertyValue("--page-shell-pad-inline")).toBe(
       "var(--space-4)",
     );
@@ -1768,7 +1873,9 @@ describe("CvForge workspace mode", () => {
       .mockImplementation(() => {
         throw quotaError;
       });
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
 
     const { container } = render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
@@ -1778,7 +1885,9 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: "Page preview" }));
 
-    expect(container.querySelector(".dasti-cv-page-preview-stage")).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-cv-page-preview-stage"),
+    ).toBeTruthy();
     expect(screen.getByText("Preview host: panel")).toBeInTheDocument();
     expect(setItemSpy).toHaveBeenCalledWith(
       "dasti:cv-forge-workspace-mode:v1",
@@ -1802,22 +1911,30 @@ describe("CvForge workspace mode", () => {
       screen.getByRole("complementary", { name: "CV forge rail" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Import CV" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Import PDF" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Import CV" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Import PDF" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New CV" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Sections" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    expect(screen.queryByRole("button", { name: /Structuring sections/i })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Structuring sections/i }),
+    ).toBeNull();
 
     await user.click(screen.getByRole("tab", { name: "Ask" }));
 
-    expect(screen.getByText("Profile fields use direct field editing.")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Ask section" }),
-    ).toBeDisabled();
-    expect(screen.queryByRole("button", { name: "Ask Profile" })).not.toBeInTheDocument();
+      screen.getByText("Profile fields use direct field editing."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask section" })).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "Ask Profile" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/whole CV/i)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Style" }));
@@ -1827,7 +1944,7 @@ describe("CvForge workspace mode", () => {
     );
     expect(
       screen.getByRole("link", { name: "→ Document style" }),
-    ).toHaveAttribute("href", "/settings");
+    ).toHaveAttribute("href", "/settings?tab=docstyle");
   });
 
   it("opens a non-empty section editor from the paper in preview mode and highlights the rail row", async () => {
@@ -1842,13 +1959,17 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByRole("button", { name: "Page preview" }));
     await user.click(screen.getByRole("button", { name: "Paper Experience" }));
 
-    expect(screen.getByRole("dialog", { name: "Experience" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Experience" }),
+    ).toBeInTheDocument();
     expect(screen.getByDisplayValue("Lead designer")).toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "experience-cv_123",
     );
     expect(
-      container.querySelector('.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title'),
+      container.querySelector(
+        '.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title',
+      ),
     ).toHaveTextContent("Experience");
   });
 
@@ -1863,12 +1984,16 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: "Paper Experience" }));
 
-    expect(screen.queryByRole("dialog", { name: "Experience" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Experience" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "experience-cv_123",
     );
     expect(
-      container.querySelector('.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title'),
+      container.querySelector(
+        '.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title',
+      ),
     ).toHaveTextContent("Experience");
   });
 
@@ -1884,7 +2009,10 @@ describe("CvForge workspace mode", () => {
     );
 
     const summaryParagraph = screen.getByTestId("paper-summary-paragraph");
-    expect(summaryParagraph).toHaveAttribute("contenteditable", "plaintext-only");
+    expect(summaryParagraph).toHaveAttribute(
+      "contenteditable",
+      "plaintext-only",
+    );
     expect(summaryParagraph).toHaveAttribute(
       "data-inline-paper-editable",
       "true",
@@ -1896,11 +2024,17 @@ describe("CvForge workspace mode", () => {
 
     await user.click(summaryParagraph);
     expect(document.activeElement).toBe(summaryParagraph);
-    expect(screen.queryByRole("dialog", { name: "Summary" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: /Paper Summary/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Summary" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: /Paper Summary/i }),
+    ).not.toBeInTheDocument();
     await waitFor(() =>
       expect(
-        container.querySelector('.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title'),
+        container.querySelector(
+          '.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title',
+        ),
       ).toHaveTextContent("Summary"),
     );
     expect(
@@ -1953,11 +2087,16 @@ describe("CvForge workspace mode", () => {
     );
 
     const summaryParagraph = screen.getByTestId("paper-summary-paragraph");
-    expect(summaryParagraph).toHaveAttribute("data-inline-paper-editable", "true");
+    expect(summaryParagraph).toHaveAttribute(
+      "data-inline-paper-editable",
+      "true",
+    );
 
     await user.click(summaryParagraph);
 
-    expect(screen.queryByRole("dialog", { name: "Summary" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Summary" }),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Page preview" }));
     expect(summaryParagraph).not.toHaveAttribute("data-inline-paper-editable");
@@ -1978,9 +2117,17 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    const customParagraph = screen.getByTestId("paper-text-section-custom-cv_123");
-    expect(customParagraph).toHaveAttribute("contenteditable", "plaintext-only");
-    expect(customParagraph).toHaveAttribute("data-inline-paper-editable", "true");
+    const customParagraph = screen.getByTestId(
+      "paper-text-section-custom-cv_123",
+    );
+    expect(customParagraph).toHaveAttribute(
+      "contenteditable",
+      "plaintext-only",
+    );
+    expect(customParagraph).toHaveAttribute(
+      "data-inline-paper-editable",
+      "true",
+    );
     expect(customParagraph).toHaveAttribute(
       "data-paper-field-path",
       "blocks.0.plainText",
@@ -1988,13 +2135,17 @@ describe("CvForge workspace mode", () => {
 
     await user.click(customParagraph);
     expect(document.activeElement).toBe(customParagraph);
-    expect(screen.queryByRole("dialog", { name: "Community" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Community" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("dialog", { name: /Paper Custom section/i }),
     ).not.toBeInTheDocument();
     await waitFor(() =>
       expect(
-        container.querySelector('.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title'),
+        container.querySelector(
+          '.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title',
+        ),
       ).toHaveTextContent("Community"),
     );
     expect(
@@ -2055,39 +2206,172 @@ describe("CvForge workspace mode", () => {
 
     const editableExpectations = [
       ["Ada Lovelace", "profile-cv_123", "structuredContent.0.name", "heading"],
-      ["Product Designer", "profile-cv_123", "structuredContent.0.desiredPosition", "meta"],
-      ["ada@example.com", "profile-cv_123", "structuredContent.0.email", "meta"],
+      [
+        "Product Designer",
+        "profile-cv_123",
+        "structuredContent.0.desiredPosition",
+        "meta",
+      ],
+      [
+        "ada@example.com",
+        "profile-cv_123",
+        "structuredContent.0.email",
+        "meta",
+      ],
       ["Paris", "profile-cv_123", "structuredContent.0.location", "meta"],
-      ["Focused builder.", "summary-cv_123", "structuredContent.0.summary", "paragraph"],
-      ["Lead designer", "experience-cv_123", "structuredContent.item:experience-item-cv_123.position", "heading"],
-      ["Studio", "experience-cv_123", "structuredContent.item:experience-item-cv_123.company", "meta"],
-      ["Remote", "experience-cv_123", "structuredContent.item:experience-item-cv_123.location", "meta"],
-      ["Led product design.", "experience-cv_123", "structuredContent.item:experience-item-cv_123.responsibilities", "paragraph"],
-      ["MFA", "education-cv_123", "structuredContent.item:education-item-cv_123.degree", "heading"],
-      ["Interaction design", "education-cv_123", "structuredContent.item:education-item-cv_123.fieldOfStudy", "heading"],
-      ["Design School", "education-cv_123", "structuredContent.item:education-item-cv_123.institution", "meta"],
-      ["TypeScript", "skills-cv_123", "structuredContent.item:skill-cv_123.name", "chip"],
-      ["Paper editor", "projects-cv_123", "structuredContent.item:project-cv_123.name", "heading"],
-      ["Case study", "projects-cv_123", "structuredContent.item:project-cv_123.meta", "meta"],
-      ["Structured inline editing.", "projects-cv_123", "structuredContent.item:project-cv_123.description", "paragraph"],
-      ["English", "languages-cv_123", "structuredContent.item:language-cv_123.name", "chip"],
-      ["Intermediate", "languages-cv_123", "structuredContent.item:language-cv_123.level", "meta"],
-      ["UX cert", "certifications-cv_123", "structuredContent.item:cert-cv_123.certificationName", "paragraph"],
-      ["NNG", "certifications-cv_123", "structuredContent.item:cert-cv_123.issuingOrganization", "meta"],
-      ["Shipped PR4.", "achievements-cv_123", "structuredContent.item:achievement-cv_123.text", "paragraph"],
-      ["AIGA", "affiliations-cv_123", "structuredContent.item:affiliation-cv_123.organizationName", "paragraph"],
-      ["Member", "affiliations-cv_123", "structuredContent.item:affiliation-cv_123.roleOrMembershipType", "meta"],
-      ["Mentors students.", "affiliations-cv_123", "structuredContent.item:affiliation-cv_123.notes", "paragraph"],
-      ["Photography", "hobbies-cv_123", "structuredContent.item:hobby-cv_123.name", "chip"],
-      ["Open to remote.", "additional-cv_123", "blocks.0.plainText", "paragraph"],
-      ["Mentors operators.", "custom-cv_123", "blocks.0.plainText", "paragraph"],
+      [
+        "Focused builder.",
+        "summary-cv_123",
+        "structuredContent.0.summary",
+        "paragraph",
+      ],
+      [
+        "Lead designer",
+        "experience-cv_123",
+        "structuredContent.item:experience-item-cv_123.position",
+        "heading",
+      ],
+      [
+        "Studio",
+        "experience-cv_123",
+        "structuredContent.item:experience-item-cv_123.company",
+        "meta",
+      ],
+      [
+        "Remote",
+        "experience-cv_123",
+        "structuredContent.item:experience-item-cv_123.location",
+        "meta",
+      ],
+      [
+        "Led product design.",
+        "experience-cv_123",
+        "structuredContent.item:experience-item-cv_123.responsibilities",
+        "paragraph",
+      ],
+      [
+        "MFA",
+        "education-cv_123",
+        "structuredContent.item:education-item-cv_123.degree",
+        "heading",
+      ],
+      [
+        "Interaction design",
+        "education-cv_123",
+        "structuredContent.item:education-item-cv_123.fieldOfStudy",
+        "heading",
+      ],
+      [
+        "Design School",
+        "education-cv_123",
+        "structuredContent.item:education-item-cv_123.institution",
+        "meta",
+      ],
+      [
+        "TypeScript",
+        "skills-cv_123",
+        "structuredContent.item:skill-cv_123.name",
+        "chip",
+      ],
+      [
+        "Paper editor",
+        "projects-cv_123",
+        "structuredContent.item:project-cv_123.name",
+        "heading",
+      ],
+      [
+        "Case study",
+        "projects-cv_123",
+        "structuredContent.item:project-cv_123.meta",
+        "meta",
+      ],
+      [
+        "Structured inline editing.",
+        "projects-cv_123",
+        "structuredContent.item:project-cv_123.description",
+        "paragraph",
+      ],
+      [
+        "English",
+        "languages-cv_123",
+        "structuredContent.item:language-cv_123.name",
+        "chip",
+      ],
+      [
+        "Intermediate",
+        "languages-cv_123",
+        "structuredContent.item:language-cv_123.level",
+        "meta",
+      ],
+      [
+        "UX cert",
+        "certifications-cv_123",
+        "structuredContent.item:cert-cv_123.certificationName",
+        "paragraph",
+      ],
+      [
+        "NNG",
+        "certifications-cv_123",
+        "structuredContent.item:cert-cv_123.issuingOrganization",
+        "meta",
+      ],
+      [
+        "Shipped PR4.",
+        "achievements-cv_123",
+        "structuredContent.item:achievement-cv_123.text",
+        "paragraph",
+      ],
+      [
+        "AIGA",
+        "affiliations-cv_123",
+        "structuredContent.item:affiliation-cv_123.organizationName",
+        "paragraph",
+      ],
+      [
+        "Member",
+        "affiliations-cv_123",
+        "structuredContent.item:affiliation-cv_123.roleOrMembershipType",
+        "meta",
+      ],
+      [
+        "Mentors students.",
+        "affiliations-cv_123",
+        "structuredContent.item:affiliation-cv_123.notes",
+        "paragraph",
+      ],
+      [
+        "Photography",
+        "hobbies-cv_123",
+        "structuredContent.item:hobby-cv_123.name",
+        "chip",
+      ],
+      [
+        "Open to remote.",
+        "additional-cv_123",
+        "blocks.0.plainText",
+        "paragraph",
+      ],
+      [
+        "Mentors operators.",
+        "custom-cv_123",
+        "blocks.0.plainText",
+        "paragraph",
+      ],
     ] as const;
 
-    for (const [text, sectionId, fieldPath, fieldKind] of editableExpectations) {
+    for (const [
+      text,
+      sectionId,
+      fieldPath,
+      fieldKind,
+    ] of editableExpectations) {
       const textNode = screen.getByText(text);
-      const field = textNode.closest<HTMLElement>("[data-inline-paper-editable='true']") ?? textNode;
+      const field =
+        textNode.closest<HTMLElement>("[data-inline-paper-editable='true']") ??
+        textNode;
       const isRichMultilineField =
-        sectionId === "summary-cv_123" || fieldPath.endsWith(".responsibilities");
+        sectionId === "summary-cv_123" ||
+        fieldPath.endsWith(".responsibilities");
       if (isRichMultilineField && field.tagName === "TEXTAREA") {
         expect(field).not.toHaveAttribute("contenteditable");
       } else if (field.hasAttribute("contenteditable")) {
@@ -2101,7 +2385,9 @@ describe("CvForge workspace mode", () => {
       expect(field).toHaveAttribute("data-paper-field-kind", fieldKind);
     }
 
-    expect(container.querySelector("[data-paper-field-kind='date']")).toBeNull();
+    expect(
+      container.querySelector("[data-paper-field-kind='date']"),
+    ).toBeNull();
     expect(
       container.querySelector("[data-paper-field-path*='startDate']"),
     ).toBeNull();
@@ -2109,9 +2395,9 @@ describe("CvForge workspace mode", () => {
     expect(
       container.querySelector(".dasti-document-stage__canvas"),
     ).not.toHaveAttribute("contenteditable");
-    expect(container.querySelector(".dasti-cv-paper-stage")).not.toHaveAttribute(
-      "contenteditable",
-    );
+    expect(
+      container.querySelector(".dasti-cv-paper-stage"),
+    ).not.toHaveAttribute("contenteditable");
 
     const summaryParagraph = screen.getByText("Focused builder.");
     await user.click(summaryParagraph);
@@ -2165,7 +2451,8 @@ describe("CvForge workspace mode", () => {
     expect(onActivate).toHaveBeenCalledWith(
       expect.objectContaining({
         sectionId: "experience-cv_123",
-        fieldPath: "structuredContent.item:experience-item-cv_123.responsibilities",
+        fieldPath:
+          "structuredContent.item:experience-item-cv_123.responsibilities",
       }),
     );
     expect(
@@ -2245,7 +2532,9 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: /\+ Add skill/i }));
     await user.click(screen.getByRole("button", { name: /\+ Add bullet/i }));
-    await user.click(screen.getByRole("button", { name: /\+ Add experience/i }));
+    await user.click(
+      screen.getByRole("button", { name: /\+ Add experience/i }),
+    );
     await user.click(screen.getByRole("button", { name: /\+ LinkedIn/i }));
 
     expect(onLinkIntent).not.toHaveBeenCalled();
@@ -2386,7 +2675,9 @@ describe("CvForge workspace mode", () => {
       expect(field).toHaveAttribute("data-inline-paper-editable", "true");
       expect(field).toHaveAttribute("data-placeholder", placeholder);
     }
-    expect(screen.getByRole("button", { name: /\+ Add skill/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /\+ Add skill/i }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the actual workshop paper non-editable and routed in preview mode", async () => {
@@ -2432,7 +2723,9 @@ describe("CvForge workspace mode", () => {
     expect(screen.queryByText("TypeScript")).not.toHaveAttribute(
       "contenteditable",
     );
-    expect(document.querySelector("[data-inline-paper-editable='true']")).toBeNull();
+    expect(
+      document.querySelector("[data-inline-paper-editable='true']"),
+    ).toBeNull();
     expect(screen.queryByRole("button", { name: /\+ Add skill/i })).toBeNull();
 
     await user.click(summaryParagraph);
@@ -2453,10 +2746,12 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    expect(container.querySelector(".dasti-cv-paper-stage")).not.toHaveAttribute(
-      "contenteditable",
-    );
-    expect(container.querySelectorAll("[data-inline-paper-editable='true']")).toHaveLength(3);
+    expect(
+      container.querySelector(".dasti-cv-paper-stage"),
+    ).not.toHaveAttribute("contenteditable");
+    expect(
+      container.querySelectorAll("[data-inline-paper-editable='true']"),
+    ).toHaveLength(3);
 
     for (const text of [
       "Lead designer",
@@ -2469,8 +2764,12 @@ describe("CvForge workspace mode", () => {
       expect(screen.getByText(text).closest("[contenteditable]")).toBeNull();
     }
 
-    expect(screen.getByRole("button", { name: "Paper Experience" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Education$/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Paper Experience" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Education$/i }),
+    ).toBeInTheDocument();
   });
 
   it("opens a non-empty section editor from the rail and focuses the preview section", async () => {
@@ -2484,7 +2783,9 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: /^Education$/i }));
 
-    expect(screen.getByRole("dialog", { name: "Education" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Education" }),
+    ).toBeInTheDocument();
     expect(screen.getByDisplayValue("MFA")).toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "education-cv_123",
@@ -2503,7 +2804,9 @@ describe("CvForge workspace mode", () => {
     );
 
     await user.click(screen.getByRole("button", { name: /^Education$/i }));
-    await user.click(screen.getByRole("button", { name: "Add education entry" }));
+    await user.click(
+      screen.getByRole("button", { name: "Add education entry" }),
+    );
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
@@ -2531,9 +2834,9 @@ describe("CvForge workspace mode", () => {
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "Grace Hopper");
     await waitFor(() => expect(importCv).toHaveBeenCalled());
-    expect(importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name).toBe(
-      "Grace Hopper",
-    );
+    expect(
+      importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name,
+    ).toBe("Grace Hopper");
   });
 
   it("updates the paper contact row immediately from drawer Location and Website edits", async () => {
@@ -2551,7 +2854,9 @@ describe("CvForge workspace mode", () => {
     await user.type(screen.getByLabelText("Location"), "Paris");
 
     await waitFor(() =>
-      expect(screen.getByTestId("paper-contact-location")).toHaveTextContent("Paris"),
+      expect(screen.getByTestId("paper-contact-location")).toHaveTextContent(
+        "Paris",
+      ),
     );
 
     await user.type(screen.getByLabelText("Website"), "ada.example");
@@ -2565,8 +2870,14 @@ describe("CvForge workspace mode", () => {
   });
 
   it("keeps selected paper text visibly highlighted while the Ask AI prompt is active", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/pages/CvForge.tsx"), "utf8");
-    const styles = readFileSync(resolve(process.cwd(), "src/styles/product-cv.css"), "utf8");
+    const source = readFileSync(
+      resolve(process.cwd(), "src/pages/CvForge.tsx"),
+      "utf8",
+    );
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles/product-cv.css"),
+      "utf8",
+    );
 
     expect(source).toContain("data-inline-ai-selection-active");
     expect(source).toContain("cv-inline-ai-selection");
@@ -2576,7 +2887,10 @@ describe("CvForge workspace mode", () => {
   });
 
   it("clears inline paper Ask AI loading after a completed request closes the toolbar", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/pages/CvForge.tsx"), "utf8");
+    const source = readFileSync(
+      resolve(process.cwd(), "src/pages/CvForge.tsx"),
+      "utf8",
+    );
 
     expect(source).toContain("activeInlinePaperAiRequestIdRef.current = null");
     expect(source).toContain(
@@ -2587,7 +2901,10 @@ describe("CvForge workspace mode", () => {
   });
 
   it("routes inline paper Experience responsibility AI through the shape-aware normalizer", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/pages/CvForge.tsx"), "utf8");
+    const source = readFileSync(
+      resolve(process.cwd(), "src/pages/CvForge.tsx"),
+      "utf8",
+    );
 
     expect(source).toContain("normalizeResponsibilityAiResultForSource");
     expect(source).toContain("applyInlineExperienceResponsibilityAiResult");
@@ -2598,11 +2915,16 @@ describe("CvForge workspace mode", () => {
   });
 
   it("keeps the page Experience responsibilities wand routed to the page AI action", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/pages/CvForge.tsx"), "utf8");
+    const source = readFileSync(
+      resolve(process.cwd(), "src/pages/CvForge.tsx"),
+      "utf8",
+    );
 
     expect(source).toContain("handleRunPageWandForSection");
     expect(source).toContain("improve_experience_responsibilities");
-    expect(source).toContain("outputShape: getResponsibilitySourceShape(source)");
+    expect(source).toContain(
+      "outputShape: getResponsibilitySourceShape(source)",
+    );
     expect(source).toContain("updateStructuredItemResponsibilities");
   });
 
@@ -2680,16 +3002,16 @@ describe("CvForge workspace mode", () => {
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "Unsaved Name");
     await waitFor(() =>
-      expect(importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name).toBe(
-        "Unsaved Name",
-      ),
+      expect(
+        importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name,
+      ).toBe("Unsaved Name"),
     );
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     await waitFor(() =>
-      expect(importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name).toBe(
-        "Ada Lovelace",
-      ),
+      expect(
+        importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name,
+      ).toBe("Ada Lovelace"),
     );
     await user.click(screen.getByRole("button", { name: /^Profile$/i }));
     expect(screen.getByLabelText("Name")).toHaveValue("Ada Lovelace");
@@ -2711,8 +3033,12 @@ describe("CvForge workspace mode", () => {
       "skills-cv_123",
     );
 
-    await user.click(within(skillsDialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click(
+      within(skillsDialog).getByRole("button", { name: "Save" }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "skills-cv_123",
     );
@@ -2733,10 +3059,20 @@ describe("CvForge workspace mode", () => {
     expect(summaryEditor).toBeInTheDocument();
     expect(summaryEditor.querySelector("textarea")).toBeNull();
     expect(summaryEditor).toHaveTextContent("Focused builder.");
-    expect(within(summaryEditor).getByRole("button", { name: "Toggle bold" })).toBeInTheDocument();
-    expect(within(summaryEditor).getByRole("button", { name: "Toggle italic" })).toBeInTheDocument();
-    expect(within(summaryEditor).getByRole("button", { name: "Toggle underline" })).toBeInTheDocument();
-    expect(within(summaryEditor).queryByRole("button", { name: "Toggle bullet list" })).toBeNull();
+    expect(
+      within(summaryEditor).getByRole("button", { name: "Toggle bold" }),
+    ).toBeInTheDocument();
+    expect(
+      within(summaryEditor).getByRole("button", { name: "Toggle italic" }),
+    ).toBeInTheDocument();
+    expect(
+      within(summaryEditor).getByRole("button", { name: "Toggle underline" }),
+    ).toBeInTheDocument();
+    expect(
+      within(summaryEditor).queryByRole("button", {
+        name: "Toggle bullet list",
+      }),
+    ).toBeNull();
   });
 
   it("renders experience responsibilities in the drawer Remirror editor while simple fields stay plain inputs", async () => {
@@ -2760,15 +3096,29 @@ describe("CvForge workspace mode", () => {
     expect(responsibilitiesEditor.querySelector("textarea")).toBeNull();
     expect(responsibilitiesEditor.querySelector(".ProseMirror")).toBeTruthy();
     expect(responsibilitiesEditor).toHaveTextContent("Led product design.");
-    expect(within(responsibilitiesEditor).getByRole("button", { name: "Toggle bold" })).toBeInTheDocument();
-    expect(within(responsibilitiesEditor).getByRole("button", { name: "Toggle italic" })).toBeInTheDocument();
-    expect(within(responsibilitiesEditor).getByRole("button", { name: "Toggle underline" })).toBeInTheDocument();
+    expect(
+      within(responsibilitiesEditor).getByRole("button", {
+        name: "Toggle bold",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(responsibilitiesEditor).getByRole("button", {
+        name: "Toggle italic",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(responsibilitiesEditor).getByRole("button", {
+        name: "Toggle underline",
+      }),
+    ).toBeInTheDocument();
     expect(
       within(responsibilitiesEditor).getByRole("button", {
         name: "Toggle bullet list",
       }),
     ).toBeInTheDocument();
-    expect(document.querySelector("[data-inline-ai-toolbar='true']")).toBeNull();
+    expect(
+      document.querySelector("[data-inline-ai-toolbar='true']"),
+    ).toBeNull();
   });
 
   it("renders project descriptions in the drawer Remirror editor without responsibility caches", async () => {
@@ -2831,17 +3181,33 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Open Projects item editor" }));
+    await user.click(
+      screen.getByRole("button", { name: "Open Projects item editor" }),
+    );
 
-    const descriptionEditor = screen.getByTestId("drawer-rich-editor-project-description-0");
+    const descriptionEditor = screen.getByTestId(
+      "drawer-rich-editor-project-description-0",
+    );
     expect(descriptionEditor.querySelector("textarea")).toBeNull();
     expect(descriptionEditor.querySelector(".ProseMirror")).toBeTruthy();
     expect(descriptionEditor).toHaveTextContent("Built a reusable CV forge.");
     expect(descriptionEditor).toHaveTextContent("Ships fast.");
-    expect(within(descriptionEditor).getByRole("button", { name: "Toggle bold" })).toBeInTheDocument();
-    expect(within(descriptionEditor).getByRole("button", { name: "Toggle italic" })).toBeInTheDocument();
-    expect(within(descriptionEditor).getByRole("button", { name: "Toggle underline" })).toBeInTheDocument();
-    expect(within(descriptionEditor).getByRole("button", { name: "Toggle bullet list" })).toBeInTheDocument();
+    expect(
+      within(descriptionEditor).getByRole("button", { name: "Toggle bold" }),
+    ).toBeInTheDocument();
+    expect(
+      within(descriptionEditor).getByRole("button", { name: "Toggle italic" }),
+    ).toBeInTheDocument();
+    expect(
+      within(descriptionEditor).getByRole("button", {
+        name: "Toggle underline",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(descriptionEditor).getByRole("button", {
+        name: "Toggle bullet list",
+      }),
+    ).toBeInTheDocument();
     expect(projectItem).not.toHaveProperty("responsibilityBullets");
   });
 
@@ -2922,10 +3288,12 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Open Projects item editor" }));
-    expect(screen.getByTestId("drawer-rich-editor-project-description-0")).toHaveTextContent(
-      "Project bullet",
+    await user.click(
+      screen.getByRole("button", { name: "Open Projects item editor" }),
     );
+    expect(
+      screen.getByTestId("drawer-rich-editor-project-description-0"),
+    ).toHaveTextContent("Project bullet");
     await user.click(screen.getByLabelText("Close panel"));
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
@@ -2935,8 +3303,12 @@ describe("CvForge workspace mode", () => {
     expect(docHasNode(saved.description, "bulletList")).toBe(true);
     expect(saved).not.toHaveProperty("responsibilityBullets");
     expect(JSON.stringify(saved.description)).not.toMatch(/<\/?[a-z][\s\S]*>/i);
-    expect(screen.getByTestId("paper-project-rich-bold-project-item-cv_123")).toBeInTheDocument();
-    expect(screen.getByTestId("paper-project-rich-bullets-project-item-cv_123")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("paper-project-rich-bold-project-item-cv_123"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("paper-project-rich-bullets-project-item-cv_123"),
+    ).toBeInTheDocument();
   });
 
   it("keeps Experience responsibility drawer click-away behavior intact", async () => {
@@ -3015,13 +3387,19 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
-    expect(docHasMark(getLastSavedSummaryItem(importCv).summary, "bold")).toBe(true);
+    expect(docHasMark(getLastSavedSummaryItem(importCv).summary, "bold")).toBe(
+      true,
+    );
 
-    await user.click(screen.getByRole("button", { name: "Open Projects item editor" }));
+    await user.click(
+      screen.getByRole("button", { name: "Open Projects item editor" }),
+    );
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(docHasMark(getLastSavedProjectItem(importCv).description, "bold")).toBe(true),
+      expect(
+        docHasMark(getLastSavedProjectItem(importCv).description, "bold"),
+      ).toBe(true),
     );
   });
 
@@ -3117,7 +3495,9 @@ describe("CvForge workspace mode", () => {
     await screen.findByText("Evidence-backed summary.");
     await user.click(screen.getByRole("button", { name: "Accept" }));
 
-    expect(screen.getByRole("status", { name: "Applied. Undo" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("status", { name: "Applied. Undo" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("drawer-rich-editor-summary")).toHaveTextContent(
       "Evidence-backed summary.",
     );
@@ -3141,14 +3521,24 @@ describe("CvForge workspace mode", () => {
 
     const skillsDialog = screen.getByRole("dialog", { name: "Skills" });
     expect(skillsDialog).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Discard" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Accept" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Discard" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/whole CV/i)).not.toBeInTheDocument();
     expect(
-      screen.queryByPlaceholderText("Tighten the second bullet, drop the buzzwords."),
+      screen.queryByPlaceholderText(
+        "Tighten the second bullet, drop the buzzwords.",
+      ),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Warm" })).not.toBeInTheDocument();
-    expect(document.body.querySelector(".dasti-cv-section-sheet-overlay")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Warm" }),
+    ).not.toBeInTheDocument();
+    expect(
+      document.body.querySelector(".dasti-cv-section-sheet-overlay"),
+    ).toBeInTheDocument();
 
     await waitFor(() =>
       expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
@@ -3160,9 +3550,13 @@ describe("CvForge workspace mode", () => {
       ),
     );
     expect(
-      within(skillsDialog).getByRole("region", { name: "Suggested items for Skills" }),
+      within(skillsDialog).getByRole("region", {
+        name: "Suggested items for Skills",
+      }),
     ).toBeInTheDocument();
-    expect(within(skillsDialog).getByText("Design systems")).toBeInTheDocument();
+    expect(
+      within(skillsDialog).getByText("Design systems"),
+    ).toBeInTheDocument();
   });
 
   it("launches language suggestions directly from the languages wand", async () => {
@@ -3192,7 +3586,9 @@ describe("CvForge workspace mode", () => {
       ),
     );
     expect(
-      within(languagesDialog).getByRole("region", { name: "Suggested items for Languages" }),
+      within(languagesDialog).getByRole("region", {
+        name: "Suggested items for Languages",
+      }),
     ).toBeInTheDocument();
     expect(within(languagesDialog).getByText("French")).toBeInTheDocument();
   });
@@ -3214,7 +3610,9 @@ describe("CvForge workspace mode", () => {
 
     const hobbiesDialog = screen.getByRole("dialog", { name: "Hobbies" });
     expect(
-      await within(hobbiesDialog).findByRole("region", { name: "Suggested items for Hobbies" }),
+      await within(hobbiesDialog).findByRole("region", {
+        name: "Suggested items for Hobbies",
+      }),
     ).toBeInTheDocument();
     await waitFor(() =>
       expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
@@ -3227,9 +3625,13 @@ describe("CvForge workspace mode", () => {
       ),
     );
     expect(
-      within(hobbiesDialog).getAllByRole("button", { name: /Add suggested item/i }).length,
+      within(hobbiesDialog).getAllByRole("button", {
+        name: /Add suggested item/i,
+      }).length,
     ).toBeGreaterThan(0);
-    expect(within(hobbiesDialog).queryByText("TypeScript")).not.toBeInTheDocument();
+    expect(
+      within(hobbiesDialog).queryByText("TypeScript"),
+    ).not.toBeInTheDocument();
     expect(within(hobbiesDialog).getByText("Chess")).toBeInTheDocument();
   });
 
@@ -3265,24 +3667,32 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: "Ask for Skills" }));
     await user.click(
-      await screen.findByRole("button", { name: "Add suggested item Design systems" }),
+      await screen.findByRole("button", {
+        name: "Add suggested item Design systems",
+      }),
     );
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
     const savedSections = importCv.mock.lastCall?.[0].sections;
     expect(
-      savedSections.find((section: { id: string }) => section.id === "skills-cv_123")
-        .structuredContent,
+      savedSections.find(
+        (section: { id: string }) => section.id === "skills-cv_123",
+      ).structuredContent,
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "TypeScript" }),
-        expect.objectContaining({ name: "Design systems", level: "Intermediate" }),
+        expect.objectContaining({
+          name: "Design systems",
+          level: "Intermediate",
+        }),
       ]),
     );
     expect(
       savedSections
         .find((section: { id: string }) => section.id === "skills-cv_123")
-        .structuredContent.some((item: { name?: string }) => !String(item.name ?? "").trim()),
+        .structuredContent.some(
+          (item: { name?: string }) => !String(item.name ?? "").trim(),
+        ),
     ).toBe(false);
   });
 
@@ -3310,18 +3720,26 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: "Ask for Skills" }));
     await user.click(
-      await screen.findByRole("button", { name: "Add suggested item Design systems" }),
+      await screen.findByRole("button", {
+        name: "Add suggested item Design systems",
+      }),
     );
 
     expect(screen.getByDisplayValue("Design systems")).toBeInTheDocument();
     expect(
-      screen.getByRole("dialog", { name: "Skills" }).querySelector(".dasti-cv-pill-editor__chip"),
+      screen
+        .getByRole("dialog", { name: "Skills" })
+        .querySelector(".dasti-cv-pill-editor__chip"),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Remove Design systems" }));
+    await user.click(
+      screen.getByRole("button", { name: "Remove Design systems" }),
+    );
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
-    expect(screen.queryByDisplayValue("Design systems")).not.toBeInTheDocument();
+    expect(
+      screen.queryByDisplayValue("Design systems"),
+    ).not.toBeInTheDocument();
   });
 
   it("runs the summary row wand directly in the Ask rail", async () => {
@@ -3391,7 +3809,9 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: "Ask for Languages" }));
 
-    expect(screen.getByRole("dialog", { name: "Languages" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Languages" }),
+    ).toBeInTheDocument();
     await waitFor(() =>
       expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -3435,14 +3855,18 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: "Ask for Skills" }));
     const skillsDialog = screen.getByRole("dialog", { name: "Skills" });
-    expect(await within(skillsDialog).findByText("Design systems")).toBeInTheDocument();
+    expect(
+      await within(skillsDialog).findByText("Design systems"),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Sections" }));
     await user.click(screen.getByRole("button", { name: "Ask for Summary" }));
 
     expect(screen.getAllByText("Summary").length).toBeGreaterThan(0);
     expect(screen.queryByText("Design systems")).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Suggested items for Skills" })).toBeNull();
+    expect(
+      screen.queryByRole("region", { name: "Suggested items for Skills" }),
+    ).toBeNull();
   });
 
   it("routes project wands to the typed drawer instead of prose Ask AI", async () => {
@@ -3484,9 +3908,13 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Open Projects item editor" }));
+    await user.click(
+      screen.getByRole("button", { name: "Open Projects item editor" }),
+    );
 
-    expect(screen.getByRole("dialog", { name: "Projects" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Projects" }),
+    ).toBeInTheDocument();
     expect(screen.getByDisplayValue("CV Forge")).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Ask" })).toHaveAttribute(
       "aria-selected",
@@ -3500,8 +3928,7 @@ describe("CvForge workspace mode", () => {
     const state = buildCvLibraryState();
     runCvSectionAiActionMock.mockResolvedValueOnce({
       kind: "text",
-      text:
-        "**Project:** CV Forge\n**Stack:** React\n**Description:** Built a sharper CV forge.",
+      text: "**Project:** CV Forge\n**Stack:** React\n**Description:** Built a sharper CV forge.",
     });
     useCvLibraryMock.mockReturnValue({
       ...state,
@@ -3539,8 +3966,12 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Open Projects item editor" }));
-    await user.click(screen.getByRole("button", { name: "Improve description" }));
+    await user.click(
+      screen.getByRole("button", { name: "Open Projects item editor" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Improve description" }),
+    );
 
     await waitFor(() =>
       expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
@@ -3572,7 +4003,9 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Delete Certifications" }));
+    await user.click(
+      screen.getByRole("button", { name: "Delete Certifications" }),
+    );
 
     await waitFor(() => expect(importCv).toHaveBeenCalledTimes(1));
     expect(
@@ -3598,7 +4031,9 @@ describe("CvForge workspace mode", () => {
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
     expect(
-      importCv.mock.lastCall?.[0].sections.map((section: { id: string }) => section.id),
+      importCv.mock.lastCall?.[0].sections.map(
+        (section: { id: string }) => section.id,
+      ),
     ).toEqual([
       "profile-cv_123",
       "summary-cv_123",
@@ -3631,10 +4066,14 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: "Ask for Summary" }));
     expect(importCv).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: "Warm" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Warm" }),
+    ).not.toBeInTheDocument();
 
     await user.type(
-      screen.getByPlaceholderText("Tighten the second bullet, drop the buzzwords."),
+      screen.getByPlaceholderText(
+        "Tighten the second bullet, drop the buzzwords.",
+      ),
       "Make this warmer.",
     );
     await user.click(screen.getByRole("button", { name: "Ask Summary" }));
@@ -3643,7 +4082,9 @@ describe("CvForge workspace mode", () => {
       expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
         expect.objectContaining({
           action: "improve_summary_text",
-          instruction: expect.stringContaining("User request: Make this warmer."),
+          instruction: expect.stringContaining(
+            "User request: Make this warmer.",
+          ),
           existingText: "Focused builder.",
         }),
       ),
@@ -3672,22 +4113,30 @@ describe("CvForge workspace mode", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Add section" }));
-    expect(document.body.querySelector(".dasti-cv-add-section-menu")).toBeInTheDocument();
+    expect(
+      document.body.querySelector(".dasti-cv-add-section-menu"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Projects" })).toBeEnabled();
-    expect(screen.getByRole("menuitem", { name: "Custom section" })).toBeEnabled();
+    expect(
+      screen.getByRole("menuitem", { name: "Custom section" }),
+    ).toBeEnabled();
     expect(screen.queryByRole("menuitem", { name: "Summary" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Experience" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Education" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Skills" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Achievements" })).toBeNull();
-    expect(screen.queryByRole("menuitem", { name: "Certifications" })).toBeNull();
+    expect(
+      screen.queryByRole("menuitem", { name: "Certifications" }),
+    ).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Languages" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Hobbies" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Publications" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Awards" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Volunteer" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "References" })).toBeNull();
-    expect(screen.queryByRole("menuitem", { name: "Additional information" })).toBeNull();
+    expect(
+      screen.queryByRole("menuitem", { name: "Additional information" }),
+    ).toBeNull();
 
     await user.click(screen.getByRole("menuitem", { name: "Projects" }));
 
@@ -3700,7 +4149,9 @@ describe("CvForge workspace mode", () => {
     const addedProjectSection = importCv.mock.lastCall?.[0].sections.find(
       (section: { title?: string }) => section.title === "Projects",
     );
-    expect(screen.queryByRole("dialog", { name: "Projects" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Projects" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       addedProjectSection.id,
     );
@@ -3739,7 +4190,8 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
     expect(input).toBeTruthy();
     fireEvent.change(input!, {
       target: {
@@ -3750,13 +4202,22 @@ describe("CvForge workspace mode", () => {
     await waitFor(() =>
       expect(screen.getAllByText("Importing PDF").length).toBeGreaterThan(0),
     );
-    await user.click(screen.getByRole("button", { name: /Structuring sections/i }));
+    await user.click(
+      screen.getByRole("button", { name: /Structuring sections/i }),
+    );
     expect(screen.getByText("Parsing imported résumé")).toBeInTheDocument();
-    expect(screen.getAllByText("Structuring sections").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("Structuring sections").length).toBeGreaterThan(
+      1,
+    );
     expect(screen.getByText("Final pass")).toBeInTheDocument();
-    expect(screen.getByText(/Parser errors will stay visible/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Parser errors will stay visible/i),
+    ).toBeInTheDocument();
 
-    resolveImport({ status: "rejected", message: "Parser URL is not configured." });
+    resolveImport({
+      status: "rejected",
+      message: "Parser URL is not configured.",
+    });
     await waitFor(() => expect(importFileMock).toHaveBeenCalled());
   });
 
@@ -3775,7 +4236,8 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
     fireEvent.change(input!, {
       target: {
         files: [new File(["%PDF"], "resume.pdf", { type: "application/pdf" })],
@@ -3786,9 +4248,13 @@ describe("CvForge workspace mode", () => {
       expect(screen.getAllByText("Importing PDF").length).toBeGreaterThan(0),
     );
     await waitFor(() =>
-      expect(screen.queryByText(/Parsing is still pending/i)).not.toBeInTheDocument(),
+      expect(
+        screen.queryByText(/Parsing is still pending/i),
+      ).not.toBeInTheDocument(),
     );
-    expect(screen.queryByRole("button", { name: /Structuring sections/i })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Structuring sections/i }),
+    ).toBeNull();
     expect(importCv).toHaveBeenCalled();
   });
 
@@ -3826,18 +4292,169 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("tab", { name: "Style" }));
 
-    expect(screen.getByRole("button", { name: /Fraunces Bold/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Workshop" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Open saved resume styles" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Open text styles" })).toBeNull();
+    expect(screen.getByRole("button", { name: /^Style 1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Style 2/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Style 3/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Fraunces Bold/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Workshop" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open saved resume styles" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Open text styles" }),
+    ).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Use Cobalt accent" }));
 
     await waitFor(() =>
-      expect(
-        screen.getByText("Preview style: swiss|quiet-editorial|custom|#2a78d6"),
-      ).toBeInTheDocument(),
+      expect(screen.getByText(/Preview style: .*cobalt/i)).toBeInTheDocument(),
     );
+  });
+
+  it("persists CV style slot identity when selecting a style slot", async () => {
+    const user = userEvent.setup();
+    const saveCurrentCvStyleOnly = vi.fn(async () => undefined);
+
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({ saveCurrentCvStyleOnly }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Style" }));
+    await user.click(screen.getByRole("button", { name: "Style 2" }));
+
+    await waitFor(() =>
+      expect(saveCurrentCvStyleOnly).toHaveBeenCalledWith(
+        expect.objectContaining({
+          typography: "quiet-editorial",
+          palette: "ink",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        }),
+        expect.objectContaining({
+          verbatiStyleSlotId: 2,
+          verbatiStyleSlotSource: "factory",
+          verbatiStyleSlotNameSnapshot: "Style 2",
+          verbatiStyleBaseSnapshot: expect.objectContaining({
+            typography: "quiet-editorial",
+            palette: "ink",
+            resumeTemplateId: "workshop_resume_twocol_ats",
+          }),
+          documentStyleVersion: 1,
+        }),
+      ),
+    );
+  });
+
+  it("shows a stable custom label for a CV style slot when visual style differs from the base snapshot", async () => {
+    const baseState = buildCvLibraryState();
+    const saveCurrentCvStyleOnly = vi.fn(async () => undefined);
+    const currentCv = {
+      ...baseState.currentCv,
+      metadata: {
+        ...baseState.currentCv.metadata,
+        verbatiStyle: {
+          layout: "swiss",
+          typography: "geist-baskervville",
+          palette: "cobalt",
+        },
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "settings",
+        verbatiStyleSlotNameSnapshot: "Style 2",
+        verbatiStyleBaseSnapshot: {
+          layout: "swiss",
+          typography: "geist-baskervville",
+          palette: "sauge",
+        },
+        documentStyleVersion: 1,
+      },
+    };
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({ currentCv, cvs: [currentCv], saveCurrentCvStyleOnly }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole("tab", { name: "Style" }));
+
+    expect(
+      screen.getByRole("button", { name: "Style 2 · Custom" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.click(screen.getByRole("button", { name: "Reset Style 2" }));
+
+    await waitFor(() =>
+      expect(saveCurrentCvStyleOnly).toHaveBeenCalledWith(
+        expect.objectContaining({
+          typography: "quiet-editorial",
+          palette: "ink",
+        }),
+        expect.objectContaining({
+          verbatiStyleSlotId: 2,
+          verbatiStyleSlotSource: "factory",
+          verbatiStyleSlotNameSnapshot: "Style 2",
+          verbatiStyleBaseSnapshot: expect.objectContaining({
+            typography: "quiet-editorial",
+            palette: "ink",
+          }),
+          documentStyleVersion: 1,
+        }),
+      ),
+    );
+  });
+
+  it("marks a selected CV style custom when the CV template differs from the base slot", async () => {
+    const baseState = buildCvLibraryState();
+    const currentCv = {
+      ...baseState.currentCv,
+      metadata: {
+        ...baseState.currentCv.metadata,
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "ink",
+          resumeTemplateId: "workshop_resume_onecol_ats",
+        },
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "factory",
+        verbatiStyleSlotNameSnapshot: "Style 2",
+        verbatiStyleBaseSnapshot: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "ink",
+        },
+        documentStyleVersion: 1,
+      },
+    };
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({ currentCv, cvs: [currentCv] }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole("tab", { name: "Style" }));
+
+    expect(
+      screen.getByRole("button", { name: "Style 2 · Custom" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 
   it("applies template and font edits to the cv preview", async () => {
@@ -3854,14 +4471,28 @@ describe("CvForge workspace mode", () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Style" }));
-    await user.click(screen.getByRole("button", { name: /Fraunces Bold/i }));
-    await user.click(screen.getByRole("menuitemradio", { name: "Ledger Sans" }));
-    await user.click(screen.getByRole("button", { name: "Workshop" }));
+    await user.click(screen.getByRole("button", { name: "Style 2" }));
 
     await waitFor(() =>
       expect(
-        screen.getByText("Preview style: workshop|ledger-sans|sauge|none"),
+        screen.getByText(/Preview style: .*quiet-editorial/i),
       ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Style 2" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Workshop 2-col" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(/Preview style: .*quiet-editorial/i),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Style 2" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
     );
   });
 
@@ -3883,12 +4514,16 @@ describe("CvForge workspace mode", () => {
         name: /Switch CV\. Active CV:/i,
       }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Back to job" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Back to job" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("Loading saved job brief…"),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Saved job context is unavailable for this resume session."),
+      screen.queryByText(
+        "Saved job context is unavailable for this resume session.",
+      ),
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Clear job context" }));
@@ -3917,7 +4552,9 @@ describe("CvForge workspace mode", () => {
     );
 
     expect(screen.queryByText("Choose your CV")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Open selected CV" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open selected CV" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Upload PDF")).toBeInTheDocument();
     expect(screen.getByText("Start blank")).toBeInTheDocument();
   });

@@ -56,6 +56,7 @@ import {
 } from "../lib/proposal-header";
 import { collectProposalFontDebugSnapshot } from "../lib/proposal-font-debug";
 import type { ProposalSignatureSettings } from "../lib/proposal-signature-settings";
+import type { ProposalClosingRef } from "../lib/proposal-closing";
 import {
   createAiUndoSnapshot,
   normalizeEditorAiTextResult,
@@ -89,6 +90,7 @@ interface ProposalDisplayProps {
   templateId?: ProposalTemplateId | null;
   stylePreset?: Partial<VerbatiStylePreset> | VerbatiStylePreset | null;
   signatureSettings?: ProposalSignatureSettings | null;
+  closing?: ProposalClosingRef | null;
   railTitle?: string | null;
   railMeta?: string | null;
   contactLine?: string | null;
@@ -112,6 +114,7 @@ interface ProposalDisplayProps {
   size?: "default" | "focused";
   previewAnchor?: "top" | "body";
   previewFitMode?: "contain" | "width";
+  previewScrollMode?: "contained" | "natural";
   hideDocumentHeader?: boolean;
   documentHeaderMode?: "full" | "actions-only" | "hidden";
   showZoomControls?: boolean;
@@ -516,6 +519,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   templateId = null,
   stylePreset = null,
   signatureSettings = null,
+  closing = null,
   railTitle = null,
   railMeta = null,
   contactLine = null,
@@ -539,6 +543,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   size = "default",
   previewAnchor = "top",
   previewFitMode = "contain",
+  previewScrollMode = "contained",
   hideDocumentHeader = false,
   documentHeaderMode = "full",
   showZoomControls = false,
@@ -904,12 +909,14 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const isMultiPagePreview =
     usesDocumentRenderer && !isEditable && documentPageCount > 1;
   const previewStageMode =
-    usesDocumentRenderer &&
-    !isEditable &&
-    (renderedDocumentHeight > stageLayout.stageHeight + 1 ||
-      stageLayout.overflowX ||
-      stageLayout.overflowY)
-      ? "overflow"
+    usesDocumentRenderer && !isEditable
+      ? previewScrollMode === "natural"
+        ? "overflow"
+        : renderedDocumentHeight > stageLayout.stageHeight + 1 ||
+            stageLayout.overflowX ||
+            stageLayout.overflowY
+          ? "overflow"
+          : "fit"
       : "fit";
   const resolveBodyClassName = React.useCallback(
     ({
@@ -1441,7 +1448,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const { attachViewport: attachAnchorViewport } = useDocumentViewportCentering(
     {
       enabled: enablesDocumentZoom,
-      layoutKey: `${effectiveZoomLevel}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${resolvedTemplateId}:${proposalContent?.length ?? 0}:${mode}:${previewAnchor}:${previewFitMode}`,
+      layoutKey: `${effectiveZoomLevel}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${resolvedTemplateId}:${proposalContent?.length ?? 0}:${mode}:${previewAnchor}:${previewFitMode}:${previewScrollMode}`,
       recenterKey: fitRequestCount,
       defaultCenterX: previewAnchor === "body" ? 0.5 : 0,
       defaultCenterY: previewAnchor === "body" ? 0.46 : 0,
@@ -2335,6 +2342,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   headerVisibility={resolvedHeaderVisibility}
                   documentTypography={documentTypography}
                   signatureSettings={signatureSettings}
+                  closing={closing}
                   pageWidth={A4_PAGE_WIDTH_PX}
                   pageGapPx={unscaledDocumentPageGapPx}
                   onPageCountChange={setDocumentPageCount}
@@ -2357,6 +2365,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         aria-busy="true"
       >
         <div className="dasti-proposal-loading-skeleton" aria-hidden="true">
+          <div className="dasti-proposal-loading-skeleton__status">
+            <span>Generating proposal</span>
+            <span className="dasti-loader-caret" />
+          </div>
           <div className="dasti-proposal-loading-skeleton__masthead">
             <span className="dasti-proposal-loading-skeleton__eyebrow" />
             <span className="dasti-proposal-loading-skeleton__title" />

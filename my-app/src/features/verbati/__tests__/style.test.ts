@@ -1,15 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveProposalTemplateId } from "../../../../convex/lib/proposals/renderTemplates";
+import {
+  CANONICAL_PROPOSAL_TEMPLATE_ID,
+  resolveProposalTemplateId,
+} from "../../../../convex/lib/proposals/renderTemplates";
 import {
   DEFAULT_VERBATI_STYLE,
   getProposalTwinTemplateId,
   getResumeTemplateId,
   getStyleFamilyId,
+  getVerbatiStyleFromCv,
   resolveLegacyResumeRendererVariantId,
   resolveVerbatiStyle,
   sanitizePersistedVerbatiStyle,
   serializeVerbatiStyle,
+  stylesEqual,
   VERBATI_LAYOUT_OPTIONS,
 } from "../style";
 
@@ -105,6 +110,7 @@ describe("verbati style normalization", () => {
   });
 
   it("keeps legacy proposal template aliases resolving to active templates", () => {
+    expect(resolveProposalTemplateId(null)).toBe(CANONICAL_PROPOSAL_TEMPLATE_ID);
     expect(resolveProposalTemplateId("editorial_left_rail")).toBe(
       "editorial_wide",
     );
@@ -167,6 +173,48 @@ describe("verbati style normalization", () => {
     );
   });
 
+  it("recovers CV visual style from base snapshot metadata when verbatiStyle is absent", () => {
+    expect(
+      getVerbatiStyleFromCv({
+        id: "cv-slot-base",
+        title: "Slot base CV",
+        metadata: {
+          verbatiStyleSlotId: 2,
+          verbatiStyleBaseSnapshot: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "civic-correspondence",
+            palette: "cobalt",
+          },
+        },
+        sections: [],
+      }),
+    ).toMatchObject({
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "civic-correspondence",
+      palette: "cobalt",
+    });
+  });
+
+  it("recovers CV visual style from factory slot metadata when snapshots are absent", () => {
+    expect(
+      getVerbatiStyleFromCv({
+        id: "cv-slot-only",
+        title: "Slot only CV",
+        metadata: {
+          verbatiStyleSlotId: 3,
+        },
+        sections: [],
+      }),
+    ).toMatchObject({
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "ledger-sans",
+      palette: "ink",
+    });
+  });
+
   it("resolves workshop family identity to the scaffolded paired templates", () => {
     const workshopStyle = resolveVerbatiStyle({
       familyId: "workshop",
@@ -186,9 +234,35 @@ describe("verbati style normalization", () => {
     );
   });
 
-  it("exposes only workshop as the active layout option", () => {
+  it("treats Workshop template identity as part of style equality", () => {
+    expect(
+      stylesEqual(
+        {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_onecol_ats",
+        },
+        {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("exposes workshop one-column and two-column as active layout options", () => {
     expect(VERBATI_LAYOUT_OPTIONS.map((option) => option.id)).toEqual([
       "workshop",
+      "workshop",
+    ]);
+    expect(VERBATI_LAYOUT_OPTIONS.map((option) => option.resumeTemplateId)).toEqual([
+      "workshop_resume_onecol_ats",
+      "workshop_resume_twocol_ats",
     ]);
   });
 });

@@ -10,13 +10,29 @@ type TemplateCard = {
   id: string;
   name: string;
   kind: "Cover letter" | "Resume";
-  family: "two-column" | "minimal" | "bold" | "classic" | "compact" | "letterpress";
+  family: "two-column" | "workshop-twocol" | "minimal" | "bold" | "classic" | "compact" | "letterpress";
   description: string;
   updatedLabel: string;
   lines: string[];
 };
 
 const TEMPLATES: TemplateCard[] = [
+  {
+    id: "workshop-two-column-resume",
+    name: "Workshop 2-col",
+    kind: "Resume",
+    family: "workshop-twocol",
+    description: "Planner-backed Workshop resume with a 17/18-inspired two-column grid.",
+    updatedLabel: "New",
+    lines: [
+      "Aurélien Pellegrini",
+      "Product engineer",
+      "Experience",
+      "Lead Frontend · Studio Aurore",
+      "Skills",
+      "React · TypeScript · Design systems",
+    ],
+  },
   {
     id: "two-column-resume",
     name: "Two-column",

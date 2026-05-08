@@ -64,9 +64,9 @@
   cursor: pointer;
   text-align: left;
   transition:
-    background 0.12s var(--ez),
-    border-color 0.12s var(--ez),
-    transform 0.12s var(--ez);
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
   font-family: inherit;
 }
 
@@ -745,7 +745,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--am);
+  color: var(--tm2);
 }
 
 .dasti-proposal-library-info-card__title,
@@ -1314,7 +1314,7 @@
 }
 
 .dasti-library-card__eyebrow {
-  color: var(--am);
+  color: var(--tm2);
 }
 
 .dasti-library-card__title,
@@ -1555,4 +1555,12 @@
   .library-tabs button {
     flex: 1 1 auto;
   }
+}
+
+/* Dark anti-blooming: soften chrome/UI labels without changing light mode. */
+.dark .dasti-proposal-library-sidebar__eyebrow,
+.dark .dasti-library-card__eyebrow,
+.dark .dasti-template-card__title,
+.dark .dasti-doc-card--proposal-library .dasti-proposal-tone-badge--compact {
+  font-weight: 640;
 }

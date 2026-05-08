@@ -64,6 +64,18 @@ describe("sidebar visual CSS contracts", () => {
     );
   });
 
+  it("wraps the collapsed sidebar logo in a rounded surface shell", () => {
+    expect(productCss).toMatch(
+      /\.sb-toggle__collapsed-logo-shell\s*\{[\s\S]*width:\s*36px;[\s\S]*height:\s*36px;[\s\S]*border-radius:\s*var\(--radius-card\);[\s\S]*background:\s*color-mix\(in srgb,\s*var\(--color-surface\)\s*86%,\s*transparent\);/,
+    );
+    expect(productCss).toMatch(
+      /\.sb-toggle__collapsed-logo\s*\{[\s\S]*width:\s*30px;[\s\S]*height:\s*30px;[\s\S]*object-fit:\s*contain;/,
+    );
+    expect(productCss).toMatch(
+      /\.sb-toggle__collapsed-logo--dark\s*\{[\s\S]*filter:\s*brightness\(0\.92\);/,
+    );
+  });
+
   it("keeps the topbar divider optically aligned with the sidebar divider", () => {
     expect(productCss).toMatch(
       /\.sb\s*\{[\s\S]*border-right:\s*1px solid\s*color-mix\(in srgb,\s*var\(--color-border\) 76%,\s*transparent\);/,

@@ -4,7 +4,6 @@ import {
   Briefcase,
   Check,
   ChevronDown,
-  ColorWheel,
   FilePdf,
   FileUser,
   FloppyDisk,
@@ -18,6 +17,11 @@ import {
   PROPOSAL_TEMPLATE_BUNDLE_DEFINITIONS,
   type ProposalTemplateBundleId,
 } from "../../lib/proposal-template-bundles";
+import {
+  CANONICAL_PROPOSAL_TEMPLATE_ID,
+  getProposalTemplateDefinition,
+  type ProposalTemplateId,
+} from "../../../convex/lib/proposals/renderTemplates";
 import {
   PROPOSAL_PALETTE_OPTIONS,
   type ProposalPaletteId,
@@ -79,6 +83,13 @@ type ProposalRailStyleOption = {
   description: string;
 };
 
+type ProposalRailLayoutOption = {
+  id: ProposalTemplateId;
+  eyebrow: string;
+  label: string;
+  description: string;
+};
+
 type ProposalRailAccentOption = {
   id: string;
   label: string;
@@ -107,6 +118,18 @@ const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
     description:
       PROPOSAL_TEMPLATE_BUNDLE_DEFINITIONS.find((definition) => definition.id === "grid_mono")
         ?.description ?? "Workshopped technical proposal style.",
+  },
+];
+
+const CANONICAL_PROPOSAL_TEMPLATE_DEFINITION =
+  getProposalTemplateDefinition(CANONICAL_PROPOSAL_TEMPLATE_ID);
+
+const PROPOSAL_LAYOUT_OPTIONS: ProposalRailLayoutOption[] = [
+  {
+    id: CANONICAL_PROPOSAL_TEMPLATE_ID,
+    eyebrow: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.shortLabel,
+    label: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.name,
+    description: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.description,
   },
 ];
 
@@ -243,7 +266,10 @@ type ProposalRailProps = {
   onSelectTone: (toneId: string | null) => void;
   lengthOptions: ProposalRailLengthOption[];
   onSelectLength: (lengthId: ProposalRailLengthOption["id"]) => void;
+  proposalTemplateId?: ProposalTemplateId | null;
+  onSelectProposalLayout?: (templateId: ProposalTemplateId) => void;
   stylePreset: VerbatiStylePreset;
+  styleTemplateBundleBaseStyle?: VerbatiStylePreset | null;
   styleTemplateBundleId: ProposalTemplateBundleId | null;
   onSelectStyleBundle: (bundleId: ProposalTemplateBundleId) => void;
   onResetStyleBundle?: (bundleId: ProposalTemplateBundleId) => void;
@@ -252,6 +278,12 @@ type ProposalRailProps = {
   onSelectStyleFixedAccent?: (hex: string) => void;
   onSelectStyleCustomAccent: (hex: string) => void;
   onClearStyleCustomAccent?: () => void;
+  signaturePresent?: boolean;
+  handwrittenSignatureAvailable?: boolean;
+  handwrittenSignatureEnabled?: boolean;
+  onChooseSignature?: () => void;
+  onToggleSignature?: (enabled: boolean) => void;
+  onToggleHandwrittenSignature?: (enabled: boolean) => void;
   aiStream: React.ReactNode;
   variableFields: ProposalRailVariableField[];
   hasProposalContent: boolean;
@@ -300,7 +332,10 @@ export function ProposalRail({
   onSelectTone,
   lengthOptions,
   onSelectLength,
+  proposalTemplateId,
+  onSelectProposalLayout,
   stylePreset,
+  styleTemplateBundleBaseStyle,
   styleTemplateBundleId,
   onSelectStyleBundle,
   onResetStyleBundle,
@@ -308,6 +343,12 @@ export function ProposalRail({
   onSelectStylePalette,
   onSelectStyleCustomAccent,
   onClearStyleCustomAccent,
+  signaturePresent = false,
+  handwrittenSignatureAvailable = false,
+  handwrittenSignatureEnabled = false,
+  onChooseSignature,
+  onToggleSignature,
+  onToggleHandwrittenSignature,
   aiStream,
   variableFields,
   hasProposalContent,
@@ -428,9 +469,12 @@ export function ProposalRail({
   );
   const activeTemplateBundleDefinition =
     getProposalTemplateBundleDefinition(activeTemplateBundleId);
+  const activeTemplateBundleBaseStyle =
+    styleTemplateBundleBaseStyle ?? activeTemplateBundleDefinition.stylePreset;
+  const resolvedProposalTemplateId =
+    proposalTemplateId ?? CANONICAL_PROPOSAL_TEMPLATE_ID;
   const isActiveTemplateBundleCustomized = Boolean(
-    styleTemplateBundleId &&
-      !railStylesEqual(stylePreset, activeTemplateBundleDefinition.stylePreset),
+    !railStylesEqual(stylePreset, activeTemplateBundleBaseStyle),
   );
   const activeTemplateBundleLabel =
     PROPOSAL_STYLE_OPTIONS.find((option) => option.id === activeTemplateBundleId)
@@ -863,12 +907,35 @@ export function ProposalRail({
             Style inherited from selected CV when available.
             <br />
             Default settings{" "}
-            <a className="dasti-proposal-skeleton-rail__link" href="/settings">
+            <a className="dasti-proposal-skeleton-rail__link" href="/settings?tab=docstyle">
               → Document style
             </a>
             .
           </div>
-          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Template</div>
+          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Layout</div>
+          <div className="dasti-proposal-skeleton-rail__style-pills" aria-label="Proposal layout presets">
+            {PROPOSAL_LAYOUT_OPTIONS.map((option) => {
+              const isSelected = resolvedProposalTemplateId === option.id;
+
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-label={`${option.label} layout`}
+                  data-selected={isSelected ? "true" : undefined}
+                  aria-pressed={isSelected}
+                  title={option.description}
+                  onClick={() => {
+                    setIsCustomColorPickerOpen(false);
+                    onSelectProposalLayout?.(option.id);
+                  }}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Style</div>
           <div className="dasti-proposal-skeleton-rail__style-pills" aria-label="Proposal style presets">
             {PROPOSAL_STYLE_OPTIONS.map((option) => {
               const isSelected = activeTemplateBundleId === option.id;
@@ -899,7 +966,7 @@ export function ProposalRail({
                 type="button"
                 className="dasti-proposal-skeleton-rail__style-reset"
                 aria-label={`Reset ${activeTemplateBundleLabel}`}
-                title={`Reset ${activeTemplateBundleLabel} to its original color, font, and layout.`}
+                title={`Reset ${activeTemplateBundleLabel} to the current Settings color, font, and layout.`}
                 onClick={() => {
                   setIsCustomColorPickerOpen(false);
                   onResetStyleBundle(activeTemplateBundleId);
@@ -959,7 +1026,6 @@ export function ProposalRail({
                   className={[
                     "dasti-proposal-skeleton-rail__style-swatch",
                     "dasti-proposal-skeleton-rail__style-swatch--custom",
-                    isSelected ? "" : "dasti-proposal-skeleton-rail__style-swatch--icon",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -974,14 +1040,7 @@ export function ProposalRail({
                   data-selected={isSelected ? "true" : undefined}
                   onClick={() => setIsCustomColorPickerOpen(true)}
                 >
-                  {isSelected ? (
-                    <Check size={12} strokeWidth={1.9} />
-                  ) : (
-                    <ColorWheel
-                      className="dasti-proposal-skeleton-rail__style-swatch-wheel"
-                      aria-hidden="true"
-                    />
-                  )}
+                  {isSelected ? <Check size={12} strokeWidth={1.9} aria-hidden="true" /> : null}
                 </button>
               );
             })}
@@ -1003,6 +1062,79 @@ export function ProposalRail({
                 : undefined
             }
           />
+          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Printed name</div>
+          <div className="dasti-proposal-skeleton-rail__signature-toggles">
+            <button
+              type="button"
+              role="switch"
+              className={[
+                "dasti-theme-switch",
+                "settings-token-switch",
+                "dasti-proposal-skeleton-rail__signature-toggle",
+                signaturePresent
+                  ? "dasti-theme-switch--dark settings-token-switch--active"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              disabled={!onChooseSignature && !onToggleSignature}
+              aria-label="Printed name"
+              aria-checked={signaturePresent}
+              title={
+                signaturePresent
+                  ? "Printed name is enabled for this proposal. Click to hide it from this proposal."
+                  : "Insert the applicant printed name using your Settings name style."
+              }
+              onClick={() => {
+                setIsCustomColorPickerOpen(false);
+                if (signaturePresent && onToggleSignature) {
+                  onToggleSignature(false);
+                  return;
+                }
+                onChooseSignature?.();
+              }}
+            >
+              <span className="dasti-theme-switch__rail" aria-hidden="true">
+                <span className="dasti-theme-switch__thumb" />
+              </span>
+              <span className="dasti-theme-switch__label">Printed name</span>
+            </button>
+            <button
+              type="button"
+              role="switch"
+              className={[
+                "dasti-theme-switch",
+                "settings-token-switch",
+                "dasti-proposal-skeleton-rail__signature-toggle",
+                handwrittenSignatureEnabled
+                  ? "dasti-theme-switch--dark settings-token-switch--active"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              disabled={
+                !signaturePresent ||
+                !handwrittenSignatureAvailable ||
+                !onToggleHandwrittenSignature
+              }
+              aria-label="Signature"
+              aria-checked={handwrittenSignatureEnabled}
+              title={
+                handwrittenSignatureAvailable
+                  ? "Place your Settings signature above the printed name."
+                  : "Add or draw a signature image in Settings to enable this option."
+              }
+              onClick={() => {
+                setIsCustomColorPickerOpen(false);
+                onToggleHandwrittenSignature?.(!handwrittenSignatureEnabled);
+              }}
+            >
+              <span className="dasti-theme-switch__rail" aria-hidden="true">
+                <span className="dasti-theme-switch__thumb" />
+              </span>
+              <span className="dasti-theme-switch__label">Signature</span>
+            </button>
+          </div>
         </section>
       ) : null}
 

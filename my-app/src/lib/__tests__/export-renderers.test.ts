@@ -319,10 +319,25 @@ describe("export-renderers", () => {
         },
       }),
     );
+    const workshopStyledDocument = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          templateId: "workshop_proposal_margin",
+        },
+        stylePreset: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "expert",
+          palette: "cobalt",
+        },
+      }),
+    );
 
     const atsCss = getInlineStyles(atsDocument);
     const railCss = getInlineStyles(railStyledDocument);
     const quireCss = getInlineStyles(quireStyledDocument);
+    const workshopCss = getInlineStyles(workshopStyledDocument);
 
     expect(atsDocument.documentElement.lang).toBe("fr");
     expect(atsDocument.body.className).toContain("proposal-shell--onecol");
@@ -359,6 +374,18 @@ describe("export-renderers", () => {
     expect(quireCss).toContain("--decor-proposal-title-font-style: italic;");
     expect(quireCss).toContain("--decor-proposal-title-letter-spacing: -0.015em;");
     expect(quireCss).toContain("--decor-signature-font-variant-caps: normal;");
+
+    expect(workshopStyledDocument.body.className).toContain(
+      "proposal-template--workshop-proposal-margin",
+    );
+    expect(workshopStyledDocument.body.className).toContain(
+      "proposal-shell--onecol",
+    );
+    expect(workshopStyledDocument.querySelector(".robial-sidebar")).toBeNull();
+    expect(workshopCss).toContain("--page-margin-left: 35mm;");
+    expect(workshopCss).toContain("--page-margin-right: 18mm;");
+    expect(workshopCss).toContain("--robial-step-a: 17mm;");
+    expect(workshopCss).toContain("--robial-step-b: 18mm;");
   });
 
   it("keeps ATS and styled proposal closing blocks structurally aligned and casing-safe", () => {
@@ -438,13 +465,44 @@ describe("export-renderers", () => {
         ?.getAttribute("style"),
     ).toContain("FD Garamond");
     expect(
-      imageDocument
+      imageDocument.querySelector('[data-block="closing"] .proposal-signature-image'),
+    ).toBeNull();
+    expect(
+      imageDocument.querySelector('[data-block="closing"] .proposal-signature')
+        ?.textContent,
+    ).toBe("alex mercer");
+
+    const stackedImageDocument = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          body: proposalFixture.body.map((block) =>
+            block.type === "closing"
+              ? { ...block, handwrittenSignatureEnabled: true }
+              : block,
+          ),
+          signatureSettings: {
+            mode: "image",
+            fontId: null,
+            imageDataUrl,
+          },
+        },
+        stylePreset: {
+          layout: "editorial",
+          typography: "fd-garamond-geist",
+          palette: "pierre",
+        },
+      }),
+    );
+    expect(
+      stackedImageDocument
         .querySelector('[data-block="closing"] .proposal-signature-image')
         ?.getAttribute("src"),
     ).toBe(imageDataUrl);
     expect(
-      imageDocument.querySelector('[data-block="closing"] .proposal-signature'),
-    ).toBeNull();
+      stackedImageDocument.querySelector('[data-block="closing"] .proposal-signature')
+        ?.textContent,
+    ).toBe("alex mercer");
   });
 
   it("builds resume and proposal DOCX exports as editable one-column documents with selected fonts", async () => {
@@ -710,6 +768,137 @@ describe("export-renderers", () => {
     expect(styledDocument.querySelector(".workshop-export-header__contact")).toBeNull();
     expect(styledDocument.querySelector(".workshop-export-header__metadata")).toBeNull();
     expect(styledDocument.querySelector(".resume-styled-page--workshop")).toBeNull();
+  });
+
+  it("renders the two-column workshop styled PDF shell from committed pages", () => {
+    const currentCv = generateCvTemplate("Workshop two-column export");
+    currentCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+      resumeTemplateId: "workshop_resume_twocol_ats",
+    };
+
+    const exportSource = buildResumeExportSource({
+      currentCv,
+      stylePreset: currentCv.metadata.verbatiStyle,
+    });
+
+    expect(exportSource?.resumeTemplateId).toBe("workshop_resume_twocol_ats");
+    const styledDocument = parseExportHtml(
+      renderResumeStyledExportDocument({
+        data: exportSource!,
+        stylePreset: currentCv.metadata.verbatiStyle,
+      }),
+    );
+    const styledCss = getInlineStyles(styledDocument);
+
+    expect(
+      styledDocument.querySelector('[data-resume-template="workshop_resume_twocol_ats"]'),
+    ).toBeTruthy();
+    expect(styledDocument.querySelector(".resume-styled-page--workshop-twocol")).toBeTruthy();
+    expect(styledDocument.querySelector(".resume-workshop-twocol-sidebar")).toBeTruthy();
+    expect(styledDocument.querySelector(".resume-workshop-twocol-main")).toBeTruthy();
+    expect(styledCss).toContain("--page-gutter: 12mm;");
+    expect(styledCss).toContain("--page-sidebar: 45mm;");
+    expect(styledCss).toContain("--page-main: 100mm;");
+
+    const atsDocument = parseExportHtml(
+      renderResumeAtsExportDocument(exportSource!, currentCv.metadata.verbatiStyle),
+    );
+    expect(atsDocument.querySelector(".resume-styled-page--workshop-twocol")).toBeNull();
+    expect(atsDocument.querySelector(".robial-body")).toBeNull();
+    expect(atsDocument.querySelector(".resume-main-stack")).toBeTruthy();
+  });
+
+  it("places two-column workshop export fragments by committed lane before kind fallback", () => {
+    const currentCv = generateCvTemplate("Workshop two-column export lane");
+    currentCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "quiet-editorial",
+      palette: "sauge",
+      resumeTemplateId: "workshop_resume_twocol_ats",
+    };
+    const exportSource = buildResumeExportSource({
+      currentCv,
+      stylePreset: currentCv.metadata.verbatiStyle,
+    });
+    const firstPage = exportSource?.committedPages?.[0];
+    expect(firstPage).toBeTruthy();
+    const laneForcedSource = {
+      ...exportSource!,
+      committedPages: [
+        {
+          ...firstPage!,
+          fragments: [
+            ...firstPage!.fragments,
+            {
+              fragmentId: "test-cert-main-lane",
+              kind: "certifications" as const,
+              lane: "main" as const,
+              sectionType: "certifications" as const,
+              sectionId: "certifications-test",
+              title: "Certifications",
+              continued: false,
+              items: [
+                {
+                  id: "cert-main-lane",
+                  name: "Detailed Architecture Certification",
+                  issuer: "Credential Board",
+                  meta: "License ABC-123",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          pageId: "test-page-2-no-header",
+          index: 1,
+          estimatedHeight: 12,
+          fragments: [
+            {
+              fragmentId: "test-skill-sidebar-lane",
+              kind: "skills" as const,
+              lane: "sidebar" as const,
+              sectionType: "skills" as const,
+              sectionId: "skills-test",
+              title: "Skills",
+              continued: false,
+              items: [{ id: "skill-sidebar-lane", name: "React" }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const styledDocument = parseExportHtml(
+      renderResumeStyledExportDocument({
+        data: laneForcedSource,
+        stylePreset: currentCv.metadata.verbatiStyle,
+      }),
+    );
+
+    expect(
+      styledDocument.querySelector(
+        '.resume-workshop-twocol-main [data-export-item-id="cert-main-lane"]',
+      ),
+    ).toBeTruthy();
+    expect(
+      styledDocument.querySelector(
+        '.resume-workshop-twocol-sidebar [data-export-item-id="cert-main-lane"]',
+      ),
+    ).toBeNull();
+    const continuationPage = styledDocument.querySelector(
+      '[data-export-page-id="test-page-2-no-header"]',
+    );
+    expect(continuationPage?.querySelector(".resume-workshop-twocol-header")).toBeNull();
+    expect(
+      continuationPage?.querySelector(
+        ".resume-workshop-twocol-sidebar .section--skills",
+      ),
+    ).toBeTruthy();
   });
 
   it("renders the dense first workshop experience entry intact in export output when the committed planner no longer splits it", () => {

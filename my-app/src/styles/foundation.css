@@ -334,7 +334,7 @@
   --proposal-document-reading-measure-min: 40ch;
   --proposal-document-reading-measure-max: 64ch;
   --proposal-document-title-scale: 7.1;
-  --paper: #FAF9F5;  /* light mode document body — overridden to #E8E5DB in .dark */
+  --paper: #FAF9F5;  /* light mode document body — overridden to #EFEADC in .dark */
   --proposal-document-paper: var(--paper);
   --proposal-document-ink: var(--color-text);
   --proposal-document-meta-ink: var(--color-text-muted);
@@ -495,12 +495,12 @@
             background were wrong — those now use `var(--paper)` directly.
 */
 :root {
-  --bg: #EFEBE2;   /* app content canvas — warm parchment, clearly below paper (#FAF9F5) */
+  --bg: #F1EEE7;   /* app content canvas — warm parchment, clearly below paper (#FAF9F5) */
   --sf0: var(--bg); /* floor level — canvas alias, used for focus ring halos + sunken fills */
-  --sf1: #F4F1E9;  /* sidebar chrome — between canvas and paper */
-  --sf2: #F0EEE6;  /* secondary surfaces + resume stage */
-  --sf3: #F5F4EF;  /* subtle-fill input hover */
-  --sfr: #FFFFFF;  /* raised: toolbars, cards, popovers — white for clear elevation */
+  --sf1: #F6F4EF;  /* sidebar chrome — between canvas and paper */
+  --sf2: #E9E5DC;  /* secondary surfaces + resume stage */
+  --sf3: #F8F6F2;  /* subtle-fill input hover */
+  --sfr: #FFFDF8;  /* raised: toolbars, cards, popovers */
   --ti: #0F0C08;
   --tm2: rgba(15, 12, 8, 0.64);
   --tg2: rgba(15, 12, 8, 0.60);
@@ -582,23 +582,23 @@
 /* --- §6 Mode Dark — dasti preview OLED -------------------- */
 .dark {
   color-scheme: dark;
-  --app-bg: #0F0E0C;
+  --app-bg: #16130F;
   /* Resume preview canvas color is not defined in foundation tokens.
      Keep it on the workspace selector in product.css so the preview canvas
      can be changed without creating a parallel theme token. */
-  --bg: #0F0E0C;         /* INKWELL — page canvas (warm-tinted OLED black) */
+  --bg: #16130F;         /* ONYX CRISP — bone mirror base */
   --sf0: var(--bg);      /* floor level — canvas alias, focus ring halos + sunken fills */
-  --sf1: #100F0D;        /* sidebar chrome — fractionally above canvas */
-  --sf2: #1A1918;        /* card rest, panels, secondary surfaces — subtle step up */
-  --sf3: #161616;        /* subtle-fill input hover — between canvas and sf2 */
-  --sfr: #222120;        /* raised: toolbars, cards, popovers, modals */
-  --paper: #E8E5DB;      /* document body — warm cream dimmed for dark */
-  --ti: #DAD9D3;
-  --tm2: #95948D;
-  --tg2: #6E6D69;
-  --border-soft: rgba(218, 217, 211, 0.08);
+  --sf1: #1C1814;        /* sidebar chrome */
+  --sf2: #251F19;        /* active row, secondary surfaces */
+  --sf3: #211C17;        /* input hover */
+  --sfr: #2A2620;        /* raised cards, popovers, modals */
+  --paper: #EFEADC;      /* digital crisp paper, Onyx Crisp variant */
+  --ti: #D8D0C2;
+  --tm2: #918677;
+  --tg2: #62584C;
+  --border-soft: rgba(255, 240, 220, 0.075);
   --border-field: rgba(218, 217, 211, 0.06);
-  --border-strong: #504F4C;
+  --border-strong: rgba(255, 240, 220, 0.135);
   --border-selected: color-mix(in srgb, var(--ac) 65%, transparent);
   /* §6 Sémantiques dark — warm palette v5 */
   --ok: hsl(150, 22%, 56%);
@@ -632,10 +632,9 @@
     inset 0 0 0 1px rgba(255, 255, 255, 0.08);
   --shadow-frost: var(--shb);
   --document-paper-shadow:
-    inset 0 1px 0 hsl(36 28% 88% / 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.40),
-    0 14px 32px -10px rgba(0, 0, 0, 0.50),
-    0 40px 90px -32px rgba(0, 0, 0, 0.60);
+    inset 0 1px 0 rgba(255, 250, 240, 0.04),
+    0 0 0 1px rgba(255, 240, 220, 0.08),
+    0 18px 40px -22px rgba(0, 0, 0, 0.50);
   --document-stage-halo: 0 0 0 1px
       color-mix(in srgb, var(--border-strong) 42%, transparent),
     var(--document-paper-shadow);
@@ -696,7 +695,7 @@
   --document-viewer-frame-surface: var(--sf2);  /* document stage — clearly above bg */
   --document-viewer-frame-border: var(--border-field);
   --document-viewer-frame-shadow: var(--document-paper-shadow);
-  --paper: #E8E5DB;      /* warm cream — unified with sf1 at line 543 */
+  --paper: #EFEADC;      /* digital crisp paper, Onyx Crisp variant */
   --proposal-document-paper: var(--paper);
   --proposal-document-ink: var(--color-text);
   --proposal-document-meta-ink: var(--color-text-muted);

@@ -124,7 +124,7 @@ describe("ProposalPrintPage", () => {
     expect(window.__DASTI_PROPOSAL_PRINT_BOOTSTRAP__).toEqual(buildPayload());
     expect(window.__DASTI_PROPOSAL_PRINT_STATUS__?.snapshot).toEqual(
       expect.objectContaining({
-        layout: "swiss",
+        layout: "workshop",
         typography: "quiet-editorial",
         templateId: "two_column_rail",
         expectedBodyFontFamily: expect.stringContaining("Syne"),

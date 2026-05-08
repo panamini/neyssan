@@ -140,6 +140,12 @@ describe("document token system", () => {
         "--proposal-document-page-gap",
         "--proposal-document-reading-measure-max",
         "--proposal-document-title-scale",
+        "--proposal-grid-half-step-block",
+        "--proposal-grid-half-step-inline",
+        "--proposal-grid-step-a-block",
+        "--proposal-grid-step-a-inline",
+        "--proposal-grid-step-b-block",
+        "--proposal-grid-step-b-inline",
         "--proposal-inline-mm",
         "--proposal-template-body-start-mm",
         "--proposal-template-bottom-margin-mm",
@@ -179,6 +185,66 @@ describe("document token system", () => {
     expect(summaryLineDescriptor?.fieldPath).toBe(
       "flow.type.summary.lineHeight",
     );
+  });
+
+  it("keeps the workshop proposal layout canonical across preview and export tokens", () => {
+    const stylePreset = resolveVerbatiStyle({
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "expert",
+      palette: "cobalt",
+    });
+    const documentTypography = getProposalDocumentTypography(
+      "expert",
+      stylePreset,
+    );
+    const previewTokens = normalizeProposalPreviewTokens({
+      templateId: "workshop_proposal_margin",
+      documentTypography,
+      stylePreset,
+    });
+    const previewVars = serializeProposalPreviewVars(previewTokens);
+    const exportProfile = normalizeProposalExportTokens({
+      mode: "styled",
+      proposalTemplateId: "workshop_proposal_margin",
+      stylePreset,
+    });
+    const exportTokens = exportProfile.canonical;
+    const exportVars = serializeExportVars(exportTokens);
+
+    expect(previewTokens.geometry.template).toMatchObject({
+      leftZoneMm: 35,
+      topOffsetMm: 35,
+      bodyStartMm: 96,
+      rightMarginMm: 18,
+      bottomMarginMm: 18,
+    });
+    expect(previewTokens.geometry.columns).toMatchObject({
+      sidebarMm: 35,
+      gutterMm: 18,
+    });
+    expect(previewTokens.geometry.primitives?.robialStep).toEqual({
+      stepAMm: 17,
+      stepBMm: 18,
+      halfStepMm: 8.5,
+    });
+    expect(previewVars["--proposal-grid-step-a-inline"]).toBe(
+      "calc(var(--proposal-inline-mm) * 17)",
+    );
+    expect(previewVars["--proposal-template-left-zone-mm"]).toBe("35");
+
+    expect(exportProfile.shell).toBe("onecol");
+    expect(exportTokens.geometry.page.margin.leftMm).toBe(35);
+    expect(exportTokens.geometry.page.margin.rightMm).toBe(18);
+    expect(exportTokens.geometry.template).toEqual(
+      previewTokens.geometry.template,
+    );
+    expect(exportTokens.geometry.primitives?.robialStep).toEqual(
+      previewTokens.geometry.primitives?.robialStep,
+    );
+    expect(exportVars["--page-margin-left"]).toBe("35mm");
+    expect(exportVars["--robial-step-a"]).toBe("17mm");
+    expect(exportVars["--robial-step-b"]).toBe("18mm");
   });
 
   it("serializes resume preview vars from one canonical object", () => {

@@ -89,6 +89,50 @@ describe("resolveProposalRenderState", () => {
     expect(result.templateId).toBe("editorial_wide");
   });
 
+  it("recovers stored slot-only metadata ahead of the active cv fallback", () => {
+    const result = resolveProposalRenderState({
+      storedStyleSlotId: 2,
+      storedStyleBaseSnapshot: {
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "civic-correspondence",
+        palette: "cobalt",
+      },
+      activeCvStylePreset: {
+        layout: "swiss",
+        typography: "signature",
+        palette: "sauge",
+      },
+    });
+
+    expect(result.stylePreset).toMatchObject({
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "civic-correspondence",
+      palette: "cobalt",
+    });
+    expect(result.templateId).toBe("workshop_proposal_margin");
+  });
+
+  it("falls back from a valid stored slot id to its native document style while using a proposal-safe template", () => {
+    const result = resolveProposalRenderState({
+      storedStyleSlotId: 3,
+      activeCvStylePreset: {
+        layout: "swiss",
+        typography: "signature",
+        palette: "sauge",
+      },
+    });
+
+    expect(result.stylePreset).toMatchObject({
+      layout: "workshop",
+      typography: "ledger-sans",
+      palette: "ink",
+      resumeTemplateId: "workshop_resume_twocol_ats",
+    });
+    expect(result.templateId).toBe("workshop_proposal_margin");
+  });
+
   it("keeps Volk style identity while resolving its proposal twin independently", () => {
     const result = resolveProposalRenderState({
       activeCvStylePreset: {

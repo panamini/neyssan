@@ -9,9 +9,34 @@ export const RESUME_TEMPLATE_IDS = [
   "modernist_resume_legacy",
   "quire_resume_legacy",
   "workshop_resume_onecol_ats",
+  "workshop_resume_twocol_ats",
 ] as const;
 
 export type ResumeTemplateId = (typeof RESUME_TEMPLATE_IDS)[number];
+
+export const WORKSHOP_RESUME_ONECOL_TEMPLATE_ID = "workshop_resume_onecol_ats";
+export const WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID = "workshop_resume_twocol_ats";
+export const WORKSHOP_RESUME_TEMPLATE_IDS = [
+  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
+] as const satisfies readonly ResumeTemplateId[];
+
+export type WorkshopResumeTemplateId =
+  (typeof WORKSHOP_RESUME_TEMPLATE_IDS)[number];
+
+export function isWorkshopResumeTemplateId(
+  templateId: ResumeTemplateId | null | undefined,
+): templateId is WorkshopResumeTemplateId {
+  return WORKSHOP_RESUME_TEMPLATE_IDS.includes(
+    templateId as WorkshopResumeTemplateId,
+  );
+}
+
+export function isWorkshopTwoColumnResumeTemplateId(
+  templateId: ResumeTemplateId | null | undefined,
+): templateId is typeof WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID {
+  return templateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID;
+}
 
 type ResumeTemplateLengthSet = {
   topMm: number;
@@ -241,6 +266,24 @@ const ONE_COLUMN_EXPORT = {
   entryGapMm: 4.8,
 } as const;
 
+const TWO_COLUMN_WORKSHOP_EXPORT = {
+  topMm: 17,
+  rightMm: 35,
+  bottomMm: 18,
+  leftMm: 18,
+  sidebarMm: 45,
+  gutterMm: 12,
+  mainMm: 100,
+  summaryWidthMm: 100,
+  readingWidthMm: 100,
+  entryMetaWidthMm: 27,
+  titleSizePt: 20,
+  titleLineHeight: 1.12,
+  headerGapMm: 8,
+  sectionGapMm: 5.8,
+  entryGapMm: 4.4,
+} as const;
+
 export const DEFAULT_RESUME_TEMPLATE_ID: ResumeTemplateId =
   "swiss_resume_legacy";
 
@@ -438,6 +481,39 @@ export const RESUME_TEMPLATE_DEFINITIONS: readonly ResumeTemplateDefinition[] = 
       workshopBottomFitSafetyMm: 0.5,
     },
     export: ONE_COLUMN_EXPORT,
+    paginationPolicy: { mode: "legacy-placeholder" },
+  }),
+  defineTemplate({
+    id: "workshop_resume_twocol_ats",
+    familyId: "workshop",
+    label: "Workshop two-column ATS",
+    shell: "legacy-preview",
+    supportsPlanner: true,
+    supportsLegacyComparison: false,
+    legacyPreviewVariantId: "swissminima",
+    decorVariantId: "swissminima",
+    exportShell: "onecol",
+    preview: {
+      topMm: 17, rightMm: 35, bottomMm: 18, leftMm: 18,
+      liveWidthMm: 157, liveHeightMm: 262,
+      sidebarMm: 45, gutterMm: 12, mainMm: 100,
+      headerGapMm: 4, headerBottomPaddingMm: 5, headerSummaryWidthMm: 100, headerTitleMarginTopMm: 2,
+      bodySectionGapMm: 6.5, sidebarRightPaddingMm: 0, mainLeftPaddingMm: 0,
+      sidebarSectionGapMm: 4.2, sidebarTitleMarginBottomMm: 1.4, sidebarTitlePaddingBottomMm: 0.8, sidebarContentGapMm: 1.4,
+      mainSectionGapMm: 4.8, mainHeadingGapMm: 2, mainHeadingMarginBottomMm: 1.6,
+      experienceDateColumnMm: 0, experienceColumnGapMm: 0, experienceItemGapMm: 4.4, experienceOrgMarginBottomMm: 1.1, experienceBulletsPaddingLeftMm: 3.5, experienceBulletsGapMm: 1.05,
+      projectGapMm: 2.7, projectPaddingMm: 2.4, educationItemGapMm: 1.6,
+      skillGapMm: 1.5, skillPaddingInlineMm: 1.8, skillPaddingBlockMm: 0.75,
+      displaySizeAdjustMm: -0.08, titleSizeAdjustMm: -0.03, bodySizeAdjustMm: -0.06, bodySmSizeAdjustMm: -0.1,
+      sectionGapAdjustMm: -0.3, headingMarginAdjustMm: -0.1, bulletGapAdjustMm: -0.05, projectGapAdjustMm: -0.15, projectPaddingAdjustMm: -0.1,
+      workshopSectionShellGapMm: 2.4, workshopSectionContentGapMm: 2.6,
+      workshopExperienceBlockGapMm: 1.6, workshopExperienceMetaGapMm: 0.55, workshopCompactMetaGapMm: 0.65,
+      workshopSectionTitleReductionMm: 0.95,
+      workshopExperienceHeadingSizeAdjustMm: 0.12,
+      workshopExperienceHeadingLineHeight: 1.22,
+      workshopBottomFitSafetyMm: 0.5,
+    },
+    export: TWO_COLUMN_WORKSHOP_EXPORT,
     paginationPolicy: { mode: "legacy-placeholder" },
   }),
 ] as const;

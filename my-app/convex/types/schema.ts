@@ -70,6 +70,17 @@ export interface ProposalDoc extends Doc<"proposals"> {
       palette: string;
       accentHex?: string;
     };
+    verbatiStyleSlotId?: 1 | 2 | 3;
+    verbatiStyleSlotSource?: "factory" | "settings";
+    verbatiStyleSlotNameSnapshot?: string;
+    verbatiStyleBaseSnapshot?: {
+      familyId?: string;
+      layout: string;
+      typography: string;
+      palette: string;
+      accentHex?: string;
+    };
+    documentStyleVersion?: 1;
     styleLinkMode?: "inherit_cv" | "proposal_local";
     styleChoice?: "auto" | "formal" | "warm" | "technical" | "balanced";
     templateBundleId?:
@@ -129,7 +140,12 @@ export interface UserProfileDoc extends Doc<"userProfiles"> {
   proposalTemplateId?: ProposalTemplateId;
   proposalStyleChoice?: "auto" | "formal" | "warm" | "technical" | "balanced";
   proposalPaletteOverride?:
+    | "terre"
+    | "cobalt"
+    | "ink"
     | "sauge"
+    | "plum"
+    | "ochre"
     | "ocre"
     | "pierre"
     | "bordeaux"
@@ -187,6 +203,17 @@ export interface UserProfileDoc extends Doc<"userProfiles"> {
         | "custom";
       accentHex?: string;
     };
+    verbatiStyleSlotId?: 1 | 2 | 3;
+    verbatiStyleSlotSource?: "factory" | "settings";
+    verbatiStyleSlotNameSnapshot?: string;
+    verbatiStyleBaseSnapshot?: {
+      familyId?: string;
+      layout: string;
+      typography: string;
+      palette: string;
+      accentHex?: string;
+    };
+    documentStyleVersion?: 1;
   };
 }
 

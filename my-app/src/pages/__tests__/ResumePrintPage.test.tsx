@@ -405,6 +405,56 @@ describe("ResumePrintPage", () => {
     expect(window.__DASTI_RESUME_PRINT_STATUS__?.pageCount).toBeGreaterThan(0);
   });
 
+  it("fails closed when a Workshop print payload omits committed pages", async () => {
+    const payload = buildWorkshopOverflowPayload();
+    window.__DASTI_RESUME_PRINT_PAYLOAD__ = {
+      ...payload,
+      committedPages: undefined,
+    };
+
+    render(<ResumePrintPage />);
+
+    expect(
+      screen.getByText(/Committed workshop print pages are required/i),
+    ).toBeInTheDocument();
+    expect(window.__DASTI_RESUME_PRINT_STATUS__).toEqual(
+      expect.objectContaining({
+        status: "error",
+        error: expect.stringMatching(/Committed workshop print pages/i),
+      }),
+    );
+  });
+
+  it("renders the two-column workshop template renderer on the print route", async () => {
+    const payload = buildWorkshopOverflowPayload();
+    const stylePreset = {
+      ...payload.stylePreset,
+      resumeTemplateId: "workshop_resume_twocol_ats" as const,
+    };
+    const committedPages = planWorkshopResumePages({
+      data: payload.resumeData,
+      template: getResumeTemplateDefinition("workshop_resume_twocol_ats"),
+      stylePreset,
+    }).committedPages;
+    window.__DASTI_RESUME_PRINT_PAYLOAD__ = {
+      ...payload,
+      stylePreset,
+      resumeTemplateId: "workshop_resume_twocol_ats",
+      committedPages,
+    };
+
+    render(<ResumePrintPage />);
+
+    expect(screen.getByTestId("resume-template-renderer")).toBeInTheDocument();
+    expect(document.querySelector('[data-resume-template-layout="workshop-two-column"]')).toBeTruthy();
+    expect(document.querySelector('[data-resume-template-column="sidebar"]')).toBeTruthy();
+    expect(document.querySelector('[data-resume-template-column="main"]')).toBeTruthy();
+
+    await waitFor(() => {
+      expect(window.__DASTI_RESUME_PRINT_STATUS__?.status).toBe("ready");
+    });
+  });
+
   it("renders workshop committed rich responsibilities on the print route", async () => {
     window.__DASTI_RESUME_PRINT_PAYLOAD__ = buildRichWorkshopCommittedPayload();
 

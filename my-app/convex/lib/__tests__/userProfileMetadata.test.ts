@@ -42,7 +42,9 @@ function matchesValidator(validator: ValidatorJSON, value: unknown): boolean {
       });
     }
     default:
-      throw new Error(`Unsupported validator kind in test helper: ${validator.type}`);
+      throw new Error(
+        `Unsupported validator kind in test helper: ${validator.type}`,
+      );
   }
 }
 
@@ -99,6 +101,29 @@ describe("userProfileMetadata", () => {
         accentHex: "#336699",
       },
     });
+  });
+
+  it("accepts document style slot metadata and base snapshots", () => {
+    expect(
+      matchesValidator(userProfileMetadataValidator.json, {
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "settings",
+        verbatiStyleSlotNameSnapshot: "Style 2",
+        verbatiStyleBaseSnapshot: {
+          familyId: "workshop",
+          layout: "workshop",
+          palette: "cobalt",
+          typography: "civic-correspondence",
+        },
+        documentStyleVersion: 1,
+      }),
+    ).toBe(true);
+
+    expect(
+      matchesValidator(userProfileMetadataValidator.json, {
+        verbatiStyleSlotId: 4,
+      }),
+    ).toBe(false);
   });
 
   it("keeps existing allowed metadata fields valid without verbatiStyle", () => {

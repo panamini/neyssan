@@ -1,35 +1,36 @@
 // my-app/src/types/cvDocument.ts
-import type { RemirrorJSON } from 'remirror';
+import type { RemirrorJSON } from "remirror";
+import type { DocumentStyleMetadata } from "../lib/document-style-slots";
 
 /**
  * Primitive block types used within a CvSection.
  */
 export type BlockType =
-  | 'text'
-  | 'heading'
-  | 'list-item'
-  | 'code'
-  | 'image'
-  | 'embed'
-  | 'quote'
-  | 'divider'
-  | 'custom';
+  | "text"
+  | "heading"
+  | "list-item"
+  | "code"
+  | "image"
+  | "embed"
+  | "quote"
+  | "divider"
+  | "custom";
 
 /**
  * Different section kinds in a CV document.
  */
 export type SectionType =
-  | 'text'
-  | 'experience'
-  | 'education'
-  | 'skills'
-  | 'languages'
-  | 'projects'
-  | 'certifications'
-  | 'summary'
-  | 'achievements'
-  | 'contact'
-  | 'profile';
+  | "text"
+  | "experience"
+  | "education"
+  | "skills"
+  | "languages"
+  | "projects"
+  | "certifications"
+  | "summary"
+  | "achievements"
+  | "contact"
+  | "profile";
 
 /**
  * ISO 8601 date string (e.g. "2020-01-01" or full timestamp).
@@ -38,11 +39,16 @@ export type SectionType =
 export type ISODateString = string;
 
 /** Precision metadata for partial dates */
-export type DatePrecision = 'year' | 'month' | 'day';
+export type DatePrecision = "year" | "month" | "day";
 
 /** Generic 5-level scale for skills/languages (labels) */
-export type Level = 'Beginner' | 'Elementary' | 'Intermediate' | 'Advanced' | 'Fluent';
-export type SkillBucket = 'core' | 'secondary' | 'familiar';
+export type Level =
+  | "Beginner"
+  | "Elementary"
+  | "Intermediate"
+  | "Advanced"
+  | "Fluent";
+export type SkillBucket = "core" | "secondary" | "familiar";
 
 /**
  * Represents a single, primitive block of content.
@@ -241,7 +247,7 @@ export interface CvSection {
 /**
  * Metadata for the CV document.
  */
-export interface CvMetadata {
+export interface CvMetadata extends DocumentStyleMetadata {
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
   version: number;

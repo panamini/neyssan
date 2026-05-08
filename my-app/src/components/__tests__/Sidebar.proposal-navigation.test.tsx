@@ -251,6 +251,23 @@ describe("Sidebar proposal navigation", () => {
     );
   });
 
+  it("does not render the footer theme toggle on the settings route", () => {
+    render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <Sidebar />
+        <Routes>
+          <Route path="/settings" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole("button", {
+        name: /dark mode|light mode|toggle dark theme|toggle light theme/i,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("does not render authenticated recents when signed out", () => {
     mockAuthState.isSignedIn = false;
 
@@ -289,10 +306,15 @@ describe("Sidebar proposal navigation", () => {
     const lightCollapsedLogo = toggle.querySelector(
       ".sb-toggle__collapsed-logo",
     ) as HTMLImageElement | null;
+    const lightCollapsedLogoShell = toggle.querySelector(
+      ".sb-toggle__collapsed-logo-shell",
+    ) as HTMLSpanElement | null;
+    expect(lightCollapsedLogoShell).not.toBeNull();
     expect(lightCollapsedLogo).not.toBeNull();
     expect(lightCollapsedLogo?.getAttribute("src")).toContain(
-      "favicon.png",
+      "two-weeks-logo.png",
     );
+    expect(lightCollapsedLogo).not.toHaveClass("sb-toggle__collapsed-logo--dark");
     expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
 
     fireEvent.click(toggle);
@@ -321,10 +343,15 @@ describe("Sidebar proposal navigation", () => {
     const darkCollapsedLogo = collapsedToggle.querySelector(
       ".sb-toggle__collapsed-logo",
     ) as HTMLImageElement | null;
+    const darkCollapsedLogoShell = collapsedToggle.querySelector(
+      ".sb-toggle__collapsed-logo-shell",
+    ) as HTMLSpanElement | null;
+    expect(darkCollapsedLogoShell).not.toBeNull();
     expect(darkCollapsedLogo).not.toBeNull();
     expect(darkCollapsedLogo?.getAttribute("src")).toContain(
-      "d6efcd7d-91fb-4cc5-99dd-2a869964e24c.png",
+      "two-weeks-logo.png",
     );
+    expect(darkCollapsedLogo).toHaveClass("sb-toggle__collapsed-logo--dark");
     expect(collapsedToggle.querySelector("svg")).toBeNull();
     expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
   });

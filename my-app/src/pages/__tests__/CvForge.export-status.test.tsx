@@ -226,7 +226,12 @@ vi.mock("../../components/ui/toast", () => ({
 }));
 
 vi.mock("../../contexts/CvLibraryContext", () => ({
-  useCvLibrary: () => useCvLibraryMock(),
+  useCvLibrary: () => ({
+    cvs: [],
+    currentCv: null,
+    importCv: importCvMock,
+    ...(useCvLibraryMock() ?? {}),
+  }),
 }));
 
 vi.mock("../../lib/cv-export", () => ({

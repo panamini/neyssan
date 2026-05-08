@@ -6,6 +6,7 @@ import {
   getProposalTemplateBundleDefinition,
   type ProposalTemplateBundleId,
 } from "../../../lib/proposal-template-bundles";
+import { CANONICAL_PROPOSAL_TEMPLATE_ID } from "../../../../convex/lib/proposals/renderTemplates";
 import type { VerbatiStylePreset } from "../../../features/verbati/types";
 
 const baseProps = {
@@ -43,6 +44,8 @@ const baseProps = {
     },
   ],
   onSelectLength: vi.fn(),
+  proposalTemplateId: CANONICAL_PROPOSAL_TEMPLATE_ID,
+  onSelectProposalLayout: vi.fn(),
   stylePreset: {
     layout: "workshop" as const,
     typography: "geist-baskervville" as const,
@@ -153,6 +156,100 @@ describe("ProposalRail style tab", () => {
     expect(onOpenJobs).toHaveBeenCalledTimes(1);
   });
 
+  it("shows signature action in the Style tab and calls the callback", () => {
+    const onChooseSignature = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        signaturePresent={false}
+        onChooseSignature={onChooseSignature}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Printed name" }));
+
+    expect(onChooseSignature).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the signature switch active when the draft content has not hydrated yet", () => {
+    const onChooseSignature = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        hasProposalContent={false}
+        signaturePresent={false}
+        onChooseSignature={onChooseSignature}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    const signatureSwitch = screen.getByRole("switch", { name: "Printed name" });
+
+    expect(signatureSwitch).not.toBeDisabled();
+    fireEvent.click(signatureSwitch);
+    expect(onChooseSignature).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows when the structured signature is already present", () => {
+    render(
+      <ProposalRail
+        {...baseProps}
+        signaturePresent
+        onChooseSignature={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+
+    expect(screen.getByRole("switch", { name: "Printed name" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+  });
+
+  it("toggles off the structured signature when already present", () => {
+    const onChooseSignature = vi.fn();
+    const onToggleSignature = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        signaturePresent
+        onChooseSignature={onChooseSignature}
+        onToggleSignature={onToggleSignature}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Printed name" }));
+
+    expect(onToggleSignature).toHaveBeenCalledWith(false);
+    expect(onChooseSignature).not.toHaveBeenCalled();
+  });
+
+  it("toggles hand-drawn signature placement when an image signature is available", () => {
+    const onToggleHandwrittenSignature = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        signaturePresent
+        handwrittenSignatureAvailable
+        handwrittenSignatureEnabled={false}
+        onChooseSignature={vi.fn()}
+        onToggleHandwrittenSignature={onToggleHandwrittenSignature}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Signature" }));
+
+    expect(onToggleHandwrittenSignature).toHaveBeenCalledWith(true);
+  });
+
   it("shows the proposal Style tab and calls proposal-scoped style callbacks", () => {
     const onSelectStyleBundle = vi.fn();
     const onSelectStylePalette = vi.fn();
@@ -179,10 +276,25 @@ describe("ProposalRail style tab", () => {
       ).length,
     ).toBeGreaterThan(0);
     expect(screen.getByText(/Default settings/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "→ Document style" })).toBeInTheDocument();
-    expect(screen.getByText("Template")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "→ Document style" })).toHaveAttribute(
+      "href",
+      "/settings?tab=docstyle",
+    );
+    expect(screen.getByText("Layout", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Workshop layout",
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Style", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(screen.getByText("Font pair")).toBeInTheDocument();
-    expect(screen.getByText("Accent")).toBeInTheDocument();
+    expect(screen.getByText("Accent", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    expect(screen.getByText("Printed name", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    const accentLabel = screen.getByText("Accent", { selector: ".forge__rail-label" });
+    const signatureLabel = screen.getByText("Printed name", { selector: ".forge__rail-label" });
+    expect(
+      accentLabel.compareDocumentPosition(signatureLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Style 1" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -209,6 +321,29 @@ describe("ProposalRail style tab", () => {
     expect(document.querySelector('input[type="color"]')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open custom color picker" }));
     expect(screen.getByRole("dialog", { name: "Custom accent color" })).toBeInTheDocument();
+  });
+
+  it("selects the canonical proposal layout from the Style tab", () => {
+    const onSelectProposalLayout = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        proposalTemplateId={null}
+        onSelectProposalLayout={onSelectProposalLayout}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Workshop layout",
+      }),
+    );
+
+    expect(onSelectProposalLayout).toHaveBeenCalledWith(
+      CANONICAL_PROPOSAL_TEMPLATE_ID,
+    );
   });
 
   it("keeps Style 3 selected, highlights ink, and exposes reset when the bundle is customized", () => {
@@ -241,6 +376,29 @@ describe("ProposalRail style tab", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Reset Style 3" }));
     expect(onResetStyleBundle).toHaveBeenCalledWith("grid_mono");
+  });
+
+  it("compares custom state against the current Settings-backed bundle style", () => {
+    const onResetStyleBundle = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        styleTemplateBundleId="swiss_serif"
+        stylePreset={getProposalTemplateBundleDefinition("swiss_serif").stylePreset}
+        styleTemplateBundleBaseStyle={{
+          ...getProposalTemplateBundleDefinition("swiss_serif").stylePreset,
+          palette: "cobalt",
+        }}
+        onResetStyleBundle={onResetStyleBundle}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+
+    expect(screen.getByText("Style 1 · Custom")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reset Style 1" }));
+    expect(onResetStyleBundle).toHaveBeenCalledWith("swiss_serif");
   });
 
   it("marks the selected style custom immediately after a manual palette edit", () => {

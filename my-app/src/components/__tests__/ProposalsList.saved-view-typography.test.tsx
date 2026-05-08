@@ -48,6 +48,30 @@ const SAVED_PROPOSALS = [
     },
     sections: [{ type: "text", content: "Inherited proposal body." }],
   },
+  {
+    _id: "proposal_slot_only",
+    _creationTime: 1710000002000,
+    title: "Saved slot-only proposal",
+    content: "Dear On-site,\n\nSlot-only proposal body.",
+    status: "saved",
+    metadata: {
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+      sourceCvId: "cv_alpha",
+      styleLinkMode: "proposal_local",
+      verbatiStyleSlotId: 2,
+      verbatiStyleSlotSource: "settings",
+      verbatiStyleSlotNameSnapshot: "Style 2",
+      verbatiStyleBaseSnapshot: {
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "civic-correspondence",
+        palette: "cobalt",
+      },
+      documentStyleVersion: 1,
+    },
+    sections: [{ type: "text", content: "Slot-only proposal body." }],
+  },
 ] as const;
 
 vi.mock("convex/react", () => ({
@@ -102,8 +126,9 @@ describe("ProposalsList saved-view typography", () => {
   function getMainProposalDisplayCall() {
     return [...proposalDisplaySpy.mock.calls]
       .reverse()
-      .find(([props]) => props.documentHeaderMode === "actions-only")
-      ?.[0] as Record<string, unknown> | undefined;
+      .find(([props]) => props.documentHeaderMode === "actions-only")?.[0] as
+      | Record<string, unknown>
+      | undefined;
   }
 
   beforeEach(() => {
@@ -146,6 +171,28 @@ describe("ProposalsList saved-view typography", () => {
           palette: "pierre",
         }),
       );
+    });
+  });
+
+  it("recovers saved slot-only style metadata instead of falling back to defaults", async () => {
+    render(
+      <ProposalsList
+        selectedProposalId="proposal_slot_only"
+        onSelectedProposalIdChange={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      const displayProps = getMainProposalDisplayCall();
+      expect(displayProps?.stylePreset).toEqual(
+        expect.objectContaining({
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "civic-correspondence",
+          palette: "cobalt",
+        }),
+      );
+      expect(displayProps?.templateId).toBe("workshop_proposal_margin");
     });
   });
 });

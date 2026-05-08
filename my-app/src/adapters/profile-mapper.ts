@@ -59,6 +59,7 @@ export interface ConvexUserProfile {
       typography?: string;
       palette?: string;
       accentHex?: string;
+      resumeTemplateId?: string;
     };
   } | undefined;
   cvDocument?: unknown;
@@ -168,6 +169,7 @@ export function mapProfileToCvDocument(profile: any, forcedId?: string): CvDocum
                 typography?: string;
                 palette?: string;
                 accentHex?: string;
+                resumeTemplateId?: string;
               },
             ),
           )

@@ -79,12 +79,25 @@ export type UserProfileVerbatiStyle = {
   accentHex?: string;
 };
 
+export type UserProfileDocumentAppearanceSnapshot = {
+  familyId?: UserProfileVerbatiLayoutId;
+  layout: UserProfileStoredVerbatiLayout;
+  typography: UserProfileStoredVerbatiTypography;
+  palette: UserProfileVerbatiPaletteId;
+  accentHex?: string;
+};
+
 export type UserProfileMetadata = {
   source?: string;
   importedAt?: number;
   confidence?: number;
   filename?: string;
   verbatiStyle?: UserProfileVerbatiStyle;
+  verbatiStyleSlotId?: 1 | 2 | 3;
+  verbatiStyleSlotSource?: "factory" | "settings";
+  verbatiStyleSlotNameSnapshot?: string;
+  verbatiStyleBaseSnapshot?: UserProfileDocumentAppearanceSnapshot;
+  documentStyleVersion?: 1;
 };
 
 const LEGACY_LAYOUT_TO_CANONICAL: Record<
@@ -138,35 +151,56 @@ export const userProfileVerbatiStyleValidator = v.object({
   accentHex: v.optional(v.string()),
 });
 
+export const userProfileDocumentAppearanceSnapshotValidator = v.object({
+  familyId: v.optional(canonicalLayoutChoice),
+  layout: persistedLayoutChoice,
+  typography: persistedTypographyChoice,
+  palette: paletteChoice,
+  accentHex: v.optional(v.string()),
+});
+
+export const documentStyleSlotIdValidator = v.union(
+  v.literal(1),
+  v.literal(2),
+  v.literal(3),
+);
+
+export const documentStyleSlotSourceValidator = v.union(
+  v.literal("factory"),
+  v.literal("settings"),
+);
+
 export const userProfileMetadataValidator = v.object({
   source: v.optional(v.string()),
   importedAt: v.optional(v.number()),
   confidence: v.optional(v.number()),
   filename: v.optional(v.string()),
   verbatiStyle: v.optional(userProfileVerbatiStyleValidator),
+  verbatiStyleSlotId: v.optional(documentStyleSlotIdValidator),
+  verbatiStyleSlotSource: v.optional(documentStyleSlotSourceValidator),
+  verbatiStyleSlotNameSnapshot: v.optional(v.string()),
+  verbatiStyleBaseSnapshot: v.optional(
+    userProfileDocumentAppearanceSnapshotValidator,
+  ),
+  documentStyleVersion: v.optional(v.literal(1)),
 });
 
-function canonicalizeLayout(
-  value: unknown,
-): unknown {
+function canonicalizeLayout(value: unknown): unknown {
   if (typeof value !== "string") {
     return value;
   }
 
-  if (
-    (USER_PROFILE_VERBATI_LAYOUT_IDS as readonly string[]).includes(value)
-  ) {
+  if ((USER_PROFILE_VERBATI_LAYOUT_IDS as readonly string[]).includes(value)) {
     return value;
   }
 
-  return LEGACY_LAYOUT_TO_CANONICAL[
-    value as UserProfileVerbatiLayoutLegacyAlias
-  ] ?? value;
+  return (
+    LEGACY_LAYOUT_TO_CANONICAL[value as UserProfileVerbatiLayoutLegacyAlias] ??
+    value
+  );
 }
 
-function canonicalizeTypography(
-  value: unknown,
-): unknown {
+function canonicalizeTypography(value: unknown): unknown {
   if (typeof value !== "string") {
     return value;
   }
@@ -177,14 +211,14 @@ function canonicalizeTypography(
     return value;
   }
 
-  return LEGACY_TYPOGRAPHY_TO_CANONICAL[
-    value as UserProfileVerbatiTypographyLegacyAlias
-  ] ?? value;
+  return (
+    LEGACY_TYPOGRAPHY_TO_CANONICAL[
+      value as UserProfileVerbatiTypographyLegacyAlias
+    ] ?? value
+  );
 }
 
-export function canonicalizeUserProfileVerbatiStyle(
-  value: unknown,
-): unknown {
+export function canonicalizeUserProfileVerbatiStyle(value: unknown): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return value;
   }
@@ -198,22 +232,27 @@ export function canonicalizeUserProfileVerbatiStyle(
   };
 }
 
-export function canonicalizeUserProfileMetadata(
-  value: unknown,
-): unknown {
+export function canonicalizeUserProfileMetadata(value: unknown): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return value;
   }
 
   const candidate = value as Record<string, unknown>;
-  if (!("verbatiStyle" in candidate)) {
-    return candidate;
+  const next = { ...candidate };
+
+  if ("verbatiStyle" in candidate) {
+    next.verbatiStyle = canonicalizeUserProfileVerbatiStyle(
+      candidate.verbatiStyle,
+    );
   }
 
-  return {
-    ...candidate,
-    verbatiStyle: canonicalizeUserProfileVerbatiStyle(candidate.verbatiStyle),
-  };
+  if ("verbatiStyleBaseSnapshot" in candidate) {
+    next.verbatiStyleBaseSnapshot = canonicalizeUserProfileVerbatiStyle(
+      candidate.verbatiStyleBaseSnapshot,
+    );
+  }
+
+  return next;
 }
 
 export const canonicalUserProfileVerbatiLayoutChoice = canonicalLayoutChoice;

@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import ResumeTemplateRenderer from "../ResumeTemplateRenderer";
@@ -31,6 +31,9 @@ const WORKSHOP_ACTIVE_PREVIEW_LAYOUT_VAR_NAMES = [
   "--margin-right",
   "--margin-bottom",
   "--margin-left",
+  "--sidebar-width",
+  "--gutter-width",
+  "--main-width",
   "--header-row-gap",
   "--header-summary-width",
   "--header-bottom-padding",
@@ -397,6 +400,106 @@ describe("ResumeTemplateRenderer", () => {
     await waitFor(() => {
       expect(onStablePageCountChange).toHaveBeenCalledWith(expect.any(Number));
     });
+  });
+
+  it("renders the workshop two-column ATS page set with canonical column vars", () => {
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        }}
+        resumeTemplateId="workshop_resume_twocol_ats"
+      />,
+    );
+
+    const renderer = container.querySelector(
+      '[data-testid="resume-template-renderer"]',
+    ) as HTMLElement | null;
+    expect(screen.getAllByTestId("resume-template-page").length).toBeGreaterThan(0);
+    expect(renderer?.style.getPropertyValue("--sidebar-width")).toBe("45mm");
+    expect(renderer?.style.getPropertyValue("--gutter-width")).toBe("12mm");
+    expect(renderer?.style.getPropertyValue("--main-width")).toBe("100mm");
+    expect(container.querySelector('[data-resume-template-layout="workshop-two-column"]')).toBeTruthy();
+    expect(container.querySelector('[data-resume-template-column="sidebar"]')).toBeTruthy();
+    expect(container.querySelector('[data-resume-template-column="main"]')).toBeTruthy();
+  });
+
+  it("places two-column committed fragments by lane in the React preview", () => {
+    const committedPages = [
+      {
+        pageId: "react-lane-page-1",
+        index: 0,
+        estimatedHeight: 20,
+        fragments: [
+          {
+            fragmentId: "react-lane-profile",
+            kind: "profile" as const,
+            lane: "header" as const,
+            sectionType: "profile" as const,
+            sectionId: "profile-1",
+            title: "Profile",
+            continued: false,
+            profile: { name: resumeMock.name, title: resumeMock.title },
+            contact: [],
+            metadata: [],
+          },
+          {
+            fragmentId: "react-lane-cert-main",
+            kind: "certifications" as const,
+            lane: "main" as const,
+            sectionType: "certifications" as const,
+            sectionId: "certifications-1",
+            title: "Certifications",
+            continued: false,
+            items: [
+              {
+                id: "react-cert-main",
+                name: "Detailed Architecture Certification",
+                issuer: "Credential Board",
+                meta: "License ABC-123",
+              },
+            ],
+          },
+          {
+            fragmentId: "react-lane-skill-sidebar",
+            kind: "skills" as const,
+            lane: "sidebar" as const,
+            sectionType: "skills" as const,
+            sectionId: "skills-1",
+            title: "Skills",
+            continued: false,
+            items: [{ id: "react-skill-sidebar", name: "React" }],
+          },
+        ],
+      },
+    ];
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        }}
+        resumeTemplateId="workshop_resume_twocol_ats"
+        committedPages={committedPages}
+      />,
+    );
+
+    const sidebar = container.querySelector('[data-resume-template-column="sidebar"]');
+    const main = container.querySelector('[data-resume-template-column="main"]');
+    expect(sidebar).toBeTruthy();
+    expect(main).toBeTruthy();
+    expect(within(main as HTMLElement).getByText("Detailed Architecture Certification")).toBeTruthy();
+    expect(within(sidebar as HTMLElement).queryByText("Detailed Architecture Certification")).toBeNull();
+    expect(within(sidebar as HTMLElement).getByText("React")).toBeTruthy();
   });
 
   it("renders committed workshop experience rich content from committedPages with fallback-safe source data", () => {

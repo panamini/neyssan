@@ -43,6 +43,11 @@ import {
   type VerbatiFontPairId,
 } from "../../features/verbati/fontCatalog";
 import { PROPOSAL_PALETTE_OPTIONS } from "../../lib/proposal-style-display";
+import { ProposalColorPickerPopover } from "../ProposalColorPickerPopover";
+import {
+  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
+} from "../../lib/layout/resumeTemplates";
 
 export type CvRailTab = "sections" | "ai" | "style";
 export type CvToneChoice = "warm" | "formal" | "natural";
@@ -106,9 +111,14 @@ type CvRailProps = {
   onAcceptListAiSuggestion: (value: string) => void;
   onDismissListAiSuggestion: (value: string) => void;
   onAddSection: (sectionKind: CvAddSectionKind) => void;
-  onSelectTemplate: (template: "editorial" | "minimal" | "classic") => void;
+  selectedStyleSlot: 1 | 2 | 3 | null;
+  selectedStyleSlotIsCustom?: boolean;
+  onSelectStyleSlot: (slot: 1 | 2 | 3) => void;
+  onResetStyleSlot?: () => void;
+  onSelectTemplate: (template: "workshop-onecol" | "workshop-twocol" | "editorial" | "minimal" | "classic") => void;
   onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
   onSelectAccent: (accent: CvAccentChoice) => void;
+  onSelectCustomAccent: (hex: string) => void;
   onNewCv: () => void;
   onImportPdf: () => void;
 };
@@ -170,6 +180,15 @@ const ACCENT_OPTIONS: Array<{
   palette: option.id,
   accentHex: option.color,
 }));
+
+const CV_CUSTOM_ACCENT_STARTER_HEX = "#8A8176";
+
+function normalizeCvAccentHex(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? "";
+  return /^#[0-9a-fA-F]{6}$/.test(normalized)
+    ? normalized.toLowerCase()
+    : null;
+}
 
 function getSectionId(section: CvSection, index: number): string {
   return String(section.id ?? `${section.type}-${index}`);
@@ -468,15 +487,24 @@ export function CvRail({
   onAcceptListAiSuggestion,
   onDismissListAiSuggestion,
   onAddSection,
+  selectedStyleSlot,
+  selectedStyleSlotIsCustom = false,
+  onSelectStyleSlot,
+  onResetStyleSlot,
   onSelectTemplate,
   onSelectFontPair,
   onSelectAccent,
+  onSelectCustomAccent,
   onNewCv,
   onImportPdf,
 }: CvRailProps): JSX.Element {
   const activeSection = getActiveSection(sections, activeSectionId);
   const [aiPrompt, setAiPrompt] = React.useState("");
   const [streamExpanded, setStreamExpanded] = React.useState(false);
+  const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] =
+    React.useState(false);
+  const customColorAnchorRef = React.useRef<HTMLButtonElement | null>(null);
+  const customColorSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const activeSectionLabel = activeSection
     ? formatSectionDisplayTitle(activeSection, { fallback: "Section" })
     : "";
@@ -503,10 +531,25 @@ export function CvRail({
     if (option.palette === stylePreset.palette) return !stylePreset.accentHex;
     return (
       stylePreset.palette === "custom" &&
-      String(stylePreset.accentHex ?? "").toLowerCase() ===
-      option.accentHex.toLowerCase()
+      normalizeCvAccentHex(stylePreset.accentHex) ===
+      normalizeCvAccentHex(option.accentHex)
     );
   });
+  const customAccentHex =
+    stylePreset.palette === "custom"
+      ? normalizeCvAccentHex(stylePreset.accentHex)
+      : null;
+  const fixedAccentHexMatch = ACCENT_OPTIONS.some(
+    (option) =>
+      stylePreset.palette === "custom" &&
+      customAccentHex === normalizeCvAccentHex(option.accentHex),
+  );
+  const isCustomAccentSelected =
+    Boolean(customAccentHex) && !fixedAccentHexMatch;
+  const customAccentColor =
+    isCustomAccentSelected && customAccentHex
+      ? customAccentHex
+      : CV_CUSTOM_ACCENT_STARTER_HEX;
   const isAiRunning = aiSuggestion?.state === "loading";
   const streamState = "active";
   const streamCount = "2 of 3";
@@ -914,19 +957,69 @@ export function CvRail({
         <div className="dasti-cv-rail-pane" data-rail-pane="style">
           <div className="dasti-cv-style-note">
             Default settings{" "}
-            <a className="dasti-cv-rail-link" href="/settings">
+            <a className="dasti-cv-rail-link" href="/settings?tab=docstyle">
               → Document style
             </a>
             .
           </div>
+          <div className="dasti-cv-rail-label">Style</div>
+          <div className="dasti-cv-style-pills" aria-label="CV style presets">
+            {([1, 2, 3] as const).map((slot) => (
+              <button
+                key={slot}
+                type="button"
+                data-selected={selectedStyleSlot === slot ? "true" : undefined}
+                aria-pressed={selectedStyleSlot === slot}
+                onClick={() => onSelectStyleSlot(slot)}
+              >
+                {`Style ${slot}${selectedStyleSlot === slot && selectedStyleSlotIsCustom ? " · Custom" : ""}`}
+              </button>
+            ))}
+          </div>
+          {selectedStyleSlot && selectedStyleSlotIsCustom && onResetStyleSlot ? (
+            <button
+              type="button"
+              className="dasti-cv-rail-secondary-action"
+              onClick={onResetStyleSlot}
+            >
+              Reset Style {selectedStyleSlot}
+            </button>
+          ) : null}
           <div className="dasti-cv-rail-label">Template</div>
           <div className="dasti-cv-style-pills">
             <button
               type="button"
-              data-selected={stylePreset.layout === "workshop" ? "true" : undefined}
-              onClick={() => onSelectTemplate("editorial")}
+              data-selected={
+                stylePreset.layout === "workshop" &&
+                (stylePreset.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) ===
+                  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID
+                  ? "true"
+                  : undefined
+              }
+              aria-pressed={
+                stylePreset.layout === "workshop" &&
+                (stylePreset.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) ===
+                  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID
+              }
+              onClick={() => onSelectTemplate("workshop-onecol")}
             >
               Workshop
+            </button>
+            <button
+              type="button"
+              data-selected={
+                stylePreset.layout === "workshop" &&
+                stylePreset.resumeTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+                  ? "true"
+                  : undefined
+              }
+              aria-pressed={
+                stylePreset.layout === "workshop" &&
+                stylePreset.resumeTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+              }
+              onClick={() => onSelectTemplate("workshop-twocol")}
+            >
+              Workshop 2-col
             </button>
           </div>
           <div className="dasti-cv-rail-label">Font pair</div>
@@ -935,7 +1028,11 @@ export function CvRail({
             onSelectFontPair={onSelectFontPair}
           />
           <div className="dasti-cv-rail-label">Accent</div>
-          <div className="dasti-cv-style-swatches" aria-label="Accent colors">
+          <div
+            ref={customColorSurfaceRef}
+            className="dasti-cv-style-swatches"
+            aria-label="Accent colors"
+          >
             {ACCENT_OPTIONS.map((swatch) => (
               <button
                 key={swatch.id}
@@ -949,12 +1046,50 @@ export function CvRail({
                 aria-label={`Use ${swatch.label} accent`}
                 aria-pressed={activeAccent?.id === swatch.id}
                 data-selected={activeAccent?.id === swatch.id ? "true" : undefined}
-                onClick={() => onSelectAccent(swatch.id)}
+                onClick={() => {
+                  setIsCustomColorPickerOpen(false);
+                  onSelectAccent(swatch.id);
+                }}
               >
                 {activeAccent?.id === swatch.id ? <Check size={12} strokeWidth={1.9} /> : null}
               </button>
             ))}
-          </div>
+              <button
+                ref={customColorAnchorRef}
+                type="button"
+                className={[
+                  "dasti-cv-style-swatch",
+                  "dasti-cv-style-swatch--custom",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              style={
+                {
+                  "--cv-accent-swatch": customAccentColor,
+                } as React.CSSProperties
+              }
+              aria-label="Open custom color picker"
+              aria-pressed={isCustomAccentSelected}
+              data-selected={isCustomAccentSelected ? "true" : undefined}
+              title={
+                isCustomAccentSelected
+                  ? `Custom accent ${customAccentColor}`
+                  : "Open custom color picker"
+              }
+                onClick={() => setIsCustomColorPickerOpen(true)}
+              >
+                {isCustomAccentSelected ? <Check size={12} strokeWidth={1.9} aria-hidden="true" /> : null}
+              </button>
+            </div>
+          <ProposalColorPickerPopover
+            currentHex={customAccentColor}
+            anchorRef={customColorAnchorRef}
+            surfaceAnchorRef={customColorSurfaceRef}
+            horizontalAlign="center"
+            isOpen={isCustomColorPickerOpen}
+            onClose={() => setIsCustomColorPickerOpen(false)}
+            onHexChange={onSelectCustomAccent}
+          />
         </div>
       ) : null}
 

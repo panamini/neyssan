@@ -224,6 +224,7 @@ export function ProposalPrintPage(): JSX.Element {
           headerVisibility={payload.headerVisibility}
           documentTypography={documentTypography}
           signatureSettings={payload.signatureSettings}
+          closing={payload.closing}
           pageWidth={A4_PAGE_WIDTH_PX}
           pageGapPx={0}
           onPageCountChange={setPageCount}

@@ -1,5 +1,9 @@
 import type React from "react";
 import type { CvDocument } from "../../types/cvDocument";
+import {
+  getFactoryDocumentStyleSlot,
+  resolveDocumentStyleSlotId,
+} from "../../lib/document-style-slots";
 import type { ProposalTemplateId } from "../../../convex/lib/proposals/renderTemplates";
 import type { ResumeLayoutVariantId } from "./resume/resume.types";
 import {
@@ -34,12 +38,16 @@ import type {
   VerbatiStylePreset,
   VerbatiTypographyPreset,
 } from "./types";
-import type { ResumeTemplateId } from "../../lib/layout/resumeTemplates";
+import {
+  isWorkshopResumeTemplateId,
+  type ResumeTemplateId,
+} from "../../lib/layout/resumeTemplates";
 
 type LayoutOption = {
   id: StyleFamilyId;
   name: string;
   description: string;
+  resumeTemplateId?: ResumeTemplateId;
 };
 
 type TypographyOption = VerbatiFontPairOption;
@@ -58,13 +66,20 @@ export const DEFAULT_VERBATI_STYLE: VerbatiStylePreset = {
 
 const ACTIVE_VERBATI_LAYOUT_FAMILIES = new Set<StyleFamilyId>(["workshop"]);
 
-export const VERBATI_LAYOUT_OPTIONS: LayoutOption[] = STYLE_FAMILY_DEFINITIONS.map(
-  (family) => ({
+export const VERBATI_LAYOUT_OPTIONS: LayoutOption[] = [
+  ...STYLE_FAMILY_DEFINITIONS.map((family) => ({
     id: family.id,
     name: family.label,
     description: family.description,
-  }),
-).filter((option) => ACTIVE_VERBATI_LAYOUT_FAMILIES.has(option.id));
+    resumeTemplateId: family.resumeTemplateId,
+  })).filter((option) => ACTIVE_VERBATI_LAYOUT_FAMILIES.has(option.id)),
+  {
+    id: "workshop",
+    name: "Workshop two-column",
+    description: "Workshop ATS layout with a 17/18-inspired two-column grid.",
+    resumeTemplateId: "workshop_resume_twocol_ats",
+  },
+];
 
 export const VERBATI_TYPOGRAPHY_OPTIONS: TypographyOption[] = [
   ...VERBATI_FONT_PAIR_OPTIONS,
@@ -128,6 +143,14 @@ function sanitizePersistedVerbatiLayout(
   return sanitizePersistedVerbatiFamilyId(value);
 }
 
+function sanitizePersistedResumeTemplateId(
+  value: unknown,
+): ResumeTemplateId | null {
+  return isWorkshopResumeTemplateId(value as ResumeTemplateId)
+    ? (value as ResumeTemplateId)
+    : null;
+}
+
 function sanitizePersistedVerbatiPalette(
   value: unknown,
 ): VerbatiStylePreset["palette"] | null {
@@ -148,10 +171,34 @@ export function getLayoutLabel(preset: VerbatiLayoutPreset): string {
 export function getVerbatiStyleFromCv(
   doc: CvDocument | null | undefined,
 ): VerbatiStylePreset {
-  const candidate = (doc?.metadata as Record<string, unknown> | undefined)
-    ?.verbatiStyle as Partial<VerbatiStylePreset> | undefined;
+  const metadata = doc?.metadata as Record<string, unknown> | undefined;
+  const candidate = metadata?.verbatiStyle as
+    | Partial<VerbatiStylePreset>
+    | undefined;
+  const sanitizedCandidate = sanitizePersistedVerbatiStyle(candidate);
+  if (sanitizedCandidate) return sanitizedCandidate;
 
-  return sanitizePersistedVerbatiStyle(candidate) ?? resolveVerbatiStyle(candidate);
+  const baseSnapshot = metadata?.verbatiStyleBaseSnapshot as
+    | Partial<VerbatiStylePreset>
+    | undefined;
+  const sanitizedBaseSnapshot = sanitizePersistedVerbatiStyle({
+    ...baseSnapshot,
+    ...(candidate?.resumeTemplateId
+      ? { resumeTemplateId: candidate.resumeTemplateId }
+      : null),
+  });
+  if (sanitizedBaseSnapshot) return sanitizedBaseSnapshot;
+
+  const slotId = resolveDocumentStyleSlotId(metadata?.verbatiStyleSlotId);
+  if (slotId) {
+    const factorySlot = getFactoryDocumentStyleSlot(slotId);
+    return resolveVerbatiStyle({
+      ...factorySlot.appearance,
+      resumeTemplateId: candidate?.resumeTemplateId ?? factorySlot.defaultCvTemplateId,
+    });
+  }
+
+  return resolveVerbatiStyle(candidate);
 }
 
 export function sanitizePersistedVerbatiStyle(
@@ -168,11 +215,16 @@ export function sanitizePersistedVerbatiStyle(
     return null;
   }
 
+  const resumeTemplateId = sanitizePersistedResumeTemplateId(
+    safeCandidate.resumeTemplateId,
+  );
+
   return {
     familyId,
     layout: familyId,
     typography,
     palette,
+    ...(resumeTemplateId ? { resumeTemplateId } : {}),
     accentHex:
       palette === "custom"
         ? normalizeVerbatiAccentHex(
@@ -203,11 +255,16 @@ export function resolveVerbatiStyle(
     family.defaultPalette ??
     DEFAULT_VERBATI_STYLE.palette;
 
+  const resumeTemplateId = sanitizePersistedResumeTemplateId(
+    safeCandidate.resumeTemplateId,
+  );
+
   return {
     familyId,
     layout: family.id,
     typography,
     palette: paletteOption,
+    ...(resumeTemplateId ? { resumeTemplateId } : {}),
     accentHex:
       paletteOption === "custom"
         ? normalizeVerbatiAccentHex(
@@ -243,10 +300,12 @@ export function getProposalTwinTemplateId(
 export function getResumeTemplateId(
   style: VerbatiStylePreset | null | undefined,
 ): ResumeTemplateId {
-  return getStyleFamilyResumeTemplateId(
-    resolveStyleFamilyFromStyle(
-      style ? resolveVerbatiStyle(style) : DEFAULT_VERBATI_STYLE,
-    ).id,
+  const resolvedStyle = style ? resolveVerbatiStyle(style) : DEFAULT_VERBATI_STYLE;
+  return (
+    sanitizePersistedResumeTemplateId(resolvedStyle.resumeTemplateId) ??
+    getStyleFamilyResumeTemplateId(
+      resolveStyleFamilyFromStyle(resolvedStyle).id,
+    )
   );
 }
 
@@ -316,7 +375,9 @@ export function stylesEqual(
     normalizedLeft.typography === normalizedRight.typography &&
     normalizedLeft.palette === normalizedRight.palette &&
     String(normalizedLeft.accentHex ?? "") ===
-      String(normalizedRight.accentHex ?? "")
+      String(normalizedRight.accentHex ?? "") &&
+    String(normalizedLeft.resumeTemplateId ?? "") ===
+      String(normalizedRight.resumeTemplateId ?? "")
   );
 }
 

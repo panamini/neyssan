@@ -287,6 +287,6 @@ describe("EmbeddedStyleInspector", () => {
 
     expect(onSelectLayout).toHaveBeenCalledWith("workshop");
     expect(onSelectTypography).toHaveBeenCalledWith("soft-serif");
-    expect(onSelectPalette).toHaveBeenCalledWith("encre");
+    expect(onSelectPalette).toHaveBeenCalledWith("ink");
   });
 });

@@ -74,6 +74,18 @@ describe("proposalsPublic", () => {
             formalityLevel: "neutral",
             creativity: "medium",
             proposalType: "cover_letter",
+            templateBundleId: "magazine_editorial",
+            verbatiStyleSlotId: 2,
+            verbatiStyleSlotSource: "settings",
+            verbatiStyleSlotNameSnapshot: "Style 2",
+            verbatiStyleBaseSnapshot: {
+              familyId: "workshop",
+              layout: "workshop",
+              typography: "civic-correspondence",
+              palette: "cobalt",
+              extra_nested_runtime_only: "should_not_escape",
+            },
+            documentStyleVersion: 1,
             extra_runtime_only: "should_not_escape",
           },
           metrics: { score: 0.8, confidence: 0.9 },
@@ -99,10 +111,24 @@ describe("proposalsPublic", () => {
         fallback_reason: "rollout_disabled",
         validator_outcome: "legacy_verified_clean",
         save_outcome: "legacy_saved_parsed",
+        templateBundleId: "magazine_editorial",
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "settings",
+        verbatiStyleSlotNameSnapshot: "Style 2",
+        verbatiStyleBaseSnapshot: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "civic-correspondence",
+          palette: "cobalt",
+        },
+        documentStyleVersion: 1,
       },
     });
     expect(result[1]).not.toHaveProperty("otherFutureField");
     expect(result[1].metadata).not.toHaveProperty("extra_runtime_only");
+    expect(result[1].metadata.verbatiStyleBaseSnapshot).not.toHaveProperty(
+      "extra_nested_runtime_only",
+    );
   });
 
   it("keeps multiple generated draft variants for the same job visible as separate library rows", async () => {
