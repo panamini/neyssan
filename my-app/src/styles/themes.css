@@ -19,10 +19,10 @@
 .dark.pal-terre,
 .dark .pal-terre {
   --ac: #A15A42;
-  --am: #D47554;
-  --ap: rgba(212, 117, 84, 0.14);
-  --as: rgba(212, 117, 84, 0.20);
-  --fr: #D47554;
+  --am: #D8805F;                       /* desat'd accent for dark, Onyx Crisp */
+  --ap: rgba(216, 128, 95, 0.14);
+  --as: rgba(216, 128, 95, 0.20);
+  --fr: #D8805F;
   --color-on-accent: #0E0E0E;
   --op: var(--color-on-accent);
 }
