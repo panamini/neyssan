@@ -1556,3 +1556,11 @@
     flex: 1 1 auto;
   }
 }
+
+/* Dark anti-blooming: soften chrome/UI labels without changing light mode. */
+.dark .dasti-proposal-library-sidebar__eyebrow,
+.dark .dasti-library-card__eyebrow,
+.dark .dasti-template-card__title,
+.dark .dasti-doc-card--proposal-library .dasti-proposal-tone-badge--compact {
+  font-weight: 640;
+}

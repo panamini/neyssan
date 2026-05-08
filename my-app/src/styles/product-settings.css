@@ -1893,24 +1893,7 @@
   align-items: center;
 }
 
-.settings-theme-toggle-shell {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
 .settings-token-switch-shell[data-toolbar-tooltip] {
-  --dasti-toolbar-tooltip-inset-block-start: calc(100% + 8px);
-  --dasti-toolbar-tooltip-inset-block-end: auto;
-  --dasti-toolbar-tooltip-inset-inline-start: 50%;
-  --dasti-toolbar-tooltip-transform-hidden: translate(-50%, -2px);
-  --dasti-toolbar-tooltip-transform-visible: translate(-50%, 0);
-  --dasti-toolbar-tooltip-text-align: center;
-  --dasti-toolbar-tooltip-justify-items: center;
-}
-
-.settings-theme-toggle-shell[data-toolbar-tooltip] {
   --dasti-toolbar-tooltip-inset-block-start: calc(100% + 8px);
   --dasti-toolbar-tooltip-inset-block-end: auto;
   --dasti-toolbar-tooltip-inset-inline-start: 50%;
@@ -1941,33 +1924,6 @@
 .settings-token-switch .dasti-theme-switch__label {
   min-width: 7ch;
   text-align: left;
-}
-
-.settings-theme-toggle__switch {
-  min-width: 0;
-  padding-inline: var(--space-2);
-  justify-content: center;
-  gap: 0;
-}
-
-.settings-theme-toggle__endpoint {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--tm2);
-  font-size: var(--tx);
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.settings-theme-toggle__endpoint--active {
-  color: var(--ti);
-  font-weight: var(--font-label-weight);
-}
-
-.settings-theme-toggle__icon {
-  width: 14px;
-  height: 14px;
 }
 
 .settings__tone-row[data-active="true"],
@@ -3827,4 +3783,19 @@ button.dasti-settings-signature-tool:focus-visible {
 .styleforge-color-popover {
   animation: styleforge-frost-fade 0.18s var(--ez) both;
   transform-origin: center bottom;
+}
+
+/* Dark anti-blooming: soften chrome/UI labels, titles, and badges without changing light mode. */
+.dark .dasti-settings-page__title,
+.dark .dasti-settings-preview-card__eyebrow,
+.dark .dasti-template-gallery__eyebrow,
+.dark .dasti-template-gallery__title,
+.dark .dasti-template-card__title,
+.dark .onb-replay__style-preview-title,
+.dark .dasti-settings-slot-card__active-badge,
+.dark .dasti-settings-signature-card__label,
+.dark .dasti-settings-signature-current__label,
+.dark .dasti-settings-hero-preview__kicker,
+.dark .styleforge-active-color-card__eyebrow {
+  font-weight: 640;
 }

@@ -1432,3 +1432,10 @@ textarea.dasti-field {
     justify-content: flex-end;
   }
 }
+
+/* Dark anti-blooming: soften chrome/UI labels without changing light mode. */
+.dark .dasti-text-overline,
+.dark .dasti-stack__eyebrow,
+.dark .dasti-pill {
+  font-weight: 640;
+}

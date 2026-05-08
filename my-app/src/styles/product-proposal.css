@@ -7896,37 +7896,26 @@
 }
 
 .dasti-proposal-skeleton-rail__style-swatch--custom {
-  background: var(--proposal-accent-swatch);
-  color: var(--paper);
-}
-
-.dasti-proposal-skeleton-rail__style-swatch--icon {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
   color: var(--tm2);
 }
 
-.dasti-proposal-skeleton-rail__style-swatch--icon:hover,
-.dasti-proposal-skeleton-rail__style-swatch--icon:focus-within {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--sf1) 72%, transparent);
+.dasti-proposal-skeleton-rail__style-swatch--custom:not([data-selected="true"]) {
+  color: var(--ti);
+  background:
+    conic-gradient(
+      from 0deg,
+      #d95843,
+      #d9a441,
+      #4f9d68,
+      #2a78d6,
+      #7a4fa0,
+      #d95843
+    );
 }
 
-.dasti-proposal-skeleton-rail__style-swatch-wheel {
-  width: 100%;
-  height: 100%;
-  display: block;
-  pointer-events: none;
-  transform: scale(1.3);
-  transform-box: fill-box;
-  transform-origin: center;
-  filter: saturate(0.34) opacity(0.68);
-}
-
-.dasti-proposal-skeleton-rail__style-swatch--icon:hover .dasti-proposal-skeleton-rail__style-swatch-wheel,
-.dasti-proposal-skeleton-rail__style-swatch--icon:focus-within .dasti-proposal-skeleton-rail__style-swatch-wheel {
-  filter: saturate(0.54) opacity(0.86);
+.dasti-proposal-skeleton-rail__style-swatch--custom[data-selected="true"] {
+  background: var(--proposal-accent-swatch);
+  color: var(--paper);
 }
 
 .dasti-proposal-skeleton-rail__cv-button {
@@ -9000,4 +8989,21 @@
 .dasti-proposal-skeleton-rail__ask-hub .dasti-proposal-skeleton-rail__length-select:focus-visible .dasti-proposal-skeleton-rail__chevron,
 .dasti-proposal-skeleton-rail__ask-hub .dasti-proposal-skeleton-rail__tone-select:focus-visible .dasti-proposal-skeleton-rail__chevron {
   color: var(--ti);
+}
+
+/* Dark anti-blooming: soften chrome/UI labels, titles, chips, and tooltips without changing document paper. */
+.dark .dasti-proposal-compose-shell__status-heading,
+.dark .dasti-proposal-editor-page__drawer-kicker,
+.dark .dasti-proposal-editor-page__field-label,
+.dark .dasti-artifact-inspector__tooltip strong,
+.dark .dasti-brief-card__document-title,
+.dark .dasti-brief-card__source-kicker,
+.dark .dasti-brief-card__pill,
+.dark .dasti-brief-card__summary-label,
+.dark .dasti-brief-card__review-label,
+.dark .dasti-brief-card__review-chip,
+.dark .dasti-compose-toolbar__job-link-label,
+.dark .dasti-proposal-skeleton-rail__label,
+.dark .dasti-proposal-toolbar [data-toolbar-tooltip] {
+  font-weight: 640;
 }

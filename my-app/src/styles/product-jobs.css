@@ -1099,3 +1099,11 @@
     justify-content: flex-start;
   }
 }
+
+/* Dark anti-blooming: soften chrome/UI labels and badges without changing light mode. */
+.dark .dasti-job-match-panel .ds-card__eyebrow,
+.dark .dasti-jobs-sample-badge,
+.dark .dasti-jobs-match-chip,
+.dark .dasti-jobs-row__meta-pill {
+  font-weight: 640;
+}
