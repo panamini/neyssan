@@ -279,11 +279,16 @@ describe("ProposalForge draft persistence", () => {
       );
     });
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "empty|preview",
+      "|edit",
     );
     expect(screen.getByText("No job loaded")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
-    expect(readStoredProposalOutputDraft()).toBeNull();
+    expect(readStoredProposalOutputDraft()).toMatchObject({
+      generatedProposalId: null,
+      proposalContent: "",
+      proposalOutputMode: "edit",
+      sourceComposeDraft: null,
+    });
     expect(
       JSON.parse(
         window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
