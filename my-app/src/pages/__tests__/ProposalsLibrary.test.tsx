@@ -24,6 +24,7 @@ const SAVED_PROPOSALS = [
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigateMock,
+  useLocation: () => ({ search: "" }),
 }));
 
 vi.mock("@clerk/clerk-react", () => ({

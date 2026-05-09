@@ -2249,8 +2249,57 @@ body,
 
 .dash-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-4);
+}
+
+.dash-action-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+
+.dash-stat,
+.dash-action-card {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-inline);
+  background: var(--sf2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dash-action-card {
+  display: grid;
+  gap: var(--space-2);
+  background: var(--sfr);
+}
+
+.dash-stat__top,
+.dash-action-card__top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dash-action-card__top .dash-stat__label {
+  margin-top: 0;
+}
+
+.dash-action-card__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  min-height: 32px;
+  margin-top: var(--space-3);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--sf1);
+  color: var(--ti);
+  font: var(--type-small-strong);
 }
 
 .dash-stat__num {
@@ -2265,19 +2314,51 @@ body,
   font: var(--type-small);
 }
 
+.dash-stat__desc {
+  margin-top: var(--space-2);
+  color: var(--color-text-subtle);
+  font: var(--type-small);
+}
+
 .dash-list {
   display: grid;
   gap: var(--space-1);
 }
 
+.dash-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.dash-section-note {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font: var(--type-small);
+}
+
 .dash-row {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(120px, max-content) minmax(0, 1fr);
   gap: var(--space-3);
   align-items: center;
+  width: 100%;
   min-height: 48px;
   padding: var(--space-2) 0;
   border-top: 1px solid var(--border-soft);
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dash-row > .ds-status {
+  justify-content: center;
+  width: 100%;
+  white-space: nowrap;
 }
 
 .dash-row:first-child {

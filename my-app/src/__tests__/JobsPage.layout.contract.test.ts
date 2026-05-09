@@ -54,7 +54,7 @@ describe("JobsPage collapsed layout contract", () => {
     expect(jobsListSource).toContain("openExternalJobCaptureLink");
     expect(jobsListSource).not.toContain("onClick={onImportFirstJob}");
     expect(jobsListSource).toContain("+ Filters");
-    expect(jobsListSource).toContain("Worth it");
+    expect(jobsListSource).toContain("Worth a shot");
     expect(jobsListSource).toContain("New");
     expect(jobsListSource).toContain("Favorites");
     expect(jobsListSource).toContain("Remote");

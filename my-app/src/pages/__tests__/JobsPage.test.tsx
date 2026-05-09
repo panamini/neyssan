@@ -2183,7 +2183,7 @@ describe("JobsPage", () => {
     expect(
       screen.queryByRole("button", { name: "Capture with extension" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Worth it" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Worth a shot" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Favorites" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "+ Filters" })).toBeInTheDocument();
@@ -2362,7 +2362,7 @@ describe("JobsPage", () => {
     expect(
       within(jobsListElement).getByText("Support Specialist"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Worth it" })).not.toHaveClass(
+    expect(screen.getByRole("button", { name: "Worth a shot" })).not.toHaveClass(
       "dasti-jobs-filter-chip--active",
     );
     expect(screen.getByRole("button", { name: "+ Filters" })).toBeEnabled();
@@ -2378,7 +2378,7 @@ describe("JobsPage", () => {
       within(supportRow as HTMLElement).getByLabelText("Favorite"),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Worth it" }));
+    fireEvent.click(screen.getByRole("button", { name: "Worth a shot" }));
 
     await waitFor(() => {
       expect(

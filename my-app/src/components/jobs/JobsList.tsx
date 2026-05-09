@@ -326,7 +326,7 @@ export function JobsList({
                 )
               }
             >
-              Worth it
+              Worth a shot
             </FilterChip>
             <FilterChip
               isActive={needsReviewOnly}
@@ -379,7 +379,7 @@ export function JobsList({
                     },
                     {
                       id: "worth-it",
-                      label: "Worth it",
+                      label: "Worth a shot",
                       role: "menuitemradio",
                       selected: matchFilter === "worth_plus",
                       onSelect: () => onMatchFilterChange("worth_plus"),

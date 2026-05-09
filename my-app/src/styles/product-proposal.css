@@ -8565,6 +8565,31 @@
   gap: var(--space-2);
 }
 
+.dasti-proposal-safe-send__group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.dasti-proposal-safe-send__group-title {
+  color: var(--tm1);
+  font: var(--type-small-strong);
+}
+
+.dasti-proposal-safe-send__group--system .dasti-proposal-safe-send__row {
+  background: var(--sf1);
+}
+
+.dasti-proposal-safe-send__group--cleared .dasti-proposal-safe-send__row {
+  background: var(--sf1);
+  opacity: 0.82;
+}
+
+.dasti-proposal-safe-send__empty {
+  margin: 0;
+  color: var(--tm2);
+  font: var(--type-small);
+}
+
 .dasti-proposal-safe-send__row {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
