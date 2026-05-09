@@ -4668,7 +4668,9 @@ export function ProposalForge(): JSX.Element {
   const handleNewProposalDraft = React.useCallback(() => {
     startFreshProposalWorkspace();
     resetProposalWorkspace();
+    setProposalContent("");
     setProposalLibraryStatus("draft");
+    setProposalOutputMode("edit");
     setComposeFormInstanceKey((currentKey) => currentKey + 1);
     void navigate("/proposal", { replace: true, state: null });
   }, [navigate, resetProposalWorkspace]);
