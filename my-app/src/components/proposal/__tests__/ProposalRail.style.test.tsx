@@ -127,7 +127,7 @@ describe("ProposalRail style tab", () => {
     expect(within(actions).getByRole("button", { name: "Delete proposal" })).toBeDisabled();
   });
 
-  it("opens the empty job context drawer and orders job site tokens for a new blank proposal", () => {
+  it("opens the empty job context drawer with a clear empty hierarchy", () => {
     const onOpenJobs = vi.fn();
 
     render(
@@ -143,7 +143,9 @@ describe("ProposalRail style tab", () => {
       />,
     );
 
-    expect(screen.getByPlaceholderText("Paste your job offer here")).toBeInTheDocument();
+    expect(screen.getByText("No job loaded")).toBeInTheDocument();
+    expect(screen.getByText("Capture, paste, or choose a job.")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Paste a job offer...")).toBeInTheDocument();
 
     const jobSites = screen.getByLabelText("Job sites");
     expect(
@@ -152,16 +154,11 @@ describe("ProposalRail style tab", () => {
         .map((link) => link.textContent),
     ).toEqual(["LinkedIn", "Indeed", "Upwork", "ZipRecruiter", "Hellowork"]);
 
-    expect(screen.getByText("No job loaded")).toBeInTheDocument();
-    expect(
-      screen.getByText("Paste a job offer or choose one from Job Forge."),
-    ).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole("button", { name: "Choose from Job Forge" }));
     expect(onOpenJobs).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps pasted job text visible while exposing clear job context", () => {
+  it("shows pasted job text as a compact context with edit and clear actions", () => {
     const onClearJobContext = vi.fn();
 
     const { rerender } = render(
@@ -178,6 +175,7 @@ describe("ProposalRail style tab", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Clear job context" })).toBeNull();
+    expect(screen.getByLabelText("Job sites")).toBeInTheDocument();
 
     rerender(
       <ProposalRail
@@ -193,11 +191,93 @@ describe("ProposalRail style tab", () => {
       />,
     );
 
-    expect(screen.getByPlaceholderText("Paste your job offer here")).toHaveValue(
+    expect(screen.getByText("Job offer added")).toBeInTheDocument();
+    expect(screen.getAllByText("Pasted context")).toHaveLength(2);
+    expect(
+      screen.getByText("Write support workflows and coordinate customer operations."),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Job sites")).toBeNull();
+    expect(screen.queryByPlaceholderText("Paste a job offer...")).toBeNull();
+    expect(screen.getByRole("button", { name: "Edit job text" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit job text" }));
+    expect(screen.getByLabelText("Edit pasted job offer")).toHaveValue(
       "Write support workflows and coordinate customer operations.",
     );
-    expect(screen.getByText("Untitled job offer")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Clear job context" }));
+    expect(onClearJobContext).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the job textarea open after typing the first character", () => {
+    const onJobOfferTextChange = vi.fn();
+
+    const { rerender } = render(
+      <ProposalRail
+        {...baseProps}
+        jobTitle=""
+        company={null}
+        location={null}
+        jobHref={null}
+        sourceUrl={null}
+        jobSummary={null}
+        jobOfferText=""
+        onJobOfferTextChange={onJobOfferTextChange}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Paste a job offer"), {
+      target: { value: "a" },
+    });
+
+    rerender(
+      <ProposalRail
+        {...baseProps}
+        jobTitle=""
+        company={null}
+        location={null}
+        jobHref={null}
+        sourceUrl={null}
+        jobSummary={null}
+        jobOfferText="a"
+        onJobOfferTextChange={onJobOfferTextChange}
+      />,
+    );
+
+    expect(screen.getByLabelText("Edit pasted job offer")).toHaveValue("a");
+    expect(document.querySelector(".dasti-proposal-skeleton-rail__job-preview")).toBeNull();
+    expect(onJobOfferTextChange).toHaveBeenCalledWith("a");
+  });
+
+  it("shows loaded Job Forge context with change and clear actions", () => {
+    const onOpenJobs = vi.fn();
+    const onClearJobContext = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        jobTitle="Senior Product Designer"
+        company="Studio Vale"
+        location="Remote"
+        sourceLabel="LinkedIn"
+        sourceUrl="https://www.linkedin.com/jobs/view/123"
+        jobSummary="Lead proposal workflows and collaborate with product engineering."
+        onOpenJobs={onOpenJobs}
+        onClearJobContext={onClearJobContext}
+      />,
+    );
+
+    expect(screen.getByText("Senior Product Designer")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Job context/i }));
+    expect(screen.getByText("Studio Vale · LinkedIn · Remote")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Lead proposal workflows and collaborate with product engineering."),
+    ).toHaveLength(2);
+    expect(screen.queryByLabelText("Job sites")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change job" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear job context" }));
+
+    expect(onOpenJobs).toHaveBeenCalledTimes(1);
     expect(onClearJobContext).toHaveBeenCalledTimes(1);
   });
 

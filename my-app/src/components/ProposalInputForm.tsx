@@ -660,9 +660,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const selectedProposalType = form.watch("proposalType");
   const selectedVoicePreset = form.watch("voicePreset");
 
-  React.useEffect(() => {
+  const syncExternalComposeDraftToForm = React.useCallback(() => {
     if (!externalComposeDraft) {
-      return;
+      return form.getValues("jobDescription");
     }
 
     if (typeof externalComposeDraft.jobTitle === "string") {
@@ -686,11 +686,17 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
         });
       }
     }
+
+    return form.getValues("jobDescription");
   }, [
     externalComposeDraft?.jobDescription,
     externalComposeDraft?.jobTitle,
     form,
   ]);
+
+  React.useEffect(() => {
+    syncExternalComposeDraftToForm();
+  }, [syncExternalComposeDraftToForm]);
 
   React.useEffect(() => {
     updateComposeScrollEdges();
@@ -1523,7 +1529,9 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       return;
     }
 
-    if (watchedJobDescription.length < 10 || !canSubmitGeneration) {
+    const latestJobDescription = syncExternalComposeDraftToForm();
+
+    if (latestJobDescription.length < 10 || !canSubmitGeneration) {
       return;
     }
 
@@ -1537,7 +1545,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     onStop,
     requestProposalGenerationCancel,
     requestGenerateButtonReverseSequence,
-    watchedJobDescription.length,
+    syncExternalComposeDraftToForm,
   ]);
 
   React.useEffect(() => {
