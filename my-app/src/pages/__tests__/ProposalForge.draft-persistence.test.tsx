@@ -253,9 +253,40 @@ describe("ProposalForge draft persistence", () => {
     ).toEqual({});
   });
 
-  it("starts a truly fresh workspace when New proposal is clicked", async () => {
-    const pastedJobOffer =
-      "Own proposal operations, coordinate client requirements, and prepare application documents from raw job briefs.";
+  it("starts a truly fresh Workshop workspace when New proposal is clicked", async () => {
+    window.localStorage.setItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY, "cv_alpha");
+    writeStoredProposalOutputDraft({
+      proposalContent: "Prior generated proposal.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: "swiss_margin",
+      proposalVerbatiStyle: {
+        familyId: "swiss",
+        layout: "swiss",
+        typography: "signature",
+        palette: "sauge",
+      },
+      proposalStyleLinkMode: "inherit_cv",
+      proposalStyleChoice: "auto",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Prior proposal",
+      proposalDocumentMeta: "Cover letter",
+      generatedProposalId: "proposal_live",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: "swiss_serif",
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: true,
+      characterLimitMode: null,
+      characterLimitValue: null,
+      sourceComposeDraft: {
+        jobTitle: "Prior role",
+        jobDescription: "Prior job context should not survive.",
+      },
+    });
 
     render(
       <MemoryRouter initialEntries={["/proposal?draftId=proposal_live"]}>
@@ -263,12 +294,8 @@ describe("ProposalForge draft persistence", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Paste your job offer here"), {
-      target: { value: pastedJobOffer },
-    });
-
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Generate" })).not.toBeDisabled();
+      expect(screen.getAllByText("Prior role").length).toBeGreaterThan(0);
     });
 
     fireEvent.click(screen.getByRole("button", { name: "New proposal" }));
@@ -287,13 +314,22 @@ describe("ProposalForge draft persistence", () => {
       generatedProposalId: null,
       proposalContent: "",
       proposalOutputMode: "edit",
+      proposalType: "cover_letter",
+      proposalStyleLinkMode: "proposal_local",
+      proposalTemplateId: "workshop_proposal_margin",
+      proposalVerbatiStyle: expect.objectContaining({
+        familyId: "workshop",
+        layout: "workshop",
+      }),
       sourceComposeDraft: null,
+      templateBundleId: null,
     });
     expect(
       JSON.parse(
         window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
       ),
     ).toEqual({});
+    expect(window.localStorage.getItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY)).toBeNull();
   });
 
   it("restores generated output without restoring its source as active job context", () => {
