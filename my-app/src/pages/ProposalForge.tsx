@@ -390,10 +390,11 @@ function estimateProposalRailPageCount(
   );
 }
 
-function resolveLiveProposalLengthLabel(
+export function resolveLiveProposalLengthLabel(
   content: string | null | undefined,
-): string {
-  const characterCount = content?.length ?? 0;
+): string | null {
+  const characterCount = content?.trim().length ?? 0;
+  if (characterCount === 0) return null;
   if (characterCount <= 1400) return "concise";
   if (characterCount <= 2600) return "standard";
   return "detailed";
@@ -8367,9 +8368,11 @@ export function ProposalForge(): JSX.Element {
     return [liveLengthLabel, pageMetric].filter(Boolean).join(" · ");
   }, [proposalContent]);
   const proposalDraftStatusTitle = React.useMemo(() => {
-    const characterCount = proposalContent?.length ?? 0;
+    const characterCount = proposalContent?.trim().length ?? 0;
+    if (characterCount === 0) return null;
     return `Draft length: ${characterCount.toLocaleString()} chars`;
   }, [proposalContent]);
+  const hasMeaningfulProposalContent = Boolean(proposalContent?.trim());
   const handleProposalRailLengthSelect = React.useCallback(
     (lengthId: "short" | "medium" | "long") => {
       const nextValue =
@@ -9141,7 +9144,7 @@ export function ProposalForge(): JSX.Element {
                           ? handleClearJobContext
                           : undefined
                       }
-                      hasProposalContent={Boolean(proposalContent)}
+                      hasProposalContent={hasMeaningfulProposalContent}
                       generateLabel={composeGenerateControl.label}
                       generateDisabled={
                         composeGenerateControl.disabled ||
@@ -9157,10 +9160,10 @@ export function ProposalForge(): JSX.Element {
                       }}
                       askAiValue={railAskAiValue}
                       askAiBusy={railAskAiBusy}
-                      askAiDisabled={!proposalContent}
+                      askAiDisabled={!hasMeaningfulProposalContent}
                       askAiPlaceholder="Make this more concrete, warmer, shorter…"
                       askAiHint={
-                        proposalContent
+                        hasMeaningfulProposalContent
                           ? "Applies to current draft."
                           : "Generate a draft first."
                       }
@@ -9305,11 +9308,11 @@ export function ProposalForge(): JSX.Element {
                         toneValue={proposalRailToneValue}
                         mode={proposalOutputMode}
                         exporting={proposalExportingFormat !== null}
-                        hasProposalContent={Boolean(proposalContent)}
+                        hasProposalContent={hasMeaningfulProposalContent}
                         styleControl={null}
                         sourceJobLinked={hasActiveProposalJobContext}
                         sourceCvSelected={Boolean(attachedCvId)}
-                        proposalLinked={Boolean(proposalContent)}
+                        proposalLinked={hasMeaningfulProposalContent}
                         matchReviewAccepted={resolveSafeSendMatchReviewAccepted(
                           canonicalJobRecord,
                         )}
@@ -9329,7 +9332,8 @@ export function ProposalForge(): JSX.Element {
                             .join("\n"),
                         )}
                         finalExportReviewed={Boolean(
-                          proposalContent && proposalOutputMode === "preview",
+                          hasMeaningfulProposalContent &&
+                            proposalOutputMode === "preview",
                         )}
                         onModeChange={handleProposalOutputModeChange}
                         onCopyText={() => {
