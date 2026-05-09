@@ -12,6 +12,7 @@ import {
   Camera as PhCamera,
   BookmarkSimple as PhBookmarkSimple,
   CaretDown as PhCaretDown,
+  CaretCircleRight as PhCaretCircleRight,
   CaretUp as PhCaretUp,
   Check as PhCheck,
   Briefcase as PhBriefcase,
@@ -153,6 +154,7 @@ export const ArrowsOutSimple = withCompat(PhArrowsOutSimple);
 export const Bold = withCompat(PhTextB);
 export const BookmarkSimple = withCompat(PhBookmarkSimple);
 export const Camera = withCompat(PhCamera);
+export const CaretCircleRight = withCompat(PhCaretCircleRight);
 export const CaretDownIcon = withCompat(PhCaretDown);
 export const CaretUpIcon = withCompat(PhCaretUp);
 export const Check = withCompat(PhCheck);
