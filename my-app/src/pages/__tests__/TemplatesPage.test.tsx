@@ -35,8 +35,8 @@ describe("TemplatesPage", () => {
     expect(screen.getByRole("tab", { name: "Cover letters" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Resume" })).toBeInTheDocument();
     expect(screen.getByText("Minimal")).toBeInTheDocument();
-    expect(screen.getByText("Bold")).toBeInTheDocument();
-    expect(screen.queryByText("Editorial")).toBeNull();
+    expect(screen.getByText("Direct")).toBeInTheDocument();
+    expect(screen.getByText("Editorial")).toBeInTheDocument();
     expect(screen.queryByText("Cover letter")).toBeNull();
     expect(screen.queryByRole("tab", { name: "CVs" })).toBeNull();
     expect(screen.getAllByTestId("template-document-preview")).toHaveLength(3);
@@ -51,12 +51,13 @@ describe("TemplatesPage", () => {
     );
 
     await user.click(screen.getByRole("tab", { name: "Resume" }));
-    expect(screen.getByText("Workshop one-col")).toBeInTheDocument();
-    expect(screen.getByText("Workshop two-col")).toBeInTheDocument();
+    expect(screen.getByText("Minimal", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
+    expect(screen.getByText("French", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.queryByText("Two-column")).toBeNull();
     expect(screen.queryByText("Classic")).toBeNull();
     expect(screen.queryByText("Compact")).toBeNull();
-    expect(screen.queryByText("Letterpress")).toBeNull();
+    expect(screen.queryByText("Workshop one-col")).toBeNull();
+    expect(screen.queryByText("Workshop two-col")).toBeNull();
     expect(screen.getAllByTestId("template-document-preview")).toHaveLength(2);
 
     await user.click(screen.getByRole("button", { name: "Customize style" }));
