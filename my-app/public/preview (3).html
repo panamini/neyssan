@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#F1EEE7" />
+
+  <title>two weeks — the private context layer for serious job applications</title>
+  <meta name="description" content="two weeks is a private context layer for job applications. Import your CV, understand the job, curate the match, draft proposals, and export ATS-clean documents. Powered by Mistral. Built for privacy, taste, and accountable agents." />
+  <link rel="canonical" href="https://twoweeks.app/" />
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+
+  <meta name="keywords" content="AI resume builder, ATS resume builder, private AI resume builder, AI cover letter generator, job proposal writer, Mistral AI resume parser, private job application assistant, context layer, MCP server, agent-ready job search, AI career assistant, resume parser, CV builder online, editorial CV templates, Stripe checkout, no data reuse" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="two weeks" />
+  <meta property="og:title" content="two weeks — the private context layer for serious job applications" />
+  <meta property="og:description" content="Your CV, the job, your voice, your proof. One private context layer. Better applications. Accountable agents." />
+  <meta property="og:url" content="https://twoweeks.app/" />
+  <meta property="og:image" content="https://twoweeks.app/two-weeks-og.png" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:locale:alternate" content="fr_FR" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="two weeks — private context for serious applications" />
+  <meta name="twitter:description" content="Private by design. Mistral-powered. ATS-clean. Agent-ready. Taste wins." />
+  <meta name="twitter:image" content="https://twoweeks.app/two-weeks-og.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baskervville:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://twoweeks.app/#org",
+        "name": "two weeks",
+        "url": "https://twoweeks.app/",
+        "logo": "https://twoweeks.app/two-weeks-mark.png",
+        "sameAs": []
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "two weeks",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "url": "https://twoweeks.app/",
+        "description": "A private AI context layer for CVs, cover letters, job proposals and ATS-clean application packages.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "publisher": { "@id": "https://twoweeks.app/#org" }
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is the two weeks context layer?",
+            "acceptedAnswer": { "@type": "Answer", "text": "It is the private application memory that connects your CV, target job, writing voice, evidence, constraints and final documents so the AI can produce grounded applications instead of generic text." }
+          },
+          {
+            "@type": "Question",
+            "name": "Does two weeks reuse my data?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. Your CV, jobs, drafts and proposals stay private. They are not reused to train shared models or sold to advertisers." }
+          },
+          {
+            "@type": "Question",
+            "name": "Is two weeks powered by Mistral?",
+            "acceptedAnswer": { "@type": "Answer", "text": "two weeks uses Mistral-powered document understanding to parse résumés and structure job context, while keeping the user in control of what is saved, edited and exported." }
+          },
+          {
+            "@type": "Question",
+            "name": "Is two weeks agent-ready?",
+            "acceptedAnswer": { "@type": "Answer", "text": "two weeks is designed as an agent-ready workspace: structured context, clear permissions, review-before-apply workflows and MCP-ready discovery for future assistants." }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    :root {
+      --bg: #F1EEE7;
+      --sf1: #F6F4EF;
+      --sf2: #E9E5DC;
+      --sfr: #FFFDF8;
+      --paper: #FAF9F5;
+      --ti: #1B1814;
+      --tm: #4A413A;
+      --tm2: #6E6358;
+      --tg: #91867A;
+      --border-soft: rgba(27, 24, 20, 0.08);
+      --border-strong: rgba(27, 24, 20, 0.16);
+      --ac: #A84E2E;
+      --am: #D97757;
+      --ap: rgba(168, 78, 46, 0.08);
+      --ok: #365A42;
+
+      --ff-body: "Geist", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      --ff-display: "Baskervville", "Iowan Old Style", "Palatino", Georgia, serif;
+      --ff-mono: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace;
+
+      --tracking-display: -0.02em;
+      --tracking-wide: 0.14em;
+      --container: 1120px;
+      --gutter: clamp(20px, 4vw, 48px);
+      --section-pad: clamp(72px, 9vw, 144px);
+      --r-1: 8px;
+      --r-2: 12px;
+      --r-3: 18px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #16130F;
+        --sf1: #1C1814;
+        --sf2: #251F19;
+        --sfr: #2A2620;
+        --paper: #EFEADC;
+        --ti: #D8D0C2;
+        --tm: #B0A697;
+        --tm2: #918677;
+        --tg: #62584C;
+        --border-soft: rgba(255, 240, 220, 0.075);
+        --border-strong: rgba(255, 240, 220, 0.135);
+        --am: #D8805F;
+        --ap: rgba(216, 128, 95, 0.14);
+        --ok: #9FB89B;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; text-rendering: optimizeLegibility; scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--ti);
+      font-family: var(--ff-body);
+      font-size: 17px;
+      line-height: 1.6;
+      font-feature-settings: "ss01", "ss02", "kern";
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    a:hover { color: var(--ac); }
+    ::selection { background: var(--ap); color: var(--ti); }
+
+    .container { max-width: var(--container); margin: 0 auto; padding-inline: var(--gutter); }
+
+    .nav {
+      position: sticky; top: 0; z-index: 10;
+      backdrop-filter: saturate(140%) blur(14px);
+      -webkit-backdrop-filter: saturate(140%) blur(14px);
+      background: color-mix(in srgb, var(--bg) 86%, transparent);
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .nav__inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+    .nav__brand { display: flex; align-items: center; gap: 10px; font-family: var(--ff-display); font-size: 22px; font-style: italic; letter-spacing: var(--tracking-display); }
+    .nav__brand img { height: 22px; width: auto; opacity: 0.92; }
+    .nav__links { display: flex; gap: 24px; font-size: 14px; color: var(--tm); }
+    .nav__cta { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding-inline: 16px; border-radius: 999px; background: var(--ti); color: var(--bg); font-size: 14px; font-weight: 500; }
+    .nav__cta:hover { background: var(--ac); color: #FAF9F5; }
+    @media (max-width: 840px) { .nav__links { display: none; } }
+
+    .hero { padding-block: clamp(80px, 11vw, 164px) clamp(56px, 8vw, 110px); text-align: center; }
+    .hero__mark { display: block; margin: 0 auto 36px; max-width: min(680px, 84vw); width: 100%; }
+    .hero h1 { font-family: var(--ff-display); font-weight: 400; font-size: clamp(42px, 7.5vw, 96px); line-height: 1.01; letter-spacing: var(--tracking-display); margin: 0 0 24px; color: var(--ti); }
+    .hero h1 em { font-style: italic; color: var(--ac); }
+    .hero__sub { max-width: 710px; margin: 0 auto 40px; font-size: clamp(17px, 1.6vw, 20px); line-height: 1.58; color: var(--tm); }
+    .hero__ctas { display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 22px; border-radius: 999px; font-size: 15px; font-weight: 560; transition: transform 120ms ease, background 200ms ease, color 200ms ease, border-color 200ms ease; }
+    .btn:hover { transform: translateY(-1px); }
+    .btn--primary { background: var(--ac); color: #FAF9F5; }
+    .btn--primary:hover { background: #8C3F23; color: #FAF9F5; }
+    .btn--ghost { background: transparent; color: var(--ti); border: 1px solid var(--border-strong); }
+    .btn--ghost:hover { background: var(--sf2); color: var(--ti); }
+
+    .trust-strip { margin-top: 64px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; text-align: left; }
+    .trust-pill { border: 1px solid var(--border-soft); background: color-mix(in srgb, var(--sfr) 72%, transparent); border-radius: 999px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+    .trust-pill strong { font-family: var(--ff-mono); font-size: 11px; letter-spacing: var(--tracking-wide); text-transform: uppercase; font-weight: 500; color: var(--ti); white-space: nowrap; }
+    .trust-pill span { font-size: 12px; color: var(--tm2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    @media (max-width: 980px) { .trust-strip { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .trust-strip { grid-template-columns: 1fr; } }
+
+    section { padding-block: var(--section-pad); }
+    .section--tinted { background: var(--sf1); border-block: 1px solid var(--border-soft); }
+    .eyebrow { font-family: var(--ff-mono); font-size: 11.5px; letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--tm2); font-weight: 500; }
+    .section-title { font-family: var(--ff-display); font-weight: 400; font-size: clamp(32px, 4.4vw, 58px); line-height: 1.08; letter-spacing: var(--tracking-display); margin: 12px 0 20px; }
+    .section-title em { font-style: italic; color: var(--ac); }
+    .section-lede { max-width: 700px; font-size: 18px; line-height: 1.62; color: var(--tm); margin: 0 0 56px; }
+    .section-lede--center { margin-inline: auto; text-align: center; }
+
+    .split { display: grid; grid-template-columns: 0.92fr 1.08fr; gap: clamp(32px, 6vw, 72px); align-items: start; }
+    @media (max-width: 920px) { .split { grid-template-columns: 1fr; } }
+
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .cards--two { grid-template-columns: repeat(2, 1fr); }
+    @media (max-width: 880px) { .cards, .cards--two { grid-template-columns: 1fr; } }
+
+    .card { background: var(--sfr); border: 1px solid var(--border-soft); border-radius: var(--r-3); padding: 32px; box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 18px 40px -28px rgba(0,0,0,0.10); transition: transform 200ms ease, box-shadow 200ms ease; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 24px 48px -26px rgba(0,0,0,0.16); }
+    .card h3 { font-family: var(--ff-display); font-weight: 400; font-size: 28px; letter-spacing: var(--tracking-display); margin: 16px 0 10px; }
+    .card p { color: var(--tm); margin: 0; font-size: 15.5px; }
+    .glyph { font-family: var(--ff-display); font-style: italic; font-size: 32px; color: var(--ac); letter-spacing: 0; }
+
+    .context-map { background: var(--sfr); border: 1px solid var(--border-soft); border-radius: var(--r-3); padding: 28px; }
+    .context-node { display: grid; grid-template-columns: 132px 1fr; gap: 18px; padding: 18px 0; border-top: 1px solid var(--border-soft); }
+    .context-node:first-child { border-top: 0; padding-top: 0; }
+    .context-node:last-child { padding-bottom: 0; }
+    .context-node strong { font-family: var(--ff-mono); font-size: 11px; letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--ti); font-weight: 500; }
+    .context-node p { margin: 0; color: var(--tm); font-size: 15px; }
+    @media (max-width: 560px) { .context-node { grid-template-columns: 1fr; gap: 6px; } }
+
+    .moat { border-left: 1px solid var(--border-strong); padding-left: clamp(24px, 4vw, 42px); }
+    .moat-list { display: grid; gap: 12px; margin-top: 28px; }
+    .moat-row { display: grid; grid-template-columns: 132px 1fr; gap: 18px; padding: 14px 0; border-top: 1px solid var(--border-soft); }
+    .moat-row strong { font-family: var(--ff-mono); font-size: 11px; letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--tm2); font-weight: 500; }
+    .moat-row span { color: var(--tm); font-size: 15px; }
+    @media (max-width: 560px) { .moat-row { grid-template-columns: 1fr; gap: 4px; } }
+
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border-soft); border-radius: var(--r-3); overflow: hidden; background: var(--sfr); }
+    .flow-step { padding: 32px; border-right: 1px solid var(--border-soft); min-height: 220px; display: flex; flex-direction: column; justify-content: space-between; }
+    .flow-step:last-child { border-right: 0; }
+    .flow-step h4 { font-family: var(--ff-display); font-size: 24px; letter-spacing: var(--tracking-display); font-weight: 400; margin: 14px 0 8px; }
+    .flow-step p { margin: 0; color: var(--tm); font-size: 15px; }
+    @media (max-width: 960px) { .flow { grid-template-columns: 1fr 1fr; } .flow-step:nth-child(2) { border-right: 0; } .flow-step { border-bottom: 1px solid var(--border-soft); } .flow-step:nth-child(3), .flow-step:nth-child(4) { border-bottom: 0; } }
+    @media (max-width: 560px) { .flow { grid-template-columns: 1fr; } .flow-step { border-right: 0 !important; border-bottom: 1px solid var(--border-soft) !important; min-height: auto; gap: 28px; } .flow-step:last-child { border-bottom: 0 !important; } }
+
+    .statement { max-width: 880px; margin: 0 auto; text-align: center; }
+    .statement blockquote { font-family: var(--ff-display); font-style: italic; font-weight: 400; font-size: clamp(28px, 4vw, 48px); line-height: 1.24; letter-spacing: var(--tracking-display); margin: 24px 0; color: var(--ti); }
+    .statement cite { font-style: normal; font-family: var(--ff-mono); font-size: 12px; letter-spacing: var(--tracking-wide); text-transform: uppercase; color: var(--tm2); }
+
+    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    @media (max-width: 880px) { .features { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .features { grid-template-columns: 1fr; } }
+    .feature { padding: 24px 0; border-top: 1px solid var(--border-soft); }
+    .feature h5 { font-family: var(--ff-display); font-weight: 400; font-size: 20px; letter-spacing: var(--tracking-display); margin: 8px 0; }
+    .feature p { color: var(--tm); font-size: 14.5px; margin: 0; }
+
+    .principles { display: grid; grid-template-columns: 1.08fr 0.92fr; gap: 24px; align-items: stretch; }
+    @media (max-width: 900px) { .principles { grid-template-columns: 1fr; } }
+    .principle-main { background: var(--ti); color: var(--bg); border-radius: var(--r-3); padding: clamp(32px, 5vw, 56px); display: flex; flex-direction: column; justify-content: space-between; min-height: 380px; }
+    .principle-main .eyebrow { color: color-mix(in srgb, var(--bg) 70%, transparent); }
+    .principle-main h2 { font-family: var(--ff-display); font-weight: 400; font-style: italic; font-size: clamp(36px, 5vw, 68px); line-height: 1.02; letter-spacing: var(--tracking-display); margin: 24px 0; }
+    .principle-main p { color: color-mix(in srgb, var(--bg) 80%, transparent); max-width: 560px; margin: 0; }
+    .principle-side { display: grid; gap: 16px; }
+    .mini { background: var(--sfr); border: 1px solid var(--border-soft); border-radius: var(--r-3); padding: 28px; }
+    .mini h4 { font-family: var(--ff-display); font-weight: 400; font-size: 24px; letter-spacing: var(--tracking-display); margin: 0 0 8px; }
+    .mini p { margin: 0; color: var(--tm); font-size: 15px; }
+
+    .faq__item { padding: 24px 0; border-top: 1px solid var(--border-soft); }
+    .faq__q { font-family: var(--ff-display); font-size: 22px; letter-spacing: var(--tracking-display); margin: 0 0 8px; }
+    .faq__a { color: var(--tm); margin: 0; }
+
+    .final { text-align: center; padding-block: clamp(96px, 11vw, 160px); }
+    .final h2 { font-family: var(--ff-display); font-weight: 400; font-style: italic; font-size: clamp(38px, 5.8vw, 78px); letter-spacing: var(--tracking-display); line-height: 1.03; margin: 0 0 28px; }
+    .final p { color: var(--tm); max-width: 560px; margin: 0 auto 32px; }
+
+    footer { border-top: 1px solid var(--border-soft); padding-block: 40px; font-size: 13px; color: var(--tm2); }
+    footer .container { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+    footer nav { display: flex; gap: 24px; flex-wrap: wrap; }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="container nav__inner">
+      <a class="nav__brand" href="/">
+        <img src="/two-weeks-mark.png" alt="two weeks logo" />
+        <span>two weeks</span>
+      </a>
+      <nav class="nav__links" aria-label="Primary">
+        <a href="#context">Context layer</a>
+        <a href="#trust">Trust</a>
+        <a href="#agents">Agents</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="nav__cta" href="/sign-in">Open the app →</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <img class="hero__mark" src="/two-weeks-mark.png" alt="two weeks — minimalist wordmark with birds perched on the lettering" />
+        <h1>The private <em>context layer</em><br />for getting hired.</h1>
+        <p class="hero__sub">
+          Your CV. The job. Your voice. Your proof. two weeks stores the context that makes AI useful — then turns it into ATS-clean CVs, sharp cover letters and one-page job proposals that still sound like you.
+        </p>
+        <div class="hero__ctas">
+          <a class="btn btn--primary" href="/sign-in">Build your application</a>
+          <a class="btn btn--ghost" href="#context">See the context layer</a>
+        </div>
+
+        <div class="trust-strip" aria-label="Trust signals">
+          <div class="trust-pill"><strong>Mistral</strong><span>document intelligence</span></div>
+          <div class="trust-pill"><strong>Stripe</strong><span>trusted checkout</span></div>
+          <div class="trust-pill"><strong>Private</strong><span>no data resale</span></div>
+          <div class="trust-pill"><strong>No reuse</strong><span>not training data</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="context" class="section--tinted">
+      <div class="container split">
+        <div>
+          <span class="eyebrow">Context layer</span>
+          <h2 class="section-title">The data moat is not the model. <em>It is the context.</em></h2>
+          <p class="section-lede">
+            If AI gets ten times better, generic generation gets cheap. What still matters is the private map of your career, the job, the match, the evidence and the exact document being sent.
+          </p>
+          <a class="btn btn--ghost" href="#agents">Make it agent-ready</a>
+        </div>
+
+        <div class="context-map" aria-label="two weeks context map">
+          <div class="context-node">
+            <strong>CV</strong>
+            <p>Your roles, skills, projects, education, constraints and proof. Structured once. Reused carefully.</p>
+          </div>
+          <div class="context-node">
+            <strong>Job</strong>
+            <p>The real offer, requirements, hidden signals, seniority, domain, location and hiring intent.</p>
+          </div>
+          <div class="context-node">
+            <strong>Match</strong>
+            <p>What fits, what is missing, what is risky, what should be emphasized and what should stay quiet.</p>
+          </div>
+          <div class="context-node">
+            <strong>Voice</strong>
+            <p>Formal. Warm. Direct. Calm. The tone is a constraint, not a decoration.</p>
+          </div>
+          <div class="context-node">
+            <strong>Package</strong>
+            <p>CV variant, proposal, cover letter, export state and send-readiness. One application. One source of truth.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="container split">
+        <div>
+          <span class="eyebrow">Why it matters</span>
+          <h2 class="section-title">Every serious product owns a <em>context layer.</em></h2>
+          <p class="section-lede">
+            Salesforce and HubSpot own customer context. SAP owns business process context. Palantir, Snowflake and Databricks own operational data context. Notion owns team knowledge. two weeks owns application context.
+          </p>
+        </div>
+        <div class="moat">
+          <div class="moat-list">
+            <div class="moat-row"><strong>SAP</strong><span>business process memory</span></div>
+            <div class="moat-row"><strong>HubSpot</strong><span>marketing and customer history</span></div>
+            <div class="moat-row"><strong>Palantir</strong><span>operational decision context</span></div>
+            <div class="moat-row"><strong>Snowflake</strong><span>enterprise data foundation</span></div>
+            <div class="moat-row"><strong>Databricks</strong><span>data and AI workflows</span></div>
+            <div class="moat-row"><strong>Notion</strong><span>team knowledge and work memory</span></div>
+            <div class="moat-row"><strong>two weeks</strong><span>CV, job, match, voice, proof, package</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="trust" class="section--tinted">
+      <div class="container">
+        <span class="eyebrow">Trust</span>
+        <h2 class="section-title">Private by default. <em>Useful by design.</em></h2>
+        <p class="section-lede">
+          Job-search data is sensitive. It says where you work, where you want to go, how much you can do and what you are willing to change. It deserves more than a chatbot memory leak.
+        </p>
+
+        <div class="cards">
+          <article class="card">
+            <span class="glyph">i.</span>
+            <h3>No data reuse</h3>
+            <p>Your CV, jobs, drafts and proposals are not treated as a shared training dataset. The work stays yours.</p>
+          </article>
+          <article class="card">
+            <span class="glyph">ii.</span>
+            <h3>Mistral-powered</h3>
+            <p>Use strong document understanding for parsing and extraction without turning the product into a generic AI wrapper.</p>
+          </article>
+          <article class="card">
+            <span class="glyph">iii.</span>
+            <h3>Stripe checkout</h3>
+            <p>Payments should feel boring, trusted and separate from your career data. Buy the export. Keep the context private.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="how">
+      <div class="container">
+        <span class="eyebrow">How it works</span>
+        <h2 class="section-title">Capture. Curate. <em>Send.</em></h2>
+        <p class="section-lede">
+          The product is not “generate me a résumé.” The product is the application system: collect context, judge fit, prepare the package and make the next move obvious.
+        </p>
+
+        <div class="flow">
+          <div class="flow-step">
+            <div>
+              <span class="glyph">i.</span>
+              <h4>Import</h4>
+              <p>Drop in a PDF CV. Mistral turns it into structured sections you can edit, trust and reuse.</p>
+            </div>
+            <span class="eyebrow">CV context</span>
+          </div>
+          <div class="flow-step">
+            <div>
+              <span class="glyph">ii.</span>
+              <h4>Understand</h4>
+              <p>Paste the job. two weeks extracts requirements, risk, hidden signals and the real match.</p>
+            </div>
+            <span class="eyebrow">Job context</span>
+          </div>
+          <div class="flow-step">
+            <div>
+              <span class="glyph">iii.</span>
+              <h4>Curate</h4>
+              <p>Choose what matters. Tighten the story. Keep evidence. Remove unsupported claims.</p>
+            </div>
+            <span class="eyebrow">Taste layer</span>
+          </div>
+          <div class="flow-step">
+            <div>
+              <span class="glyph">iv.</span>
+              <h4>Package</h4>
+              <p>Export the CV, proposal and cover letter as one coherent application. Ready to send.</p>
+            </div>
+            <span class="eyebrow">Distribution</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section--tinted">
+      <div class="container principles">
+        <div class="principle-main">
+          <span class="eyebrow">Taste wins</span>
+          <h2>Curation beats generation.</h2>
+          <p>
+            When everyone can ask an AI to write a cover letter, the winner is not the longest output. The winner is judgment: what to include, what to cut, what tone to hold, what claim to prove and when to stop.
+          </p>
+        </div>
+        <div class="principle-side">
+          <div class="mini">
+            <h4>Strong design</h4>
+            <p>Editorial documents, controlled typography, serious layouts. No template spam. No corporate glitter.</p>
+          </div>
+          <div class="mini">
+            <h4>Better orchestration</h4>
+            <p>Prompts, tools, review states and agent behavior are the product. The model is only one part.</p>
+          </div>
+          <div class="mini">
+            <h4>Sharper value</h4>
+            <p>The promise is not more AI. The promise is a better application, finished faster.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="agents">
+      <div class="container">
+        <span class="eyebrow">Agent ready</span>
+        <h2 class="section-title">Discovery for agents. <em>Control for humans.</em></h2>
+        <p class="section-lede">
+          Agents will get more autonomous. That makes responsibility more important, not less. two weeks is built around structured context, narrow permissions, visible reasoning and review-before-send workflows.
+        </p>
+
+        <div class="cards cards--two">
+          <article class="card">
+            <span class="glyph">i.</span>
+            <h3>Fast MCP surface</h3>
+            <p>A clean server can expose the useful parts: CV context, job context, match state, document drafts and send-readiness. Easy for agents to discover. Hard for them to invent.</p>
+          </article>
+          <article class="card">
+            <span class="glyph">ii.</span>
+            <h3>Accountable actions</h3>
+            <p>Agents can suggest, compare, draft and package. They should not silently claim experience you do not have, send without review or blur who made the decision.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section--tinted">
+      <div class="container statement">
+        <span class="eyebrow">The 10x question</span>
+        <blockquote>
+          “If AI gets ten times better, what still matters?”
+        </blockquote>
+        <p class="section-lede section-lede--center">
+          Context. Taste. Responsibility. The job match. The evidence. The final package. The parts that generic AI cannot know unless your product stores, protects and curates them.
+        </p>
+        <cite>— two weeks, product thesis</cite>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="container">
+        <span class="eyebrow">Features</span>
+        <h2 class="section-title">Built for the application, <em>not the prompt.</em></h2>
+
+        <div class="features">
+          <div class="feature"><span class="eyebrow">i.</span><h5>Private context memory</h5><p>CV, job, voice, proof, constraints and package state live together.</p></div>
+          <div class="feature"><span class="eyebrow">ii.</span><h5>Mistral résumé parsing</h5><p>PDF import becomes structured sections without retyping your own life.</p></div>
+          <div class="feature"><span class="eyebrow">iii.</span><h5>ATS-clean exports</h5><p>Real text, parseable layout, readable by Workday, Greenhouse, Lever and Taleo.</p></div>
+          <div class="feature"><span class="eyebrow">iv.</span><h5>Job-match review</h5><p>See what fits, what is missing, what is risky and what deserves emphasis.</p></div>
+          <div class="feature"><span class="eyebrow">v.</span><h5>Proposal builder</h5><p>One-page proposals for hiring managers, clients and referrals.</p></div>
+          <div class="feature"><span class="eyebrow">vi.</span><h5>Review before apply</h5><p>AI changes stay visible. You accept the work before it becomes yours.</p></div>
+          <div class="feature"><span class="eyebrow">vii.</span><h5>Style profiles</h5><p>Typography, layout, color and signature defaults that feel intentional.</p></div>
+          <div class="feature"><span class="eyebrow">viii.</span><h5>Agent discovery</h5><p>Structured context makes the workspace legible to future assistants.</p></div>
+          <div class="feature"><span class="eyebrow">ix.</span><h5>Stripe payments</h5><p>Checkout stays simple, trusted and separate from your private application data.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="section--tinted">
+      <div class="container">
+        <span class="eyebrow">FAQ</span>
+        <h2 class="section-title">Honest <em>answers.</em></h2>
+
+        <div>
+          <div class="faq__item">
+            <h3 class="faq__q">What is two weeks, exactly?</h3>
+            <p class="faq__a">A private AI workspace for serious job applications. It stores the context that matters — your CV, the job, your voice and your proof — then helps you produce the right CV, cover letter and proposal.</p>
+          </div>
+          <div class="faq__item">
+            <h3 class="faq__q">What is the context layer?</h3>
+            <p class="faq__a">The context layer is the structured memory behind the application: CV facts, job requirements, match analysis, tone, drafts, exports and readiness state. It is what makes the AI grounded instead of generic.</p>
+          </div>
+          <div class="faq__item">
+            <h3 class="faq__q">Do you reuse my data?</h3>
+            <p class="faq__a">No. Your application data stays private. We do not sell it, and we do not reuse your CV, job descriptions or drafts as shared training data.</p>
+          </div>
+          <div class="faq__item">
+            <h3 class="faq__q">Where do Mistral and Stripe fit?</h3>
+            <p class="faq__a">Mistral powers document understanding and extraction. Stripe handles trusted checkout. Neither changes the core rule: your application context remains private and under your control.</p>
+          </div>
+          <div class="faq__item">
+            <h3 class="faq__q">Why does taste matter if AI keeps getting better?</h3>
+            <p class="faq__a">Because better AI makes generic writing abundant. Taste decides what deserves to be said, how it should be framed and when the document is finished.</p>
+          </div>
+          <div class="faq__item">
+            <h3 class="faq__q">Can agents use two weeks?</h3>
+            <p class="faq__a">two weeks is designed to become agent-readable through structured context and MCP-ready surfaces. Agents can discover the right context, but humans keep review, permission and final accountability.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="final">
+      <div class="container">
+        <h2>The work is done.<br />Now send it.</h2>
+        <p>Private context. Better match. Cleaner documents. Accountable agents. Finish faster. Go play outside.</p>
+        <a class="btn btn--primary" href="/sign-in">Open two weeks →</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <span>© two weeks · Private context for serious applications.</span>
+      <nav aria-label="Footer">
+        <a href="/sign-in">Open app</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="mailto:hello@twoweeks.app">Contact</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#F1EEE7" />
+
+  <title>two weeks — AI résumé, cover letter & job proposal builder for serious applicants</title>
+  <meta name="description" content="two weeks is an editorial AI résumé and cover letter builder. Import a PDF, write ATS-friendly CVs, draft cover letters in your own voice, send job proposals — all in two weeks, not two months." />
+
+  <link rel="canonical" href="https://twoweeks.app/" />
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+
+  <!-- Primary keywords (woven into copy below; surfaced here for crawlers) -->
+  <meta name="keywords" content="AI resume builder, ATS resume builder, ATS-friendly CV, AI cover letter generator, AI cover letter writer, job proposal writer, resume parser, PDF resume import, AI job application assistant, editorial CV templates, premium resume builder, Mistral AI resume, CV builder online, free resume builder, cover letter examples, resume writing tool, job search tool, AI career assistant" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="two weeks" />
+  <meta property="og:title" content="two weeks — AI résumé, cover letter & job proposal builder" />
+  <meta property="og:description" content="The editorial way to apply for work. Import a PDF, write ATS-friendly CVs and cover letters in your own voice, send job proposals. Two weeks, not two months." />
+  <meta property="og:url" content="https://twoweeks.app/" />
+  <meta property="og:image" content="https://twoweeks.app/two-weeks-og.png" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:locale:alternate" content="fr_FR" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="two weeks — AI résumé, cover letter & job proposal builder" />
+  <meta name="twitter:description" content="Editorial CVs, AI cover letters, ATS-friendly. Two weeks, not two months." />
+  <meta name="twitter:image" content="https://twoweeks.app/two-weeks-og.png" />
+
+  <!-- Fonts (Baskervville for display, Geist for body — match app brand) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baskervville:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" />
+
+  <!-- JSON-LD: SoftwareApplication + Organization + FAQ -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://twoweeks.app/#org",
+        "name": "two weeks",
+        "url": "https://twoweeks.app/",
+        "logo": "https://twoweeks.app/two-weeks-mark.png",
+        "sameAs": []
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "two weeks",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "url": "https://twoweeks.app/",
+        "description": "AI résumé, cover letter and job proposal builder. ATS-friendly. Editorial templates. Mistral-powered PDF parsing.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "publisher": { "@id": "https://twoweeks.app/#org" }
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is two weeks an ATS-friendly resume builder?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Every CV template renders text as real, parseable type — no images, no bitmap headings. Your résumé passes Workday, Greenhouse, Lever and Taleo screens." }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I import an existing PDF résumé?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Upload a PDF and Mistral parses it into structured sections in seconds. Edit, restyle, export." }
+          },
+          {
+            "@type": "Question",
+            "name": "Does two weeks write cover letters?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Pick a voice profile, paste the job offer, and two weeks drafts a cover letter that sounds like you — not like ChatGPT." }
+          },
+          {
+            "@type": "Question",
+            "name": "What is a job proposal?",
+            "acceptedAnswer": { "@type": "Answer", "text": "A focused one-page document that opens a conversation with a hiring manager. Sharper than a cover letter, lighter than a pitch deck. two weeks ships templates for both." }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    /* ============================================================
+       two weeks — Bone Editorial palette
+       Mirrors the app: foundation.css :root + .dark
+       ============================================================ */
+    :root {
+      --bg: #F1EEE7;
+      --sf1: #F6F4EF;
+      --sf2: #E9E5DC;
+      --sfr: #FFFDF8;
+      --paper: #FAF9F5;
+      --ti: #1B1814;
+      --tm: #4A413A;
+      --tm2: #6E6358;
+      --tg: #91867A;
+      --border-soft: rgba(27, 24, 20, 0.08);
+      --border-strong: rgba(27, 24, 20, 0.16);
+      --ac: #A84E2E;
+      --am: #D97757;
+      --ap: rgba(168, 78, 46, 0.08);
+
+      --ff-body: "Geist", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+      --ff-display: "Baskervville", "Iowan Old Style", "Palatino", Georgia, serif;
+      --ff-mono: "Geist Mono", "SF Mono", ui-monospace, Menlo, monospace;
+
+      --tracking-display: -0.02em;
+      --tracking-wide: 0.14em;
+
+      --container: 1120px;
+      --gutter: clamp(20px, 4vw, 48px);
+      --section-pad: clamp(72px, 9vw, 144px);
+
+      --r-1: 8px;
+      --r-2: 12px;
+      --r-3: 18px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #16130F;
+        --sf1: #1C1814;
+        --sf2: #251F19;
+        --sfr: #2A2620;
+        --paper: #EFEADC;
+        --ti: #D8D0C2;
+        --tm: #B0A697;
+        --tm2: #918677;
+        --tg: #62584C;
+        --border-soft: rgba(255, 240, 220, 0.075);
+        --border-strong: rgba(255, 240, 220, 0.135);
+        --am: #D8805F;
+        --ap: rgba(216, 128, 95, 0.14);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; text-rendering: optimizeLegibility; }
+    body {
+      background: var(--bg);
+      color: var(--ti);
+      font-family: var(--ff-body);
+      font-size: 17px;
+      line-height: 1.6;
+      font-feature-settings: "ss01", "ss02", "kern";
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    a:hover { color: var(--ac); }
+
+    .container {
+      max-width: var(--container);
+      margin: 0 auto;
+      padding-inline: var(--gutter);
+    }
+
+    /* ---------------- Top nav ---------------- */
+    .nav {
+      position: sticky; top: 0; z-index: 10;
+      backdrop-filter: saturate(140%) blur(14px);
+      -webkit-backdrop-filter: saturate(140%) blur(14px);
+      background: color-mix(in srgb, var(--bg) 86%, transparent);
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .nav__inner {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .nav__brand {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--ff-display);
+      font-size: 22px;
+      font-style: italic;
+      letter-spacing: var(--tracking-display);
+    }
+    .nav__brand img { height: 22px; width: auto; opacity: 0.92; }
+    .nav__links { display: flex; gap: 28px; font-size: 14px; color: var(--tm); }
+    .nav__cta {
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 36px; padding-inline: 16px;
+      border-radius: 999px;
+      background: var(--ti); color: var(--bg);
+      font-size: 14px; font-weight: 500;
+    }
+    .nav__cta:hover { background: var(--ac); color: #FAF9F5; }
+
+    @media (max-width: 720px) { .nav__links { display: none; } }
+
+    /* ---------------- Hero ---------------- */
+    .hero {
+      padding-block: clamp(80px, 11vw, 168px) clamp(56px, 8vw, 120px);
+      text-align: center;
+    }
+    .hero__mark {
+      display: block; margin: 0 auto var(--gutter);
+      max-width: min(680px, 84vw);
+      width: 100%;
+    }
+    .hero h1 {
+      font-family: var(--ff-display);
+      font-weight: 400;
+      font-size: clamp(40px, 7vw, 88px);
+      line-height: 1.04;
+      letter-spacing: var(--tracking-display);
+      margin: 0 0 24px;
+      color: var(--ti);
+    }
+    .hero h1 em {
+      font-style: italic;
+      color: var(--ac);
+    }
+    .hero__sub {
+      max-width: 640px; margin: 0 auto 40px;
+      font-size: clamp(17px, 1.6vw, 20px);
+      line-height: 1.55;
+      color: var(--tm);
+    }
+    .hero__ctas {
+      display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 48px; padding-inline: 22px;
+      border-radius: 999px;
+      font-size: 15px; font-weight: 500;
+      transition: transform 120ms ease, background 200ms ease, color 200ms ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn--primary { background: var(--ac); color: #FAF9F5; }
+    .btn--primary:hover { background: #8C3F23; color: #FAF9F5; }
+    .btn--ghost {
+      background: transparent;
+      color: var(--ti);
+      border: 1px solid var(--border-strong);
+    }
+    .btn--ghost:hover { background: var(--sf2); color: var(--ti); }
+
+    .hero__strip {
+      margin-top: 64px;
+      display: flex; gap: clamp(24px, 4vw, 56px); justify-content: center; flex-wrap: wrap;
+      font-family: var(--ff-mono);
+      font-size: 12px;
+      letter-spacing: var(--tracking-wide);
+      text-transform: uppercase;
+      color: var(--tg);
+    }
+
+    /* ---------------- Section ---------------- */
+    section { padding-block: var(--section-pad); }
+    .eyebrow {
+      font-family: var(--ff-mono);
+      font-size: 11.5px;
+      letter-spacing: var(--tracking-wide);
+      text-transform: uppercase;
+      color: var(--tm2);
+      font-weight: 500;
+    }
+    .section-title {
+      font-family: var(--ff-display);
+      font-weight: 400;
+      font-size: clamp(32px, 4.4vw, 56px);
+      line-height: 1.1;
+      letter-spacing: var(--tracking-display);
+      margin: 12px 0 20px;
+    }
+    .section-title em { font-style: italic; color: var(--ac); }
+    .section-lede {
+      max-width: 640px;
+      font-size: 18px;
+      line-height: 1.6;
+      color: var(--tm);
+      margin-bottom: 56px;
+    }
+
+    /* ---------------- Pillars ---------------- */
+    .pillars {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    @media (max-width: 880px) { .pillars { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--sfr);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--r-3);
+      padding: 32px;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 18px 40px -28px rgba(0,0,0,0.10);
+      transition: transform 200ms ease, box-shadow 200ms ease;
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 24px 48px -26px rgba(0,0,0,0.16); }
+    .card h3 {
+      font-family: var(--ff-display);
+      font-weight: 400;
+      font-size: 28px;
+      letter-spacing: var(--tracking-display);
+      margin: 16px 0 10px;
+    }
+    .card p { color: var(--tm); margin: 0; font-size: 15.5px; }
+    .card .glyph {
+      font-family: var(--ff-display);
+      font-style: italic;
+      font-size: 32px;
+      color: var(--ac);
+      letter-spacing: 0;
+    }
+
+    /* ---------------- How it works ---------------- */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--r-3);
+      overflow: hidden;
+      background: var(--sfr);
+    }
+    .step {
+      padding: 36px;
+      border-right: 1px solid var(--border-soft);
+    }
+    .step:last-child { border-right: none; }
+    .step__num {
+      font-family: var(--ff-display);
+      font-style: italic;
+      font-size: 44px;
+      color: var(--ac);
+      line-height: 1;
+      margin-bottom: 16px;
+    }
+    .step h4 {
+      font-family: var(--ff-display);
+      font-weight: 400;
+      font-size: 22px;
+      letter-spacing: var(--tracking-display);
+      margin: 0 0 8px;
+    }
+    .step p { color: var(--tm); margin: 0; font-size: 15px; }
+    @media (max-width: 880px) {
+      .steps { grid-template-columns: 1fr; }
+      .step { border-right: none; border-bottom: 1px solid var(--border-soft); }
+      .step:last-child { border-bottom: none; }
+    }
+
+    /* ---------------- Manifesto ---------------- */
+    .manifesto {
+      background: var(--sf1);
+      border-block: 1px solid var(--border-soft);
+    }
+    .manifesto__inner {
+      max-width: 820px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .manifesto blockquote {
+      font-family: var(--ff-display);
+      font-style: italic;
+      font-weight: 400;
+      font-size: clamp(26px, 3.4vw, 40px);
+      line-height: 1.32;
+      letter-spacing: var(--tracking-display);
+      margin: 24px 0;
+      color: var(--ti);
+    }
+    .manifesto cite {
+      font-style: normal;
+      font-family: var(--ff-mono);
+      font-size: 12px;
+      letter-spacing: var(--tracking-wide);
+      text-transform: uppercase;
+      color: var(--tm2);
+    }
+
+    /* ---------------- Features grid ---------------- */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    @media (max-width: 880px) { .features { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .features { grid-template-columns: 1fr; } }
+    .feature {
+      padding: 24px 0;
+      border-top: 1px solid var(--border-soft);
+    }
+    .feature h5 {
+      font-family: var(--ff-display);
+      font-weight: 400;
+      font-size: 20px;
+      letter-spacing: var(--tracking-display);
+      margin: 8px 0;
+    }
+    .feature p { color: var(--tm); font-size: 14.5px; margin: 0; }
+
+    /* ---------------- Templates ---------------- */
+    .tpl-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 880px) { .tpl-strip { grid-template-columns: 1fr 1fr; } }
+    .tpl {
+      aspect-ratio: 3 / 4;
+      background: var(--paper);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--r-2);
+      padding: 24px;
+      display: flex; flex-direction: column; justify-content: space-between;
+      color: #1B1814;
+    }
+    .tpl__head { font-family: var(--ff-display); font-size: 22px; line-height: 1.1; letter-spacing: var(--tracking-display); }
+    .tpl__sub { font-family: var(--ff-mono); font-size: 10px; letter-spacing: var(--tracking-wide); text-transform: uppercase; color: #6E6358; }
+    .tpl--workshop { font-family: var(--ff-mono); }
+    .tpl--workshop .tpl__head { font-family: "Special Elite", var(--ff-mono); font-style: normal; }
+    .tpl--archive { background: #F4EFE3; }
+    .tpl--editorial .tpl__head { font-style: italic; }
+
+    /* ---------------- FAQ ---------------- */
+    .faq__item {
+      padding: 24px 0;
+      border-top: 1px solid var(--border-soft);
+    }
+    .faq__q {
+      font-family: var(--ff-display);
+      font-size: 22px;
+      letter-spacing: var(--tracking-display);
+      margin: 0 0 8px;
+    }
+    .faq__a { color: var(--tm); margin: 0; }
+
+    /* ---------------- Final CTA ---------------- */
+    .final {
+      text-align: center;
+      padding-block: clamp(96px, 11vw, 160px);
+    }
+    .final h2 {
+      font-family: var(--ff-display);
+      font-weight: 400;
+      font-style: italic;
+      font-size: clamp(36px, 5.5vw, 72px);
+      letter-spacing: var(--tracking-display);
+      line-height: 1.05;
+      margin: 0 0 28px;
+    }
+    .final p { color: var(--tm); max-width: 480px; margin: 0 auto 32px; }
+
+    /* ---------------- Footer ---------------- */
+    footer {
+      border-top: 1px solid var(--border-soft);
+      padding-block: 40px;
+      font-size: 13px;
+      color: var(--tm2);
+    }
+    footer .container {
+      display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap;
+    }
+    footer nav { display: flex; gap: 24px; }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =================== NAV =================== -->
+  <header class="nav">
+    <div class="container nav__inner">
+      <a class="nav__brand" href="/">
+        <img src="/two-weeks-mark.png" alt="two weeks logo" />
+        <span>two weeks</span>
+      </a>
+      <nav class="nav__links" aria-label="Primary">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#templates">Templates</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="nav__cta" href="/sign-in">Open the app →</a>
+    </div>
+  </header>
+
+  <!-- =================== HERO =================== -->
+  <main>
+    <section class="hero">
+      <div class="container">
+        <img class="hero__mark" src="/two-weeks-mark.png"
+             alt="two weeks — minimalist wordmark with three sparrows perched on the lettering" />
+        <h1>Apply for work, <em>carefully</em>.<br />Land it in two weeks.</h1>
+        <p class="hero__sub">
+          two weeks is an editorial AI résumé, cover letter and job proposal
+          builder. Import a PDF. Edit in your own voice. Send something that
+          reads like you wrote it on a Tuesday afternoon — not something ChatGPT
+          assembled at 2 a.m.
+        </p>
+        <div class="hero__ctas">
+          <a class="btn btn--primary" href="/sign-in">Start a CV — it's free</a>
+          <a class="btn btn--ghost" href="#how">See how it works</a>
+        </div>
+        <div class="hero__strip" aria-label="Capabilities">
+          <span>ATS-friendly</span>
+          <span>PDF résumé import</span>
+          <span>Mistral-powered</span>
+          <span>Editorial templates</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== PILLARS =================== -->
+    <section id="what">
+      <div class="container">
+        <span class="eyebrow">What it is</span>
+        <h2 class="section-title">One studio. <em>Three documents.</em></h2>
+        <p class="section-lede">
+          Most AI résumé builders treat a job application like a form. We treat
+          it like a piece of writing. Curate a CV, draft a cover letter, send a
+          short proposal — all from one calm workspace.
+        </p>
+
+        <div class="pillars">
+          <article class="card">
+            <span class="glyph">i.</span>
+            <h3>Résumé</h3>
+            <p>An ATS-friendly CV that still looks like a real document. Nine editorial templates, real fonts, real grids. Workday and Greenhouse will read it; recruiters will remember it.</p>
+          </article>
+          <article class="card">
+            <span class="glyph">ii.</span>
+            <h3>Cover letter</h3>
+            <p>Pick a voice profile, paste the job offer, get a draft that sounds like you. Edit inline — the AI rewrites paragraphs, never replaces them. Premium cover letter generator without the AI smell.</p>
+          </article>
+          <article class="card">
+            <span class="glyph">iii.</span>
+            <h3>Proposal</h3>
+            <p>The one-page job proposal: sharper than a cover letter, lighter than a deck. Open a conversation with a hiring manager, a freelance client, or a hiring referral.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== HOW =================== -->
+    <section id="how" style="background: var(--sf1); border-block: 1px solid var(--border-soft);">
+      <div class="container">
+        <span class="eyebrow">How it works</span>
+        <h2 class="section-title">Import. Edit. <em>Send.</em></h2>
+        <p class="section-lede">
+          Three steps. No onboarding tour. No empty-state-vibes. You arrive,
+          you write, you leave.
+        </p>
+
+        <div class="steps">
+          <div class="step">
+            <div class="step__num">i.</div>
+            <h4>Import a PDF</h4>
+            <p>Drop in your existing résumé. Mistral parses it into structured sections in seconds — no copy-pasting from a Word doc you found on Google Drive.</p>
+          </div>
+          <div class="step">
+            <div class="step__num">ii.</div>
+            <h4>Edit in your voice</h4>
+            <p>Pick a voice profile and a style profile. The AI assistant rewrites a sentence, not your whole personality. Keep the bits that already sound like you.</p>
+          </div>
+          <div class="step">
+            <div class="step__num">iii.</div>
+            <h4>Send the work</h4>
+            <p>Export an ATS-clean PDF. Or print the editorial version if the role calls for it. Some jobs deserve a real letter.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== MANIFESTO =================== -->
+    <section class="manifesto">
+      <div class="container manifesto__inner">
+        <span class="eyebrow">Why two weeks</span>
+        <blockquote>
+          “Most résumé tools are built for the Sunday-night-panic market.
+          We built ours for the people who treat their next role like a
+          decade-defining decision — and write the cover letter accordingly.”
+        </blockquote>
+        <cite>— two weeks, design notes</cite>
+      </div>
+    </section>
+
+    <!-- =================== FEATURES =================== -->
+    <section id="features">
+      <div class="container">
+        <span class="eyebrow">Features</span>
+        <h2 class="section-title">Built like a <em>writing tool</em>, not a form.</h2>
+
+        <div class="features">
+          <div class="feature"><span class="eyebrow">i.</span><h5>ATS-friendly résumé</h5><p>Real text, real grid. Passes Workday, Greenhouse, Lever, Taleo and SmartRecruiters parsing.</p></div>
+          <div class="feature"><span class="eyebrow">ii.</span><h5>PDF résumé import</h5><p>Mistral-powered parsing extracts sections in seconds. Stops you from re-typing your own life.</p></div>
+          <div class="feature"><span class="eyebrow">iii.</span><h5>AI cover letter generator</h5><p>Voice profiles capture how you actually write. The AI imitates you — not a corporate template.</p></div>
+          <div class="feature"><span class="eyebrow">iv.</span><h5>Style profiles</h5><p>Three saved presets: font, layout, color, printed name. One click between Editorial, Workshop and Auto.</p></div>
+          <div class="feature"><span class="eyebrow">v.</span><h5>Job proposal builder</h5><p>One-page proposals for hiring managers, freelance clients, or referrals. Calmer than a pitch deck.</p></div>
+          <div class="feature"><span class="eyebrow">vi.</span><h5>Editorial typography</h5><p>Baskervville, Fraunces, Special Elite, Bricolage, Geist Mono. Real fonts for real documents.</p></div>
+          <div class="feature"><span class="eyebrow">vii.</span><h5>Tone & voice control</h5><p>Warm, formal, natural. Pick a register; the AI stays in it across the whole document.</p></div>
+          <div class="feature"><span class="eyebrow">viii.</span><h5>Resume parser</h5><p>Section-aware extraction: experience, education, skills, projects. Edit structured, export beautifully.</p></div>
+          <div class="feature"><span class="eyebrow">ix.</span><h5>Dark mode that doesn't bloom</h5><p>An onyx palette tuned for long sessions. Type stops vibrating after midnight.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== TEMPLATES =================== -->
+    <section id="templates" style="background: var(--sf1); border-block: 1px solid var(--border-soft);">
+      <div class="container">
+        <span class="eyebrow">Templates</span>
+        <h2 class="section-title">Nine ways to <em>look serious.</em></h2>
+        <p class="section-lede">
+          Editorial, Workshop, Archive, Letterpress, Bold, Two-column, Classic,
+          Modern, Print. Each template ships ATS-clean. None of them look like
+          a 2014 SaaS landing page.
+        </p>
+
+        <div class="tpl-strip">
+          <div class="tpl tpl--editorial">
+            <div>
+              <div class="tpl__sub">Editorial · Baskervville</div>
+              <div class="tpl__head" style="margin-top:18px">Robert Cooper</div>
+            </div>
+            <div class="tpl__sub">Senior Designer · Paris</div>
+          </div>
+          <div class="tpl tpl--workshop">
+            <div>
+              <div class="tpl__sub">Workshop · Special Elite</div>
+              <div class="tpl__head" style="margin-top:18px">Camille Veron</div>
+            </div>
+            <div class="tpl__sub">Product Engineer · Berlin</div>
+          </div>
+          <div class="tpl tpl--archive">
+            <div>
+              <div class="tpl__sub">Archive · Fraunces</div>
+              <div class="tpl__head" style="margin-top:18px">Ines Marchand</div>
+            </div>
+            <div class="tpl__sub">Editor-in-Residence · NYC</div>
+          </div>
+          <div class="tpl">
+            <div>
+              <div class="tpl__sub">Bold · Bricolage</div>
+              <div class="tpl__head" style="margin-top:18px;font-weight:600">Yusuf Adeyemi</div>
+            </div>
+            <div class="tpl__sub">Founding Engineer · Lagos</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== FAQ =================== -->
+    <section id="faq">
+      <div class="container">
+        <span class="eyebrow">FAQ</span>
+        <h2 class="section-title">Honest <em>answers.</em></h2>
+
+        <div>
+          <div class="faq__item">
+            <h3 class="faq__q">Is two weeks an ATS-friendly résumé builder?</h3>
+            <p class="faq__a">Yes. Every CV template renders as real, parseable type — no images, no bitmap headings, no trick fonts. Your résumé passes Workday, Greenhouse, Lever and Taleo screens.</p>
+          </div>
+          <div class="faq__item">
+            <h3 class="faq__q">Can I import an existing PDF résumé?</h3>
+            <p class="faq__a">Yes. Drop the file in. Mistral parses it into structured sections in seconds. Edit, restyle, export. No re-typing.</p>
+          </div>
+          <div class="faq__item">
+            <h3 class="faq__q">How is the AI cover letter generator different from ChatGPT?</h3>
+            <p class="faq__a">two weeks holds your voice profile, your CV, and the job offer in the same context. The AI rewrites sentences, never your personality. The output reads like you, not like a corporate memo from a generic LLM.</p>
+          </div>
+          <div class="faq__item">
+            <h3 class="faq__q">What's a “job proposal,” exactly?</h3>
+            <p class="faq__a">A one-page document you send to a hiring manager, a freelance prospect, or a referral. Sharper than a cover letter, lighter than a pitch deck. Best when you want to start a real conversation about a real role.</p>
+          </div>
+          <div class="faq__item">
+            <h3 class="faq__q">Is two weeks free?</h3>
+            <p class="faq__a">Yes — start free, build your first CV, send your first cover letter. Pay only when you need extra exports or premium templates.</p>
+          </div>
+          <div class="faq__item">
+            <h3 class="faq__q">Why “two weeks”?</h3>
+            <p class="faq__a">Two weeks is the time it takes to land an offer if your application is good — and the time most people lose when it isn't. We picked the deadline as the brand.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== FINAL CTA =================== -->
+    <section class="final">
+      <div class="container">
+        <h2>Send something <br />worth reading.</h2>
+        <p>Free to start. PDF import in seconds. ATS-clean exports. Editorial templates. Dark mode that doesn't burn your eyes.</p>
+        <a class="btn btn--primary" href="/sign-in">Open two weeks →</a>
+      </div>
+    </section>
+  </main>
+
+  <!-- =================== FOOTER =================== -->
+  <footer>
+    <div class="container">
+      <span>© two weeks · Carefully written job applications.</span>
+      <nav aria-label="Footer">
+        <a href="/sign-in">Open app</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
+        <a href="mailto:hello@twoweeks.app">Contact</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>
