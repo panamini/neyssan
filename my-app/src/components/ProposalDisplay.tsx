@@ -2472,7 +2472,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         >
           No draft yet.
           <br />
-          Load a job offer to generate, or start a blank draft.
+          <strong>Add a job offer</strong> to generate.
+          <br />
+          Or start blank.
         </p>
       </div>
     );

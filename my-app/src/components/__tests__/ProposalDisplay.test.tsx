@@ -718,8 +718,9 @@ describe("ProposalDisplay", () => {
     expect(frame).toBeTruthy();
     expect(screen.getByText(/No draft yet\./)).toBeInTheDocument();
     expect(
-      screen.getByText(/Load a job offer to generate, or start a blank draft\./),
+      screen.getByText(/Add a job offer.*to generate\./),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Or start blank\./)).toBeInTheDocument();
     expect(
       (frame as HTMLElement).style.getPropertyValue("--font-body-family"),
     ).toContain("Geist");
