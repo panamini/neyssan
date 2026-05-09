@@ -68,8 +68,12 @@ import {
 } from "../lib/proposal-workspace-state";
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
-import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import {
+  CANONICAL_PROPOSAL_TEMPLATE_ID,
+  type ProposalTemplateId,
+} from "../../convex/lib/proposals/renderTemplates";
+import {
+  DEFAULT_VERBATI_STYLE,
   getProposalTwinTemplateId,
   getVerbatiStyleFromCv,
   resolveVerbatiStyle,
@@ -1873,6 +1877,7 @@ export function ProposalForge(): JSX.Element {
   const toolbarTransitionTimerRef = React.useRef<number | null>(null);
   const syncedStoredOutputSourceComposeRef = React.useRef(false);
   const suppressStoredOutputDraftSyncRef = React.useRef(false);
+  const skipNextStoredOutputDraftSyncRef = React.useRef(false);
   const lastAutoApplicantHeaderRef = React.useRef({
     name: defaultPreviewApplicantHeader.name ?? "",
     role: defaultPreviewApplicantHeader.role ?? "",
@@ -4570,35 +4575,48 @@ export function ProposalForge(): JSX.Element {
     ],
   );
 
-  const resetProposalWorkspace = React.useCallback(() => {
+  const resetProposalWorkspace = React.useCallback((options?: {
+    appearance?: "canonical-workshop";
+  }) => {
     cancelPendingComposeDraftSync();
     if (copyFeedbackTimeoutRef.current !== null) {
       window.clearTimeout(copyFeedbackTimeoutRef.current);
       copyFeedbackTimeoutRef.current = null;
     }
 
-    const nextStyleLinkMode = activeCvProposalStylePreset
+    const shouldUseCanonicalWorkshop =
+      options?.appearance === "canonical-workshop";
+    const canonicalWorkshopStyle = resolveVerbatiStyle(DEFAULT_VERBATI_STYLE);
+    const nextStyleLinkMode = shouldUseCanonicalWorkshop
+      ? "proposal_local"
+      : activeCvProposalStylePreset
       ? "inherit_cv"
       : "proposal_local";
-    const nextStyleChoice = activeCvProposalStylePreset
+    const nextStyleChoice = shouldUseCanonicalWorkshop
+      ? "auto"
+      : activeCvProposalStylePreset
       ? "auto"
       : settingsStyleChoice;
     const nextResolvedLocalStyle = resolveProposalStyleRenderState({
       choice: nextStyleChoice,
     });
-    const nextStylePreset = activeCvProposalStylePreset
+    const nextStylePreset = shouldUseCanonicalWorkshop
+      ? canonicalWorkshopStyle
+      : activeCvProposalStylePreset
       ? activeCvProposalStylePreset
       : applyProposalTypographyPreference({
           stylePreset: nextResolvedLocalStyle.stylePreset,
           fontPairId: currentProposalSettings?.fontPairId,
         });
-    const nextTemplateId = getProposalTwinTemplateId(nextStylePreset);
+    const nextTemplateId = shouldUseCanonicalWorkshop
+      ? CANONICAL_PROPOSAL_TEMPLATE_ID
+      : getProposalTwinTemplateId(nextStylePreset);
 
     setProposalContent(null);
     setLoading(false);
     setError(null);
     setErrorDetail(null);
-    setProposalType(null);
+    setProposalType(shouldUseCanonicalWorkshop ? "cover_letter" : null);
     setProposalVoicePreset(null);
     setComposeToolbarVoicePreset(
       normalizeComposeToolbarVoicePreset(
@@ -4609,13 +4627,20 @@ export function ProposalForge(): JSX.Element {
     setProposalStyleLinkMode(nextStyleLinkMode);
     setProposalStyleChoice(nextStyleChoice);
     setProposalStylePreset(nextStylePreset);
-    setHasUserEditedStyle(false);
-    setProposalWorkspaceStyle(null);
+    setHasUserEditedStyle(shouldUseCanonicalWorkshop);
+    setProposalWorkspaceStyle(
+      shouldUseCanonicalWorkshop ? nextStylePreset : null,
+    );
+    setProposalTemplateBundleId(null);
     setProposalPaletteOverride(
-      activeCvProposalStylePreset ? null : settingsPaletteOverride,
+      shouldUseCanonicalWorkshop || activeCvProposalStylePreset
+        ? null
+        : settingsPaletteOverride,
     );
     setProposalCustomAccentHex(
-      activeCvProposalStylePreset ? null : settingsAccentHex,
+      shouldUseCanonicalWorkshop || activeCvProposalStylePreset
+        ? null
+        : settingsAccentHex,
     );
     setProposalApplicantName(defaultPreviewApplicantHeader.name || "");
     setProposalApplicantRole(defaultPreviewApplicantHeader.role || "");
@@ -4666,14 +4691,81 @@ export function ProposalForge(): JSX.Element {
   ]);
 
   const handleNewProposalDraft = React.useCallback(() => {
+    const canonicalWorkshopStyle = resolveVerbatiStyle(DEFAULT_VERBATI_STYLE);
+    const nextApplicantName = defaultPreviewApplicantHeader.name || "";
+    const nextApplicantRole = defaultPreviewApplicantHeader.role || "";
+    const nextLetterDate = getDefaultProposalLetterDate(
+      defaultPreviewApplicantHeader.location,
+    );
+    const nextHeaderVisibility = buildProposalHeaderVisibilityFromContent(null);
+
     startFreshProposalWorkspace();
-    resetProposalWorkspace();
+    skipNextStoredOutputDraftSyncRef.current = true;
+    setAttachedCvId(null);
+    setAttachedCvTitle(null);
+    setPendingScopedCvSelection(null);
+    lastRequestedScopedCvSyncKeyRef.current = null;
+    lastScopedJobIdRef.current = null;
+    resetProposalWorkspace({ appearance: "canonical-workshop" });
     setProposalContent("");
     setProposalLibraryStatus("draft");
     setProposalOutputMode("edit");
+    writeStoredOutputDraft({
+      proposalContent: "",
+      proposalType: "cover_letter",
+      proposalVoicePreset: null,
+      proposalTemplateId: CANONICAL_PROPOSAL_TEMPLATE_ID,
+      proposalVerbatiStyle: serializeVerbatiStyle(canonicalWorkshopStyle),
+      verbatiStyleSlotId: null,
+      verbatiStyleSlotSource: null,
+      verbatiStyleSlotNameSnapshot: null,
+      verbatiStyleBaseSnapshot: null,
+      documentStyleVersion: null,
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "auto",
+      proposalApplicantName: nextApplicantName,
+      proposalApplicantRole: nextApplicantRole,
+      proposalContactLine: defaultPreviewContactLine,
+      proposalLetterDate: nextLetterDate,
+      proposalRecipientDetails: "",
+      proposalHeaderShowSender: nextHeaderVisibility.showSender,
+      proposalHeaderShowDate: nextHeaderVisibility.showDate,
+      proposalHeaderShowSubject: nextHeaderVisibility.showSubject,
+      proposalHeaderShowRecipient: nextHeaderVisibility.showRecipient,
+      proposalHeaderShowRecipientDetails:
+        nextHeaderVisibility.showRecipientDetails,
+      proposalDocumentTitle: "",
+      proposalDocumentMeta: "",
+      generatedProposalId: null,
+      proposalOutputMode: "edit",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: canonicalWorkshopStyle.typography,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      proposalClosing: resolveProposalClosingRef({
+        closing: null,
+        content: "",
+        proposalType: "cover_letter",
+        applicantName: nextApplicantName,
+        voicePreset: null,
+      }),
+      characterLimitMode: null,
+      characterLimitValue: null,
+      sourceComposeDraft: null,
+    });
     setComposeFormInstanceKey((currentKey) => currentKey + 1);
     void navigate("/proposal", { replace: true, state: null });
-  }, [navigate, resetProposalWorkspace]);
+  }, [
+    defaultPreviewApplicantHeader.location,
+    defaultPreviewApplicantHeader.name,
+    defaultPreviewApplicantHeader.role,
+    defaultPreviewContactLine,
+    navigate,
+    resetProposalWorkspace,
+    writeStoredOutputDraft,
+  ]);
 
   const handleClearJobContext = React.useCallback(() => {
     cancelPendingComposeDraftSync();
@@ -6516,6 +6608,11 @@ export function ProposalForge(): JSX.Element {
     if (suppressStoredOutputDraftSyncRef.current) {
       suppressStoredOutputDraftSyncRef.current = false;
       writeStoredOutputDraft(null);
+      return;
+    }
+
+    if (skipNextStoredOutputDraftSyncRef.current) {
+      skipNextStoredOutputDraftSyncRef.current = false;
       return;
     }
 
