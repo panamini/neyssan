@@ -303,6 +303,7 @@ type ProposalRailProps = {
   onJobOfferTextChange?: (value: string) => void;
   onJobOfferTextCommit?: () => void;
   onOpenJobs?: () => void;
+  onClearJobContext?: () => void;
   askAiValue: string;
   askAiBusy: boolean;
   askAiDisabled: boolean;
@@ -368,6 +369,7 @@ export function ProposalRail({
   onJobOfferTextChange,
   onJobOfferTextCommit,
   onOpenJobs,
+  onClearJobContext,
   askAiValue,
   askAiBusy,
   askAiDisabled,
@@ -383,15 +385,21 @@ export function ProposalRail({
   const customColorSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const jobMeta = [company, location].filter(Boolean).join(" · ");
   const compactJobSummary = jobSummary?.trim() || jobMeta || null;
+  const hasPastedJobText = Boolean(jobOfferText.trim());
   const hasLoadedJobContext = Boolean(
     jobTitle?.trim() || compactJobSummary || jobHref || sourceUrl,
   );
+  const hasActiveJobContext = Boolean(
+    hasLoadedJobContext || hasPastedJobText,
+  );
+  const jobContextTitle =
+    jobTitle?.trim() || (hasPastedJobText ? "Untitled job offer" : "No job loaded");
 
   React.useEffect(() => {
-    if (!hasLoadedJobContext) {
+    if (!hasActiveJobContext) {
       setJobContextOpen(true);
     }
-  }, [hasLoadedJobContext]);
+  }, [hasActiveJobContext]);
 
   const cvMenuSections = React.useMemo<MenuSection[]>(() => {
     const cvItems = cvOptions.map((option) => ({
@@ -678,11 +686,15 @@ export function ProposalRail({
           <span className="dasti-proposal-skeleton-rail__summary-copy">
             <span className="forge__rail-label dasti-proposal-skeleton-rail__label">Job context</span>
             <span className="forge__rail-title dasti-proposal-skeleton-rail__title">
-              {jobTitle || "Untitled job offer"}
+              {jobContextTitle}
             </span>
             {compactJobSummary ? (
               <span className="dasti-proposal-skeleton-rail__summary-text">
                 {compactJobSummary}
+              </span>
+            ) : !hasLoadedJobContext ? (
+              <span className="dasti-proposal-skeleton-rail__summary-text">
+                Paste a job offer or choose one from Job Forge.
               </span>
             ) : null}
           </span>
@@ -699,7 +711,7 @@ export function ProposalRail({
                   onClick={onOpenJobs}
                   iconLeft={<Briefcase size={14} strokeWidth={1.8} />}
                 >
-                  Open Job Forge
+                  Choose from Job Forge
                 </Button>
                 <textarea
                   className="ds-field ds-field--textarea dasti-proposal-skeleton-rail__job-offer-input"
@@ -746,6 +758,16 @@ export function ProposalRail({
                   </a>
                 ) : null}
               </div>
+            ) : null}
+            {hasActiveJobContext && onClearJobContext ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onClearJobContext}
+              >
+                Clear job context
+              </Button>
             ) : null}
             {jobMatch ? (
               <div className={`dasti-proposal-skeleton-rail__match dasti-proposal-skeleton-rail__match--${jobMatch.tone}`}>

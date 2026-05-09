@@ -15,6 +15,7 @@ export type ProposalWorkspaceHandoffPrefill = {
 };
 
 export type ResolveProposalWorkspaceSourceDraftInput = {
+  allowStoredDraftCandidates?: boolean;
   canonicalJobRecord?: ProposalWorkspaceSourceRecord | null;
   storedOutputSourceDraft?: StoredProposalComposeDraft | null;
   composePreviewValues?: StoredProposalComposeDraft | null;
@@ -29,6 +30,11 @@ export type ResolveProposalWorkspaceSourceDraftInput = {
 };
 
 export type ResolvedProposalWorkspaceSourceDraft = {
+  mode:
+    | "explicit-live-job"
+    | "explicit-handoff"
+    | "pasted-job"
+    | "saved-historical-origin";
   jobTitle: string;
   jobDescription: string;
   sourceUrl: string | null;
@@ -46,6 +52,7 @@ function normalizeDraftUrl(value: string | null | undefined): string | null {
 
 function normalizeCandidate(
   draft: StoredProposalComposeDraft | null | undefined,
+  mode: ResolvedProposalWorkspaceSourceDraft["mode"],
 ): ResolvedProposalWorkspaceSourceDraft | null {
   const normalized = {
     jobTitle: normalizeDraftText(draft?.jobTitle),
@@ -58,7 +65,7 @@ function normalizeCandidate(
     normalized.jobDescription ||
     normalized.sourceUrl ||
     normalized.platform
-    ? normalized
+    ? { mode, ...normalized }
     : null;
 }
 
@@ -79,6 +86,7 @@ export function resolveProposalWorkspaceSourceDraft(
     canonicalPlatform
   ) {
     return {
+      mode: "explicit-live-job",
       jobTitle: canonicalJobTitle,
       jobDescription: canonicalJobDescription,
       sourceUrl: canonicalSourceUrl,
@@ -102,12 +110,14 @@ export function resolveProposalWorkspaceSourceDraft(
     : null;
 
   return (
-    normalizeCandidate(input.storedOutputSourceDraft) ??
-    normalizeCandidate(input.composePreviewValues) ??
-    normalizeCandidate(input.outputSourceComposeDraft) ??
-    normalizeCandidate(input.composeDraftInitialSeed) ??
-    normalizeCandidate(input.storedComposeDraft) ??
-    normalizeCandidate(prefillCandidate) ??
-    normalizeCandidate(stickyCandidate)
+    normalizeCandidate(prefillCandidate, "explicit-handoff") ??
+    normalizeCandidate(stickyCandidate, "explicit-handoff") ??
+    normalizeCandidate(input.composePreviewValues, "pasted-job") ??
+    normalizeCandidate(input.outputSourceComposeDraft, "pasted-job") ??
+    normalizeCandidate(input.composeDraftInitialSeed, "pasted-job") ??
+    (input.allowStoredDraftCandidates
+      ? normalizeCandidate(input.storedOutputSourceDraft, "saved-historical-origin") ??
+        normalizeCandidate(input.storedComposeDraft, "saved-historical-origin")
+      : null)
   );
 }

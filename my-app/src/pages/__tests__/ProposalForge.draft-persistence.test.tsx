@@ -59,6 +59,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
   default: ({
     onSubmit,
     onValuesChange,
+    onGenerateControlChange,
     initialComposeDraft,
     externalComposeDraft,
   }: {
@@ -69,6 +70,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
       proposalId?: string,
     ) => void;
     onValuesChange?: (values: any) => void;
+    onGenerateControlChange?: (control: any) => void;
     initialComposeDraft?: {
       jobTitle?: string;
       jobDescription?: string;
@@ -87,6 +89,17 @@ vi.mock("../../components/ProposalInputForm", () => ({
       jobTitle?: string;
       jobDescription?: string;
     };
+    const canGenerate = (storedDraft.jobDescription ?? "").trim().length >= 10;
+
+    React.useEffect(() => {
+      onGenerateControlChange?.({
+        trigger: () => {},
+        label: "Generate",
+        disabled: !canGenerate,
+        state: "idle",
+      });
+      return () => onGenerateControlChange?.(null);
+    }, [canGenerate, onGenerateControlChange]);
 
     return (
       <div>
@@ -175,6 +188,8 @@ describe("ProposalForge draft persistence", () => {
       "Paste your job offer here",
     );
     expect(railJobOfferInput).toBeInTheDocument();
+    expect(screen.getByText("No job loaded")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
 
     const jobSites = screen.getByLabelText("Job sites");
     expect(
@@ -192,6 +207,10 @@ describe("ProposalForge draft persistence", () => {
         pastedJobOffer,
       );
     });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Generate" })).not.toBeDisabled();
+    });
+    expect(screen.getByText("Untitled job offer")).toBeInTheDocument();
     expect(
       JSON.parse(
         window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
@@ -202,7 +221,77 @@ describe("ProposalForge draft persistence", () => {
     });
   });
 
-  it("restores the generated draft after leaving the proposal workspace immediately", () => {
+  it("clears active pasted job context and disables generation", async () => {
+    const pastedJobOffer =
+      "Own proposal operations, coordinate client requirements, and prepare application documents from raw job briefs.";
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Paste your job offer here"), {
+      target: { value: pastedJobOffer },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Clear job context" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear job context" }));
+
+    expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
+      "empty-description",
+    );
+    expect(screen.getByText("No job loaded")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
+    expect(
+      JSON.parse(
+        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
+      ),
+    ).toEqual({});
+  });
+
+  it("starts a truly fresh workspace when New proposal is clicked", async () => {
+    const pastedJobOffer =
+      "Own proposal operations, coordinate client requirements, and prepare application documents from raw job briefs.";
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?draftId=proposal_live"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Paste your job offer here"), {
+      target: { value: pastedJobOffer },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Generate" })).not.toBeDisabled();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "New proposal" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
+        "empty-description",
+      );
+    });
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "empty|preview",
+    );
+    expect(screen.getByText("No job loaded")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
+    expect(readStoredProposalOutputDraft()).toBeNull();
+    expect(
+      JSON.parse(
+        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
+      ),
+    ).toEqual({});
+  });
+
+  it("restores generated output without restoring its source as active job context", () => {
     window.localStorage.setItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY, "cv_alpha");
     window.localStorage.setItem("cvActiveId", "cv_beta");
 
@@ -244,18 +333,20 @@ describe("ProposalForge draft persistence", () => {
       "Freshly generated proposal body.|preview",
     );
     expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
-      "Operations Associate",
+      "empty-title",
     );
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
-      "Support recurring processes and coordinate communication.",
+      "empty-description",
     );
+    expect(screen.getByText("No job loaded")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
     expect(window.localStorage.getItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY)).toBe(
       "cv_alpha",
     );
     expect(window.localStorage.getItem("cvActiveId")).toBe("cv_beta");
   });
 
-  it("restores stored compose input and editable workspace state on plain proposal re-entry", () => {
+  it("ignores stale stored compose and output drafts on plain proposal re-entry", () => {
     window.localStorage.setItem(
       PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
       JSON.stringify({
@@ -299,17 +390,19 @@ describe("ProposalForge draft persistence", () => {
     );
 
     expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
-      "Staff Product Designer",
+      "empty-title",
     );
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
-      "Shape product direction with engineering and research.",
+      "empty-description",
     );
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "Saved editable proposal.|edit",
     );
+    expect(screen.getByText("No job loaded")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
   });
 
-  it("recovers the proposal style bundle from slot-only draft metadata on plain proposal re-entry", async () => {
+  it("recovers output appearance without restoring stale job context on plain proposal re-entry", async () => {
     writeStoredProposalOutputDraft({
       proposalContent: "Saved slot-only proposal.",
       proposalType: "cover_letter",
@@ -358,9 +451,11 @@ describe("ProposalForge draft persistence", () => {
         "true",
       );
     });
+    fireEvent.click(screen.getByRole("tab", { name: "Draft" }));
+    expect(screen.getByText("No job loaded")).toBeInTheDocument();
   });
 
-  it("prefers the generated output source brief over later unsent compose edits on plain proposal re-entry", () => {
+  it("ignores stale output source brief on plain proposal re-entry", () => {
     window.localStorage.setItem(
       PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
       JSON.stringify({
@@ -413,26 +508,18 @@ describe("ProposalForge draft persistence", () => {
     );
 
     expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
-      "UI / UX Artist For Game Development",
+      "empty-title",
     );
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
-      "Design tactile game interfaces, polish interaction details, and support gameplay presentation.",
+      "empty-description",
     );
-    expect(
-      JSON.parse(
-        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
-      ),
-    ).toMatchObject({
-      jobTitle: "UI / UX Artist For Game Development",
-      jobDescription:
-        "Design tactile game interfaces, polish interaction details, and support gameplay presentation.",
-    });
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "Generated proposal body.|preview",
     );
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
   });
 
-  it("restores the generated brief from the session output fallback when localStorage is full", () => {
+  it("ignores stale session output source brief on plain proposal re-entry", () => {
     window.localStorage.setItem(
       PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
       JSON.stringify({
@@ -481,22 +568,14 @@ describe("ProposalForge draft persistence", () => {
     );
 
     expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
-      "Social Media Marketing Intern",
+      "empty-title",
     );
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
-      "Plan content calendars, support paid social reporting, and coordinate creative handoffs.",
+      "empty-description",
     );
-    expect(
-      JSON.parse(
-        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
-      ),
-    ).toMatchObject({
-      jobTitle: "Social Media Marketing Intern",
-      jobDescription:
-        "Plan content calendars, support paid social reporting, and coordinate creative handoffs.",
-    });
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "Generated proposal body.|preview",
     );
+    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
   });
 });

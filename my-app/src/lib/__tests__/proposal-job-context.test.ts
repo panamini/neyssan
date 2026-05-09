@@ -1,50 +1,86 @@
 import { describe, expect, it } from "vitest";
-import {
-  resolveProposalWorkspaceSourceDraft,
-} from "../proposal-job-context";
+import { resolveProposalWorkspaceSourceDraft } from "../proposal-job-context";
 
 describe("resolveProposalWorkspaceSourceDraft", () => {
-  it("prefers the current compose preview over a stale stored compose draft", () => {
-    const resolved = resolveProposalWorkspaceSourceDraft({
-      composePreviewValues: {
-        jobTitle: "Current Operations Lead",
-        jobDescription: "Current source brief.",
-        sourceUrl: "https://example.com/jobs/current",
-        platform: "linkedin",
-      },
-      storedComposeDraft: {
-        jobTitle: "Stale Operations Lead",
-        jobDescription: "Stale source brief.",
-        sourceUrl: "https://example.com/jobs/stale",
-        platform: "linkedin",
-      },
-    });
+  it("does not promote stored compose or output drafts when stored candidates are disabled", () => {
+    expect(
+      resolveProposalWorkspaceSourceDraft({
+        allowStoredDraftCandidates: false,
+        storedComposeDraft: {
+          jobTitle: "Stale role",
+          jobDescription: "Old local job context that should not hydrate.",
+        },
+        storedOutputSourceDraft: {
+          jobTitle: "Old generated role",
+          jobDescription: "Old generated source brief.",
+        },
+      }),
+    ).toBeNull();
+  });
 
-    expect(resolved).toEqual({
-      jobTitle: "Current Operations Lead",
-      jobDescription: "Current source brief.",
-      sourceUrl: "https://example.com/jobs/current",
+  it("treats typed compose text as an active pasted job", () => {
+    expect(
+      resolveProposalWorkspaceSourceDraft({
+        allowStoredDraftCandidates: false,
+        composePreviewValues: {
+          jobTitle: "",
+          jobDescription:
+            "Own proposal operations and coordinate application documents.",
+        },
+      }),
+    ).toMatchObject({
+      mode: "pasted-job",
+      jobTitle: "",
+      jobDescription:
+        "Own proposal operations and coordinate application documents.",
+    });
+  });
+
+  it("prefers explicit handoff context over pasted and stored candidates", () => {
+    expect(
+      resolveProposalWorkspaceSourceDraft({
+        allowStoredDraftCandidates: true,
+        prefill: {
+          jobTitle: "Imported Product Lead",
+          jobDescription: "Imported handoff brief.",
+          sourceUrl: "https://example.com/jobs/imported",
+          platform: "linkedin",
+        },
+        composePreviewValues: {
+          jobTitle: "Pasted role",
+          jobDescription: "Pasted job text.",
+        },
+        storedComposeDraft: {
+          jobTitle: "Stored role",
+          jobDescription: "Stored job text.",
+        },
+      }),
+    ).toEqual({
+      mode: "explicit-handoff",
+      jobTitle: "Imported Product Lead",
+      jobDescription: "Imported handoff brief.",
+      sourceUrl: "https://example.com/jobs/imported",
       platform: "linkedin",
     });
   });
 
-  it("prefers the stored output source brief over later unsent compose edits", () => {
-    const resolved = resolveProposalWorkspaceSourceDraft({
-      storedOutputSourceDraft: {
-        jobTitle: "Saved Product Lead",
-        jobDescription: "Saved generated source brief.",
-        sourceUrl: "https://example.com/jobs/saved",
-        platform: "linkedin",
-      },
-      composePreviewValues: {
-        jobTitle: "Later Unsaved Edit",
-        jobDescription: "Later unsaved edit.",
-        sourceUrl: "https://example.com/jobs/edit",
-        platform: "linkedin",
-      },
-    });
-
-    expect(resolved).toEqual({
+  it("uses stored drafts only as historical origin candidates when explicitly allowed", () => {
+    expect(
+      resolveProposalWorkspaceSourceDraft({
+        allowStoredDraftCandidates: true,
+        storedOutputSourceDraft: {
+          jobTitle: "Saved Product Lead",
+          jobDescription: "Saved generated source brief.",
+          sourceUrl: "https://example.com/jobs/saved",
+          platform: "linkedin",
+        },
+        storedComposeDraft: {
+          jobTitle: "Stored role",
+          jobDescription: "Stored job text.",
+        },
+      }),
+    ).toEqual({
+      mode: "saved-historical-origin",
       jobTitle: "Saved Product Lead",
       jobDescription: "Saved generated source brief.",
       sourceUrl: "https://example.com/jobs/saved",
@@ -52,27 +88,23 @@ describe("resolveProposalWorkspaceSourceDraft", () => {
     });
   });
 
-  it("does not combine a sparse source-only draft with another candidate's title", () => {
-    const resolved = resolveProposalWorkspaceSourceDraft({
-      outputSourceComposeDraft: {
-        sourceUrl: "https://example.com/jobs/source-only",
-        platform: "linkedin",
-      },
-      storedComposeDraft: {
-        jobTitle: "Unrelated Stored Title",
-        jobDescription: "Unrelated stored description.",
-        sourceUrl: "https://example.com/jobs/stored",
-        platform: "company_website",
-      },
-      prefill: {
-        jobTitle: "Unrelated Prefill Title",
-        jobDescription: "Unrelated prefill description.",
-        sourceUrl: "https://example.com/jobs/prefill",
-        platform: "indeed",
-      },
-    });
-
-    expect(resolved).toEqual({
+  it("does not combine a source-only candidate with another candidate's title", () => {
+    expect(
+      resolveProposalWorkspaceSourceDraft({
+        allowStoredDraftCandidates: true,
+        outputSourceComposeDraft: {
+          sourceUrl: "https://example.com/jobs/source-only",
+          platform: "linkedin",
+        },
+        storedComposeDraft: {
+          jobTitle: "Unrelated Stored Title",
+          jobDescription: "Unrelated stored description.",
+          sourceUrl: "https://example.com/jobs/stored",
+          platform: "company_website",
+        },
+      }),
+    ).toEqual({
+      mode: "pasted-job",
       jobTitle: "",
       jobDescription: "",
       sourceUrl: "https://example.com/jobs/source-only",
@@ -80,27 +112,23 @@ describe("resolveProposalWorkspaceSourceDraft", () => {
     });
   });
 
-  it("uses the canonical job record when the active route has one", () => {
-    const resolved = resolveProposalWorkspaceSourceDraft({
-      canonicalJobRecord: {
-        title: "Canonical Operations Lead",
-        rawDescription: "Canonical description.",
-        sourceUrl: "https://example.com/jobs/canonical",
-        sourceDomain: "example.com",
-      },
-      composePreviewValues: {
-        jobTitle: "Draft title",
-        jobDescription: "Draft description.",
-        sourceUrl: "https://example.com/jobs/draft",
-        platform: "linkedin",
-      },
-    });
-
-    expect(resolved).toEqual({
-      jobTitle: "Canonical Operations Lead",
-      jobDescription: "Canonical description.",
-      sourceUrl: "https://example.com/jobs/canonical",
-      platform: "example.com",
+  it("keeps explicit live jobs ahead of pasted or stored candidates", () => {
+    expect(
+      resolveProposalWorkspaceSourceDraft({
+        allowStoredDraftCandidates: true,
+        canonicalJobRecord: {
+          title: "Live Operations Lead",
+          rawDescription: "Current job from Job Forge.",
+        },
+        composePreviewValues: {
+          jobTitle: "Pasted role",
+          jobDescription: "Pasted job text.",
+        },
+      }),
+    ).toMatchObject({
+      mode: "explicit-live-job",
+      jobTitle: "Live Operations Lead",
+      jobDescription: "Current job from Job Forge.",
     });
   });
 });
