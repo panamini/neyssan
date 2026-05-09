@@ -405,13 +405,18 @@ describe("ProposalRail style tab", () => {
       "href",
       "/settings?tab=docstyle",
     );
+    expect(screen.getByText("Style", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(screen.getByText("Layout", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: "Workshop layout",
+        name: "Minimal layout",
       }),
     ).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("Style", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    const styleLabel = screen.getByText("Style", { selector: ".forge__rail-label" });
+    const layoutLabel = screen.getByText("Layout", { selector: ".forge__rail-label" });
+    expect(
+      styleLabel.compareDocumentPosition(layoutLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
     expect(screen.getByText("Font pair")).toBeInTheDocument();
     expect(screen.getByText("Accent", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(screen.getByText("Printed name", { selector: ".forge__rail-label" })).toBeInTheDocument();
@@ -462,7 +467,7 @@ describe("ProposalRail style tab", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Style" }));
     fireEvent.click(
       screen.getByRole("button", {
-        name: "Workshop layout",
+        name: "Minimal layout",
       }),
     );
 

@@ -62,7 +62,7 @@ const TEMPLATES: TemplateCard[] = [
   },
   {
     id: "bold-letter",
-    name: "Direct",
+    name: "French",
     kind: "Cover letter",
     family: "bold",
     description: "A sharper letter with a stronger opening. Confident, simple, direct.",

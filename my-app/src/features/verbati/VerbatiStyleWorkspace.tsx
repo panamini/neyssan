@@ -31,7 +31,10 @@ import {
   hasRenderableResumeData,
 } from "./cvDocumentToResumeData";
 import { buildCanonicalResumeRenderModelFromCv } from "../../lib/buildCanonicalResumeRenderModel";
-import { WORKSHOP_RESUME_ONECOL_TEMPLATE_ID } from "../../lib/layout/resumeTemplates";
+import {
+  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
+} from "../../lib/layout/resumeTemplates";
 import { formatUiDate } from "../../lib/ui-date";
 import { VerbatiProposalWorkspace } from "./VerbatiProposalWorkspace";
 
@@ -502,6 +505,16 @@ export function VerbatiStyleWorkspace(): JSX.Element {
 
         <div style={{ display: "grid", gap: "var(--s3)" }}>
           {VERBATI_LAYOUT_OPTIONS.map((option) => {
+            const displayName =
+              (option.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) ===
+              WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+                ? "French"
+                : "Minimal";
+            const displayDescription =
+              (option.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) ===
+              WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+                ? "A structured two-column CV with clear sections and hierarchy."
+                : "A clean one-column CV that works well with recruiters and application systems.";
             const active = option.resumeTemplateId
               ? option.resumeTemplateId ===
                   (stylePreset.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID)
@@ -534,10 +547,10 @@ export function VerbatiStyleWorkspace(): JSX.Element {
                     fontWeight: 600,
                     color: active
                       ? "color-mix(in srgb, var(--ti) 84%, black 16%)"
-                      : "var(--ti)",
+                    : "var(--ti)",
                   }}
                 >
-                  {option.name}
+                  {displayName}
                 </div>
                 <div
                   style={{
@@ -548,7 +561,7 @@ export function VerbatiStyleWorkspace(): JSX.Element {
                     lineHeight: 1.55,
                   }}
                 >
-                  {option.description}
+                  {displayDescription}
                 </div>
               </button>
             );

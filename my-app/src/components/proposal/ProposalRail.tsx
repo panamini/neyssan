@@ -128,7 +128,7 @@ const PROPOSAL_LAYOUT_OPTIONS: ProposalRailLayoutOption[] = [
   {
     id: CANONICAL_PROPOSAL_TEMPLATE_ID,
     eyebrow: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.shortLabel,
-    label: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.name,
+    label: "Minimal",
     description: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.description,
   },
 ];
@@ -1034,29 +1034,6 @@ export function ProposalRail({
             </a>
             .
           </div>
-          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Layout</div>
-          <div className="dasti-proposal-skeleton-rail__style-pills" aria-label="Proposal layout presets">
-            {PROPOSAL_LAYOUT_OPTIONS.map((option) => {
-              const isSelected = resolvedProposalTemplateId === option.id;
-
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  aria-label={`${option.label} layout`}
-                  data-selected={isSelected ? "true" : undefined}
-                  aria-pressed={isSelected}
-                  title={option.description}
-                  onClick={() => {
-                    setIsCustomColorPickerOpen(false);
-                    onSelectProposalLayout?.(option.id);
-                  }}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
           <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Style</div>
           <div className="dasti-proposal-skeleton-rail__style-pills" aria-label="Proposal style presets">
             {PROPOSAL_STYLE_OPTIONS.map((option) => {
@@ -1097,6 +1074,29 @@ export function ProposalRail({
                 Reset
               </button>
             ) : null}
+          </div>
+          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Layout</div>
+          <div className="dasti-proposal-skeleton-rail__style-pills" aria-label="Proposal layout presets">
+            {PROPOSAL_LAYOUT_OPTIONS.map((option) => {
+              const isSelected = resolvedProposalTemplateId === option.id;
+
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-label={`${option.label} layout`}
+                  data-selected={isSelected ? "true" : undefined}
+                  aria-pressed={isSelected}
+                  title={option.description}
+                  onClick={() => {
+                    setIsCustomColorPickerOpen(false);
+                    onSelectProposalLayout?.(option.id);
+                  }}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
           </div>
           <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Font pair</div>
           <ProposalRailFontPairMenu
