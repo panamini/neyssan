@@ -148,11 +148,12 @@ describe("ProposalRail style tab", () => {
     expect(screen.getByPlaceholderText("Paste a job offer...")).toBeInTheDocument();
 
     const jobSites = screen.getByLabelText("Job sites");
+    expect(screen.getByText("Open job sites")).toBeInTheDocument();
     expect(
       within(jobSites)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["LinkedIn", "Indeed", "Upwork", "ZipRecruiter", "Hellowork"]);
+    ).toEqual(["LinkedIn", "Indeed", "Upwork", "ZipRecruiter", "HelloWork"]);
 
     fireEvent.click(screen.getByRole("button", { name: "Choose from Job Forge" }));
     expect(onOpenJobs).toHaveBeenCalledTimes(1);

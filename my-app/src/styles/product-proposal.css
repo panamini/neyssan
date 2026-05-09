@@ -7595,6 +7595,31 @@
   color: var(--ti);
 }
 
+.dasti-proposal-template-job-empty {
+  display: grid;
+  gap: var(--space-2);
+  width: min(100%, var(--proposal-workspace-output-shell-inline-size));
+  margin-inline: auto;
+  margin-block-end: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--sf1) 74%, transparent);
+}
+
+.dasti-proposal-template-job-empty p {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: 560;
+}
+
+.dasti-proposal-template-job-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .dasti-proposal-skeleton-stage__mode {
   height: 28px;
   flex-shrink: 0;

@@ -1452,6 +1452,26 @@ describe("CvForge workspace mode", () => {
     useCvLibraryMock.mockReturnValue(buildCvLibraryState());
   });
 
+  it("consumes create-new template intent from the Templates route", async () => {
+    const createNewCv = vi.fn(async () => undefined);
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ createNewCv }));
+
+    render(
+      <MemoryRouter
+        initialEntries={["/cv?cvForgeAction=createBlank&templateId=french"]}
+      >
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(createNewCv).toHaveBeenCalledWith(undefined, {
+        forceV1: true,
+        resumeTemplateId: "workshop_resume_twocol_ats",
+      });
+    });
+  });
+
   it("appends one draft bullet to canonical rich responsibilities while preserving paragraph text", async () => {
     const user = userEvent.setup();
     const { state, importCv } = buildStateWithExperienceItem({

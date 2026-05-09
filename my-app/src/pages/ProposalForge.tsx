@@ -4,6 +4,7 @@ import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { v4 as uuidv4 } from "uuid";
 import { ClipboardText, ShareFat, TrashSimple } from "@/lib/icons";
 import { BodyPortal } from "../components/ui/body-portal";
+import { Menu, type MenuSection } from "../components/ui/menu";
 import { LibraryFilterMenu } from "../components/LibraryFilterMenu";
 import ProposalExportActions from "../components/ProposalExportActions";
 import ProposalInputForm, {
@@ -103,6 +104,7 @@ import {
   resolveProposalWorkspaceSourceDraft,
   type ResolvedProposalWorkspaceSourceDraft,
 } from "../lib/proposal-job-context";
+import { getProposalExtensionSourceLinks } from "../lib/proposal-source-platforms";
 import { formatUiDate } from "../lib/ui-date";
 import {
   resolveProposalStyleChoice,
@@ -195,6 +197,15 @@ type CurrentProposalSettings = {
   proposalDefaultContactWebsite?: string | null;
   proposalDefaultContactLocation?: string | null;
 };
+
+function resolveProposalStyleSlotIntent(
+  value: string | null | undefined,
+): DocumentStyleSlotId | null {
+  if (value === "minimal") return 1;
+  if (value === "direct") return 2;
+  if (value === "editorial") return 3;
+  return null;
+}
 
 type ProposalSettingsPresetSlot = {
   fontPairId?: string | null;
@@ -1404,6 +1415,38 @@ export function ProposalForge(): JSX.Element {
     () => new URLSearchParams(search).get("draftId"),
     [search],
   );
+  const proposalStyleSlotIntent = React.useMemo(
+    () =>
+      resolveProposalStyleSlotIntent(
+        new URLSearchParams(search).get("templateId"),
+      ),
+    [search],
+  );
+  const proposalStyleIntent = React.useMemo(
+    () =>
+      proposalStyleSlotIntent
+        ? resolveProposalStyleForDocumentSlot({
+            slotId: proposalStyleSlotIntent,
+            savedPreset: getProposalSettingsPresetForSlot(
+              proposalSettingsPresets,
+              proposalStyleSlotIntent,
+            ),
+          })
+        : null,
+    [proposalSettingsPresets, proposalStyleSlotIntent],
+  );
+  const proposalTemplateIntent = React.useMemo(
+    () =>
+      proposalStyleIntent ? getProposalTwinTemplateId(proposalStyleIntent) : null,
+    [proposalStyleIntent],
+  );
+  const proposalTemplateBundleIntent = React.useMemo(
+    () =>
+      proposalStyleSlotIntent
+        ? getProposalBundleForDocumentStyleSlot(proposalStyleSlotIntent)
+        : null,
+    [proposalStyleSlotIntent],
+  );
   const requestedView = React.useMemo<ProposalForgeView>(() => {
     const params = new URLSearchParams(search);
     const view = params.get("view");
@@ -1448,6 +1491,9 @@ export function ProposalForge(): JSX.Element {
     proposalWorkspaceResetToken,
     requestedView,
   ]);
+  React.useEffect(() => {
+    setIsTemplateJobContextEmptyStateDismissed(false);
+  }, [proposalStyleSlotIntent, proposalWorkspaceResetToken]);
   const generateProposalAction = useAction(api.functions.generateProposal);
   const transformEditorSelectionAction = useAction(
     (api.functions as any).transformEditorSelection,
@@ -1523,12 +1569,15 @@ export function ProposalForge(): JSX.Element {
     ? resolveVerbatiStyle(currentProposalSettings.verbatiStyle)
     : null;
   const initialSettingsStylePreset =
-    !storedOutputStylePreset && !activeCvProposalStylePreset
+    proposalStyleIntent ??
+    (!storedOutputStylePreset && !activeCvProposalStylePreset
       ? activeSettingsSlotStylePreset ?? currentSettingsStylePreset
-      : null;
-  const initialSettingsTemplateId = initialSettingsStylePreset
-    ? getProposalTwinTemplateId(initialSettingsStylePreset)
-    : currentProposalSettings?.templateId ?? null;
+      : null);
+  const initialSettingsTemplateId =
+    proposalTemplateIntent ??
+    (initialSettingsStylePreset
+      ? getProposalTwinTemplateId(initialSettingsStylePreset)
+      : currentProposalSettings?.templateId ?? null);
   const savedProposals = useQuery(
     api.proposalsPublic.default as any,
     isConvexAuthenticated ? {} : "skip",
@@ -1598,7 +1647,8 @@ export function ProposalForge(): JSX.Element {
   >(storedOutputDraft?.proposalVoicePreset ?? null);
   const [proposalTemplateId, setProposalTemplateId] =
     React.useState<ProposalTemplateId | null>(
-      storedOutputAppearanceDraft?.proposalTemplateId ??
+      proposalTemplateIntent ??
+        storedOutputAppearanceDraft?.proposalTemplateId ??
         initialSettingsTemplateId ??
         fallbackProposalTemplateId,
     );
@@ -1615,10 +1665,12 @@ export function ProposalForge(): JSX.Element {
         storedOutputAppearanceDraft?.proposalStyleChoice ??
           resolveProposalStyleChoiceFromRenderState({
             templateId:
+              proposalTemplateIntent ??
               storedOutputAppearanceDraft?.proposalTemplateId ??
               initialSettingsTemplateId ??
               fallbackProposalTemplateId,
             stylePreset:
+              proposalStyleIntent ??
               storedOutputAppearanceDraft?.proposalVerbatiStyle ??
               activeCvProposalStylePreset ??
               initialSettingsStylePreset,
@@ -1631,7 +1683,8 @@ export function ProposalForge(): JSX.Element {
       ),
     );
   const [proposalStylePreset, setProposalStylePreset] = React.useState(
-    storedOutputStylePreset ??
+    proposalStyleIntent ??
+      storedOutputStylePreset ??
       activeCvProposalStylePreset ??
       initialSettingsStylePreset,
   );
@@ -1652,7 +1705,8 @@ export function ProposalForge(): JSX.Element {
     );
   const [proposalTemplateBundleId, setProposalTemplateBundleId] =
     React.useState<ProposalTemplateBundleId | null>(
-      storedOutputAppearanceDraft?.templateBundleId ??
+      proposalTemplateBundleIntent ??
+        storedOutputAppearanceDraft?.templateBundleId ??
         getProposalBundleForDocumentStyleSlot(
           storedOutputAppearanceDraft?.verbatiStyleSlotId,
         ),
@@ -1794,6 +1848,29 @@ export function ProposalForge(): JSX.Element {
     () =>
       shouldInitializeCoverLetterStartSession &&
       proposalJobImportFocus === "supported-sites",
+  );
+  const [
+    isTemplateJobContextEmptyStateDismissed,
+    setIsTemplateJobContextEmptyStateDismissed,
+  ] = React.useState(false);
+  const templateJobSiteLinks = React.useMemo(
+    () => getProposalExtensionSourceLinks(),
+    [],
+  );
+  const templateJobSiteMenuSections = React.useMemo<MenuSection[]>(
+    () => [
+      {
+        items: templateJobSiteLinks.map((site) => ({
+          id: site.key,
+          label: site.label,
+          onSelect: () => {
+            if (typeof window === "undefined") return;
+            window.open(site.href, "_blank", "noopener,noreferrer");
+          },
+        })),
+      },
+    ],
+    [templateJobSiteLinks],
   );
   const [coverLetterInlineImportPhase, setCoverLetterInlineImportPhase] =
     React.useState<ProposalInlineImportPhase>("idle");
@@ -2750,6 +2827,11 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
+    if (proposalTemplateIntent || proposalStyleIntent) {
+      appliedSettingsAppearanceDefaultsRef.current = true;
+      return;
+    }
+
     const settingsActiveTemplateBundleId = getProposalBundleForDocumentStyleSlot(
       proposalSettingsPresets?.activeSlot,
     );
@@ -2777,6 +2859,8 @@ export function ProposalForge(): JSX.Element {
     currentProposalSettings,
     proposalSettingsPresets,
     proposalSettingsPresets?.activeSlot,
+    proposalStyleIntent,
+    proposalTemplateIntent,
     settingsAccentHex,
     settingsPaletteOverride,
     settingsStylePreset,
@@ -4810,6 +4894,22 @@ export function ProposalForge(): JSX.Element {
 
     setComposeFormInstanceKey((currentKey) => currentKey + 1);
     resetProposalWorkspace();
+    if (proposalStyleIntent && proposalTemplateIntent) {
+      setProposalStyleLinkMode("proposal_local");
+      setProposalTemplateBundleId(proposalTemplateBundleIntent ?? null);
+      setProposalPaletteOverride(null);
+      setProposalCustomAccentHex(null);
+      setProposalStylePreset(proposalStyleIntent);
+      setHasUserEditedStyle(true);
+      setProposalWorkspaceStyle(proposalStyleIntent);
+      setProposalTemplateId(proposalTemplateIntent);
+      setProposalStyleChoice(
+        resolveProposalStyleChoiceFromRenderState({
+          templateId: proposalTemplateIntent,
+          stylePreset: proposalStyleIntent,
+        }) ?? settingsStyleChoice,
+      );
+    }
     void navigate(
       {
         pathname: location.pathname,
@@ -4834,8 +4934,12 @@ export function ProposalForge(): JSX.Element {
     navigate,
     proposalEntryIntent,
     proposalJobImportFocus,
+    proposalStyleIntent,
+    proposalTemplateBundleIntent,
+    proposalTemplateIntent,
     proposalWorkspaceResetToken,
     resetProposalWorkspace,
+    settingsStyleChoice,
   ]);
 
   /* ── Handlers (logique métier intacte) ────────────────────── */
@@ -8131,6 +8235,14 @@ export function ProposalForge(): JSX.Element {
       (Boolean(canonicalJobId) &&
         (isConvexAuthLoading ||
           (isConvexAuthenticated && canonicalJobRecord === undefined))));
+  const shouldShowTemplateJobContextEmptyState =
+    !isSavedView &&
+    Boolean(proposalStyleSlotIntent) &&
+    !hasActiveProposalJobContext &&
+    !isTemplateJobContextEmptyStateDismissed &&
+    !handoffId &&
+    !canonicalJobId &&
+    !isLoadingHandoff;
   const shouldShowProposalAiStream = Boolean(
     isLoadingHandoff ||
       loading ||
@@ -8641,6 +8753,12 @@ export function ProposalForge(): JSX.Element {
   const handleOpenJobsFromRail = React.useCallback(() => {
     void navigate("/jobs");
   }, [navigate]);
+  const handleTemplateStartBlank = React.useCallback(() => {
+    setIsTemplateJobContextEmptyStateDismissed(true);
+    setProposalType("cover_letter");
+    setProposalLibraryStatus("draft");
+    setProposalOutputMode("edit");
+  }, []);
 
   React.useEffect(() => {
     if (!canCollapseComposePanel && !isComposePanelVisible) {
@@ -9231,6 +9349,43 @@ export function ProposalForge(): JSX.Element {
                           });
                         }}
                       >
+                        {shouldShowTemplateJobContextEmptyState ? (
+                          <section
+                            className="dasti-proposal-template-job-empty"
+                            aria-label="Job context"
+                          >
+                            <p>Load a job to tailor this letter.</p>
+                            <div className="dasti-proposal-template-job-empty__actions">
+                              <button
+                                type="button"
+                                className="dasti-button dasti-button--secondary dasti-button--sm"
+                                onClick={handleOpenJobsFromRail}
+                              >
+                                Use saved job
+                              </button>
+                              <Menu
+                                ariaLabel="Job boards"
+                                align="start"
+                                sections={templateJobSiteMenuSections}
+                                trigger={
+                                  <button
+                                    type="button"
+                                    className="dasti-button dasti-button--secondary dasti-button--sm"
+                                  >
+                                    Job boards
+                                  </button>
+                                }
+                              />
+                              <button
+                                type="button"
+                                className="dasti-button dasti-button--ghost dasti-button--sm"
+                                onClick={handleTemplateStartBlank}
+                              >
+                                Start blank
+                              </button>
+                            </div>
+                          </section>
+                        ) : null}
                         <div
                           style={
                             {

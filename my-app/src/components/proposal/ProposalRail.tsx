@@ -26,6 +26,7 @@ import {
   PROPOSAL_PALETTE_OPTIONS,
   type ProposalPaletteId,
 } from "../../lib/proposal-style-display";
+import { getProposalExtensionSourceLinks } from "../../lib/proposal-source-platforms";
 import {
   getVerbatiFontPairOption,
   type VerbatiFontPairId,
@@ -68,14 +69,6 @@ type ProposalRailLengthOption = {
 };
 
 type ProposalRailTab = "draft" | "ask" | "header" | "style";
-
-const JOB_SITE_LINKS = [
-  { label: "LinkedIn", href: "https://www.linkedin.com/jobs" },
-  { label: "Indeed", href: "https://www.indeed.com" },
-  { label: "Upwork", href: "https://www.upwork.com" },
-  { label: "ZipRecruiter", href: "https://www.ziprecruiter.com" },
-  { label: "Hellowork", href: "https://www.hellowork.com" },
-] as const;
 
 type ProposalRailStyleOption = {
   id: ProposalTemplateBundleId;
@@ -401,6 +394,7 @@ export function ProposalRail({
     : jobContextState === "pasted" ? "Job offer added"
     : "No job loaded";
   const loadedJobMeta = [company, sourceLabel, location].filter(Boolean).join(" · ");
+  const jobSiteLinks = React.useMemo(() => getProposalExtensionSourceLinks(), []);
 
   React.useEffect(() => {
     if (!hasActiveJobContext) {
@@ -748,9 +742,9 @@ export function ProposalRail({
                   }}
                   onBlur={onJobOfferTextCommit}
                 />
-                <div className="dasti-proposal-skeleton-rail__job-sites-label">Job sources</div>
+                <div className="dasti-proposal-skeleton-rail__job-sites-label">Open job sites</div>
                 <div className="dasti-proposal-skeleton-rail__job-site-tokens" aria-label="Job sites">
-                  {JOB_SITE_LINKS.map((site) => (
+                  {jobSiteLinks.map((site) => (
                     <a
                       key={site.label}
                       href={site.href}

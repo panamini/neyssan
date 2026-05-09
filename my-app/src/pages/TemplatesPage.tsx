@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui";
-import { Check } from "../lib/icons";
+import { ArrowRight } from "../lib/icons";
 import { ResumeTemplateRenderer } from "../features/verbati/resume/ResumeTemplateRenderer";
 import { resumeMock, resumeMockOnecol } from "../features/verbati/resume/resume.mock";
 import { resolveVerbatiStyle } from "../features/verbati/style";
@@ -16,6 +16,7 @@ import {
 } from "../lib/layout/documentAppearance";
 import { getResumeTemplateDefinition } from "../lib/layout/resumeTemplates";
 import { planWorkshopResumePages } from "../lib/resume/resumePagination";
+import { createProposalWorkspaceResetState } from "../lib/proposal-workspace-state";
 import { templatePreviewApplicant, templatePreviewProposal } from "./templatePreviewSamples";
 
 const TEMPLATE_FILTERS = ["cover letters", "resume"] as const;
@@ -35,6 +36,9 @@ type TemplateCard = {
   family: TemplateFamily;
   description: string;
 };
+
+type ResumeTemplateIntent = "minimal" | "french";
+type CoverLetterTemplateIntent = "minimal" | "direct" | "editorial";
 
 const TEMPLATES: TemplateCard[] = [
   {
@@ -121,6 +125,23 @@ function filterLabel(filter: TemplateFilter): string {
   return filter === "resume" ? "Resume" : "Cover letters";
 }
 
+function getResumeTemplateIntent(
+  family: TemplateFamily,
+): ResumeTemplateIntent | null {
+  if (family === "workshop-onecol") return "minimal";
+  if (family === "workshop-twocol") return "french";
+  return null;
+}
+
+function getCoverLetterTemplateIntent(
+  family: TemplateFamily,
+): CoverLetterTemplateIntent | null {
+  if (family === "minimal") return "minimal";
+  if (family === "bold") return "direct";
+  if (family === "letterpress") return "editorial";
+  return null;
+}
+
 function TemplateDocumentPreview({
   kind,
   family,
@@ -185,6 +206,27 @@ export function TemplatesPage(): JSX.Element {
     () => TEMPLATES.filter((template) => filterMatches(template, activeFilter)),
     [activeFilter],
   );
+  const handleUseTemplate = React.useCallback(
+    (template: TemplateCard) => {
+      setSelectedTemplateId(template.id);
+
+      if (template.kind === "Resume") {
+        const templateIntent = getResumeTemplateIntent(template.family);
+        navigate(
+          `/cv?cvForgeAction=createBlank${
+            templateIntent ? `&templateId=${templateIntent}` : ""
+          }`,
+        );
+        return;
+      }
+
+      const templateIntent = getCoverLetterTemplateIntent(template.family);
+      navigate(`/proposal${templateIntent ? `?templateId=${templateIntent}` : ""}`, {
+        state: createProposalWorkspaceResetState(),
+      });
+    },
+    [navigate],
+  );
 
   return (
     <div className="dasti-page-scroll">
@@ -226,31 +268,74 @@ export function TemplatesPage(): JSX.Element {
         </div>
 
         <div className="dasti-template-grid" data-template-filter={activeFilter} aria-label="Templates">
-          {visibleTemplates.map((template) => (
-            <button
-              key={template.id}
-              type="button"
-              className={`dasti-template-card dasti-template-card--${template.family}`}
-              data-selected={selectedTemplateId === template.id ? "true" : "false"}
-              onClick={() => {
-                setSelectedTemplateId(template.id);
-                navigate(template.kind === "Resume" ? "/cv" : "/proposal");
-              }}
-            >
-              {selectedTemplateId === template.id ? (
-                <span className="dasti-template-card__check" aria-label="Selected">
-                  <Check size={12} weight="regular" aria-hidden="true" />
+          {visibleTemplates.map((template) => {
+            const isSelected = selectedTemplateId === template.id;
+            const tooltipId = `template-use-tooltip-${template.id}`;
+            const useTemplateLabel = `Use ${template.name} template`;
+
+            return (
+              <article
+                key={template.id}
+                role="button"
+                tabIndex={0}
+                className={`dasti-template-card dasti-template-card--${template.family}`}
+                data-selected={isSelected ? "true" : "false"}
+                onClick={() => setSelectedTemplateId(template.id)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  setSelectedTemplateId(template.id);
+                }}
+              >
+                {isSelected ? (
+                  <span className="dasti-template-card__quick-action dasti-toolbar--surface-tooltips">
+                    <button
+                      type="button"
+                      className="dasti-template-card__use-icon dasti-toolbar-tooltip-trigger--above"
+                      aria-label={useTemplateLabel}
+                      aria-describedby={tooltipId}
+                      data-toolbar-tooltip="Use this template"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleUseTemplate(template);
+                      }}
+                    >
+                      <ArrowRight size={13} weight="regular" aria-hidden="true" />
+                    </button>
+                    <span
+                      id={tooltipId}
+                      role="tooltip"
+                      className="dasti-template-card__tooltip"
+                    >
+                      Use this template
+                    </span>
+                  </span>
+                ) : null}
+                <span className="dasti-template-card__title">{template.name}</span>
+                <span className="dasti-template-card__description">{template.description}</span>
+                <span className="dasti-template-card__action">
+                  {isSelected ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleUseTemplate(template);
+                      }}
+                    >
+                      Use this template
+                    </Button>
+                  ) : null}
                 </span>
-              ) : null}
-              <span className="dasti-template-card__title">{template.name}</span>
-              <span className="dasti-template-card__description">{template.description}</span>
-              <span className="dasti-template-card__preview" aria-hidden="true">
-                <span className="dasti-template-card__document-scale" data-testid="template-document-preview">
-                  <TemplateDocumentPreview kind={template.kind} family={template.family} />
+                <span className="dasti-template-card__preview" aria-hidden="true">
+                  <span className="dasti-template-card__document-scale" data-testid="template-document-preview">
+                    <TemplateDocumentPreview kind={template.kind} family={template.family} />
+                  </span>
                 </span>
-              </span>
-            </button>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </div>
     </div>

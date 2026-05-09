@@ -1,7 +1,7 @@
 import React from "react";
 import fs from "node:fs";
 import path from "node:path";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -62,6 +62,116 @@ describe("TemplatesPage", () => {
 
     await user.click(screen.getByRole("button", { name: "Customize style" }));
     expect(navigateMock).toHaveBeenCalledWith("/settings?tab=docstyle");
+  });
+
+  it("selects template cards without navigating", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    const editorialCard = screen
+      .getByText("Editorial", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    expect(editorialCard).toBeTruthy();
+
+    await user.click(editorialCard as HTMLElement);
+
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(editorialCard).toHaveAttribute("data-selected", "true");
+  });
+
+  it("shows a quiet arrow use-template action on the selected card", () => {
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    const selectedCard = screen
+      .getByText("Minimal", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    expect(selectedCard).toBeTruthy();
+    const useButton = within(selectedCard as HTMLElement).getByRole("button", {
+      name: "Use Minimal template",
+    });
+    expect(useButton).toBeInTheDocument();
+    expect(useButton).toHaveAttribute("data-toolbar-tooltip", "Use this template");
+    expect(useButton).toHaveAttribute("aria-describedby");
+    expect(within(selectedCard as HTMLElement).queryByLabelText("Selected")).toBeNull();
+
+    const frenchCard = screen
+      .getByText("French", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    expect(frenchCard).toBeTruthy();
+    expect(
+      within(frenchCard as HTMLElement).queryByRole("button", {
+        name: "Use French template",
+      }),
+    ).toBeNull();
+  });
+
+  it("uses the selected resume template from the arrow on the first click", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Resume" }));
+    const frenchCard = screen
+      .getByText("French", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    expect(frenchCard).toBeTruthy();
+    await user.click(frenchCard as HTMLElement);
+    expect(navigateMock).not.toHaveBeenCalled();
+
+    await user.click(
+      within(frenchCard as HTMLElement).getByRole("button", {
+        name: "Use French template",
+      }),
+    );
+
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/cv?cvForgeAction=createBlank&templateId=french",
+    );
+  });
+
+  it("starts cover-letter creation with the selected template intent", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    const editorialCard = screen
+      .getByText("Editorial", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    expect(editorialCard).toBeTruthy();
+    await user.click(editorialCard as HTMLElement);
+
+    await user.click(
+      within(editorialCard as HTMLElement).getByRole("button", {
+        name: "Use Editorial template",
+      }),
+    );
+
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/proposal?templateId=editorial",
+      {
+        state: expect.objectContaining({
+          proposalWorkspaceResetToken: expect.any(String),
+        }),
+      },
+    );
+    expect(navigateMock.mock.calls[0]?.[1]?.state).not.toHaveProperty(
+      "proposalEntryIntent",
+    );
   });
 
   it("keeps resume template previews to card plus real paper without a shell frame", async () => {
