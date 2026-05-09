@@ -29,6 +29,7 @@ import type { VerbatiStylePreset } from "../features/verbati/types";
 import {
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
+  type ResumeTemplateId,
 } from "../lib/layout/resumeTemplates";
 import {
   DOCUMENT_STYLE_VERSION,
@@ -138,6 +139,14 @@ const CV_FORGE_WORKSPACE_MODE_STORAGE_KEY = "dasti:cv-forge-workspace-mode:v1";
 const ENTRY_PICKER_PENDING_ROUTE_ID = "__entry-picker-pending-route__";
 const DRAFT_EMPTY_RESPONSIBILITY_BULLET =
   "__draft_empty_responsibility_bullet__";
+
+function resolveCvTemplateIntent(
+  value: string | null | undefined,
+): ResumeTemplateId | null {
+  if (value === "minimal") return WORKSHOP_RESUME_ONECOL_TEMPLATE_ID;
+  if (value === "french") return WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID;
+  return null;
+}
 
 function mapDefaultVoicePresetToCvTone(value: unknown): CvToneChoice {
   if (value === "engaging") return "warm";
@@ -5431,7 +5440,9 @@ export function CvForge(): JSX.Element {
     ],
   );
 
-  const handleStartFreshEntryCv = React.useCallback(async () => {
+  const handleStartFreshEntryCv = React.useCallback(async (
+    resumeTemplateId?: ResumeTemplateId | null,
+  ) => {
     if (isEntryPickerBusy) {
       return;
     }
@@ -5440,7 +5451,10 @@ export function CvForge(): JSX.Element {
     setEntryPickerTransitionCvId(ENTRY_PICKER_PENDING_ROUTE_ID);
     setPendingFreshEntryBaseCvId(currentCvId ?? "__none__");
     try {
-      await createNewCv(undefined, { forceV1: true });
+      await createNewCv(undefined, {
+        forceV1: true,
+        resumeTemplateId: resumeTemplateId ?? undefined,
+      });
     } catch (error) {
       setEntryPickerTransitionCvId(null);
       setPendingFreshEntryBaseCvId(null);
@@ -5455,12 +5469,18 @@ export function CvForge(): JSX.Element {
       typeof location.state === "object" && location.state !== null
         ? (location.state as Record<string, unknown>)
         : null;
-    const cvForgeAction = state?.cvForgeAction;
+    const params = new URLSearchParams(location.search);
+    const queryCvForgeAction = params.get("cvForgeAction");
+    const cvForgeAction =
+      state?.cvForgeAction === "createBlank" || state?.cvForgeAction === "importCv"
+        ? state.cvForgeAction
+        : queryCvForgeAction;
+    const resumeTemplateId = resolveCvTemplateIntent(params.get("templateId"));
     if (cvForgeAction !== "createBlank" && cvForgeAction !== "importCv") {
       return;
     }
 
-    const actionKey = `${location.key}:${cvForgeAction}`;
+    const actionKey = `${location.key}:${cvForgeAction}:${resumeTemplateId ?? "default"}`;
     if (consumedCvForgeActionRef.current === actionKey) {
       return;
     }
@@ -5468,13 +5488,20 @@ export function CvForge(): JSX.Element {
 
     const nextState = { ...(state ?? {}) };
     delete nextState.cvForgeAction;
+    const nextParams = new URLSearchParams(location.search);
+    nextParams.delete("cvForgeAction");
+    nextParams.delete("templateId");
+    const nextSearch = nextParams.toString();
     void navigate(
-      { pathname: location.pathname, search: location.search },
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
       { replace: true, state: nextState },
     );
 
     if (cvForgeAction === "createBlank") {
-      void handleStartFreshEntryCv();
+      void handleStartFreshEntryCv(resumeTemplateId);
       return;
     }
 

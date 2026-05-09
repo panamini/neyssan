@@ -1,10 +1,12 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { ProposalForge } from "../ProposalForge";
 import { PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY } from "../../lib/proposal-output-draft";
+import { createProposalWorkspaceResetState } from "../../lib/proposal-workspace-state";
 
 const defaultCurrentProposalSettings = {
   voicePreset: "signature",
@@ -264,6 +266,136 @@ describe("ProposalForge settings style round-trip", () => {
         "workshop|quiet-editorial|cobalt|workshop_proposal_margin",
       );
     });
+  });
+
+  it("applies a Templates cover-letter template query intent", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal?templateId=direct"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+        "workshop|quiet-editorial|cobalt|workshop_proposal_margin",
+      );
+    });
+  });
+
+  it.each([
+    ["minimal", "workshop|geist-baskervville|ink|workshop_proposal_margin"],
+    ["direct", "workshop|quiet-editorial|cobalt|workshop_proposal_margin"],
+    ["editorial", "workshop|ledger-sans|ink|workshop_proposal_margin"],
+  ] as const)(
+    "skips style onboarding from Templates and applies %s",
+    async (templateId, expectedStyle) => {
+      render(
+        <MemoryRouter
+          initialEntries={[
+            {
+              pathname: "/proposal",
+              search: `?templateId=${templateId}`,
+              state: createProposalWorkspaceResetState(),
+            },
+          ]}
+        >
+          <ProposalForge />
+        </MemoryRouter>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+          expectedStyle,
+        );
+      });
+      expect(
+        screen.queryByRole("heading", { name: "Pick a starting style." }),
+      ).toBeNull();
+      expect(screen.queryByTestId("cover-letter-start-surface")).toBeNull();
+      expect(screen.queryByText("Bring in the job")).toBeNull();
+      expect(screen.queryByText("Bring in your resume")).toBeNull();
+    },
+  );
+
+  it("shows a job-context empty state for Templates-driven proposal starts", async () => {
+    const user = userEvent.setup();
+    const windowOpenSpy = vi
+      .spyOn(window, "open")
+      .mockImplementation(() => null);
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/proposal",
+            search: "?templateId=direct",
+            state: createProposalWorkspaceResetState(),
+          },
+        ]}
+      >
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByText("Load a job to tailor this letter."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Use saved job" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Job boards" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open job sites" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Paste job URL" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Start blank" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Pick a starting style." }),
+    ).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Job boards" }));
+    expect(await screen.findByRole("menuitem", { name: "LinkedIn" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Indeed" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Upwork" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "ZipRecruiter" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "HelloWork" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("menuitem", { name: "LinkedIn" }));
+    expect(windowOpenSpy).toHaveBeenCalledWith(
+      "https://www.linkedin.com/jobs/",
+      "_blank",
+      "noopener,noreferrer",
+    );
+    windowOpenSpy.mockRestore();
+  });
+
+  it("keeps the Templates-selected style when starting blank", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/proposal",
+            search: "?templateId=editorial",
+            state: createProposalWorkspaceResetState(),
+          },
+        ]}
+      >
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Start blank" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+        "workshop|ledger-sans|ink|workshop_proposal_margin",
+      );
+    });
+    expect(screen.queryByText("Load a job to tailor this letter.")).toBeNull();
+    expect(screen.queryByTestId("cover-letter-start-surface")).toBeNull();
   });
 
   it("resets proposal Style 2 to the Settings slot color", async () => {

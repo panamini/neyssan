@@ -58,9 +58,13 @@ import {
   LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY,
   LOCAL_CV_LIBRARY_STORAGE_KEY,
 } from "../lib/cv-local-storage";
-import { serializeVerbatiStyle } from "../features/verbati/style";
+import { resolveVerbatiStyle, serializeVerbatiStyle } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import type { DocumentStyleMetadata } from "../lib/document-style-slots";
+import {
+  isWorkshopResumeTemplateId,
+  type ResumeTemplateId,
+} from "../lib/layout/resumeTemplates";
 
 /**
  * Small, safe deep equality check used for dirty detection.
@@ -469,7 +473,10 @@ export interface ICvLibraryContext {
     title?: string,
   ) => void;
   // Create a new CV from a built-in template
-  createNewCv: (title?: string, opts?: { forceV1?: boolean }) => Promise<void>;
+  createNewCv: (
+    title?: string,
+    opts?: { forceV1?: boolean; resumeTemplateId?: ResumeTemplateId },
+  ) => Promise<void>;
   // Import a fully-normalized CvDocument (used by file import workflows).
   // This replaces the current CV with the provided document and schedules persistence.
   importCv: (doc: CvDocument) => Promise<void>;
@@ -2747,7 +2754,10 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
    * This function uses generateCvTemplate() to ensure a fresh document.
    */
   const createNewCv = useCallback(
-    async (title?: string, opts?: { forceV1?: boolean }) => {
+    async (
+      title?: string,
+      opts?: { forceV1?: boolean; resumeTemplateId?: ResumeTemplateId },
+    ) => {
       try {
         await prepareCurrentCvForReplacement();
 
@@ -2756,6 +2766,21 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         // documents are v1-shaped and avoid legacy UI being shown for new docs.
         const explicitDisableV1 = opts?.forceV1 === false;
         const shouldUseV1 = !explicitDisableV1;
+        const requestedResumeTemplateId = isWorkshopResumeTemplateId(
+          opts?.resumeTemplateId,
+        )
+          ? opts.resumeTemplateId
+          : null;
+        const initialVerbatiStyle = requestedResumeTemplateId
+          ? serializeVerbatiStyle(
+              resolveVerbatiStyle({
+                familyId: "workshop",
+                typography: "geist-baskervville",
+                palette: "sauge",
+                resumeTemplateId: requestedResumeTemplateId,
+              }),
+            )
+          : null;
 
         let cvRaw = shouldUseV1
           ? generateCvTemplateV1(title)
@@ -2817,6 +2842,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
 
         const cv = {
           ...(ensureRepresentativeBlocks(cvRaw as CvDocument) as CvDocument),
+          metadata: {
+            ...((cvRaw as CvDocument).metadata ?? {}),
+            ...(initialVerbatiStyle
+              ? { verbatiStyle: initialVerbatiStyle }
+              : null),
+          },
           // Back-compat: seed legacy cvState so tests relying on it can function
           cvState: { sections: [], source: "manual", history: [] } as any,
         } as CvDocument;

@@ -2356,7 +2356,7 @@ html[data-reduce-motion="true"] *::after {
   box-shadow: var(--sh-paper);
 }
 
-.layout-card__preview[data-layout="workshop"] {
+.layout-card__preview[data-layout="workshop-twocol"] {
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   gap: var(--s2);
 }
@@ -2374,12 +2374,20 @@ html[data-reduce-motion="true"] *::after {
   background: color-mix(in srgb, var(--ti) 18%, transparent);
 }
 
+.dark .layout-card__line {
+  background: color-mix(in srgb, var(--paper-dark-body-ink) 28%, transparent);
+}
+
 .layout-card__line--title {
   height: 6px;
 }
 
 .layout-card__line--accent {
   margin-top: var(--s1);
+  background: var(--ac);
+}
+
+.dark .layout-card__line--accent {
   background: var(--ac);
 }
 
