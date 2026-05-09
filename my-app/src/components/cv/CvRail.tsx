@@ -1003,7 +1003,7 @@ export function CvRail({
               }
               onClick={() => onSelectTemplate("workshop-onecol")}
             >
-              Workshop
+              Minimal
             </button>
             <button
               type="button"
@@ -1019,7 +1019,7 @@ export function CvRail({
               }
               onClick={() => onSelectTemplate("workshop-twocol")}
             >
-              Workshop 2-col
+              French
             </button>
           </div>
           <div className="dasti-cv-rail-label">Font pair</div>

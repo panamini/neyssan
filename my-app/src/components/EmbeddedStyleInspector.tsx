@@ -18,6 +18,7 @@ import {
 } from "../features/verbati/styleBundles";
 import {
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
   type ResumeTemplateId,
 } from "../lib/layout/resumeTemplates";
 import type {
@@ -62,6 +63,24 @@ type DrawerId =
   | "typography"
   | "color"
   | "prompt";
+
+function getTemplateDisplayName(
+  option: (typeof VERBATI_LAYOUT_OPTIONS)[number],
+): string {
+  return (option.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) ===
+    WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+    ? "French"
+    : "Minimal";
+}
+
+function getTemplateDisplayDescription(
+  option: (typeof VERBATI_LAYOUT_OPTIONS)[number],
+): string {
+  return (option.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) ===
+    WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+    ? "A structured two-column CV with clear sections and hierarchy."
+    : "A clean one-column CV that works well with recruiters and application systems.";
+}
 
 function getTypographyFontWeight(typography: VerbatiTypographyPreset | string) {
   return typography === "expert" ? 500 : 600;
@@ -357,8 +376,8 @@ export function EmbeddedStyleInspector({
                     role: "menuitemradio",
                     selected: isActiveLayoutOption(option),
                     disabled: readOnly,
-                    label: option.name,
-                    description: option.description,
+                    label: getTemplateDisplayName(option),
+                    description: getTemplateDisplayDescription(option),
                     icon: <Layout size={14} strokeWidth={1.8} />,
                     onSelect: () => selectLayoutOption(option),
                   })),
@@ -622,11 +641,11 @@ export function EmbeddedStyleInspector({
                             </span>
                             <span className="dasti-proposal-chrome-option__copy">
                               <span className="dasti-proposal-chrome-option__title">
-                                {option.name}
+                                {getTemplateDisplayName(option)}
                               </span>
                               {!isTitleOnlyCopy ? (
                                 <span className="dasti-proposal-chrome-option__description">
-                                  {option.description}
+                                  {getTemplateDisplayDescription(option)}
                                 </span>
                               ) : null}
                             </span>

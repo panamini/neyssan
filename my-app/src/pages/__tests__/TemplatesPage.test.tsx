@@ -35,7 +35,7 @@ describe("TemplatesPage", () => {
     expect(screen.getByRole("tab", { name: "Cover letters" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Resume" })).toBeInTheDocument();
     expect(screen.getByText("Minimal")).toBeInTheDocument();
-    expect(screen.getByText("Direct")).toBeInTheDocument();
+    expect(screen.getByText("French")).toBeInTheDocument();
     expect(screen.getByText("Editorial")).toBeInTheDocument();
     expect(screen.queryByText("Cover letter")).toBeNull();
     expect(screen.queryByRole("tab", { name: "CVs" })).toBeNull();

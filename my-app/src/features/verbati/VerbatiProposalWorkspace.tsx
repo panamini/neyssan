@@ -526,6 +526,14 @@ export function VerbatiProposalWorkspace({
 
         <div style={{ display: "grid", gap: "var(--s3)" }}>
           {PROPOSAL_TEMPLATE_DEFINITIONS.map((template) => {
+            const displayName =
+              template.id === "workshop_proposal_margin"
+                ? "Minimal"
+                : template.id === "modernist_signal"
+                  ? "French"
+                  : template.id === "quire_margin"
+                    ? "Editorial"
+                    : template.name;
             const active = template.id === selectedTemplateId;
 
             return (
@@ -561,7 +569,7 @@ export function VerbatiProposalWorkspace({
                         color: "var(--ti)",
                       }}
                     >
-                      {template.name}
+                      {displayName}
                     </div>
                     {template.id === recommendedTemplateId ? (
                       <span

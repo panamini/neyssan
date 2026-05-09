@@ -250,14 +250,15 @@ const STYLE_OPTIONS = [
   },
   {
     id: "workshop",
-    label: "Workshop",
-    description: "One-column Workshop ATS. Paired margin twin.",
+    label: "Minimal",
+    description:
+      "A clean one-column CV that works well with recruiters and application systems.",
     resumeTemplateId: WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   },
   {
     id: "workshop-twocol",
-    label: "Workshop 2-col",
-    description: "Two-column Workshop grid with 17/18-inspired rhythm.",
+    label: "French",
+    description: "A structured two-column CV with clear sections and hierarchy.",
     resumeTemplateId: WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
   },
 ] satisfies StyleOption[];

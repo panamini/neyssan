@@ -4299,7 +4299,7 @@ describe("CvForge workspace mode", () => {
       screen.getByRole("button", { name: /Fraunces Bold/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Workshop" }),
+      screen.getByRole("button", { name: "Minimal" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open saved resume styles" }),
@@ -4415,7 +4415,7 @@ describe("CvForge workspace mode", () => {
     );
   });
 
-  it("marks a selected CV style custom when the CV template differs from the base slot", async () => {
+  it("marks a selected CV style custom when the CV layout differs from the base slot", async () => {
     const baseState = buildCvLibraryState();
     const currentCv = {
       ...baseState.currentCv,
@@ -4483,7 +4483,7 @@ describe("CvForge workspace mode", () => {
       "true",
     );
 
-    await user.click(screen.getByRole("button", { name: "Workshop 2-col" }));
+    await user.click(screen.getByRole("button", { name: "French" }));
 
     await waitFor(() =>
       expect(

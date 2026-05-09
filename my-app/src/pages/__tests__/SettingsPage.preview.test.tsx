@@ -830,7 +830,7 @@ describe("SettingsPage preview controls", () => {
     });
   });
 
-  it("shows auto plus both Workshop style cards", () => {
+  it("shows auto plus both template style cards", () => {
     const { container } = renderSettings();
     const previewBadge = () =>
       container.querySelector(".dasti-settings-hero-preview__style-badge");
@@ -839,26 +839,26 @@ describe("SettingsPage preview controls", () => {
     ).map((element) => element.textContent);
     const uniqueStyleCardLabels = Array.from(new Set(styleCardLabels));
 
-    expect(previewBadge()).toHaveTextContent("Workshop");
+    expect(previewBadge()).toHaveTextContent("Minimal");
     expect(uniqueStyleCardLabels).toEqual([
       "Auto",
-      "Workshop",
-      "Workshop 2-col",
+      "Minimal",
+      "French",
     ]);
   });
 
-  it("saves workshop as canonical verbatiStyle on the preset slot", async () => {
+  it("saves the Minimal template as canonical verbatiStyle on the preset slot", async () => {
     const user = userEvent.setup();
     const { container } = renderSettings();
-    const workshopStyleButton = screen
-      .getAllByRole("button", { name: /Workshop/ })
+    const minimalStyleButton = screen
+      .getAllByRole("button", { name: "Minimal" })
       .find((element) => element.className.includes("layout-card"));
     const previewBadge = () =>
       container.querySelector(".dasti-settings-hero-preview__style-badge");
 
-    expect(workshopStyleButton).toBeTruthy();
+    expect(minimalStyleButton).toBeTruthy();
 
-    await user.click(workshopStyleButton!);
+    await user.click(minimalStyleButton!);
 
     await waitFor(() => {
       expect(savePresetMock).toHaveBeenCalled();
@@ -877,19 +877,19 @@ describe("SettingsPage preview controls", () => {
         }),
       }),
     });
-    expect(previewBadge()).toHaveTextContent("Workshop");
+    expect(previewBadge()).toHaveTextContent("Minimal");
   });
 
-  it("saves the two-column Workshop template id from settings", async () => {
+  it("saves the French template id from settings", async () => {
     const user = userEvent.setup();
     renderSettings();
-    const workshopTwoColumnButton = screen
-      .getAllByRole("button", { name: /Workshop 2-col/ })
+    const frenchButton = screen
+      .getAllByRole("button", { name: "French" })
       .find((element) => element.className.includes("layout-card"));
 
-    expect(workshopTwoColumnButton).toBeTruthy();
+    expect(frenchButton).toBeTruthy();
 
-    await user.click(workshopTwoColumnButton!);
+    await user.click(frenchButton!);
 
     await waitFor(() => {
       expect(savePresetMock).toHaveBeenCalled();
@@ -911,13 +911,13 @@ describe("SettingsPage preview controls", () => {
   it("keeps the selected CV layout when saving a font pair on a style slot", async () => {
     const user = userEvent.setup();
     const { container } = renderSettings();
-    const workshopTwoColumnButton = screen
-      .getAllByRole("button", { name: /Workshop 2-col/ })
+    const frenchButton = screen
+      .getAllByRole("button", { name: "French" })
       .find((element) => element.className.includes("layout-card"));
 
-    expect(workshopTwoColumnButton).toBeTruthy();
+    expect(frenchButton).toBeTruthy();
 
-    await user.click(workshopTwoColumnButton!);
+    await user.click(frenchButton!);
     await waitFor(() => {
       expect(getLastSavePresetPayload()).toMatchObject({
         preset: expect.objectContaining({
@@ -958,7 +958,7 @@ describe("SettingsPage preview controls", () => {
       Array.from(container.querySelectorAll(".layout-card__name")).map(
         (element) => element.textContent,
       ),
-    ).toEqual(["Auto", "Workshop", "Workshop 2-col"]);
+    ).toEqual(["Auto", "Minimal", "French"]);
   });
 
   it("updates the hero preview tilt when the pointer moves", async () => {
