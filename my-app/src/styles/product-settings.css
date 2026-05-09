@@ -2089,16 +2089,6 @@ html[data-reduce-motion="true"] *::after {
   line-height: var(--ls);
 }
 
-.onb-replay__choice-check {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 17px;
-  height: 17px;
-  border-radius: var(--radius-pill);
-  color: var(--ac);
-}
-
 .onb-replay__choice-layout {
   color: var(--tm);
   font-size: var(--tx);
@@ -2888,6 +2878,16 @@ html[data-reduce-motion="true"] *::after {
   letter-spacing: 0.01em;
 }
 
+.dasti-settings-font-pair-card[data-font-pair-id="special-correspondence"]
+  .dasti-settings-font-pair-card__heading {
+  line-height: var(--text-body-sm-line);
+}
+
+.dasti-settings-font-pair-card[data-font-pair-id="special-correspondence"]
+  .dasti-settings-font-pair-card__body {
+  line-height: var(--text-caption-line);
+}
+
 .dasti-settings-font-pair-card__check {
   position: absolute;
   top: var(--dasti-settings-card-corner-inset);
@@ -3326,6 +3326,11 @@ button.dasti-settings-signature-tool:focus-visible {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
+}
+
+.dasti-settings-hero-preview[data-font-pair-id="special-correspondence"]
+  .dasti-settings-hero-preview__body-text {
+  line-height: var(--text-body-line);
 }
 
 .dasti-settings-hero-preview__signature {

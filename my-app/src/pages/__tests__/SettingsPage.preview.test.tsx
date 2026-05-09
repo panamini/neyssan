@@ -1,4 +1,6 @@
 import React from "react";
+import fs from "node:fs";
+import path from "node:path";
 import {
   fireEvent,
   render,
@@ -780,6 +782,36 @@ describe("SettingsPage preview controls", () => {
     expect(grid).toHaveTextContent("Doto Black");
     expect(grid).toHaveTextContent("FD Garamond");
     expect(container.querySelector(".dasti-settings-font-grid")).toBeTruthy();
+  });
+
+  it("uses tokenized line-height for the Grave Presse and Borel settings preview", () => {
+    renderSettings();
+    const grid = screen.getByRole("group", { name: "Font pair" });
+    const specialCorrespondenceCard = within(grid)
+      .getByText("Grave Presse", {
+        selector: ".dasti-settings-font-pair-card__heading",
+      })
+      .closest(".dasti-settings-font-pair-card");
+
+    expect(specialCorrespondenceCard).toHaveAttribute(
+      "data-font-pair-id",
+      "special-correspondence",
+    );
+
+    const stylesPath = path.resolve(
+      __dirname,
+      "../../styles/product-settings.css",
+    );
+    const styles = fs.readFileSync(stylesPath, "utf8");
+    expect(styles).toMatch(
+      /\.dasti-settings-font-pair-card\[data-font-pair-id="special-correspondence"\][\s\S]*\.dasti-settings-font-pair-card__heading\s*\{[\s\S]*line-height:\s*var\(--text-body-sm-line\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-settings-font-pair-card\[data-font-pair-id="special-correspondence"\][\s\S]*\.dasti-settings-font-pair-card__body\s*\{[\s\S]*line-height:\s*var\(--text-caption-line\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-settings-hero-preview\[data-font-pair-id="special-correspondence"\][\s\S]*\.dasti-settings-hero-preview__body-text\s*\{[\s\S]*line-height:\s*var\(--text-body-line\);/,
+    );
   });
 
   it("saves an explicit signature font on the current preset", async () => {
