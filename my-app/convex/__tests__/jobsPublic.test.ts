@@ -159,6 +159,26 @@ describe("jobsPublic.listForUser", () => {
             };
             }
 
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, _value: string) {
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    take: async () => [],
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
             throw new Error(`Unexpected table: ${table}`);
           },
         },
@@ -307,6 +327,26 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, _value: string) {
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    take: async () => [],
                     collect: async () => [],
                   };
                 },
@@ -478,6 +518,26 @@ describe("jobsPublic.listForUser", () => {
             }
 
             if (table === "proposals") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, _value: string) {
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    take: async () => [],
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            if (table === "job_extraction_shadow") {
               return {
                 withIndex(_indexName: string, buildIndex: any) {
                   const scope = {
@@ -1441,6 +1501,26 @@ describe("jobsPublic.getById", () => {
                   buildIndex(scope);
                   return {
                     unique: async () => null,
+                  };
+                },
+              };
+            }
+
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, _value: string) {
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    take: async () => [],
+                    collect: async () => [],
                   };
                 },
               };
@@ -2540,6 +2620,26 @@ describe("jobsPublic.listArchivedForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, _value: string) {
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    take: async () => [],
                     collect: async () => [],
                   };
                 },

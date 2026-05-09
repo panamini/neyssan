@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { MatchReadBlock } from "../MatchReadBlock";
+import { resolveVisibleJobVerdict } from "../../../lib/jobs/visibleJobVerdict";
 
 type MatchReadProps = React.ComponentProps<typeof MatchReadBlock>["matchRead"];
 type MatchReviewProps = NonNullable<
@@ -56,6 +57,42 @@ function buildMatchReview(
 }
 
 describe("MatchReadBlock", () => {
+  it("resolves visible verdicts from review, then matchRead, then matchTier", () => {
+    expect(
+      resolveVisibleJobVerdict({
+        matchReview: { verdict: "possible_lead", score: 68 },
+        matchRead: { tier: "weak" },
+        matchTier: "weak",
+      }),
+    ).toMatchObject({
+      key: "worth_a_shot",
+      label: "Worth a shot",
+      tone: "worth",
+    });
+    expect(
+      resolveVisibleJobVerdict({
+        matchReview: null,
+        matchRead: { tier: "weak" },
+        matchTier: "partial",
+      }),
+    ).toMatchObject({
+      key: "probably_skip",
+      label: "Probably skip",
+      tone: "skip",
+    });
+    expect(
+      resolveVisibleJobVerdict({
+        matchReview: null,
+        matchRead: null,
+        matchTier: "partial",
+      }),
+    ).toMatchObject({
+      key: "worth_a_shot",
+      label: "Worth a shot",
+      tone: "worth",
+    });
+  });
+
   it("does not show the empty-profile message when attached resume scoring data exists", () => {
     render(
       <MatchReadBlock
@@ -233,5 +270,29 @@ describe("MatchReadBlock", () => {
     expect(screen.getByText("Worth a shot — review.")).toBeInTheDocument();
     expect(screen.queryByText("Probably skip · 0%")).toBeNull();
     expect(screen.queryByText("Operations overlaps.")).toBeNull();
+  });
+
+  it("keeps probably skip verdict copy decisive and leaves nuance below", () => {
+    render(
+      <MatchReadBlock
+        matchRead={buildMatchRead({
+          tier: "weak",
+          matched: [],
+          missing: ["Program management"],
+        })}
+        matchReview={buildMatchReview({
+          verdict: "probably_skip",
+          score: 18,
+          one_liner: "Weak match. Limited overlap.",
+          why_this_may_interest_you: [],
+          watch_out: ["Limited overlap."],
+          suggested_next_step: "review_manually",
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Probably skip.")).toBeInTheDocument();
+    expect(screen.getByText("Weak match. Limited overlap.")).toBeInTheDocument();
+    expect(screen.queryByText("Probably skip — review.")).toBeNull();
   });
 });

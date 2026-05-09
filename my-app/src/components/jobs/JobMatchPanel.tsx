@@ -1,7 +1,12 @@
 import React from "react";
+import { RotateCcw } from "@/lib/icons";
+import {
+  resolveVisibleJobVerdict,
+  type VisibleJobMatchReviewInput,
+} from "../../lib/jobs/visibleJobVerdict";
 
 type MatchTier = "strong" | "partial" | "weak" | "unknown";
-type MatchReviewVerdict =
+export type MatchReviewVerdict =
   | "strong_lead"
   | "possible_lead"
   | "probably_skip"
@@ -13,7 +18,7 @@ export type JobMatchPanelProps = {
   missing: string[];
   profileLabel: string;
   oneLiner?: string | null;
-  reviewVerdict?: MatchReviewVerdict | null;
+  matchReview?: VisibleJobMatchReviewInput;
   suggestedNextStep?: string | null;
   whyItems?: string[];
   watchOutItems?: string[];
@@ -22,50 +27,6 @@ export type JobMatchPanelProps = {
   onToggleExpanded: () => void;
   onRefreshMatch?: () => void;
 };
-
-function resolveVerdictLabel(
-  tier: MatchTier,
-  reviewVerdict?: MatchReviewVerdict | null,
-): string {
-  switch (reviewVerdict) {
-    case "strong_lead":
-      return "Strong match";
-    case "possible_lead":
-      return "Worth a shot";
-    case "probably_skip":
-      return "Probably skip";
-    case "not_enough_signal":
-      return "Maybe";
-    default:
-      break;
-  }
-
-  switch (tier) {
-    case "strong":
-      return "Strong match";
-    case "partial":
-      return "Worth a shot";
-    case "weak":
-      return "Probably skip";
-    case "unknown":
-      return "Maybe";
-  }
-}
-
-function resolveVerdictTone(
-  tier: MatchTier,
-  reviewVerdict?: MatchReviewVerdict | null,
-): "strong" | "worth" | "maybe" | "skip" {
-  if (reviewVerdict === "strong_lead") return "strong";
-  if (reviewVerdict === "possible_lead") return "worth";
-  if (reviewVerdict === "probably_skip") return "skip";
-  if (reviewVerdict === "not_enough_signal") return "maybe";
-
-  if (tier === "strong") return "strong";
-  if (tier === "partial") return "worth";
-  if (tier === "weak") return "skip";
-  return "maybe";
-}
 
 function formatSuggestedNextStep(nextStep?: string | null): string {
   switch (nextStep) {
@@ -85,6 +46,10 @@ function formatSuggestedNextStep(nextStep?: string | null): string {
 }
 
 function formatVerdictHeadline(label: string, nextStep?: string | null): string {
+  if (label === "Probably skip") {
+    return "Probably skip.";
+  }
+
   switch (nextStep) {
     case "apply":
       return `${label} — apply.`;
@@ -111,7 +76,7 @@ export function JobMatchPanel({
   missing,
   profileLabel,
   oneLiner,
-  reviewVerdict,
+  matchReview,
   suggestedNextStep,
   whyItems = [],
   watchOutItems = [],
@@ -120,8 +85,13 @@ export function JobMatchPanel({
   onToggleExpanded,
   onRefreshMatch,
 }: JobMatchPanelProps): JSX.Element {
-  const verdictLabel = resolveVerdictLabel(tier, reviewVerdict);
-  const tone = resolveVerdictTone(tier, reviewVerdict);
+  const { label: verdictLabel, tone } = resolveVisibleJobVerdict(
+    {
+      matchReview,
+      matchRead: { tier },
+      matchTier: tier,
+    },
+  );
   const skillsCopy =
     matched.length > 0
       ? `${matched.slice(0, 3).join(", ")} — strong overlap.`
@@ -155,6 +125,7 @@ export function JobMatchPanel({
               className="dasti-job-match-panel__refresh"
               onClick={onRefreshMatch}
             >
+              <RotateCcw size={14} strokeWidth={1.8} aria-hidden="true" />
               Refresh match
             </button>
           ) : null}
@@ -176,13 +147,21 @@ export function JobMatchPanel({
 
       <dl className="verdict-grid dasti-job-match-panel__rows">
         <dt>Skills</dt>
-        <dd>{skillsCopy}</dd>
+        <dd>
+          <span>{skillsCopy}</span>
+        </dd>
         <dt>Seniority</dt>
-        <dd>{seniorityCopy}</dd>
+        <dd>
+          <span>{seniorityCopy}</span>
+        </dd>
         <dt>Location</dt>
-        <dd>{locationCopy}</dd>
+        <dd>
+          <span>{locationCopy}</span>
+        </dd>
         <dt>Gap</dt>
-        <dd>{watchOutCopy}</dd>
+        <dd>
+          <span>{watchOutCopy}</span>
+        </dd>
       </dl>
 
       <button

@@ -176,6 +176,19 @@ type StructuredShadowSummary = {
   profileConstraintCount: number;
 };
 
+function normalizeStoredMatchTier(value: unknown): MatchReadTier | null {
+  if (
+    value === "strong" ||
+    value === "partial" ||
+    value === "weak" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return null;
+}
+
 type StructuredInternalIdentity = {
   subject?: string | null;
   email?: string | null;
@@ -187,6 +200,13 @@ const structuredMatchTierValidator = v.union(
   v.literal("partial"),
   v.literal("weak"),
   v.literal("unknown"),
+);
+
+const listJobMatchReadValidator = v.union(
+  v.null(),
+  v.object({
+    tier: structuredMatchTierValidator,
+  }),
 );
 
 const structuredShadowSummaryValidator = v.object({
@@ -1694,7 +1714,7 @@ async function listProjectedJobsForProfiles(
       : job.archivedAt === null || job.archivedAt === undefined,
   );
 
-  const projections = visibleJobs.map((job: any) => {
+  const projections = await Promise.all(visibleJobs.map(async (job: any) => {
     const storedResume = resolveStoredResumeSelection({
       job,
       primaryProfile,
@@ -1716,6 +1736,34 @@ async function listProjectedJobsForProfiles(
       },
       profile: buildMatchReadProfile(matchReadProfile),
     });
+    const pendingMatchRead = buildStructuredPendingMatchRead({
+      jobId: String(job._id),
+      profileId: String(
+        (matchReadProfile as any)?.profileId ??
+          (matchReadProfile as any)?._id ??
+          (matchReadProfile as any)?.id ??
+          "",
+      ),
+    });
+    const shadowRows = await ctx.db
+      .query("job_extraction_shadow")
+      .withIndex("by_job_id", (q: any) => q.eq("job_id", job._id))
+      .order("desc")
+      .take(JOB_DETAIL_SHADOW_ROWS_LIMIT);
+    const structuredDebug = buildStructuredMatchReadDebug({
+      old: pendingMatchRead,
+      job: {
+        id: String(job._id),
+        rawLanguageDetected: resolveEffectiveJobRawLanguageDetected(job),
+      },
+      profile: matchReadProfile,
+      shadowRows,
+    });
+    const visibleMatchRead = buildVisibleMatchReadFromStructuredDebug({
+      pendingMatchRead,
+      debug: structuredDebug,
+    });
+    const matchReview = buildJobMatchReviewFromStructuredDebug(structuredDebug);
     const stats = linkedProposalStats.get(String(job._id));
     const lastActivityAt = Math.max(
       job.updatedAt ?? 0,
@@ -1734,7 +1782,11 @@ async function listProjectedJobsForProfiles(
       sourceType: job.sourceType,
       parseStatus: job.parseStatus,
       reviewState: job.reviewState,
-      matchTier: matchRead.tier,
+      matchTier: normalizeStoredMatchTier(job.matchTier) ?? matchRead.tier,
+      matchRead: {
+        tier: visibleMatchRead.tier,
+      },
+      matchReview,
       status: job.status,
       importedAt: job.importedAt,
       updatedAt: job.updatedAt,
@@ -1742,7 +1794,7 @@ async function listProjectedJobsForProfiles(
       lastActivityAt,
       linkedDocumentCount: stats?.count ?? 0,
     };
-  });
+  }));
 
   return projections.sort((left: any, right: any) => {
     const leftActivity = Number(left.lastActivityAt ?? left.updatedAt ?? 0);
@@ -2472,6 +2524,8 @@ export const listForUser = query({
         v.literal("weak"),
         v.literal("unknown"),
       ),
+      matchRead: listJobMatchReadValidator,
+      matchReview: v.union(v.null(), jobMatchReviewValidator),
       status: v.string(),
       importedAt: v.number(),
       updatedAt: v.number(),
@@ -2621,6 +2675,8 @@ export const listArchivedForUser = query({
         v.literal("weak"),
         v.literal("unknown"),
       ),
+      matchRead: listJobMatchReadValidator,
+      matchReview: v.union(v.null(), jobMatchReviewValidator),
       status: v.string(),
       importedAt: v.number(),
       updatedAt: v.number(),

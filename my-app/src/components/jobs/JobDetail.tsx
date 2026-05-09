@@ -62,37 +62,41 @@ function formatJobTitle(value: string): string {
   return String(value ?? "").trim().replace(/[:\s]+$/, "") || "Untitled job";
 }
 
-function resolveMatchTierLabel(tier: string | null | undefined): string {
-  switch (tier) {
-    case "strong":
-      return "Strong match";
-    case "partial":
-      return "Worth a shot";
-    case "weak":
-      return "Probably skip";
-    default:
-      return "Maybe";
+function resolveDetailStatusLabel(args: {
+  parseStatus?: string | null;
+  trustState?: string | null;
+}): string | null {
+  if (args.parseStatus === "failed") {
+    return "Needs attention";
   }
+
+  if (args.trustState === "ready" || args.trustState === "needs_review") {
+    return "Ready";
+  }
+
+  if (args.parseStatus === "parsed") {
+    return "Parsed";
+  }
+
+  if (args.parseStatus === "parsing" || args.trustState === "pending") {
+    return "Imported";
+  }
+
+  return null;
 }
 
-function resolveMatchTierTone(tier: string | null | undefined): string {
-  switch (tier) {
-    case "strong":
-      return "strong";
-    case "partial":
-      return "worth";
-    case "weak":
-      return "skip";
-    default:
-      return "maybe";
+function formatLinkedDocumentCount(count: number): string | null {
+  if (count <= 0) {
+    return null;
   }
+
+  return `${count} linked document${count === 1 ? "" : "s"}`;
 }
 
 export function JobDetail({
   selectedJobId,
   selectedJobIsLoading,
   selectedJob,
-  selectedJobMatchTier,
   selectedJobIsFavorite,
   selectedJobResumeDisplayName,
   selectedSourceLabel,
@@ -137,13 +141,12 @@ export function JobDetail({
   }
 
   const selectedJobTitle = formatJobTitle(selectedJob.title);
-  const selectedJobResolvedMatchTier =
-    selectedJobMatchTier ?? selectedJob.matchTier;
-  const selectedJobVerdictLabel = resolveMatchTierLabel(
-    selectedJobResolvedMatchTier,
-  );
-  const selectedJobVerdictTone = resolveMatchTierTone(
-    selectedJobResolvedMatchTier,
+  const detailStatusLabel = resolveDetailStatusLabel({
+    parseStatus: selectedJob.parseStatus,
+    trustState: selectedJob.reviewState,
+  });
+  const linkedDocumentLabel = formatLinkedDocumentCount(
+    Number(selectedJob.linkedProposalCount ?? 0),
   );
 
   return (
@@ -195,13 +198,6 @@ export function JobDetail({
                 )}
               </>
             ) : null}
-            <span>·</span>
-            <span
-              className={`ds-verdict ds-verdict--${selectedJobVerdictTone} dasti-jobs-detail__verdict`}
-            >
-              <span className="ds-verdict__dot" aria-hidden="true" />
-              {selectedJobVerdictLabel}
-            </span>
           </div>
           <div className="dasti-jobs-detail__action-row">
             <button
@@ -313,6 +309,15 @@ export function JobDetail({
                 <span>Generate proposal</span>
               </button>
             </div>
+            {detailStatusLabel || linkedDocumentLabel ? (
+              <div className="dasti-jobs-detail__status-line">
+                {detailStatusLabel ? <span>{detailStatusLabel}</span> : null}
+                {detailStatusLabel && linkedDocumentLabel ? (
+                  <span aria-hidden="true">·</span>
+                ) : null}
+                {linkedDocumentLabel ? <span>{linkedDocumentLabel}</span> : null}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

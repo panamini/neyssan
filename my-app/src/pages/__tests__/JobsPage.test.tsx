@@ -9,6 +9,10 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { JobsPage } from "../JobsPage";
+import {
+  PROPOSAL_EXTENSION_INSTALL_LINK,
+  getProposalExtensionSourceLinks,
+} from "../../lib/proposal-source-platforms";
 
 const approveReviewItemMock = vi.fn().mockResolvedValue(null);
 const archiveJobMock = vi.fn().mockResolvedValue(null);
@@ -531,6 +535,9 @@ describe("JobsPage", () => {
         name: /Open linked proposal Operations Associate cover letter/i,
       }),
     ).toHaveAttribute("href", "/proposal?view=saved&id=proposal_1");
+    expect(
+      document.querySelector(".dasti-jobs-detail__status-line"),
+    ).toHaveTextContent(/Ready\s*·\s*2 linked documents/);
     expect((await screen.findAllByText("Ready")).length).toBeGreaterThan(0);
     expect(screen.queryByText("Check fields")).not.toBeInTheDocument();
     expect(screen.queryByText("Review state")).not.toBeInTheDocument();
@@ -1014,7 +1021,7 @@ describe("JobsPage", () => {
       screen.getByRole("button", { name: "Generate proposal" }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "+ filter" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Filters" }));
     fireEvent.click(
       screen.getByRole("menuitemradio", { name: "Strong match" }),
     );
@@ -1323,6 +1330,58 @@ describe("JobsPage", () => {
     expect(
       within(matchRegion).queryByText("Worth a shot — review."),
     ).toBeNull();
+  });
+
+  it("uses matchReview as the shared visible verdict authority for list card and detail", async () => {
+    const conflictingReview = buildMatchReview({
+      verdict: "possible_lead",
+      score: 68,
+      one_liner: "Partial match. A few checks left.",
+      suggested_next_step: "apply",
+    });
+    listResult = [
+      {
+        ...jobsList[0],
+        matchTier: "weak",
+        matchRead: {
+          tier: "weak",
+        },
+        matchReview: conflictingReview,
+      },
+    ] as any;
+    selectedJobResult = {
+      ...selectedJob,
+      matchRead: {
+        ...selectedJob.matchRead,
+        tier: "weak",
+      },
+      matchReview: conflictingReview,
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/job_alpha"]}>
+        <Routes>
+          <Route path="/jobs/:jobId" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    const selectedRow = within(jobsListElement)
+      .getByText("Operations Associate")
+      .closest("article");
+    expect(
+      within(selectedRow as HTMLElement).getByText("Worth a shot"),
+    ).toBeInTheDocument();
+    expect(
+      within(selectedRow as HTMLElement).queryByText("Probably skip"),
+    ).toBeNull();
+
+    const matchRegion = await screen.findByLabelText("Match");
+    expect(
+      within(matchRegion).getByText("Worth a shot — apply."),
+    ).toBeInTheDocument();
+    expect(within(matchRegion).queryByText(/Probably skip/)).toBeNull();
   });
 
   it("renders matchReview watch-out copy for an unclear credential", async () => {
@@ -2086,6 +2145,108 @@ describe("JobsPage", () => {
     });
   });
 
+  it("clears Jobs search with the custom clear action", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs?view=list"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const search = await screen.findByRole("searchbox", {
+      name: "Search jobs",
+    });
+    fireEvent.change(search, { target: { value: "support" } });
+    expect(search).toHaveValue("support");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+
+    expect(search).toHaveValue("");
+  });
+
+  it("opens extension and job board links from the Jobs list Add job menu", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs?view=list"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "+ Add job" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Paste URL" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Capture with extension" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Worth it" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Favorites" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "+ Filters" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add job" }));
+    expect(
+      screen.getByRole("menuitem", { name: "Install Chrome extension" }),
+    ).toBeInTheDocument();
+    for (const link of getProposalExtensionSourceLinks()) {
+      expect(
+        screen.getByRole("menuitem", { name: link.label }),
+      ).toBeInTheDocument();
+    }
+
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Install Chrome extension" }),
+    );
+    expect(windowOpenMock).toHaveBeenCalledWith(
+      PROPOSAL_EXTENSION_INSTALL_LINK.href,
+      "_blank",
+      "noopener,noreferrer",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add job" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "LinkedIn" }));
+    expect(windowOpenMock).toHaveBeenCalledWith(
+      getProposalExtensionSourceLinks().find((link) => link.key === "linkedin")
+        ?.href,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  });
+
+  it("keeps moved Jobs list filters in the separate filter menu", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs?view=list"]}>
+        <Routes>
+          <Route path="/jobs" element={<JobsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "+ Add job" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+ Filters" }));
+    expect(
+      screen.getByRole("menuitemradio", { name: "Remote" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitemradio", { name: "Senior" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitemradio", { name: "Has docs" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitemradio", { name: "No docs" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitemradio", { name: "Strong match" }),
+    ).toBeInTheDocument();
+  });
+
   it("saves summary edits inline from the brief card", async () => {
     selectedJobResult = {
       ...selectedJob,
@@ -2201,23 +2362,23 @@ describe("JobsPage", () => {
     expect(
       within(jobsListElement).getByText("Support Specialist"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Worth+ a shot" })).not.toHaveClass(
+    expect(screen.getByRole("button", { name: "Worth it" })).not.toHaveClass(
       "dasti-jobs-filter-chip--active",
     );
-    expect(screen.getByRole("button", { name: "+ filter" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "+ Filters" })).toBeEnabled();
     const supportRow = within(jobsListElement)
       .getByText("Support Specialist")
       .closest("article");
     expect(
       within(supportRow as HTMLElement)
         .getByText("Probably skip")
-        .closest(".dasti-jobs-row__title"),
+        .closest(".dasti-jobs-row__rail"),
     ).toBeTruthy();
     expect(
       within(supportRow as HTMLElement).getByLabelText("Favorite"),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Worth+ a shot" }));
+    fireEvent.click(screen.getByRole("button", { name: "Worth it" }));
 
     await waitFor(() => {
       expect(
@@ -2228,7 +2389,7 @@ describe("JobsPage", () => {
       ).not.toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "+ filter" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Filters" }));
     fireEvent.click(
       screen.getByRole("menuitemradio", { name: "Probably skip" }),
     );
@@ -2242,7 +2403,7 @@ describe("JobsPage", () => {
       ).not.toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "+ filter" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Filters" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Has docs" }));
 
     expect(
@@ -2266,7 +2427,7 @@ describe("JobsPage", () => {
     );
 
     const jobsListElement = await screen.findByRole("list");
-    fireEvent.click(screen.getByRole("button", { name: "Unviewed" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
 
     await waitFor(() => {
       expect(
