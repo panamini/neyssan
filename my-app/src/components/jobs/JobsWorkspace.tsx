@@ -1217,6 +1217,10 @@ function JobsPageContent(): JSX.Element {
     () => new URLSearchParams(location.search).get("view") === "list",
     [location.search],
   );
+  const isProposalSelectionMode = React.useMemo(
+    () => new URLSearchParams(location.search).get("selectFor") === "proposal",
+    [location.search],
+  );
   const jobsView = React.useMemo<JobsViewMode>(
     () =>
       new URLSearchParams(location.search).get("view") === "archived"
@@ -1523,13 +1527,15 @@ function JobsPageContent(): JSX.Element {
       jobsView === "active" &&
       filteredJobs.length > 0 &&
       !isMobileJobsLayout &&
-      !holdListViewOpen
+      !holdListViewOpen &&
+      !isProposalSelectionMode
     ) {
       void navigate(buildJobsRoute(filteredJobs[0].id), { replace: true });
     }
   }, [
     filteredJobs,
     holdListViewOpen,
+    isProposalSelectionMode,
     isMobileJobsLayout,
     jobsView,
     navigate,
@@ -2205,7 +2211,15 @@ function JobsPageContent(): JSX.Element {
                 onRemoteOnlyChange={setRemoteOnly}
                 onSeniorOnlyChange={setSeniorOnly}
                 onViewChange={(view) => void navigate(buildJobsListRoute(view))}
-                onSelectJob={(jobId) => void navigate(buildJobsRoute(jobId))}
+                onSelectJob={(jobId) =>
+                  void navigate(
+                    isProposalSelectionMode
+                      ? buildProposalRoute(jobId)
+                      : buildJobsRoute(jobId),
+                  )
+                }
+                isProposalSelectionMode={isProposalSelectionMode}
+                onCancelProposalSelection={() => void navigate("/proposal")}
                 onOpenJobSource={handleOpenJobSource}
                 onArchiveJob={(jobId) => {
                   void handleArchiveJob(jobId);

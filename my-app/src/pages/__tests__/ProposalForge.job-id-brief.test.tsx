@@ -101,8 +101,8 @@ describe("ProposalForge canonical job brief", () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockUseQuery.mockReset();
-    mockUseQuery.mockImplementation((query: string) => {
-      if (query === "jobsPublic.getById") {
+    mockUseQuery.mockImplementation((query: string, args: unknown) => {
+      if (query === "jobsPublic.getById" && args && args !== "skip") {
         return {
           id: "job_123",
           title: "Operations Associate",
@@ -235,5 +235,24 @@ describe("ProposalForge canonical job brief", () => {
       container.querySelector(".dasti-brief-card__summary"),
     ).not.toBeInTheDocument();
 
+  });
+
+  it("opens Jobs in proposal selection mode from the empty job context action", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <Routes>
+          <Route path="/proposal" element={<ProposalForge />} />
+          <Route path="/jobs" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Choose from Job Forge" }),
+    );
+
+    expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+      "/jobs?selectFor=proposal",
+    );
   });
 });

@@ -1607,6 +1607,79 @@ describe("JobsPage", () => {
     });
   });
 
+  it("routes a job card directly to Proposal Forge in proposal selection mode", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs?selectFor=proposal"]}>
+        <Routes>
+          <Route
+            path="/jobs"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route path="/proposal" element={<LocationProbe />} />
+          <Route path="/jobs/:jobId" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByText("Choose a job for this proposal."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Pick one job to attach it to your draft."),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Select job").length).toBeGreaterThan(0);
+
+    const jobsListElement = await screen.findByRole("list");
+    fireEvent.click(within(jobsListElement).getByText("Operations Associate"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/proposal?jobId=job_alpha",
+      );
+    });
+  });
+
+  it("keeps normal job card clicks opening job detail outside proposal selection mode", async () => {
+    render(
+      <MemoryRouter initialEntries={["/jobs"]}>
+        <Routes>
+          <Route
+            path="/jobs"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+          <Route
+            path="/jobs/:jobId"
+            element={
+              <>
+                <JobsPage />
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const jobsListElement = await screen.findByRole("list");
+    fireEvent.click(within(jobsListElement).getByText("Operations Associate"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
+        "/jobs/job_alpha",
+      );
+    });
+  });
+
   it("attaches a resume only to the selected job from the paperclip picker", async () => {
     enableJobsMatchDebug();
     selectedJobResultByRefreshKey[1] = {

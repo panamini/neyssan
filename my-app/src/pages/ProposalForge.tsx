@@ -8754,7 +8754,7 @@ export function ProposalForge(): JSX.Element {
   }, []);
 
   const handleOpenJobsFromRail = React.useCallback(() => {
-    void navigate("/jobs");
+    void navigate("/jobs?selectFor=proposal");
   }, [navigate]);
   const handleTemplateStartBlank = React.useCallback(() => {
     setIsTemplateJobContextEmptyStateDismissed(true);

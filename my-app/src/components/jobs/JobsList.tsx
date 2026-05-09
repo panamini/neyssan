@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  CaretCircleRight,
   DotsThree,
   FileText,
   ListMagnifyingGlass,
@@ -87,6 +88,8 @@ type JobsListProps = {
   onDeleteArchivedJob: (jobId: string) => void;
   onConfirmPermanentDeleteJobIdChange: (jobId: string | null) => void;
   onImportFirstJob: () => void;
+  isProposalSelectionMode?: boolean;
+  onCancelProposalSelection?: () => void;
 };
 
 const JOBS_SORT_OPTIONS = [
@@ -190,6 +193,8 @@ export function JobsList({
   onRestoreArchivedJob,
   onDeleteArchivedJob,
   onConfirmPermanentDeleteJobIdChange,
+  isProposalSelectionMode = false,
+  onCancelProposalSelection,
 }: JobsListProps): JSX.Element {
   const jobsCountLabel =
     filteredJobs.length === displayedJobsCount
@@ -202,6 +207,21 @@ export function JobsList({
 
   return (
     <section className="dasti-jobs-list-pane jobs__list" aria-label="Jobs list">
+      {isProposalSelectionMode ? (
+        <div className="dasti-jobs-selection-banner">
+          <div>
+            <strong>Choose a job for this proposal.</strong>
+            <span>Pick one job to attach it to your draft.</span>
+          </div>
+          <button
+            type="button"
+            className="dasti-button dasti-button--secondary dasti-button--sm"
+            onClick={onCancelProposalSelection}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
       <div className="dasti-jobs-chrome">
         <div className="dasti-jobs-toolbar-stack">
           <div className="dasti-jobs-toolbar__search">
@@ -533,6 +553,12 @@ export function JobsList({
                       <span className="ds-verdict__dot" aria-hidden="true" />
                       {matchLabel}
                     </span>
+                    {isProposalSelectionMode ? (
+                      <span className="dasti-jobs-row__select-hint">
+                        Select job
+                        <CaretCircleRight size={14} aria-hidden="true" />
+                      </span>
+                    ) : null}
                     <div className="dasti-jobs-row__controls">
                       <div className="dasti-import-dropdown dasti-jobs-row__menu">
                         <Menu
