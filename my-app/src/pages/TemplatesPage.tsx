@@ -1,53 +1,55 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Pill } from "../components/ui";
+import { Button } from "../components/ui";
 import { Check } from "../lib/icons";
+import { ResumeTemplateRenderer } from "../features/verbati/resume/ResumeTemplateRenderer";
+import { resumeMock, resumeMockOnecol } from "../features/verbati/resume/resume.mock";
+import { resolveVerbatiStyle } from "../features/verbati/style";
+import type { VerbatiStylePreset } from "../features/verbati/types";
+import { ProposalDocumentRenderer } from "../components/proposal-render/ProposalDocumentRenderer";
+import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
+import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
+import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
+import {
+  resolvePreviewCanonicalAppearance,
+  serializeProposalDocumentThemeVars,
+} from "../lib/layout/documentAppearance";
+import { getResumeTemplateDefinition } from "../lib/layout/resumeTemplates";
+import { planWorkshopResumePages } from "../lib/resume/resumePagination";
+import { templatePreviewApplicant, templatePreviewProposal } from "./templatePreviewSamples";
 
 const TEMPLATE_FILTERS = ["cover letters", "resume"] as const;
 type TemplateFilter = (typeof TEMPLATE_FILTERS)[number];
+
+type TemplateFamily =
+  | "workshop-onecol"
+  | "workshop-twocol"
+  | "minimal"
+  | "bold"
+  | "letterpress";
 
 type TemplateCard = {
   id: string;
   name: string;
   kind: "Cover letter" | "Resume";
-  family: "two-column" | "workshop-twocol" | "minimal" | "bold" | "classic" | "compact" | "letterpress";
+  family: TemplateFamily;
   description: string;
-  updatedLabel: string;
-  lines: string[];
 };
 
 const TEMPLATES: TemplateCard[] = [
   {
+    id: "workshop-one-column-resume",
+    name: "Workshop one-col",
+    kind: "Resume",
+    family: "workshop-onecol",
+    description: "Planner-backed Workshop resume with a focused single-column ATS page.",
+  },
+  {
     id: "workshop-two-column-resume",
-    name: "Workshop 2-col",
+    name: "Workshop two-col",
     kind: "Resume",
     family: "workshop-twocol",
     description: "Planner-backed Workshop resume with a 17/18-inspired two-column grid.",
-    updatedLabel: "New",
-    lines: [
-      "Aurélien Pellegrini",
-      "Product engineer",
-      "Experience",
-      "Lead Frontend · Studio Aurore",
-      "Skills",
-      "React · TypeScript · Design systems",
-    ],
-  },
-  {
-    id: "two-column-resume",
-    name: "Two-column",
-    kind: "Resume",
-    family: "two-column",
-    description: "A simple two-column resume shell for structured experience and skills.",
-    updatedLabel: "Updated 1 week ago",
-    lines: [
-      "Aurélien Pellegrini",
-      "Product engineer",
-      "Experience",
-      "Lead Frontend · Studio Aurore",
-      "Skills",
-      "React · TypeScript · Design systems",
-    ],
   },
   {
     id: "minimal-letter",
@@ -55,14 +57,6 @@ const TEMPLATES: TemplateCard[] = [
     kind: "Cover letter",
     family: "minimal",
     description: "A clean letter with quiet spacing and straightforward hierarchy.",
-    updatedLabel: "Updated 2h ago",
-    lines: [
-      "Aurélien Pellegrini",
-      "May 1, 2026",
-      "Hello Linear team,",
-      "I have spent six years building craft-first product surfaces.",
-      "— Aurélien",
-    ],
   },
   {
     id: "bold-letter",
@@ -70,44 +64,6 @@ const TEMPLATES: TemplateCard[] = [
     kind: "Cover letter",
     family: "bold",
     description: "A sharper letter direction for confident, product-led applications.",
-    updatedLabel: "Updated 1 day ago",
-    lines: [
-      "Aurélien.",
-      "Frontend engineer.",
-      "Hello team,",
-      "I build fast, legible product workflows with careful systems thinking.",
-      "Thank you,",
-    ],
-  },
-  {
-    id: "classic-resume",
-    name: "Classic",
-    kind: "Resume",
-    family: "classic",
-    description: "A traditional resume frame with centered identity and readable sections.",
-    updatedLabel: "Updated 1 month ago",
-    lines: [
-      "Aurélien Pellegrini",
-      "Frontend engineer · Paris, France",
-      "Experience",
-      "Lead Frontend — Studio Aurore.",
-      "Senior Frontend — Pixel and Co.",
-    ],
-  },
-  {
-    id: "compact-resume",
-    name: "Compact",
-    kind: "Resume",
-    family: "compact",
-    description: "A dense resume layout for senior profiles with more content pressure.",
-    updatedLabel: "Updated 1 week ago",
-    lines: [
-      "Aurélien Pellegrini",
-      "aurelien@twoweeks.ai · Paris",
-      "Experience",
-      "Lead Frontend · Studio Aurore.",
-      "Education · MSc Computer Science.",
-    ],
   },
   {
     id: "letterpress-letter",
@@ -115,16 +71,44 @@ const TEMPLATES: TemplateCard[] = [
     kind: "Cover letter",
     family: "letterpress",
     description: "A warmer editorial letter style for narrative applications.",
-    updatedLabel: "Updated May 2025",
-    lines: [
-      "Aurélien Pellegrini",
-      "May 1, 2026",
-      "Hello Linear team,",
-      "I have spent six years building craft-first product surfaces.",
-      "— Aurélien",
-    ],
   },
 ];
+
+const TEMPLATE_STYLE_PRESETS: Record<TemplateFamily, VerbatiStylePreset> = {
+  "workshop-onecol": resolveVerbatiStyle({
+    familyId: "workshop",
+    typography: "geist-baskervville",
+    palette: "sauge",
+    resumeTemplateId: "workshop_resume_onecol_ats",
+  }),
+  "workshop-twocol": resolveVerbatiStyle({
+    familyId: "workshop",
+    typography: "geist-baskervville",
+    palette: "sauge",
+    resumeTemplateId: "workshop_resume_twocol_ats",
+  }),
+  minimal: resolveVerbatiStyle({
+    familyId: "workshop",
+    typography: "geist-baskervville",
+    palette: "sauge",
+  }),
+  bold: resolveVerbatiStyle({
+    familyId: "modernist",
+    typography: "ledger-sans",
+    palette: "ink",
+  }),
+  letterpress: resolveVerbatiStyle({
+    familyId: "quire",
+    typography: "quiet-editorial",
+    palette: "terre",
+  }),
+};
+
+const PROPOSAL_PREVIEW_TEMPLATES: Partial<Record<TemplateFamily, ProposalTemplateId>> = {
+  minimal: "workshop_proposal_margin",
+  bold: "modernist_signal",
+  letterpress: "quire_margin",
+};
 
 function filterMatches(template: TemplateCard, filter: TemplateFilter): boolean {
   if (filter === "cover letters") return template.kind === "Cover letter";
@@ -133,6 +117,62 @@ function filterMatches(template: TemplateCard, filter: TemplateFilter): boolean 
 
 function filterLabel(filter: TemplateFilter): string {
   return filter === "resume" ? "Resume" : "Cover letters";
+}
+
+function TemplateDocumentPreview({
+  kind,
+  family,
+}: {
+  kind: TemplateCard["kind"];
+  family: TemplateFamily;
+}): JSX.Element {
+  const stylePreset = TEMPLATE_STYLE_PRESETS[family];
+
+  if (kind === "Resume") {
+    const resumeTemplateId =
+      family === "workshop-onecol"
+        ? "workshop_resume_onecol_ats"
+        : "workshop_resume_twocol_ats";
+    const previewData = family === "workshop-onecol" ? resumeMockOnecol : resumeMock;
+    const previewPages = planWorkshopResumePages({
+      data: previewData,
+      template: getResumeTemplateDefinition(resumeTemplateId),
+      stylePreset,
+    }).committedPages;
+    const firstPreviewPage = previewPages[0];
+
+    return (
+      <ResumeTemplateRenderer
+        data={previewData}
+        stylePreset={stylePreset}
+        resumeTemplateId={resumeTemplateId}
+        committedPages={firstPreviewPage ? [firstPreviewPage] : undefined}
+      />
+    );
+  }
+
+  return (
+    <ProposalDocumentRenderer
+      content={templatePreviewProposal.content}
+      proposalType="cover_letter"
+      templateId={PROPOSAL_PREVIEW_TEMPLATES[family] ?? "workshop_proposal_margin"}
+      railTitle={templatePreviewProposal.railTitle}
+      railMeta={templatePreviewProposal.railMeta}
+      contactLine={templatePreviewProposal.contactLine}
+      letterDate={templatePreviewProposal.letterDate}
+      recipientDetails={templatePreviewProposal.recipientDetails}
+      documentTitle={templatePreviewProposal.documentTitle}
+      documentMeta={templatePreviewProposal.documentMeta}
+      applicantHeader={templatePreviewApplicant}
+      headerVisibility={templatePreviewProposal.headerVisibility}
+      documentTypography={getProposalDocumentTypography("direct", stylePreset)}
+      pageWidth={A4_PAGE_WIDTH_PX}
+      stylePreset={stylePreset}
+      documentThemeVars={serializeProposalDocumentThemeVars(
+        resolvePreviewCanonicalAppearance(stylePreset),
+      )}
+    />
+  );
 }
 
 export function TemplatesPage(): JSX.Element {
@@ -183,7 +223,7 @@ export function TemplatesPage(): JSX.Element {
           </div>
         </div>
 
-        <div className="dasti-template-grid" aria-label="Templates">
+        <div className="dasti-template-grid" data-template-filter={activeFilter} aria-label="Templates">
           {visibleTemplates.map((template) => (
             <button
               key={template.id}
@@ -195,29 +235,17 @@ export function TemplatesPage(): JSX.Element {
                 navigate(template.kind === "Resume" ? "/cv" : "/proposal");
               }}
             >
-              <span className="dasti-template-card__topline">
-                <span className="ds-card__eyebrow dasti-library-card__eyebrow">{template.kind}</span>
-                {selectedTemplateId === template.id ? (
-                  <span className="dasti-template-card__check" aria-label="Selected">
-                    <Check size={13} strokeWidth={2.4} aria-hidden="true" />
-                  </span>
-                ) : null}
-              </span>
+              {selectedTemplateId === template.id ? (
+                <span className="dasti-template-card__check" aria-label="Selected">
+                  <Check size={13} strokeWidth={2.4} aria-hidden="true" />
+                </span>
+              ) : null}
               <span className="dasti-template-card__title">{template.name}</span>
               <span className="dasti-template-card__description">{template.description}</span>
               <span className="dasti-template-card__preview" aria-hidden="true">
-                {template.lines.map((line, lineIndex) => (
-                  <span
-                    key={`${template.id}-${line}`}
-                    className={lineIndex === 0 ? "dasti-template-card__name-line" : lineIndex === 2 || lineIndex === 4 ? "dasti-template-card__heading-line" : undefined}
-                  >
-                    {line}
-                  </span>
-                ))}
-              </span>
-              <span className="dasti-library-card__footer dasti-template-card__footer">
-                <span>{template.updatedLabel}</span>
-                <Pill tone="neutral">{template.kind}</Pill>
+                <span className="dasti-template-card__document-scale" data-testid="template-document-preview">
+                  <TemplateDocumentPreview kind={template.kind} family={template.family} />
+                </span>
               </span>
             </button>
           ))}
