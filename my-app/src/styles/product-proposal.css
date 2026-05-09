@@ -8012,6 +8012,10 @@
   padding-top: var(--space-2);
 }
 
+.dasti-proposal-skeleton-rail__job-context .dasti-proposal-skeleton-rail__drawer-body {
+  gap: var(--space-3);
+}
+
 .dasti-proposal-skeleton-rail__job-links {
   display: flex;
   flex-wrap: wrap;
@@ -8051,30 +8055,49 @@
 .dasti-proposal-skeleton-rail__empty-job-context {
   display: grid;
   gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--sf1) 74%, transparent);
+}
+
+.dasti-proposal-skeleton-rail__empty-job-context > .ds-btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .dasti-proposal-skeleton-rail__job-offer-input {
-  min-block-size: 132px;
+  min-block-size: 96px;
   resize: vertical;
+}
+
+.dasti-proposal-skeleton-rail__job-sites-label,
+.dasti-proposal-skeleton-rail__job-context-meta {
+  color: var(--tm2);
+  font-size: var(--tx);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: var(--lx);
+  text-transform: uppercase;
 }
 
 .dasti-proposal-skeleton-rail__job-site-tokens {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
+  gap: 6px;
 }
 
 .dasti-proposal-skeleton-rail__job-site-token {
   display: inline-flex;
   align-items: center;
-  min-block-size: 22px;
-  padding: 0 var(--space-2);
+  min-block-size: 20px;
+  padding: 0 9px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
   color: var(--tm2);
-  background: var(--sf1);
+  background: color-mix(in srgb, var(--sf1) 70%, transparent);
   font-size: var(--tx);
-  font-weight: 600;
+  font-weight: 550;
   line-height: 1;
   text-decoration: none;
 }
@@ -8084,6 +8107,38 @@
   border-color: var(--color-border-selected);
   color: var(--ti);
   text-decoration: none;
+}
+
+.dasti-proposal-skeleton-rail__active-job-context {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--sf1) 78%, transparent);
+}
+
+.dasti-proposal-skeleton-rail__job-preview {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ti);
+  font-size: var(--ts);
+  line-height: var(--ls);
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.dasti-proposal-skeleton-rail__job-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-1);
+}
+
+.dasti-proposal-skeleton-rail__job-actions .ds-btn {
+  min-height: 28px;
+  padding-inline: var(--space-2);
 }
 
 .dasti-proposal-skeleton-rail__match {

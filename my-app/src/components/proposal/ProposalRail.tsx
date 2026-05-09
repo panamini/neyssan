@@ -380,11 +380,14 @@ export function ProposalRail({
 }: ProposalRailProps): JSX.Element {
   const [activeTab, setActiveTab] = React.useState<ProposalRailTab>("draft");
   const [jobContextOpen, setJobContextOpen] = React.useState(false);
+  const [jobTextEditing, setJobTextEditing] = React.useState(false);
   const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] = React.useState(false);
   const customColorAnchorRef = React.useRef<HTMLButtonElement | null>(null);
   const customColorSurfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const jobOfferTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const jobMeta = [company, location].filter(Boolean).join(" · ");
   const compactJobSummary = jobSummary?.trim() || jobMeta || null;
+  const trimmedJobOfferText = jobOfferText.trim();
   const hasPastedJobText = Boolean(jobOfferText.trim());
   const hasLoadedJobContext = Boolean(
     jobTitle?.trim() || compactJobSummary || jobHref || sourceUrl,
@@ -392,14 +395,30 @@ export function ProposalRail({
   const hasActiveJobContext = Boolean(
     hasLoadedJobContext || hasPastedJobText,
   );
+  const jobContextState = hasLoadedJobContext ? "loaded" : hasPastedJobText ? "pasted" : "empty";
   const jobContextTitle =
-    jobTitle?.trim() || (hasPastedJobText ? "Untitled job offer" : "No job loaded");
+    jobContextState === "loaded" ? jobTitle?.trim() || "Untitled job offer"
+    : jobContextState === "pasted" ? "Job offer added"
+    : "No job loaded";
+  const loadedJobMeta = [company, sourceLabel, location].filter(Boolean).join(" · ");
 
   React.useEffect(() => {
     if (!hasActiveJobContext) {
       setJobContextOpen(true);
     }
   }, [hasActiveJobContext]);
+
+  React.useEffect(() => {
+    if (jobContextState !== "pasted") {
+      setJobTextEditing(false);
+    }
+  }, [jobContextState]);
+
+  React.useEffect(() => {
+    if (jobTextEditing) {
+      jobOfferTextareaRef.current?.focus();
+    }
+  }, [jobTextEditing]);
 
   const cvMenuSections = React.useMemo<MenuSection[]>(() => {
     const cvItems = cvOptions.map((option) => ({
@@ -688,13 +707,17 @@ export function ProposalRail({
             <span className="forge__rail-title dasti-proposal-skeleton-rail__title">
               {jobContextTitle}
             </span>
-            {compactJobSummary ? (
+            {jobContextState === "pasted" ? (
+              <span className="dasti-proposal-skeleton-rail__summary-text">
+                Pasted context
+              </span>
+            ) : compactJobSummary ? (
               <span className="dasti-proposal-skeleton-rail__summary-text">
                 {compactJobSummary}
               </span>
             ) : !hasLoadedJobContext ? (
               <span className="dasti-proposal-skeleton-rail__summary-text">
-                Paste a job offer or choose one from Job Forge.
+                Capture, paste, or choose a job.
               </span>
             ) : null}
           </span>
@@ -702,7 +725,7 @@ export function ProposalRail({
         </button>
         {jobContextOpen ? (
           <div id="proposal-rail-job-context" className="dasti-proposal-skeleton-rail__drawer-body">
-            {!hasLoadedJobContext ? (
+            {jobContextState === "empty" ? (
               <div className="dasti-proposal-skeleton-rail__empty-job-context">
                 <Button
                   type="button"
@@ -714,13 +737,18 @@ export function ProposalRail({
                   Choose from Job Forge
                 </Button>
                 <textarea
+                  ref={jobOfferTextareaRef}
                   className="ds-field ds-field--textarea dasti-proposal-skeleton-rail__job-offer-input"
                   value={jobOfferText}
-                  placeholder="Paste your job offer here"
-                  aria-label="Paste your job offer here"
-                  onChange={(event) => onJobOfferTextChange?.(event.target.value)}
+                  placeholder="Paste a job offer..."
+                  aria-label="Paste a job offer"
+                  onChange={(event) => {
+                    setJobTextEditing(true);
+                    onJobOfferTextChange?.(event.target.value);
+                  }}
                   onBlur={onJobOfferTextCommit}
                 />
+                <div className="dasti-proposal-skeleton-rail__job-sites-label">Job sources</div>
                 <div className="dasti-proposal-skeleton-rail__job-site-tokens" aria-label="Job sites">
                   {JOB_SITE_LINKS.map((site) => (
                     <a
@@ -734,6 +762,63 @@ export function ProposalRail({
                     </a>
                   ))}
                 </div>
+              </div>
+            ) : null}
+            {jobContextState === "pasted" ? (
+              <div className="dasti-proposal-skeleton-rail__active-job-context">
+                <div className="dasti-proposal-skeleton-rail__job-context-meta">
+                  Pasted context
+                </div>
+                {jobTextEditing ? (
+                  <textarea
+                    ref={jobOfferTextareaRef}
+                    className="ds-field ds-field--textarea dasti-proposal-skeleton-rail__job-offer-input"
+                    value={jobOfferText}
+                    placeholder="Paste a job offer..."
+                    aria-label="Edit pasted job offer"
+                    onChange={(event) => onJobOfferTextChange?.(event.target.value)}
+                    onBlur={onJobOfferTextCommit}
+                  />
+                ) : (
+                  <p className="dasti-proposal-skeleton-rail__job-preview">
+                    {trimmedJobOfferText}
+                  </p>
+                )}
+                <div className="dasti-proposal-skeleton-rail__job-actions">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setJobTextEditing((current) => !current)}
+                  >
+                    {jobTextEditing ? "Preview" : "Edit job text"}
+                  </Button>
+                  {onClearJobContext ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Clear job context"
+                      onClick={onClearJobContext}
+                    >
+                      Clear
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            {jobContextState === "loaded" ? (
+              <div className="dasti-proposal-skeleton-rail__active-job-context">
+                {loadedJobMeta ? (
+                  <div className="dasti-proposal-skeleton-rail__job-context-meta">
+                    {loadedJobMeta}
+                  </div>
+                ) : null}
+                {compactJobSummary ? (
+                  <p className="dasti-proposal-skeleton-rail__job-preview">
+                    {compactJobSummary}
+                  </p>
+                ) : null}
               </div>
             ) : null}
             {jobHref || sourceUrl ? (
@@ -759,15 +844,30 @@ export function ProposalRail({
                 ) : null}
               </div>
             ) : null}
-            {hasActiveJobContext && onClearJobContext ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onClearJobContext}
-              >
-                Clear job context
-              </Button>
+            {jobContextState === "loaded" ? (
+              <div className="dasti-proposal-skeleton-rail__job-actions">
+                {onOpenJobs ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={onOpenJobs}
+                  >
+                    Change job
+                  </Button>
+                ) : null}
+                {onClearJobContext ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Clear job context"
+                    onClick={onClearJobContext}
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
             {jobMatch ? (
               <div className={`dasti-proposal-skeleton-rail__match dasti-proposal-skeleton-rail__match--${jobMatch.tone}`}>
