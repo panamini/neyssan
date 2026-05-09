@@ -39,17 +39,19 @@ type TemplateCard = {
 const TEMPLATES: TemplateCard[] = [
   {
     id: "workshop-one-column-resume",
-    name: "Workshop one-col",
+    name: "Minimal",
     kind: "Resume",
     family: "workshop-onecol",
-    description: "Planner-backed Workshop resume with a focused single-column ATS page.",
+    description:
+      "A clean one-column CV that works well with recruiters and application systems. Simple, readable, safe.",
   },
   {
     id: "workshop-two-column-resume",
-    name: "Workshop two-col",
+    name: "French",
     kind: "Resume",
     family: "workshop-twocol",
-    description: "Planner-backed Workshop resume with a 17/18-inspired two-column grid.",
+    description:
+      "A structured two-column CV for a more polished European layout. Clear sections, strong hierarchy, still professional.",
   },
   {
     id: "minimal-letter",
@@ -60,17 +62,17 @@ const TEMPLATES: TemplateCard[] = [
   },
   {
     id: "bold-letter",
-    name: "Bold",
+    name: "Direct",
     kind: "Cover letter",
     family: "bold",
-    description: "A sharper letter direction for confident, product-led applications.",
+    description: "A sharper letter with a stronger opening. Confident, simple, direct.",
   },
   {
     id: "letterpress-letter",
-    name: "Letterpress",
+    name: "Editorial",
     kind: "Cover letter",
     family: "letterpress",
-    description: "A warmer editorial letter style for narrative applications.",
+    description: "A warmer letter with more personality. Good for narrative applications.",
   },
 ];
 
@@ -237,7 +239,7 @@ export function TemplatesPage(): JSX.Element {
             >
               {selectedTemplateId === template.id ? (
                 <span className="dasti-template-card__check" aria-label="Selected">
-                  <Check size={13} strokeWidth={2.4} aria-hidden="true" />
+                  <Check size={12} weight="regular" aria-hidden="true" />
                 </span>
               ) : null}
               <span className="dasti-template-card__title">{template.name}</span>
