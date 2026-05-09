@@ -4,10 +4,16 @@ import {
   FileText,
   ListMagnifyingGlass,
   Star,
+  X,
 } from "@/lib/icons";
 import { LibraryFilterMenu } from "../LibraryFilterMenu";
 import { Menu } from "../ui/menu";
 import { formatUiDate } from "../../lib/ui-date";
+import {
+  PROPOSAL_EXTENSION_INSTALL_LINK,
+  getProposalExtensionSourceLinks,
+} from "../../lib/proposal-source-platforms";
+import { resolveVisibleJobVerdict } from "../../lib/jobs/visibleJobVerdict";
 
 type JobsListItem = {
   id: string;
@@ -21,6 +27,17 @@ type JobsListItem = {
   sourceDomain: string;
   reviewState: string;
   matchTier: "strong" | "partial" | "weak" | "unknown";
+  matchRead?: {
+    tier: "strong" | "partial" | "weak" | "unknown";
+  } | null;
+  matchReview?: {
+    verdict:
+      | "strong_lead"
+      | "possible_lead"
+      | "probably_skip"
+      | "not_enough_signal";
+    score?: number | null;
+  } | null;
   lastActivityAt: number;
   linkedDocumentCount: number;
 };
@@ -91,34 +108,6 @@ const JOBS_SORT_OPTIONS = [
   },
 ] as const;
 
-function resolveMatchTierLabel(tier: JobsListItem["matchTier"]): string {
-  switch (tier) {
-    case "strong":
-      return "Strong match";
-    case "partial":
-      return "Worth a shot";
-    case "weak":
-      return "Probably skip";
-    case "unknown":
-      return "Maybe";
-  }
-}
-
-function resolveMatchTierTone(
-  tier: JobsListItem["matchTier"],
-): "strong" | "worth" | "skip" | "maybe" {
-  switch (tier) {
-    case "strong":
-      return "strong";
-    case "partial":
-      return "worth";
-    case "weak":
-      return "skip";
-    case "unknown":
-      return "maybe";
-  }
-}
-
 function resolveLocationModeLabel(value: string): string {
   const normalizedValue = String(value ?? "").trim();
   if (!normalizedValue) {
@@ -162,6 +151,11 @@ function FilterChip({
   );
 }
 
+function openExternalJobCaptureLink(href: string): void {
+  if (typeof window === "undefined") return;
+  window.open(href, "_blank", "noopener,noreferrer");
+}
+
 export function JobsList({
   jobsView,
   selectedJobId,
@@ -196,121 +190,175 @@ export function JobsList({
   onRestoreArchivedJob,
   onDeleteArchivedJob,
   onConfirmPermanentDeleteJobIdChange,
-  onImportFirstJob,
 }: JobsListProps): JSX.Element {
+  const jobsCountLabel =
+    filteredJobs.length === displayedJobsCount
+      ? `${displayedJobsCount} jobs`
+      : `${filteredJobs.length} of ${displayedJobsCount}`;
+  const addJobSourceLinks = React.useMemo(
+    () => getProposalExtensionSourceLinks(),
+    [],
+  );
+
   return (
     <section className="dasti-jobs-list-pane jobs__list" aria-label="Jobs list">
-      <div className="dasti-jobs-toolbar">
-        <label className="dasti-jobs-toolbar__search">
-          <span className="sr-only">Search jobs</span>
-          <span className="dasti-jobs-toolbar__search-icon" aria-hidden="true">
-            <ListMagnifyingGlass size={14} strokeWidth={1.7} />
-          </span>
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(event) => onSearchQueryChange(event.target.value)}
-            placeholder="Search jobs"
-            aria-label="Search jobs"
-            className="dasti-select dasti-select--sm"
-          />
-        </label>
-        <LibraryFilterMenu
-          label="Sort jobs"
-          value={sortOrder}
-          options={JOBS_SORT_OPTIONS}
-          onChange={onSortOrderChange}
-        />
-        <span className="dasti-jobs-toolbar__count">
-          {filteredJobs.length === displayedJobsCount
-            ? `${displayedJobsCount} jobs`
-            : `${filteredJobs.length} of ${displayedJobsCount}`}
-        </span>
-      </div>
+      <div className="dasti-jobs-chrome">
+        <div className="dasti-jobs-toolbar-stack">
+          <div className="dasti-jobs-toolbar__search">
+            <span className="sr-only">Search jobs</span>
+            <span className="dasti-jobs-toolbar__search-icon" aria-hidden="true">
+              <ListMagnifyingGlass size={16} strokeWidth={1.7} />
+            </span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => onSearchQueryChange(event.target.value)}
+              placeholder="Search jobs"
+              aria-label="Search jobs"
+              className="dasti-select dasti-select--sm"
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                className="dasti-jobs-toolbar__clear"
+                aria-label="Clear search"
+                onClick={() => onSearchQueryChange("")}
+              >
+                <X size={16} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            ) : null}
+            <span className="dasti-jobs-toolbar__count" aria-hidden="true">
+              {jobsCountLabel}
+            </span>
+          </div>
 
-      <div
-        className="dasti-jobs-filter-chips dasti-jobs-view-toggle"
-        aria-label="Job views"
-        role="group"
-      >
-        <button
-          type="button"
-          className={[
-            "dasti-jobs-filter-chip",
-            "dasti-jobs-view-toggle__button",
-            jobsView === "active" ? "dasti-jobs-filter-chip--active" : null,
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          aria-pressed={jobsView === "active"}
-          onClick={() => onViewChange("active")}
-        >
-          Active
-        </button>
-        <button
-          type="button"
-          className={[
-            "dasti-jobs-filter-chip",
-            "dasti-jobs-view-toggle__button",
-            jobsView === "archived" ? "dasti-jobs-filter-chip--active" : null,
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          aria-pressed={jobsView === "archived"}
-          onClick={() => onViewChange("archived")}
-        >
-          Archived
-        </button>
-      </div>
+          <div className="dasti-jobs-sort-row">
+            <div className="dasti-jobs-sort-control">
+              <LibraryFilterMenu
+                label="Sort jobs"
+                value={sortOrder}
+                options={JOBS_SORT_OPTIONS}
+                onChange={onSortOrderChange}
+                align="start"
+              />
+            </div>
+            <Menu
+              ariaLabel="Add job"
+              align="end"
+              menuClassName="dasti-jobs-add-menu"
+              sections={[
+                {
+                  label: "Primary",
+                  items: [
+                    {
+                      id: "install-extension",
+                      label: "Install Chrome extension",
+                      onSelect: () =>
+                        openExternalJobCaptureLink(
+                          PROPOSAL_EXTENSION_INSTALL_LINK.href,
+                        ),
+                    },
+                  ],
+                },
+                {
+                  label: "Job boards",
+                  items: addJobSourceLinks.map((link) => ({
+                    id: link.key,
+                    label: link.label,
+                    onSelect: () => openExternalJobCaptureLink(link.href),
+                  })),
+                },
+              ]}
+              trigger={
+                <button type="button" className="dasti-jobs-add-action">
+                  + Add job
+                </button>
+              }
+            />
+          </div>
+        </div>
 
-      {jobsView === "active" ? (
-        <div className="dasti-jobs-filter-chips" aria-label="Job filters">
-          <FilterChip
-            isActive={matchFilter === "worth_plus"}
-            onClick={() =>
-              onMatchFilterChange(
-                matchFilter === "worth_plus" ? "all" : "worth_plus",
-              )
-            }
+        <div
+          className="dasti-jobs-filter-chips dasti-jobs-view-toggle"
+          aria-label="Job views"
+          role="group"
+        >
+          <button
+            type="button"
+            className={[
+              "dasti-jobs-filter-chip",
+              "dasti-jobs-view-toggle__button",
+              jobsView === "active" ? "dasti-jobs-filter-chip--active" : null,
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            aria-pressed={jobsView === "active"}
+            onClick={() => onViewChange("active")}
           >
-            Worth+ a shot
-          </FilterChip>
+            Active
+          </button>
+          <button
+            type="button"
+            className={[
+              "dasti-jobs-filter-chip",
+              "dasti-jobs-view-toggle__button",
+              jobsView === "archived" ? "dasti-jobs-filter-chip--active" : null,
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            aria-pressed={jobsView === "archived"}
+            onClick={() => onViewChange("archived")}
+          >
+            Archived
+          </button>
+        </div>
+
+        {jobsView === "active" ? (
           <div
-            className="dasti-jobs-filter-cluster dasti-jobs-filter-cluster--attention"
-            aria-label="Review state"
+            className="dasti-jobs-filter-chips dasti-jobs-quick-filter-row"
+            aria-label="Quick job filters"
           >
+            <FilterChip
+              isActive={matchFilter === "worth_plus"}
+              onClick={() =>
+                onMatchFilterChange(
+                  matchFilter === "worth_plus" ? "all" : "worth_plus",
+                )
+              }
+            >
+              Worth it
+            </FilterChip>
             <FilterChip
               isActive={needsReviewOnly}
               onClick={() => onNeedsReviewOnlyChange(!needsReviewOnly)}
             >
-              Unviewed
+              New
             </FilterChip>
-          </div>
-          <div
-            className="dasti-jobs-filter-cluster dasti-jobs-filter-cluster--utility"
-            aria-label="Job utilities"
-          >
-            <FilterChip
-              isActive={favoritesOnly}
+            <button
+              type="button"
+              className={[
+                "dasti-jobs-filter-chip",
+                "dasti-jobs-filter-chip--icon",
+                favoritesOnly ? "dasti-jobs-filter-chip--active" : null,
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-label="Favorites"
+              aria-pressed={favoritesOnly}
+              title="Favorites"
               onClick={() => onFavoritesOnlyChange(!favoritesOnly)}
             >
-              Favorites
-            </FilterChip>
-            <FilterChip
-              isActive={remoteOnly}
-              onClick={() => onRemoteOnlyChange(!remoteOnly)}
-            >
-              Remote
-            </FilterChip>
-            <FilterChip
-              isActive={seniorOnly}
-              onClick={() => onSeniorOnlyChange(!seniorOnly)}
-            >
-              Senior
-            </FilterChip>
+              <Star
+                size={16}
+                strokeWidth={1.8}
+                weight={favoritesOnly ? "fill" : "regular"}
+                aria-hidden="true"
+              />
+            </button>
             <Menu
               ariaLabel="Additional job filters"
               align="start"
+              menuClassName="dasti-jobs-filter-menu"
               sections={[
                 {
                   label: "Match quality",
@@ -328,6 +376,13 @@ export function JobsList({
                       role: "menuitemradio",
                       selected: matchFilter === "strong",
                       onSelect: () => onMatchFilterChange("strong"),
+                    },
+                    {
+                      id: "worth-it",
+                      label: "Worth it",
+                      role: "menuitemradio",
+                      selected: matchFilter === "worth_plus",
+                      onSelect: () => onMatchFilterChange("worth_plus"),
                     },
                     {
                       id: "maybe",
@@ -374,35 +429,35 @@ export function JobsList({
                     },
                   ],
                 },
+                {
+                  label: "Job traits",
+                  items: [
+                    {
+                      id: "remote",
+                      label: "Remote",
+                      role: "menuitemradio",
+                      selected: remoteOnly,
+                      onSelect: () => onRemoteOnlyChange(!remoteOnly),
+                    },
+                    {
+                      id: "senior",
+                      label: "Senior",
+                      role: "menuitemradio",
+                      selected: seniorOnly,
+                      onSelect: () => onSeniorOnlyChange(!seniorOnly),
+                    },
+                  ],
+                },
               ]}
               trigger={
                 <button type="button" className="dasti-jobs-filter-chip">
-                  + filter
+                  + Filters
                 </button>
               }
             />
           </div>
-          <div
-            className="dasti-jobs-filter-cluster dasti-jobs-filter-cluster--capture"
-            aria-label="Job capture"
-          >
-            <button
-              type="button"
-              className="dasti-jobs-filter-chip"
-              onClick={onImportFirstJob}
-            >
-              Paste URL
-            </button>
-            <button
-              type="button"
-              className="dasti-jobs-filter-chip"
-              onClick={onImportFirstJob}
-            >
-              Capture with extension
-            </button>
-          </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {filteredJobs.length === 0 ? (
         <div className="dasti-empty-state dasti-empty-state--panel">
@@ -426,8 +481,12 @@ export function JobsList({
               "Recent";
             const isFavorite =
               optimisticFavoriteById[job.id] ?? job.isFavorite;
-            const matchLabel = resolveMatchTierLabel(job.matchTier);
-            const matchTone = resolveMatchTierTone(job.matchTier);
+            const { label: matchLabel, tone: matchTone } =
+              resolveVisibleJobVerdict({
+                matchReview: job.matchReview,
+                matchRead: job.matchRead,
+                matchTier: job.matchTier,
+              });
 
             return (
               <div key={job.id} className="dasti-jobs-list-item" role="listitem">
@@ -452,12 +511,6 @@ export function JobsList({
                           <span className="dasti-jobs-sample-badge">Sample</span>
                         ) : null}
                       </span>
-                      <span
-                        className={`ds-verdict ds-verdict--${matchTone} dasti-jobs-match-chip`}
-                      >
-                        <span className="ds-verdict__dot" aria-hidden="true" />
-                        {matchLabel}
-                      </span>
                     </div>
                     <div className="dasti-jobs-row__company">
                       <span>{company}</span>
@@ -471,99 +524,107 @@ export function JobsList({
                         </span>
                         <span>Last activity {lastActivityLabel}</span>
                       </div>
-                      <div className="dasti-jobs-row__controls">
-                        <div className="dasti-import-dropdown dasti-jobs-row__menu">
-                          <Menu
-                            ariaLabel={`Actions for ${title}`}
-                            align="end"
-                            sections={[
-                              {
-                                items:
-                                  jobsView === "active"
+                    </div>
+                  </div>
+                  <div className="dasti-jobs-row__rail">
+                    <span
+                      className={`ds-verdict ds-verdict--${matchTone} dasti-jobs-match-chip`}
+                    >
+                      <span className="ds-verdict__dot" aria-hidden="true" />
+                      {matchLabel}
+                    </span>
+                    <div className="dasti-jobs-row__controls">
+                      <div className="dasti-import-dropdown dasti-jobs-row__menu">
+                        <Menu
+                          ariaLabel={`Actions for ${title}`}
+                          align="end"
+                          sections={[
+                            {
+                              items:
+                                jobsView === "active"
+                                  ? [
+                                      {
+                                        id: "open-source",
+                                        label: "Open source",
+                                        disabled: !job.sourceUrl,
+                                        onSelect: () => onOpenJobSource(job.sourceUrl),
+                                      },
+                                      {
+                                        id: "archive",
+                                        label: "Archive",
+                                        onSelect: () => onArchiveJob(job.id),
+                                      },
+                                      {
+                                        id: "duplicate",
+                                        label: "Duplicate",
+                                        onSelect: () => onDuplicateJob(job.id),
+                                      },
+                                    ]
+                                  : confirmingPermanentDeleteJobId === job.id
                                     ? [
                                         {
-                                          id: "open-source",
-                                          label: "Open source",
-                                          disabled: !job.sourceUrl,
-                                          onSelect: () => onOpenJobSource(job.sourceUrl),
+                                          id: "restore",
+                                          label: "Restore",
+                                          onSelect: () => onRestoreArchivedJob(job.id),
                                         },
                                         {
-                                          id: "archive",
-                                          label: "Archive",
-                                          onSelect: () => onArchiveJob(job.id),
+                                          id: "confirm-delete",
+                                          label: "Confirm",
+                                          tone: "danger",
+                                          onSelect: () => onDeleteArchivedJob(job.id),
                                         },
                                         {
-                                          id: "duplicate",
-                                          label: "Duplicate",
-                                          onSelect: () => onDuplicateJob(job.id),
+                                          id: "cancel-delete",
+                                          label: "Cancel",
+                                          onSelect: () =>
+                                            onConfirmPermanentDeleteJobIdChange(null),
                                         },
                                       ]
-                                    : confirmingPermanentDeleteJobId === job.id
-                                      ? [
-                                          {
-                                            id: "restore",
-                                            label: "Restore",
-                                            onSelect: () => onRestoreArchivedJob(job.id),
-                                          },
-                                          {
-                                            id: "confirm-delete",
-                                            label: "Confirm",
-                                            tone: "danger",
-                                            onSelect: () => onDeleteArchivedJob(job.id),
-                                          },
-                                          {
-                                            id: "cancel-delete",
-                                            label: "Cancel",
-                                            onSelect: () =>
-                                              onConfirmPermanentDeleteJobIdChange(null),
-                                          },
-                                        ]
-                                      : [
-                                          {
-                                            id: "restore",
-                                            label: "Restore",
-                                            onSelect: () => onRestoreArchivedJob(job.id),
-                                          },
-                                          {
-                                            id: "delete-forever",
-                                            label: "Delete forever",
-                                            tone: "danger",
-                                            onSelect: () =>
-                                              onConfirmPermanentDeleteJobIdChange(job.id),
-                                          },
-                                        ],
-                              },
-                            ]}
-                            trigger={
-                              <button
-                                type="button"
-                                className="dasti-icon-button dasti-jobs-row__menu-trigger"
-                                aria-label={`More actions for ${title}`}
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <DotsThree
-                                  size={16}
-                                  strokeWidth={1.7}
-                                  aria-hidden="true"
-                                />
-                              </button>
-                            }
-                          />
-                        </div>
-                        {isFavorite ? (
-                          <span
-                            className="dasti-jobs-row__favorite-slot"
-                            aria-label="Favorite"
-                          >
-                            <Star
-                              size={13}
-                              strokeWidth={1.8}
-                              weight="fill"
-                              aria-hidden="true"
-                            />
-                          </span>
-                        ) : null}
+                                    : [
+                                        {
+                                          id: "restore",
+                                          label: "Restore",
+                                          onSelect: () => onRestoreArchivedJob(job.id),
+                                        },
+                                        {
+                                          id: "delete-forever",
+                                          label: "Delete forever",
+                                          tone: "danger",
+                                          onSelect: () =>
+                                            onConfirmPermanentDeleteJobIdChange(job.id),
+                                        },
+                                      ],
+                            },
+                          ]}
+                          trigger={
+                            <button
+                              type="button"
+                              className="dasti-icon-button dasti-jobs-row__menu-trigger"
+                              aria-label={`More actions for ${title}`}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <DotsThree
+                                size={16}
+                                strokeWidth={1.7}
+                                aria-hidden="true"
+                              />
+                            </button>
+                          }
+                        />
                       </div>
+                      {isFavorite ? (
+                        <span
+                          className="dasti-jobs-row__favorite-slot"
+                          aria-label="Favorite"
+                        >
+                          <Star
+                            size={13}
+                            strokeWidth={1.8}
+                            weight="fill"
+                            aria-hidden="true"
+                          />
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </article>

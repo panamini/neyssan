@@ -14,6 +14,7 @@ type LibraryFilterMenuProps<TValue extends string> = {
   value: TValue;
   options: ReadonlyArray<LibraryFilterMenuOption<TValue>>;
   onChange: (value: TValue) => void;
+  align?: "start" | "end";
 };
 
 export function LibraryFilterMenu<TValue extends string>({
@@ -21,6 +22,7 @@ export function LibraryFilterMenu<TValue extends string>({
   value,
   options,
   onChange,
+  align = "end",
 }: LibraryFilterMenuProps<TValue>): JSX.Element {
   const activeOption =
     options.find((option) => option.value === value) ?? options[0];
@@ -48,7 +50,7 @@ export function LibraryFilterMenu<TValue extends string>({
     <div className="dasti-proposal-library-filter-menu">
       <Menu
         ariaLabel={label}
-        align="end"
+        align={align}
         sections={sections}
         trigger={
           <button

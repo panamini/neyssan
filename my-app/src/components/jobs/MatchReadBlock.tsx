@@ -1,5 +1,7 @@
 import React from "react";
+import { RotateCcw } from "@/lib/icons";
 import { selectVisibleMissingRequirements } from "../../lib/jobs/visibleMissingRequirements";
+import { hasUsableMatchReview } from "../../lib/jobs/visibleJobVerdict";
 import { JobMatchPanel } from "./JobMatchPanel";
 
 type MatchRead = {
@@ -54,24 +56,6 @@ type JobMatchReview = {
   }>;
 };
 
-function hasUsableMatchReview(
-  matchReview: JobMatchReview | null | undefined,
-): matchReview is JobMatchReview {
-  if (!matchReview) {
-    return false;
-  }
-  if (matchReview.verdict === "not_enough_signal") {
-    return false;
-  }
-  if (
-    matchReview.verdict === "probably_skip" &&
-    (matchReview.score ?? 0) <= 0
-  ) {
-    return false;
-  }
-  return true;
-}
-
 export function MatchReadBlock({
   matchRead,
   matchReview = null,
@@ -115,7 +99,7 @@ export function MatchReadBlock({
         missing={visibleMissingRequirements}
         profileLabel={matchRead.basedOn.profileLabel}
         oneLiner={oneLiner}
-        reviewVerdict={matchReview.verdict}
+        matchReview={matchReview}
         suggestedNextStep={matchReview.suggested_next_step}
         whyItems={whyItems}
         watchOutItems={watchOutItems}
@@ -216,6 +200,7 @@ export function MatchReadBlock({
                 className="dasti-button dasti-button--sm dasti-button--pill dasti-button--ghost"
                 onClick={onRefreshMatch}
               >
+                <RotateCcw size={14} strokeWidth={1.8} aria-hidden="true" />
                 Refresh match
               </button>
             ) : null}

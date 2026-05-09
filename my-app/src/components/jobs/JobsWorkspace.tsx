@@ -95,6 +95,17 @@ type JobsPageListItem = {
   parseStatus: string;
   reviewState: string;
   matchTier: "strong" | "partial" | "weak" | "unknown";
+  matchRead?: {
+    tier: "strong" | "partial" | "weak" | "unknown";
+  } | null;
+  matchReview?: {
+    verdict:
+      | "strong_lead"
+      | "possible_lead"
+      | "probably_skip"
+      | "not_enough_signal";
+    score?: number | null;
+  } | null;
   status: string;
   importedAt: number;
   updatedAt: number;
