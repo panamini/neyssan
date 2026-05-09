@@ -52,6 +52,7 @@ type ProposalDocumentRendererProps = {
   pageWidth?: number;
   pageGapPx?: number;
   stylePreset?: VerbatiStylePreset | null;
+  documentThemeVars?: React.CSSProperties | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   onPageCountChange?: (count: number) => void;
@@ -546,6 +547,7 @@ export function ProposalDocumentRenderer({
   pageWidth,
   pageGapPx = 0,
   stylePreset = null,
+  documentThemeVars = null,
   signatureSettings = null,
   closing = null,
   onPageCountChange,
@@ -1261,6 +1263,7 @@ export function ProposalDocumentRenderer({
       data-proposal-template={resolvedTemplateId}
       style={
         {
+          ...(documentThemeVars ?? {}),
           ...serializeProposalPreviewVars(canonicalPreviewTokens),
           ...serializeProposalRuntimeVars(canonicalPreviewTokens),
         } as React.CSSProperties
