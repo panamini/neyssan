@@ -2072,15 +2072,54 @@ html[data-reduce-motion="true"] *::after {
 }
 
 .onb-replay__choice-title,
+.onb-replay__choice-layout,
+.onb-replay__choice-meta,
 .onb-replay__choice-desc {
   display: block;
 }
 
 .onb-replay__choice-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s1);
   color: var(--ti);
   font-size: var(--ts);
   font-weight: 600;
   line-height: var(--ls);
+}
+
+.onb-replay__choice-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: var(--radius-pill);
+  color: var(--ac);
+}
+
+.onb-replay__choice-layout {
+  color: var(--tm);
+  font-size: var(--tx);
+  font-weight: 650;
+  line-height: var(--lx);
+}
+
+.onb-replay__choice-meta {
+  color: var(--tm2);
+  font-size: var(--tx);
+  font-weight: 600;
+  line-height: var(--lx);
+}
+
+.onb-replay__choice-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  width: 100%;
+  margin-top: auto;
 }
 
 .onb-replay__choice-desc {
@@ -2097,50 +2136,89 @@ html[data-reduce-motion="true"] *::after {
   min-height: var(--hs);
 }
 
-.onb-replay__style-preview {
-  display: grid;
-  gap: var(--s1);
-  width: min(100%, 132px);
-  aspect-ratio: 8.5 / 11;
-  padding: var(--s3);
-  border-radius: var(--r-paper);
-  background: var(--paper);
-  box-shadow: var(--sh-paper);
-  color: var(--ti);
+.onb-replay__settings-preview {
+  --hero-accent: var(--paper-dark-accent);
+  width: min(100%, 220px);
+  aspect-ratio: 52 / 85;
+  justify-items: stretch;
+  align-content: stretch;
+  gap: var(--s3);
+  padding: var(--s4);
+  border-radius: var(--radius-card);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+  text-align: left;
 }
 
-.onb-replay__style-preview--style-1 {
-  font-family: "Fraunces", Georgia, serif;
+.onb-replay__choice--style.onb-replay__settings-preview {
+  cursor: pointer;
+  transition:
+    border-color var(--dur-2) var(--ease-standard),
+    transform var(--dur-2) var(--ease-standard);
 }
 
-.onb-replay__style-preview--style-2 {
-  font-family: "Geist", system-ui, sans-serif;
+.onb-replay__choice--style:hover,
+.onb-replay__choice--style:focus-visible {
+  outline: none;
+  border-color: var(--ac);
+  transform: translateY(-2px);
 }
 
-.onb-replay__style-preview--style-3 {
-  font-family: "Special Elite", "Courier Prime", monospace;
+.onb-replay__choice--style:active {
+  transform: scale(0.97);
+  transition-duration: 0.06s;
 }
 
-.onb-replay__style-preview-title {
-  color: var(--ti);
+.onb-replay__choice--style .onb-replay__choice-title {
+  justify-content: space-between;
+  width: 100%;
+}
+
+.onb-replay__settings-preview .dasti-settings-hero-preview__inner {
+  gap: var(--s2);
+  padding: 0;
+  animation: none;
+}
+
+.onb-replay__settings-preview .dasti-settings-hero-preview__title {
+  font-size: clamp(23px, 14cqi, 34px);
+  letter-spacing: 0;
+}
+
+.onb-replay__settings-preview .dasti-settings-hero-preview__subtitle {
   font-size: var(--tx);
-  font-weight: 700;
+}
+
+.onb-replay__settings-preview .dasti-settings-hero-preview__body-text {
+  font-size: 10px;
+  line-height: 1.45;
+  -webkit-line-clamp: 3;
+}
+
+.onb-replay__settings-preview .dasti-settings-hero-preview__signature {
+  min-height: 20px;
+  font-size: 20px;
+  opacity: 0.76;
+}
+
+.onb-replay__settings-preview .dasti-settings-hero-preview__chip,
+.onb-replay__settings-preview .dasti-settings-hero-preview__style-badge {
+  height: 20px;
+  font-size: 9px;
+}
+
+.onb-replay__settings-preview--style-2 .dasti-settings-hero-preview__title {
+  font-weight: 760;
+}
+
+.onb-replay__settings-preview--style-3 .dasti-settings-hero-preview__body-text {
+  line-height: 1.5;
+}
+
+.onb-replay__helper {
+  margin: 0;
+  color: var(--tm2);
+  font-size: var(--tx);
   line-height: var(--lx);
-}
-
-.onb-replay__style-preview-line {
-  display: block;
-  height: 3px;
-  border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--ti) 16%, transparent);
-}
-
-.onb-replay__style-preview-line--short {
-  width: 50%;
-}
-
-.onb-replay__style-preview-line--mid {
-  width: 70%;
 }
 
 .settings__tone-row {
@@ -2640,12 +2718,14 @@ html[data-reduce-motion="true"] *::after {
 .dasti-settings-slot-card:hover {
   border-color: var(--color-border-contrast);
   box-shadow: var(--shb);
+  transform: translateY(-2px);
 }
 
 .dasti-settings-slot-card:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
   border-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
+  transform: translateY(-2px);
 }
 
 .dasti-settings-slot-card--editing {
