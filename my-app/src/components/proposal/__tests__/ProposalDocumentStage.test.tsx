@@ -111,6 +111,49 @@ describe("ProposalDocumentStage share and safe-send controls", () => {
     const dialog = await screen.findByRole("dialog", { name: "Safe-send checklist" });
     expect(within(dialog).getByText("Package is ready to continue.")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Continue to send" })).not.toBeDisabled();
+    expect(within(dialog).getByText("Cleared")).toBeInTheDocument();
     expect(dialog.querySelectorAll('[data-state="clear"]')).toHaveLength(10);
+  });
+
+  it("groups user blockers, cleared checks, and system detection checks separately", async () => {
+    renderStage({
+      sourceJobLinked: false,
+      sourceCvSelected: false,
+      proposalLinked: true,
+      matchReviewAccepted: null,
+      hasUnresolvedImportIssues: null,
+      hasPendingAiSuggestion: null,
+      unsupportedClaimState: null,
+      recipientOrExportTargetSelected: false,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /share/i }));
+    const menu = await screen.findByRole("menu", { name: "Share proposal" });
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Safe-send checklist…" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Safe-send checklist" });
+    const userGroup = within(dialog)
+      .getByText("User action required")
+      .closest(".dasti-proposal-safe-send__group") as HTMLElement;
+    const clearedGroup = within(dialog)
+      .getByText("Cleared")
+      .closest(".dasti-proposal-safe-send__group") as HTMLElement;
+    const systemGroup = within(dialog)
+      .getByText("System checks")
+      .closest(".dasti-proposal-safe-send__group") as HTMLElement;
+
+    expect(within(userGroup).getByText("Source job linked")).toBeInTheDocument();
+    expect(within(userGroup).getByText("CV variant selected")).toBeInTheDocument();
+    expect(within(userGroup).queryByText("No placeholder text")).not.toBeInTheDocument();
+    expect(within(clearedGroup).getByText("No placeholder text")).toBeInTheDocument();
+    expect(within(clearedGroup).getByText("Proposal linked")).toBeInTheDocument();
+    expect(within(userGroup).queryByText("Detection pending")).not.toBeInTheDocument();
+    expect(within(systemGroup).getAllByText("Detection pending")).toHaveLength(4);
+    expect(
+      within(dialog).getByRole("button", { name: "Resolve next" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("button", { name: "Fix first blocker" }),
+    ).not.toBeInTheDocument();
   });
 });

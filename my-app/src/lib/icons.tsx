@@ -10,11 +10,13 @@ import {
   ArrowUUpLeft as PhArrowUUpLeft,
   ArrowUp as PhArrowUp,
   Camera as PhCamera,
+  BookmarkSimple as PhBookmarkSimple,
   CaretDown as PhCaretDown,
   CaretUp as PhCaretUp,
   Check as PhCheck,
   Briefcase as PhBriefcase,
   ClipboardText as PhClipboardText,
+  Command as PhCommand,
   SealWarning as PhSealWarning,
   CornersIn as PhCornersIn,
   Copy as PhCopy,
@@ -28,10 +30,12 @@ import {
   Feather as PhFeather,
   FileImage as PhFileImage,
   FilePdf as PhFilePdf,
+  FilePlus as PhFilePlus,
   FileText as PhFileText,
   FloppyDisk as PhFloppyDisk,
   FolderOpen as PhFolderOpen,
   FolderSimple as PhFolderSimple,
+  Highlighter as PhHighlighter,
   IdentificationCard as PhIdentificationCard,
   Layout as PhLayout,
   Lightning as PhLightning,
@@ -48,6 +52,7 @@ import {
   Paperclip as PhPaperclip,
   Palette as PhPalette,
   Pen as PhPen,
+  PencilLine as PhPencilLine,
   PenNib as PhPenNib,
   PencilSimple as PhPencilSimple,
   PencilSimpleLine as PhPencilSimpleLine,
@@ -75,6 +80,7 @@ import {
   Sun as PhSun,
   Sunglasses as PhSunglasses,
   Stamp as PhStamp,
+  Target as PhTarget,
   TextB as PhTextB,
   TextItalic as PhTextItalic,
   TextUnderline as PhTextUnderline,
@@ -145,6 +151,7 @@ export const ArrowUUpLeft = withCompat(PhArrowUUpLeft);
 export const ArrowUp = withCompat(PhArrowUp);
 export const ArrowsOutSimple = withCompat(PhArrowsOutSimple);
 export const Bold = withCompat(PhTextB);
+export const BookmarkSimple = withCompat(PhBookmarkSimple);
 export const Camera = withCompat(PhCamera);
 export const CaretDownIcon = withCompat(PhCaretDown);
 export const CaretUpIcon = withCompat(PhCaretUp);
@@ -153,6 +160,7 @@ export const Briefcase = withCompat(PhBriefcase);
 export const ClipboardText = withCompat(PhClipboardText);
 export const ChevronDown = withCompat(PhCaretDown);
 export const ChevronUp = withCompat(PhCaretUp);
+export const Command = withCompat(PhCommand);
 export const Copy = withCompat(PhCopy);
 export const CornersIn = withCompat(PhCornersIn);
 export const DotsThree = withCompat(PhDotsThree);
@@ -164,6 +172,7 @@ export const Eraser = withCompat(PhEraser);
 export const Feather = withCompat(PhFeather);
 export const FileImage = withCompat(PhFileImage);
 export const FilePdf = withCompat(PhFilePdf);
+export const FilePlus = withCompat(PhFilePlus);
 export const FileText = withCompat(PhFileText);
 export const FileUser = withCompat(PhIdentificationCard);
 export const ReadCvLogo = withCompat(PhIdentificationCard);
@@ -172,6 +181,7 @@ export const FolderOpen = withCompat(PhFolderOpen);
 export const FolderSimple = withCompat(PhFolderSimple);
 export const FolderTree = withCompat(PhTreeView);
 export const GripHorizontal = withCompat(PhDotsSixVertical);
+export const Highlighter = withCompat(PhHighlighter);
 export const Italic = withCompat(PhTextItalic);
 export const Layout = withCompat(PhLayout);
 export const Lightning = withCompat(PhLightning);
@@ -187,10 +197,12 @@ export const Minus = withCompat(PhMinus);
 export const Moon = withCompat(PhMoon);
 export const Paperclip = withCompat(PhPaperclip);
 export const PaperPlaneRight = withCompat(PhPaperPlaneRight);
+export const PaperPlaneTilt = withCompat(PhPaperPlaneTilt);
 export const Palette = withCompat(PhPalette);
 export const Pause = withCompat(PhPause);
 export const PanelLeftDashed = withCompat(PhSidebarSimple);
 export const Pen = withCompat(PhPen);
+export const PencilLine = withCompat(PhPencilLine);
 export const PenNib = withCompat(PhPenNib);
 export const PenLine = withCompat(PhPencilSimpleLine);
 export const Pencil = withCompat(PhPencilSimple);
@@ -217,6 +229,7 @@ export const Sun = withCompat(PhSun);
 export const SunMedium = withCompat(PhSun);
 export const Sunglasses = withCompat(PhSunglasses);
 export const Stamp = withCompat(PhStamp);
+export const Target = withCompat(PhTarget);
 export const TrashSimple = withCompat(PhTrashSimple);
 export const Underline = withCompat(PhTextUnderline);
 export const ToggleLeft = withCompat(PhToggleLeft);

@@ -22,6 +22,7 @@ type SafeSendRow = {
   meta: string;
   state: SafeSendState;
   label: string;
+  category: "user" | "system";
   actionLabel?: string;
   actionDisabled?: boolean;
   onAction?: () => void;
@@ -71,6 +72,7 @@ function statusRow({
   blockedMeta,
   clearLabel = "Clear",
   blockedLabel = "Missing",
+  category = "user",
 }: {
   id: string;
   title: string;
@@ -79,6 +81,7 @@ function statusRow({
   blockedMeta: string;
   clearLabel?: string;
   blockedLabel?: string;
+  category?: SafeSendRow["category"];
 }): SafeSendRow {
   return {
     id,
@@ -86,6 +89,7 @@ function statusRow({
     meta: clear ? clearMeta : blockedMeta,
     state: clear ? "clear" : "warn",
     label: clear ? clearLabel : blockedLabel,
+    category,
   };
 }
 
@@ -100,6 +104,7 @@ function detectionPendingRow(
     meta,
     state: "warn",
     label: "Detection pending",
+    category: "system",
   };
 }
 
@@ -143,6 +148,7 @@ function buildSafeSendRows({
             : "No import-review blockers detected for the selected CV.",
           state: hasUnresolvedImportIssues ? "warn" : "clear",
           label: hasUnresolvedImportIssues ? "Resolve" : "Clear",
+          category: "user",
           actionLabel: hasUnresolvedImportIssues ? "Resolve" : undefined,
           actionDisabled: !onResolveImportIssues,
           onAction: onResolveImportIssues,
@@ -163,6 +169,7 @@ function buildSafeSendRows({
             : "No pending AI rewrite suggestions detected.",
           state: hasPendingAiSuggestion ? "warn" : "clear",
           label: hasPendingAiSuggestion ? "Pending" : "Clear",
+          category: hasPendingAiSuggestion ? "user" : "system",
         };
 
   const matchReviewRow: SafeSendRow =
@@ -180,6 +187,7 @@ function buildSafeSendRows({
             : "Open the source job before sending.",
           state: matchReviewAccepted ? "clear" : "warn",
           label: matchReviewAccepted ? "Viewed" : "Unviewed",
+          category: "user",
         };
 
   const unsupportedClaimRow: SafeSendRow =
@@ -203,6 +211,7 @@ function buildSafeSendRows({
               : unsupportedClaimState === "danger"
                 ? "Blocked"
                 : "Review",
+          category: unsupportedClaimState === "clear" ? "system" : "user",
         };
 
   return [
@@ -333,8 +342,38 @@ export function ProposalDocumentStage({
       sourceJobLinked,
     ],
   );
-  const blockerCount = safeSendRows.filter((row) => row.state !== "clear").length;
+  const userSafeSendRows = React.useMemo(
+    () =>
+      safeSendRows.filter(
+        (row) => row.category === "user" && row.state !== "clear",
+      ),
+    [safeSendRows],
+  );
+  const clearedSafeSendRows = React.useMemo(
+    () => safeSendRows.filter((row) => row.state === "clear"),
+    [safeSendRows],
+  );
+  const systemSafeSendRows = React.useMemo(
+    () =>
+      safeSendRows.filter(
+        (row) => row.category === "system" && row.state !== "clear",
+      ),
+    [safeSendRows],
+  );
+  const firstUserBlocker =
+    userSafeSendRows.find((row) => row.state !== "clear") ?? null;
+  const blockerCount = userSafeSendRows.filter((row) => row.state !== "clear").length;
   const canContinueToSend = blockerCount === 0;
+  const fixFirstBlocker = React.useCallback(() => {
+    if (!firstUserBlocker) return;
+    if (firstUserBlocker.onAction) {
+      firstUserBlocker.onAction();
+      return;
+    }
+    if (firstUserBlocker.id === "source-job" || firstUserBlocker.id === "match-review") {
+      onReviewMatch?.();
+    }
+  }, [firstUserBlocker, onReviewMatch]);
 
   return (
     <section
@@ -564,22 +603,12 @@ export function ProposalDocumentStage({
             <span className="dasti-proposal-safe-send__footer-spacer" />
             <Button
               type="button"
-              variant="secondary"
-              size="md"
-              onClick={() => {
-                setSafeSendOpen(false);
-                onReviewMatch?.();
-              }}
-            >
-              Review match
-            </Button>
-            <Button
-              type="button"
               variant="primary"
               size="md"
-              disabled={!canContinueToSend}
+              disabled={!canContinueToSend && !firstUserBlocker}
+              onClick={canContinueToSend ? undefined : fixFirstBlocker}
             >
-              Continue to send
+              {canContinueToSend ? "Continue to send" : "Resolve next"}
             </Button>
           </>
         }
@@ -600,46 +629,78 @@ export function ProposalDocumentStage({
             <small>
               {canContinueToSend
                 ? "All safe-send rows are clear."
-                : `${blockerCount} checks still need attention before handoff.`}
+                : `${blockerCount} user action${blockerCount === 1 ? "" : "s"} required before handoff.`}
             </small>
           </div>
-          <div className="dasti-proposal-safe-send__list">
-            {safeSendRows.map((row) => (
-              <div
-                key={row.id}
-                className="dasti-proposal-safe-send__row"
-                data-state={row.state}
-              >
-                <span className="dasti-proposal-safe-send__mark">
-                  {row.state === "clear"
-                    ? "✓"
-                    : row.state === "danger"
-                      ? "×"
-                      : "!"}
-                </span>
-                <span className="dasti-proposal-safe-send__copy">
-                  <strong>{row.title}</strong>
-                  <small>{row.meta}</small>
-                </span>
-                {row.actionLabel ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={row.actionDisabled}
-                    onClick={row.onAction}
-                  >
-                    {row.actionLabel}
-                  </Button>
-                ) : (
-                  <Pill tone={getPillTone(row.state)}>{row.label}</Pill>
-                )}
+          <div className="dasti-proposal-safe-send__group">
+            <div className="dasti-proposal-safe-send__group-title">
+              User action required
+            </div>
+            <div className="dasti-proposal-safe-send__list">
+              {userSafeSendRows.length > 0 ? (
+                userSafeSendRows.map((row) => <SafeSendChecklistRow key={row.id} row={row} />)
+              ) : (
+                <p className="dasti-proposal-safe-send__empty">
+                  No user actions required.
+                </p>
+              )}
+            </div>
+          </div>
+          {clearedSafeSendRows.length > 0 ? (
+            <div className="dasti-proposal-safe-send__group dasti-proposal-safe-send__group--cleared">
+              <div className="dasti-proposal-safe-send__group-title">
+                Cleared
               </div>
-            ))}
+              <div className="dasti-proposal-safe-send__list">
+                {clearedSafeSendRows.map((row) => (
+                  <SafeSendChecklistRow key={row.id} row={row} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <div className="dasti-proposal-safe-send__group dasti-proposal-safe-send__group--system">
+            <div className="dasti-proposal-safe-send__group-title">
+              System checks
+            </div>
+            <div className="dasti-proposal-safe-send__list">
+              {systemSafeSendRows.map((row) => (
+                <SafeSendChecklistRow key={row.id} row={row} />
+              ))}
+            </div>
           </div>
         </div>
       </Sheet>
     </section>
+  );
+}
+
+function SafeSendChecklistRow({ row }: { row: SafeSendRow }) {
+  return (
+    <div
+      className="dasti-proposal-safe-send__row"
+      data-state={row.state}
+    >
+      <span className="dasti-proposal-safe-send__mark">
+        {row.state === "clear" ? "✓" : row.state === "danger" ? "×" : "!"}
+      </span>
+      <span className="dasti-proposal-safe-send__copy">
+        <strong>{row.title}</strong>
+        <small>{row.meta}</small>
+      </span>
+      {row.actionLabel ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={row.actionDisabled}
+          onClick={row.onAction}
+        >
+          {row.actionLabel}
+        </Button>
+      ) : (
+        <Pill tone={getPillTone(row.state)}>{row.label}</Pill>
+      )}
+    </div>
   );
 }
 

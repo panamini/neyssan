@@ -1030,18 +1030,23 @@ function matchesListFilters(
 ): boolean {
   const openedAt = optimisticOpenedAt ?? job.lastOpenedAt;
   const isFavorite = optimisticFavorite ?? job.isFavorite;
-  if (
-    matchFilter === "worth_plus" &&
-    job.matchTier !== "strong" &&
-    job.matchTier !== "partial"
-  ) {
+  const verdict = job.matchReview?.verdict;
+  const resolvedTier = job.matchRead?.tier ?? job.matchTier;
+  const isStrongMatch = verdict === "strong_lead" || resolvedTier === "strong";
+  const isWorthMatch = verdict === "possible_lead" || resolvedTier === "partial";
+  if (matchFilter === "worth_plus" && !isStrongMatch && !isWorthMatch) {
     return false;
   }
-  if (
-    matchFilter !== "all" &&
-    matchFilter !== "worth_plus" &&
-    job.matchTier !== matchFilter
-  ) {
+  if (matchFilter === "strong" && !isStrongMatch) {
+    return false;
+  }
+  if (matchFilter === "partial" && !isWorthMatch) {
+    return false;
+  }
+  if (matchFilter === "weak" && resolvedTier !== "weak") {
+    return false;
+  }
+  if (matchFilter === "unknown" && resolvedTier !== "unknown") {
     return false;
   }
   if (hasDocsOnly && job.linkedDocumentCount === 0) {
@@ -1223,10 +1228,21 @@ function JobsPageContent(): JSX.Element {
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [matchFilter, setMatchFilter] = React.useState<JobsMatchFilter>("all");
+  const [matchFilter, setMatchFilter] = React.useState<JobsMatchFilter>(() => {
+    const value = new URLSearchParams(location.search).get("match");
+    return value === "worth_plus" ||
+      value === "strong" ||
+      value === "partial" ||
+      value === "weak" ||
+      value === "unknown"
+      ? value
+      : "all";
+  });
   const [hasDocsOnly, setHasDocsOnly] = React.useState(false);
   const [noDocsOnly, setNoDocsOnly] = React.useState(false);
-  const [needsReviewOnly, setNeedsReviewOnly] = React.useState(false);
+  const [needsReviewOnly, setNeedsReviewOnly] = React.useState(
+    () => new URLSearchParams(location.search).get("needsReview") === "1",
+  );
   const [favoritesOnly, setFavoritesOnly] = React.useState(false);
   const [remoteOnly, setRemoteOnly] = React.useState(false);
   const [seniorOnly, setSeniorOnly] = React.useState(false);

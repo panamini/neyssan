@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
@@ -116,6 +116,7 @@ function buildProposalSnippet(value: unknown): string {
 
 export function ProposalsLibrary(): JSX.Element {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLoaded, isSignedIn } = useAuth();
   const {
     isAuthenticated: isConvexAuthenticated,
@@ -133,6 +134,10 @@ export function ProposalsLibrary(): JSX.Element {
   const [sortOrder, setSortOrder] = React.useState<
     "newest" | "oldest" | "title"
   >("newest");
+  const statusFilter = React.useMemo(() => {
+    const value = new URLSearchParams(location.search).get("status");
+    return value === "sent" ? "sent" : "saved";
+  }, [location.search]);
 
   const handleCreateProposal = React.useCallback(() => {
     clearActiveLocalCvId();
@@ -147,7 +152,13 @@ export function ProposalsLibrary(): JSX.Element {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     return [...proposals]
-      .filter((proposal) => proposal.status === "saved")
+      .filter((proposal) =>
+        statusFilter === "sent"
+          ? proposal.status === "sent" ||
+            proposal.status === "exported" ||
+            proposal.status === "submitted"
+          : proposal.status === "saved",
+      )
       .filter((proposal) => {
         if (
           toneFilter !== "all" &&
@@ -180,12 +191,19 @@ export function ProposalsLibrary(): JSX.Element {
         }
         return b._creationTime - a._creationTime;
       });
-  }, [proposals, searchQuery, sortOrder, toneFilter]);
+  }, [proposals, searchQuery, sortOrder, statusFilter, toneFilter]);
 
   const sorted = filteredProposals;
-  const savedProposalCount = React.useMemo(
-    () => (proposals ?? []).filter((proposal) => proposal.status === "saved").length,
-    [proposals],
+  const proposalCount = React.useMemo(
+    () =>
+      (proposals ?? []).filter((proposal) =>
+        statusFilter === "sent"
+          ? proposal.status === "sent" ||
+            proposal.status === "exported" ||
+            proposal.status === "submitted"
+          : proposal.status === "saved",
+      ).length,
+    [proposals, statusFilter],
   );
 
   async function handleDelete(id: Id<"proposals">) {
@@ -243,7 +261,7 @@ export function ProposalsLibrary(): JSX.Element {
           </div>
         )}
 
-        {!authStatusMessage && savedProposalCount > 0 && (
+        {!authStatusMessage && proposalCount > 0 && (
           <>
             <div className="dasti-proposal-library-utility-row">
               <label className="dasti-proposal-library-utility-row__search">
@@ -270,9 +288,9 @@ export function ProposalsLibrary(): JSX.Element {
                 onChange={setSortOrder}
               />
               <span className="dasti-proposal-library-utility-row__count">
-                {sorted.length === savedProposalCount
-                  ? `${savedProposalCount} saved`
-                  : `${sorted.length} of ${savedProposalCount}`}
+                {sorted.length === proposalCount
+                  ? `${proposalCount} ${statusFilter}`
+                  : `${sorted.length} of ${proposalCount}`}
               </span>
             </div>
             {sorted.length === 0 ? (
@@ -412,11 +430,11 @@ export function ProposalsLibrary(): JSX.Element {
 
         {!authStatusMessage &&
         proposals !== undefined &&
-        savedProposalCount === 0 ? (
+        proposalCount === 0 ? (
           <div className="dasti-empty-state">
             <FileText size={32} strokeWidth={1.2} />
             <div className="dasti-empty-state__title">
-              No cover letters yet
+              {statusFilter === "sent" ? "No sent cover letters yet" : "No cover letters yet"}
             </div>
             <p className="dasti-empty-state__subtitle">
               Generated drafts will appear here with their title, tone, and a readable excerpt.

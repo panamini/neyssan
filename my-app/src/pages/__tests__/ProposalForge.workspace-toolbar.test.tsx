@@ -203,18 +203,23 @@ describe("ProposalForge workbench layout", () => {
     expect(within(dialog).getByText("Source job linked")).toBeInTheDocument();
     expect(within(dialog).getByText("Match review accepted")).toBeInTheDocument();
     expect(within(dialog).getByText("Unsupported claim")).toBeInTheDocument();
+    expect(within(dialog).getByText("User action required")).toBeInTheDocument();
+    expect(within(dialog).getByText("System checks")).toBeInTheDocument();
     expect(
       within(dialog).getAllByText("Detection pending", { selector: "span" })
         .length,
     ).toBeGreaterThan(0);
     expect(
-      within(dialog).getByRole("button", { name: "Continue to send" }),
-    ).toBeDisabled();
+      within(dialog).getByRole("button", { name: "Resolve next" }),
+    ).toBeInTheDocument();
 
     const sourceJobRow = within(dialog)
       .getByText("Source job linked")
       .closest(".dasti-proposal-safe-send__row");
     expect(sourceJobRow).toHaveAttribute("data-state", "clear");
+    expect(
+      within(dialog).queryByRole("button", { name: "Fix first blocker" }),
+    ).not.toBeInTheDocument();
   });
 
   it("wires active job review and CV import recovery signals into Safe-send", async () => {
