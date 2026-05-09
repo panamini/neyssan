@@ -515,6 +515,7 @@ function HeroPreview({
   return (
     <article
       className={`dasti-settings-hero-preview dasti-settings-hero-preview--${styleOption.id}`}
+      data-font-pair-id={fontPair.id}
       style={{ "--hero-accent": accentColor } as React.CSSProperties}
     >
       <div className="dasti-settings-hero-preview__inner">
@@ -678,6 +679,7 @@ function FontPairGrid({
             ]
               .filter(Boolean)
               .join(" ")}
+            data-font-pair-id={pair.id}
             aria-pressed={active}
             onClick={() => onChange(pair.id)}
           >

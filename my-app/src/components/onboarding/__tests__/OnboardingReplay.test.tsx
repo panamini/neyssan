@@ -198,7 +198,7 @@ describe("OnboardingReplay", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Install the twoweeks extension. Capture roles from supported job sites and company career pages.",
+        "Install the twoweeks extension. Capture roles from supported job sites.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText("Paste URLs")).toBeNull();

@@ -1,7 +1,6 @@
 import React from "react";
 import { useQuery } from "convex/react";
 import { Button } from "../ui/button";
-import { Check } from "@/lib/icons";
 import { api } from "../../../convex/_generated/api";
 import {
   getProposalExtensionSourceLinks,
@@ -349,12 +348,12 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
     id: "jobs",
     title: "Catch jobs as you browse.",
     progressLabel: "Jobs",
-    copy: "Install the twoweeks extension. Capture roles from supported job sites.",
+    copy: "Set up the twoweeks extension. Capture roles from supported job sites.",
     choices: [
       {
         label: "Install for Chrome",
         description:
-          "One click install. Pin it for fastest capture. Also works on Edge, Brave, Arc — Firefox coming soon.",
+          "One click install. Pin it for fastest capture.",
         action: "install-chrome",
       },
       {
@@ -616,14 +615,6 @@ export function OnboardingReplay({
                       <>
                         <span className="onb-replay__choice-title">
                           {choice.label}
-                          {isSelected(choice) ? (
-                            <span
-                              className="onb-replay__choice-check"
-                              aria-hidden="true"
-                            >
-                              <Check size={11} strokeWidth={2.5} />
-                            </span>
-                          ) : null}
                         </span>
                         <OnboardingStylePreviewContent styleSlot={styleSlot} />
                         <span className="onb-replay__choice-footer">
