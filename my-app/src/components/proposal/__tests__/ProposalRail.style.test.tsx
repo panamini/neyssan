@@ -152,8 +152,53 @@ describe("ProposalRail style tab", () => {
         .map((link) => link.textContent),
     ).toEqual(["LinkedIn", "Indeed", "Upwork", "ZipRecruiter", "Hellowork"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Job Forge" }));
+    expect(screen.getByText("No job loaded")).toBeInTheDocument();
+    expect(
+      screen.getByText("Paste a job offer or choose one from Job Forge."),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose from Job Forge" }));
     expect(onOpenJobs).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps pasted job text visible while exposing clear job context", () => {
+    const onClearJobContext = vi.fn();
+
+    const { rerender } = render(
+      <ProposalRail
+        {...baseProps}
+        jobTitle=""
+        company={null}
+        location={null}
+        jobHref={null}
+        sourceUrl={null}
+        jobSummary={null}
+        onClearJobContext={onClearJobContext}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Clear job context" })).toBeNull();
+
+    rerender(
+      <ProposalRail
+        {...baseProps}
+        jobTitle=""
+        company={null}
+        location={null}
+        jobHref={null}
+        sourceUrl={null}
+        jobSummary={null}
+        jobOfferText="Write support workflows and coordinate customer operations."
+        onClearJobContext={onClearJobContext}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText("Paste your job offer here")).toHaveValue(
+      "Write support workflows and coordinate customer operations.",
+    );
+    expect(screen.getByText("Untitled job offer")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear job context" }));
+    expect(onClearJobContext).toHaveBeenCalledTimes(1);
   });
 
   it("shows signature action in the Style tab and calls the callback", () => {

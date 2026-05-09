@@ -1371,20 +1371,24 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       liveSourceUrl ??
       initialComposeDraft?.sourceUrl ??
       prefill?.sourceUrl ??
-      readStoredProposalComposeDraft()?.sourceUrl ??
+      (initialComposeDraft === null
+        ? readStoredProposalComposeDraft()?.sourceUrl
+        : null) ??
       null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initialComposeDraft?.sourceUrl, liveSourceUrl, prefill?.sourceUrl],
+    [initialComposeDraft, initialComposeDraft?.sourceUrl, liveSourceUrl, prefill?.sourceUrl],
   );
   const draftPlatform = React.useMemo(
     () =>
       liveSourcePlatform ??
       initialComposeDraft?.platform ??
       prefill?.platform ??
-      readStoredProposalComposeDraft()?.platform ??
+      (initialComposeDraft === null
+        ? readStoredProposalComposeDraft()?.platform
+        : null) ??
       null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initialComposeDraft?.platform, liveSourcePlatform, prefill?.platform],
+    [initialComposeDraft, initialComposeDraft?.platform, liveSourcePlatform, prefill?.platform],
   );
   const [stickyImportedSource, setStickyImportedSource] = React.useState<{
     sourceUrl: string | null;

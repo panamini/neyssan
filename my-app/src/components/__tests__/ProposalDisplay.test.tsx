@@ -716,7 +716,10 @@ describe("ProposalDisplay", () => {
     const frame = document.querySelector(".dasti-proposal-sheet-frame");
 
     expect(frame).toBeTruthy();
-    expect(screen.getByText("No draft yet. Generate one.")).toBeInTheDocument();
+    expect(screen.getByText(/No draft yet\./)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Paste a job offer to generate one\./),
+    ).toBeInTheDocument();
     expect(
       (frame as HTMLElement).style.getPropertyValue("--font-body-family"),
     ).toContain("Geist");
@@ -739,7 +742,7 @@ describe("ProposalDisplay", () => {
       />,
     );
 
-    expect(screen.queryByText("No draft yet. Generate one.")).toBeNull();
+    expect(screen.queryByText(/No draft yet\./)).toBeNull();
     expect(screen.getByPlaceholderText("Content appears here")).toBeInTheDocument();
   });
 

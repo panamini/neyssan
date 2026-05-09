@@ -62,6 +62,7 @@ import {
   readProposalJobImportFocus,
   readProposalWorkspaceResetToken,
   readStoredProposalComposeDraft,
+  startFreshProposalWorkspace,
   writeStoredProposalComposeDraft,
   type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
@@ -1105,6 +1106,27 @@ function buildResolvedRenderTraceSnapshot(args: {
   };
 }
 
+function isPlainProposalWorkspaceRoute(
+  search: string,
+  state: unknown,
+): boolean {
+  const params = new URLSearchParams(search);
+  const hasExplicitRouteContext =
+    params.has("jobId") ||
+    params.has("handoffId") ||
+    params.has("handoffToken") ||
+    params.has("id") ||
+    params.has("draftId") ||
+    params.get("view") === "saved";
+
+  return (
+    !hasExplicitRouteContext &&
+    !readProposalWorkspaceResetToken(state) &&
+    !readProposalEntryIntent(state) &&
+    !readProposalJobImportFocus(state)
+  );
+}
+
 /**
  * ProposalForge — page Write
  *
@@ -1120,6 +1142,10 @@ export function ProposalForge(): JSX.Element {
   const navigate = useNavigate();
   const { currentCvId, importCv } = useCvLibrary();
   const { showToast } = useToast();
+  const shouldStartFromEmptyProposalWorkspace = isPlainProposalWorkspaceRoute(
+    search,
+    location.state,
+  );
   const traceProposalStyle = React.useCallback(
     (args: {
       step: string;
@@ -1689,6 +1715,9 @@ export function ProposalForge(): JSX.Element {
     React.useState<FormValues | null>(null);
   const [composePreviewValues, setComposePreviewValues] =
     React.useState<StoredProposalComposeDraft | null>(() => {
+      if (shouldStartFromEmptyProposalWorkspace) {
+        return {};
+      }
       const storedComposeDraft = readStoredProposalComposeDraft();
       return (
         storedOutputDraft?.sourceComposeDraft ?? storedComposeDraft ?? null
@@ -1696,14 +1725,21 @@ export function ProposalForge(): JSX.Element {
     });
   const [outputSourceComposeDraft, setOutputSourceComposeDraft] =
     React.useState<StoredProposalComposeDraft | null>(
-      storedOutputDraft?.sourceComposeDraft ?? null,
+      shouldStartFromEmptyProposalWorkspace
+        ? null
+        : storedOutputDraft?.sourceComposeDraft ?? null,
     );
   const [composeDraftInitialSeed, setComposeDraftInitialSeed] =
     React.useState<StoredProposalComposeDraft | null>(
-      storedOutputDraft?.sourceComposeDraft ?? null,
+      shouldStartFromEmptyProposalWorkspace
+        ? {}
+        : storedOutputDraft?.sourceComposeDraft ?? null,
     );
   const [stickyImportedSource, setStickyImportedSource] =
     React.useState<ProposalImportedSourceState>(() => {
+      if (shouldStartFromEmptyProposalWorkspace) {
+        return { sourceUrl: null, platform: null };
+      }
       const storedComposeDraft = readStoredProposalComposeDraft();
       return {
         sourceUrl:
@@ -2270,6 +2306,7 @@ export function ProposalForge(): JSX.Element {
     React.useMemo<ResolvedProposalWorkspaceSourceDraft | null>(
       () =>
         resolveProposalWorkspaceSourceDraft({
+          allowStoredDraftCandidates: !shouldStartFromEmptyProposalWorkspace,
           canonicalJobRecord: canonicalJobRecord
             ? {
                 title: canonicalJobRecord.title,
@@ -2279,11 +2316,15 @@ export function ProposalForge(): JSX.Element {
               }
             : null,
           storedOutputSourceDraft:
-            storedOutputDraft?.sourceComposeDraft ?? null,
+            shouldStartFromEmptyProposalWorkspace
+              ? null
+              : storedOutputDraft?.sourceComposeDraft ?? null,
           composePreviewValues,
           outputSourceComposeDraft,
           composeDraftInitialSeed,
-          storedComposeDraft,
+          storedComposeDraft: shouldStartFromEmptyProposalWorkspace
+            ? null
+            : storedComposeDraft,
           prefill: prefill
             ? {
                 jobTitle: prefill.jobTitle,
@@ -2315,6 +2356,7 @@ export function ProposalForge(): JSX.Element {
         stickyImportedSource.sourceUrl,
         storedComposeDraft,
         storedOutputDraft?.sourceComposeDraft,
+        shouldStartFromEmptyProposalWorkspace,
       ],
     );
 
@@ -2494,13 +2536,17 @@ export function ProposalForge(): JSX.Element {
 
   React.useEffect(() => {
     const storedComposeDraft =
-      typeof window !== "undefined" ? readStoredProposalComposeDraft() : null;
+      typeof window !== "undefined" && !shouldStartFromEmptyProposalWorkspace
+        ? readStoredProposalComposeDraft()
+        : null;
     const nextSourceUrl =
       prefill?.sourceUrl ??
       outputSourceComposeDraft?.sourceUrl ??
       composePreviewValues?.sourceUrl ??
       composeDraftInitialSeed?.sourceUrl ??
-      storedOutputDraft?.sourceComposeDraft?.sourceUrl ??
+      (!shouldStartFromEmptyProposalWorkspace
+        ? storedOutputDraft?.sourceComposeDraft?.sourceUrl
+        : null) ??
       storedComposeDraft?.sourceUrl ??
       null;
     const nextPlatform =
@@ -2508,7 +2554,9 @@ export function ProposalForge(): JSX.Element {
       outputSourceComposeDraft?.platform ??
       composePreviewValues?.platform ??
       composeDraftInitialSeed?.platform ??
-      storedOutputDraft?.sourceComposeDraft?.platform ??
+      (!shouldStartFromEmptyProposalWorkspace
+        ? storedOutputDraft?.sourceComposeDraft?.platform
+        : null) ??
       storedComposeDraft?.platform ??
       null;
 
@@ -2529,6 +2577,7 @@ export function ProposalForge(): JSX.Element {
     outputSourceComposeDraft?.sourceUrl,
     prefill?.platform,
     prefill?.sourceUrl,
+    shouldStartFromEmptyProposalWorkspace,
     storedOutputDraft?.sourceComposeDraft?.platform,
     storedOutputDraft?.sourceComposeDraft?.sourceUrl,
   ]);
@@ -2540,6 +2589,7 @@ export function ProposalForge(): JSX.Element {
     if (
       requestedView !== "compose" ||
       prefill?.handoffId ||
+      shouldStartFromEmptyProposalWorkspace ||
       !storedOutputDraft?.sourceComposeDraft
     ) {
       return;
@@ -2562,6 +2612,7 @@ export function ProposalForge(): JSX.Element {
   }, [
     prefill?.handoffId,
     requestedView,
+    shouldStartFromEmptyProposalWorkspace,
     storedOutputDraft?.sourceComposeDraft,
   ]);
 
@@ -4615,12 +4666,48 @@ export function ProposalForge(): JSX.Element {
   ]);
 
   const handleNewProposalDraft = React.useCallback(() => {
+    startFreshProposalWorkspace();
     resetProposalWorkspace();
-    setProposalContent("");
-    setProposalType("cover_letter");
     setProposalLibraryStatus("draft");
-    setProposalOutputMode("edit");
-  }, [resetProposalWorkspace]);
+    setComposeFormInstanceKey((currentKey) => currentKey + 1);
+    void navigate("/proposal", { replace: true, state: null });
+  }, [navigate, resetProposalWorkspace]);
+
+  const handleClearJobContext = React.useCallback(() => {
+    cancelPendingComposeDraftSync();
+    setDuplicateSourceJobId(null);
+    setComposePreviewValues({});
+    setOutputSourceComposeDraft(null);
+    setComposeDraftInitialSeed({});
+    setStickyImportedSource({ sourceUrl: null, platform: null });
+    writeStoredProposalComposeDraft({});
+    setComposeFormInstanceKey((currentKey) => currentKey + 1);
+
+    const currentOutputDraft = readStoredProposalOutputDraft();
+    if (currentOutputDraft) {
+      writeStoredOutputDraft({
+        ...currentOutputDraft,
+        sourceComposeDraft: null,
+      });
+    }
+
+    const params = new URLSearchParams(search);
+    if (params.has("jobId") || params.has("handoffId") || params.has("handoffToken")) {
+      params.delete("jobId");
+      params.delete("handoffId");
+      params.delete("handoffToken");
+      const nextSearch = params.toString();
+      void navigate(nextSearch ? `/proposal?${nextSearch}` : "/proposal", {
+        replace: true,
+        state: null,
+      });
+    }
+  }, [
+    cancelPendingComposeDraftSync,
+    navigate,
+    search,
+    writeStoredOutputDraft,
+  ]);
 
   React.useEffect(() => {
     if (!proposalWorkspaceResetToken) {
@@ -4712,7 +4799,9 @@ export function ProposalForge(): JSX.Element {
 
   const buildStoredProposalComposeDraftSnapshot = React.useCallback(
     (values: FormValues): StoredProposalComposeDraft => {
-      const storedComposeDraft = readStoredProposalComposeDraft();
+      const storedComposeDraft = shouldStartFromEmptyProposalWorkspace
+        ? null
+        : readStoredProposalComposeDraft();
       const preservedSourceUrl =
         outputSourceComposeDraft?.sourceUrl ??
         composePreviewValues?.sourceUrl ??
@@ -4772,6 +4861,7 @@ export function ProposalForge(): JSX.Element {
       stickyImportedSource.sourceUrl,
       prefill?.platform,
       prefill?.sourceUrl,
+      shouldStartFromEmptyProposalWorkspace,
     ],
   );
   const commitComposeDraftPreview = React.useCallback(
@@ -4969,24 +5059,7 @@ export function ProposalForge(): JSX.Element {
         showRecipientDetails:
           openedSavedProposal.metadata?.headerShowRecipientDetails,
       });
-      const nextSourceComposeDraft: StoredProposalComposeDraft | null =
-        openedSavedProposal.metadata?.sourceJobDescription ||
-        openedSavedProposal.metadata?.sourceJobTitle ||
-        openedSavedProposal.metadata?.sourceUrl ||
-        openedSavedProposal.metadata?.platform
-          ? {
-              jobTitle:
-                openedSavedProposal.metadata?.sourceJobTitle ??
-                openedSavedProposal.title ??
-                "",
-              jobDescription:
-                openedSavedProposal.metadata?.sourceJobDescription ?? "",
-              sourceUrl: openedSavedProposal.metadata?.sourceUrl ?? null,
-              platform: openedSavedProposal.metadata?.platform ?? null,
-              proposalType: nextProposalType ?? undefined,
-              voicePreset: nextVoicePreset ?? null,
-            }
-          : null;
+      const nextSourceComposeDraft: StoredProposalComposeDraft | null = null;
 
       setProposalContent(nextContent);
       setProposalType(nextProposalType);
@@ -5182,23 +5255,7 @@ export function ProposalForge(): JSX.Element {
     const shouldRestoreDraftDetachedStyle = Boolean(
       nextStyleLinkMode === "proposal_local" && nextStylePreset,
     );
-    const nextSourceComposeDraft: StoredProposalComposeDraft | null =
-      draftProposal.metadata?.sourceJobDescription ||
-      draftProposal.metadata?.sourceJobTitle ||
-      draftProposal.metadata?.sourceUrl ||
-      draftProposal.metadata?.platform
-        ? {
-            jobTitle:
-              draftProposal.metadata?.sourceJobTitle ??
-              draftProposal.title ??
-              "",
-            jobDescription: draftProposal.metadata?.sourceJobDescription ?? "",
-            sourceUrl: draftProposal.metadata?.sourceUrl ?? null,
-            platform: draftProposal.metadata?.platform ?? null,
-            proposalType: nextType ?? undefined,
-            voicePreset: nextVoicePreset ?? null,
-          }
-        : null;
+    const nextSourceComposeDraft: StoredProposalComposeDraft | null = null;
 
     loadedDraftProposalIdRef.current = selectedDraftProposalId;
     latestProposalStyleCommitRef.current = null;
@@ -6908,17 +6965,6 @@ export function ProposalForge(): JSX.Element {
         return;
       }
 
-      const restoredSourceJobDescription =
-        openedSavedProposal.metadata?.sourceJobDescription?.trim() ?? "";
-      const restoredSourceUrl =
-        openedSavedProposal.metadata?.sourceUrl?.trim() ?? "";
-      const restoredSourcePlatform =
-        openedSavedProposal.metadata?.platform?.trim() ?? "";
-      const restoredJobTitle =
-        openedSavedProposal.metadata?.sourceJobTitle?.trim() ||
-        savedProposalDocumentTitle.trim() ||
-        openedSavedProposal.title.trim() ||
-        "Saved proposal";
       const savedProposalHasRequestedVoicePreset = hasOwnProperty(
         openedSavedProposal.metadata,
         "requestedVoicePreset",
@@ -7024,7 +7070,6 @@ export function ProposalForge(): JSX.Element {
         try {
           const existingComposeDraft = readStoredProposalComposeDraft() ?? {};
           const composeDraft: StoredProposalComposeDraft = {
-            jobTitle: restoredJobTitle,
             proposalType: savedProposalType ?? "cover_letter",
             modelType:
               existingComposeDraft.modelType === "chatgpt" ||
@@ -7035,18 +7080,6 @@ export function ProposalForge(): JSX.Element {
                 ? existingComposeDraft.modelType
                 : composeToolbarModelType,
           };
-
-          if (restoredSourceJobDescription) {
-            composeDraft.jobDescription = restoredSourceJobDescription;
-          } else if (typeof existingComposeDraft.jobDescription === "string") {
-            composeDraft.jobDescription = existingComposeDraft.jobDescription;
-          }
-          if (restoredSourceUrl) {
-            composeDraft.sourceUrl = restoredSourceUrl;
-          }
-          if (restoredSourcePlatform) {
-            composeDraft.platform = restoredSourcePlatform;
-          }
 
           const normalizedRestoredToolbarVoicePreset =
             normalizeComposeToolbarVoicePreset(restoredRequestedVoicePreset);
@@ -7970,6 +8003,14 @@ export function ProposalForge(): JSX.Element {
   const briefLinkedDocumentCount = canonicalJobRecord?.linkedProposalCount ?? 0;
   const briefLinkedProposals = canonicalJobRecord?.linkedProposals ?? [];
   const hasBriefContent = Boolean(briefJobDescription);
+  const hasActiveProposalJobContext = Boolean(
+    canonicalJobRecord?.title?.trim() ||
+      canonicalJobRecord?.rawDescription?.trim() ||
+      resolvedProposalWorkspaceSourceDraft?.jobTitle?.trim() ||
+      resolvedProposalWorkspaceSourceDraft?.jobDescription?.trim() ||
+      resolvedProposalWorkspaceSourceDraft?.sourceUrl?.trim() ||
+      resolvedProposalWorkspaceSourceDraft?.platform?.trim(),
+  );
   const showBriefCard = hasBriefContent && !isBriefExpanded && showComposePanel;
   const shouldShowDesktopBriefCapsule =
     showBriefCard && !isCompactComposeLayout;
@@ -8878,6 +8919,11 @@ export function ProposalForge(): JSX.Element {
                       onJobOfferTextChange={handleRailJobOfferTextChange}
                       onJobOfferTextCommit={handleRailJobOfferTextCommit}
                       onOpenJobs={handleOpenJobsFromRail}
+                      onClearJobContext={
+                        hasActiveProposalJobContext
+                          ? handleClearJobContext
+                          : undefined
+                      }
                       hasProposalContent={Boolean(proposalContent)}
                       generateLabel={composeGenerateControl.label}
                       generateDisabled={
@@ -9044,10 +9090,7 @@ export function ProposalForge(): JSX.Element {
                         exporting={proposalExportingFormat !== null}
                         hasProposalContent={Boolean(proposalContent)}
                         styleControl={null}
-                        sourceJobLinked={Boolean(
-                          composePreviewValues?.jobTitle?.trim() ||
-                            composePreviewValues?.jobDescription?.trim(),
-                        )}
+                        sourceJobLinked={hasActiveProposalJobContext}
                         sourceCvSelected={Boolean(attachedCvId)}
                         proposalLinked={Boolean(proposalContent)}
                         matchReviewAccepted={resolveSafeSendMatchReviewAccepted(

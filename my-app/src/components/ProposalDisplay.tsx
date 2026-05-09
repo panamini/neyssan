@@ -2470,7 +2470,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             textAlign: "center",
           }}
         >
-          No draft yet. Generate one.
+          No draft yet.
+          <br />
+          Paste a job offer to generate one.
         </p>
       </div>
     );
