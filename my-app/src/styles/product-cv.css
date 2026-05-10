@@ -770,6 +770,7 @@
 }
 
 .dasti-cv-org-row {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -778,6 +779,42 @@
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-card);
   background: var(--sf0);
+  will-change: transform;
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-ease-standard),
+    background var(--motion-duration-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-standard),
+    opacity var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.dasti-cv-org-row::before {
+  content: "";
+  position: absolute;
+  inset-inline: var(--space-1);
+  inset-block-start: calc(-0.5 * var(--space-1) - 1px);
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--ac);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ac) 14%, transparent);
+  opacity: 0;
+  transform: scaleX(0.96);
+  transform-origin: center;
+  pointer-events: none;
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.dasti-cv-org-row[data-over="true"]::before {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.dasti-cv-org-row[data-dragging="true"] {
+  z-index: 2;
+  border-color: color-mix(in srgb, var(--ac) 42%, var(--border-soft));
+  box-shadow: 0 10px 24px -18px color-mix(in srgb, var(--shadow-color) 70%, transparent);
+  opacity: 0.88;
 }
 
 .dasti-cv-org-row[data-active="true"] {
