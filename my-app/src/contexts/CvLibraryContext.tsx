@@ -438,7 +438,7 @@ function buildRemoteLibrarySummary(
     return null;
   }
 
-  return inflateCvLibraryIndexEntry(buildCvLibraryIndexEntry(sourceDocument));
+  return sourceDocument;
 }
 
 /**

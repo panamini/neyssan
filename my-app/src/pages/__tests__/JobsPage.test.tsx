@@ -2921,41 +2921,41 @@ describe("JobsPage", () => {
     });
   });
 
-  it("shows the first-run panel and routes import clicks directly to Capture the role", async () => {
+  it("shows the first-run panel and opens onboarding jobs from Add a job", async () => {
     listResult = [];
     selectedJobResult = null;
+    const onboardingReplayListener = vi.fn();
+    window.addEventListener(
+      "twoweeks:open-onboarding-replay",
+      onboardingReplayListener,
+    );
 
     render(
       <MemoryRouter initialEntries={["/jobs"]}>
         <Routes>
           <Route path="/jobs" element={<JobsPage />} />
-          <Route path="/proposal" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>,
     );
 
     expect(await screen.findByText("Start with one job.")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Import job" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Add a job\b/i }),
+    );
 
     await waitFor(() => {
-      expect(screen.getByTestId("jobs-location")).toHaveTextContent(
-        "/proposal",
-      );
+      expect(onboardingReplayListener).toHaveBeenCalled();
     });
-    const locationState = JSON.parse(
-      screen.getByTestId("jobs-location").dataset.state ?? "null",
-    );
-    expect(locationState).toEqual(
-      expect.objectContaining({
-        proposalEntryIntent: "cover-letter-start",
-        jobImportFocus: "supported-sites",
-      }),
-    );
-    expect(locationState.proposalWorkspaceResetToken).toEqual(
-      expect.any(String),
-    );
+    const event = onboardingReplayListener.mock.calls[0]?.[0] as CustomEvent<{
+      stepId?: string;
+    }>;
+    expect(event.detail).toEqual({ stepId: "jobs" });
     expect(recordFirstRunPathMock).toHaveBeenCalledWith({ path: "import" });
+    window.removeEventListener(
+      "twoweeks:open-onboarding-replay",
+      onboardingReplayListener,
+    );
   });
 
   it("holds the first-run panel until the jobs query resolves", () => {

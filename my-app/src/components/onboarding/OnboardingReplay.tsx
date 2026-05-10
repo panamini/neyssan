@@ -31,6 +31,7 @@ type OnboardingNavigateOptions = {
 
 type OnboardingReplayProps = {
   open: boolean;
+  initialStepId?: OnboardingStepId;
   onClose: () => void;
   onNavigate: (to: string, options?: OnboardingNavigateOptions) => void;
   onOpenCommandPalette: () => void;
@@ -57,8 +58,16 @@ type OnboardingChoice = {
   metadata?: string;
 };
 
+export type OnboardingStepId =
+  | "intro"
+  | "style"
+  | "tone"
+  | "cv"
+  | "jobs"
+  | "done";
+
 type OnboardingStep = {
-  id: "intro" | "style" | "tone" | "cv" | "jobs" | "done";
+  id: OnboardingStepId;
   title: string;
   progressLabel: string;
   copy: string;
@@ -346,7 +355,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     id: "jobs",
-    title: "Catch jobs as you browse.",
+    title: "Catch jobs instantly",
     progressLabel: "Jobs",
     copy: "Set up the twoweeks extension. Capture roles from supported job sites.",
     choices: [
@@ -387,6 +396,7 @@ function openExternalUrl(url: string): void {
 
 export function OnboardingReplay({
   open,
+  initialStepId = "intro",
   onClose,
   onNavigate,
   onOpenCommandPalette,
@@ -421,14 +431,17 @@ export function OnboardingReplay({
 
   React.useEffect(() => {
     if (open) {
-      setStepIndex(0);
+      const requestedStepIndex = ONBOARDING_STEPS.findIndex(
+        (candidate) => candidate.id === initialStepId,
+      );
+      setStepIndex(requestedStepIndex >= 0 ? requestedStepIndex : 0);
       setSupportedSitesOpen(false);
       setSelectedTone("warm");
       setSelectedStyle("style-1");
       setCvChoice(null);
       setSelectedCvFileName(null);
     }
-  }, [open]);
+  }, [initialStepId, open]);
 
   React.useEffect(() => {
     setSupportedSitesOpen(false);

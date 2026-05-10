@@ -57,6 +57,10 @@ import {
   applyMotionPreference,
   readStoredMotionPreference,
 } from "./lib/motion-preference";
+import {
+  OPEN_ONBOARDING_REPLAY_EVENT,
+  type OnboardingReplayTargetStep,
+} from "./lib/onboarding-replay-event";
 import { MagnifyingGlass, User } from "./lib/icons";
 import { useThemeMode } from "./lib/theme-mode";
 
@@ -186,7 +190,7 @@ function useBrowserTitle(topbarDocumentTitle: string | null): void {
         ? `${topbarDocumentTitle} · two weeks`
         : "All cover letters · two weeks";
     } else if (pathname === "/documents") {
-      pageTitle = "Documents · two weeks";
+      pageTitle = "Projects · two weeks";
     } else if (pathname === "/templates") {
       pageTitle = "Templates · two weeks";
     } else if (pathname === "/settings") {
@@ -215,8 +219,8 @@ function resolvePageLabel(pathname: string): string {
   if (pathname.startsWith("/proposal")) return "Proposal forge";
   if (pathname.startsWith("/cv")) return "CV forge";
   if (pathname.startsWith("/cvs")) return "CV library";
-  if (pathname.startsWith("/documents")) return "Documents";
-  if (pathname.startsWith("/proposals")) return "Documents";
+  if (pathname.startsWith("/documents")) return "Projects";
+  if (pathname.startsWith("/proposals")) return "Projects";
   if (pathname.startsWith("/templates")) return "Templates";
   if (pathname.startsWith("/style")) return "Templates";
   if (pathname.startsWith("/settings")) return "Settings";
@@ -352,6 +356,8 @@ function AppShell(): JSX.Element {
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = React.useState(false);
   const [onboardingReplayOpen, setOnboardingReplayOpen] = React.useState(false);
+  const [onboardingReplayInitialStepId, setOnboardingReplayInitialStepId] =
+    React.useState<OnboardingReplayTargetStep>("intro");
   const { toggle: toggleTheme } = useThemeMode();
 
   React.useEffect(() => {
@@ -364,6 +370,26 @@ function AppShell(): JSX.Element {
     }
 
     installStorageDiagnostics();
+  }, []);
+
+  React.useEffect(() => {
+    const handleOpenOnboardingReplay = (event: Event) => {
+      const detail = (event as CustomEvent<{ stepId?: OnboardingReplayTargetStep }>)
+        .detail;
+      setOnboardingReplayInitialStepId(detail?.stepId ?? "intro");
+      setOnboardingReplayOpen(true);
+    };
+
+    window.addEventListener(
+      OPEN_ONBOARDING_REPLAY_EVENT,
+      handleOpenOnboardingReplay,
+    );
+    return () => {
+      window.removeEventListener(
+        OPEN_ONBOARDING_REPLAY_EVENT,
+        handleOpenOnboardingReplay,
+      );
+    };
   }, []);
 
   const quickStartRouteState = React.useMemo(
@@ -444,11 +470,15 @@ function AppShell(): JSX.Element {
           <CommandPalette
             open={commandPaletteOpen}
             onOpenChange={setCommandPaletteOpen}
-            onReplayOnboarding={() => setOnboardingReplayOpen(true)}
+            onReplayOnboarding={() => {
+              setOnboardingReplayInitialStepId("intro");
+              setOnboardingReplayOpen(true);
+            }}
             onToggleTheme={toggleTheme}
           />
           <OnboardingReplay
             open={onboardingReplayOpen}
+            initialStepId={onboardingReplayInitialStepId}
             onClose={() => setOnboardingReplayOpen(false)}
             onNavigate={(to, options) => navigate(to, options)}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}

@@ -48,6 +48,7 @@ import {
   MagnifyingGlass as PhMagnifyingGlass,
   MagnifyingGlassMinus as PhMagnifyingGlassMinus,
   MagnifyingGlassPlus as PhMagnifyingGlassPlus,
+  NewspaperClipping as PhNewspaperClipping,
   PaperPlaneRight as PhPaperPlaneRight,
   PaperPlaneTilt as PhPaperPlaneTilt,
   Paperclip as PhPaperclip,
@@ -197,6 +198,7 @@ export const MagnifyingGlassPlus = withCompat(PhMagnifyingGlassPlus);
 export const Menu = withCompat(PhRows);
 export const Minus = withCompat(PhMinus);
 export const Moon = withCompat(PhMoon);
+export const NewspaperClipping = withCompat(PhNewspaperClipping);
 export const Paperclip = withCompat(PhPaperclip);
 export const PaperPlaneRight = withCompat(PhPaperPlaneRight);
 export const PaperPlaneTilt = withCompat(PhPaperPlaneTilt);

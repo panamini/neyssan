@@ -24,7 +24,7 @@ function renderStage(props: Partial<React.ComponentProps<typeof ProposalDocument
   );
 }
 
-describe("ProposalDocumentStage share and safe-send controls", () => {
+describe("ProposalDocumentStage proposal actions", () => {
   it("renders length term in the top status pill and keeps character count in the tooltip", () => {
     renderStage({
       statusMeta: "Standard",
@@ -56,104 +56,71 @@ describe("ProposalDocumentStage share and safe-send controls", () => {
     expect(screen.getByRole("button", { name: "Redo" })).toBeInTheDocument();
   });
 
-  it("uses shared app tooltips without native titles for stage mode and share triggers", () => {
+  it("uses shared app tooltips without native titles for stage mode and action triggers", () => {
     renderStage();
 
     const edit = screen.getByRole("button", { name: "Edit proposal" });
     const preview = screen.getByRole("button", { name: "Preview proposal" });
-    const share = screen.getByRole("button", { name: "Share proposal" });
+    const actions = screen.getByRole("button", { name: "Proposal actions" });
 
     expect(edit).toHaveAttribute("data-toolbar-tooltip", "Edit");
     expect(preview).toHaveAttribute("data-toolbar-tooltip", "Preview");
-    expect(share).toHaveAttribute("data-toolbar-tooltip", "Share");
+    expect(actions).toHaveAttribute("data-toolbar-tooltip", "Actions");
     expect(edit).not.toHaveAttribute("title");
     expect(preview).not.toHaveAttribute("title");
-    expect(share).not.toHaveAttribute("title");
-    expect(share.closest(".dasti-toolbar--surface-tooltips")).toBeTruthy();
+    expect(actions).not.toHaveAttribute("title");
+    expect(actions.closest(".dasti-toolbar--surface-tooltips")).toBeTruthy();
   });
 
-  it("marks unavailable share actions explicitly and wires copy text", async () => {
+  it("exposes direct proposal actions and wires copy/download", async () => {
     const onCopyText = vi.fn();
-    renderStage({ onCopyText });
+    const onExportPdf = vi.fn();
+    const onExportDocx = vi.fn();
+    renderStage({ onCopyText, onExportPdf, onExportDocx });
 
-    fireEvent.click(screen.getByRole("button", { name: /share/i }));
-    const menu = await screen.findByRole("menu", { name: "Share proposal" });
+    fireEvent.click(screen.getByRole("button", { name: "Proposal actions" }));
+    const menu = await screen.findByRole("menu", { name: "Proposal actions" });
 
-    expect(within(menu).getByRole("menuitem", { name: "Send by email" })).toBeDisabled();
-    expect(within(menu).getAllByText("Unavailable in this checkpoint")).toHaveLength(3);
-    expect(within(menu).getByRole("menuitem", { name: "Copy link" })).toBeDisabled();
-    expect(
-      within(menu).getByRole("menuitem", { name: "Public preview link" }),
-    ).toBeDisabled();
+    expect(within(menu).queryByText(/send/i)).not.toBeInTheDocument();
+    expect(within(menu).queryByText(/safe-send/i)).not.toBeInTheDocument();
+    expect(within(menu).queryByText(/export/i)).not.toBeInTheDocument();
 
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "Copy as text" }));
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Copy text" }));
     expect(onCopyText).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Proposal actions" }));
+    const secondMenu = await screen.findByRole("menu", { name: "Proposal actions" });
+    fireEvent.click(within(secondMenu).getByRole("menuitem", { name: "Download PDF" }));
+    expect(onExportPdf).toHaveBeenCalledWith("styled");
+
+    fireEvent.click(screen.getByRole("button", { name: "Proposal actions" }));
+    const thirdMenu = await screen.findByRole("menu", { name: "Proposal actions" });
+    fireEvent.click(within(thirdMenu).getByRole("menuitem", { name: "Download DOCX" }));
+    expect(onExportDocx).toHaveBeenCalledTimes(1);
   });
 
-  it("enables Continue only when every concrete safe-send row is clear", async () => {
+  it("does not block copy or download because job metadata is missing", async () => {
+    const onCopyText = vi.fn();
+    const onExportPdf = vi.fn();
     renderStage({
-      sourceJobLinked: true,
-      sourceCvSelected: true,
-      proposalLinked: true,
-      matchReviewAccepted: true,
-      hasUnresolvedImportIssues: false,
-      hasPendingAiSuggestion: false,
-      unsupportedClaimState: "clear",
-      hasPlaceholderText: false,
-      recipientOrExportTargetSelected: true,
-      finalExportReviewed: true,
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /share/i }));
-    const menu = await screen.findByRole("menu", { name: "Share proposal" });
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "Safe-send checklist…" }));
-
-    const dialog = await screen.findByRole("dialog", { name: "Safe-send checklist" });
-    expect(within(dialog).getByText("Package is ready to continue.")).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Continue to send" })).not.toBeDisabled();
-    expect(within(dialog).getByText("Cleared")).toBeInTheDocument();
-    expect(dialog.querySelectorAll('[data-state="clear"]')).toHaveLength(10);
-  });
-
-  it("groups user blockers, cleared checks, and system detection checks separately", async () => {
-    renderStage({
+      onCopyText,
+      onExportPdf,
       sourceJobLinked: false,
       sourceCvSelected: false,
-      proposalLinked: true,
+      proposalLinked: false,
       matchReviewAccepted: null,
       hasUnresolvedImportIssues: null,
       hasPendingAiSuggestion: null,
       unsupportedClaimState: null,
+      hasPlaceholderText: true,
       recipientOrExportTargetSelected: false,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /share/i }));
-    const menu = await screen.findByRole("menu", { name: "Share proposal" });
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "Safe-send checklist…" }));
+    fireEvent.click(screen.getByRole("button", { name: "Proposal actions" }));
+    const menu = await screen.findByRole("menu", { name: "Proposal actions" });
 
-    const dialog = await screen.findByRole("dialog", { name: "Safe-send checklist" });
-    const userGroup = within(dialog)
-      .getByText("User action required")
-      .closest(".dasti-proposal-safe-send__group") as HTMLElement;
-    const clearedGroup = within(dialog)
-      .getByText("Cleared")
-      .closest(".dasti-proposal-safe-send__group") as HTMLElement;
-    const systemGroup = within(dialog)
-      .getByText("System checks")
-      .closest(".dasti-proposal-safe-send__group") as HTMLElement;
-
-    expect(within(userGroup).getByText("Source job linked")).toBeInTheDocument();
-    expect(within(userGroup).getByText("CV variant selected")).toBeInTheDocument();
-    expect(within(userGroup).queryByText("No placeholder text")).not.toBeInTheDocument();
-    expect(within(clearedGroup).getByText("No placeholder text")).toBeInTheDocument();
-    expect(within(clearedGroup).getByText("Proposal linked")).toBeInTheDocument();
-    expect(within(userGroup).queryByText("Detection pending")).not.toBeInTheDocument();
-    expect(within(systemGroup).getAllByText("Detection pending")).toHaveLength(4);
-    expect(
-      within(dialog).getByRole("button", { name: "Resolve next" }),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).queryByRole("button", { name: "Fix first blocker" }),
-    ).not.toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Copy text" })).not.toBeDisabled();
+    expect(within(menu).getByRole("menuitem", { name: "Download PDF" })).not.toBeDisabled();
+    expect(screen.queryByRole("dialog", { name: /safe-send/i })).not.toBeInTheDocument();
   });
 });

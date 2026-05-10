@@ -5,6 +5,18 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { DashboardPage } from "../DashboardPage";
 
 const useQueryMock = vi.fn();
+const deleteProposalMock = vi.fn();
+const loadCvMock = vi.fn(() => true);
+const deleteCvMock = vi.fn();
+const downloadLibraryItemsMock = vi.fn();
+
+const cvLibraryState = {
+  cvs: [] as any[],
+  currentCv: null as any,
+  currentCvId: null as string | null,
+  loadCv: loadCvMock,
+  deleteCv: deleteCvMock,
+};
 
 vi.mock("@clerk/clerk-react", () => ({
   useAuth: () => ({
@@ -19,14 +31,30 @@ vi.mock("convex/react", () => ({
     isAuthenticated: true,
   }),
   useQuery: (...args: unknown[]) => useQueryMock(...args),
+  useMutation: () => deleteProposalMock,
 }));
 
 vi.mock("../../../convex/_generated/api", () => ({
   api: {
     proposalsPublic: { default: "proposalsPublic.default" },
+    deleteProposalPublic: { default: "deleteProposalPublic.default" },
     jobsPublic: { listForUser: "jobsPublic.listForUser" },
   },
 }));
+
+vi.mock("../../contexts/CvLibraryContext", () => ({
+  useCvLibrary: () => cvLibraryState,
+}));
+
+vi.mock("../../lib/library-download", async () => {
+  const actual = await vi.importActual<typeof import("../../lib/library-download")>(
+    "../../lib/library-download",
+  );
+  return {
+    ...actual,
+    downloadLibraryItems: (...args: unknown[]) => downloadLibraryItemsMock(...args),
+  };
+});
 
 function LocationProbe(): JSX.Element {
   const location = useLocation();
@@ -39,9 +67,87 @@ function LocationProbe(): JSX.Element {
 
 const now = Date.now();
 
+const currentCv = {
+  id: "cv-1",
+  title: "Aurelien CV",
+  metadata: {
+    updatedAt: new Date(now - 3_000).toISOString(),
+    createdAt: new Date(now - 10_000).toISOString(),
+  },
+  sections: [
+    {
+      id: "summary",
+      title: "Profile",
+      type: "summary",
+      blocks: [],
+      structuredContent: [{ summary: "Product engineer with proposal systems experience." }],
+    },
+  ],
+};
+
+const summaryOnlyCv = {
+  id: "cv-summary",
+  title: "Summary-only CV",
+  metadata: {
+    createdAt: new Date(now - 12_000).toISOString(),
+    updatedAt: new Date(now - 4_000).toISOString(),
+    version: 1,
+    librarySummaryOnly: true,
+  },
+  sections: [
+    {
+      id: "profile-cv-summary",
+      title: "Profile",
+      type: "profile",
+      blocks: [],
+      structuredContent: [{ id: "profile-item", name: "Summary Only" }],
+    },
+  ],
+};
+
+const cachedFullCv = {
+  ...summaryOnlyCv,
+  title: "Hydrated Today CV",
+  metadata: {
+    createdAt: new Date(now - 12_000).toISOString(),
+    updatedAt: new Date(now - 2_000).toISOString(),
+    version: 1,
+    verbatiStyle: {
+      familyId: "workshop",
+      typography: "geist-baskervville",
+      palette: "sauge",
+      resumeTemplateId: "workshop_resume_twocol_ats",
+    },
+  },
+  sections: [
+    {
+      id: "summary",
+      title: "Profile",
+      type: "summary",
+      blocks: [],
+      structuredContent: [{ summary: "Hydrated Today resume summary." }],
+    },
+    {
+      id: "experience",
+      title: "Experience",
+      type: "experience",
+      blocks: [],
+      structuredContent: [
+        {
+          role: "Hydrated Engineer",
+          company: "Today Renderer Co",
+          startDate: "2025",
+          endDate: "Present",
+          bullets: ["This Today line only exists in the full cached document."],
+        },
+      ],
+    },
+  ],
+};
+
 const draftProposal = {
   _id: "draft-1",
-  title: "Staff Designer draft",
+  title: "Building Security Guard",
   content: "Draft body",
   status: "draft",
   updatedAt: now - 1_000,
@@ -81,63 +187,36 @@ const sentProposal = {
   },
 };
 
-const strongJob = {
-  id: "job-strong",
-  title: "Senior Frontend Engineer",
-  company: "Linear",
+const linkedDraftJob = {
+  id: "job-1",
+  title: "Building Security Guard",
+  company: "AM",
   status: "active",
   matchTier: "strong",
   matchRead: { tier: "strong" },
   matchReview: { verdict: "strong_lead" },
   reviewState: "ready",
-  linkedDocumentCount: 0,
+  linkedDocumentCount: 1,
   updatedAt: now - 20_000,
   importedAt: now - 21_000,
   lastActivityAt: now - 20_000,
 };
 
-const linkedDraftJob = {
-  ...strongJob,
-  id: "job-1",
-  title: "Building Security Guard",
-  company: "AM",
-  linkedDocumentCount: 1,
-};
+function resetCvLibrary(overrides: Partial<typeof cvLibraryState> = {}) {
+  cvLibraryState.cvs = [];
+  cvLibraryState.currentCv = null;
+  cvLibraryState.currentCvId = null;
+  Object.assign(cvLibraryState, overrides);
+}
 
-const worthJob = {
-  ...strongJob,
-  id: "job-worth",
-  title: "Product Engineer",
-  company: "Stripe",
-  matchTier: "partial",
-  matchRead: { tier: "partial" },
-  matchReview: { verdict: "possible_lead" },
-  updatedAt: now - 30_000,
-  importedAt: now - 31_000,
-  lastActivityAt: now - 30_000,
-};
-
-const reviewJob = {
-  ...strongJob,
-  id: "job-review",
-  title: "Staff Designer",
-  company: "Vercel",
-  matchTier: "unknown",
-  matchRead: { tier: "unknown" },
-  matchReview: { verdict: "not_enough_signal" },
-  reviewState: "needs_review",
-  linkedDocumentCount: 1,
-  updatedAt: now - 40_000,
-  importedAt: now - 41_000,
-  lastActivityAt: now - 40_000,
-};
-
-function renderDashboard({
+function renderToday({
   proposals = [],
   jobs = [],
+  initialEntry = "/dashboard",
 }: {
   proposals?: unknown[];
   jobs?: unknown[];
+  initialEntry?: string;
 } = {}) {
   useQueryMock.mockImplementation((reference) => {
     if (reference === "proposalsPublic.default") return proposals;
@@ -146,7 +225,7 @@ function renderDashboard({
   });
 
   return render(
-    <MemoryRouter initialEntries={["/dashboard"]}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route
           path="/dashboard"
@@ -160,160 +239,188 @@ function renderDashboard({
         <Route path="/proposal" element={<LocationProbe />} />
         <Route path="/jobs" element={<LocationProbe />} />
         <Route path="/cv" element={<LocationProbe />} />
+        <Route path="/templates" element={<LocationProbe />} />
+        <Route path="/documents" element={<LocationProbe />} />
       </Routes>
     </MemoryRouter>,
   );
+}
+
+function sectionByHeading(name: string): HTMLElement {
+  const heading = screen.getByRole("heading", { name });
+  return heading.closest("section") as HTMLElement;
 }
 
 describe("DashboardPage", () => {
   beforeEach(() => {
     window.localStorage.clear();
     useQueryMock.mockReset();
+    loadCvMock.mockClear();
+    deleteProposalMock.mockClear();
+    deleteCvMock.mockClear();
+    downloadLibraryItemsMock.mockClear();
+    downloadLibraryItemsMock.mockResolvedValue({ downloaded: 1, skipped: 0 });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    resetCvLibrary();
   });
 
-  it("renders the dashboard without mock metric values", () => {
-    const { container } = renderDashboard();
+  it("renders Today instead of the old Dashboard analytics page", () => {
+    resetCvLibrary({ currentCv, currentCvId: "cv-1", cvs: [currentCv] });
+    renderToday({ proposals: [draftProposal], jobs: [linkedDraftJob] });
 
-    expect(screen.getByRole("heading", { name: /Dashboard/i })).toBeInTheDocument();
-    const metricValues = [...container.querySelectorAll(".dash-stat__num")].map(
-      (node) => node.textContent,
-    );
-    expect(metricValues).not.toContain("14");
-    expect(metricValues).not.toContain("3");
-    expect(metricValues).not.toContain("28");
+    expect(screen.getByRole("heading", { name: "Today" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Dashboard" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Proposals sent (30d)")).not.toBeInTheDocument();
     expect(screen.queryByText("Replies waiting")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Senior Frontend Engineer · Linear/)).not.toBeInTheDocument();
-    expect(screen.getByText("No captured jobs yet.")).toBeInTheDocument();
+    expect(screen.queryByText(/strong matches/i)).not.toBeInTheDocument();
   });
 
-  it("routes Import CV to the CV Forge PDF picker", () => {
-    renderDashboard();
+  it("renders the work-resumption sections and create actions", () => {
+    renderToday();
 
-    fireEvent.click(screen.getByRole("button", { name: "Import CV" }));
+    expect(screen.getByRole("heading", { name: "Continue" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Recent work" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Context" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Needs review" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Active applications" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Proposal work" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create" })).toBeInTheDocument();
+    const createSection = sectionByHeading("Create");
+    expect(within(createSection).getByRole("button", { name: /Import CV/ })).toBeInTheDocument();
+    expect(within(createSection).getByRole("button", { name: /Add job/ })).toBeInTheDocument();
+    expect(within(createSection).getByRole("button", { name: /New proposal/ })).toBeInTheDocument();
+    expect(within(createSection).getByRole("button", { name: /Start from template/ })).toBeInTheDocument();
+  });
+
+  it("shows real recent work from proposals and CV library data", () => {
+    resetCvLibrary({ currentCv, currentCvId: "cv-1", cvs: [currentCv] });
+    renderToday({ proposals: [sentProposal, savedProposal, draftProposal], jobs: [linkedDraftJob] });
+
+    const recentTitle = screen.getByRole("heading", { name: "Recent work" });
+    const recentSection = recentTitle.closest("section") as HTMLElement;
+    expect(within(recentSection).queryByText("Building Security Guard")).not.toBeInTheDocument();
+    expect(within(recentSection).queryByText("Product Engineer")).not.toBeInTheDocument();
+    expect(within(recentSection).queryByText("Aurelien CV")).not.toBeInTheDocument();
+    expect(within(recentSection).getAllByText("Senior Frontend Engineer").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".today-preview-card").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".work-doc-preview").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".work-doc-preview--rendered").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".work-doc-preview--resume-rendered").length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId("resume-template-renderer").length).toBeGreaterThan(0);
+    expect(document.querySelector(".work-doc-preview--cv-crop")).not.toBeInTheDocument();
+    expect(document.querySelector(".today-continue-card")).not.toBeInTheDocument();
+  });
+
+  it("hydrates summary-only CVs from the full cached CV before rendering Today previews", () => {
+    resetCvLibrary({
+      currentCv: null,
+      currentCvId: "cv-summary",
+      cvs: [summaryOnlyCv],
+    });
+    window.localStorage.setItem("cv:cv-summary", JSON.stringify(cachedFullCv));
+
+    renderToday();
+
+    expect(screen.getAllByText("Hydrated Today CV").length).toBeGreaterThan(0);
+    expect(screen.getByText("Hydrated Today resume summary.")).toBeInTheDocument();
+    expect(screen.queryByText("Summary Only")).not.toBeInTheDocument();
+    expect(document.querySelectorAll(".work-doc-preview--resume-rendered").length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId("resume-template-renderer").length).toBeGreaterThan(0);
+  });
+
+  it("does not render fake recent work when no data exists", () => {
+    renderToday();
+
+    expect(screen.getByText("No work yet.")).toBeInTheDocument();
+    expect(screen.queryByText(/Staff Designer · Vercel/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Senior Frontend Engineer · Linear/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Elena Marlowe/)).not.toBeInTheDocument();
+  });
+
+  it("routes Import CV through the existing CV import action", () => {
+    renderToday();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Import CV/ })[0]);
 
     expect(screen.getByTestId("dashboard-location")).toHaveTextContent(
       "/cv?cvForgeAction=importCv::null",
     );
   });
 
-  it("opens the latest existing proposal draft", () => {
-    renderDashboard({ proposals: [savedProposal, draftProposal], jobs: [linkedDraftJob] });
+  it("routes New proposal through the proposal reset flow", () => {
+    renderToday();
 
-    expect(screen.getByRole("heading", { name: "Continue draft." })).toBeInTheDocument();
-    expect(screen.getByText("Building Security Guard · Letter draft")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Open draft" })).toHaveLength(1);
-    fireEvent.click(screen.getAllByRole("button", { name: "Open draft" })[0]);
-
-    expect(screen.getByTestId("dashboard-location")).toHaveTextContent(
-      "/proposal?draftId=draft-1",
+    fireEvent.click(
+      within(sectionByHeading("Create")).getByRole("button", {
+        name: /New proposal/,
+      }),
     );
-  });
-
-  it("shows missing job context in the draft subtitle when no linked job exists", () => {
-    const missingJobDraft = {
-      ...draftProposal,
-      _id: "draft-without-job",
-      metadata: { jobId: null, sourceCvId: "cv-1" },
-    };
-
-    renderDashboard({ proposals: [missingJobDraft] });
-
-    expect(screen.getByRole("heading", { name: "Add job context." })).toBeInTheDocument();
-    expect(screen.getByText("Letter draft · Missing job context")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open draft" })).toBeInTheDocument();
-  });
-
-  it("starts the proposal template quick-start flow when no draft exists", () => {
-    renderDashboard({ proposals: [] });
-
-    expect(screen.getByRole("heading", { name: "Write first proposal" })).toBeInTheDocument();
-    expect(screen.getByText("Start with a job or blank letter.")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Start proposal" })[0]);
 
     const locationText = screen.getByTestId("dashboard-location").textContent ?? "";
-    expect(locationText).toContain("/proposal?templateId=minimal");
+    expect(locationText).toContain("/proposal::");
     expect(locationText).toContain("proposalWorkspaceResetToken");
   });
 
-  it("links strong matches to the filtered Jobs view", () => {
-    renderDashboard({ proposals: [], jobs: [strongJob] });
+  it("routes Start from template to the global templates page", () => {
+    renderToday();
 
-    expect(screen.getByText("Captured jobs ready to review.")).toBeInTheDocument();
-    expect(screen.getByText("Review matches")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /1 strong match/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Start from template/ }));
+
+    expect(screen.getByTestId("dashboard-location")).toHaveTextContent("/templates::null");
+  });
+
+  it("opens the current proposal draft from Continue", () => {
+    resetCvLibrary({ currentCv, currentCvId: "cv-1", cvs: [currentCv] });
+    renderToday({ proposals: [savedProposal, draftProposal], jobs: [linkedDraftJob] });
+
+    const continueTitle = screen.getByRole("heading", { name: "Continue" });
+    const continueSection = continueTitle.closest("section") as HTMLElement;
+    const draftTitle = within(continueSection).getAllByText("Building Security Guard").at(-1)!;
+    expect(draftTitle).toBeInTheDocument();
+    expect(within(continueSection).getAllByText("Draft body").length).toBeGreaterThan(0);
+    fireEvent.click(draftTitle.closest("button") as HTMLButtonElement);
 
     expect(screen.getByTestId("dashboard-location")).toHaveTextContent(
-      "/jobs?match=worth_plus",
+      "/proposal?draftId=draft-1::null",
     );
   });
 
-  it("renders secondary Quick actions without duplicating Open draft", () => {
-    renderDashboard({ proposals: [draftProposal] });
+  it("deletes supported proposal and CV items from secondary menus", async () => {
+    resetCvLibrary({ currentCv, currentCvId: "cv-1", cvs: [currentCv] });
+    renderToday({ proposals: [draftProposal] });
 
-    const quickActionsTitle = screen.getByText("Quick actions");
-    const quickActions = quickActionsTitle.closest(".ds-card") as HTMLElement;
+    fireEvent.click(
+      screen.getByRole("button", { name: "More actions for Building Security Guard" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    expect(deleteProposalMock).toHaveBeenCalledWith({ id: "draft-1" });
 
-    expect(within(quickActions).getByRole("button", { name: "Import CV" })).toBeInTheDocument();
-    expect(within(quickActions).getByRole("button", { name: "Review jobs" })).toBeInTheDocument();
-    expect(within(quickActions).getByRole("button", { name: "New proposal" })).toBeInTheDocument();
-    expect(within(quickActions).queryByRole("button", { name: "Open draft" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Open draft" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Import CV" })).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole("button", { name: "More actions for Aurelien CV" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    expect(deleteCvMock).toHaveBeenCalledWith("cv-1");
   });
 
-  it("renders live metric and activity icons as decorative", () => {
-    renderDashboard({
-      proposals: [sentProposal],
-      jobs: [strongJob],
-    });
+  it("downloads supported proposal and CV items from secondary menus", async () => {
+    resetCvLibrary({ currentCv, currentCvId: "cv-1", cvs: [currentCv] });
+    renderToday({ proposals: [draftProposal] });
 
-    expect(screen.queryByRole("button", { name: /Proposals sent \(30d\)/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /1 strong match/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Strong Senior Frontend Engineer/i }),
-    ).toBeInTheDocument();
-    expect(document.querySelectorAll("svg[aria-hidden='true']").length).toBeGreaterThan(0);
-  });
+    fireEvent.click(
+      screen.getByRole("button", { name: "More actions for Building Security Guard" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Download PDF" }));
+    expect(downloadLibraryItemsMock).toHaveBeenCalledWith([
+      expect.objectContaining({ id: "proposal:draft-1", type: "proposal" }),
+    ]);
 
-  it("shows captured jobs and caps Blocked to two items with View all", () => {
-    const missingContextDraft = {
-      ...draftProposal,
-      _id: "draft-missing-context",
-      title: "Draft missing context",
-      updatedAt: now,
-      metadata: { jobId: null, sourceCvId: null },
-    };
-
-    renderDashboard({
-      proposals: [missingContextDraft],
-      jobs: [strongJob, worthJob, reviewJob],
-    });
-
-    expect(screen.getByText("Captured jobs")).toBeInTheDocument();
-    expect(screen.getByText("Strong")).toBeInTheDocument();
-    expect(screen.getByText("Worth a shot")).toBeInTheDocument();
-    expect(screen.queryByText("Worth review")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Review all jobs" })).toBeInTheDocument();
-
-    const blockedTitle = screen
-      .getAllByText("Blocked")
-      .find((element) => element.classList.contains("ds-card__title")) as HTMLElement;
-    const blockedSection = blockedTitle.closest(".ds-card") as HTMLElement;
-    expect(
-      within(blockedSection).getByText("4 need context. Start with these."),
-    ).toBeInTheDocument();
-    expect(blockedSection.querySelectorAll(".dash-row")).toHaveLength(2);
-    expect(
-      within(blockedSection).getByRole("button", { name: "Resolve next" }),
-    ).toBeInTheDocument();
-    expect(
-      within(blockedSection)
-        .getByRole("button", { name: "Resolve next" })
-        .querySelector("svg[aria-hidden='true']"),
-    ).toBeInTheDocument();
-    expect(
-      within(blockedSection).getByRole("button", { name: "View all" }),
-    ).toBeInTheDocument();
+    downloadLibraryItemsMock.mockClear();
+    fireEvent.click(
+      screen.getByRole("button", { name: "More actions for Aurelien CV" }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Download PDF" }));
+    expect(downloadLibraryItemsMock).toHaveBeenCalledWith([
+      expect.objectContaining({ id: "cv:cv-1", type: "cv" }),
+    ]);
   });
 });
