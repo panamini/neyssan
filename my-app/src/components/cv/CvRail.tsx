@@ -315,7 +315,9 @@ function SortableSectionRow({
         >
           <GripHorizontal size={16} strokeWidth={1.8} />
         </button>
-      ) : null}
+      ) : (
+        <span className="dasti-cv-org-handle-spacer" aria-hidden="true" />
+      )}
       <button
         type="button"
         className="dasti-cv-org-row__main"
