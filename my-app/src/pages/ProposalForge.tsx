@@ -9256,16 +9256,19 @@ export function ProposalForge(): JSX.Element {
     !isComposePanelVisible &&
     !isSavedView &&
     canCollapseComposePanel;
-  const shouldAutoCollapseProposalRailForDockedDrawer =
+  const isForgeDrawerDockedDesktop =
     templatePanelOpen &&
     templatePanelOpenMode === "pinned" &&
-    viewportWidth >= 1180 &&
-    viewportWidth < 1640;
+    viewportWidth >= 1180;
+  const shouldAutoCollapseProposalRailForDockedDrawer =
+    isForgeDrawerDockedDesktop && viewportWidth < 1760;
   const shouldRenderProposalRail =
     !shouldAutoCollapseProposalRailForDockedDrawer;
   const showComposeGridColumn =
     shouldRenderProposalRail && showComposePanel && !isCompactComposeLayout;
-  const liveWorkbenchMaxWidth = isCompactComposeLayout
+  const liveWorkbenchMaxWidth = isForgeDrawerDockedDesktop
+    ? "100%"
+    : isCompactComposeLayout
     ? "100%"
     : shouldRenderColdStartInlineOnly
       ? proposalDesktopComposeWidth
@@ -9298,7 +9301,9 @@ export function ProposalForge(): JSX.Element {
   const proposalWorkbenchFrameStyle: ProposalWorkspaceCssVars = {
     width: "100%",
     maxWidth: liveWorkbenchMaxWidth,
-    marginInline: shouldRenderColdStartInlineOnly
+    marginInline: isForgeDrawerDockedDesktop
+      ? 0
+      : shouldRenderColdStartInlineOnly
       ? "auto"
       : showComposeGridColumn ||
           shouldLeftAnchorStackedWorkbench ||
@@ -10056,6 +10061,9 @@ export function ProposalForge(): JSX.Element {
                 ) : (
                   <div
                     className="dasti-proposal-skeleton-forge"
+                    data-forge-drawer-docked={
+                      isForgeDrawerDockedDesktop ? "true" : undefined
+                    }
                     data-forge-drawer-rail-collapsed={
                       shouldAutoCollapseProposalRailForDockedDrawer
                         ? "true"
@@ -10070,6 +10078,8 @@ export function ProposalForge(): JSX.Element {
                         "--proposal-workspace-rail-inline-size": "360px",
                         "--grid-columns": isCompactComposeLayout
                           ? "minmax(0, 1fr)"
+                          : isForgeDrawerDockedDesktop && showComposeGridColumn
+                            ? "minmax(0, 1fr) var(--proposal-workspace-rail-inline-size)"
                           : showComposeGridColumn
                             ? "minmax(0, var(--proposal-workspace-stage-inline-size)) var(--proposal-workspace-rail-inline-size)"
                             : "minmax(0, 1fr)",
@@ -10078,7 +10088,9 @@ export function ProposalForge(): JSX.Element {
                           : "0px",
                         "--grid-align": "start",
                         "--grid-justify":
-                          shouldAutoCollapseProposalRailForDockedDrawer
+                          isForgeDrawerDockedDesktop
+                            ? "stretch"
+                          : shouldAutoCollapseProposalRailForDockedDrawer
                             ? "center"
                             : !isCompactComposeLayout && showComposeGridColumn
                             ? "center"
