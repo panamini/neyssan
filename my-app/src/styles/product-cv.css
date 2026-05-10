@@ -784,6 +784,7 @@
     border-color var(--motion-duration-fast) var(--motion-ease-standard),
     background var(--motion-duration-fast) var(--motion-ease-standard),
     box-shadow var(--motion-duration-fast) var(--motion-ease-standard),
+    margin-block-start var(--motion-duration-fast) var(--motion-ease-standard),
     opacity var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
@@ -808,6 +809,10 @@
 .dasti-cv-org-row[data-over="true"]::before {
   opacity: 1;
   transform: scaleX(1);
+}
+
+.dasti-cv-org-row[data-over="true"] {
+  margin-block-start: var(--space-2);
 }
 
 .dasti-cv-org-row[data-dragging="true"] {
