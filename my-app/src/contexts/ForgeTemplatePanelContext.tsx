@@ -1,5 +1,7 @@
 import React from "react";
 
+import type { TemplateFamily } from "../pages/TemplatesPage";
+
 export type ForgeTemplateSurface = "cv" | "proposal";
 
 export type ForgeTemplateItem = {
@@ -7,6 +9,10 @@ export type ForgeTemplateItem = {
   label: string;
   description?: string | null;
   meta?: string | null;
+  preview?: {
+    kind: "Cover letter" | "Resume";
+    family: TemplateFamily;
+  };
 };
 
 export type ForgeTemplateRegistration = {

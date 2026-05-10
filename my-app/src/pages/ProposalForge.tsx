@@ -8457,19 +8457,26 @@ export function ProposalForge(): JSX.Element {
   );
   const proposalTemplatePanelItems = React.useMemo(
     () =>
-      PROPOSAL_STYLE_OPTIONS.map((option) => ({
-        id: option.id,
-        label: option.label,
-        meta: "Proposal template",
-        description: option.description,
-      })),
+      PROPOSAL_STYLE_OPTIONS.map((option) => {
+        const family =
+          option.id === "magazine_editorial"
+            ? "letterpress"
+            : option.id === "grid_mono"
+              ? "bold"
+              : "minimal";
+        return {
+          id: option.id,
+          label: option.label,
+          preview: { kind: "Cover letter" as const, family },
+        };
+      }),
     [],
   );
   const proposalTemplatePanelRegistration = React.useMemo(
     () => ({
       surface: "proposal" as const,
       title: "Proposal templates",
-      subtitle: "Apply a template to the current proposal.",
+      subtitle: "A4 · 21 × 29.7 cm",
       activeItemId: effectiveProposalTemplateBundleId,
       items: proposalTemplatePanelItems,
       onSelect: handleProposalStyleBundleSelect,

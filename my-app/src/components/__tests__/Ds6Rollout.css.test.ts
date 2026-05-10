@@ -195,10 +195,16 @@ describe("DS-6 rollout contracts", () => {
       /\.sb-section__document--active::before\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*scaleY\(1\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-rail-button--active\s*\{[\s\S]*background:\s*var\(--sf2\);/,
+      /\.sb-rail-button--active\s*\{[\s\S]*background:\s*transparent;/,
     );
     expect(productCss).toMatch(
-      /\.sb-rail-button--active::before\s*\{[\s\S]*top:\s*10px;[\s\S]*bottom:\s*10px;[\s\S]*width:\s*2px;[\s\S]*background:\s*var\(--ac\);/,
+      /\.sb-rail-button--active \.sb-rail-button__icon\s*\{[\s\S]*background:\s*var\(--sf2\);/,
+    );
+    expect(productCss).toMatch(
+      /\.sb-rail-button--active::before\s*\{[\s\S]*content:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.sb-rail-button--active \.sb-rail-button__glyph--fill\s*\{[\s\S]*opacity:\s*1;/,
     );
     expect(productCss).toMatch(
       /\.sb-footer--collapsed \.sb-section__action\s*\{[\s\S]*width:\s*calc\(var\(--app-sidebar-width-collapsed\) - \(var\(--space-1\) \* 2\)\);[\s\S]*min-height:\s*var\(--app-sidebar-item-height\);[\s\S]*border-radius:\s*var\(--radius-control\);/,

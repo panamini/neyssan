@@ -4441,14 +4441,12 @@ export function CvForge(): JSX.Element {
       {
         id: "workshop-onecol",
         label: "Minimal",
-        meta: "CV template",
-        description: "Workshop one-column resume layout.",
+        preview: { kind: "Resume" as const, family: "workshop-onecol" as const },
       },
       {
         id: "workshop-twocol",
         label: "French",
-        meta: "CV template",
-        description: "Workshop two-column resume layout.",
+        preview: { kind: "Resume" as const, family: "workshop-twocol" as const },
       },
     ],
     [],
@@ -4462,7 +4460,7 @@ export function CvForge(): JSX.Element {
     () => ({
       surface: "cv" as const,
       title: "CV templates",
-      subtitle: "Apply a template to the current CV.",
+      subtitle: "A4 · 21 × 29.7 cm",
       activeItemId: activeCvTemplatePanelItemId,
       items: cvTemplatePanelItems,
       onSelect: (itemId: string) => {

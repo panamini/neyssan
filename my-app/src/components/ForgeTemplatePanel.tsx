@@ -1,6 +1,12 @@
 import React from "react";
-import { Check, ImagesSquare, X } from "../lib/icons";
+import { ImagesSquare, X } from "../lib/icons";
 import { useForgeTemplatePanel } from "../contexts/ForgeTemplatePanelContext";
+import { TemplateDocumentPreview } from "../pages/TemplatesPage";
+import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../lib/document-stage";
+
+const TEMPLATE_THUMBNAIL_WIDTH_PX = 136;
+const TEMPLATE_THUMBNAIL_SCALE =
+  TEMPLATE_THUMBNAIL_WIDTH_PX / A4_PAGE_WIDTH_PX;
 
 export function ForgeTemplatePanel(): JSX.Element | null {
   const { open, activeRegistration, closePanel } = useForgeTemplatePanel();
@@ -42,29 +48,28 @@ export function ForgeTemplatePanel(): JSX.Element | null {
               role="listitem"
               className="forge-template-card"
               data-selected={selected ? "true" : undefined}
+              aria-label={item.label}
               aria-pressed={selected}
               onClick={() => activeRegistration.onSelect(item.id)}
             >
               <span className="forge-template-card__preview" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-              </span>
-              <span className="forge-template-card__body">
-                <span className="forge-template-card__title-row">
-                  <span className="forge-template-card__title">{item.label}</span>
-                  {selected ? (
-                    <Check size={13} strokeWidth={1.9} aria-hidden="true" />
+                <span
+                  className="forge-template-card__page"
+                  style={
+                    {
+                      width: A4_PAGE_WIDTH_PX,
+                      height: A4_PAGE_HEIGHT_PX,
+                      transform: `scale(${TEMPLATE_THUMBNAIL_SCALE})`,
+                    } as React.CSSProperties
+                  }
+                >
+                  {item.preview ? (
+                    <TemplateDocumentPreview
+                      kind={item.preview.kind}
+                      family={item.preview.family}
+                    />
                   ) : null}
                 </span>
-                {item.meta ? (
-                  <span className="forge-template-card__meta">{item.meta}</span>
-                ) : null}
-                {item.description ? (
-                  <span className="forge-template-card__description">
-                    {item.description}
-                  </span>
-                ) : null}
               </span>
             </button>
           );
