@@ -466,6 +466,7 @@ export interface ICvLibraryContext {
   // True when currentCv carries user-provided content beyond the blank template.
   hasMeaningfulContent: boolean;
   loadCv: (id: string) => boolean;
+  hydrateCvDocument: (id: string) => Promise<CvDocument | null>;
   saveCurrentCv: () => Promise<void>;
   // Create a CV document from an ICvState snapshot (used by LocalBackupsPanel)
   createCvFromState: (
@@ -1661,6 +1662,107 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       // ignore
     }
   }
+
+  const readCachedFullCvDocument = useCallback(
+    (id: string): CvDocument | null => {
+      if (typeof window === "undefined" || !window.localStorage) {
+        return null;
+      }
+
+      const keys = [
+        getLocalCvDocumentStorageKey(id),
+        getLegacyLocalCvDocumentStorageKey(id),
+      ];
+
+      for (const key of keys) {
+        try {
+          const raw = window.localStorage.getItem(key);
+          if (!raw) continue;
+          const parsed = JSON.parse(raw);
+          const parsedResult = safeParseCvDocument(parsed);
+          const doc = parsedResult.ok
+            ? parsedResult.value
+            : parsed &&
+                typeof parsed === "object" &&
+                typeof parsed.id === "string" &&
+                Array.isArray(parsed.sections)
+              ? (parsed as CvDocument)
+              : null;
+          if (doc && !isLibrarySummaryOnlyCv(doc)) {
+            return doc;
+          }
+        } catch {
+          /* ignore malformed cached documents */
+        }
+      }
+
+      return null;
+    },
+    [],
+  );
+
+  const normalizeHydratedCvDocument = useCallback((doc: CvDocument) => {
+    let migrated = doc;
+    try {
+      migrated = migrateLegacyIds(doc);
+    } catch {
+      /* noop */
+    }
+    const docV1 = normalizeToV1Document(migrated);
+    return ensureRepresentativeBlocks(docV1);
+  }, []);
+
+  const hydrateCvDocument = useCallback(
+    async (id: string): Promise<CvDocument | null> => {
+      const targetId = String(id).trim();
+      if (!targetId) return null;
+
+      const inMemoryDoc =
+        currentCvRef.current && String(currentCvRef.current.id) === targetId
+          ? currentCvRef.current
+          : cvsRef.current.find((candidate) => String(candidate.id) === targetId) ??
+            null;
+
+      if (inMemoryDoc && !isLibrarySummaryOnlyCv(inMemoryDoc)) {
+        return normalizeHydratedCvDocument(inMemoryDoc);
+      }
+
+      const cachedDoc = readCachedFullCvDocument(targetId);
+      if (cachedDoc) {
+        const normalized = normalizeHydratedCvDocument(cachedDoc);
+        cacheDocumentLocally(normalized);
+        setCvs((prev) =>
+          prev.some((candidate) => String(candidate.id) === targetId)
+            ? prev.map((candidate) =>
+                String(candidate.id) === targetId ? normalized : candidate,
+              )
+            : [...prev, normalized],
+        );
+        return normalized;
+      }
+
+      try {
+        const remoteDoc = await adapter.load(targetId);
+        if (!remoteDoc || isLibrarySummaryOnlyCv(remoteDoc)) {
+          return null;
+        }
+        const normalized = normalizeHydratedCvDocument(remoteDoc);
+        cacheDocumentLocally(normalized);
+        setCvs((prev) =>
+          prev.some((candidate) => String(candidate.id) === targetId)
+            ? prev.map((candidate) =>
+                String(candidate.id) === targetId ? normalized : candidate,
+              )
+            : [...prev, normalized],
+        );
+        return normalized;
+      } catch (error) {
+        console.warn("[CvLibraryContext] hydrateCvDocument failed", error);
+        return null;
+      }
+    },
+    [adapter, normalizeHydratedCvDocument, readCachedFullCvDocument],
+  );
 
   function removeDocumentLocally(id: string) {
     try {
@@ -3909,6 +4011,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       isV1Active,
       hasMeaningfulContent: hasMeaningfulCvContent(currentCv),
       loadCv,
+      hydrateCvDocument,
       saveCurrentCv,
       createCvFromState,
       createNewCv,
@@ -3962,6 +4065,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       lastLibraryFetchFailed,
       isDirty,
       loadCv,
+      hydrateCvDocument,
       saveCurrentCv,
       createCvFromState,
       createNewCv,

@@ -36,22 +36,44 @@ describe("sidebar visual CSS contracts", () => {
       /\.sb-rail-button:hover \.sb-rail-button__icon\s*\{[\s\S]*background:\s*var\(--sidebar-hover-bg\);[\s\S]*color:\s*var\(--ti\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-rail-button--active\s*\{[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--ti\);/,
+      /\.sb-rail-button--route-active,\s*\.sb-rail-button--active\s*\{[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--ti\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-rail-button--active \.sb-rail-button__icon\s*\{[\s\S]*background:\s*var\(--sf2\);[\s\S]*color:\s*var\(--ti\);/,
+      /\.sb-rail-button--route-active \.sb-rail-button__icon,\s*\.sb-rail-button--active \.sb-rail-button__icon\s*\{[\s\S]*background:\s*var\(--sf2\);[\s\S]*color:\s*var\(--ti\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-rail-button--active::before\s*\{[\s\S]*content:\s*none;/,
+      /\.sb-rail-button--route-active::before,\s*\.sb-rail-button--active::before\s*\{[\s\S]*content:\s*none;/,
     );
     expect(productCss).toMatch(
-      /\.sb-rail-button--active \.sb-rail-button__glyph--regular\s*\{[\s\S]*opacity:\s*0;/,
+      /\.sb-rail-button--route-active \.sb-rail-button__glyph--regular,\s*\.sb-rail-button--active \.sb-rail-button__glyph--regular\s*\{[\s\S]*opacity:\s*0;/,
     );
     expect(productCss).toMatch(
-      /\.sb-rail-button--active \.sb-rail-button__glyph--fill\s*\{[\s\S]*opacity:\s*1;/,
+      /\.sb-rail-button--route-active \.sb-rail-button__glyph--fill,\s*\.sb-rail-button--active \.sb-rail-button__glyph--fill\s*\{[\s\S]*opacity:\s*1;/,
+    );
+    expect(productCss).not.toMatch(
+      /\.sb-rail-button--panel-open \.sb-rail-button__glyph--regular\s*\{[\s\S]*opacity:\s*0;/,
+    );
+    expect(productCss).not.toMatch(
+      /\.sb-rail-button--panel-open \.sb-rail-button__glyph--fill\s*\{[\s\S]*opacity:\s*1;/,
     );
     expect(productCss).not.toMatch(
       /\.sb-rail-button:hover[^{]*\.sb-rail-button__glyph--fill/,
+    );
+  });
+
+  it("docks pinned forge drawers as a shell column without changing peek overlay behavior", () => {
+    expect(productCss).toMatch(
+      /\.app-shell\[data-forge-panel-docked="true"\]\s*\{[\s\S]*grid-template-columns:\s*auto[\s\S]*var\(--app-nav-panel-width-wide\)[\s\S]*minmax\(0,\s*1fr\)/,
+    );
+    expect(productCss).toMatch(
+      /\.app-shell\[data-forge-panel-docked="true"\] \.forge-template-panel\s*\{[\s\S]*position:\s*relative;[\s\S]*grid-column:\s*2;[\s\S]*width:\s*var\(--app-nav-panel-width-wide\);/,
+    );
+    expect(productCss).toMatch(
+      /\.forge-template-panel\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset-inline-start:\s*var\(--app-nav-rail-width\);/,
+    );
+    expect(productCss).toContain(".forge-template-panel__collapse");
+    expect(productCss).toMatch(
+      /\.forge-template-panel__collapse\s*\{[\s\S]*inset-inline-end:\s*0;[\s\S]*transform:\s*translate\(50%,\s*-50%\);/,
     );
   });
 

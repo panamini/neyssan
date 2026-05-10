@@ -3,7 +3,7 @@ import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import type { RemirrorJSON } from "remirror";
-import { PenLine, Upload, X } from "@/lib/icons";
+import { ArrowSquareOut, FileUser, PenLine, Upload, X } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import FloatingAiToolbar, {
   type InlineAiActionId,
@@ -12,8 +12,13 @@ import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import {
   useForgeTemplatePanel,
+  useRegisterForgePanel,
   useRegisterForgeTemplates,
 } from "../contexts/ForgeTemplatePanelContext";
+import {
+  DrawerDocumentTile,
+  DrawerUnavailableThumbnail,
+} from "../components/library/LibraryDocumentPreview";
 import { VerbatiResumePreview } from "../features/verbati/VerbatiResumePreview";
 import type {
   ActivePaperEditTarget,
@@ -81,6 +86,11 @@ import {
 import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
 import type { CvDocument } from "../types/cvDocument";
+import {
+  buildWorkLibraryModel,
+  type LibraryItem,
+  type LibraryProposalRecord,
+} from "../lib/application-library";
 import { buildCanonicalResumeRenderModelFromCv } from "../lib/buildCanonicalResumeRenderModel";
 import { deriveCvTitleFromSections } from "../lib/normalize-cv";
 import CvStageBar from "../components/cv/CvStageBar";
@@ -2179,6 +2189,363 @@ function resolveAccentStyle(
   }
 }
 
+function isSummaryOnlyCvDocument(cv: CvDocument | null | undefined): boolean {
+  return Boolean(
+    (cv?.metadata as { librarySummaryOnly?: boolean } | undefined)
+      ?.librarySummaryOnly,
+  );
+}
+
+function readCvForgeDrawerRecentSearches(storageKey: string): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string").slice(0, 5)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function useCvForgeDrawerRecentSearches(storageKey: string) {
+  const [recentSearches, setRecentSearches] = React.useState<string[]>(() =>
+    readCvForgeDrawerRecentSearches(storageKey),
+  );
+
+  const writeRecentSearches = React.useCallback(
+    (next: string[]) => {
+      setRecentSearches(next);
+      if (typeof window === "undefined") return;
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(next));
+      } catch {
+        /* local-only enhancement */
+      }
+    },
+    [storageKey],
+  );
+
+  const rememberSearch = React.useCallback(
+    (value: string) => {
+      const normalized = value.trim();
+      if (!normalized) return;
+      writeRecentSearches([
+        normalized,
+        ...recentSearches.filter(
+          (item) => item.toLowerCase() !== normalized.toLowerCase(),
+        ),
+      ].slice(0, 5));
+    },
+    [recentSearches, writeRecentSearches],
+  );
+
+  const clearRecentSearches = React.useCallback(() => {
+    writeRecentSearches([]);
+  }, [writeRecentSearches]);
+
+  return { recentSearches, rememberSearch, clearRecentSearches };
+}
+
+function CvForgeDrawerSearch({
+  value,
+  onChange,
+  placeholder = "Search library",
+  storageKey = "twoweeks:forge-drawer:recent-cvforge-library-searches",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  storageKey?: string;
+}): JSX.Element {
+  const [focused, setFocused] = React.useState(false);
+  const { recentSearches, rememberSearch, clearRecentSearches } =
+    useCvForgeDrawerRecentSearches(storageKey);
+  const showRecentSearches = focused && value.trim() === "" && recentSearches.length > 0;
+  const commitSearch = React.useCallback(() => {
+    rememberSearch(value);
+  }, [rememberSearch, value]);
+
+  return (
+    <div className="forge-rail-drawer__search-wrap">
+      <label className="forge-rail-drawer__search">
+        <span className="sr-only">{placeholder}</span>
+        <input
+          type="search"
+          value={value}
+          onChange={(event) => onChange(event.currentTarget.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            commitSearch();
+            window.setTimeout(() => setFocused(false), 120);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") commitSearch();
+          }}
+          placeholder={placeholder}
+        />
+      </label>
+      {showRecentSearches ? (
+        <div className="forge-rail-drawer__recent-searches" role="listbox">
+          <div className="forge-rail-drawer__recent-searches-head">
+            <span>Recent searches</span>
+            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={clearRecentSearches}>
+              Clear
+            </button>
+          </div>
+          {recentSearches.map((recent) => (
+            <button
+              key={recent}
+              type="button"
+              role="option"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onChange(recent)}
+            >
+              {recent}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CvForgeDrawerSectionTitle({
+  title,
+  actionLabel,
+  onAction,
+  sectionRef,
+  focusable = false,
+}: {
+  title: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  sectionRef?: React.Ref<HTMLDivElement>;
+  focusable?: boolean;
+}): JSX.Element {
+  return (
+    <div
+      ref={sectionRef}
+      className="forge-rail-drawer__section-title"
+      tabIndex={focusable ? -1 : undefined}
+    >
+      <span>{title}</span>
+      {actionLabel ? (
+        <button type="button" onClick={onAction}>
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function CvForgeDrawerPreview({
+  item,
+  hydrateCvDocument,
+  badge,
+}: {
+  item: LibraryItem;
+  hydrateCvDocument: (id: string) => Promise<CvDocument | null>;
+  badge?: string | null;
+}): JSX.Element {
+  if (item.type === "proposal") {
+    return <DrawerDocumentTile item={item} badge={badge} />;
+  }
+
+  const sourceId = item.id.slice(item.id.indexOf(":") + 1);
+  const [hydratedCv, setHydratedCv] = React.useState<CvDocument | null>(
+    item.cvDocument && !isSummaryOnlyCvDocument(item.cvDocument)
+      ? item.cvDocument
+      : null,
+  );
+  const [failed, setFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    if (item.cvDocument && !isSummaryOnlyCvDocument(item.cvDocument)) {
+      setHydratedCv(item.cvDocument);
+      setFailed(false);
+      return () => undefined;
+    }
+    setHydratedCv(null);
+    setFailed(false);
+    hydrateCvDocument(sourceId).then((doc) => {
+      if (cancelled) return;
+      if (doc && !isSummaryOnlyCvDocument(doc)) {
+        setHydratedCv(doc);
+      } else {
+        setFailed(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrateCvDocument, item, sourceId]);
+
+  if (!hydratedCv) {
+    return (
+      <DrawerUnavailableThumbnail
+        label={failed ? "Preview unavailable" : "Loading preview"}
+      />
+    );
+  }
+
+  return <DrawerDocumentTile item={item} cvDocument={hydratedCv} badge={badge} />;
+}
+
+export function CvForgeLibraryDrawer({
+  items,
+  currentCvId,
+  hydrateCvDocument,
+  onSelectCv,
+  onOpenItem,
+  onOpenLibraryType,
+}: {
+  items: LibraryItem[];
+  currentCvId: string | null;
+  hydrateCvDocument: (id: string) => Promise<CvDocument | null>;
+  onSelectCv: (id: string) => void;
+  onOpenItem: (item: LibraryItem) => void;
+  onOpenLibraryType: (type: "cvs" | "proposals") => void;
+}): JSX.Element {
+  const [query, setQuery] = React.useState("");
+  const [filter, setFilter] = React.useState<"all" | "cvs" | "proposals">("cvs");
+  const allResultsRef = React.useRef<HTMLDivElement | null>(null);
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredItems = items.filter((item) => {
+    if (filter === "cvs" && item.type !== "cv") return false;
+    if (filter === "proposals" && item.type !== "proposal") return false;
+    return normalizedQuery
+      ? [item.title, item.subtitle, item.jobTitle, item.linkedCvTitle]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery)
+      : true;
+  });
+  const recentItems = React.useMemo(() => {
+    const alternatives = filteredItems.filter((item) => {
+      if (item.type !== "cv") return true;
+      const sourceId = item.id.slice(item.id.indexOf(":") + 1);
+      return currentCvId !== sourceId;
+    });
+    return (alternatives.length >= 2 ? alternatives : filteredItems).slice(0, 2);
+  }, [currentCvId, filteredItems]);
+  const renderItem = (item: LibraryItem, keyPrefix = "") => {
+    const sourceId = item.id.slice(item.id.indexOf(":") + 1);
+    const selected = item.type === "cv" && currentCvId === sourceId;
+    return (
+      <article
+        key={`${keyPrefix}${item.id}`}
+        className="forge-rail-drawer__thumb-item"
+        data-state={selected ? "current" : undefined}
+        role="listitem"
+      >
+        <button
+          type="button"
+          className="forge-template-card forge-rail-drawer__thumb-button"
+          aria-label={
+            item.type === "cv" ? `Open CV: ${item.title}` : `Open proposal: ${item.title}`
+          }
+          aria-pressed={item.type === "cv" ? selected : undefined}
+          onClick={() => {
+            if (item.type === "cv") {
+              onSelectCv(sourceId);
+              return;
+            }
+            onOpenItem(item);
+          }}
+        >
+          <CvForgeDrawerPreview
+            item={item}
+            hydrateCvDocument={hydrateCvDocument}
+            badge={selected ? "Current" : null}
+          />
+        </button>
+        <button
+          type="button"
+          className="forge-rail-drawer__thumb-menu forge-rail-drawer__thumb-menu--direct"
+          aria-label={
+            item.type === "cv"
+              ? `Open CV library for ${item.title}`
+              : `Open proposals library for ${item.title}`
+          }
+          data-toolbar-tooltip={
+            item.type === "cv" ? "Open CV library" : "Open proposals"
+          }
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenLibraryType(item.type === "cv" ? "cvs" : "proposals");
+          }}
+        >
+          <ArrowSquareOut size={15} aria-hidden="true" />
+        </button>
+      </article>
+    );
+  };
+
+  return (
+    <div className="forge-rail-drawer">
+      <CvForgeDrawerSearch
+        value={query}
+        onChange={setQuery}
+        placeholder="Search library"
+      />
+      <div className="forge-rail-drawer__tabs" role="tablist" aria-label="Library filter">
+        {[
+          ["all", "All"],
+          ["cvs", "CVs"],
+          ["proposals", "Proposals"],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={filter === id}
+            data-active={filter === id ? "true" : undefined}
+            onClick={() => {
+              setFilter(id as "all" | "cvs" | "proposals");
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="forge-rail-drawer__grid" role="list">
+        <CvForgeDrawerSectionTitle
+          title="Recently viewed"
+          actionLabel={
+            filteredItems.length <= recentItems.length
+              ? undefined
+              : filter === "cvs"
+                ? "Show all CVs"
+                : filter === "proposals"
+                  ? "Show all proposals"
+                  : "Show all"
+          }
+          onAction={() => {
+            setQuery("");
+            window.setTimeout(() => {
+              allResultsRef.current?.scrollIntoView({ block: "start" });
+              allResultsRef.current?.focus();
+            }, 0);
+          }}
+        />
+        {recentItems.map((item) => renderItem(item, "recent-"))}
+        <CvForgeDrawerSectionTitle
+          title="All results"
+          sectionRef={allResultsRef}
+          focusable
+        />
+        {filteredItems.map((item) => renderItem(item))}
+        {filteredItems.length === 0 ? (
+          <p className="forge-rail-drawer__empty">No documents found.</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /**
  * CvForge — page Resume
  *
@@ -2193,8 +2560,13 @@ export function CvForge(): JSX.Element {
   const {
     activeSurface: activeTemplateSurface,
     open: templatePanelOpen,
+    openMode: templatePanelOpenMode,
     openSurface: openTemplateSurface,
+    closePanel: closeForgePanel,
   } = useForgeTemplatePanel();
+  const [viewportWidth, setViewportWidth] = React.useState(() =>
+    typeof window === "undefined" ? 1440 : window.innerWidth,
+  );
   const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
   const setJobResume = useMutation(
     ((api as any).jobsPublic?.setResumeForJob ??
@@ -2211,7 +2583,19 @@ export function CvForge(): JSX.Element {
     isLibraryHydrated,
     lastLibraryFetchFailed,
     loadCv,
+    hydrateCvDocument,
   } = useCvLibrary();
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
   const { importFile: importStructuredCvFile } = useStructuredMistralImport({
     probeOnMount: false,
   });
@@ -2234,6 +2618,10 @@ export function CvForge(): JSX.Element {
         verbatiStyle?: VerbatiStylePreset | null;
       }
     | undefined;
+  const cvForgeLibraryProposals = useQuery(
+    (api as any).proposalsPublic?.default ?? "proposalsPublic.default",
+    isConvexAuthenticated ? {} : "skip",
+  ) as LibraryProposalRecord[] | undefined;
   const documentStylePresets = useQuery(
     ((api.proposalSettings as any)?.getPresets ??
       "proposalSettings.getPresets") as any,
@@ -2936,6 +3324,11 @@ export function CvForge(): JSX.Element {
     "--cv-paper-visual-inline-size": `min(100%, ${CV_PAPER_VISUAL_INLINE_SIZE})`,
     "--cv-workspace-stage-inline-size": "var(--cv-paper-visual-inline-size)",
   } as React.CSSProperties;
+  const shouldAutoCollapseCvRailForDockedDrawer =
+    templatePanelOpen &&
+    templatePanelOpenMode === "pinned" &&
+    viewportWidth >= 1180 &&
+    viewportWidth < 1640;
   const showJobBriefContext = Boolean(requestedJobId);
   const isEntryPickerBusy = isCreatingEntryCv || isImportingEntryCv;
 
@@ -4484,6 +4877,69 @@ export function CvForge(): JSX.Element {
     ],
   );
   useRegisterForgeTemplates(cvTemplatePanelRegistration);
+  const cvLibraryDrawerItems = React.useMemo(
+    () =>
+      buildWorkLibraryModel({
+        cvs,
+        currentCvId,
+        proposals: cvForgeLibraryProposals,
+      }).items,
+    [currentCvId, cvForgeLibraryProposals, cvs],
+  );
+  const handleSelectCvFromLibraryDrawer = React.useCallback(
+    (cvId: string) => {
+      loadCv(cvId);
+      closeForgePanel();
+    },
+    [closeForgePanel, loadCv],
+  );
+  const handleOpenCvLibraryItemFromDrawer = React.useCallback(
+    (item: LibraryItem) => {
+      closeForgePanel();
+      if (item.routeTarget.kind === "route") {
+        void navigate(item.routeTarget.to);
+      }
+    },
+    [closeForgePanel, navigate],
+  );
+  const handleOpenCvLibraryTypeFromDrawer = React.useCallback(
+    (type: "cvs" | "proposals") => {
+      closeForgePanel();
+      void navigate(`/documents?type=${type}`);
+    },
+    [closeForgePanel, navigate],
+  );
+  const cvLibraryPanelRegistration = React.useMemo(
+    () => ({
+      surface: "documents" as const,
+      title: "Library",
+      icon: <FileUser size={16} aria-hidden="true" />,
+      renderContent: () => (
+        <CvForgeLibraryDrawer
+          items={cvLibraryDrawerItems}
+          currentCvId={currentCvId}
+          hydrateCvDocument={hydrateCvDocument}
+          onSelectCv={handleSelectCvFromLibraryDrawer}
+          onOpenItem={handleOpenCvLibraryItemFromDrawer}
+          onOpenLibraryType={handleOpenCvLibraryTypeFromDrawer}
+        />
+      ),
+      footer: {
+        label: "Open Library",
+        onSelect: () => navigate("/documents?type=cvs"),
+      },
+    }),
+    [
+      currentCvId,
+      cvLibraryDrawerItems,
+      handleOpenCvLibraryTypeFromDrawer,
+      handleOpenCvLibraryItemFromDrawer,
+      handleSelectCvFromLibraryDrawer,
+      hydrateCvDocument,
+      navigate,
+    ],
+  );
+  useRegisterForgePanel(cvLibraryPanelRegistration);
   const cvTemplatesOpen =
     templatePanelOpen && activeTemplateSurface === "cv";
   const handleOpenCvTemplates = React.useCallback(() => {
@@ -5628,6 +6084,9 @@ export function CvForge(): JSX.Element {
         <>
           <div
             className="dasti-cv-skeleton-forge"
+            data-forge-drawer-rail-collapsed={
+              shouldAutoCollapseCvRailForDockedDrawer ? "true" : undefined
+            }
             style={cvWorkbenchShellStyle}
           >
             <div className="dasti-cv-skeleton-forge__stage">
@@ -5770,6 +6229,7 @@ export function CvForge(): JSX.Element {
                 </div>
               )}
             </div>
+            {shouldAutoCollapseCvRailForDockedDrawer ? null : (
             <CvRail
               sections={currentSections}
               hiddenSectionIds={hiddenSectionIds}
@@ -5807,6 +6267,7 @@ export function CvForge(): JSX.Element {
               }}
               onImportPdf={handleImportEntryCv}
             />
+            )}
           </div>
           <SectionEditorSheet
             open={sectionEditorOpen}
