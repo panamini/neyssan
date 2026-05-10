@@ -10,6 +10,7 @@ import FloatingAiToolbar, {
 } from "../components/FloatingAiToolbar";
 import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
+import { useRegisterForgeTemplates } from "../contexts/ForgeTemplatePanelContext";
 import { VerbatiResumePreview } from "../features/verbati/VerbatiResumePreview";
 import type {
   ActivePaperEditTarget,
@@ -4435,6 +4436,48 @@ export function CvForge(): JSX.Element {
     },
     [setStylePreset],
   );
+  const cvTemplatePanelItems = React.useMemo(
+    () => [
+      {
+        id: "workshop-onecol",
+        label: "Minimal",
+        meta: "CV template",
+        description: "Workshop one-column resume layout.",
+      },
+      {
+        id: "workshop-twocol",
+        label: "French",
+        meta: "CV template",
+        description: "Workshop two-column resume layout.",
+      },
+    ],
+    [],
+  );
+  const activeCvTemplatePanelItemId =
+    stylePreset.layout === "workshop" &&
+    stylePreset.resumeTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+      ? "workshop-twocol"
+      : "workshop-onecol";
+  const cvTemplatePanelRegistration = React.useMemo(
+    () => ({
+      surface: "cv" as const,
+      title: "CV templates",
+      subtitle: "Apply a template to the current CV.",
+      activeItemId: activeCvTemplatePanelItemId,
+      items: cvTemplatePanelItems,
+      onSelect: (itemId: string) => {
+        if (itemId === "workshop-onecol" || itemId === "workshop-twocol") {
+          handleSelectTemplate(itemId);
+        }
+      },
+    }),
+    [
+      activeCvTemplatePanelItemId,
+      cvTemplatePanelItems,
+      handleSelectTemplate,
+    ],
+  );
+  useRegisterForgeTemplates(cvTemplatePanelRegistration);
 
   const handleSelectFontPair = React.useCallback(
     (fontPairId: VerbatiFontPairId) => {

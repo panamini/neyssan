@@ -29,11 +29,13 @@ import { ProposalPrintPage } from "./pages/ProposalPrintPage";
 import { ResumeFontParityHarnessPage } from "./pages/ResumeFontParityHarnessPage";
 import { PdfRasterHarnessPage } from "./pages/PdfRasterHarnessPage";
 import { Sidebar } from "./components/Sidebar";
+import { ForgeTemplatePanel } from "./components/ForgeTemplatePanel";
 import { CommandPalette } from "./components/CommandPalette";
 import { OnboardingReplay } from "./components/onboarding/OnboardingReplay";
 import { QuickStartFlow } from "./components/onboarding/QuickStartFlow";
 import { IconButton, Pill } from "./components/ui";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
+import { ForgeTemplatePanelProvider } from "./contexts/ForgeTemplatePanelContext";
 import { installStorageDiagnostics } from "./lib/storage-diagnostics";
 import { useCvLibrary } from "./contexts/CvLibraryContext";
 import { api } from "../convex/_generated/api";
@@ -397,59 +399,62 @@ function AppShell(): JSX.Element {
 
   return (
     <CvLibraryProvider>
-      <div className="app-shell">
-        <Sidebar />
-        <div className="app-main">
-          <ConvexStatusBanner />
-          <TopbarTitleSync />
-          <AppTopbar
-            commandPaletteOpen={commandPaletteOpen}
+      <ForgeTemplatePanelProvider>
+        <div className="app-shell">
+          <Sidebar />
+          <ForgeTemplatePanel />
+          <div className="app-main">
+            <ConvexStatusBanner />
+            <TopbarTitleSync />
+            <AppTopbar
+              commandPaletteOpen={commandPaletteOpen}
+              onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+            />
+
+            <div className="app-pages">
+              {quickStartRouteState.isOpen ? (
+                <QuickStartFlow
+                  onExit={closeQuickStart}
+                  initialCreateType={quickStartRouteState.createType}
+                  resumeMode={quickStartRouteState.resumeMode}
+                  returnTarget={quickStartRouteState.returnTarget}
+                />
+              ) : (
+                <Routes>
+                  <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/cv" element={<CvForge />} />
+                  <Route path="/cvs" element={<CvsLibrary />} />
+                  <Route path="/proposal" element={<ProposalForge />} />
+                  <Route path="/proposal-next" element={<Navigate to="/proposal" replace />} />
+                  <Route path="/jobs" element={<JobsPage />} />
+                  <Route path="/jobs/:jobId" element={<JobsPage />} />
+                  <Route path="/proposals" element={<ProposalsLibrary />} />
+                  <Route path="/documents" element={<DocumentsPage />} />
+                  <Route path="/style" element={<StyleForge />} />
+                  <Route path="/templates" element={<TemplatesPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/sign-in/*" element={<SignInPage />} />
+                  <Route path="/sign-out" element={<SignOutPage />} />
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                </Routes>
+              )}
+            </div>
+          </div>
+          <CommandPalette
+            open={commandPaletteOpen}
+            onOpenChange={setCommandPaletteOpen}
+            onReplayOnboarding={() => setOnboardingReplayOpen(true)}
+            onToggleTheme={toggleTheme}
+          />
+          <OnboardingReplay
+            open={onboardingReplayOpen}
+            onClose={() => setOnboardingReplayOpen(false)}
+            onNavigate={(to, options) => navigate(to, options)}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
           />
-
-          <div className="app-pages">
-            {quickStartRouteState.isOpen ? (
-              <QuickStartFlow
-                onExit={closeQuickStart}
-                initialCreateType={quickStartRouteState.createType}
-                resumeMode={quickStartRouteState.resumeMode}
-                returnTarget={quickStartRouteState.returnTarget}
-              />
-            ) : (
-              <Routes>
-                <Route path="/dashboard" element={<DashboardPage />} />
-                <Route path="/cv" element={<CvForge />} />
-                <Route path="/cvs" element={<CvsLibrary />} />
-                <Route path="/proposal" element={<ProposalForge />} />
-                <Route path="/proposal-next" element={<Navigate to="/proposal" replace />} />
-                <Route path="/jobs" element={<JobsPage />} />
-                <Route path="/jobs/:jobId" element={<JobsPage />} />
-                <Route path="/proposals" element={<ProposalsLibrary />} />
-                <Route path="/documents" element={<DocumentsPage />} />
-                <Route path="/style" element={<StyleForge />} />
-                <Route path="/templates" element={<TemplatesPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/sign-in/*" element={<SignInPage />} />
-                <Route path="/sign-out" element={<SignOutPage />} />
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-              </Routes>
-            )}
-          </div>
         </div>
-        <CommandPalette
-          open={commandPaletteOpen}
-          onOpenChange={setCommandPaletteOpen}
-          onReplayOnboarding={() => setOnboardingReplayOpen(true)}
-          onToggleTheme={toggleTheme}
-        />
-        <OnboardingReplay
-          open={onboardingReplayOpen}
-          onClose={() => setOnboardingReplayOpen(false)}
-          onNavigate={(to, options) => navigate(to, options)}
-          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-        />
-      </div>
+      </ForgeTemplatePanelProvider>
     </CvLibraryProvider>
   );
 }
