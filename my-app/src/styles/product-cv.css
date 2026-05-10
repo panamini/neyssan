@@ -803,6 +803,14 @@
   text-align: left;
 }
 
+.dasti-cv-org-row__main--draggable {
+  cursor: grab;
+}
+
+.dasti-cv-org-row__main--draggable:active {
+  cursor: grabbing;
+}
+
 .dasti-cv-org-handle {
   width: 28px;
   height: 28px;

@@ -297,21 +297,6 @@ function SortableSectionRow({
           className="dasti-cv-org-handle"
           aria-label={`Reorder ${label}`}
           title="Drag to reorder"
-          {...sortable.attributes}
-          {...sortable.listeners}
-          onKeyDown={(event) => {
-            if (!showMoveControls) return;
-            if (event.key === "ArrowUp") {
-              event.preventDefault();
-              onMoveSection(sectionId, -1);
-              return;
-            }
-            if (event.key === "ArrowDown") {
-              event.preventDefault();
-              onMoveSection(sectionId, 1);
-              return;
-            }
-          }}
         >
           <GripHorizontal size={16} strokeWidth={1.8} />
         </button>
@@ -320,8 +305,25 @@ function SortableSectionRow({
       )}
       <button
         type="button"
-        className="dasti-cv-org-row__main"
+        className={`dasti-cv-org-row__main ${
+          showDragHandle ? "dasti-cv-org-row__main--draggable" : ""
+        }`.trim()}
+        {...(showDragHandle ? sortable.attributes : {})}
+        {...(showDragHandle ? sortable.listeners : {})}
         onClick={() => onSelectSection(sectionId, { openEditor: true })}
+        onKeyDown={(event) => {
+          if (!showMoveControls) return;
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            onMoveSection(sectionId, -1);
+            return;
+          }
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            onMoveSection(sectionId, 1);
+            return;
+          }
+        }}
       >
         <span className="dasti-cv-org-row__title">{label}</span>
         <span className="dasti-cv-org-row__count">
