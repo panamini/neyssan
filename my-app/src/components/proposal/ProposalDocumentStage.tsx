@@ -7,6 +7,7 @@ import {
   Eye,
   FilePdf,
   FileText,
+  ImagesSquare,
   Link,
   PaperPlaneRight,
   PenLine,
@@ -38,8 +39,10 @@ type ProposalDocumentStageProps = {
   exporting: boolean;
   hasProposalContent: boolean;
   styleControl?: React.ReactNode;
+  templatesOpen?: boolean;
   children: React.ReactNode;
   onModeChange: (mode: "preview" | "edit") => void;
+  onOpenTemplates?: () => void;
   onCopyText: () => void;
   onDeleteDraft?: () => void;
   onSaveToLibrary?: () => void;
@@ -287,8 +290,10 @@ export function ProposalDocumentStage({
   exporting,
   hasProposalContent,
   styleControl = null,
+  templatesOpen = false,
   children,
   onModeChange,
+  onOpenTemplates,
   onCopyText,
   onDeleteDraft,
   onSaveToLibrary,
@@ -431,6 +436,18 @@ export function ProposalDocumentStage({
             <div className="dasti-proposal-skeleton-stage__style-control">
               {styleControl}
             </div>
+          ) : null}
+          {onOpenTemplates ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              iconLeft={<ImagesSquare size={14} strokeWidth={1.8} />}
+              aria-expanded={templatesOpen}
+              onClick={onOpenTemplates}
+            >
+              Templates
+            </Button>
           ) : null}
           {mode === "edit" ? (
             <>

@@ -31,7 +31,7 @@ type SidebarRailLinkProps = {
 type SidebarRailButtonProps = {
   label: string;
   icon: RailIconComponent;
-  active: boolean;
+  panelOpen: boolean;
   expanded: boolean;
   onClick: () => void;
 };
@@ -88,7 +88,7 @@ function SidebarRailLink({
 function SidebarRailButton({
   label,
   icon,
-  active,
+  panelOpen,
   expanded,
   onClick,
 }: SidebarRailButtonProps): JSX.Element {
@@ -97,8 +97,7 @@ function SidebarRailButton({
       type="button"
       className={clsx(
         "sb-rail-button",
-        active && "sb-rail-button--active",
-        expanded && "sb-rail-button--panel-open",
+        panelOpen && "sb-rail-button--panel-open",
       )}
       aria-label={label}
       aria-expanded={expanded}
@@ -143,6 +142,7 @@ export const Sidebar: React.FC = () => {
   const proposalActive =
     isRouteActive(pathname, "/proposal") || isRouteActive(pathname, "/proposals");
   const projectsActive = isRouteActive(pathname, "/documents");
+  const templatesActive = isRouteActive(pathname, "/templates");
   const settingsActive = isRouteActive(pathname, "/settings");
   const activeForgeSurface: ForgeTemplateSurface | null = cvActive
     ? "cv"
@@ -197,12 +197,19 @@ export const Sidebar: React.FC = () => {
         {activeForgeSurface ? (
           <SidebarRailButton
             label="Templates"
-            active={templatesOpen}
+            panelOpen={templatesOpen}
             expanded={templatesOpen}
             onClick={handleOpenTemplates}
             icon={ImagesSquare}
           />
-        ) : null}
+        ) : (
+          <SidebarRailLink
+            label="Templates"
+            href="/templates"
+            active={templatesActive}
+            icon={ImagesSquare}
+          />
+        )}
         <SidebarRailLink
           label="Settings"
           href="/settings"

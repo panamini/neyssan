@@ -5,6 +5,7 @@ import {
   FilePdf,
   FolderOpen,
   FolderSimple,
+  ImagesSquare,
   PenLine,
   ShareFat,
 } from "@/lib/icons";
@@ -36,7 +37,9 @@ type CvStageBarProps = {
   exporting: boolean;
   tone: CvToneChoice;
   resumeOptions: CvStageBarResumeOption[];
+  templatesOpen?: boolean;
   onModeChange: (mode: "edit" | "preview") => void;
+  onOpenTemplates?: () => void;
   onOpenImportReview: () => void;
   onPickResume: (cvId: string) => void;
   onExportPdf: () => void;
@@ -51,7 +54,9 @@ export function CvStageBar({
   exporting,
   tone,
   resumeOptions,
+  templatesOpen = false,
   onModeChange,
+  onOpenTemplates,
   onOpenImportReview,
   onPickResume,
   onExportPdf,
@@ -226,6 +231,18 @@ export function CvStageBar({
         <Button type="button" size="sm" variant="ghost" disabled>
           Version history
         </Button>
+        {onOpenTemplates ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            iconLeft={<ImagesSquare size={14} strokeWidth={1.8} />}
+            aria-expanded={templatesOpen}
+            onClick={onOpenTemplates}
+          >
+            Templates
+          </Button>
+        ) : null}
         <Menu
           ariaLabel="Pick resume"
           align="end"

@@ -38,7 +38,10 @@ import {
   useStructuredMistralImport,
 } from "../components/useStructuredMistralImport";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
-import { useRegisterForgeTemplates } from "../contexts/ForgeTemplatePanelContext";
+import {
+  useForgeTemplatePanel,
+  useRegisterForgeTemplates,
+} from "../contexts/ForgeTemplatePanelContext";
 import { api } from "../../convex/_generated/api";
 import {
   buildAppProposalPersonalizationPayload,
@@ -1158,6 +1161,11 @@ export function ProposalForge(): JSX.Element {
   const location = useLocation();
   const { search } = location;
   const navigate = useNavigate();
+  const {
+    activeSurface: activeTemplateSurface,
+    open: templatePanelOpen,
+    openSurface: openTemplateSurface,
+  } = useForgeTemplatePanel();
   const { currentCvId, importCv } = useCvLibrary();
   const { showToast } = useToast();
   const shouldStartFromEmptyProposalWorkspace = isPlainProposalWorkspaceRoute(
@@ -8488,6 +8496,11 @@ export function ProposalForge(): JSX.Element {
     ],
   );
   useRegisterForgeTemplates(proposalTemplatePanelRegistration);
+  const proposalTemplatesOpen =
+    templatePanelOpen && activeTemplateSurface === "proposal";
+  const handleOpenProposalTemplates = React.useCallback(() => {
+    openTemplateSurface("proposal");
+  }, [openTemplateSurface]);
   const shouldAnimateDesktopBriefTransition =
     !isSavedView && !isCompactComposeLayout;
   const shouldRenderBriefCard =
@@ -9345,6 +9358,8 @@ export function ProposalForge(): JSX.Element {
                         exporting={proposalExportingFormat !== null}
                         hasProposalContent={hasMeaningfulProposalContent}
                         styleControl={null}
+                        templatesOpen={proposalTemplatesOpen}
+                        onOpenTemplates={handleOpenProposalTemplates}
                         sourceJobLinked={hasActiveProposalJobContext}
                         sourceCvSelected={Boolean(attachedCvId)}
                         proposalLinked={hasMeaningfulProposalContent}
