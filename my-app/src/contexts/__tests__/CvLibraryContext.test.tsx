@@ -1244,6 +1244,76 @@ describe('CvLibraryContext', () => {
     expect(ctx.cvs[0].title).toBe('Jane Doe — Product Manager');
   });
 
+  it('importCv preserves explicit section order from CV Forge reordering', async () => {
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+    await waitFor(() => expect(ctx).toBeDefined());
+
+    await act(async () => {
+      await ctx.importCv({
+        id: 'reordered-cv',
+        title: 'Reordered CV',
+        metadata: {
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          version: 1,
+        },
+        sections: [
+          {
+            id: 'sec-profile',
+            title: 'Profile',
+            type: 'profile',
+            order: 0,
+            blocks: [],
+            structuredContent: [
+              {
+                id: 'profile-1',
+                name: 'Jane Doe',
+                desiredPosition: 'Product Manager',
+              },
+            ],
+            collapsed: false,
+          },
+          {
+            id: 'sec-skills',
+            title: 'Skills',
+            type: 'skills',
+            order: 1,
+            blocks: [],
+            structuredContent: [{ id: 'skill-1', name: 'Roadmapping' }],
+            collapsed: false,
+          },
+          {
+            id: 'sec-experience',
+            title: 'Experience',
+            type: 'experience',
+            order: 2,
+            blocks: [],
+            structuredContent: [
+              {
+                id: 'experience-1',
+                position: 'Product Lead',
+                company: 'Example Co',
+              },
+            ],
+            collapsed: false,
+          },
+        ],
+      });
+    });
+
+    await waitFor(() => expect(ctx.currentCv).not.toBeNull());
+    expect(ctx.currentCv.sections.map((section: any) => section.id).slice(0, 3)).toEqual([
+      'sec-profile',
+      'sec-skills',
+      'sec-experience',
+    ]);
+  });
+
   it('preserves authoritative resume metadata through import, save, and load', async () => {
     let ctx: any;
     render(

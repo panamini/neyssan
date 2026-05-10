@@ -2945,13 +2945,29 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       const importOrderIndex = new Map(
         preferredImportOrder.map((t, i) => [t, i]),
       );
-      const reorderedSections = [...validated.sections].sort((a, b) => {
-        const aRank =
-          importOrderIndex.get(String((a as any).type ?? "") as any) ?? 999;
-        const bRank =
-          importOrderIndex.get(String((b as any).type ?? "") as any) ?? 999;
-        return aRank - bRank;
-      });
+      const hasExplicitSectionOrder = validated.sections.some(
+        (section) => typeof section.order === "number",
+      );
+      const reorderedSections = [...validated.sections]
+        .map((section, index) => ({ section, index }))
+        .sort((a, b) => {
+          if (hasExplicitSectionOrder) {
+            const aOrder =
+              typeof a.section.order === "number" ? a.section.order : a.index;
+            const bOrder =
+              typeof b.section.order === "number" ? b.section.order : b.index;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return a.index - b.index;
+          }
+
+          const aRank =
+            importOrderIndex.get(String((a.section as any).type ?? "") as any) ?? 999;
+          const bRank =
+            importOrderIndex.get(String((b.section as any).type ?? "") as any) ?? 999;
+          if (aRank !== bRank) return aRank - bRank;
+          return a.index - b.index;
+        })
+        .map(({ section }) => section);
       const validatedReordered = {
         ...validated,
         sections: reorderedSections,
