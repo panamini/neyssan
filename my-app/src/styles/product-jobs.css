@@ -1321,14 +1321,18 @@
 }
 
 .dasti-jobs-empty-state {
-  padding-block: clamp(var(--space-6), 8vw, var(--space-8));
+  display: grid;
+  place-items: center;
+  min-block-size: min(720px, calc(100dvh - var(--header-height) - var(--space-8)));
+  padding-block: var(--space-8);
+  text-align: center;
 }
 
-.dasti-jobs-empty-state__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  justify-content: center;
+.dasti-jobs-empty-state__icon-slot {
+  min-block-size: var(--topbar-block-size, var(--header-height));
+  display: grid;
+  place-items: end center;
+  color: var(--tm2);
 }
 
 .dasti-jobs-detail__mobile-back,

@@ -65,9 +65,9 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "documents",
     group: "Go to",
-    label: "Documents",
+    label: "Projects",
     shortcut: "G L",
-    keywords: ["library", "proposals", "resumes"],
+    keywords: ["library", "documents", "proposals", "resumes"],
     action: { type: "navigate", to: "/documents" },
   },
   {

@@ -17,6 +17,7 @@ import {
   createProposalWorkspaceResetState,
   startFreshProposalWorkspace,
 } from "../../lib/proposal-workspace-state";
+import { openOnboardingReplay } from "../../lib/onboarding-replay-event";
 import type { CvDocument } from "../../types/cvDocument";
 import { formatUiDate } from "../../lib/ui-date";
 
@@ -1689,15 +1690,8 @@ function JobsPageContent(): JSX.Element {
   }, [refreshStructuredMatch, selectedJob?.id, showToast]);
 
   const handleImportFirstJob = React.useCallback(() => {
-    clearActiveLocalCvId();
-    startFreshProposalWorkspace();
-    void navigate("/proposal", {
-      state: createProposalWorkspaceResetState({
-        entryIntent: "cover-letter-start",
-        jobImportFocus: "supported-sites",
-      }),
-    });
-  }, [navigate]);
+    openOnboardingReplay({ stepId: "jobs" });
+  }, []);
 
   const handleTrySampleJob = React.useCallback(async () => {
     setIsSeedingSample(true);

@@ -8178,7 +8178,7 @@ export function ProposalForge(): JSX.Element {
               : undefined,
         });
 
-        showToast("Exported.", { variant: "success" });
+        showToast("Downloaded.", { variant: "success" });
       } catch (error) {
         console.error("[ProposalForge] export failed", error);
         showToast("Export failed.", { variant: "error" });
@@ -9345,9 +9345,9 @@ export function ProposalForge(): JSX.Element {
                       <ProposalDocumentStage
                         statusLabel={
                           loading
-                            ? "Drafting"
-                            : proposalLibraryStatus === "saved"
-                              ? "Saved"
+                            ? "Preparing"
+                            : hasMeaningfulProposalContent
+                              ? "Proposal text"
                               : "Draft"
                         }
                         statusMeta={proposalDraftStatusMeta}

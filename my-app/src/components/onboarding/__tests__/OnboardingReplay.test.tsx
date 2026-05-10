@@ -19,6 +19,18 @@ function renderReplay() {
   );
 }
 
+function renderReplayAtJobsStep() {
+  render(
+    <OnboardingReplay
+      open
+      initialStepId="jobs"
+      onClose={onClose}
+      onNavigate={onNavigate}
+      onOpenCommandPalette={onOpenCommandPalette}
+    />,
+  );
+}
+
 describe("OnboardingReplay", () => {
   beforeEach(() => {
     onClose.mockClear();
@@ -198,7 +210,7 @@ describe("OnboardingReplay", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Install the twoweeks extension. Capture roles from supported job sites.",
+        "Set up the twoweeks extension. Capture roles from supported job sites.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText("Paste URLs")).toBeNull();
@@ -261,6 +273,15 @@ describe("OnboardingReplay", () => {
       "data-primary",
       "true",
     );
+  });
+
+  it("can open directly on the Jobs capture step", () => {
+    renderReplayAtJobsStep();
+
+    expect(
+      screen.getByRole("heading", { name: "Catch jobs as you browse." }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Step 5 of 6")).toBeInTheDocument();
   });
 
   it("marks blank CV locally without navigating before onboarding completion", async () => {

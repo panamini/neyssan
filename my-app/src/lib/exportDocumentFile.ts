@@ -81,7 +81,7 @@ function scheduleObjectUrlCleanup(url: string): void {
   }, DOWNLOAD_OBJECT_URL_REVOKE_DELAY_MS);
 }
 
-async function triggerDownload(blob: Blob, filename: string): Promise<void> {
+export async function downloadBlob(blob: Blob, filename: string): Promise<void> {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -101,9 +101,18 @@ async function triggerDownload(blob: Blob, filename: string): Promise<void> {
   }
 }
 
-export async function exportDocumentFile(
+export async function buildExportDocumentFileBlob(
   args: ExportDocumentFileArgs,
-): Promise<{ filename: string }> {
+): Promise<{
+  filename: string;
+  blob: Blob;
+  byteLength: number;
+  responseStatus: number;
+  responseOk: boolean;
+  contentType: string | null;
+  contentDisposition: string | null;
+  bytesBase64: string | null;
+}> {
   const requestBody = {
     kind: args.kind,
     format: args.format,
@@ -135,19 +144,47 @@ export async function exportDocumentFile(
   const filename =
     parseContentDispositionFilename(response.headers.get("Content-Disposition")) ||
     resolveFallbackFilename(args);
+  const outputBlob = new Blob([buffer], { type: blob.type });
 
-  await triggerDownload(new Blob([buffer], { type: blob.type }), filename);
+  return {
+    filename,
+    blob: outputBlob,
+    byteLength: buffer.byteLength,
+    responseStatus: response.status,
+    responseOk: response.ok,
+    contentType: response.headers.get("Content-Type"),
+    contentDisposition: response.headers.get("Content-Disposition"),
+    bytesBase64:
+      args.format === "pdf" ? encodeArrayBufferToBase64(buffer) : null,
+  };
+}
+
+export async function exportDocumentFile(
+  args: ExportDocumentFileArgs,
+): Promise<{ filename: string }> {
+  const requestBody = {
+    kind: args.kind,
+    format: args.format,
+    mode: args.mode,
+    data: args.data,
+    stylePreset: args.stylePreset ?? null,
+    fileNameBase: args.fileNameBase,
+    metadata: args.metadata ?? null,
+  };
+  const exported = await buildExportDocumentFileBlob(args);
+
+  await downloadBlob(exported.blob, exported.filename);
 
   setLastCapturedDocumentExport({
     requestBody,
     response: {
-      responseStatus: response.status,
-      responseOk: response.ok,
-      contentType: response.headers.get("Content-Type"),
-      contentDisposition: response.headers.get("Content-Disposition"),
-      filename,
-      byteLength: buffer.byteLength,
-      bytesBase64: args.format === "pdf" ? encodeArrayBufferToBase64(buffer) : null,
+      responseStatus: exported.responseStatus,
+      responseOk: exported.responseOk,
+      contentType: exported.contentType,
+      contentDisposition: exported.contentDisposition,
+      filename: exported.filename,
+      byteLength: exported.byteLength,
+      bytesBase64: exported.bytesBase64,
     },
     clickContext:
       args.kind === "resume" && args.format === "pdf" && args.mode === "styled"
@@ -159,7 +196,7 @@ export async function exportDocumentFile(
         : null,
     timestamp: Date.now(),
   });
-  return { filename };
+  return { filename: exported.filename };
 }
 
 export default exportDocumentFile;

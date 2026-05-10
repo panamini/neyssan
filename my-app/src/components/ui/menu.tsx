@@ -18,6 +18,7 @@ export interface MenuItem {
   ariaLabel?: string;
   selected?: boolean;
   role?: "menuitem" | "menuitemradio";
+  closeOnSelect?: boolean;
   onSelect?: () => void;
 }
 
@@ -206,8 +207,10 @@ export function Menu({
     const item = sections[index.sectionIndex]?.items[index.itemIndex];
     if (!item || item.disabled) return;
     item.onSelect?.();
-    closeMenu();
-    triggerRef.current?.focus({ preventScroll: true });
+    if (item.closeOnSelect !== false) {
+      closeMenu();
+      triggerRef.current?.focus({ preventScroll: true });
+    }
   }
 
   function handleMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -327,8 +330,10 @@ export function Menu({
                       }}
                       onClick={() => {
                         item.onSelect?.();
-                        closeMenu();
-                        triggerRef.current?.focus({ preventScroll: true });
+                        if (item.closeOnSelect !== false) {
+                          closeMenu();
+                          triggerRef.current?.focus({ preventScroll: true });
+                        }
                       }}
                     >
                       {item.icon ? (

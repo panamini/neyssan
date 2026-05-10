@@ -616,6 +616,7 @@ export function JobsList({
                                           id: "delete-forever",
                                           label: "Delete forever",
                                           tone: "danger",
+                                          closeOnSelect: false,
                                           onSelect: () =>
                                             onConfirmPermanentDeleteJobIdChange(job.id),
                                         },
