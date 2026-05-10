@@ -90,7 +90,7 @@ type ProposalRailAccentOption = {
   paletteOverride: ProposalPaletteId | null;
 };
 
-const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
+export const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
   {
     id: "swiss_serif",
     label: "Style 1",

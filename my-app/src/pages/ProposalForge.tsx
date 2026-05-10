@@ -13,6 +13,7 @@ import ProposalInputForm, {
 import ProposalAIStream from "../components/proposal/ProposalAIStream";
 import ProposalDocumentStage from "../components/proposal/ProposalDocumentStage";
 import ProposalRail, {
+  PROPOSAL_STYLE_OPTIONS,
   type ProposalRailJobMatchSummary,
 } from "../components/proposal/ProposalRail";
 import {
@@ -37,6 +38,7 @@ import {
   useStructuredMistralImport,
 } from "../components/useStructuredMistralImport";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
+import { useRegisterForgeTemplates } from "../contexts/ForgeTemplatePanelContext";
 import { api } from "../../convex/_generated/api";
 import {
   buildAppProposalPersonalizationPayload,
@@ -8453,6 +8455,32 @@ export function ProposalForge(): JSX.Element {
       ),
     [canonicalJobRecord?.matchRead, canonicalJobRecord?.matchReview],
   );
+  const proposalTemplatePanelItems = React.useMemo(
+    () =>
+      PROPOSAL_STYLE_OPTIONS.map((option) => ({
+        id: option.id,
+        label: option.label,
+        meta: "Proposal template",
+        description: option.description,
+      })),
+    [],
+  );
+  const proposalTemplatePanelRegistration = React.useMemo(
+    () => ({
+      surface: "proposal" as const,
+      title: "Proposal templates",
+      subtitle: "Apply a template to the current proposal.",
+      activeItemId: effectiveProposalTemplateBundleId,
+      items: proposalTemplatePanelItems,
+      onSelect: handleProposalStyleBundleSelect,
+    }),
+    [
+      effectiveProposalTemplateBundleId,
+      handleProposalStyleBundleSelect,
+      proposalTemplatePanelItems,
+    ],
+  );
+  useRegisterForgeTemplates(proposalTemplatePanelRegistration);
   const shouldAnimateDesktopBriefTransition =
     !isSavedView && !isCompactComposeLayout;
   const shouldRenderBriefCard =

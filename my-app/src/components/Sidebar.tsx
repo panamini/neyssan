@@ -30,6 +30,7 @@ import {
   createProposalWorkspaceResetState,
   readStoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
+import { useForgeTemplatePanel } from "../contexts/ForgeTemplatePanelContext";
 import { useThemeMode } from "../lib/theme-mode";
 import collapsedLogoUrl from "../assets/logo/two-weeks-logo.png";
 
@@ -251,6 +252,11 @@ function SidebarRailLink({
 export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const {
+    activeSurface: activeTemplateSurface,
+    open: templatePanelOpen,
+    openSurface: openTemplateSurface,
+  } = useForgeTemplatePanel();
   const { pathname, search } = location;
   const { mode: themeMode, toggle: toggleTheme } = useThemeMode();
   const {
@@ -402,6 +408,11 @@ export const Sidebar: React.FC = () => {
   const isProposalRoute = matchesRoute("/proposal");
   const isProposalLibraryRoute = matchesRoute("/proposals");
   const isTemplatesRoute = matchesRoute("/style") || matchesRoute("/templates");
+  const activeForgeTemplateSurface = isResumeRoute
+    ? "cv"
+    : isProposalRoute
+      ? "proposal"
+      : null;
   const isDocumentsRoute =
     matchesRoute("/documents") ||
     isProposalLibraryRoute ||
@@ -1041,6 +1052,19 @@ export const Sidebar: React.FC = () => {
               onClick={handleCreateResume}
             />
           )}
+          {activeForgeTemplateSurface ? (
+            <SidebarRailButton
+              label="Templates"
+              icon={
+                <ImagesSquare size={16} strokeWidth={1.5} aria-hidden="true" />
+              }
+              active={
+                templatePanelOpen &&
+                activeTemplateSurface === activeForgeTemplateSurface
+              }
+              onClick={() => openTemplateSurface(activeForgeTemplateSurface)}
+            />
+          ) : null}
         </nav>
       ) : (
         <nav className="sb__nav sb__nav--stack" aria-label="Primary sidebar">
