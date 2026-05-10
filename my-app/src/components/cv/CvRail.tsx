@@ -278,9 +278,12 @@ function SortableSectionRow({
     id: sectionId,
     disabled: !showDragHandle,
   });
+  const rowTransition = sortable.transition
+    ? `${sortable.transition}, border-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-fast) var(--motion-ease-standard), opacity var(--motion-duration-fast) var(--motion-ease-standard)`
+    : "transform var(--motion-duration-medium) var(--motion-ease-emphasized), border-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-fast) var(--motion-ease-standard), opacity var(--motion-duration-fast) var(--motion-ease-standard)";
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(sortable.transform),
-    transition: sortable.transition,
+    transition: rowTransition,
   };
 
   return (
@@ -289,6 +292,12 @@ function SortableSectionRow({
       className="dasti-cv-org-row"
       data-active={active ? "true" : undefined}
       data-hidden={hidden ? "true" : undefined}
+      data-dragging={sortable.isDragging ? "true" : undefined}
+      data-over={
+        showDragHandle && sortable.isOver && !sortable.isDragging
+          ? "true"
+          : undefined
+      }
       style={style}
     >
       {showDragHandle ? (
