@@ -7,6 +7,8 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -252,6 +254,7 @@ type SortableSectionRowProps = {
   itemCount: number;
   showDragHandle: boolean;
   showMoveControls: boolean;
+  dropIndicator?: "before" | "after" | null;
   onSelectSection: (sectionId: string, options?: { openEditor?: boolean }) => void;
   onMoveSection: (sectionId: string, direction: -1 | 1) => void;
   children: React.ReactNode;
@@ -270,6 +273,7 @@ function SortableSectionRow({
   itemCount,
   showDragHandle,
   showMoveControls,
+  dropIndicator = null,
   onSelectSection,
   onMoveSection,
   children,
@@ -293,11 +297,7 @@ function SortableSectionRow({
       data-active={active ? "true" : undefined}
       data-hidden={hidden ? "true" : undefined}
       data-dragging={sortable.isDragging ? "true" : undefined}
-      data-over={
-        showDragHandle && sortable.isOver && !sortable.isDragging
-          ? "true"
-          : undefined
-      }
+      data-drop-indicator={dropIndicator ?? undefined}
       style={style}
     >
       {showDragHandle ? (
@@ -524,6 +524,12 @@ export function CvRail({
   const activeSection = getActiveSection(sections, activeSectionId);
   const [aiPrompt, setAiPrompt] = React.useState("");
   const [streamExpanded, setStreamExpanded] = React.useState(false);
+  const [activeDragSectionId, setActiveDragSectionId] = React.useState<
+    string | null
+  >(null);
+  const [overDragSectionId, setOverDragSectionId] = React.useState<
+    string | null
+  >(null);
   const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] =
     React.useState(false);
   const customColorAnchorRef = React.useRef<HTMLButtonElement | null>(null);
@@ -591,11 +597,28 @@ export function CvRail({
     },
   ] as const;
 
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDragSectionId(String(event.active.id));
+    setOverDragSectionId(String(event.active.id));
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    setOverDragSectionId(event.over?.id ? String(event.over.id) : null);
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const activeId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : null;
-    if (!overId || activeId === overId) return;
-    onReorderSections(activeId, overId);
+    setActiveDragSectionId(null);
+    setOverDragSectionId(null);
+    if (overId && activeId !== overId) {
+      onReorderSections(activeId, overId);
+    }
+  }
+
+  function handleDragCancel() {
+    setActiveDragSectionId(null);
+    setOverDragSectionId(null);
   }
 
   return (
@@ -670,7 +693,10 @@ export function CvRail({
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
             >
               <SortableContext
                 items={sortableSectionIds}
@@ -684,6 +710,17 @@ export function CvRail({
                     const label = formatSectionDisplayTitle(section, {
                       fallback: "Section",
                     });
+                    const activeDragIndex = activeDragSectionId
+                      ? sortableSectionIds.indexOf(activeDragSectionId)
+                      : -1;
+                    const dropIndicator =
+                      activeDragIndex !== -1 &&
+                      overDragSectionId === sectionId &&
+                      activeDragSectionId !== sectionId
+                        ? activeDragIndex < index
+                          ? "after"
+                          : "before"
+                        : null;
 	                    const railAiMode = getRailAiMode(section);
 	                    return (
                     <SortableSectionRow
@@ -695,6 +732,7 @@ export function CvRail({
                         itemCount={getItemCount(section)}
                         showDragHandle={policy.showDragHandle}
                         showMoveControls={policy.showMoveControls}
+                        dropIndicator={dropIndicator}
                         onSelectSection={onSelectSection}
                         onMoveSection={onMoveSection}
                       >
