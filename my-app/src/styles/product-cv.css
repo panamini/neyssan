@@ -816,6 +816,15 @@
   cursor: grab;
 }
 
+.dasti-cv-org-handle-spacer {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+
 .dasti-cv-org-handle:active {
   cursor: grabbing;
 }
