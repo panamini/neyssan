@@ -2,6 +2,7 @@ import JSZip from "jszip";
 
 import { resolveVerbatiStyle } from "../features/verbati/style";
 import type { LibraryItem } from "./application-library";
+import type { CvDocument } from "../types/cvDocument";
 import {
   buildProposalPreviewPrintSource,
   buildStyledResumePrintSource,
@@ -20,6 +21,10 @@ const LIBRARY_PROPOSAL_DOWNLOAD_STYLE = resolveVerbatiStyle({
 export type LibraryDownloadResult = {
   downloaded: number;
   skipped: number;
+};
+
+export type LibraryDownloadOptions = {
+  hydrateCvDocument?: (id: string) => Promise<CvDocument | null>;
 };
 
 export function sanitizeDownloadFilename(
@@ -55,12 +60,33 @@ export function isLibraryItemDownloadable(item: LibraryItem): boolean {
   return false;
 }
 
+function isLibrarySummaryOnlyCv(cv: CvDocument | null | undefined): boolean {
+  return Boolean(
+    (cv?.metadata as { librarySummaryOnly?: boolean } | undefined)
+      ?.librarySummaryOnly,
+  );
+}
+
+function itemSourceId(item: LibraryItem): string {
+  return item.id.slice(item.id.indexOf(":") + 1);
+}
+
 export async function buildLibraryItemPdfBlob(
   item: LibraryItem,
+  options: LibraryDownloadOptions = {},
 ): Promise<{ filename: string; blob: Blob }> {
-  if (item.type === "cv" && item.cvDocument) {
+  if (item.type === "cv") {
+    const cvDocument =
+      item.cvDocument && !isLibrarySummaryOnlyCv(item.cvDocument)
+        ? item.cvDocument
+        : options.hydrateCvDocument
+          ? await options.hydrateCvDocument(itemSourceId(item))
+          : null;
+    if (!cvDocument || isLibrarySummaryOnlyCv(cvDocument)) {
+      throw new Error("CV export source is unavailable.");
+    }
     const source = buildStyledResumePrintSource({
-      currentCv: item.cvDocument,
+      currentCv: cvDocument,
     });
     if (!source) {
       throw new Error("CV export source is unavailable.");
@@ -130,6 +156,7 @@ function uniqueFilename(filename: string, used: Set<string>): string {
 
 export async function buildLibraryItemsZipBlob(
   items: LibraryItem[],
+  options: LibraryDownloadOptions = {},
 ): Promise<{ filename: string; blob: Blob; downloaded: number; skipped: number }> {
   const zip = new JSZip();
   const usedFilenames = new Set<string>();
@@ -137,13 +164,17 @@ export async function buildLibraryItemsZipBlob(
   let skipped = 0;
 
   for (const item of items) {
-    if (!isLibraryItemDownloadable(item)) {
+    if (!isLibraryItemDownloadable(item) && item.type !== "cv") {
       skipped += 1;
       continue;
     }
-    const pdf = await buildLibraryItemPdfBlob(item);
-    zip.file(uniqueFilename(pdf.filename, usedFilenames), pdf.blob);
-    downloaded += 1;
+    try {
+      const pdf = await buildLibraryItemPdfBlob(item, options);
+      zip.file(uniqueFilename(pdf.filename, usedFilenames), pdf.blob);
+      downloaded += 1;
+    } catch {
+      skipped += 1;
+    }
   }
 
   if (downloaded === 0) {
@@ -162,8 +193,11 @@ export async function buildLibraryItemsZipBlob(
 
 export async function downloadLibraryItems(
   items: LibraryItem[],
+  options: LibraryDownloadOptions = {},
 ): Promise<LibraryDownloadResult> {
-  const exportableItems = items.filter(isLibraryItemDownloadable);
+  const exportableItems = items.filter(
+    (item) => isLibraryItemDownloadable(item) || item.type === "cv",
+  );
   const skipped = items.length - exportableItems.length;
 
   if (exportableItems.length === 0) {
@@ -171,12 +205,12 @@ export async function downloadLibraryItems(
   }
 
   if (exportableItems.length === 1) {
-    const pdf = await buildLibraryItemPdfBlob(exportableItems[0]);
+    const pdf = await buildLibraryItemPdfBlob(exportableItems[0], options);
     await downloadBlob(pdf.blob, pdf.filename);
     return { downloaded: 1, skipped };
   }
 
-  const zip = await buildLibraryItemsZipBlob(items);
+  const zip = await buildLibraryItemsZipBlob(items, options);
   await downloadBlob(zip.blob, zip.filename);
   return { downloaded: zip.downloaded, skipped: zip.skipped };
 }

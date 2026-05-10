@@ -35,7 +35,10 @@ import { OnboardingReplay } from "./components/onboarding/OnboardingReplay";
 import { QuickStartFlow } from "./components/onboarding/QuickStartFlow";
 import { IconButton, Pill } from "./components/ui";
 import { CvLibraryProvider } from "./contexts/CvLibraryContext";
-import { ForgeTemplatePanelProvider } from "./contexts/ForgeTemplatePanelContext";
+import {
+  ForgeTemplatePanelProvider,
+  useForgeTemplatePanel,
+} from "./contexts/ForgeTemplatePanelContext";
 import { installStorageDiagnostics } from "./lib/storage-diagnostics";
 import { useCvLibrary } from "./contexts/CvLibraryContext";
 import { api } from "../convex/_generated/api";
@@ -352,8 +355,23 @@ function AppTopbar({
  * depuis n'importe quelle route.
  */
 function AppShell(): JSX.Element {
+  return (
+    <CvLibraryProvider>
+      <ForgeTemplatePanelProvider>
+        <AppShellFrame />
+      </ForgeTemplatePanelProvider>
+    </CvLibraryProvider>
+  );
+}
+
+function AppShellFrame(): JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
+  const {
+    open: forgePanelOpen,
+    openMode: forgePanelOpenMode,
+    closePanel: closeForgePanel,
+  } = useForgeTemplatePanel();
   const [commandPaletteOpen, setCommandPaletteOpen] = React.useState(false);
   const [onboardingReplayOpen, setOnboardingReplayOpen] = React.useState(false);
   const [onboardingReplayInitialStepId, setOnboardingReplayInitialStepId] =
@@ -423,69 +441,79 @@ function AppShell(): JSX.Element {
     );
   }, [location.pathname, location.search, location.state, navigate]);
 
-  return (
-    <CvLibraryProvider>
-      <ForgeTemplatePanelProvider>
-        <div className="app-shell">
-          <Sidebar />
-          <ForgeTemplatePanel />
-          <div className="app-main">
-            <ConvexStatusBanner />
-            <TopbarTitleSync />
-            <AppTopbar
-              commandPaletteOpen={commandPaletteOpen}
-              onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-            />
+  React.useEffect(() => {
+    closeForgePanel();
+  }, [closeForgePanel, location.pathname]);
 
-            <div className="app-pages">
-              {quickStartRouteState.isOpen ? (
-                <QuickStartFlow
-                  onExit={closeQuickStart}
-                  initialCreateType={quickStartRouteState.createType}
-                  resumeMode={quickStartRouteState.resumeMode}
-                  returnTarget={quickStartRouteState.returnTarget}
-                />
-              ) : (
-                <Routes>
-                  <Route path="/dashboard" element={<DashboardPage />} />
-                  <Route path="/cv" element={<CvForge />} />
-                  <Route path="/cvs" element={<CvsLibrary />} />
-                  <Route path="/proposal" element={<ProposalForge />} />
-                  <Route path="/proposal-next" element={<Navigate to="/proposal" replace />} />
-                  <Route path="/jobs" element={<JobsPage />} />
-                  <Route path="/jobs/:jobId" element={<JobsPage />} />
-                  <Route path="/proposals" element={<ProposalsLibrary />} />
-                  <Route path="/documents" element={<DocumentsPage />} />
-                  <Route path="/style" element={<StyleForge />} />
-                  <Route path="/templates" element={<TemplatesPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                  <Route path="/sign-in/*" element={<SignInPage />} />
-                  <Route path="/sign-out" element={<SignOutPage />} />
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
-              )}
-            </div>
-          </div>
-          <CommandPalette
-            open={commandPaletteOpen}
-            onOpenChange={setCommandPaletteOpen}
-            onReplayOnboarding={() => {
-              setOnboardingReplayInitialStepId("intro");
-              setOnboardingReplayOpen(true);
-            }}
-            onToggleTheme={toggleTheme}
-          />
-          <OnboardingReplay
-            open={onboardingReplayOpen}
-            initialStepId={onboardingReplayInitialStepId}
-            onClose={() => setOnboardingReplayOpen(false)}
-            onNavigate={(to, options) => navigate(to, options)}
-            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-          />
+  const forgePanelDocked =
+    forgePanelOpen &&
+    forgePanelOpenMode === "pinned" &&
+    (location.pathname === "/proposal" || location.pathname === "/cv");
+
+  return (
+    <div
+      className="app-shell"
+      data-forge-panel-open={forgePanelOpen ? "true" : undefined}
+      data-forge-panel-mode={forgePanelOpenMode ?? undefined}
+      data-forge-panel-docked={forgePanelDocked ? "true" : undefined}
+    >
+      <Sidebar />
+      <ForgeTemplatePanel />
+      <div className="app-main">
+        <ConvexStatusBanner />
+        <TopbarTitleSync />
+        <AppTopbar
+          commandPaletteOpen={commandPaletteOpen}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+        />
+
+        <div className="app-pages">
+          {quickStartRouteState.isOpen ? (
+            <QuickStartFlow
+              onExit={closeQuickStart}
+              initialCreateType={quickStartRouteState.createType}
+              resumeMode={quickStartRouteState.resumeMode}
+              returnTarget={quickStartRouteState.returnTarget}
+            />
+          ) : (
+            <Routes>
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/cv" element={<CvForge />} />
+              <Route path="/cvs" element={<CvsLibrary />} />
+              <Route path="/proposal" element={<ProposalForge />} />
+              <Route path="/proposal-next" element={<Navigate to="/proposal" replace />} />
+              <Route path="/jobs" element={<JobsPage />} />
+              <Route path="/jobs/:jobId" element={<JobsPage />} />
+              <Route path="/proposals" element={<ProposalsLibrary />} />
+              <Route path="/documents" element={<DocumentsPage />} />
+              <Route path="/style" element={<StyleForge />} />
+              <Route path="/templates" element={<TemplatesPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/sign-in/*" element={<SignInPage />} />
+              <Route path="/sign-out" element={<SignOutPage />} />
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
+          )}
         </div>
-      </ForgeTemplatePanelProvider>
-    </CvLibraryProvider>
+      </div>
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        onReplayOnboarding={() => {
+          setOnboardingReplayInitialStepId("intro");
+          setOnboardingReplayOpen(true);
+        }}
+        onToggleTheme={toggleTheme}
+      />
+      <OnboardingReplay
+        open={onboardingReplayOpen}
+        initialStepId={onboardingReplayInitialStepId}
+        onClose={() => setOnboardingReplayOpen(false)}
+        onNavigate={(to, options) => navigate(to, options)}
+        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+      />
+    </div>
   );
 }
 

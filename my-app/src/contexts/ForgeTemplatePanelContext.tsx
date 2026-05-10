@@ -3,6 +3,14 @@ import React from "react";
 import type { TemplateFamily } from "../pages/TemplatesPage";
 
 export type ForgeTemplateSurface = "cv" | "proposal";
+export type ForgeRailSurface =
+  | ForgeTemplateSurface
+  | "jobs"
+  | "documents"
+  | "cvs"
+  | "proposals";
+
+export type ForgePanelOpenMode = "peek" | "pinned";
 
 export type ForgeTemplateItem = {
   id: string;
@@ -24,22 +32,58 @@ export type ForgeTemplateRegistration = {
   onSelect: (itemId: string) => void;
 };
 
+export type ForgeCustomPanelRegistration = {
+  surface: Exclude<ForgeRailSurface, ForgeTemplateSurface>;
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
+  renderContent: () => React.ReactNode;
+  footer?: {
+    label: string;
+    onSelect: () => void;
+  } | null;
+};
+
+export type ForgePanelRegistration =
+  | (ForgeTemplateRegistration & { kind: "templates" })
+  | (ForgeCustomPanelRegistration & { kind: "custom" });
+
 type ForgeTemplatePanelContextValue = {
   open: boolean;
-  activeSurface: ForgeTemplateSurface | null;
-  activeRegistration: ForgeTemplateRegistration | null;
-  openSurface: (surface: ForgeTemplateSurface) => void;
+  openMode: ForgePanelOpenMode | null;
+  activeSurface: ForgeRailSurface | null;
+  pinnedSurface: ForgeRailSurface | null;
+  activeRegistration: ForgePanelRegistration | null;
+  openSurface: (
+    surface: ForgeRailSurface,
+    options?: { mode?: ForgePanelOpenMode },
+  ) => void;
+  togglePinnedSurface: (
+    surface: ForgeRailSurface,
+    options?: { unpinBehavior?: "peek" | "close" },
+  ) => void;
   closePanel: () => void;
+  queueOpenSurface: (surface: ForgeRailSurface) => void;
+  queueClosePanel: () => void;
+  cancelPanelClose: () => void;
   registerTemplates: (registration: ForgeTemplateRegistration) => () => void;
+  registerPanel: (registration: ForgeCustomPanelRegistration) => () => void;
 };
 
 const DEFAULT_FORGE_TEMPLATE_PANEL_CONTEXT: ForgeTemplatePanelContextValue = {
   open: false,
+  openMode: null,
   activeSurface: null,
+  pinnedSurface: null,
   activeRegistration: null,
   openSurface: () => undefined,
+  togglePinnedSurface: () => undefined,
   closePanel: () => undefined,
+  queueOpenSurface: () => undefined,
+  queueClosePanel: () => undefined,
+  cancelPanelClose: () => undefined,
   registerTemplates: () => () => undefined,
+  registerPanel: () => () => undefined,
 };
 
 const ForgeTemplatePanelContext =
@@ -52,32 +96,205 @@ export function ForgeTemplatePanelProvider({
 }: {
   children: React.ReactNode;
 }): JSX.Element {
+  const openIntentTimerRef = React.useRef<number | null>(null);
+  const closeIntentTimerRef = React.useRef<number | null>(null);
   const [open, setOpen] = React.useState(false);
+  const [openMode, setOpenMode] = React.useState<ForgePanelOpenMode | null>(
+    null,
+  );
   const [activeSurface, setActiveSurface] =
-    React.useState<ForgeTemplateSurface | null>(null);
+    React.useState<ForgeRailSurface | null>(null);
+  const [pinnedSurface, setPinnedSurface] =
+    React.useState<ForgeRailSurface | null>(null);
+  const activeSurfaceRef = React.useRef<ForgeRailSurface | null>(null);
+  const openModeRef = React.useRef<ForgePanelOpenMode | null>(null);
+  const pinnedSurfaceRef = React.useRef<ForgeRailSurface | null>(null);
   const [registrations, setRegistrations] = React.useState<
-    Partial<Record<ForgeTemplateSurface, ForgeTemplateRegistration>>
+    Partial<Record<ForgeRailSurface, ForgePanelRegistration>>
   >({});
 
-  const openSurface = React.useCallback((surface: ForgeTemplateSurface) => {
-    setActiveSurface(surface);
-    setOpen(true);
+  React.useEffect(() => {
+    activeSurfaceRef.current = activeSurface;
+  }, [activeSurface]);
+
+  React.useEffect(() => {
+    openModeRef.current = openMode;
+  }, [openMode]);
+
+  React.useEffect(() => {
+    pinnedSurfaceRef.current = pinnedSurface;
+  }, [pinnedSurface]);
+
+  const clearOpenIntent = React.useCallback(() => {
+    if (openIntentTimerRef.current === null) return;
+    window.clearTimeout(openIntentTimerRef.current);
+    openIntentTimerRef.current = null;
   }, []);
 
-  const closePanel = React.useCallback(() => {
-    setOpen(false);
+  const clearCloseIntent = React.useCallback(() => {
+    if (closeIntentTimerRef.current === null) return;
+    window.clearTimeout(closeIntentTimerRef.current);
+    closeIntentTimerRef.current = null;
   }, []);
+
+  const openSurface = React.useCallback(
+    (
+      surface: ForgeRailSurface,
+      options?: { mode?: ForgePanelOpenMode },
+    ) => {
+      const mode = options?.mode ?? "pinned";
+      clearOpenIntent();
+      clearCloseIntent();
+      activeSurfaceRef.current = surface;
+      openModeRef.current = mode;
+      pinnedSurfaceRef.current = mode === "pinned" ? surface : null;
+      setActiveSurface(surface);
+      setOpenMode(mode);
+      setPinnedSurface(mode === "pinned" ? surface : null);
+      setOpen(true);
+    },
+    [clearCloseIntent, clearOpenIntent],
+  );
+
+  const togglePinnedSurface = React.useCallback(
+    (
+      surface: ForgeRailSurface,
+      options?: { unpinBehavior?: "peek" | "close" },
+    ) => {
+      clearOpenIntent();
+      clearCloseIntent();
+      const samePinnedSurface =
+        pinnedSurfaceRef.current === surface &&
+        activeSurfaceRef.current === surface &&
+        openModeRef.current === "pinned";
+
+      if (samePinnedSurface) {
+        pinnedSurfaceRef.current = null;
+        setPinnedSurface(null);
+        if (options?.unpinBehavior === "close") {
+          activeSurfaceRef.current = null;
+          openModeRef.current = null;
+          setOpen(false);
+          setOpenMode(null);
+          setActiveSurface(null);
+          return;
+        }
+        setOpen(true);
+        activeSurfaceRef.current = surface;
+        openModeRef.current = "peek";
+        setOpenMode("peek");
+        setActiveSurface(surface);
+        return;
+      }
+
+      setOpen(true);
+      activeSurfaceRef.current = surface;
+      openModeRef.current = "pinned";
+      pinnedSurfaceRef.current = surface;
+      setOpenMode("pinned");
+      setPinnedSurface(surface);
+      setActiveSurface(surface);
+    },
+    [clearCloseIntent, clearOpenIntent],
+  );
+
+  const closePanel = React.useCallback(() => {
+    clearOpenIntent();
+    clearCloseIntent();
+    activeSurfaceRef.current = null;
+    openModeRef.current = null;
+    pinnedSurfaceRef.current = null;
+    setOpen(false);
+    setOpenMode(null);
+    setPinnedSurface(null);
+    setActiveSurface(null);
+  }, [clearCloseIntent, clearOpenIntent]);
+
+  const queueOpenSurface = React.useCallback(
+    (surface: ForgeRailSurface) => {
+      if (pinnedSurfaceRef.current) return;
+      clearOpenIntent();
+      clearCloseIntent();
+      openIntentTimerRef.current = window.setTimeout(() => {
+        openIntentTimerRef.current = null;
+        if (pinnedSurfaceRef.current) return;
+        activeSurfaceRef.current = surface;
+        openModeRef.current = "peek";
+        pinnedSurfaceRef.current = null;
+        setActiveSurface(surface);
+        setOpenMode("peek");
+        setPinnedSurface(null);
+        setOpen(true);
+      }, 150);
+    },
+    [clearCloseIntent, clearOpenIntent],
+  );
+
+  const queueClosePanel = React.useCallback(() => {
+    if (pinnedSurfaceRef.current) return;
+    clearCloseIntent();
+    closeIntentTimerRef.current = window.setTimeout(() => {
+      closeIntentTimerRef.current = null;
+      if (pinnedSurfaceRef.current) return;
+      activeSurfaceRef.current = null;
+      openModeRef.current = null;
+      setOpen(false);
+      setOpenMode(null);
+      setActiveSurface(null);
+    }, 180);
+  }, [clearCloseIntent]);
+
+  const cancelPanelClose = React.useCallback(() => {
+    clearCloseIntent();
+  }, [clearCloseIntent]);
+
+  React.useEffect(
+    () => () => {
+      clearOpenIntent();
+      clearCloseIntent();
+    },
+    [clearCloseIntent, clearOpenIntent],
+  );
 
   const registerTemplates = React.useCallback(
     (registration: ForgeTemplateRegistration) => {
+      const panelRegistration: ForgePanelRegistration = {
+        ...registration,
+        kind: "templates",
+      };
       setRegistrations((current) => ({
         ...current,
-        [registration.surface]: registration,
+        [registration.surface]: panelRegistration,
       }));
 
       return () => {
         setRegistrations((current) => {
-          if (current[registration.surface] !== registration) {
+          if (current[registration.surface] !== panelRegistration) {
+            return current;
+          }
+          const next = { ...current };
+          delete next[registration.surface];
+          return next;
+        });
+      };
+    },
+    [],
+  );
+
+  const registerPanel = React.useCallback(
+    (registration: ForgeCustomPanelRegistration) => {
+      const panelRegistration: ForgePanelRegistration = {
+        ...registration,
+        kind: "custom",
+      };
+      setRegistrations((current) => ({
+        ...current,
+        [registration.surface]: panelRegistration,
+      }));
+
+      return () => {
+        setRegistrations((current) => {
+          if (current[registration.surface] !== panelRegistration) {
             return current;
           }
           const next = { ...current };
@@ -96,19 +313,33 @@ export function ForgeTemplatePanelProvider({
   const value = React.useMemo<ForgeTemplatePanelContextValue>(
     () => ({
       open,
+      openMode,
       activeSurface,
+      pinnedSurface,
       activeRegistration,
       openSurface,
+      togglePinnedSurface,
       closePanel,
+      queueOpenSurface,
+      queueClosePanel,
+      cancelPanelClose,
       registerTemplates,
+      registerPanel,
     }),
     [
       activeRegistration,
       activeSurface,
       closePanel,
+      cancelPanelClose,
       open,
+      openMode,
       openSurface,
+      pinnedSurface,
+      queueClosePanel,
+      queueOpenSurface,
       registerTemplates,
+      registerPanel,
+      togglePinnedSurface,
     ],
   );
 
@@ -131,5 +362,16 @@ export function useRegisterForgeTemplates(
   React.useEffect(
     () => registerTemplates(registration),
     [registerTemplates, registration],
+  );
+}
+
+export function useRegisterForgePanel(
+  registration: ForgeCustomPanelRegistration,
+): void {
+  const { registerPanel } = useForgeTemplatePanel();
+
+  React.useEffect(
+    () => registerPanel(registration),
+    [registerPanel, registration],
   );
 }

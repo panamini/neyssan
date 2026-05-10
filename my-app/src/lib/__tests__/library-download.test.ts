@@ -95,6 +95,49 @@ describe("library-download", () => {
     expect(pdf.blob.type).toBe("application/pdf");
   });
 
+  it("hydrates summary-only CVs before building download PDFs", async () => {
+    const hydrateCvDocument = vi.fn().mockResolvedValue(cvDocument);
+    const summaryOnlyCvItem: LibraryItem = {
+      ...cvItem,
+      cvDocument: {
+        id: "cv-1",
+        title: "Summary only",
+        metadata: { librarySummaryOnly: true },
+        sections: [],
+      } as any,
+    };
+
+    await buildLibraryItemPdfBlob(summaryOnlyCvItem, { hydrateCvDocument });
+
+    expect(hydrateCvDocument).toHaveBeenCalledWith("cv-1");
+    expect(buildExportDocumentFileBlobMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "resume",
+        data: expect.objectContaining({
+          committedPages: expect.any(Array),
+        }),
+      }),
+    );
+  });
+
+  it("blocks CV downloads when hydration cannot resolve a full document", async () => {
+    const hydrateCvDocument = vi.fn().mockResolvedValue(null);
+    const summaryOnlyCvItem: LibraryItem = {
+      ...cvItem,
+      cvDocument: {
+        id: "cv-1",
+        title: "Summary only",
+        metadata: { librarySummaryOnly: true },
+        sections: [],
+      } as any,
+    };
+
+    await expect(
+      buildLibraryItemPdfBlob(summaryOnlyCvItem, { hydrateCvDocument }),
+    ).rejects.toThrow("CV export source is unavailable.");
+    expect(buildExportDocumentFileBlobMock).not.toHaveBeenCalled();
+  });
+
   it("builds proposal PDFs through the existing proposal export path", async () => {
     const pdf = await buildLibraryItemPdfBlob(proposalItem);
 

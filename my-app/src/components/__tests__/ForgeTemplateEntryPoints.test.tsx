@@ -160,7 +160,7 @@ describe("forge template entry points", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Templates" }));
-    fireEvent.click(screen.getByRole("button", { name: "Browse all templates" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Templates" }));
 
     expect(screen.getByTestId("location")).toHaveTextContent("/templates");
     expect(

@@ -267,6 +267,8 @@ describe("DocumentsPage", () => {
     expect(document.querySelectorAll(".projects-card").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".library-doc-preview").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".library-doc-preview--rendered").length).toBeGreaterThan(0);
+    expect(document.querySelector(".forge-rail-document-tile")).not.toBeInTheDocument();
+    expect(document.querySelector(".forge-rail-drawer")).not.toBeInTheDocument();
     expect(document.querySelectorAll(".dasti-proposal-document").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".library-doc-preview--resume-rendered").length).toBeGreaterThan(0);
     expect(screen.getAllByTestId("resume-template-renderer").length).toBeGreaterThan(0);

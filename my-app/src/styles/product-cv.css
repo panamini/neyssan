@@ -33,6 +33,10 @@
   justify-self: center;
 }
 
+.dasti-cv-skeleton-forge[data-forge-drawer-rail-collapsed="true"] {
+  grid-template-columns: minmax(0, var(--cv-workspace-stage-inline-size));
+}
+
 .dasti-cv-paper-stage {
   width: min(100%, var(--cv-paper-visual-inline-size));
   margin-inline: auto;

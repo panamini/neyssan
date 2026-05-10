@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ImagesSquare, X } from "../lib/icons";
+import { ArrowSquareOut, CaretLeft, X } from "../lib/icons";
 import { useForgeTemplatePanel } from "../contexts/ForgeTemplatePanelContext";
 import { TemplateDocumentPreview } from "../pages/TemplatesPage";
 import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../lib/document-stage";
@@ -10,7 +10,14 @@ const TEMPLATE_THUMBNAIL_SCALE =
   TEMPLATE_THUMBNAIL_WIDTH_PX / A4_PAGE_WIDTH_PX;
 
 export function ForgeTemplatePanel(): JSX.Element | null {
-  const { open, activeRegistration, closePanel } = useForgeTemplatePanel();
+  const {
+    open,
+    openMode,
+    activeRegistration,
+    closePanel,
+    cancelPanelClose,
+    queueClosePanel,
+  } = useForgeTemplatePanel();
   const navigate = useNavigate();
 
   const handleBrowseAllTemplates = () => {
@@ -18,22 +25,106 @@ export function ForgeTemplatePanel(): JSX.Element | null {
     navigate("/templates");
   };
 
+  React.useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closePanel();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closePanel, open]);
+
+  const panelHoverProps = {
+    onPointerEnter: (event: React.PointerEvent<HTMLElement>) => {
+      if (event.pointerType === "touch") return;
+      cancelPanelClose();
+    },
+    onPointerLeave: (event: React.PointerEvent<HTMLElement>) => {
+      if (event.pointerType === "touch") return;
+      queueClosePanel();
+    },
+  };
+
   if (!open || !activeRegistration) {
     return null;
   }
+  const pinned = openMode === "pinned";
+
+  if (activeRegistration.kind === "custom") {
+    const handleFooter = () => {
+      closePanel();
+      activeRegistration.footer?.onSelect();
+    };
+
+    return (
+      <aside
+        className="forge-template-panel"
+        aria-label={activeRegistration.title}
+        {...panelHoverProps}
+      >
+        <div className="forge-template-panel__head">
+          <span className="forge-template-panel__head-title">
+            {activeRegistration.title}
+          </span>
+          {activeRegistration.footer ? (
+            <button
+              type="button"
+              className="forge-template-panel__head-action"
+              onClick={handleFooter}
+            >
+              {activeRegistration.footer.label}
+              <ArrowSquareOut size={13} aria-hidden="true" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="forge-template-panel__close"
+            aria-label={`Close ${activeRegistration.title}`}
+            title={`Close ${activeRegistration.title}`}
+            onClick={closePanel}
+          >
+            <X size={15} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+        </div>
+        {pinned ? (
+          <button
+            type="button"
+            className="forge-template-panel__collapse"
+            aria-label="Collapse drawer"
+            title="Collapse drawer"
+            onClick={closePanel}
+          >
+            <CaretLeft size={14} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+        ) : null}
+
+        <div className="forge-template-panel__content">
+          {activeRegistration.renderContent()}
+        </div>
+      </aside>
+    );
+  }
 
   return (
-    <aside className="forge-template-panel" aria-label={activeRegistration.title}>
+    <aside
+      className="forge-template-panel"
+      aria-label={activeRegistration.title}
+      {...panelHoverProps}
+    >
       <div className="forge-template-panel__head">
-        <span className="forge-template-panel__icon" aria-hidden="true">
-          <ImagesSquare size={16} strokeWidth={1.7} />
-        </span>
-        <div className="forge-template-panel__title-group">
-          <h2>{activeRegistration.title}</h2>
-          {activeRegistration.subtitle ? (
-            <p>{activeRegistration.subtitle}</p>
-          ) : null}
-        </div>
+        <span className="forge-template-panel__head-title">Templates</span>
+        <button
+          type="button"
+          className="forge-template-panel__head-action"
+          onClick={handleBrowseAllTemplates}
+        >
+          Open Templates
+          <ArrowSquareOut size={13} aria-hidden="true" />
+        </button>
         <button
           type="button"
           className="forge-template-panel__close"
@@ -44,6 +135,17 @@ export function ForgeTemplatePanel(): JSX.Element | null {
           <X size={15} strokeWidth={1.8} aria-hidden="true" />
         </button>
       </div>
+      {pinned ? (
+        <button
+          type="button"
+          className="forge-template-panel__collapse"
+          aria-label="Collapse drawer"
+          title="Collapse drawer"
+          onClick={closePanel}
+        >
+          <CaretLeft size={14} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+      ) : null}
 
       <div className="forge-template-panel__grid" role="list">
         {activeRegistration.items.map((item) => {
@@ -82,13 +184,6 @@ export function ForgeTemplatePanel(): JSX.Element | null {
           );
         })}
       </div>
-      <button
-        type="button"
-        className="forge-template-panel__browse-all"
-        onClick={handleBrowseAllTemplates}
-      >
-        Browse all templates
-      </button>
     </aside>
   );
 }

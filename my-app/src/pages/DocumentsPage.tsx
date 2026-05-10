@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
@@ -178,6 +178,7 @@ function matchesSearch(query: string, item: LibraryItem): boolean {
 
 export function DocumentsPage(): JSX.Element {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isLoaded, isSignedIn } = useAuth();
   const {
     isAuthenticated: isConvexAuthenticated,
@@ -188,8 +189,13 @@ export function DocumentsPage(): JSX.Element {
     isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
   ) as LibraryProposalRecord[] | undefined;
   const deleteProposal = useMutation(api.deleteProposalPublic.default);
-  const { cvs, currentCvId, loadCv, deleteCv } = useCvLibrary();
-  const [typeFilter, setTypeFilter] = React.useState<TypeFilter>("all");
+  const { cvs, currentCvId, loadCv, deleteCv, hydrateCvDocument } = useCvLibrary();
+  const urlTypeParam = searchParams.get("type");
+  const [typeFilter, setTypeFilter] = React.useState<TypeFilter>(() =>
+    urlTypeParam === "cvs" || urlTypeParam === "proposals" || urlTypeParam === "all"
+      ? urlTypeParam
+      : "all",
+  );
   const [viewMode, setViewMode] = React.useState<ViewMode>("grid");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
@@ -198,6 +204,26 @@ export function DocumentsPage(): JSX.Element {
 
   const localOutputDraft = React.useMemo(() => readStoredProposalOutputDraft(), []);
   const localComposeDraft = React.useMemo(() => readStoredProposalComposeDraft(), []);
+
+  React.useEffect(() => {
+    const nextType =
+      urlTypeParam === "cvs" || urlTypeParam === "proposals" || urlTypeParam === "all"
+        ? urlTypeParam
+        : "all";
+    setTypeFilter(nextType);
+  }, [urlTypeParam]);
+
+  const updateTypeFilter = React.useCallback(
+    (filter: TypeFilter) => {
+      setTypeFilter(filter);
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set("type", filter);
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
 
   const hydratedCvs = React.useMemo(
     () => hydrateLibraryCvDocuments(cvs),
@@ -261,11 +287,15 @@ export function DocumentsPage(): JSX.Element {
 
   const downloadItem = React.useCallback(async (item: LibraryItem) => {
     try {
-      await downloadLibraryItems([item]);
+      if (hydrateCvDocument) {
+        await downloadLibraryItems([item], { hydrateCvDocument });
+      } else {
+        await downloadLibraryItems([item]);
+      }
     } catch (error) {
       console.warn("Failed to download library item", error);
     }
-  }, []);
+  }, [hydrateCvDocument]);
 
   const handleCreateProposal = React.useCallback(() => {
     clearActiveLocalCvId();
@@ -324,11 +354,15 @@ export function DocumentsPage(): JSX.Element {
   const downloadSelected = React.useCallback(async () => {
     if (selectedItems.length === 0) return;
     try {
-      await downloadLibraryItems(selectedItems);
+      if (hydrateCvDocument) {
+        await downloadLibraryItems(selectedItems, { hydrateCvDocument });
+      } else {
+        await downloadLibraryItems(selectedItems);
+      }
     } catch (error) {
       console.warn("Failed to download selected library items", error);
     }
-  }, [selectedItems]);
+  }, [hydrateCvDocument, selectedItems]);
 
   const listEntries = React.useMemo<ListEntry[]>(
     () =>
@@ -378,7 +412,7 @@ export function DocumentsPage(): JSX.Element {
                   role="tab"
                   aria-selected={typeFilter === filter}
                   data-active={typeFilter === filter ? "true" : undefined}
-                  onClick={() => setTypeFilter(filter)}
+                  onClick={() => updateTypeFilter(filter)}
                 >
                   {typeLabel(filter)}
                 </button>
@@ -896,7 +930,7 @@ function LibraryDocumentPreview({ item }: { item: LibraryItem }) {
 function LibraryCvDocumentPreview({ item }: { item: LibraryItem }) {
   const cvDocument = item.cvDocument;
   const preview = React.useMemo(() => {
-    if (!cvDocument) return null;
+    if (!cvDocument || isLibrarySummaryOnlyCv(cvDocument)) return null;
     const source = buildStyledResumePrintSource({ currentCv: cvDocument });
     return source
       ? {
