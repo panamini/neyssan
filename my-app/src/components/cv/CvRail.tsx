@@ -250,6 +250,8 @@ type SortableSectionRowProps = {
   hidden: boolean;
   active: boolean;
   itemCount: number;
+  showDragHandle: boolean;
+  showMoveControls: boolean;
   onSelectSection: (sectionId: string, options?: { openEditor?: boolean }) => void;
   onMoveSection: (sectionId: string, direction: -1 | 1) => void;
   children: React.ReactNode;
@@ -266,11 +268,16 @@ function SortableSectionRow({
   hidden,
   active,
   itemCount,
+  showDragHandle,
+  showMoveControls,
   onSelectSection,
   onMoveSection,
   children,
 }: SortableSectionRowProps): JSX.Element {
-  const sortable = useSortable({ id: sectionId });
+  const sortable = useSortable({
+    id: sectionId,
+    disabled: !showDragHandle,
+  });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(sortable.transform),
     transition: sortable.transition,
@@ -284,28 +291,31 @@ function SortableSectionRow({
       data-hidden={hidden ? "true" : undefined}
       style={style}
     >
-      <button
-        type="button"
-        className="dasti-cv-org-handle"
-        aria-label={`Reorder ${label}`}
-        title="Drag to reorder"
-        {...sortable.attributes}
-        {...sortable.listeners}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowUp") {
-            event.preventDefault();
-            onMoveSection(sectionId, -1);
-            return;
-          }
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            onMoveSection(sectionId, 1);
-            return;
-          }
-        }}
-      >
-        <GripHorizontal size={16} strokeWidth={1.8} />
-      </button>
+      {showDragHandle ? (
+        <button
+          type="button"
+          className="dasti-cv-org-handle"
+          aria-label={`Reorder ${label}`}
+          title="Drag to reorder"
+          {...sortable.attributes}
+          {...sortable.listeners}
+          onKeyDown={(event) => {
+            if (!showMoveControls) return;
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              onMoveSection(sectionId, -1);
+              return;
+            }
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              onMoveSection(sectionId, 1);
+              return;
+            }
+          }}
+        >
+          <GripHorizontal size={16} strokeWidth={1.8} />
+        </button>
+      ) : null}
       <button
         type="button"
         className="dasti-cv-org-row__main"
@@ -663,16 +673,18 @@ export function CvRail({
                     });
 	                    const railAiMode = getRailAiMode(section);
 	                    return (
-	                      <SortableSectionRow
-	                        key={sectionId}
-	                        sectionId={sectionId}
-	                        label={label}
-	                        hidden={hidden}
-	                        active={sectionId === activeSectionId}
-	                        itemCount={getItemCount(section)}
-	                        onSelectSection={onSelectSection}
-	                        onMoveSection={onMoveSection}
-	                      >
+                    <SortableSectionRow
+                        key={sectionId}
+                        sectionId={sectionId}
+                        label={label}
+                        hidden={hidden}
+                        active={sectionId === activeSectionId}
+                        itemCount={getItemCount(section)}
+                        showDragHandle={policy.showDragHandle}
+                        showMoveControls={policy.showMoveControls}
+                        onSelectSection={onSelectSection}
+                        onMoveSection={onMoveSection}
+                      >
 	                        {railAiMode !== "none" ? (
 	                          <button
 	                            type="button"
