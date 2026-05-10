@@ -501,7 +501,17 @@ body,
   transform: scale(0.96);
 }
 
+.sb-rail-button--panel-open .sb-rail-button__glyph--regular {
+  opacity: 0;
+  transform: scale(0.96);
+}
+
 .sb-rail-button--active .sb-rail-button__glyph--fill {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.sb-rail-button--panel-open .sb-rail-button__glyph--fill {
   opacity: 1;
   transform: scale(1);
 }
@@ -555,6 +565,15 @@ body,
 }
 
 .sb-rail-button--active .sb-rail-button__icon {
+  background: var(--sf2);
+  color: var(--ti);
+}
+
+.sb-rail-button--panel-open {
+  color: var(--ti);
+}
+
+.sb-rail-button--panel-open .sb-rail-button__icon {
   background: var(--sf2);
   color: var(--ti);
 }
@@ -1926,6 +1945,32 @@ body,
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
   gap: var(--space-3);
+}
+
+.forge-template-panel__browse-all {
+  justify-self: start;
+  min-height: var(--control-sm);
+  padding: 0 var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--tm2);
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.forge-template-panel__browse-all:hover,
+.forge-template-panel__browse-all:focus-visible {
+  background: var(--sidebar-hover-bg);
+  border-color: color-mix(in srgb, var(--color-border-contrast) 64%, transparent);
+  color: var(--ti);
+  outline: none;
 }
 
 .forge-template-card {

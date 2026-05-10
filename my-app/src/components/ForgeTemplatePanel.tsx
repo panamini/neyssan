@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { ImagesSquare, X } from "../lib/icons";
 import { useForgeTemplatePanel } from "../contexts/ForgeTemplatePanelContext";
 import { TemplateDocumentPreview } from "../pages/TemplatesPage";
@@ -10,6 +11,12 @@ const TEMPLATE_THUMBNAIL_SCALE =
 
 export function ForgeTemplatePanel(): JSX.Element | null {
   const { open, activeRegistration, closePanel } = useForgeTemplatePanel();
+  const navigate = useNavigate();
+
+  const handleBrowseAllTemplates = () => {
+    closePanel();
+    navigate("/templates");
+  };
 
   if (!open || !activeRegistration) {
     return null;
@@ -75,6 +82,13 @@ export function ForgeTemplatePanel(): JSX.Element | null {
           );
         })}
       </div>
+      <button
+        type="button"
+        className="forge-template-panel__browse-all"
+        onClick={handleBrowseAllTemplates}
+      >
+        Browse all templates
+      </button>
     </aside>
   );
 }

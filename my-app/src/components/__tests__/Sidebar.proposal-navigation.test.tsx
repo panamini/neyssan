@@ -74,7 +74,7 @@ describe("Sidebar permanent rail", () => {
     });
   });
 
-  it("renders the permanent navigation items without Templates outside forge routes", () => {
+  it("renders Templates as a global link outside forge routes", () => {
     renderSidebar();
 
     expect(primaryNavItems().map((item) => item.getAttribute("aria-label"))).toEqual([
@@ -83,8 +83,13 @@ describe("Sidebar permanent rail", () => {
       "CV",
       "Proposal",
       "Projects",
+      "Templates",
       "Settings",
     ]);
+    expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
+      "href",
+      "/templates",
+    );
   });
 
   it.each(["/cv", "/proposal"])(
@@ -131,6 +136,7 @@ describe("Sidebar permanent rail", () => {
     ["/cv", "CV"],
     ["/proposal", "Proposal"],
     ["/documents", "Projects"],
+    ["/templates", "Templates"],
     ["/settings", "Settings"],
   ])("marks %s as the current route", (path, label) => {
     renderSidebar(path);
@@ -160,12 +166,28 @@ describe("Sidebar permanent rail", () => {
     fireEvent.click(templates);
 
     expect(templates).toHaveAttribute("aria-expanded", "true");
+    expect(templates).toHaveClass("sb-rail-button--panel-open");
+    expect(screen.getByRole("link", { name: "CV" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getByRole("complementary", { name: "CV templates" })).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
 
     fireEvent.click(screen.getByRole("listitem", { name: "Schematic" }));
     expect(onSelect).toHaveBeenCalledWith("schematic");
   });
+
+  it.each(["/dashboard", "/documents"])(
+    "navigates Templates to the global templates page from %s",
+    (path) => {
+      renderSidebar(path);
+
+      fireEvent.click(screen.getByRole("link", { name: "Templates" }));
+
+      expect(screen.getByTestId("location")).toHaveTextContent("/templates");
+    },
+  );
 
   it("opens the proposal template panel without navigating", () => {
     const onSelect = vi.fn();
@@ -179,6 +201,22 @@ describe("Sidebar permanent rail", () => {
     expect(
       screen.getByRole("complementary", { name: "Proposal templates" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Proposal" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+  });
+
+  it("contextual panel browse action navigates to all templates", () => {
+    renderSidebar("/proposal", <RegisterTemplates surface="proposal" onSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Templates" }));
+    fireEvent.click(screen.getByRole("button", { name: "Browse all templates" }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/templates");
+    expect(
+      screen.queryByRole("complementary", { name: "Proposal templates" }),
+    ).not.toBeInTheDocument();
   });
 });

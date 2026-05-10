@@ -10,7 +10,10 @@ import FloatingAiToolbar, {
 } from "../components/FloatingAiToolbar";
 import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
-import { useRegisterForgeTemplates } from "../contexts/ForgeTemplatePanelContext";
+import {
+  useForgeTemplatePanel,
+  useRegisterForgeTemplates,
+} from "../contexts/ForgeTemplatePanelContext";
 import { VerbatiResumePreview } from "../features/verbati/VerbatiResumePreview";
 import type {
   ActivePaperEditTarget,
@@ -2187,6 +2190,11 @@ export function CvForge(): JSX.Element {
   const location = useLocation();
   const { search } = location;
   const navigate = useNavigate();
+  const {
+    activeSurface: activeTemplateSurface,
+    open: templatePanelOpen,
+    openSurface: openTemplateSurface,
+  } = useForgeTemplatePanel();
   const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
   const setJobResume = useMutation(
     ((api as any).jobsPublic?.setResumeForJob ??
@@ -4476,6 +4484,11 @@ export function CvForge(): JSX.Element {
     ],
   );
   useRegisterForgeTemplates(cvTemplatePanelRegistration);
+  const cvTemplatesOpen =
+    templatePanelOpen && activeTemplateSurface === "cv";
+  const handleOpenCvTemplates = React.useCallback(() => {
+    openTemplateSurface("cv");
+  }, [openTemplateSurface]);
 
   const handleSelectFontPair = React.useCallback(
     (fontPairId: VerbatiFontPairId) => {
@@ -5626,7 +5639,9 @@ export function CvForge(): JSX.Element {
                 exporting={exportingFormat !== null}
                 tone={cvTone}
                 resumeOptions={resumeOptions}
+                templatesOpen={cvTemplatesOpen}
                 onModeChange={setWorkspaceMode}
+                onOpenTemplates={handleOpenCvTemplates}
                 onOpenImportReview={() => setImportReviewOpen(true)}
                 onPickResume={handlePickResume}
                 onExportPdf={() =>
