@@ -784,8 +784,6 @@
     border-color var(--motion-duration-fast) var(--motion-ease-standard),
     background var(--motion-duration-fast) var(--motion-ease-standard),
     box-shadow var(--motion-duration-fast) var(--motion-ease-standard),
-    margin-block-end var(--motion-duration-fast) var(--motion-ease-standard),
-    margin-block-start var(--motion-duration-fast) var(--motion-ease-standard),
     opacity var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
@@ -821,19 +819,13 @@
   transform: scaleX(1);
 }
 
-.dasti-cv-org-row[data-drop-indicator="before"] {
-  margin-block-start: calc(var(--space-1) * 0.75);
-}
-
-.dasti-cv-org-row[data-drop-indicator="after"] {
-  margin-block-end: calc(var(--space-1) * 0.75);
-}
-
 .dasti-cv-org-row[data-dragging="true"] {
   z-index: 2;
   border-color: color-mix(in srgb, var(--ac) 42%, var(--border-soft));
-  box-shadow: 0 10px 24px -18px color-mix(in srgb, var(--shadow-color) 70%, transparent);
-  opacity: 0.88;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ac) 34%, transparent),
+    0 14px 28px -20px color-mix(in srgb, var(--shadow-color) 82%, transparent);
+  opacity: 0.94;
 }
 
 .dasti-cv-org-row[data-active="true"] {

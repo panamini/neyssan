@@ -281,10 +281,14 @@ function SortableSectionRow({
   const sortable = useSortable({
     id: sectionId,
     disabled: !showDragHandle,
+    transition: {
+      duration: 260,
+      easing: "cubic-bezier(0.2, 0, 0, 1)",
+    },
   });
   const rowTransition = sortable.transition
-    ? `${sortable.transition}, border-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-fast) var(--motion-ease-standard), opacity var(--motion-duration-fast) var(--motion-ease-standard)`
-    : "transform var(--motion-duration-medium) var(--motion-ease-emphasized), border-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-fast) var(--motion-ease-standard), opacity var(--motion-duration-fast) var(--motion-ease-standard)";
+    ? `${sortable.transition}, border-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-normal) var(--motion-ease-emphasized), opacity var(--motion-duration-fast) var(--motion-ease-standard)`
+    : "transform var(--motion-duration-medium) var(--motion-ease-emphasized), border-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-normal) var(--motion-ease-emphasized), opacity var(--motion-duration-fast) var(--motion-ease-standard)";
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(sortable.transform),
     transition: rowTransition,
