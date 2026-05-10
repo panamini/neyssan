@@ -3324,11 +3324,12 @@ export function CvForge(): JSX.Element {
     "--cv-paper-visual-inline-size": `min(100%, ${CV_PAPER_VISUAL_INLINE_SIZE})`,
     "--cv-workspace-stage-inline-size": "var(--cv-paper-visual-inline-size)",
   } as React.CSSProperties;
-  const shouldAutoCollapseCvRailForDockedDrawer =
+  const isForgeDrawerDockedDesktop =
     templatePanelOpen &&
     templatePanelOpenMode === "pinned" &&
-    viewportWidth >= 1180 &&
-    viewportWidth < 1640;
+    viewportWidth >= 1180;
+  const shouldAutoCollapseCvRailForDockedDrawer =
+    isForgeDrawerDockedDesktop && viewportWidth < 1760;
   const showJobBriefContext = Boolean(requestedJobId);
   const isEntryPickerBusy = isCreatingEntryCv || isImportingEntryCv;
 
@@ -6084,6 +6085,9 @@ export function CvForge(): JSX.Element {
         <>
           <div
             className="dasti-cv-skeleton-forge"
+            data-forge-drawer-docked={
+              isForgeDrawerDockedDesktop ? "true" : undefined
+            }
             data-forge-drawer-rail-collapsed={
               shouldAutoCollapseCvRailForDockedDrawer ? "true" : undefined
             }

@@ -37,6 +37,17 @@
   grid-template-columns: minmax(0, var(--cv-workspace-stage-inline-size));
 }
 
+.dasti-cv-skeleton-forge[data-forge-drawer-docked="true"] {
+  grid-template-columns:
+    minmax(0, 1fr)
+    var(--cv-workspace-rail-inline-size);
+  justify-content: stretch;
+}
+
+.dasti-cv-skeleton-forge[data-forge-drawer-docked="true"][data-forge-drawer-rail-collapsed="true"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .dasti-cv-paper-stage {
   width: min(100%, var(--cv-paper-visual-inline-size));
   margin-inline: auto;

@@ -7487,8 +7487,14 @@
 
 .dasti-proposal-skeleton-forge__stage {
   grid-column: 1;
+  width: min(100%, var(--proposal-workspace-stage-inline-size));
   min-width: 0;
   order: 1;
+  justify-self: center;
+}
+
+.dasti-proposal-skeleton-forge[data-forge-drawer-docked="true"] {
+  justify-content: stretch;
 }
 
 .dasti-proposal-skeleton-stage {
