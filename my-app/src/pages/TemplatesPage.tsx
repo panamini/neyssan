@@ -22,7 +22,7 @@ import { templatePreviewApplicant, templatePreviewProposal } from "./templatePre
 const TEMPLATE_FILTERS = ["cover letters", "resume"] as const;
 type TemplateFilter = (typeof TEMPLATE_FILTERS)[number];
 
-type TemplateFamily =
+export type TemplateFamily =
   | "workshop-onecol"
   | "workshop-twocol"
   | "minimal"
@@ -142,7 +142,7 @@ function getCoverLetterTemplateIntent(
   return null;
 }
 
-function TemplateDocumentPreview({
+export function TemplateDocumentPreview({
   kind,
   family,
 }: {

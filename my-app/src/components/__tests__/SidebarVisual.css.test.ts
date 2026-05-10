@@ -16,33 +16,42 @@ const productCss = productCssPaths
 const dsCss = readFileSync(resolve(process.cwd(), "src/styles/ds-v2.css"), "utf8");
 
 describe("sidebar visual CSS contracts", () => {
-  it("uses skeleton-style inline radius and a left accent stripe", () => {
+  it("uses permanent rail tokens and icon-tile active state", () => {
     expect(productCss).toMatch(
-      /\.sb-section__action,\s*\.sb-section__document,\s*\.sb-section__all-link\s*\{[\s\S]*border-radius:\s*var\(--radius-inline\);/,
+      /\.sb\s*\{[\s\S]*width:\s*var\(--app-nav-rail-width\);[\s\S]*flex:\s*0 0 var\(--app-nav-rail-width\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-doc\s*\{[\s\S]*border-radius:\s*var\(--radius-inline\);/,
+      /\.sb__nav\s*\{[\s\S]*padding:\s*var\(--app-nav-rail-pad-block\) var\(--app-nav-rail-pad-inline\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-section__action--active\s*\{[\s\S]*background:\s*linear-gradient\(90deg,\s*var\(--ap\),\s*transparent\);[\s\S]*color:\s*var\(--sidebar-active-ink\);/,
+      /\.sb-rail-button\s*\{[\s\S]*width:\s*100%;[\s\S]*min-height:\s*var\(--app-nav-item-block-size\);[\s\S]*border-radius:\s*var\(--app-nav-item-radius\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-section__action--active::before\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*scaleY\(1\);/,
+      /\.sb-rail-button__label\s*\{[\s\S]*font-size:\s*var\(--app-nav-label-size\);[\s\S]*line-height:\s*var\(--app-nav-label-line\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-section__document::before\s*\{[\s\S]*left:\s*0;[\s\S]*top:\s*6px;[\s\S]*bottom:\s*6px;/,
+      /\.sb-rail-button:hover\s*\{[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--tm2\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-section__document--active\s*\{[\s\S]*background:\s*linear-gradient\(90deg,\s*var\(--ap\),\s*transparent\);[\s\S]*color:\s*var\(--ti\);/,
+      /\.sb-rail-button:hover \.sb-rail-button__icon\s*\{[\s\S]*background:\s*var\(--sidebar-hover-bg\);[\s\S]*color:\s*var\(--ti\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-section__document--active::before\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*scaleY\(1\);/,
+      /\.sb-rail-button--active\s*\{[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--ti\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-doc--active\s*\{[\s\S]*background:\s*linear-gradient\(90deg,\s*var\(--ap\),\s*transparent\);[\s\S]*box-shadow:\s*none;/,
+      /\.sb-rail-button--active \.sb-rail-button__icon\s*\{[\s\S]*background:\s*var\(--sf2\);[\s\S]*color:\s*var\(--ti\);/,
     );
     expect(productCss).toMatch(
-      /\.sb-doc--active::before\s*\{[\s\S]*opacity:\s*1;[\s\S]*transform:\s*scaleY\(1\);/,
+      /\.sb-rail-button--active::before\s*\{[\s\S]*content:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.sb-rail-button--active \.sb-rail-button__glyph--regular\s*\{[\s\S]*opacity:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.sb-rail-button--active \.sb-rail-button__glyph--fill\s*\{[\s\S]*opacity:\s*1;/,
+    );
+    expect(productCss).not.toMatch(
+      /\.sb-rail-button:hover[^{]*\.sb-rail-button__glyph--fill/,
     );
   });
 
