@@ -345,14 +345,20 @@ describe("Sidebar permanent rail", () => {
     },
   );
 
-  it("opens the proposal template panel without navigating", () => {
+  it("opens the proposal template panel from hover and navigates on click", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
     const onSelect = vi.fn();
     renderSidebar(
       "/proposal",
       <RegisterTemplates surface="proposal" onSelect={onSelect} />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Templates" }));
+    const templates = screen.getByRole("link", { name: "Templates" });
+    fireEvent.pointerEnter(templates, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
 
     expect(
       screen.getByRole("complementary", { name: "Proposal templates" }),
@@ -362,19 +368,27 @@ describe("Sidebar permanent rail", () => {
       "page",
     );
     expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+
+    fireEvent.click(templates);
+    expect(screen.getByTestId("location")).toHaveTextContent("/templates");
   });
 
   it("keeps route-active and drawer-open rail states separate on Proposal Forge", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
     const proposal = screen.getByRole("button", { name: "Proposal" });
-    const cv = screen.getByRole("button", { name: "CV" });
+    const cv = screen.getByRole("link", { name: "CV" });
 
     expect(proposal).toHaveAttribute("aria-current", "page");
     expect(proposal).toHaveClass("sb-rail-button--route-active");
     expect(cv).not.toHaveAttribute("aria-current");
 
-    fireEvent.click(cv);
+    fireEvent.pointerEnter(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
 
     expect(proposal).toHaveAttribute("aria-current", "page");
     expect(proposal).toHaveClass("sb-rail-button--route-active");
@@ -384,31 +398,47 @@ describe("Sidebar permanent rail", () => {
   });
 
   it.each([
-    ["Jobs", "Attach job", "Job drawer content"],
-    ["CV", "Attach CV", "CV drawer content"],
-    ["Proposal", "Saved proposals", "Saved proposals drawer content"],
-    ["Projects", "Library", "Library drawer content"],
+    ["Jobs", "/jobs"],
+    ["CV", "/cv"],
+    ["Projects", "/documents"],
+    ["Templates", "/templates"],
   ])(
-    "opens the proposal %s rail drawer without navigating",
-    (railLabel, drawerLabel, drawerContent) => {
-      renderSidebar("/proposal", <RegisterProposalPanels />);
+    "navigates from Proposal Forge to %s on desktop click",
+    (railLabel, route) => {
+      mockFinePointer(true);
+      renderSidebar(
+        "/proposal",
+        <>
+          <RegisterProposalPanels />
+          <RegisterTemplates surface="proposal" onSelect={vi.fn()} />
+        </>,
+      );
 
-      fireEvent.click(screen.getByRole("button", { name: railLabel }));
+      fireEvent.click(screen.getByRole("link", { name: railLabel }));
 
-      expect(
-        screen.getByRole("complementary", { name: drawerLabel }),
-      ).toBeInTheDocument();
-      expect(screen.getByText(drawerContent)).toBeInTheDocument();
-      expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+      expect(screen.getByTestId("location")).toHaveTextContent(route);
     },
   );
+
+  it("pins the saved proposals drawer from Proposal click on Proposal Forge", () => {
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Proposal" }));
+
+    expect(
+      screen.getByRole("complementary", { name: "Saved proposals" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+  });
 
   it("opens proposal drawers from rail hover on fine pointer devices", () => {
     vi.useFakeTimers();
     mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
-    fireEvent.pointerEnter(screen.getByRole("button", { name: "Jobs" }), {
+    fireEvent.pointerEnter(screen.getByLabelText("Jobs"), {
       pointerType: "mouse",
     });
 
@@ -437,7 +467,7 @@ describe("Sidebar permanent rail", () => {
       </>,
     );
 
-    fireEvent.pointerEnter(screen.getByRole("button", { name: railLabel }), {
+    fireEvent.pointerEnter(screen.getByLabelText(railLabel), {
       pointerType: "mouse",
     });
     act(() => {
@@ -453,7 +483,7 @@ describe("Sidebar permanent rail", () => {
     mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
-    fireEvent.pointerEnter(screen.getByRole("button", { name: "CV" }), {
+    fireEvent.pointerEnter(screen.getByLabelText("CV"), {
       pointerType: "mouse",
     });
     act(() => {
@@ -462,28 +492,33 @@ describe("Sidebar permanent rail", () => {
 
     expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Collapse drawer" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
   });
 
-  it("pins the CV drawer from click and unpins the same CV rail item", () => {
+  it("pins a peek drawer from the drawer pin action", () => {
     vi.useFakeTimers();
     mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
-    const cv = screen.getByRole("button", { name: "CV" });
+    const cv = screen.getByRole("link", { name: "CV" });
 
-    fireEvent.click(cv);
+    fireEvent.pointerEnter(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
     expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
     expect(cv).toHaveClass("sb-rail-button--panel-open");
 
-    fireEvent.click(cv);
+    fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
     expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
 
     fireEvent.pointerLeave(cv, { pointerType: "mouse" });
     act(() => {
       vi.advanceTimersByTime(180);
     });
 
-    expect(screen.queryByRole("complementary", { name: "Attach CV" })).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
   });
 
   it("closes an unpinned hover CV drawer when leaving the rail trigger", () => {
@@ -491,7 +526,7 @@ describe("Sidebar permanent rail", () => {
     mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
-    const cv = screen.getByRole("button", { name: "CV" });
+    const cv = screen.getByRole("link", { name: "CV" });
     fireEvent.pointerEnter(cv, { pointerType: "mouse" });
     act(() => {
       vi.advanceTimersByTime(150);
@@ -506,16 +541,20 @@ describe("Sidebar permanent rail", () => {
     expect(screen.queryByRole("complementary", { name: "Attach CV" })).not.toBeInTheDocument();
   });
 
-  it("pins drawers on rail click and keeps the pinned drawer stable across other hovers", () => {
+  it("keeps a pinned drawer stable across other hovers", () => {
     vi.useFakeTimers();
     mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
-    const jobs = screen.getByRole("button", { name: "Jobs" });
-    const cv = screen.getByRole("button", { name: "CV" });
+    const jobs = screen.getByRole("link", { name: "Jobs" });
+    const cv = screen.getByRole("link", { name: "CV" });
 
-    fireEvent.click(jobs);
+    fireEvent.pointerEnter(jobs, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
     expect(screen.getByRole("complementary", { name: "Attach job" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
     expect(jobs).toHaveClass("sb-rail-button--panel-open");
 
     fireEvent.pointerEnter(cv, { pointerType: "mouse" });
@@ -525,27 +564,6 @@ describe("Sidebar permanent rail", () => {
 
     expect(screen.getByRole("complementary", { name: "Attach job" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Attach CV" })).not.toBeInTheDocument();
-  });
-
-  it("unpins a clicked drawer and closes it after hover leaves", () => {
-    vi.useFakeTimers();
-    mockFinePointer(true);
-    renderSidebar("/proposal", <RegisterProposalPanels />);
-
-    const jobs = screen.getByRole("button", { name: "Jobs" });
-
-    fireEvent.click(jobs);
-    expect(screen.getByRole("complementary", { name: "Attach job" })).toBeInTheDocument();
-
-    fireEvent.click(jobs);
-    expect(screen.getByRole("complementary", { name: "Attach job" })).toBeInTheDocument();
-
-    fireEvent.pointerLeave(jobs, { pointerType: "mouse" });
-    act(() => {
-      vi.advanceTimersByTime(180);
-    });
-
-    expect(screen.queryByRole("complementary", { name: "Attach job" })).not.toBeInTheDocument();
   });
 
   it("closes and unpins drawers from the collapse handle", () => {
@@ -564,7 +582,7 @@ describe("Sidebar permanent rail", () => {
     mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
-    const jobs = screen.getByRole("button", { name: "Jobs" });
+    const jobs = screen.getByRole("link", { name: "Jobs" });
     fireEvent.pointerEnter(jobs, { pointerType: "mouse" });
     act(() => {
       vi.advanceTimersByTime(150);
