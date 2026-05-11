@@ -6,7 +6,7 @@ import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { useCvForgeTopbarRegistration } from "../contexts/CvForgeTopbarContext";
 import { useProposalForgeTopbarRegistration } from "../contexts/ProposalForgeTopbarContext";
-import { IconButton } from "./ui";
+import { IconButton, Menu } from "./ui";
 import CvShareMenu from "./cv/CvShareMenu";
 import {
   PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
@@ -18,7 +18,14 @@ import {
 } from "../lib/proposal-output-draft";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
 import { resolveCommandShortcutLabel } from "../lib/app-topbar";
-import { FileText, MagnifyingGlass, User } from "../lib/icons";
+import {
+  ClipboardText,
+  FilePdf,
+  FileText,
+  MagnifyingGlass,
+  ShareFat,
+  User,
+} from "../lib/icons";
 
 function normalizeTitle(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -441,6 +448,67 @@ export function AppTopbar({
               onExportDocx={cvTopbarRegistration.onExportDocx}
             />
           </>
+        ) : null}
+        {location.pathname === "/proposal" && proposalTopbarRegistration ? (
+          <Menu
+            ariaLabel="Share proposal"
+            align="end"
+            sections={[
+              {
+                items: [
+                  {
+                    id: "copy-text",
+                    label: "Copy text",
+                    icon: <ClipboardText size={15} strokeWidth={1.8} />,
+                    disabled: !proposalTopbarRegistration.hasProposalContent,
+                    onSelect: proposalTopbarRegistration.onCopyText,
+                  },
+                  {
+                    id: "download-pdf",
+                    label: "Download PDF",
+                    icon: <FilePdf size={15} strokeWidth={1.8} />,
+                    disabled:
+                      !proposalTopbarRegistration.hasProposalContent ||
+                      proposalTopbarRegistration.exporting,
+                    onSelect: () => proposalTopbarRegistration.onExportPdf("styled"),
+                  },
+                  {
+                    id: "download-docx",
+                    label: "Download DOCX",
+                    icon: <FileText size={15} strokeWidth={1.8} />,
+                    disabled:
+                      !proposalTopbarRegistration.hasProposalContent ||
+                      proposalTopbarRegistration.exporting,
+                    onSelect: proposalTopbarRegistration.onExportDocx,
+                  },
+                  ...(proposalTopbarRegistration.savedShareAvailable &&
+                  proposalTopbarRegistration.onShareSavedProposal
+                    ? [
+                        {
+                          id: "share-saved-proposal",
+                          label: "Share saved proposal",
+                          icon: <ShareFat size={15} strokeWidth={1.8} />,
+                          disabled: !proposalTopbarRegistration.hasProposalContent,
+                          onSelect:
+                            proposalTopbarRegistration.onShareSavedProposal,
+                        },
+                      ]
+                    : []),
+                ],
+              },
+            ]}
+            trigger={
+              <button
+                type="button"
+                className="dasti-icon-button app-topbar__share"
+                aria-label="Share proposal"
+                data-toolbar-tooltip="Share"
+              >
+                <ShareFat size={15} strokeWidth={1.8} aria-hidden="true" />
+                <span className="app-topbar__share-label">Share</span>
+              </button>
+            }
+          />
         ) : null}
         <IconButton
           label={

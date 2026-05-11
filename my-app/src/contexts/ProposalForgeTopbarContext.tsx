@@ -12,6 +12,13 @@ export type ProposalForgeTopbarRegistration = {
   title: string | null;
   documentState: ProposalForgeTopbarDocumentState;
   lengthLabel: "Concise" | "Standard" | "Detailed" | null;
+  hasProposalContent: boolean;
+  exporting: boolean;
+  savedShareAvailable?: boolean;
+  onCopyText: () => void;
+  onExportPdf: (mode: "ats" | "styled") => void;
+  onExportDocx: () => void;
+  onShareSavedProposal?: () => void;
 };
 
 type ProposalForgeTopbarContextValue = {

@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -50,6 +50,11 @@ function renderProposalTopbar(
             title: "Porphyre cover letter",
             documentState: "draft",
             lengthLabel: null,
+            hasProposalContent: true,
+            exporting: false,
+            onCopyText: vi.fn(),
+            onExportPdf: vi.fn(),
+            onExportDocx: vi.fn(),
             ...registration,
           }}
         />
@@ -119,5 +124,44 @@ describe("AppTopbar Proposal document identity", () => {
     expect(screen.getByTitle("Proposal draft application package")).toHaveClass(
       "app-topbar__doc-identity",
     );
+  });
+
+  it("renders Proposal share actions in the global topbar", async () => {
+    const onCopyText = vi.fn();
+    const onExportPdf = vi.fn();
+    const onExportDocx = vi.fn();
+    renderProposalTopbar({ onCopyText, onExportPdf, onExportDocx });
+
+    fireEvent.click(screen.getByRole("button", { name: "Share proposal" }));
+    const menu = await screen.findByRole("menu", { name: "Share proposal" });
+
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Copy text" }));
+    expect(onCopyText).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Share proposal" }));
+    const pdfMenu = await screen.findByRole("menu", { name: "Share proposal" });
+    fireEvent.click(within(pdfMenu).getByRole("menuitem", { name: "Download PDF" }));
+    expect(onExportPdf).toHaveBeenCalledWith("styled");
+
+    fireEvent.click(screen.getByRole("button", { name: "Share proposal" }));
+    const docxMenu = await screen.findByRole("menu", { name: "Share proposal" });
+    fireEvent.click(within(docxMenu).getByRole("menuitem", { name: "Download DOCX" }));
+    expect(onExportDocx).toHaveBeenCalledTimes(1);
+  });
+
+  it("includes saved proposal sharing only when registered", async () => {
+    const onShareSavedProposal = vi.fn();
+    renderProposalTopbar({
+      savedShareAvailable: true,
+      onShareSavedProposal,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Share proposal" }));
+    const menu = await screen.findByRole("menu", { name: "Share proposal" });
+    fireEvent.click(
+      within(menu).getByRole("menuitem", { name: "Share saved proposal" }),
+    );
+
+    expect(onShareSavedProposal).toHaveBeenCalledTimes(1);
   });
 });

@@ -4,7 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
+import { AppTopbar } from "../../components/AppTopbar";
 import { ProposalForge } from "../ProposalForge";
+import { ProposalForgeTopbarProvider } from "../../contexts/ProposalForgeTopbarContext";
 import { writeStoredProposalOutputDraft } from "../../lib/proposal-output-draft";
 import { LOCAL_SAVED_PROPOSALS_FIXTURE_KEY } from "../../lib/proposal-saved-fixtures";
 
@@ -62,8 +64,16 @@ vi.mock("../../components/ui/toast", () => ({
 vi.mock("../../contexts/CvLibraryContext", () => ({
   useCvLibrary: () => ({
     currentCv: null,
+    currentCvId: null,
+    cvs: [],
     loadCv: vi.fn(),
   }),
+}));
+
+vi.mock("@clerk/clerk-react", () => ({
+  useAuth: vi.fn(() => ({ isLoaded: true, isSignedIn: false })),
+  useUser: vi.fn(() => ({ user: null })),
+  UserButton: () => null,
 }));
 
 vi.mock("../../components/ProposalInputForm", () => ({
@@ -117,6 +127,20 @@ vi.mock("../../lib/exportDocumentFile", () => ({
   exportDocumentFile: exportDocumentFileMock,
 }));
 
+function renderProposalForge(route = "/proposal") {
+  return render(
+    <MemoryRouter initialEntries={[route]}>
+      <ProposalForgeTopbarProvider>
+        <AppTopbar
+          commandPaletteOpen={false}
+          onOpenCommandPalette={vi.fn()}
+        />
+        <ProposalForge />
+      </ProposalForgeTopbarProvider>
+    </MemoryRouter>,
+  );
+}
+
 describe("ProposalForge export behavior", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -160,14 +184,10 @@ describe("ProposalForge export behavior", () => {
       characterLimitValue: null,
     });
 
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
+    renderProposalForge();
 
     await user.click(screen.getByRole("button", { name: "Share proposal" }));
-    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
+    await user.click(screen.getByRole("menuitem", { name: "Download PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -223,14 +243,10 @@ describe("ProposalForge export behavior", () => {
       characterLimitValue: null,
     });
 
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
+    renderProposalForge();
 
     await user.click(screen.getByRole("button", { name: "Share proposal" }));
-    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
+    await user.click(screen.getByRole("menuitem", { name: "Download PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -296,14 +312,10 @@ describe("ProposalForge export behavior", () => {
       characterLimitValue: null,
     });
 
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
+    renderProposalForge();
 
     await user.click(screen.getByRole("button", { name: "Share proposal" }));
-    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
+    await user.click(screen.getByRole("menuitem", { name: "Download PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -360,18 +372,14 @@ describe("ProposalForge export behavior", () => {
       ]),
     );
 
-    render(
-      <MemoryRouter initialEntries={["/proposal?id=proposal_saved"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
+    renderProposalForge("/proposal?id=proposal_saved");
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Share proposal" })).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole("button", { name: "Share proposal" }));
-    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
+    await user.click(screen.getByRole("menuitem", { name: "Download PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -398,7 +406,7 @@ describe("ProposalForge export behavior", () => {
     });
 
     await user.click(screen.getByRole("button", { name: "Share proposal" }));
-    await user.click(screen.getByRole("menuitem", { name: /Export DOCX/i }));
+    await user.click(screen.getByRole("menuitem", { name: /Download DOCX/i }));
 
     expect(exportDocumentFileMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -453,22 +461,18 @@ describe("ProposalForge export behavior", () => {
       characterLimitValue: null,
     });
 
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
+    renderProposalForge();
 
     const exportButton = screen.getByRole("button", { name: "Share proposal" });
 
     await user.click(exportButton);
-    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
+    await user.click(screen.getByRole("menuitem", { name: "Download PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledTimes(1);
 
     await user.click(exportButton);
-    expect(screen.getByRole("menuitem", { name: "Export PDF" })).toBeDisabled();
-    await user.click(screen.getByRole("menuitem", { name: "Export PDF" }));
+    expect(screen.getByRole("menuitem", { name: "Download PDF" })).toBeDisabled();
+    await user.click(screen.getByRole("menuitem", { name: "Download PDF" }));
 
     expect(exportDocumentFileMock).toHaveBeenCalledTimes(1);
 
@@ -480,7 +484,7 @@ describe("ProposalForge export behavior", () => {
       expect(screen.getByRole("button", { name: "Share proposal" })).toBeInTheDocument();
     });
 
-    expect(showToastMock).toHaveBeenCalledWith("Exported.", {
+    expect(showToastMock).toHaveBeenCalledWith("Downloaded.", {
       variant: "success",
     });
   });

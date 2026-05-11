@@ -21,7 +21,9 @@ describe("ProposalForge export contract", () => {
     expect(proposalForgeSource).not.toContain("downloadProposalFromMountedPreview");
   });
 
-  it("exposes ATS PDF, styled PDF, and DOCX proposal actions", () => {
-    expect(proposalForgeSource).toContain("ProposalExportActions");
+  it("registers proposal share and export actions for the global topbar", () => {
+    expect(proposalForgeSource).toContain("onExportPdf");
+    expect(proposalForgeSource).toContain("onExportDocx");
+    expect(proposalForgeSource).toContain("onShareSavedProposal");
   });
 });
