@@ -8583,6 +8583,7 @@ export function ProposalForge(): JSX.Element {
       ),
       footer: {
         label: "Open Jobs page",
+        icon: <Briefcase size={13} aria-hidden="true" />,
         onSelect: () => navigate("/jobs"),
       },
     }),
@@ -8610,6 +8611,7 @@ export function ProposalForge(): JSX.Element {
       ),
       footer: {
         label: "Open CV Forge",
+        icon: <FileUser size={13} aria-hidden="true" />,
         onSelect: () =>
           navigate(attachedCvId ? `/cv?id=${encodeURIComponent(attachedCvId)}` : "/cv"),
       },
@@ -8639,6 +8641,7 @@ export function ProposalForge(): JSX.Element {
       ),
       footer: {
         label: "Open Library",
+        icon: <FolderTree size={13} aria-hidden="true" />,
         onSelect: () => navigate("/documents?type=proposals"),
       },
     }),
@@ -8668,6 +8671,7 @@ export function ProposalForge(): JSX.Element {
       ),
       footer: {
         label: "Open Library",
+        icon: <FolderTree size={13} aria-hidden="true" />,
         onSelect: () => navigate("/documents?type=proposals"),
       },
     }),

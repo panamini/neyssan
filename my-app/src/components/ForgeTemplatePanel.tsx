@@ -77,7 +77,9 @@ export function ForgeTemplatePanel(): JSX.Element | null {
               onClick={handleFooter}
             >
               {activeRegistration.footer.label}
-              <ArrowSquareOut size={13} aria-hidden="true" />
+              {activeRegistration.footer.icon ?? (
+                <ArrowSquareOut size={13} aria-hidden="true" />
+              )}
             </button>
           ) : null}
         </div>
@@ -120,7 +122,9 @@ export function ForgeTemplatePanel(): JSX.Element | null {
           onClick={handleBrowseAllTemplates}
         >
           Open Templates
-          <ArrowSquareOut size={13} aria-hidden="true" />
+          {activeRegistration.footer?.icon ?? (
+            <ArrowSquareOut size={13} aria-hidden="true" />
+          )}
         </button>
       </div>
       {pinned ? (
