@@ -85,16 +85,12 @@ function ProposalTemplateEntryPoint({
         toneLabel="Natural"
         toneValue="natural"
         mode="edit"
-        exporting={false}
         hasProposalContent
         headingOpen={open && activeSurface === "proposal-heading"}
         onOpenHeading={() => openSurface("proposal-heading")}
         templatesOpen={open && activeSurface === "proposal"}
         onOpenTemplates={() => openSurface("proposal")}
         onModeChange={vi.fn()}
-        onCopyText={vi.fn()}
-        onExportPdf={vi.fn()}
-        onExportDocx={vi.fn()}
       >
         <div>Proposal paper</div>
       </ProposalDocumentStage>

@@ -1,12 +1,10 @@
 import React from "react";
-import { Button, Menu, ToneBadge } from "../ui";
+import { Button, ToneBadge } from "../ui";
 import {
   ArrowUDownRight,
   ArrowUUpLeft,
   ClipboardText,
   Eye,
-  FilePdf,
-  FileText,
   ImagesSquare,
   NewspaperClipping,
   PenLine,
@@ -19,7 +17,6 @@ type ProposalDocumentStageProps = {
   toneLabel: string;
   toneValue: "auto" | "warm" | "formal" | "natural";
   mode: "preview" | "edit";
-  exporting: boolean;
   hasProposalContent: boolean;
   styleControl?: React.ReactNode;
   templatesOpen?: boolean;
@@ -28,11 +25,8 @@ type ProposalDocumentStageProps = {
   onModeChange: (mode: "preview" | "edit") => void;
   onOpenHeading?: () => void;
   onOpenTemplates?: () => void;
-  onCopyText: () => void;
   onDeleteDraft?: () => void;
   onSaveToLibrary?: () => void;
-  onExportPdf: (mode: "ats" | "styled") => void;
-  onExportDocx: () => void;
   sourceJobLinked?: boolean;
   sourceCvSelected?: boolean;
   proposalLinked?: boolean;
@@ -56,7 +50,6 @@ export function ProposalDocumentStage({
   toneLabel,
   toneValue,
   mode,
-  exporting,
   hasProposalContent,
   styleControl = null,
   templatesOpen = false,
@@ -65,16 +58,9 @@ export function ProposalDocumentStage({
   onModeChange,
   onOpenHeading,
   onOpenTemplates,
-  onCopyText,
   onDeleteDraft,
   onSaveToLibrary,
-  onExportPdf,
-  onExportDocx,
 }: ProposalDocumentStageProps): JSX.Element {
-  const [selectedExportTarget, setSelectedExportTarget] = React.useState<
-    "pdf" | "docx" | "copy-text" | null
-  >(null);
-
   return (
     <section
       className="dasti-proposal-skeleton-stage"
@@ -212,56 +198,6 @@ export function ProposalDocumentStage({
           ) : null}
         </div>
         <span className="dasti-proposal-skeleton-stage__spacer" />
-        <Menu
-          ariaLabel="Proposal actions"
-          align="end"
-          sections={[
-            {
-              items: [
-                {
-                  id: "copy-text",
-                  label: "Copy text",
-                  icon: <ClipboardText size={15} strokeWidth={1.8} />,
-                  disabled: !hasProposalContent,
-                  onSelect: () => {
-                    setSelectedExportTarget("copy-text");
-                    onCopyText();
-                  },
-                },
-                {
-                  id: "export-pdf",
-                  label: "Download PDF",
-                  icon: <FilePdf size={15} strokeWidth={1.8} />,
-                  disabled: !hasProposalContent || exporting,
-                  onSelect: () => {
-                    setSelectedExportTarget("pdf");
-                    onExportPdf("styled");
-                  },
-                },
-                {
-                  id: "export-docx",
-                  label: "Download DOCX",
-                  icon: <FileText size={15} strokeWidth={1.8} />,
-                  disabled: !hasProposalContent || exporting,
-                  onSelect: () => {
-                    setSelectedExportTarget("docx");
-                    onExportDocx();
-                  },
-                },
-              ],
-            },
-          ]}
-          trigger={
-            <button
-              type="button"
-              className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
-              aria-label="Proposal actions"
-              data-toolbar-tooltip="Actions"
-            >
-              <ClipboardText size={15} strokeWidth={1.8} aria-hidden="true" />
-            </button>
-          }
-        />
       </div>
 
       <div className="dasti-proposal-skeleton-stage__paper">{children}</div>

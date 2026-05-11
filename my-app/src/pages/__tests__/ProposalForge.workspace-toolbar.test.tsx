@@ -193,56 +193,16 @@ describe("ProposalForge workbench layout", () => {
     expect(proposalComposeToolbarSpy).not.toHaveBeenCalled();
   });
 
-  it("consolidates share, export, and safe-send risk checks in the stage menu", async () => {
+  it("removes proposal share and export actions from the local stage menu", () => {
     renderProposalForge();
 
     const stage = screen.getByLabelText("Proposal document stage");
-    fireEvent.click(within(stage).getByRole("button", { name: /share/i }));
-
-    const menu = await screen.findByRole("menu", { name: "Share proposal" });
     expect(
-      within(menu).getByRole("menuitem", { name: "Safe-send checklist…" }),
-    ).toBeInTheDocument();
-    expect(
-      within(menu).getByRole("menuitem", { name: "Send by email" }),
-    ).toBeDisabled();
-    expect(
-      within(menu).getByRole("menuitem", { name: "Export PDF" }),
-    ).toBeDisabled();
-    expect(
-      within(menu).getByRole("menuitem", { name: "Copy as text" }),
-    ).toBeDisabled();
-
-    fireEvent.click(
-      within(menu).getByRole("menuitem", { name: "Safe-send checklist…" }),
-    );
-
-    const dialog = await screen.findByRole("dialog", {
-      name: "Safe-send checklist",
-    });
-    expect(within(dialog).getByText("Source job linked")).toBeInTheDocument();
-    expect(within(dialog).getByText("Match review accepted")).toBeInTheDocument();
-    expect(within(dialog).getByText("Unsupported claim")).toBeInTheDocument();
-    expect(within(dialog).getByText("User action required")).toBeInTheDocument();
-    expect(within(dialog).getByText("System checks")).toBeInTheDocument();
-    expect(
-      within(dialog).getAllByText("Detection pending", { selector: "span" })
-        .length,
-    ).toBeGreaterThan(0);
-    expect(
-      within(dialog).getByRole("button", { name: "Resolve next" }),
-    ).toBeInTheDocument();
-
-    const sourceJobRow = within(dialog)
-      .getByText("Source job linked")
-      .closest(".dasti-proposal-safe-send__row");
-    expect(sourceJobRow).toHaveAttribute("data-state", "clear");
-    expect(
-      within(dialog).queryByRole("button", { name: "Fix first blocker" }),
+      within(stage).queryByRole("button", { name: /share/i }),
     ).not.toBeInTheDocument();
   });
 
-  it("wires active job review and CV import recovery signals into Safe-send", async () => {
+  it("keeps active job context separate from the local stage toolbar", async () => {
     useQueryMock.mockImplementation((query: unknown, args: unknown) => {
       if (query === "jobsPublic.getById" && args && args !== "skip") {
         return {
@@ -297,29 +257,10 @@ describe("ProposalForge workbench layout", () => {
 
     renderProposalForge("/proposal?jobId=job_safe_send");
 
-    const stage = await screen.findByLabelText("Proposal document stage");
-    fireEvent.click(within(stage).getByRole("button", { name: /share/i }));
-    const menu = await screen.findByRole("menu", { name: "Share proposal" });
-    fireEvent.click(
-      within(menu).getByRole("menuitem", { name: "Safe-send checklist…" }),
-    );
-
-    const dialog = await screen.findByRole("dialog", {
-      name: "Safe-send checklist",
-    });
-    const matchReviewRow = within(dialog)
-      .getByText("Match review accepted")
-      .closest(".dasti-proposal-safe-send__row");
-    expect(matchReviewRow).toHaveAttribute("data-state", "clear");
     expect(
-      within(matchReviewRow as HTMLElement).getByText("Viewed"),
+      await screen.findByLabelText("Proposal document stage"),
     ).toBeInTheDocument();
-
-    const importIssueRow = within(dialog)
-      .getByText("Unresolved import issues")
-      .closest(".dasti-proposal-safe-send__row");
-    expect(importIssueRow).toHaveAttribute("data-state", "warn");
-    expect(within(importIssueRow as HTMLElement).getByText("Resolve")).toBeInTheDocument();
+    expect(screen.getByText("Game UI Artist")).toBeInTheDocument();
   });
 
   it("renders the skeleton rail with lightweight setup and no visible legacy compose controls", async () => {

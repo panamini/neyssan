@@ -440,9 +440,7 @@ describe("ProposalForge saved view", () => {
       .map((button) => button.getAttribute("aria-label"));
     expect(actionButtons).toEqual([
       "Duplicate to draft",
-      "Export proposal",
       "Delete proposal",
-      "Share proposal",
     ]);
     expect(toolbar).not.toHaveTextContent("Based on CV: Alex Martin Resume");
     expect(

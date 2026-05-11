@@ -11,14 +11,12 @@ import {
   FileUser,
   FolderTree,
   Paperclip,
-  ShareFat,
   TrashSimple,
   X,
 } from "@/lib/icons";
 import { BodyPortal } from "../components/ui/body-portal";
 import { Menu, type MenuSection } from "../components/ui/menu";
 import { LibraryFilterMenu } from "../components/LibraryFilterMenu";
-import ProposalExportActions from "../components/ProposalExportActions";
 import ProposalInputForm, {
   type ProposalGenerateControl,
 } from "../components/ProposalInputForm";
@@ -9653,11 +9651,45 @@ export function ProposalForge(): JSX.Element {
       title: proposalDocumentTitle.trim() || null,
       documentState: proposalTopbarDocumentState,
       lengthLabel: proposalTopbarLengthLabel,
+      hasProposalContent: isSavedView
+        ? Boolean(openedSavedProposal && savedProposalContent?.trim())
+        : Boolean(proposalContent?.trim()),
+      exporting: proposalExportingFormat !== null,
+      savedShareAvailable: Boolean(isSavedView && openedSavedProposal),
+      onCopyText: () => {
+        void handleCopyOutput();
+      },
+      onExportPdf: (mode: "ats" | "styled") => {
+        void handleExportProposalFile({
+          target: isSavedView ? "saved" : "compose",
+          format: "pdf",
+          mode,
+        });
+      },
+      onExportDocx: () => {
+        void handleExportProposalFile({
+          target: isSavedView ? "saved" : "compose",
+          format: "docx",
+        });
+      },
+      onShareSavedProposal: isSavedView
+        ? () => {
+            void handleShareSavedProposal();
+          }
+        : undefined,
     }),
     [
+      handleCopyOutput,
+      handleExportProposalFile,
+      handleShareSavedProposal,
+      isSavedView,
+      openedSavedProposal,
       proposalDocumentTitle,
+      proposalContent,
+      proposalExportingFormat,
       proposalTopbarDocumentState,
       proposalTopbarLengthLabel,
+      savedProposalContent,
     ],
   );
   useRegisterProposalForgeTopbar(proposalTopbarRegistration);
@@ -10364,26 +10396,6 @@ export function ProposalForge(): JSX.Element {
                   >
                     <ClipboardText size={16} strokeWidth={1.8} />
                   </button>
-                  <ProposalExportActions
-                    disabled={
-                      !openedSavedProposal ||
-                      !savedProposalContent ||
-                      proposalExportingFormat !== null
-                    }
-                    onExportPdf={(mode) => {
-                      void handleExportProposalFile({
-                        target: "saved",
-                        format: "pdf",
-                        mode,
-                      });
-                    }}
-                    onExportDocx={() => {
-                      void handleExportProposalFile({
-                        target: "saved",
-                        format: "docx",
-                      });
-                    }}
-                  />
                   <button
                     type="button"
                     className="dasti-icon-button"
@@ -10399,18 +10411,6 @@ export function ProposalForge(): JSX.Element {
                       strokeWidth={1.8}
                       aria-hidden="true"
                     />
-                  </button>
-                  <button
-                    type="button"
-                    className="dasti-icon-button"
-                    data-toolbar-tooltip="Share proposal"
-                    onClick={() => {
-                      void handleShareSavedProposal();
-                    }}
-                    disabled={!openedSavedProposal || !savedProposalContent}
-                    aria-label="Share proposal"
-                  >
-                    <ShareFat size={16} strokeWidth={1.8} aria-hidden="true" />
                   </button>
                 </div>
               }
@@ -10681,7 +10681,6 @@ export function ProposalForge(): JSX.Element {
                         toneLabel={proposalRailToneLabel}
                         toneValue={proposalRailToneValue}
                         mode={proposalOutputMode}
-                        exporting={proposalExportingFormat !== null}
                         hasProposalContent={hasMeaningfulProposalContent}
                         styleControl={null}
                         headingOpen={proposalHeadingOpen}
@@ -10714,22 +10713,6 @@ export function ProposalForge(): JSX.Element {
                             proposalOutputMode === "preview",
                         )}
                         onModeChange={handleProposalOutputModeChange}
-                        onCopyText={() => {
-                          void handleCopyOutput();
-                        }}
-                        onExportPdf={(mode) => {
-                          void handleExportProposalFile({
-                            target: "compose",
-                            format: "pdf",
-                            mode,
-                          });
-                        }}
-                        onExportDocx={() => {
-                          void handleExportProposalFile({
-                            target: "compose",
-                            format: "docx",
-                          });
-                        }}
                       >
                         {shouldShowTemplateJobContextEmptyState ? (
                           <section
