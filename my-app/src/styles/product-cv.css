@@ -320,6 +320,14 @@
     blur(var(--frost-blur, 14px));
 }
 
+.dasti-cv-stage-bar > .ds-tone {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .dasti-cv-stage-bar__status {
   flex: 0 1 auto;
   width: fit-content;
@@ -500,6 +508,7 @@
   background: var(--sf1);
   color: var(--tm2);
   font-size: var(--tx);
+  line-height: 1;
   font-weight: 650;
   white-space: nowrap;
   overflow: hidden;
@@ -533,7 +542,7 @@ span.dasti-cv-ats {
   min-height: 16px;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, currentColor 10%, transparent);
-  font-size: 9px;
+  font-size: var(--text-meta-size);
   font-weight: 800;
   letter-spacing: 0.02em;
 }
@@ -1830,6 +1839,36 @@ span.dasti-cv-ats {
 
   .dasti-cv-stage-bar__primary-action[data-stage-tooltip-mode="compact"]::after {
     display: block;
+  }
+}
+
+@media (max-width: 980px) {
+  .dasti-cv-skeleton-forge {
+    gap: var(--space-3);
+    padding-inline: var(--space-3);
+  }
+
+  .dasti-cv-stage-bar {
+    gap: var(--space-1);
+  }
+
+  .dasti-cv-stage-bar > .ds-tone {
+    max-width: 96px;
+    padding-inline: var(--space-2);
+  }
+}
+
+@media (max-width: 760px) {
+  .dasti-cv-skeleton-forge {
+    padding-inline: var(--space-2);
+  }
+
+  .dasti-cv-stage-bar {
+    padding: calc(var(--space-1) + 1px);
+  }
+
+  .dasti-cv-stage-bar > .ds-tone {
+    max-width: 84px;
   }
 }
 

@@ -101,6 +101,23 @@ describe("sidebar visual CSS contracts", () => {
     );
   });
 
+  it("defines a reusable responsive forge document identity contract", () => {
+    expect(productCss).toContain(".app-topbar__doc-identity");
+    expect(productCss).toContain(".app-topbar__doc-state");
+    expect(productCss).toContain(".app-topbar__doc-title");
+    expect(productCss).toContain(".app-topbar__doc-title-main");
+    expect(productCss).toContain(".app-topbar__doc-title-suffix");
+    expect(productCss).toContain(".app-topbar__doc-meta");
+    expect(productCss).toContain(".app-topbar__doc-health");
+    expect(productCss).toContain(".app-topbar__actions");
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*1023px\)\s*\{[\s\S]*\.app-topbar__doc-title-suffix\s*\{[\s\S]*display:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.app-topbar__doc-title,[\s\S]*\.app-topbar__doc-meta\s*\{[\s\S]*display:\s*none;/,
+    );
+  });
+
   it("wraps the collapsed sidebar logo in a rounded surface shell", () => {
     expect(productCss).toMatch(
       /\.sb-toggle__collapsed-logo-shell\s*\{[\s\S]*width:\s*36px;[\s\S]*height:\s*36px;[\s\S]*border-radius:\s*var\(--radius-card\);[\s\S]*background:\s*color-mix\(in srgb,\s*var\(--color-surface\)\s*86%,\s*transparent\);/,

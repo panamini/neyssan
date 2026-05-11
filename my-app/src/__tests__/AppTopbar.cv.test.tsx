@@ -91,7 +91,7 @@ describe("AppTopbar CV controls", () => {
   it("renders CV status and share controls in the global topbar", async () => {
     const user = userEvent.setup();
 
-    render(
+    const { container } = render(
       <MemoryRouter initialEntries={["/cv?id=cv_1"]}>
         <CvForgeTopbarProvider>
           <RegisterCvTopbar />
@@ -104,10 +104,22 @@ describe("AppTopbar CV controls", () => {
     );
 
     expect(screen.queryByText("Working on:")).not.toBeInTheDocument();
-    expect(screen.getByText("Jessica Claire profile source")).toBeInTheDocument();
+    expect(screen.getByTitle("Jessica Claire profile source")).toHaveClass(
+      "app-topbar__doc-identity",
+    );
+    expect(
+      container.querySelector(".app-topbar__doc-title-main"),
+    ).toHaveTextContent("Jessica Claire");
+    expect(
+      container.querySelector(".app-topbar__doc-title-suffix"),
+    ).toHaveTextContent("profile source");
+    expect(container.querySelector(".app-topbar__actions")).toBeTruthy();
     expect(screen.queryByText("Ready")).not.toBeInTheDocument();
     expect(screen.queryByText("Saved")).not.toBeInTheDocument();
     expect(screen.queryByText("ATS-ready")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ATS audit looks good" })).toHaveClass(
+      "app-topbar__doc-health",
+    );
     expect(screen.getByRole("button", { name: "ATS audit looks good" })).toHaveTextContent("ATS");
     expect(screen.getByLabelText("Saved")).toBeInTheDocument();
     expect(screen.queryByText("1 page")).not.toBeInTheDocument();
@@ -165,6 +177,9 @@ describe("AppTopbar CV controls", () => {
     expect(screen.queryByText("ATS review")).not.toBeInTheDocument();
     expect(screen.queryByText("Export ready")).not.toBeInTheDocument();
     expect(screen.queryByText("Export review")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ATS audit looks good" })).toHaveClass(
+      "app-topbar__doc-health",
+    );
     expect(screen.getByRole("button", { name: "ATS audit looks good" })).toHaveTextContent("ATS");
     expect(screen.getByText("2 pages")).toBeInTheDocument();
   });
