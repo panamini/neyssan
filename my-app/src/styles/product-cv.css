@@ -4838,17 +4838,18 @@ span.dasti-cv-ats {
 }
 
 .dasti-cv-import-recovery-sheet {
-  width: min(920px, 100%);
+  width: min(420px, 100%);
 }
 
 .dasti-cv-import-recovery-sheet__body {
-  padding: 0;
+  padding: var(--s5);
 }
 
 .dasti-cv-import-recovery-sheet__body .dasti-import-recovery {
   min-height: 100%;
   border: 0;
   border-radius: 0;
+  padding: 0;
   box-shadow: none;
 }
 
@@ -5025,6 +5026,12 @@ span.dasti-cv-ats {
 }
 .dasti-import-recovery__drawer-controls .dasti-select {
   flex: 1 1 220px;
+}
+.dasti-import-recovery__drawer-controls .dasti-select,
+.dasti-import-recovery__remaining-controls .dasti-select {
+  height: var(--control-md);
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
 }
 .dasti-import-recovery__drawer-open {
   display: inline-flex;
