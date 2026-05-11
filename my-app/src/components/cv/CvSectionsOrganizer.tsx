@@ -378,11 +378,11 @@ export function CvSectionsOrganizer({
   function handleDragEnd(event: DragEndEvent) {
     const activeId = String(event.active.id);
     const overId = event.over?.id ? String(event.over.id) : null;
-    setActiveDragSectionId(null);
-    setOverDragSectionId(null);
     if (overId && activeId !== overId) {
       onReorderSections(activeId, overId);
     }
+    setActiveDragSectionId(null);
+    setOverDragSectionId(null);
   }
 
   function handleDragCancel() {
@@ -522,12 +522,8 @@ export function CvSectionsOrganizer({
               })}
             </div>
           </SortableContext>
-          <DragOverlay
-            dropAnimation={{
-              duration: 320,
-              easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-            }}
-          >
+          {/* TODO: Future polish: custom FLIP/drop-settle animation after reorder, without live reflow during drag. */}
+          <DragOverlay dropAnimation={null}>
             {activeDragSection ? (
               <CvSectionDragOverlayRow
                 label={formatSectionDisplayTitle(activeDragSection, {

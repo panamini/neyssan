@@ -7,15 +7,36 @@ import CvSectionsOrganizer from "../CvSectionsOrganizer";
 import type { CvSection } from "../../../types/cvDocument";
 
 const sortableContextMock = vi.hoisted(() => vi.fn());
+const dragOverlayMock = vi.hoisted(() => vi.fn());
+const useSortableMock = vi.hoisted(() =>
+  vi.fn((options: { id: string }) => ({
+    attributes: { "data-dnd-attribute": "true" },
+    listeners: { "data-dnd-listener": "true" },
+    setNodeRef: vi.fn(),
+    transform:
+      options.id === "experience"
+        ? { x: 0, y: 14, scaleX: 1, scaleY: 1 }
+        : null,
+    transition:
+      options.id === "experience"
+        ? "transform 320ms cubic-bezier(0.22, 1, 0.36, 1)"
+        : undefined,
+    isDragging: false,
+  })),
+);
 
 vi.mock("@dnd-kit/core", async () => {
   const ReactModule = await import("react");
   return {
     DndContext: ({
       children,
+      onDragStart,
+      onDragOver,
       onDragEnd,
     }: {
       children: ReactModule.ReactNode;
+      onDragStart: (event: { active: { id: string } }) => void;
+      onDragOver: (event: { over: { id: string } | null }) => void;
       onDragEnd: (event: {
         active: { id: string };
         over: { id: string } | null;
@@ -32,12 +53,27 @@ vi.mock("@dnd-kit/core", async () => {
             })
           }
         />
+        <button
+          type="button"
+          aria-label="Simulate active drag"
+          onClick={() => {
+            onDragStart({ active: { id: "summary" } });
+            onDragOver({ over: { id: "experience" } });
+          }}
+        />
         {children}
       </div>
     ),
-    DragOverlay: ({ children }: { children: ReactModule.ReactNode }) => (
-      <>{children}</>
-    ),
+    DragOverlay: ({
+      children,
+      dropAnimation,
+    }: {
+      children: ReactModule.ReactNode;
+      dropAnimation?: unknown;
+    }) => {
+      dragOverlayMock({ dropAnimation });
+      return <>{children}</>;
+    },
     KeyboardSensor: vi.fn(),
     PointerSensor: vi.fn(),
     closestCenter: vi.fn(),
@@ -58,21 +94,15 @@ vi.mock("@dnd-kit/sortable", () => ({
     return <>{children}</>;
   },
   sortableKeyboardCoordinates: vi.fn(),
-  useSortable: () => ({
-    attributes: { "data-dnd-attribute": "true" },
-    listeners: { "data-dnd-listener": "true" },
-    setNodeRef: vi.fn(),
-    transform: null,
-    transition: undefined,
-    isDragging: false,
-  }),
+  useSortable: useSortableMock,
   verticalListSortingStrategy: {},
 }));
 
 vi.mock("@dnd-kit/utilities", () => ({
   CSS: {
     Transform: {
-      toString: () => undefined,
+      toString: (transform: { x: number; y: number } | null) =>
+        transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     },
   },
 }));
@@ -120,6 +150,8 @@ function renderOrganizer(overrides: Partial<React.ComponentProps<typeof CvSectio
 describe("CvSectionsOrganizer", () => {
   beforeEach(() => {
     sortableContextMock.mockClear();
+    dragOverlayMock.mockClear();
+    useSortableMock.mockClear();
   });
 
   it("renders section rows with active and hidden state", () => {
@@ -160,6 +192,33 @@ describe("CvSectionsOrganizer", () => {
       "experience",
       "skills",
     ]);
+  });
+
+  it("disables DragOverlay drop animation so release does not return to source", () => {
+    renderOrganizer();
+
+    expect(dragOverlayMock).toHaveBeenLastCalledWith({ dropAnimation: null });
+  });
+
+  it("suppresses sortable row transforms during active drag to avoid live reflow", async () => {
+    const user = userEvent.setup();
+    renderOrganizer();
+
+    const experienceRow = screen
+      .getByRole("button", { name: "Experience 2 items" })
+      .closest(".dasti-cv-org-row");
+
+    expect(experienceRow).toHaveStyle({
+      transform: "translate3d(0px, 14px, 0)",
+    });
+
+    await user.click(screen.getByRole("button", { name: "Simulate active drag" }));
+
+    expect(experienceRow).not.toHaveAttribute(
+      "style",
+      expect.stringContaining("translate3d(0px, 14px, 0)"),
+    );
+    expect(experienceRow).toHaveAttribute("data-drop-indicator", "after");
   });
 
   it("fires move, toggle, delete, add, ask, and reorder callbacks", async () => {
