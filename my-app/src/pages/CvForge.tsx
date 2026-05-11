@@ -103,6 +103,7 @@ import CvRail, {
   type CvRailTab,
   type CvToneChoice,
 } from "../components/cv/CvRail";
+import CvSectionsDrawer from "../components/cv/CvSectionsDrawer";
 import ImportReviewSheet, {
   type CvImportReviewBlock,
 } from "../components/cv/ImportReviewSheet";
@@ -2786,7 +2787,8 @@ export function CvForge(): JSX.Element {
   const [resumeActiveTarget, setResumeActiveTarget] =
     React.useState<ResumeActiveTarget | null>(null);
   const [hiddenSectionIds, setHiddenSectionIds] = React.useState<string[]>([]);
-  const [cvRailTab, setCvRailTab] = React.useState<CvRailTab>("sections");
+  const [sectionsPanelOpen, setSectionsPanelOpen] = React.useState(false);
+  const [cvRailTab, setCvRailTab] = React.useState<CvRailTab>("ai");
   const cvTone = mapDefaultVoicePresetToCvTone(
     defaultProposalSettings?.savedVoicePreset ??
       defaultProposalSettings?.voicePreset,
@@ -5101,8 +5103,20 @@ export function CvForge(): JSX.Element {
   const cvTemplatesOpen =
     templatePanelOpen && activeTemplateSurface === "cv";
   const handleOpenCvTemplates = React.useCallback(() => {
+    setSectionsPanelOpen(false);
     openTemplateSurface("cv");
   }, [openTemplateSurface]);
+
+  const handleOpenCvSections = React.useCallback(() => {
+    closeForgePanel();
+    setSectionsPanelOpen(true);
+  }, [closeForgePanel]);
+
+  React.useEffect(() => {
+    if (templatePanelOpen) {
+      setSectionsPanelOpen(false);
+    }
+  }, [templatePanelOpen]);
 
   const handleSelectFontPair = React.useCallback(
     (fontPairId: VerbatiFontPairId) => {
@@ -6239,6 +6253,22 @@ export function CvForge(): JSX.Element {
             )}
           </div>
         ) : null}
+        <CvSectionsDrawer
+          open={sectionsPanelOpen}
+          onClose={() => setSectionsPanelOpen(false)}
+          sections={currentSections}
+          hiddenSectionIds={hiddenSectionIds}
+          activeSectionId={activeSectionId}
+          selectedTone={cvTone}
+          onSelectSection={handleSelectSection}
+          onToggleHiddenSection={handleToggleHiddenSection}
+          onDeleteSection={handleDeleteSection}
+          onReorderSections={handleReorderSections}
+          onMoveSection={handleMoveSection}
+          onAskAiForSection={handleAskAiForSection}
+          onRunAskAiForSection={handleRunAskAiForSection}
+          onAddSection={handleAddSection}
+        />
         <>
           <div
             className="dasti-cv-skeleton-forge"
@@ -6260,7 +6290,9 @@ export function CvForge(): JSX.Element {
                 tone={cvTone}
                 resumeOptions={resumeOptions}
                 templatesOpen={cvTemplatesOpen}
+                sectionsOpen={sectionsPanelOpen}
                 onModeChange={setWorkspaceMode}
+                onOpenSections={handleOpenCvSections}
                 onOpenTemplates={handleOpenCvTemplates}
                 onOpenImportReview={() => setImportReviewOpen(true)}
                 onPickResume={handlePickResume}
@@ -6391,43 +6423,36 @@ export function CvForge(): JSX.Element {
               )}
             </div>
             {shouldAutoCollapseCvRailForDockedDrawer ? null : (
-            <CvRail
-              sections={currentSections}
-              hiddenSectionIds={hiddenSectionIds}
-              activeSectionId={activeSectionId}
-              activeTab={cvRailTab}
-              stylePreset={stylePreset}
-              selectedTone={cvTone}
-              aiSuggestion={cvRailAiSuggestion}
-              appliedAiEdit={cvRailAppliedAiEdit}
-              isImporting={isImportingEntryCv}
-              onActiveTabChange={setCvRailTab}
-              onSelectSection={handleSelectSection}
-              onToggleHiddenSection={handleToggleHiddenSection}
-              onDeleteSection={handleDeleteSection}
-              onReorderSections={handleReorderSections}
-              onMoveSection={handleMoveSection}
-              onAskAiForSection={handleAskAiForSection}
-              onRunAskAiForSection={handleRunAskAiForSection}
-              onAcceptAiSuggestion={handleAcceptAiSuggestion}
-              onDiscardAiSuggestion={handleDiscardAiSuggestion}
-              onUndoAiSuggestion={handleUndoAiSuggestion}
-              onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
-              onDismissListAiSuggestion={handleDismissListAiSuggestion}
-              onAddSection={handleAddSection}
-              selectedStyleSlot={selectedStyleSlot}
-              selectedStyleSlotIsCustom={selectedStyleSlotIsCustom}
-              onSelectStyleSlot={handleSelectStyleSlot}
-              onResetStyleSlot={handleResetStyleSlot}
-              onSelectTemplate={handleSelectTemplate}
-              onSelectFontPair={handleSelectFontPair}
-              onSelectAccent={handleSelectAccent}
-              onSelectCustomAccent={handleSelectCustomAccent}
-              onNewCv={() => {
-                void handleStartFreshEntryCv();
-              }}
-              onImportPdf={handleImportEntryCv}
-            />
+              <CvRail
+                sections={currentSections}
+                activeSectionId={activeSectionId}
+                activeTab={cvRailTab}
+                stylePreset={stylePreset}
+                selectedTone={cvTone}
+                aiSuggestion={cvRailAiSuggestion}
+                appliedAiEdit={cvRailAppliedAiEdit}
+                isImporting={isImportingEntryCv}
+                onActiveTabChange={setCvRailTab}
+                onSelectSection={handleSelectSection}
+                onRunAskAiForSection={handleRunAskAiForSection}
+                onAcceptAiSuggestion={handleAcceptAiSuggestion}
+                onDiscardAiSuggestion={handleDiscardAiSuggestion}
+                onUndoAiSuggestion={handleUndoAiSuggestion}
+                onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
+                onDismissListAiSuggestion={handleDismissListAiSuggestion}
+                selectedStyleSlot={selectedStyleSlot}
+                selectedStyleSlotIsCustom={selectedStyleSlotIsCustom}
+                onSelectStyleSlot={handleSelectStyleSlot}
+                onResetStyleSlot={handleResetStyleSlot}
+                onSelectTemplate={handleSelectTemplate}
+                onSelectFontPair={handleSelectFontPair}
+                onSelectAccent={handleSelectAccent}
+                onSelectCustomAccent={handleSelectCustomAccent}
+                onNewCv={() => {
+                  void handleStartFreshEntryCv();
+                }}
+                onImportPdf={handleImportEntryCv}
+              />
             )}
           </div>
           <SectionEditorSheet

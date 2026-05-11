@@ -2,6 +2,7 @@ import React from "react";
 import {
   ClipboardText,
   Eye,
+  FileUser,
   FilePdf,
   FolderOpen,
   FolderSimple,
@@ -38,7 +39,9 @@ type CvStageBarProps = {
   tone: CvToneChoice;
   resumeOptions: CvStageBarResumeOption[];
   templatesOpen?: boolean;
+  sectionsOpen?: boolean;
   onModeChange: (mode: "edit" | "preview") => void;
+  onOpenSections?: () => void;
   onOpenTemplates?: () => void;
   onOpenImportReview: () => void;
   onPickResume: (cvId: string) => void;
@@ -55,7 +58,9 @@ export function CvStageBar({
   tone,
   resumeOptions,
   templatesOpen = false,
+  sectionsOpen = false,
   onModeChange,
+  onOpenSections,
   onOpenTemplates,
   onOpenImportReview,
   onPickResume,
@@ -231,6 +236,18 @@ export function CvStageBar({
         <Button type="button" size="sm" variant="ghost" disabled>
           Version history
         </Button>
+        {onOpenSections ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            iconLeft={<FileUser size={14} strokeWidth={1.8} />}
+            aria-expanded={sectionsOpen}
+            onClick={onOpenSections}
+          >
+            Sections
+          </Button>
+        ) : null}
         {onOpenTemplates ? (
           <Button
             type="button"

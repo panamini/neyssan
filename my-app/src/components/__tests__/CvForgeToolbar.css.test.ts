@@ -21,6 +21,14 @@ const cvRailSource = readFileSync(
   resolve(process.cwd(), "src/components/cv/CvRail.tsx"),
   "utf8",
 );
+const cvSectionsOrganizerSource = readFileSync(
+  resolve(process.cwd(), "src/components/cv/CvSectionsOrganizer.tsx"),
+  "utf8",
+);
+const cvSectionsDrawerSource = readFileSync(
+  resolve(process.cwd(), "src/components/cv/CvSectionsDrawer.tsx"),
+  "utf8",
+);
 
 describe("CvForge toolbar CSS contracts", () => {
   it("uses the shared proposal rail shell for the anchored CV edit toolbar", () => {
@@ -60,8 +68,10 @@ describe("CvForge toolbar CSS contracts", () => {
   });
 
   it("keeps the CV organize helper copy short enough for one rail line", () => {
-    expect(cvRailSource).toContain("Open a section row to edit its items.");
-    expect(cvRailSource).not.toContain(
+    expect(cvSectionsOrganizerSource).toContain("Open a section row to edit its items.");
+    expect(cvSectionsOrganizerSource).toContain("dasti-cv-sections-organizer");
+    expect(cvSectionsOrganizerSource).not.toContain('data-rail-pane="sections"');
+    expect(cvSectionsOrganizerSource).not.toContain(
       "Each section opens its own editor.",
     );
   });
@@ -153,8 +163,12 @@ describe("CvForge toolbar CSS contracts", () => {
       /@media\s*\(max-width:\s*1419px\)\s*\{[\s\S]*\.dasti-cv-rail\s*\{[\s\S]*max-height:\s*none;[\s\S]*position:\s*static;[\s\S]*padding:\s*var\(--space-5\);[\s\S]*border:\s*1px\s+solid\s+var\(--border-soft\);[\s\S]*border-radius:\s*var\(--r-surface,\s*var\(--radius-card\)\);[\s\S]*background:\s*var\(--sfr\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-cv-rail-tabs\s*\{[\s\S]*padding:\s*var\(--space-1\);[\s\S]*\.dasti-cv-rail-tabs button\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*min-block-size:\s*var\(--control-sm\);/,
+      /\.dasti-cv-rail-tabs\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*padding:\s*var\(--space-1\);[\s\S]*\.dasti-cv-rail-tabs button\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*min-block-size:\s*var\(--control-sm\);/,
     );
+    expect(cvSectionsDrawerSource).toContain("forge-template-panel");
+    expect(cvForgeSource).not.toContain("data-cv-sections-panel-docked");
+    expect(productCss).not.toContain("dasti-cv-sections-drawer-backdrop");
+    expect(productCss).not.toContain("data-cv-sections-panel-docked");
     expect(productCss).toMatch(
       /\.dasti-cv-rail-tabs button\[data-active="true"\]\s*\{[\s\S]*background:\s*var\(--color-surface-raised\);/,
     );
