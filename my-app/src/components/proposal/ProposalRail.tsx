@@ -818,8 +818,9 @@ export function ProposalRail({
               <Menu
                 ariaLabel={sourceCvTitle ? "Source CV" : "Pick a CV"}
                 align="start"
-                side="bottom"
-                matchTriggerWidth
+                side="left"
+                mobileMode="sheet"
+                menuClassName="dasti-proposal-skeleton-rail__cv-action-menu"
                 sections={cvMenuSections}
                 trigger={
                   <button

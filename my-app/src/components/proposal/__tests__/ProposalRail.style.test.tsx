@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProposalRail } from "../ProposalRail";
 import {
@@ -118,6 +118,67 @@ describe("ProposalRail style tab", () => {
     expect(onNewProposal).toHaveBeenCalledTimes(1);
     expect(onSaveToLibrary).toHaveBeenCalledTimes(1);
     expect(onDeleteProposal).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens attached CV actions through the shared sidecar menu contract", async () => {
+    render(
+      <ProposalRail
+        {...baseProps}
+        sourceCvTitle="Porphyre profile"
+        sourceCvMeta="Updated today"
+      />,
+    );
+
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 1180,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: 780,
+    });
+    const trigger = screen.getByRole("button", { name: /Porphyre profile/i });
+    vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue({
+      x: 840,
+      y: 180,
+      top: 180,
+      left: 840,
+      right: 1120,
+      bottom: 224,
+      width: 280,
+      height: 44,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    fireEvent.click(trigger);
+
+    const menu = await screen.findByRole("menu", { name: "Source CV" });
+    vi.spyOn(menu, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 320,
+      bottom: 240,
+      width: 320,
+      height: 240,
+      toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent(window, new Event("resize"));
+
+    expect(menu).toHaveClass("dasti-proposal-skeleton-rail__cv-action-menu");
+    await waitFor(() => expect(menu).toHaveAttribute("data-side", "left"));
+    expect(
+      within(menu).getByRole("menuitem", { name: "Create new CV" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Import PDF" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Remove attached CV" }),
+    ).toBeInTheDocument();
   });
 
   it("disables save and delete proposal actions when the draft has no content", () => {

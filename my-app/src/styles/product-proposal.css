@@ -8043,6 +8043,16 @@
   box-shadow: var(--focus-shadow-soft);
 }
 
+.dasti-proposal-skeleton-rail__cv-action-menu {
+  inline-size: min(340px, calc(100vw - (var(--space-3) * 2)));
+  min-inline-size: min(300px, calc(100vw - (var(--space-3) * 2)));
+}
+
+.dasti-proposal-skeleton-rail__cv-action-menu[data-side="sheet"] {
+  inline-size: auto;
+  min-inline-size: 0;
+}
+
 .dasti-proposal-skeleton-rail__summary-row,
 .dasti-proposal-skeleton-rail__drawer-toggle {
   width: 100%;
