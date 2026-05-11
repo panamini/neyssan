@@ -3032,6 +3032,8 @@ export function CvForge(): JSX.Element {
   const isImportReviewBannerDismissed = currentCv?.id
     ? dismissedImportReviewCvIds.includes(String(currentCv.id))
     : false;
+  const isImportReviewBannerVisible =
+    importReviewBlocks.length > 0 && !isImportReviewBannerDismissed;
   const [exportingFormat, setExportingFormat] = React.useState<string | null>(
     null,
   );
@@ -3188,9 +3190,11 @@ export function CvForge(): JSX.Element {
     const nextCvId = currentCv?.id ? String(currentCv.id) : null;
     if (!nextCvId) {
       setHiddenSectionIds([]);
+      setCvPreviewPageCount(null);
       return;
     }
 
+    setCvPreviewPageCount(null);
     setHiddenSectionIds(
       sanitizeHiddenSectionIds(
         currentCv?.sections ?? [],
@@ -3459,8 +3463,9 @@ export function CvForge(): JSX.Element {
       hasCurrentCv: Boolean(currentCv),
       hasTrustedExport,
       importIssueCount: importReviewBlocks.length,
+      importReviewBannerVisible: isImportReviewBannerVisible,
       exporting: exportingFormat !== null,
-      pageCount: cvPreviewPageCount,
+      pageCount: currentCv ? cvPreviewPageCount : null,
       onOpenImportReview: handleOpenImportReview,
       onExportPdf: handleExportStyledPdf,
       onExportDocx: handleExportDocx,
@@ -3474,6 +3479,7 @@ export function CvForge(): JSX.Element {
       handleOpenImportReview,
       hasTrustedExport,
       importReviewBlocks.length,
+      isImportReviewBannerVisible,
       workspaceMode,
     ],
   );
@@ -6353,7 +6359,7 @@ export function CvForge(): JSX.Element {
                 onOpenTemplates={handleOpenCvTemplates}
                 onPickResume={handlePickResume}
               />
-              {!isImportReviewBannerDismissed ? (
+              {isImportReviewBannerVisible ? (
                 <CvReviewBanner
                   issueCount={importReviewBlocks.length}
                   summary={importReviewSummary}

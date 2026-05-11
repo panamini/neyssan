@@ -101,7 +101,13 @@ export function CvStageBar({
           <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
         </button>
       </div>
-      <Button type="button" size="sm" variant="ghost" disabled>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="dasti-cv-stage-bar__version-history"
+        disabled
+      >
         Version history
       </Button>
       {onOpenSections ? (
@@ -109,11 +115,15 @@ export function CvStageBar({
           type="button"
           size="sm"
           variant="secondary"
+          className="dasti-cv-stage-bar__primary-action"
           iconLeft={<ListNumbers size={14} strokeWidth={1.8} />}
           aria-expanded={sectionsOpen}
+          aria-label="Sections"
+          data-toolbar-tooltip="Sections"
+          data-stage-tooltip-mode="compact"
           onClick={onOpenSections}
         >
-          Sections
+          <span className="dasti-cv-stage-bar__action-label">Sections</span>
         </Button>
       ) : null}
       {onOpenTemplates ? (
@@ -121,11 +131,15 @@ export function CvStageBar({
           type="button"
           size="sm"
           variant="secondary"
+          className="dasti-cv-stage-bar__primary-action"
           iconLeft={<ImagesSquare size={14} strokeWidth={1.8} />}
           aria-expanded={templatesOpen}
+          aria-label="Templates"
+          data-toolbar-tooltip="Templates"
+          data-stage-tooltip-mode="compact"
           onClick={onOpenTemplates}
         >
-          Templates
+          <span className="dasti-cv-stage-bar__action-label">Templates</span>
         </Button>
       ) : null}
       <Menu

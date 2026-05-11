@@ -5,6 +5,7 @@ export type CvForgeTopbarRegistration = {
   hasCurrentCv: boolean;
   hasTrustedExport: boolean;
   importIssueCount: number;
+  importReviewBannerVisible: boolean;
   exporting: boolean;
   pageCount: number | null;
   onOpenImportReview: () => void;
