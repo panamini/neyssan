@@ -1747,8 +1747,12 @@ describe("ResumeOneColAtsPage", () => {
     expect(
       screen.getByText("Bachelor of Science, Computer Science"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("Northbridge University · Grade: 3.9 GPA · 2016 — 2020"),
-    ).toBeInTheDocument();
+    const schoolLine = screen.getByText(
+      "Northbridge University · Grade: 3.9 GPA · 2016 — 2020",
+    );
+    expect(schoolLine).toBeInTheDocument();
+    expect(schoolLine.closest("p")?.getAttribute("style")).toContain(
+      "font-size: var(--text-body-sm-size);",
+    );
   });
 });
