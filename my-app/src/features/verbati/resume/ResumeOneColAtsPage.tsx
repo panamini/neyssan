@@ -1825,8 +1825,8 @@ function renderFragmentContent(args: {
             <p
               style={{
                 margin: 0,
-                fontSize: "var(--text-meta-size)",
-                lineHeight: "var(--text-meta-line)",
+                fontSize: "var(--text-body-sm-size)",
+                lineHeight: "var(--text-body-sm-line)",
                 color: "var(--color-text-muted)",
               }}
             >
