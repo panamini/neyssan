@@ -2959,6 +2959,24 @@ body,
   overflow: visible;
 }
 
+.app-topbar__cv-ats[data-state="success"] {
+  border-color: color-mix(in srgb, var(--ok) 24%, transparent);
+  background: var(--okb);
+  color: var(--okt);
+}
+
+.app-topbar__cv-ats[data-state="warn"] {
+  border-color: color-mix(in srgb, var(--wa) 30%, transparent);
+  background: var(--wab);
+  color: var(--wat);
+}
+
+.app-topbar__cv-ats[data-state="danger"] {
+  border-color: color-mix(in srgb, var(--er) 30%, transparent);
+  background: var(--erb);
+  color: var(--ert);
+}
+
 .app-topbar__cv-ats[data-toolbar-tooltip] {
   --dasti-toolbar-tooltip-inset-block-start: calc(100% + var(--space-1));
   --dasti-toolbar-tooltip-inset-block-end: auto;
@@ -2974,7 +2992,7 @@ button.app-topbar__cv-ats {
 
 button.app-topbar__cv-ats:hover,
 button.app-topbar__cv-ats:focus-visible {
-  border-color: color-mix(in srgb, var(--wa) 38%, transparent);
+  border-color: color-mix(in srgb, currentColor 38%, transparent);
   outline: none;
   box-shadow: var(--focus-shadow-soft);
 }

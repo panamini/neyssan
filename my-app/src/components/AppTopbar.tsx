@@ -258,8 +258,27 @@ export function AppTopbar({
     cvTopbarRegistration.pageCount >= 2
       ? `${cvTopbarRegistration.pageCount} pages`
       : null;
+  const cvAtsAudit = cvTopbarRegistration?.atsAudit ?? null;
+  const cvAtsBadge =
+    cvAtsAudit === null
+      ? null
+      : cvAtsAudit.verdict === "blocked"
+        ? {
+            state: "danger" as const,
+            tooltip: "ATS blocked",
+          }
+        : cvAtsAudit.verdict === "needs_review"
+          ? {
+              state: "warn" as const,
+              tooltip: "ATS issues found",
+            }
+          : {
+              state: "success" as const,
+              tooltip: "ATS audit looks good",
+            };
   const shouldShowImportReviewChip = Boolean(
     cvTopbarRegistration &&
+      cvAtsBadge === null &&
       cvTopbarRegistration.importIssueCount > 0 &&
       !cvTopbarRegistration.importReviewBannerVisible,
   );
@@ -345,6 +364,22 @@ export function AppTopbar({
                 Review
               </span>
               <span className="dasti-cv-ats__label">Review needed</span>
+            </button>
+          ) : null}
+          {cvAtsBadge ? (
+            <button
+              type="button"
+              className="dasti-cv-ats app-topbar__cv-ats"
+              data-state={cvAtsBadge.state}
+              data-actionable="true"
+              aria-label={cvAtsBadge.tooltip}
+              data-toolbar-tooltip={cvAtsBadge.tooltip}
+              onClick={cvTopbarRegistration.onOpenAtsAudit}
+            >
+              <span className="dasti-cv-ats__mark" aria-hidden="true">
+                ATS
+              </span>
+              <span className="dasti-cv-ats__label">ATS</span>
             </button>
           ) : null}
           <CvShareMenu
