@@ -282,6 +282,9 @@ export function AppTopbar({
       cvTopbarRegistration.importIssueCount > 0 &&
       !cvTopbarRegistration.importReviewBannerVisible,
   );
+  const cvDocumentTitleMain = topbarDocumentTitle?.trim() || "Active CV";
+  const cvDocumentTitleSuffix = "profile source";
+  const cvDocumentIdentityLabel = `${cvDocumentTitleMain} ${cvDocumentTitleSuffix}`;
   return (
     <header className="app-topbar">
       <div className="app-topbar__identity">
@@ -293,9 +296,13 @@ export function AppTopbar({
           </div>
         )}
         {forgeContext && location.pathname === "/cv" ? (
-          <div className="app-topbar__document">
+          <div
+            className="app-topbar__doc-identity"
+            aria-label={cvDocumentIdentityLabel}
+            title={cvDocumentIdentityLabel}
+          >
             <span
-              className="app-topbar__document-icon"
+              className="app-topbar__doc-state"
               data-state={
                 cvTopbarRegistration?.exporting
                   ? "exporting"
@@ -307,7 +314,7 @@ export function AppTopbar({
               title={cvDocumentStateLabel}
             >
               <span
-                className="app-topbar__document-dot"
+                className="app-topbar__doc-dot"
                 data-pulsing={
                   cvTopbarRegistration?.exporting ? "true" : undefined
                 }
@@ -315,9 +322,17 @@ export function AppTopbar({
               />
               <FileText size={15} strokeWidth={1.8} aria-hidden="true" />
             </span>
-            <strong>{forgeContext.label}</strong>
+            <span className="app-topbar__doc-title" aria-hidden="true">
+              <span className="app-topbar__doc-title-main">
+                {cvDocumentTitleMain}
+              </span>
+              <span className="app-topbar__doc-title-suffix">
+                {" "}
+                {cvDocumentTitleSuffix}
+              </span>
+            </span>
             {cvPageCountLabel ? (
-              <span className="app-topbar__document-meta">
+              <span className="app-topbar__doc-meta">
                 {cvPageCountLabel}
               </span>
             ) : null}
@@ -333,93 +348,96 @@ export function AppTopbar({
         ) : null}
       </div>
       <div className="app-topbar__spacer" />
-      <button
-        type="button"
-        className="app-topbar__cmdk"
-        aria-label="Open command palette"
-        aria-expanded={commandPaletteOpen}
-        onClick={onOpenCommandPalette}
-      >
-        <MagnifyingGlass
-          className="app-topbar__cmdk-icon"
-          size={15}
-          aria-hidden="true"
-        />
-        <span className="app-topbar__cmdk-label">Search or run command</span>
-        <span className="app-topbar__kbd">{shortcutLabel}</span>
-      </button>
-      {location.pathname === "/cv" && cvTopbarRegistration ? (
-        <>
-          {shouldShowImportReviewChip ? (
-            <button
-              type="button"
-              className="dasti-cv-ats app-topbar__cv-ats"
-              data-state="warn"
-              data-actionable="true"
-              aria-label="Review needed"
-              data-toolbar-tooltip="Open import review"
-              onClick={cvTopbarRegistration.onOpenImportReview}
-            >
-              <span className="dasti-cv-ats__mark" aria-hidden="true">
-                Review
-              </span>
-              <span className="dasti-cv-ats__label">Review needed</span>
-            </button>
-          ) : null}
-          {cvAtsBadge ? (
-            <button
-              type="button"
-              className="dasti-cv-ats app-topbar__cv-ats"
-              data-state={cvAtsBadge.state}
-              data-actionable="true"
-              aria-label={cvAtsBadge.tooltip}
-              data-toolbar-tooltip={cvAtsBadge.tooltip}
-              onClick={cvTopbarRegistration.onOpenAtsAudit}
-            >
-              <span className="dasti-cv-ats__mark" aria-hidden="true">
-                ATS
-              </span>
-              <span className="dasti-cv-ats__label">ATS</span>
-            </button>
-          ) : null}
-          <CvShareMenu
-            mode={cvTopbarRegistration.mode}
-            hasCurrentCv={cvTopbarRegistration.hasCurrentCv}
-            importIssueCount={cvTopbarRegistration.importIssueCount}
-            exporting={cvTopbarRegistration.exporting}
-            triggerClassName="dasti-icon-button app-topbar__share"
-            showTriggerLabel
-            onOpenImportReview={cvTopbarRegistration.onOpenImportReview}
-            onExportPdf={cvTopbarRegistration.onExportPdf}
-            onExportDocx={cvTopbarRegistration.onExportDocx}
+      <div className="app-topbar__actions">
+        <button
+          type="button"
+          className="app-topbar__cmdk"
+          aria-label="Open command palette"
+          aria-expanded={commandPaletteOpen}
+          onClick={onOpenCommandPalette}
+        >
+          <MagnifyingGlass
+            className="app-topbar__cmdk-icon"
+            size={15}
+            aria-hidden="true"
           />
-        </>
-      ) : null}
-      <IconButton
-        label={
-          !isAccountReady
-            ? "Account loading"
+          <span className="app-topbar__cmdk-label">Search or run command</span>
+          <span className="app-topbar__kbd">{shortcutLabel}</span>
+        </button>
+        {location.pathname === "/cv" && cvTopbarRegistration ? (
+          <>
+            {shouldShowImportReviewChip ? (
+              <button
+                type="button"
+                className="app-topbar__doc-health"
+                data-state="warn"
+                data-actionable="true"
+                aria-label="Review needed"
+                data-toolbar-tooltip="Open import review"
+                onClick={cvTopbarRegistration.onOpenImportReview}
+              >
+                <span className="app-topbar__doc-health-mark" aria-hidden="true">
+                  Review
+                </span>
+                <span className="app-topbar__doc-health-label">
+                  Review needed
+                </span>
+              </button>
+            ) : null}
+            {cvAtsBadge ? (
+              <button
+                type="button"
+                className="app-topbar__doc-health"
+                data-state={cvAtsBadge.state}
+                data-actionable="true"
+                aria-label={cvAtsBadge.tooltip}
+                data-toolbar-tooltip={cvAtsBadge.tooltip}
+                onClick={cvTopbarRegistration.onOpenAtsAudit}
+              >
+                <span className="app-topbar__doc-health-mark" aria-hidden="true">
+                  ATS
+                </span>
+              </button>
+            ) : null}
+            <CvShareMenu
+              mode={cvTopbarRegistration.mode}
+              hasCurrentCv={cvTopbarRegistration.hasCurrentCv}
+              importIssueCount={cvTopbarRegistration.importIssueCount}
+              exporting={cvTopbarRegistration.exporting}
+              triggerClassName="dasti-icon-button app-topbar__share"
+              showTriggerLabel
+              onOpenImportReview={cvTopbarRegistration.onOpenImportReview}
+              onExportPdf={cvTopbarRegistration.onExportPdf}
+              onExportDocx={cvTopbarRegistration.onExportDocx}
+            />
+          </>
+        ) : null}
+        <IconButton
+          label={
+            !isAccountReady
+              ? "Account loading"
+              : isSignedIn
+                ? "Open account menu"
+                : "Sign in"
+          }
+          onClick={handleProfile}
+          disabled={!isAccountReady}
+        >
+          <User size={16} aria-hidden="true" />
+        </IconButton>
+        <span className="app-topbar__profile-name" aria-hidden="true">
+          {!isAccountReady
+            ? "Account"
             : isSignedIn
-              ? "Open account menu"
-              : "Sign in"
-        }
-        onClick={handleProfile}
-        disabled={!isAccountReady}
-      >
-        <User size={16} aria-hidden="true" />
-      </IconButton>
-      <span className="app-topbar__profile-name" aria-hidden="true">
-        {!isAccountReady
-          ? "Account"
-          : isSignedIn
-            ? user?.firstName ?? user?.username ?? "Profile"
-            : "Sign in"}
-      </span>
-      {isSignedIn ? (
-        <div ref={clerkUserButtonRef} className="app-topbar__clerk-button">
-          <UserButton afterSignOutUrl="/" />
-        </div>
-      ) : null}
+              ? user?.firstName ?? user?.username ?? "Profile"
+              : "Sign in"}
+        </span>
+        {isSignedIn ? (
+          <div ref={clerkUserButtonRef} className="app-topbar__clerk-button">
+            <UserButton afterSignOutUrl="/" />
+          </div>
+        ) : null}
+      </div>
     </header>
   );
 }

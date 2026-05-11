@@ -161,6 +161,12 @@ describe("CvForge toolbar CSS contracts", () => {
     expect(productCss).toMatch(
       /@media\s*\(max-width:\s*1419px\)\s*\{[\s\S]*\.dasti-cv-ats\s*\{[\s\S]*inline-size:\s*48px;[\s\S]*padding-inline:\s*0;[\s\S]*\.dasti-cv-ats\[data-state="success"\]\s*\{[\s\S]*background:\s*var\(--okb\);[\s\S]*\.dasti-cv-ats__mark\s*\{[\s\S]*display:\s*inline-grid;[\s\S]*background:\s*transparent;[\s\S]*\.dasti-cv-ats__label,[\s\S]*\.dasti-cv-stage-bar__pick-label\s*\{[\s\S]*display:\s*none;/,
     );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*980px\)\s*\{[\s\S]*\.dasti-cv-skeleton-forge\s*\{[\s\S]*padding-inline:\s*var\(--space-3\);[\s\S]*\.dasti-cv-stage-bar\s*\{[\s\S]*gap:\s*var\(--space-1\);/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-cv-skeleton-forge\s*\{[\s\S]*padding-inline:\s*var\(--space-2\);[\s\S]*\.dasti-cv-stage-bar\s*\{[\s\S]*padding:\s*calc\(var\(--space-1\) \+ 1px\);/,
+    );
   });
 
   it("keeps CV forge canvas and rail tabs aligned with Proposal forge", () => {
