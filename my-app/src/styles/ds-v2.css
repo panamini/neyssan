@@ -1064,6 +1064,23 @@
     pointer-events: none;
   }
 
+  .ds-menu[data-side="left"] {
+    transform-origin: top right;
+  }
+
+  .ds-menu[data-side="right"] {
+    transform-origin: top left;
+  }
+
+  .ds-menu[data-side="sheet"] {
+    border-radius: var(--radius-card);
+    transform-origin: bottom center;
+  }
+
+  .ds-menu[data-side="sheet"][data-state="closed"] {
+    transform: translateY(8px);
+  }
+
   .ds-menu__label {
     padding: var(--s2) var(--s3);
     font-size: var(--tx);
