@@ -9,6 +9,7 @@ import {
   CvForgeTopbarProvider,
   useRegisterCvForgeTopbar,
 } from "../contexts/CvForgeTopbarContext";
+import type { AtsAuditResult } from "../lib/ats-audit/types";
 
 vi.mock("convex/react", () => ({
   useConvexAuth: vi.fn(() => ({ isAuthenticated: false, isLoading: false })),
@@ -30,16 +31,52 @@ vi.mock("../contexts/CvLibraryContext", () => ({
   }),
 }));
 
+const emptyIssues = {
+  parsing: [],
+  layout: [],
+  typography: [],
+  sections: [],
+  keywords: [],
+  content: [],
+};
+
+const excellentAudit: AtsAuditResult = {
+  score: 100,
+  verdict: "excellent",
+  blockers: [],
+  categoryScores: {
+    parsing: 100,
+    layout: 100,
+    typography: 100,
+    sections: 100,
+    keywords: 100,
+    content: 100,
+  },
+  issues: emptyIssues,
+  priorityFixes: [],
+};
+
+function makeAudit(
+  overrides: Partial<AtsAuditResult> = {},
+): AtsAuditResult {
+  return {
+    ...excellentAudit,
+    ...overrides,
+  };
+}
+
 function RegisterCvTopbar(): null {
   const registration = React.useMemo(
     () => ({
       mode: "preview" as const,
       hasCurrentCv: true,
       hasTrustedExport: true,
+      atsAudit: excellentAudit,
       importIssueCount: 0,
       importReviewBannerVisible: false,
       exporting: false,
       pageCount: 1,
+      onOpenAtsAudit: vi.fn(),
       onOpenImportReview: vi.fn(),
       onExportPdf: vi.fn(),
       onExportDocx: vi.fn(),
@@ -71,6 +108,7 @@ describe("AppTopbar CV controls", () => {
     expect(screen.queryByText("Ready")).not.toBeInTheDocument();
     expect(screen.queryByText("Saved")).not.toBeInTheDocument();
     expect(screen.queryByText("ATS-ready")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ATS audit looks good" })).toHaveTextContent("ATS");
     expect(screen.getByLabelText("Saved")).toBeInTheDocument();
     expect(screen.queryByText("1 page")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
@@ -95,10 +133,12 @@ describe("AppTopbar CV controls", () => {
           mode: "edit" as const,
           hasCurrentCv: true,
           hasTrustedExport: false,
+          atsAudit: makeAudit({ verdict: "good", score: 82 }),
           importIssueCount: 0,
           importReviewBannerVisible: false,
           exporting: false,
           pageCount: 2,
+          onOpenAtsAudit: vi.fn(),
           onOpenImportReview: vi.fn(),
           onExportPdf: vi.fn(),
           onExportDocx: vi.fn(),
@@ -125,7 +165,99 @@ describe("AppTopbar CV controls", () => {
     expect(screen.queryByText("ATS review")).not.toBeInTheDocument();
     expect(screen.queryByText("Export ready")).not.toBeInTheDocument();
     expect(screen.queryByText("Export review")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ATS audit looks good" })).toHaveTextContent("ATS");
     expect(screen.getByText("2 pages")).toBeInTheDocument();
+  });
+
+  it("shows an ATS issues badge when the audit needs review", async () => {
+    const user = userEvent.setup();
+    const onOpenAtsAudit = vi.fn();
+
+    function RegisterNeedsReview(): null {
+      const registration = React.useMemo(
+        () => ({
+          mode: "edit" as const,
+          hasCurrentCv: true,
+          hasTrustedExport: true,
+          atsAudit: makeAudit({ verdict: "needs_review", score: 68 }),
+          importIssueCount: 0,
+          importReviewBannerVisible: false,
+          exporting: false,
+          pageCount: 2,
+          onOpenAtsAudit,
+          onOpenImportReview: vi.fn(),
+          onExportPdf: vi.fn(),
+          onExportDocx: vi.fn(),
+        }),
+        [],
+      );
+      useRegisterCvForgeTopbar(registration);
+      return null;
+    }
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_1"]}>
+        <CvForgeTopbarProvider>
+          <RegisterNeedsReview />
+          <AppTopbar
+            commandPaletteOpen={false}
+            onOpenCommandPalette={vi.fn()}
+          />
+        </CvForgeTopbarProvider>
+      </MemoryRouter>,
+    );
+
+    const atsIssues = screen.getByRole("button", { name: "ATS issues found" });
+    expect(atsIssues).toHaveTextContent("ATS");
+    await user.click(atsIssues);
+    expect(onOpenAtsAudit).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an ATS blocked badge when the audit is blocked", async () => {
+    const user = userEvent.setup();
+    const onOpenAtsAudit = vi.fn();
+
+    function RegisterBlocked(): null {
+      const registration = React.useMemo(
+        () => ({
+          mode: "edit" as const,
+          hasCurrentCv: true,
+          hasTrustedExport: true,
+          atsAudit: makeAudit({ verdict: "blocked", score: 72 }),
+          importIssueCount: 1,
+          importReviewBannerVisible: false,
+          exporting: false,
+          pageCount: 2,
+          onOpenAtsAudit,
+          onOpenImportReview: vi.fn(),
+          onExportPdf: vi.fn(),
+          onExportDocx: vi.fn(),
+        }),
+        [],
+      );
+      useRegisterCvForgeTopbar(registration);
+      return null;
+    }
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_1"]}>
+        <CvForgeTopbarProvider>
+          <RegisterBlocked />
+          <AppTopbar
+            commandPaletteOpen={false}
+            onOpenCommandPalette={vi.fn()}
+          />
+        </CvForgeTopbarProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Review needed" }),
+    ).not.toBeInTheDocument();
+    const atsBlocked = screen.getByRole("button", { name: "ATS blocked" });
+    expect(atsBlocked).toHaveTextContent("ATS");
+    await user.click(atsBlocked);
+    expect(onOpenAtsAudit).toHaveBeenCalledTimes(1);
   });
 
   it("does not show ATS review when there is no current CV", () => {
@@ -135,10 +267,12 @@ describe("AppTopbar CV controls", () => {
           mode: "edit" as const,
           hasCurrentCv: false,
           hasTrustedExport: false,
+          atsAudit: null,
           importIssueCount: 0,
           importReviewBannerVisible: false,
           exporting: false,
           pageCount: null,
+          onOpenAtsAudit: vi.fn(),
           onOpenImportReview: vi.fn(),
           onExportPdf: vi.fn(),
           onExportDocx: vi.fn(),
@@ -163,6 +297,7 @@ describe("AppTopbar CV controls", () => {
 
     expect(screen.getByLabelText("No CV")).toBeInTheDocument();
     expect(screen.queryByText("ATS review")).not.toBeInTheDocument();
+    expect(screen.queryByText("ATS")).not.toBeInTheDocument();
   });
 
   it("exposes Exporting PDF on the document state dot", () => {
@@ -172,10 +307,12 @@ describe("AppTopbar CV controls", () => {
           mode: "preview" as const,
           hasCurrentCv: true,
           hasTrustedExport: true,
+          atsAudit: excellentAudit,
           importIssueCount: 0,
           importReviewBannerVisible: false,
           exporting: true,
           pageCount: null,
+          onOpenAtsAudit: vi.fn(),
           onOpenImportReview: vi.fn(),
           onExportPdf: vi.fn(),
           onExportDocx: vi.fn(),
@@ -215,10 +352,12 @@ describe("AppTopbar CV controls", () => {
           mode: "edit" as const,
           hasCurrentCv: true,
           hasTrustedExport: true,
+          atsAudit: null,
           importIssueCount: 2,
           importReviewBannerVisible: bannerVisible,
           exporting: false,
           pageCount: 2,
+          onOpenAtsAudit: vi.fn(),
           onOpenImportReview,
           onExportPdf: vi.fn(),
           onExportDocx: vi.fn(),

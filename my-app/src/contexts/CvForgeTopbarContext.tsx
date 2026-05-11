@@ -1,13 +1,16 @@
 import React from "react";
+import type { AtsAuditResult } from "../lib/ats-audit/types";
 
 export type CvForgeTopbarRegistration = {
   mode: "edit" | "preview";
   hasCurrentCv: boolean;
   hasTrustedExport: boolean;
+  atsAudit: AtsAuditResult | null;
   importIssueCount: number;
   importReviewBannerVisible: boolean;
   exporting: boolean;
   pageCount: number | null;
+  onOpenAtsAudit: () => void;
   onOpenImportReview: () => void;
   onExportPdf: () => void;
   onExportDocx: () => void;

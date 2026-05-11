@@ -58,6 +58,7 @@ import {
   buildAuthoritativeResumeExportModel,
   readAuthoritativeResumeFromCv,
 } from "../lib/authoritative-resume";
+import { evaluateCvAtsAudit } from "../lib/ats-audit/evaluateCvAtsAudit";
 import {
   TRUSTED_MISTRAL_FILE_INPUT_ACCEPT,
   useStructuredMistralImport,
@@ -80,6 +81,13 @@ import {
   writeStoredHiddenSectionIds,
 } from "../lib/cv-section-organization";
 import {
+  applyImportRecoveryItems,
+  buildRecoveryCommitState,
+  collectRecoveryDestinationSectionIds,
+  formatRecoveryCommitToast,
+  normalizeRecoverySectionTarget,
+} from "../lib/import-recovery";
+import {
   buildResumeTypographyAuditMetadata,
   readResumePreviewDebugCapture,
   setStyledResumeExportContext,
@@ -96,6 +104,7 @@ import { buildCanonicalResumeRenderModelFromCv } from "../lib/buildCanonicalResu
 import { deriveCvTitleFromSections } from "../lib/normalize-cv";
 import CvStageBar from "../components/cv/CvStageBar";
 import CvReviewBanner from "../components/cv/CvReviewBanner";
+import ImportRecoveryPanel from "../components/ImportRecoveryPanel";
 import CvRail, {
   type CvAccentChoice,
   type CvAddSectionKind,
@@ -105,12 +114,15 @@ import CvRail, {
   type CvToneChoice,
 } from "../components/cv/CvRail";
 import CvSectionsOrganizer from "../components/cv/CvSectionsOrganizer";
-import ImportReviewSheet, {
-  type CvImportReviewBlock,
-} from "../components/cv/ImportReviewSheet";
+import CvAtsAuditPanel from "../components/cv/CvAtsAuditPanel";
 import SectionEditorSheet from "../components/cv/SectionEditorSheet";
+import { Sheet } from "../components/ui";
 import type { CvSection } from "../types/cvDocument";
-import type { ImportRecoverySession } from "../types/importRecovery";
+import type {
+  ImportRecoveryItem,
+  ImportRecoverySectionType,
+  ImportRecoverySession,
+} from "../types/importRecovery";
 import {
   createAiInteractionId,
   recordAiInteractionEvent,
@@ -136,6 +148,13 @@ type CvForgeCanonicalJob = {
   title: string;
   company: string;
 } | null;
+type CvImportRecoveryDraft = {
+  cycleId: string;
+  baseSections: CvSection[];
+  items: ImportRecoveryItem[];
+  overflowCount: number;
+  reviewLimit: number;
+};
 type InlinePaperSelectionState = {
   text: string;
   anchor: EditorSelectionAnchor;
@@ -1673,24 +1692,78 @@ function readImportRecoverySession(
   return session;
 }
 
-function buildImportReviewBlocks(
-  currentCv: CvDocument | null | undefined,
-): CvImportReviewBlock[] {
-  const session = readImportRecoverySession(currentCv);
-  if (!session) return [];
+function normalizeCvRecoveryItemTargets(
+  item: ImportRecoveryItem,
+): ImportRecoveryItem {
+  return {
+    ...item,
+    predictedSection: normalizeRecoverySectionTarget(item.predictedSection),
+    selectedSection: normalizeRecoverySectionTarget(
+      item.selectedSection ?? item.predictedSection,
+    ),
+    fragmentAssignments: (item.fragmentAssignments ?? []).map((fragment) => ({
+      ...fragment,
+      targetSection: normalizeRecoverySectionTarget(fragment.targetSection),
+    })),
+  };
+}
 
-  return session.items
-    .filter((item) => item.reviewStatus === "pending")
-    .map((item) => ({
-      id: item.blockId,
-      title:
-        item.sourceSectionTitle ||
-        item.selectedSectionTitle ||
-        item.predictedSection,
-      original: item.rawText || item.cleanedText,
-      parsed: item.cleanedText || item.rawText,
-      status: "uncertain" as const,
-    }));
+function getCvRecoveryDecisionStatus(
+  item: ImportRecoveryItem,
+  targetSection: ImportRecoverySectionType,
+  targetSectionTitle?: string | null,
+): ImportRecoveryItem["reviewStatus"] {
+  const normalizedPredicted = normalizeRecoverySectionTarget(
+    item.predictedSection,
+  );
+  const normalizedSelected = normalizeRecoverySectionTarget(targetSection);
+  const normalizedTitle =
+    normalizedSelected === "custom" ? targetSectionTitle?.trim() ?? "" : "";
+
+  return normalizedSelected === normalizedPredicted &&
+    normalizedTitle.length === 0
+    ? "accepted"
+    : "reassigned";
+}
+
+function createCvImportRecoverySession(
+  items: ImportRecoveryItem[],
+  reviewLimit: number,
+): ImportRecoverySession {
+  return {
+    status: items.length > 0 ? "pending" : "completed",
+    updatedAt: new Date().toISOString(),
+    items: items.map(normalizeCvRecoveryItemTargets),
+    overflowCount: Math.max(items.length - reviewLimit, 0),
+    reviewLimit,
+  };
+}
+
+function createCompletedCvImportRecoverySession(
+  items: ImportRecoveryItem[],
+  reviewLimit: number,
+  baseSectionsSnapshot?: CvSection[],
+): ImportRecoverySession {
+  return {
+    status: "completed",
+    updatedAt: new Date().toISOString(),
+    items: items.map(normalizeCvRecoveryItemTargets),
+    overflowCount: Math.max(items.length - reviewLimit, 0),
+    reviewLimit,
+    ...(Array.isArray(baseSectionsSnapshot) ? { baseSectionsSnapshot } : {}),
+  };
+}
+
+function buildTouchedSectionRevealState(
+  sections: CvSection[],
+  touchedSectionIds: string[],
+) {
+  const revealedIds = new Set(touchedSectionIds.map(String));
+  return sections.map((section) =>
+    revealedIds.has(String(section.id ?? ""))
+      ? { ...section, collapsed: false }
+      : section,
+  );
 }
 
 function getCvSectionId(section: CvSection, index: number): string {
@@ -2828,7 +2901,12 @@ export function CvForge(): JSX.Element {
   }>({});
   const [sectionEditorOpen, setSectionEditorOpen] = React.useState(false);
   const [importReviewOpen, setImportReviewOpen] = React.useState(false);
+  const [atsAuditOpen, setAtsAuditOpen] = React.useState(false);
+  const [cvImportRecoveryDraft, setCvImportRecoveryDraft] =
+    React.useState<CvImportRecoveryDraft | null>(null);
   const [dismissedImportReviewCvIds, setDismissedImportReviewCvIds] =
+    React.useState<string[]>([]);
+  const [acceptedImportReviewCvIds, setAcceptedImportReviewCvIds] =
     React.useState<string[]>([]);
   const [cvPreviewPageCount, setCvPreviewPageCount] =
     React.useState<number | null>(null);
@@ -3018,22 +3096,39 @@ export function CvForge(): JSX.Element {
       null
     );
   }, [activeSectionId, currentSections, pendingActiveSection]);
-  const importReviewBlocks = React.useMemo(
-    () => buildImportReviewBlocks(currentCv),
+  const importRecoverySession = React.useMemo(
+    () => readImportRecoverySession(currentCv),
     [currentCv],
   );
+  const isImportReviewAccepted = currentCv?.id
+    ? acceptedImportReviewCvIds.includes(String(currentCv.id))
+    : false;
+  const activeImportRecoveryItems = React.useMemo(
+    () =>
+      isImportReviewAccepted
+        ? []
+        : (importRecoverySession?.items ?? []).filter(
+            (item) => item.reviewStatus === "pending",
+          ),
+    [importRecoverySession?.items, isImportReviewAccepted],
+  );
   const importReviewSummary = React.useMemo(() => {
-    if (importReviewBlocks.length === 0) return "";
-    return importReviewBlocks
+    if (activeImportRecoveryItems.length === 0) return "";
+    return activeImportRecoveryItems
       .slice(0, 2)
-      .map((block) => block.title)
+      .map(
+        (item) =>
+          item.sourceSectionTitle ||
+          item.selectedSectionTitle ||
+          item.predictedSection,
+      )
       .join(", ");
-  }, [importReviewBlocks]);
+  }, [activeImportRecoveryItems]);
   const isImportReviewBannerDismissed = currentCv?.id
     ? dismissedImportReviewCvIds.includes(String(currentCv.id))
     : false;
   const isImportReviewBannerVisible =
-    importReviewBlocks.length > 0 && !isImportReviewBannerDismissed;
+    activeImportRecoveryItems.length > 0 && !isImportReviewBannerDismissed;
   const [exportingFormat, setExportingFormat] = React.useState<string | null>(
     null,
   );
@@ -3315,6 +3410,17 @@ export function CvForge(): JSX.Element {
     [authoritativeResume],
   );
   const hasTrustedExport = authoritativeExportModel !== null;
+  const atsAudit = React.useMemo(
+    () =>
+      currentCv
+        ? evaluateCvAtsAudit({
+            cv: currentCv,
+            pageCount: cvPreviewPageCount,
+            importIssueCount: activeImportRecoveryItems.length,
+          })
+        : null,
+    [currentCv, cvPreviewPageCount, activeImportRecoveryItems.length],
+  );
 
   const handleResumeExport = React.useCallback(
     async (request: ResumeExportRequest) => {
@@ -3446,7 +3552,285 @@ export function CvForge(): JSX.Element {
     ],
   );
   const handleOpenImportReview = React.useCallback(() => {
+    if (importRecoverySession) {
+      setCvImportRecoveryDraft({
+        cycleId: uuidv4(),
+        baseSections: Array.isArray(importRecoverySession.baseSectionsSnapshot)
+          ? importRecoverySession.baseSectionsSnapshot
+          : currentSections,
+        items: importRecoverySession.items.map(normalizeCvRecoveryItemTargets),
+        overflowCount: importRecoverySession.overflowCount,
+        reviewLimit: importRecoverySession.reviewLimit,
+      });
+    }
     setImportReviewOpen(true);
+  }, [currentSections, importRecoverySession]);
+  const handleImportReviewOpenChange = React.useCallback((open: boolean) => {
+    setImportReviewOpen(open);
+    if (!open) {
+      setCvImportRecoveryDraft(null);
+    }
+  }, []);
+  const updateCvRecoveryItem = React.useCallback(
+    (blockId: string, updates: Partial<ImportRecoveryItem>) => {
+      setCvImportRecoveryDraft((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          items: current.items.map((item) => {
+            if (item.blockId !== blockId) return item;
+            const nextSelectedSection =
+              updates.selectedSection === undefined
+                ? item.selectedSection ?? item.predictedSection
+                : updates.selectedSection;
+            const nextStatus = updates.reviewStatus ?? item.reviewStatus;
+            return {
+              ...item,
+              ...updates,
+              selectedSection: nextSelectedSection,
+              reviewStatus:
+                nextStatus === "reassigned" &&
+                nextSelectedSection === item.predictedSection
+                  ? "pending"
+                  : nextStatus,
+            };
+          }),
+        };
+      });
+    },
+    [],
+  );
+  const handleAcceptRecoveryItem = React.useCallback((blockId: string) => {
+    setCvImportRecoveryDraft((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((item) =>
+          item.blockId === blockId
+            ? {
+                ...item,
+                selectedSection: normalizeRecoverySectionTarget(
+                  item.selectedSection ?? item.predictedSection,
+                ),
+                selectedSectionTitle:
+                  normalizeRecoverySectionTarget(
+                    item.selectedSection ?? item.predictedSection,
+                  ) === "custom"
+                    ? item.selectedSectionTitle ?? null
+                    : null,
+                reviewStatus: getCvRecoveryDecisionStatus(
+                  item,
+                  normalizeRecoverySectionTarget(
+                    item.selectedSection ?? item.predictedSection,
+                  ),
+                  item.selectedSectionTitle ?? null,
+                ),
+              }
+            : item,
+        ),
+      };
+    });
+  }, []);
+  const handleUpdateRecoveryRemainingTarget = React.useCallback(
+    (payload: {
+      blockId: string;
+      targetSection: ImportRecoverySectionType;
+      targetSectionTitle?: string | null;
+    }) => {
+      setCvImportRecoveryDraft((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          items: current.items.map((item) => {
+            if (item.blockId !== payload.blockId) return item;
+            const nextSection = normalizeRecoverySectionTarget(
+              payload.targetSection,
+            );
+            const nextTitle =
+              nextSection === "custom"
+                ? payload.targetSectionTitle?.trim() ?? null
+                : null;
+            const nextStatus =
+              item.reviewStatus === "accepted" ||
+              item.reviewStatus === "reassigned"
+                ? getCvRecoveryDecisionStatus(item, nextSection, nextTitle)
+                : item.reviewStatus;
+
+            return {
+              ...item,
+              selectedSection: nextSection,
+              selectedSectionTitle: nextTitle,
+              reviewStatus: nextStatus,
+            };
+          }),
+        };
+      });
+    },
+    [],
+  );
+  const handleAssignRecoveryFragment = React.useCallback(
+    (payload: {
+      blockId: string;
+      range: { start: number; end: number };
+      text: string;
+      selectionSource: "cleaned" | "raw";
+      targetSection: ImportRecoverySectionType;
+      targetSectionTitle?: string | null;
+    }) => {
+      setCvImportRecoveryDraft((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          items: current.items.map((item) =>
+            item.blockId === payload.blockId
+              ? {
+                  ...item,
+                  fragmentAssignments: [
+                    ...item.fragmentAssignments,
+                    {
+                      fragmentId: uuidv4(),
+                      blockId: item.blockId,
+                      startOffset: payload.range.start,
+                      endOffset: payload.range.end,
+                      selectedText: payload.text,
+                      selectionSource: payload.selectionSource,
+                      targetSection: payload.targetSection,
+                      targetSectionTitle: payload.targetSectionTitle ?? null,
+                      status: "assigned",
+                      createdAt: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        };
+      });
+    },
+    [],
+  );
+  const handleRemoveRecoveryFragment = React.useCallback(
+    (blockId: string, fragmentId: string) => {
+      setCvImportRecoveryDraft((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          items: current.items.map((item) =>
+            item.blockId === blockId
+              ? {
+                  ...item,
+                  fragmentAssignments: item.fragmentAssignments.filter(
+                    (fragment) => fragment.fragmentId !== fragmentId,
+                  ),
+                }
+              : item,
+          ),
+        };
+      });
+    },
+    [],
+  );
+  const handleApplyReviewedRecoveryImport = React.useCallback(() => {
+    if (!currentCv || !cvImportRecoveryDraft) return;
+    const normalizedItems = cvImportRecoveryDraft.items.map(
+      normalizeCvRecoveryItemTargets,
+    );
+    const { itemsToApply, pendingItems, summary } =
+      buildRecoveryCommitState(normalizedItems);
+    const reviewedSections = applyImportRecoveryItems(
+      cvImportRecoveryDraft.baseSections,
+      itemsToApply,
+    );
+    const touchedSectionIds = collectRecoveryDestinationSectionIds(
+      reviewedSections,
+      itemsToApply,
+    );
+    const revealedSections = buildTouchedSectionRevealState(
+      reviewedSections,
+      touchedSectionIds,
+    );
+    const persistedSession = pendingItems.length
+      ? createCvImportRecoverySession(
+          pendingItems,
+          cvImportRecoveryDraft.reviewLimit,
+        )
+      : createCompletedCvImportRecoverySession(
+          normalizedItems,
+          cvImportRecoveryDraft.reviewLimit,
+          cvImportRecoveryDraft.baseSections,
+        );
+    const now = new Date().toISOString();
+    void importCv({
+      ...currentCv,
+      metadata: {
+        ...buildUpdatedCvMetadata(currentCv, now),
+        importRecoverySession: persistedSession,
+      },
+      sections: revealedSections,
+    });
+    if (!pendingItems.length) {
+      const cvId = String(currentCv.id);
+      setAcceptedImportReviewCvIds((current) =>
+        current.includes(cvId) ? current : [...current, cvId],
+      );
+      setDismissedImportReviewCvIds((current) =>
+        current.includes(cvId) ? current : [...current, cvId],
+      );
+    }
+    showToast(formatRecoveryCommitToast(summary), { variant: "success" });
+    setImportReviewOpen(false);
+    setCvImportRecoveryDraft(null);
+  }, [currentCv, cvImportRecoveryDraft, importCv, showToast]);
+  const handleImportRecoveryAsIs = React.useCallback(() => {
+    if (!currentCv || !cvImportRecoveryDraft) return;
+    const normalizedItems = cvImportRecoveryDraft.items.map(
+      normalizeCvRecoveryItemTargets,
+    );
+    const persistedSession = createCompletedCvImportRecoverySession(
+      normalizedItems,
+      cvImportRecoveryDraft.reviewLimit,
+      cvImportRecoveryDraft.baseSections,
+    );
+    const now = new Date().toISOString();
+    void importCv({
+      ...currentCv,
+      metadata: {
+        ...buildUpdatedCvMetadata(currentCv, now),
+        importRecoverySession: persistedSession,
+      },
+      sections: currentSections,
+    });
+    const cvId = String(currentCv.id);
+    setAcceptedImportReviewCvIds((current) =>
+      current.includes(cvId) ? current : [...current, cvId],
+    );
+    setDismissedImportReviewCvIds((current) =>
+      current.includes(cvId) ? current : [...current, cvId],
+    );
+    setImportReviewOpen(false);
+    setCvImportRecoveryDraft(null);
+  }, [currentCv, currentSections, cvImportRecoveryDraft, importCv]);
+  const handleDiscardImportRecovery = React.useCallback(() => {
+    if (!currentCv) return;
+    const now = new Date().toISOString();
+    const metadata = buildUpdatedCvMetadata(currentCv, now);
+    delete (metadata as { importRecoverySession?: unknown })
+      .importRecoverySession;
+    void importCv({
+      ...currentCv,
+      metadata,
+    });
+    const cvId = String(currentCv.id);
+    setAcceptedImportReviewCvIds((current) =>
+      current.includes(cvId) ? current : [...current, cvId],
+    );
+    setDismissedImportReviewCvIds((current) =>
+      current.includes(cvId) ? current : [...current, cvId],
+    );
+    setImportReviewOpen(false);
+    setCvImportRecoveryDraft(null);
+  }, [currentCv, importCv]);
+  const handleOpenAtsAudit = React.useCallback(() => {
+    setAtsAuditOpen(true);
   }, []);
   const handleExportStyledPdf = React.useCallback(() => {
     void handleResumeExport({ format: "pdf", mode: "styled" });
@@ -3462,28 +3846,38 @@ export function CvForge(): JSX.Element {
       mode: workspaceMode,
       hasCurrentCv: Boolean(currentCv),
       hasTrustedExport,
-      importIssueCount: importReviewBlocks.length,
+      atsAudit,
+      importIssueCount: activeImportRecoveryItems.length,
       importReviewBannerVisible: isImportReviewBannerVisible,
       exporting: exportingFormat !== null,
       pageCount: currentCv ? cvPreviewPageCount : null,
+      onOpenAtsAudit: handleOpenAtsAudit,
       onOpenImportReview: handleOpenImportReview,
       onExportPdf: handleExportStyledPdf,
       onExportDocx: handleExportDocx,
     }),
     [
       currentCv,
+      atsAudit,
       cvPreviewPageCount,
       exportingFormat,
       handleExportDocx,
+      handleOpenAtsAudit,
       handleExportStyledPdf,
       handleOpenImportReview,
       hasTrustedExport,
-      importReviewBlocks.length,
+      activeImportRecoveryItems.length,
       isImportReviewBannerVisible,
       workspaceMode,
     ],
   );
   useRegisterCvForgeTopbar(cvTopbarRegistration);
+  const cvRecoveryOutcomeSummary = React.useMemo(() => {
+    if (!cvImportRecoveryDraft) return null;
+    return buildRecoveryCommitState(
+      cvImportRecoveryDraft.items.map(normalizeCvRecoveryItemTargets),
+    ).summary;
+  }, [cvImportRecoveryDraft]);
 
   const cvWorkbenchShellStyle = {
     width: "100%",
@@ -6361,9 +6755,9 @@ export function CvForge(): JSX.Element {
               />
               {isImportReviewBannerVisible ? (
                 <CvReviewBanner
-                  issueCount={importReviewBlocks.length}
+                  issueCount={activeImportRecoveryItems.length}
                   summary={importReviewSummary}
-                  onOpenReview={() => setImportReviewOpen(true)}
+                  onOpenReview={handleOpenImportReview}
                   onDismiss={handleDismissImportReviewBanner}
                 />
               ) : null}
@@ -6532,10 +6926,44 @@ export function CvForge(): JSX.Element {
             onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
             onDismissListAiSuggestion={handleDismissListAiSuggestion}
           />
-          <ImportReviewSheet
+          <Sheet
             open={importReviewOpen}
-            blocks={importReviewBlocks}
-            onOpenChange={setImportReviewOpen}
+            onOpenChange={handleImportReviewOpenChange}
+            title="CV import review"
+            description="Review uncertain imported blocks, route them to sections, or assign fragments before saving."
+            className="dasti-cv-import-recovery-sheet"
+            bodyClassName="dasti-cv-import-recovery-sheet__body"
+          >
+            {cvImportRecoveryDraft ? (
+              <ImportRecoveryPanel
+                recoveryCycleKey={cvImportRecoveryDraft.cycleId}
+                items={cvImportRecoveryDraft.items}
+                overflowCount={cvImportRecoveryDraft.overflowCount}
+                reviewLimit={cvImportRecoveryDraft.reviewLimit}
+                onAccept={handleAcceptRecoveryItem}
+                onIgnore={(blockId) =>
+                  updateCvRecoveryItem(blockId, { reviewStatus: "ignored" })
+                }
+                onUpdateRemainingTarget={handleUpdateRecoveryRemainingTarget}
+                onAssignFragment={handleAssignRecoveryFragment}
+                onRemoveFragment={handleRemoveRecoveryFragment}
+                onImportAsIs={handleImportRecoveryAsIs}
+                onCancel={() => handleImportReviewOpenChange(false)}
+                onDiscardRecovery={handleDiscardImportRecovery}
+                onApply={handleApplyReviewedRecoveryImport}
+                outcomeSummary={cvRecoveryOutcomeSummary}
+              />
+            ) : (
+              <div className="dasti-cv-import-review__empty">
+                No import recovery items need review.
+              </div>
+            )}
+          </Sheet>
+          <CvAtsAuditPanel
+            open={atsAuditOpen}
+            audit={atsAudit}
+            onOpenChange={setAtsAuditOpen}
+            onOpenImportReview={handleOpenImportReview}
           />
         </>
         <input
