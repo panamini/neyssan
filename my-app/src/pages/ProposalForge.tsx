@@ -10,6 +10,7 @@ import {
   DotsThree,
   FileUser,
   FolderTree,
+  Paperclip,
   ShareFat,
   TrashSimple,
   X,
@@ -886,10 +887,12 @@ function ForgeDrawerDocumentPreview({
   item,
   hydrateCvDocument,
   badge,
+  actionPill,
 }: {
   item: LibraryItem;
   hydrateCvDocument: (id: string) => Promise<import("../types/cvDocument").CvDocument | null>;
   badge?: string | null;
+  actionPill?: React.ReactNode;
 }): JSX.Element {
   const [hydratedCv, setHydratedCv] = React.useState<import("../types/cvDocument").CvDocument | null>(
     item.type === "cv" && item.cvDocument ? item.cvDocument : null,
@@ -932,7 +935,14 @@ function ForgeDrawerDocumentPreview({
     );
   }
 
-  return <DrawerDocumentTile item={item} cvDocument={hydratedCv} badge={badge} />;
+  return (
+    <DrawerDocumentTile
+      item={item}
+      cvDocument={hydratedCv}
+      badge={badge}
+      actionPill={actionPill}
+    />
+  );
 }
 
 export function ProposalJobsDrawer({
@@ -1060,6 +1070,10 @@ function ForgeDrawerJobRow({
       >
         <strong>{job.title || "Untitled job"}</strong>
         <span>{[job.company, job.location].filter(Boolean).join(" · ") || "Saved job"}</span>
+        <span className="forge-rail-drawer__row-affordance">
+          <Briefcase size={12} aria-hidden="true" />
+          Attach job
+        </span>
       </button>
       <button
         type="button"
@@ -1082,13 +1096,13 @@ export function ProposalCvDrawer({
   activeCvId,
   hydrateCvDocument,
   onSelectCv,
-  onOpenCvLibrary,
+  onOpenCv,
 }: {
   items: LibraryItem[];
   activeCvId: string | null;
   hydrateCvDocument: (id: string) => Promise<import("../types/cvDocument").CvDocument | null>;
   onSelectCv: (cvId: string) => void | Promise<void>;
-  onOpenCvLibrary: () => void;
+  onOpenCv: (cvId: string) => void;
 }): JSX.Element {
   const [query, setQuery] = React.useState("");
   const allResultsRef = React.useRef<HTMLDivElement | null>(null);
@@ -1132,16 +1146,22 @@ export function ProposalCvDrawer({
             item={item}
             hydrateCvDocument={hydrateCvDocument}
             badge={selected ? "Attached" : null}
+            actionPill={
+              <>
+                <Paperclip size={12} aria-hidden="true" />
+                <span>Attach CV</span>
+              </>
+            }
           />
         </button>
         <button
           type="button"
           className="forge-rail-drawer__thumb-menu forge-rail-drawer__thumb-menu--direct"
-          aria-label={`Open CV library for ${item.title}`}
-          data-toolbar-tooltip="Open CV library"
+          aria-label={`Open full CV: ${item.title}`}
+          data-toolbar-tooltip="Open full CV"
           onClick={(event) => {
             event.stopPropagation();
-            onOpenCvLibrary();
+            onOpenCv(sourceId);
           }}
         >
           <ArrowSquareOut size={15} aria-hidden="true" />
@@ -1183,12 +1203,12 @@ export function ProposalLibraryDrawer({
   items,
   hydrateCvDocument,
   onOpenItem,
-  onOpenProposalLibrary,
+  onOpenProposal,
 }: {
   items: LibraryItem[];
   hydrateCvDocument: (id: string) => Promise<import("../types/cvDocument").CvDocument | null>;
   onOpenItem: (item: LibraryItem) => void;
-  onOpenProposalLibrary: () => void;
+  onOpenProposal: (item: LibraryItem) => void;
 }): JSX.Element {
   const [query, setQuery] = React.useState("");
   const allResultsRef = React.useRef<HTMLDivElement | null>(null);
@@ -1225,16 +1245,20 @@ export function ProposalLibraryDrawer({
           aria-label={`Open proposal ${item.title}`}
           onClick={() => onOpenItem(item)}
         >
-          <ForgeDrawerDocumentPreview item={item} hydrateCvDocument={hydrateCvDocument} />
+          <ForgeDrawerDocumentPreview
+            item={item}
+            hydrateCvDocument={hydrateCvDocument}
+            actionPill="Open"
+          />
         </button>
         <button
           type="button"
           className="forge-rail-drawer__thumb-menu forge-rail-drawer__thumb-menu--direct"
-          aria-label={`Open proposals library for ${item.title}`}
-          data-toolbar-tooltip="Open proposals"
+          aria-label={`Open full proposal: ${item.title}`}
+          data-toolbar-tooltip="Open proposal"
           onClick={(event) => {
             event.stopPropagation();
-            onOpenProposalLibrary();
+            onOpenProposal(item);
           }}
         >
           <ArrowSquareOut size={15} aria-hidden="true" />
@@ -8495,10 +8519,6 @@ export function ProposalForge(): JSX.Element {
     closeForgePanel();
     void navigate("/documents?type=cvs");
   }, [closeForgePanel, navigate]);
-  const handleOpenProposalLibraryFromRailDrawer = React.useCallback(() => {
-    closeForgePanel();
-    void navigate("/documents?type=proposals");
-  }, [closeForgePanel, navigate]);
   const handleOpenLibraryTypeFromRailDrawer = React.useCallback(
     (type: "cvs" | "proposals") => {
       closeForgePanel();
@@ -8585,7 +8605,7 @@ export function ProposalForge(): JSX.Element {
           activeCvId={attachedCvId}
           hydrateCvDocument={hydrateCvDocument}
           onSelectCv={handleSelectCvFromRailDrawer}
-          onOpenCvLibrary={handleOpenCvLibraryFromRailDrawer}
+          onOpenCv={handleOpenCvFromRailDrawer}
         />
       ),
       footer: {
@@ -8596,7 +8616,7 @@ export function ProposalForge(): JSX.Element {
     }),
     [
       attachedCvId,
-      handleOpenCvLibraryFromRailDrawer,
+      handleOpenCvFromRailDrawer,
       handleSelectCvFromRailDrawer,
       hydrateCvDocument,
       navigate,
@@ -8614,7 +8634,7 @@ export function ProposalForge(): JSX.Element {
           items={railProposalItems}
           hydrateCvDocument={hydrateCvDocument}
           onOpenItem={handleOpenLibraryItemFromRailDrawer}
-          onOpenProposalLibrary={handleOpenProposalLibraryFromRailDrawer}
+          onOpenProposal={handleOpenLibraryItemFromRailDrawer}
         />
       ),
       footer: {
@@ -8624,7 +8644,6 @@ export function ProposalForge(): JSX.Element {
     }),
     [
       handleOpenLibraryItemFromRailDrawer,
-      handleOpenProposalLibraryFromRailDrawer,
       hydrateCvDocument,
       navigate,
       railProposalItems,

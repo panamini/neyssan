@@ -535,6 +535,18 @@ body,
   color: var(--ti);
 }
 
+.sb-rail-button:focus-visible {
+  outline: none;
+}
+
+.sb-rail-button:focus-visible .sb-rail-button__icon {
+  background: var(--sidebar-hover-bg);
+  color: var(--ti);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-border-strong) 72%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--ti) 10%, transparent);
+}
+
 .sb-rail-button:disabled:hover {
   background: transparent;
   color: var(--tm2);
@@ -2256,6 +2268,34 @@ body,
   white-space: nowrap;
 }
 
+.forge-rail-drawer__row-affordance {
+  width: max-content;
+  max-width: 100%;
+  margin-block-start: var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--sf1) 92%, transparent);
+  color: var(--ti) !important;
+  box-shadow: var(--shadow-popover);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+
+.forge-rail-drawer__row-affordance svg {
+  margin-inline-end: var(--space-1);
+}
+
+.forge-rail-drawer__row:hover .forge-rail-drawer__row-affordance,
+.forge-rail-drawer__row:focus-within .forge-rail-drawer__row-affordance {
+  opacity: 1;
+}
+
 .forge-rail-drawer__row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2318,6 +2358,7 @@ body,
 }
 
 .forge-rail-drawer__thumb-button {
+  position: relative;
   inline-size: 100%;
   border-radius: var(--radius-control);
   transition:
@@ -2345,28 +2386,44 @@ body,
 
 .forge-rail-drawer__thumb-affordance {
   position: absolute;
-  inset-block-start: var(--space-1);
-  inset-inline-start: var(--space-1);
-  min-height: var(--control-xs);
+  inset-block-start: auto;
+  inset-block-end: var(--space-2);
+  inset-inline-start: 50%;
+  min-height: var(--control-sm);
   display: inline-flex;
   align-items: center;
-  padding: 0 var(--space-2);
+  justify-content: center;
+  padding: 0 var(--space-3);
   border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--sf1) 92%, transparent);
   color: var(--ti);
   box-shadow: var(--shadow-popover);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
+  font-size: var(--tx);
+  line-height: var(--lx);
   font-weight: 700;
   opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease-standard);
+  transform: translateX(-50%);
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+  white-space: nowrap;
 }
 
-.forge-rail-drawer__thumb-item[data-state] .forge-rail-drawer__thumb-affordance,
+.forge-rail-drawer__thumb-affordance svg {
+  margin-inline-end: var(--space-1);
+}
+
 .forge-rail-drawer__thumb-item:hover .forge-rail-drawer__thumb-affordance,
 .forge-rail-drawer__thumb-item:focus-within .forge-rail-drawer__thumb-affordance {
+  border-color: color-mix(in srgb, var(--color-accent) 42%, var(--color-border));
+  background: color-mix(in srgb, var(--sidebar-hover-bg) 78%, var(--sf1));
+  box-shadow: var(--shadow-frost);
   opacity: 1;
+  transform: translate(-50%, -1px);
 }
 
 .forge-rail-drawer__thumb-caption strong,

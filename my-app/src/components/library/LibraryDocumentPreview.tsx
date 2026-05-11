@@ -98,10 +98,12 @@ export function DrawerDocumentTile({
   item,
   cvDocument,
   badge,
+  actionPill,
 }: {
   item: LibraryItem;
   cvDocument?: CvDocument | null;
   badge?: string | null;
+  actionPill?: React.ReactNode;
 }): JSX.Element {
   const document = cvDocument ?? item.cvDocument ?? null;
   const context = proposalContext(item);
@@ -144,6 +146,11 @@ export function DrawerDocumentTile({
         </span>
         {badge ? (
           <span className="forge-rail-document-tile__badge">{badge}</span>
+        ) : null}
+        {actionPill ? (
+          <span className="forge-rail-drawer__thumb-affordance">
+            {actionPill}
+          </span>
         ) : null}
       </span>
       <span className="forge-rail-document-tile__caption">

@@ -27,6 +27,7 @@ type SidebarRailLinkProps = {
   href: string;
   active: boolean;
   className?: string;
+  onNavigate?: () => void;
 };
 
 type SidebarRailButtonProps = {
@@ -73,6 +74,7 @@ function SidebarRailLink({
   href,
   active,
   className,
+  onNavigate,
 }: SidebarRailLinkProps): JSX.Element {
   return (
     <Link
@@ -85,6 +87,7 @@ function SidebarRailLink({
       )}
       aria-label={label}
       aria-current={active ? "page" : undefined}
+      onClick={onNavigate}
     >
       <SidebarRailIcon icon={icon} />
       <span className="sb-rail-button__label">{label}</span>
@@ -142,6 +145,7 @@ export const Sidebar: React.FC = () => {
     open: templatePanelOpen,
     openSurface: openTemplateSurface,
     togglePinnedSurface,
+    closePanel,
     queueOpenSurface,
     queueClosePanel,
   } = useForgeTemplatePanel();
@@ -254,6 +258,7 @@ export const Sidebar: React.FC = () => {
           href="/dashboard"
           active={dashboardActive}
           icon={SquaresFour}
+          onNavigate={closePanel}
         />
         {proposalContextualRail ? (
           <SidebarRailButton
@@ -273,13 +278,15 @@ export const Sidebar: React.FC = () => {
             href="/jobs"
             active={jobsActive}
             icon={Briefcase}
+            onNavigate={closePanel}
           />
         )}
-        {proposalContextualRail ? (
+        {proposalContextualRail || cvContextualRail ? (
           <SidebarRailButton
             label="CV"
             panelOpen={panelOpenFor("cvs")}
             expanded={panelOpenFor("cvs")}
+            active={cvActive}
             hoverEnabled={finePointer}
             onClick={() => handleOpenProposalPanel("cvs")}
             onFocusOpen={() => handleFocusPanel("cvs")}
@@ -293,6 +300,7 @@ export const Sidebar: React.FC = () => {
             href="/cv"
             active={cvActive}
             icon={FileUser}
+            onNavigate={closePanel}
           />
         )}
         {proposalContextualRail ? (
@@ -314,6 +322,7 @@ export const Sidebar: React.FC = () => {
             href="/proposal"
             active={proposalActive}
             icon={FileText}
+            onNavigate={closePanel}
           />
         )}
         {proposalContextualRail ? (
@@ -346,6 +355,7 @@ export const Sidebar: React.FC = () => {
             href="/documents"
             active={projectsActive}
             icon={FolderTree}
+            onNavigate={closePanel}
           />
         )}
         {activeForgeSurface ? (
@@ -366,6 +376,7 @@ export const Sidebar: React.FC = () => {
             href="/templates"
             active={templatesActive}
             icon={ImagesSquare}
+            onNavigate={closePanel}
           />
         )}
         <SidebarRailLink
@@ -374,6 +385,7 @@ export const Sidebar: React.FC = () => {
           active={settingsActive}
           icon={Gear}
           className="sb-rail-button--bottom"
+          onNavigate={closePanel}
         />
       </nav>
     </aside>
