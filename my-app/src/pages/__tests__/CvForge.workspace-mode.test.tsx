@@ -995,6 +995,21 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
   useCvLibrary: () => useCvLibraryMock(),
 }));
 
+async function openSectionsPanel(user: ReturnType<typeof userEvent.setup>) {
+  if (!screen.queryByRole("complementary", { name: "CV sections" })) {
+    await user.click(screen.getByRole("button", { name: "Sections" }));
+  }
+  return screen.getByRole("complementary", { name: "CV sections" });
+}
+
+async function clickSectionOrganizerButton(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string | RegExp,
+) {
+  const sectionsPanel = await openSectionsPanel(user);
+  await user.click(within(sectionsPanel).getByRole("button", { name }));
+}
+
 function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
   const now = "2026-04-17T12:00:00.000Z";
   const currentCv = {
@@ -1918,7 +1933,7 @@ describe("CvForge workspace mode", () => {
     setItemSpy.mockRestore();
   });
 
-  it("renders the PR4 skeleton stage and section-scoped CV rail tabs", async () => {
+  it("renders the PR4 skeleton stage, left Sections panel entry, and Ask/Style rail tabs", async () => {
     const user = userEvent.setup();
 
     const { container } = render(
@@ -1938,7 +1953,14 @@ describe("CvForge workspace mode", () => {
       screen.getByRole("button", { name: "Import PDF" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New CV" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Sections" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Sections" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(
+      screen.queryByRole("tab", { name: "Sections" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Ask" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
@@ -1965,6 +1987,33 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByRole("link", { name: "→ Document style" }),
     ).toHaveAttribute("href", "/settings?tab=docstyle");
+
+    await user.click(screen.getByRole("button", { name: "Sections" }));
+
+    const sectionsPanel = screen.getByRole("complementary", {
+      name: "CV sections",
+    });
+    expect(sectionsPanel).toBeInTheDocument();
+    expect(within(sectionsPanel).queryByRole("tab", { name: "Ask" })).toBeNull();
+    expect(within(sectionsPanel).queryByRole("tab", { name: "Style" })).toBeNull();
+    expect(within(sectionsPanel).getByRole("button", { name: "Summary" })).toBeInTheDocument();
+    expect(sectionsPanel.querySelector(".dasti-cv-rail")).toBeNull();
+    expect(sectionsPanel.querySelector(".dasti-cv-rail-tabs")).toBeNull();
+    expect(sectionsPanel.querySelector(".dasti-cv-rail-pane")).toBeNull();
+    expect(
+      sectionsPanel.querySelector(".dasti-cv-sections-organizer"),
+    ).toBeInTheDocument();
+    expect(within(sectionsPanel).queryByText(/CV library/i)).toBeNull();
+    expect(within(sectionsPanel).queryByText(/proposals/i)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Templates" }));
+    expect(
+      screen.queryByRole("complementary", { name: "CV sections" }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Sections" }));
+    expect(
+      screen.getByRole("complementary", { name: "CV sections" }),
+    ).toBeInTheDocument();
   });
 
   it("opens a non-empty section editor from the paper in preview mode and highlights the rail row", async () => {
@@ -1986,6 +2035,7 @@ describe("CvForge workspace mode", () => {
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "experience-cv_123",
     );
+    await openSectionsPanel(user);
     expect(
       container.querySelector(
         '.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title',
@@ -2010,6 +2060,7 @@ describe("CvForge workspace mode", () => {
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "experience-cv_123",
     );
+    await openSectionsPanel(user);
     expect(
       container.querySelector(
         '.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title',
@@ -2050,6 +2101,7 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.queryByRole("dialog", { name: /Paper Summary/i }),
     ).not.toBeInTheDocument();
+    await openSectionsPanel(user);
     await waitFor(() =>
       expect(
         container.querySelector(
@@ -2161,6 +2213,7 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.queryByRole("dialog", { name: /Paper Custom section/i }),
     ).not.toBeInTheDocument();
+    await openSectionsPanel(user);
     await waitFor(() =>
       expect(
         container.querySelector(
@@ -2760,6 +2813,7 @@ describe("CvForge workspace mode", () => {
   });
 
   it("keeps structured rendered sections out of raw inline editing", async () => {
+    const user = userEvent.setup();
     const { container } = render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
         <CvForge />
@@ -2787,8 +2841,9 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByRole("button", { name: "Paper Experience" }),
     ).toBeInTheDocument();
+    const sectionsPanel = await openSectionsPanel(user);
     expect(
-      screen.getByRole("button", { name: /^Education$/i }),
+      within(sectionsPanel).getByRole("button", { name: /^Education$/i }),
     ).toBeInTheDocument();
   });
 
@@ -2801,7 +2856,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Education$/i }));
+    await clickSectionOrganizerButton(user, /^Education$/i);
 
     expect(
       screen.getByRole("dialog", { name: "Education" }),
@@ -2823,7 +2878,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Education$/i }));
+    await clickSectionOrganizerButton(user, /^Education$/i);
     await user.click(
       screen.getByRole("button", { name: "Add education entry" }),
     );
@@ -2850,7 +2905,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Profile$/i }));
+    await clickSectionOrganizerButton(user, /^Profile$/i);
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "Grace Hopper");
     await waitFor(() => expect(importCv).toHaveBeenCalled());
@@ -2870,7 +2925,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Profile$/i }));
+    await clickSectionOrganizerButton(user, /^Profile$/i);
     await user.type(screen.getByLabelText("Location"), "Paris");
 
     await waitFor(() =>
@@ -3018,7 +3073,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Profile$/i }));
+    await clickSectionOrganizerButton(user, /^Profile$/i);
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "Unsaved Name");
     await waitFor(() =>
@@ -3033,7 +3088,7 @@ describe("CvForge workspace mode", () => {
         importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name,
       ).toBe("Ada Lovelace"),
     );
-    await user.click(screen.getByRole("button", { name: /^Profile$/i }));
+    await clickSectionOrganizerButton(user, /^Profile$/i);
     expect(screen.getByLabelText("Name")).toHaveValue("Ada Lovelace");
   });
 
@@ -3046,7 +3101,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Skills$/i }));
+    await clickSectionOrganizerButton(user, /^Skills$/i);
     const skillsDialog = screen.getByRole("dialog", { name: "Skills" });
     expect(screen.queryByLabelText("Section title")).not.toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
@@ -3073,7 +3128,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await clickSectionOrganizerButton(user, /^Summary$/i);
 
     const summaryEditor = screen.getByTestId("drawer-rich-editor-summary");
     expect(summaryEditor).toBeInTheDocument();
@@ -3104,7 +3159,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Experience$/i }));
+    await clickSectionOrganizerButton(user, /^Experience$/i);
 
     const roleInput = screen.getByLabelText("Role 1");
     expect(roleInput.tagName).toBe("INPUT");
@@ -3201,9 +3256,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open Projects item editor" }),
-    );
+    await clickSectionOrganizerButton(user, "Open Projects item editor");
 
     const descriptionEditor = screen.getByTestId(
       "drawer-rich-editor-project-description-0",
@@ -3259,7 +3312,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await clickSectionOrganizerButton(user, /^Summary$/i);
     expect(screen.getByTestId("drawer-rich-editor-summary")).toHaveTextContent(
       "Focused builder.",
     );
@@ -3308,9 +3361,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open Projects item editor" }),
-    );
+    await clickSectionOrganizerButton(user, "Open Projects item editor");
     expect(
       screen.getByTestId("drawer-rich-editor-project-description-0"),
     ).toHaveTextContent("Project bullet");
@@ -3347,7 +3398,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Experience$/i }));
+    await clickSectionOrganizerButton(user, /^Experience$/i);
     expect(
       screen.getByTestId("drawer-rich-editor-experience-responsibilities-0"),
     ).toHaveTextContent("Led product design.");
@@ -3403,7 +3454,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await clickSectionOrganizerButton(user, /^Summary$/i);
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
@@ -3411,9 +3462,7 @@ describe("CvForge workspace mode", () => {
       true,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open Projects item editor" }),
-    );
+    await clickSectionOrganizerButton(user, "Open Projects item editor");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
@@ -3434,7 +3483,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await clickSectionOrganizerButton(user, /^Summary$/i);
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
@@ -3453,7 +3502,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Experience$/i }));
+    await clickSectionOrganizerButton(user, /^Experience$/i);
     const roleInput = screen.getByLabelText("Role 1");
     await user.clear(roleInput);
     await user.type(roleInput, "Senior product designer");
@@ -3480,7 +3529,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await clickSectionOrganizerButton(user, /^Summary$/i);
     await user.click(screen.getByRole("button", { name: "Rewrite summary" }));
 
     await waitFor(() =>
@@ -3510,7 +3559,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await clickSectionOrganizerButton(user, /^Summary$/i);
     await user.click(screen.getByRole("button", { name: "Rewrite summary" }));
     await screen.findByText("Evidence-backed summary.");
     await user.click(screen.getByRole("button", { name: "Accept" }));
@@ -3537,7 +3586,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Skills" }));
+    await clickSectionOrganizerButton(user, "Ask for Skills");
 
     const skillsDialog = screen.getByRole("dialog", { name: "Skills" });
     expect(skillsDialog).toBeInTheDocument();
@@ -3592,7 +3641,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Languages" }));
+    await clickSectionOrganizerButton(user, "Ask for Languages");
 
     const languagesDialog = screen.getByRole("dialog", { name: "Languages" });
     expect(languagesDialog).toBeInTheDocument();
@@ -3626,7 +3675,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Hobbies" }));
+    await clickSectionOrganizerButton(user, "Ask for Hobbies");
 
     const hobbiesDialog = screen.getByRole("dialog", { name: "Hobbies" });
     expect(
@@ -3685,7 +3734,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Skills" }));
+    await clickSectionOrganizerButton(user, "Ask for Skills");
     await user.click(
       await screen.findByRole("button", {
         name: "Add suggested item Design systems",
@@ -3727,7 +3776,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Skills$/i }));
+    await clickSectionOrganizerButton(user, /^Skills$/i);
     const skillsDialog = screen.getByRole("dialog", { name: "Skills" });
 
     expect(screen.getByDisplayValue("TypeScript")).toBeInTheDocument();
@@ -3738,7 +3787,7 @@ describe("CvForge workspace mode", () => {
       skillsDialog.querySelector(".dasti-cv-pill-editor__chip"),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Ask for Skills" }));
+    await clickSectionOrganizerButton(user, "Ask for Skills");
     await user.click(
       await screen.findByRole("button", {
         name: "Add suggested item Design systems",
@@ -3777,7 +3826,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Summary" }));
+    await clickSectionOrganizerButton(user, "Ask for Summary");
 
     expect(screen.getAllByText("Summary").length).toBeGreaterThan(0);
     await waitFor(() =>
@@ -3827,7 +3876,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Languages" }));
+    await clickSectionOrganizerButton(user, "Ask for Languages");
 
     expect(
       screen.getByRole("dialog", { name: "Languages" }),
@@ -3855,7 +3904,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Skills$/i }));
+    await clickSectionOrganizerButton(user, /^Skills$/i);
     const addSkillInput = screen.getByLabelText("Skill");
     await user.type(addSkillInput, "Design systems");
     await user.click(screen.getByRole("button", { name: "Add" }));
@@ -3873,14 +3922,14 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Skills" }));
+    await clickSectionOrganizerButton(user, "Ask for Skills");
     const skillsDialog = screen.getByRole("dialog", { name: "Skills" });
     expect(
       await within(skillsDialog).findByText("Design systems"),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Sections" }));
-    await user.click(screen.getByRole("button", { name: "Ask for Summary" }));
+    await user.click(screen.getByRole("button", { name: "Sections" }));
+    await clickSectionOrganizerButton(user, "Ask for Summary");
 
     expect(screen.getAllByText("Summary").length).toBeGreaterThan(0);
     expect(screen.queryByText("Design systems")).not.toBeInTheDocument();
@@ -3928,17 +3977,16 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open Projects item editor" }),
-    );
+    await clickSectionOrganizerButton(user, "Open Projects item editor");
 
     expect(
       screen.getByRole("dialog", { name: "Projects" }),
     ).toBeInTheDocument();
     expect(screen.getByDisplayValue("CV Forge")).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: "Ask" })).toHaveAttribute(
+    expect(screen.queryByRole("tab", { name: "Sections" })).toBeNull();
+    expect(screen.getByRole("tab", { name: "Ask" })).toHaveAttribute(
       "aria-selected",
-      "false",
+      "true",
     );
     expect(transformEditorSelectionMock).not.toHaveBeenCalled();
   });
@@ -3986,9 +4034,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open Projects item editor" }),
-    );
+    await clickSectionOrganizerButton(user, "Open Projects item editor");
     await user.click(
       screen.getByRole("button", { name: "Improve description" }),
     );
@@ -4023,9 +4069,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Delete Certifications" }),
-    );
+    await clickSectionOrganizerButton(user, "Delete Certifications");
 
     await waitFor(() => expect(importCv).toHaveBeenCalledTimes(1));
     expect(
@@ -4035,7 +4079,7 @@ describe("CvForge workspace mode", () => {
     ).toBe(false);
   });
 
-  it("persists keyboard reorder from the rail handle", async () => {
+  it("persists keyboard reorder from the section organizer row", async () => {
     const user = userEvent.setup();
     const importCv = vi.fn(async () => undefined);
     useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
@@ -4046,7 +4090,8 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    screen.getByRole("button", { name: "Reorder Skills" }).focus();
+    const sectionsPanel = await openSectionsPanel(user);
+    within(sectionsPanel).getByRole("button", { name: /^Skills$/i }).focus();
     await user.keyboard("{ArrowUp}");
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
@@ -4084,7 +4129,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Summary" }));
+    await clickSectionOrganizerButton(user, "Ask for Summary");
     expect(importCv).not.toHaveBeenCalled();
     expect(
       screen.queryByRole("button", { name: "Warm" }),
@@ -4132,7 +4177,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Add section" }));
+    await clickSectionOrganizerButton(user, "Add section");
     expect(
       document.body.querySelector(".dasti-cv-add-section-menu"),
     ).toBeInTheDocument();
