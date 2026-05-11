@@ -393,7 +393,6 @@ export function CvSectionsOrganizer({
   return (
     <div className="dasti-cv-sections-organizer" data-cv-sections-organizer="true">
       <div className="dasti-cv-sections-organizer__head">
-        <span className="dasti-cv-sections-organizer__label">Organize</span>
         <span className="dasti-cv-sections-organizer__hint">
           <span>Drag to reorder</span>
           <span aria-hidden="true">·</span>

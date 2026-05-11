@@ -2830,6 +2830,8 @@ export function CvForge(): JSX.Element {
   const [importReviewOpen, setImportReviewOpen] = React.useState(false);
   const [dismissedImportReviewCvIds, setDismissedImportReviewCvIds] =
     React.useState<string[]>([]);
+  const [cvPreviewPageCount, setCvPreviewPageCount] =
+    React.useState<number | null>(null);
   const currentSections = React.useMemo<CvSection[]>(
     () => (currentCv?.sections ?? []) as CvSection[],
     [currentCv?.sections],
@@ -3448,6 +3450,9 @@ export function CvForge(): JSX.Element {
   const handleExportDocx = React.useCallback(() => {
     void handleResumeExport({ format: "docx" });
   }, [handleResumeExport]);
+  const handleCvPreviewPageCountChange = React.useCallback((pageCount: number) => {
+    setCvPreviewPageCount((current) => (current === pageCount ? current : pageCount));
+  }, []);
   const cvTopbarRegistration = React.useMemo(
     () => ({
       mode: workspaceMode,
@@ -3455,12 +3460,14 @@ export function CvForge(): JSX.Element {
       hasTrustedExport,
       importIssueCount: importReviewBlocks.length,
       exporting: exportingFormat !== null,
+      pageCount: cvPreviewPageCount,
       onOpenImportReview: handleOpenImportReview,
       onExportPdf: handleExportStyledPdf,
       onExportDocx: handleExportDocx,
     }),
     [
       currentCv,
+      cvPreviewPageCount,
       exportingFormat,
       handleExportDocx,
       handleExportStyledPdf,
@@ -6453,6 +6460,7 @@ export function CvForge(): JSX.Element {
                     showPageCount={
                       workspaceMode === "preview" && Boolean(currentCv)
                     }
+                    onPageCountChange={handleCvPreviewPageCountChange}
                   />
                   {inlinePaperSelectionState ? (
                     <FloatingAiToolbar

@@ -6,16 +6,10 @@ import CvStageBar from "../CvStageBar";
 
 const baseProps = {
   mode: "edit" as const,
-  hasCurrentCv: true,
-  hasTrustedExport: true,
-  importIssueCount: 0,
   exporting: false,
   tone: "natural" as const,
   onModeChange: vi.fn(),
-  onOpenImportReview: vi.fn(),
   onPickResume: vi.fn(),
-  onExportPdf: vi.fn(),
-  onExportDocx: vi.fn(),
 };
 
 describe("CvStageBar", () => {
@@ -62,19 +56,15 @@ describe("CvStageBar", () => {
     const previewTrigger = screen.getByRole("button", {
       name: "Page preview",
     });
-    const shareTrigger = screen.getByRole("button", { name: "Share" });
     expect(editTrigger).toHaveAttribute("data-toolbar-tooltip", "Edit");
     expect(previewTrigger).toHaveAttribute("data-toolbar-tooltip", "Preview");
-    expect(shareTrigger).toHaveAttribute("data-toolbar-tooltip", "Share");
     expect(editTrigger).not.toHaveAttribute("title");
     expect(previewTrigger).not.toHaveAttribute("title");
-    expect(shareTrigger).not.toHaveAttribute("title");
     expect(screen.getByText("Natural")).toBeInTheDocument();
     expect(screen.queryByText("Natural tone")).not.toBeInTheDocument();
-    expect(screen.getByText("Saved").closest(".ds-status")).toBeTruthy();
-    expect(
-      screen.getByText("ATS", { selector: ".dasti-cv-ats__mark" }),
-    ).toBeInTheDocument();
+    expect(screen.queryByText("Saved")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
+    expect(screen.queryByText("ATS-ready")).not.toBeInTheDocument();
     expect(screen.queryByText("OK")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Import CV/i }),

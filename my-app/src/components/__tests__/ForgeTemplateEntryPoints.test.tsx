@@ -53,19 +53,13 @@ function CvTemplateEntryPoint({
       <RegisterTemplates surface="cv" onSelect={onSelect} />
       <CvStageBar
         mode="edit"
-        hasCurrentCv
-        hasTrustedExport
-        importIssueCount={0}
         exporting={false}
         tone="natural"
         resumeOptions={[]}
         templatesOpen={open && activeSurface === "cv"}
         onModeChange={vi.fn()}
         onOpenTemplates={() => openSurface("cv")}
-        onOpenImportReview={vi.fn()}
         onPickResume={vi.fn()}
-        onExportPdf={vi.fn()}
-        onExportDocx={vi.fn()}
       />
     </>
   );

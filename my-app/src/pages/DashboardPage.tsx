@@ -231,6 +231,44 @@ export function DashboardPage(): JSX.Element {
           </div>
         </header>
 
+        <section className="today-section" aria-labelledby="create-title">
+          <SectionHeading
+            id="create-title"
+            title="Create"
+            copy="Start a concrete workflow."
+          />
+          <div className="today-create-actions">
+            <Button
+              variant="secondary"
+              onClick={importCv}
+              iconLeft={<Upload size={16} aria-hidden="true" />}
+            >
+              Import CV
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => navigate("/jobs")}
+              iconLeft={<Target size={16} aria-hidden="true" />}
+            >
+              Add job
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={startNewProposal}
+              iconLeft={<PencilLine size={16} aria-hidden="true" />}
+            >
+              New proposal
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => navigate("/templates")}
+              iconLeft={<ImagesSquare size={16} aria-hidden="true" />}
+            >
+              Start from template
+            </Button>
+          </div>
+        </section>
+
         <section className="today-section" aria-labelledby="continue-title">
           <SectionHeading
             id="continue-title"
@@ -309,43 +347,6 @@ export function DashboardPage(): JSX.Element {
           )}
         </section>
 
-        <section className="today-section" aria-labelledby="create-title">
-          <SectionHeading
-            id="create-title"
-            title="Create"
-            copy="Start a concrete workflow."
-          />
-          <div className="today-create-actions">
-            <Button
-              variant="secondary"
-              onClick={importCv}
-              iconLeft={<Upload size={16} aria-hidden="true" />}
-            >
-              Import CV
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => navigate("/jobs")}
-              iconLeft={<Target size={16} aria-hidden="true" />}
-            >
-              Add job
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={startNewProposal}
-              iconLeft={<PencilLine size={16} aria-hidden="true" />}
-            >
-              New proposal
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => navigate("/templates")}
-              iconLeft={<ImagesSquare size={16} aria-hidden="true" />}
-            >
-              Start from template
-            </Button>
-          </div>
-        </section>
       </div>
     </main>
   );
