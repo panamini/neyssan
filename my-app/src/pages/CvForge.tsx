@@ -2196,6 +2196,10 @@ function isSummaryOnlyCvDocument(cv: CvDocument | null | undefined): boolean {
   );
 }
 
+function cvForgeDrawerSourceId(item: LibraryItem): string {
+  return item.id.slice(item.id.indexOf(":") + 1);
+}
+
 function readCvForgeDrawerRecentSearches(storageKey: string): string[] {
   if (typeof window === "undefined") return [];
   try {
@@ -2343,16 +2347,18 @@ function CvForgeDrawerPreview({
   item,
   hydrateCvDocument,
   badge,
+  actionPill,
 }: {
   item: LibraryItem;
   hydrateCvDocument: (id: string) => Promise<CvDocument | null>;
   badge?: string | null;
+  actionPill?: React.ReactNode;
 }): JSX.Element {
   if (item.type === "proposal") {
-    return <DrawerDocumentTile item={item} badge={badge} />;
+    return <DrawerDocumentTile item={item} badge={badge} actionPill={actionPill} />;
   }
 
-  const sourceId = item.id.slice(item.id.indexOf(":") + 1);
+  const sourceId = cvForgeDrawerSourceId(item);
   const [hydratedCv, setHydratedCv] = React.useState<CvDocument | null>(
     item.cvDocument && !isSummaryOnlyCvDocument(item.cvDocument)
       ? item.cvDocument
@@ -2390,7 +2396,122 @@ function CvForgeDrawerPreview({
     );
   }
 
-  return <DrawerDocumentTile item={item} cvDocument={hydratedCv} badge={badge} />;
+  return (
+    <DrawerDocumentTile
+      item={item}
+      cvDocument={hydratedCv}
+      badge={badge}
+      actionPill={actionPill}
+    />
+  );
+}
+
+export function CvForgeCvDrawer({
+  items,
+  currentCvId,
+  hydrateCvDocument,
+  onSelectCv,
+  onOpenCv,
+}: {
+  items: LibraryItem[];
+  currentCvId: string | null;
+  hydrateCvDocument: (id: string) => Promise<CvDocument | null>;
+  onSelectCv: (id: string) => void;
+  onOpenCv: (id: string) => void;
+}): JSX.Element {
+  const [query, setQuery] = React.useState("");
+  const allResultsRef = React.useRef<HTMLDivElement | null>(null);
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredItems = items.filter((item) => {
+    if (item.type !== "cv") return false;
+    return normalizedQuery
+      ? [item.title, item.subtitle]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery)
+      : true;
+  });
+  const recentItems = React.useMemo(() => {
+    const alternatives = filteredItems.filter(
+      (item) => currentCvId !== cvForgeDrawerSourceId(item),
+    );
+    return (alternatives.length >= 2 ? alternatives : filteredItems).slice(0, 2);
+  }, [currentCvId, filteredItems]);
+  const handleShowAll = () => {
+    setQuery("");
+    window.setTimeout(() => {
+      allResultsRef.current?.scrollIntoView({ block: "start" });
+      allResultsRef.current?.focus();
+    }, 0);
+  };
+  const renderItem = (item: LibraryItem, keyPrefix = "") => {
+    const sourceId = cvForgeDrawerSourceId(item);
+    const selected = currentCvId === sourceId;
+    return (
+      <article
+        key={`${keyPrefix}${item.id}`}
+        className="forge-rail-drawer__thumb-item"
+        data-state={selected ? "current" : undefined}
+        role="listitem"
+      >
+        <button
+          type="button"
+          className="forge-template-card forge-rail-drawer__thumb-button"
+          aria-label={`Open CV: ${item.title}`}
+          aria-pressed={selected}
+          onClick={() => onSelectCv(sourceId)}
+        >
+          <CvForgeDrawerPreview
+            item={item}
+            hydrateCvDocument={hydrateCvDocument}
+            badge={selected ? "Current" : null}
+            actionPill="Switch CV"
+          />
+        </button>
+        <button
+          type="button"
+          className="forge-rail-drawer__thumb-menu forge-rail-drawer__thumb-menu--direct"
+          aria-label={`Open full CV: ${item.title}`}
+          data-toolbar-tooltip="Open full CV"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenCv(sourceId);
+          }}
+        >
+          <ArrowSquareOut size={15} aria-hidden="true" />
+        </button>
+      </article>
+    );
+  };
+
+  return (
+    <div className="forge-rail-drawer">
+      <CvForgeDrawerSearch
+        value={query}
+        onChange={setQuery}
+        placeholder="Search CVs"
+        storageKey="twoweeks:forge-drawer:recent-cvforge-cv-searches"
+      />
+      <div className="forge-rail-drawer__grid" role="list">
+        <CvForgeDrawerSectionTitle
+          title="Recently viewed"
+          actionLabel={filteredItems.length > recentItems.length ? "Show all CVs" : undefined}
+          onAction={handleShowAll}
+        />
+        {recentItems.map((item) => renderItem(item, "recent-"))}
+        <CvForgeDrawerSectionTitle
+          title="All results"
+          sectionRef={allResultsRef}
+          focusable
+        />
+        {filteredItems.map((item) => renderItem(item))}
+        {filteredItems.length === 0 ? (
+          <p className="forge-rail-drawer__empty">No CVs found.</p>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 export function CvForgeLibraryDrawer({
@@ -2432,7 +2553,7 @@ export function CvForgeLibraryDrawer({
     return (alternatives.length >= 2 ? alternatives : filteredItems).slice(0, 2);
   }, [currentCvId, filteredItems]);
   const renderItem = (item: LibraryItem, keyPrefix = "") => {
-    const sourceId = item.id.slice(item.id.indexOf(":") + 1);
+    const sourceId = cvForgeDrawerSourceId(item);
     const selected = item.type === "cv" && currentCvId === sourceId;
     return (
       <article
@@ -4894,6 +5015,13 @@ export function CvForge(): JSX.Element {
     },
     [closeForgePanel, loadCv],
   );
+  const handleOpenCvFromLibraryDrawer = React.useCallback(
+    (cvId: string) => {
+      closeForgePanel();
+      void navigate(`/cv?id=${encodeURIComponent(cvId)}`);
+    },
+    [closeForgePanel, navigate],
+  );
   const handleOpenCvLibraryItemFromDrawer = React.useCallback(
     (item: LibraryItem) => {
       closeForgePanel();
@@ -4910,6 +5038,35 @@ export function CvForge(): JSX.Element {
     },
     [closeForgePanel, navigate],
   );
+  const cvOnlyPanelRegistration = React.useMemo(
+    () => ({
+      surface: "cvs" as const,
+      title: "CV library",
+      icon: <FileUser size={16} aria-hidden="true" />,
+      renderContent: () => (
+        <CvForgeCvDrawer
+          items={cvLibraryDrawerItems}
+          currentCvId={currentCvId}
+          hydrateCvDocument={hydrateCvDocument}
+          onSelectCv={handleSelectCvFromLibraryDrawer}
+          onOpenCv={handleOpenCvFromLibraryDrawer}
+        />
+      ),
+      footer: {
+        label: "Open Library",
+        onSelect: () => navigate("/documents?type=cvs"),
+      },
+    }),
+    [
+      currentCvId,
+      cvLibraryDrawerItems,
+      handleOpenCvFromLibraryDrawer,
+      handleSelectCvFromLibraryDrawer,
+      hydrateCvDocument,
+      navigate,
+    ],
+  );
+  useRegisterForgePanel(cvOnlyPanelRegistration);
   const cvLibraryPanelRegistration = React.useMemo(
     () => ({
       surface: "documents" as const,

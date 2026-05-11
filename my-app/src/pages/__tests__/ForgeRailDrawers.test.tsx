@@ -10,7 +10,10 @@ import {
   ProposalCvDrawer,
   ProposalLibraryDrawer,
 } from "../ProposalForge";
-import { CvForgeLibraryDrawer } from "../CvForge";
+import {
+  CvForgeCvDrawer,
+  CvForgeLibraryDrawer,
+} from "../CvForge";
 import type { LibraryItem } from "../../lib/application-library";
 import type { CvDocument } from "../../types/cvDocument";
 
@@ -18,13 +21,23 @@ vi.mock("../../components/library/LibraryDocumentPreview", () => ({
   DrawerDocumentTile: ({
     item,
     badge,
+    actionPill,
   }: {
     item: LibraryItem;
     badge?: string | null;
+    actionPill?: React.ReactNode;
   }) => (
-    <span data-testid={`drawer-preview-${item.id}`}>
-      {item.title}
-      {badge ? <span className="forge-rail-document-tile__badge">{badge}</span> : null}
+    <span className="forge-rail-document-tile" data-testid={`drawer-tile-${item.id}`}>
+      <span className="forge-rail-document-tile__preview" data-testid={`drawer-preview-${item.id}`}>
+        {badge ? <span className="forge-rail-document-tile__badge">{badge}</span> : null}
+        {actionPill ? (
+          <span className="forge-rail-drawer__thumb-affordance">{actionPill}</span>
+        ) : null}
+      </span>
+      <span className="forge-rail-document-tile__caption">
+        <strong>{item.title}</strong>
+        <span>meta</span>
+      </span>
     </span>
   ),
   DrawerUnavailableThumbnail: ({ label }: { label?: string }) => (
@@ -106,46 +119,56 @@ describe("forge rail drawers", () => {
 
   it("wires CV attach drawer tile and external CV actions", () => {
     const onSelectCv = vi.fn();
-    const onOpenCvLibrary = vi.fn();
+    const onOpenCv = vi.fn();
     render(
       <ProposalCvDrawer
         items={[cvItem("cv-one", "CV one")]}
         activeCvId={null}
         hydrateCvDocument={hydrateCvDocument}
         onSelectCv={onSelectCv}
-        onOpenCvLibrary={onOpenCvLibrary}
+        onOpenCv={onOpenCv}
       />,
     );
 
     fireEvent.click(screen.getAllByRole("button", { name: "Attach CV: CV one" })[0]);
     expect(onSelectCv).toHaveBeenCalledWith("cv-one");
+    expect(screen.getAllByText("Attach CV").length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId("drawer-preview-cv:cv-one")[0]).toHaveTextContent(
+      "Attach CV",
+    );
+    expect(
+      screen.getAllByTestId("drawer-tile-cv:cv-one")[0].querySelector(
+        ".forge-rail-document-tile__caption strong",
+      ),
+    ).toHaveTextContent("CV one");
 
-    const openCv = screen.getAllByRole("button", { name: "Open CV library for CV one" })[0];
-    expect(openCv).toHaveAttribute("data-toolbar-tooltip", "Open CV library");
+    const openCv = screen.getAllByRole("button", { name: "Open full CV: CV one" })[0];
+    expect(openCv).toHaveAttribute("data-toolbar-tooltip", "Open full CV");
     fireEvent.click(openCv);
-    expect(onOpenCvLibrary).toHaveBeenCalled();
+    expect(onOpenCv).toHaveBeenCalledWith("cv-one");
   });
 
   it("wires saved proposal drawer primary and external actions to the same proposal item", () => {
     const onOpenItem = vi.fn();
-    const onOpenProposalLibrary = vi.fn();
+    const onOpenProposal = vi.fn();
     const item = savedProposalItem("proposal-one", "Proposal one");
     render(
       <ProposalLibraryDrawer
         items={[item]}
         hydrateCvDocument={hydrateCvDocument}
         onOpenItem={onOpenItem}
-        onOpenProposalLibrary={onOpenProposalLibrary}
+        onOpenProposal={onOpenProposal}
       />,
     );
 
     fireEvent.click(screen.getAllByRole("button", { name: "Open proposal Proposal one" })[0]);
     expect(onOpenItem).toHaveBeenLastCalledWith(item);
+    expect(screen.getAllByText("Open").length).toBeGreaterThan(0);
 
-    const openProposal = screen.getAllByRole("button", { name: "Open proposals library for Proposal one" })[0];
-    expect(openProposal).toHaveAttribute("data-toolbar-tooltip", "Open proposals");
+    const openProposal = screen.getAllByRole("button", { name: "Open full proposal: Proposal one" })[0];
+    expect(openProposal).toHaveAttribute("data-toolbar-tooltip", "Open proposal");
     fireEvent.click(openProposal);
-    expect(onOpenProposalLibrary).toHaveBeenCalled();
+    expect(onOpenProposal).toHaveBeenCalledWith(item);
     expect(item.routeTarget).toEqual({
       kind: "route",
       to: "/proposal?view=saved&id=proposal-one",
@@ -327,7 +350,7 @@ describe("forge rail drawers", () => {
   });
 
   it("reveals all CVs from the CV attach drawer Show all action", () => {
-    const onOpenCvLibrary = vi.fn();
+    const onOpenCv = vi.fn();
     const { container } = render(
       <ProposalCvDrawer
         items={[
@@ -338,7 +361,7 @@ describe("forge rail drawers", () => {
         activeCvId="two"
         hydrateCvDocument={hydrateCvDocument}
         onSelectCv={vi.fn()}
-        onOpenCvLibrary={onOpenCvLibrary}
+        onOpenCv={onOpenCv}
       />,
     );
 
@@ -348,6 +371,9 @@ describe("forge rail drawers", () => {
     expect(screen.getByText("All results")).toBeInTheDocument();
     expect(screen.getAllByText("Attached").length).toBeGreaterThan(0);
     expect(screen.getByText("Attached")).toHaveClass("forge-rail-document-tile__badge");
+    expect(screen.getAllByTestId("drawer-preview-cv:two")[0]).toHaveTextContent(
+      "Attach CV",
+    );
     expect(screen.getAllByText("CV two")).toHaveLength(1);
     expect(
       screen.getByRole("button", { name: "Attach CV: CV two" }).closest("article"),
@@ -361,8 +387,8 @@ describe("forge rail drawers", () => {
       ),
     ).toBe(false);
     expect(screen.queryByRole("button", { name: "More actions for CV two" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Open CV library for CV two" }));
-    expect(onOpenCvLibrary).toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole("button", { name: "Open full CV: CV two" })[0]);
+    expect(onOpenCv).toHaveBeenCalledWith("two");
 
     fireEvent.click(screen.getByRole("button", { name: "Show all CVs" }));
     expect(screen.getAllByText("CV three").length).toBeGreaterThan(0);
@@ -370,7 +396,7 @@ describe("forge rail drawers", () => {
 
   it("reveals all proposals from the proposal drawer Show all action", () => {
     const onOpenItem = vi.fn();
-    const onOpenProposalLibrary = vi.fn();
+    const onOpenProposal = vi.fn();
     render(
       <ProposalLibraryDrawer
         items={[
@@ -380,7 +406,7 @@ describe("forge rail drawers", () => {
         ]}
         hydrateCvDocument={hydrateCvDocument}
         onOpenItem={onOpenItem}
-        onOpenProposalLibrary={onOpenProposalLibrary}
+        onOpenProposal={onOpenProposal}
       />,
     );
 
@@ -389,11 +415,42 @@ describe("forge rail drawers", () => {
     expect(screen.getByText("Proposal three")).toBeInTheDocument();
     expect(screen.getByText("All results")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "More actions for Proposal one" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Open proposals library for Proposal one" })[0]);
-    expect(onOpenProposalLibrary).toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole("button", { name: "Open full proposal: Proposal one" })[0]);
+    expect(onOpenProposal).toHaveBeenCalledWith(expect.objectContaining({ id: "proposal:one" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Show all proposals" }));
     expect(screen.getByText("Proposal three")).toBeInTheDocument();
+  });
+
+  it("renders the CV Forge CV rail drawer as CV-only without library tabs or bulk selection", () => {
+    const onSelectCv = vi.fn();
+    const onOpenCv = vi.fn();
+    render(
+      <CvForgeCvDrawer
+        items={[
+          cvItem("one", "CV one"),
+          cvItem("two", "CV two"),
+          proposalItem("one", "Proposal one"),
+        ]}
+        currentCvId="one"
+        hydrateCvDocument={hydrateCvDocument}
+        onSelectCv={onSelectCv}
+        onOpenCv={onOpenCv}
+      />,
+    );
+
+    expect(screen.queryByRole("tab", { name: "All" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "CVs" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Proposals" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Current").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Proposal one")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Open CV: CV two" })[0]);
+    expect(onSelectCv).toHaveBeenCalledWith("two");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Open full CV: CV two" })[0]);
+    expect(onOpenCv).toHaveBeenCalledWith("two");
   });
 
   it("renders the CV Forge mixed library drawer with CVs active by default", () => {

@@ -102,6 +102,28 @@ function RegisterCvPanels(): null {
   useRegisterForgePanel(
     React.useMemo(
       () => ({
+        surface: "cvs",
+        title: "CV library",
+        renderContent: () => <div>CV library drawer content</div>,
+        footer: { label: "Open Library", onSelect: () => navigate("/documents?type=cvs") },
+      }),
+      [],
+    ),
+  );
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "proposals",
+        title: "Saved proposals",
+        renderContent: () => <div>Saved proposals drawer content</div>,
+        footer: { label: "Open Library", onSelect: () => navigate("/documents?type=proposals") },
+      }),
+      [],
+    ),
+  );
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
         surface: "documents",
         title: "Library",
         renderContent: () => <div>Library drawer content</div>,
@@ -232,7 +254,7 @@ describe("Sidebar permanent rail", () => {
     renderSidebar(path);
 
     const currentItem =
-      path === "/proposal"
+      path === "/proposal" || path === "/cv"
         ? screen.getByRole("button", { name: label })
         : screen.getByRole("link", { name: label });
     expect(currentItem).toHaveAttribute(
@@ -261,7 +283,7 @@ describe("Sidebar permanent rail", () => {
 
     expect(templates).toHaveAttribute("aria-expanded", "true");
     expect(templates).toHaveClass("sb-rail-button--panel-open");
-    expect(screen.getByRole("link", { name: "CV" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "CV" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -270,6 +292,46 @@ describe("Sidebar permanent rail", () => {
 
     fireEvent.click(screen.getByRole("listitem", { name: "Schematic" }));
     expect(onSelect).toHaveBeenCalledWith("schematic");
+  });
+
+  it("opens the CV Forge CV drawer without navigating and keeps Proposal as page navigation", () => {
+    renderSidebar("/cv", <RegisterCvPanels />);
+
+    const cv = screen.getByRole("button", { name: "CV" });
+
+    fireEvent.click(cv);
+
+    expect(screen.getByRole("complementary", { name: "CV library" })).toBeInTheDocument();
+    expect(screen.getByText("CV library drawer content")).toBeInTheDocument();
+    expect(cv).toHaveAttribute("aria-current", "page");
+    expect(screen.getByTestId("location")).toHaveTextContent("/cv");
+
+    const proposal = screen.getByRole("link", { name: "Proposal" });
+    expect(proposal).toHaveAttribute("href", "/proposal");
+    fireEvent.click(proposal);
+    expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+    expect(screen.queryByRole("complementary", { name: "CV library" })).not.toBeInTheDocument();
+  });
+
+  it("keeps CV Forge Jobs as direct navigation and Projects as mixed library", () => {
+    renderSidebar("/cv", <RegisterCvPanels />);
+
+    fireEvent.click(screen.getByRole("link", { name: "Jobs" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/jobs");
+  });
+
+  it("opens the CV Forge mixed library drawer from Projects", () => {
+    renderSidebar("/cv", <RegisterCvPanels />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+
+    expect(screen.getByRole("complementary", { name: "Library" })).toBeInTheDocument();
+    expect(screen.getByText("Library drawer content")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "CV" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent("/cv");
   });
 
   it.each(["/dashboard", "/documents"])(

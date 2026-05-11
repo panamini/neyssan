@@ -36,6 +36,12 @@ describe("sidebar visual CSS contracts", () => {
       /\.sb-rail-button:hover \.sb-rail-button__icon\s*\{[\s\S]*background:\s*var\(--sidebar-hover-bg\);[\s\S]*color:\s*var\(--ti\);/,
     );
     expect(productCss).toMatch(
+      /\.sb-rail-button:focus-visible\s*\{[\s\S]*outline:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.sb-rail-button:focus-visible \.sb-rail-button__icon\s*\{[\s\S]*background:\s*var\(--sidebar-hover-bg\);[\s\S]*box-shadow:[\s\S]*var\(--color-border-strong\)[\s\S]*var\(--ti\)/,
+    );
+    expect(productCss).toMatch(
       /\.sb-rail-button--route-active,\s*\.sb-rail-button--active\s*\{[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--ti\);/,
     );
     expect(productCss).toMatch(
