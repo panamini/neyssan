@@ -266,6 +266,11 @@ describe("forge rail drawers", () => {
       /\.app-shell\[data-forge-panel-docked="true"\]\s*\{[\s\S]*var\(--app-nav-panel-width-wide\)/,
     );
     expect(proposalSource).toContain("data-forge-drawer-docked");
+    expect(proposalSource).toContain("FORGE_DOCKED_PANEL_INLINE_SIZE_PX = 352");
+    expect(proposalSource).toContain("proposalLayoutViewportWidth");
+    expect(proposalSource).toContain(
+      "proposalLayoutViewportWidth < proposalTwoPaneMinViewportWidth",
+    );
     expect(proposalSource).toContain(
       "minmax(0, 1fr) var(--proposal-workspace-rail-inline-size)",
     );
