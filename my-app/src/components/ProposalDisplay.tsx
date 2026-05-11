@@ -774,6 +774,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       onRailTitleChange ||
       onRailMetaChange,
   );
+  const hasDocumentShell =
+    usesDocumentRenderer &&
+    (Boolean(proposalContent) || isEditable || canEditApplicantHeader);
   const applicantDisplayName =
     typeof railTitle === "string"
       ? railTitle.trim()
@@ -835,7 +838,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     showZoomControls &&
     !loading &&
     !error &&
-    Boolean(proposalContent) &&
+    hasDocumentShell &&
     usesDocumentRenderer &&
     !isEditable;
   const activeScrollTop = isEditable
@@ -855,7 +858,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     "--proposal-scroll-bottom-strength": activeScrollBottomStrength.toFixed(3),
   } as React.CSSProperties;
   const stageLayout = useDocumentStageLayout({
-    enabled: usesDocumentRenderer && Boolean(proposalContent),
+    enabled: hasDocumentShell,
     measurementRef: stageMeasureRef,
     zoomLevel: effectiveZoomLevel,
     fitMode: usesDocumentRenderer && !isEditable ? previewFitMode : "width",
@@ -866,7 +869,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     pageHeightPx: A4_PAGE_HEIGHT_PX,
   });
   const stageLayoutVars =
-    usesDocumentRenderer && proposalContent
+    hasDocumentShell
       ? ({
           "--document-stage-width": `${stageLayout.stageWidth}px`,
           "--document-stage-height": `${stageLayout.stageHeight}px`,
@@ -2343,6 +2346,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   documentTypography={documentTypography}
                   signatureSettings={signatureSettings}
                   closing={closing}
+                  emptyBodyPlaceholder={
+                    !proposalContent && !isEditable
+                      ? "No draft yet. Add a job offer to generate, or start blank."
+                      : null
+                  }
                   pageWidth={A4_PAGE_WIDTH_PX}
                   pageGapPx={unscaledDocumentPageGapPx}
                   onPageCountChange={setDocumentPageCount}
@@ -2454,7 +2462,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         </div>
       </div>
     );
-  } else if (!proposalContent && !isEditable) {
+  } else if (!proposalContent && !isEditable && !hasDocumentShell) {
     sheetBody = (
       <div
         className={resolveBodyClassName()}

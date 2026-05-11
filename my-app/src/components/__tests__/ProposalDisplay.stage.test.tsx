@@ -40,9 +40,15 @@ vi.mock("../../hooks/use-document-viewport-centering", () => ({
 vi.mock("../proposal-render/ProposalDocumentRenderer", () => ({
   ProposalDocumentRenderer: ({
     content,
+    railTitle,
+    contactLine,
+    emptyBodyPlaceholder,
     onPageCountChange,
   }: {
     content: string;
+    railTitle?: string | null;
+    contactLine?: string | null;
+    emptyBodyPlaceholder?: string | null;
     onPageCountChange?: (count: number) => void;
   }) => {
     const explicitPageCount = content.match(/\[PAGES=(\d+)\]/)?.[1];
@@ -57,6 +63,18 @@ vi.mock("../proposal-render/ProposalDocumentRenderer", () => ({
 
     return (
       <div data-testid="proposal-document-renderer">
+        <div data-testid="proposal-document-content">{content}</div>
+        {railTitle ? (
+          <div data-testid="proposal-document-title">{railTitle}</div>
+        ) : null}
+        {contactLine ? (
+          <div data-testid="proposal-document-contact">{contactLine}</div>
+        ) : null}
+        {emptyBodyPlaceholder ? (
+          <div data-testid="proposal-document-empty-body">
+            {emptyBodyPlaceholder}
+          </div>
+        ) : null}
         {Array.from({ length: pageCount }, (_, index) => (
           <div
             key={index}
@@ -182,6 +200,38 @@ describe("ProposalDisplay stage behavior", () => {
       fitMode: "width",
       fillAvailableOnZoom: false,
       includeParentMeasurement: false,
+    });
+  });
+
+  it("renders the document heading shell even when the proposal body is empty", () => {
+    render(
+      <ProposalDisplay
+        proposalContent={null}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        mode="preview"
+        railTitle="Alex Martin"
+        railMeta="Operations Associate"
+        contactLine="alex@example.com · Paris"
+        onRailTitleChange={vi.fn()}
+        onRailMetaChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("proposal-document-renderer")).toBeInTheDocument();
+    expect(screen.getByTestId("proposal-document-content")).toHaveTextContent("");
+    expect(screen.getByTestId("proposal-document-title")).toHaveTextContent(
+      "Alex Martin",
+    );
+    expect(screen.getByTestId("proposal-document-contact")).toHaveTextContent(
+      "alex@example.com · Paris",
+    );
+    expect(screen.getByTestId("proposal-document-empty-body")).toHaveTextContent(
+      "No draft yet.",
+    );
+    expect(stageLayoutSpy.mock.calls.at(-1)?.[0]).toMatchObject({
+      enabled: true,
     });
   });
 
