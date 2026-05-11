@@ -79,7 +79,6 @@ function ProposalTemplateEntryPoint({
     <>
       <RegisterTemplates surface="proposal" onSelect={onSelect} />
       <ProposalDocumentStage
-        statusLabel="Draft"
         toneLabel="Natural"
         toneValue="natural"
         mode="edit"

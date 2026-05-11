@@ -5,7 +5,8 @@ import { useAuth, useUser, UserButton } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { useCvForgeTopbarRegistration } from "../contexts/CvForgeTopbarContext";
-import { IconButton, Pill } from "./ui";
+import { useProposalForgeTopbarRegistration } from "../contexts/ProposalForgeTopbarContext";
+import { IconButton } from "./ui";
 import CvShareMenu from "./cv/CvShareMenu";
 import {
   PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
@@ -186,30 +187,15 @@ function resolvePageLabel(pathname: string): string {
   return "Dashboard";
 }
 
-function useForgeContextLine(topbarDocumentTitle: string | null): {
-  label: string;
-  tone: "success" | "warning";
-} | null {
-  const location = useLocation();
-  const title = topbarDocumentTitle?.trim();
-
-  if (location.pathname === "/proposal") {
-    return {
-      label: title
-        ? `${title} application package`
-        : "Proposal draft application package",
-      tone: "warning",
-    };
-  }
-
-  if (location.pathname === "/cv") {
-    return {
-      label: title ? `${title} profile source` : "Active CV profile source",
-      tone: "success",
-    };
-  }
-
-  return null;
+function resolveProposalStateLabel(
+  state: string | null | undefined,
+): string {
+  if (state === "exporting") return "Exporting";
+  if (state === "saving") return "Saving";
+  if (state === "saved") return "Saved";
+  if (state === "generating") return "Generating";
+  if (state === "error") return "Save error";
+  return "Draft";
 }
 
 export function AppTopbar({
@@ -222,8 +208,8 @@ export function AppTopbar({
   const location = useLocation();
   const navigate = useNavigate();
   const topbarDocumentTitle = useTopbarDocumentTitle();
-  const forgeContext = useForgeContextLine(topbarDocumentTitle);
   const cvTopbarRegistration = useCvForgeTopbarRegistration();
+  const proposalTopbarRegistration = useProposalForgeTopbarRegistration();
   const pageLabel = resolvePageLabel(location.pathname);
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
@@ -285,17 +271,29 @@ export function AppTopbar({
   const cvDocumentTitleMain = topbarDocumentTitle?.trim() || "Active CV";
   const cvDocumentTitleSuffix = "profile source";
   const cvDocumentIdentityLabel = `${cvDocumentTitleMain} ${cvDocumentTitleSuffix}`;
+  const proposalDocumentTitleMain =
+    proposalTopbarRegistration?.title?.trim() ||
+    topbarDocumentTitle?.trim() ||
+    "Proposal draft";
+  const proposalDocumentTitleSuffix = "application package";
+  const proposalDocumentIdentityLabel = `${proposalDocumentTitleMain} ${proposalDocumentTitleSuffix}`;
+  const proposalDocumentState =
+    proposalTopbarRegistration?.documentState ?? "draft";
+  const proposalDocumentStateLabel =
+    resolveProposalStateLabel(proposalDocumentState);
+  const isForgeDocumentRoute =
+    location.pathname === "/cv" || location.pathname === "/proposal";
   return (
     <header className="app-topbar">
       <div className="app-topbar__identity">
-        {forgeContext ? null : (
+        {isForgeDocumentRoute ? null : (
           <div className="app-topbar__crumb" aria-label="Breadcrumb">
             <span>twoweeks</span>
             <span className="app-topbar__crumb-sep">/</span>
             <strong className="app-topbar__crumb-current">{pageLabel}</strong>
           </div>
         )}
-        {forgeContext && location.pathname === "/cv" ? (
+        {location.pathname === "/cv" ? (
           <div
             className="app-topbar__doc-identity"
             aria-label={cvDocumentIdentityLabel}
@@ -337,13 +335,45 @@ export function AppTopbar({
               </span>
             ) : null}
           </div>
-        ) : forgeContext ? (
-          <div className="app-topbar__context">
-            <span>Working on:</span>
-            <strong>{forgeContext.label}</strong>
-            <Pill tone={forgeContext.tone}>
-              {forgeContext.tone === "warning" ? "Needs review" : "Ready"}
-            </Pill>
+        ) : location.pathname === "/proposal" ? (
+          <div
+            className="app-topbar__doc-identity"
+            aria-label={proposalDocumentIdentityLabel}
+            title={proposalDocumentIdentityLabel}
+          >
+            <span
+              className="app-topbar__doc-state"
+              data-state={proposalDocumentState}
+              aria-label={proposalDocumentStateLabel}
+              title={proposalDocumentStateLabel}
+            >
+              <span
+                className="app-topbar__doc-dot"
+                data-pulsing={
+                  proposalDocumentState === "saving" ||
+                  proposalDocumentState === "generating" ||
+                  proposalDocumentState === "exporting"
+                    ? "true"
+                    : undefined
+                }
+                aria-hidden="true"
+              />
+              <FileText size={15} strokeWidth={1.8} aria-hidden="true" />
+            </span>
+            <span className="app-topbar__doc-title" aria-hidden="true">
+              <span className="app-topbar__doc-title-main">
+                {proposalDocumentTitleMain}
+              </span>
+              <span className="app-topbar__doc-title-suffix">
+                {" "}
+                {proposalDocumentTitleSuffix}
+              </span>
+            </span>
+            {proposalTopbarRegistration?.lengthLabel ? (
+              <span className="app-topbar__doc-meta">
+                {proposalTopbarRegistration.lengthLabel}
+              </span>
+            ) : null}
           </div>
         ) : null}
       </div>

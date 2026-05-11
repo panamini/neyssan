@@ -110,6 +110,18 @@ describe("sidebar visual CSS contracts", () => {
     expect(productCss).toContain(".app-topbar__doc-meta");
     expect(productCss).toContain(".app-topbar__doc-health");
     expect(productCss).toContain(".app-topbar__actions");
+    expect(productCss).toContain(
+      '.app-topbar__doc-state[data-state="draft"]',
+    );
+    expect(productCss).toContain(
+      '.app-topbar__doc-state[data-state="saving"]',
+    );
+    expect(productCss).toContain(
+      '.app-topbar__doc-state[data-state="generating"]',
+    );
+    expect(productCss).toContain(
+      '.app-topbar__doc-state[data-state="error"]',
+    );
     expect(productCss).toMatch(
       /@media\s*\(max-width:\s*1023px\)\s*\{[\s\S]*\.app-topbar__doc-title-suffix\s*\{[\s\S]*display:\s*none;/,
     );

@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 import ProposalDocumentStage from "../ProposalDocumentStage";
 
 const baseProps = {
-  statusLabel: "Draft",
   toneLabel: "Warm tone",
   toneValue: "warm" as const,
   mode: "preview" as const,
@@ -25,19 +24,28 @@ function renderStage(props: Partial<React.ComponentProps<typeof ProposalDocument
 }
 
 describe("ProposalDocumentStage proposal actions", () => {
-  it("renders length term in the top status pill and keeps character count in the tooltip", () => {
+  it("keeps the local toolbar focused on tone, mode, templates, and actions", () => {
     renderStage({
-      statusMeta: "Standard",
-      statusTitle: "Draft length: 742 chars",
+      onOpenTemplates: vi.fn(),
     });
 
-    const status = screen.getByText("Draft").closest(".ds-status");
-    expect(status).toHaveTextContent("Standard");
-    expect(status).not.toHaveAttribute("title");
-    expect(status).toHaveAttribute(
-      "data-toolbar-tooltip",
-      "Draft length: 742 chars",
-    );
+    expect(screen.queryByText("Draft")).not.toBeInTheDocument();
+    expect(screen.queryByText("Proposal text")).not.toBeInTheDocument();
+    expect(screen.queryByText("Preparing")).not.toBeInTheDocument();
+    expect(screen.queryByText("Standard")).not.toBeInTheDocument();
+    expect(screen.queryByText("Concise")).not.toBeInTheDocument();
+    expect(screen.queryByText("Detailed")).not.toBeInTheDocument();
+    expect(screen.queryByText("standard")).not.toBeInTheDocument();
+    expect(screen.queryByText("concise")).not.toBeInTheDocument();
+    expect(screen.queryByText("detailed")).not.toBeInTheDocument();
+    expect(screen.getByText("Warm tone")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit proposal" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Preview proposal" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Templates" })).toBeInTheDocument();
   });
 
   it("shows undo and redo only while editing", () => {

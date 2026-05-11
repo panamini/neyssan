@@ -40,6 +40,9 @@ import {
 import {
   CvForgeTopbarProvider,
 } from "./contexts/CvForgeTopbarContext";
+import {
+  ProposalForgeTopbarProvider,
+} from "./contexts/ProposalForgeTopbarContext";
 import { installStorageDiagnostics } from "./lib/storage-diagnostics";
 import {
   clearQuickStartLocationState,
@@ -71,7 +74,9 @@ function AppShell(): JSX.Element {
     <CvLibraryProvider>
       <ForgeTemplatePanelProvider>
         <CvForgeTopbarProvider>
-          <AppShellFrame />
+          <ProposalForgeTopbarProvider>
+            <AppShellFrame />
+          </ProposalForgeTopbarProvider>
         </CvForgeTopbarProvider>
       </ForgeTemplatePanelProvider>
     </CvLibraryProvider>

@@ -15,9 +15,6 @@ import {
 type SafeSendState = "clear" | "warn" | "danger";
 
 type ProposalDocumentStageProps = {
-  statusLabel: string;
-  statusMeta?: string | null;
-  statusTitle?: string | null;
   toneLabel: string;
   toneValue: "auto" | "warm" | "formal" | "natural";
   mode: "preview" | "edit";
@@ -53,9 +50,6 @@ function runBrowserCommand(command: "undo" | "redo") {
 }
 
 export function ProposalDocumentStage({
-  statusLabel,
-  statusMeta,
-  statusTitle,
   toneLabel,
   toneValue,
   mode,
@@ -82,20 +76,6 @@ export function ProposalDocumentStage({
       aria-label="Proposal document stage"
     >
       <div className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-toolbar--surface-tooltips">
-        <span
-          className={`ds-status ds-status--${statusLabel === "Draft" ? "warning" : "neutral"} dasti-proposal-skeleton-stage__status${statusTitle ? " dasti-toolbar-tooltip-trigger--below" : ""}`}
-          data-toolbar-tooltip={statusTitle ?? undefined}
-        >
-          <span className="ds-status__dot" aria-hidden="true" />
-          <span className="dasti-proposal-skeleton-stage__status-label">
-            {statusLabel}
-          </span>
-          {statusMeta ? (
-            <span className="dasti-proposal-skeleton-stage__status-meta">
-              {statusMeta}
-            </span>
-          ) : null}
-        </span>
         <ToneBadge tone={toneValue}>{toneLabel}</ToneBadge>
         <div
           className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__actions"
