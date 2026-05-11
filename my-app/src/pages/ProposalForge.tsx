@@ -9818,8 +9818,8 @@ export function ProposalForge(): JSX.Element {
   }, []);
 
   const handleOpenJobsFromRail = React.useCallback(() => {
-    void navigate("/jobs?selectFor=proposal");
-  }, [navigate]);
+    openTemplateSurface("jobs", { mode: "pinned" });
+  }, [openTemplateSurface]);
   const handleTemplateStartBlank = React.useCallback(() => {
     setIsTemplateJobContextEmptyStateDismissed(true);
     setProposalType("cover_letter");

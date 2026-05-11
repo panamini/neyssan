@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { ProposalForge } from "../ProposalForge";
+import { ForgeTemplatePanel } from "../../components/ForgeTemplatePanel";
+import { ForgeTemplatePanelProvider } from "../../contexts/ForgeTemplatePanelContext";
 import { PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY } from "../../lib/proposal-workspace-state";
 import { PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY } from "../../lib/proposal-output-draft";
 
@@ -237,13 +239,24 @@ describe("ProposalForge canonical job brief", () => {
 
   });
 
-  it("opens Jobs in proposal selection mode from the empty job context action", async () => {
+  it("opens the in-page Jobs drawer from the empty job context action", async () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
-        <Routes>
-          <Route path="/proposal" element={<ProposalForge />} />
-          <Route path="/jobs" element={<LocationProbe />} />
-        </Routes>
+        <ForgeTemplatePanelProvider>
+          <ForgeTemplatePanel />
+          <Routes>
+            <Route
+              path="/proposal"
+              element={
+                <>
+                  <ProposalForge />
+                  <LocationProbe />
+                </>
+              }
+            />
+            <Route path="/jobs" element={<LocationProbe />} />
+          </Routes>
+        </ForgeTemplatePanelProvider>
       </MemoryRouter>,
     );
 
@@ -252,7 +265,10 @@ describe("ProposalForge canonical job brief", () => {
     );
 
     expect(screen.getByTestId("proposal-location")).toHaveTextContent(
-      "/jobs?selectFor=proposal",
+      "/proposal",
     );
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
   });
 });
