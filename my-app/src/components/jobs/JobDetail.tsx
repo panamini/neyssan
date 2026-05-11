@@ -7,6 +7,7 @@ import {
 } from "@/lib/icons";
 import { ProposalBriefCard } from "../ProposalBriefCard";
 import { MatchReadBlock } from "./MatchReadBlock";
+import LoadingSpinner from "../LoadingSpinner";
 
 type ResumePickerOption = {
   id: string;
@@ -123,8 +124,13 @@ export function JobDetail({
 
   if (selectedJobIsLoading) {
     return (
-      <div className="dasti-empty-state dasti-empty-state--panel">
+      <div
+        className="dasti-empty-state dasti-empty-state--panel"
+        role="status"
+        aria-live="polite"
+      >
         <div className="dasti-empty-state__title">Loading job</div>
+        <LoadingSpinner />
       </div>
     );
   }
