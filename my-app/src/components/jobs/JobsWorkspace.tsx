@@ -2050,9 +2050,10 @@ function JobsPageContent(): JSX.Element {
     [duplicateJob, jobs, navigate, showToast],
   );
 
+  const isAuthLoading = !isLoaded || isConvexAuthLoading;
   const authStatusMessage =
-    !isLoaded || isConvexAuthLoading
-      ? "Loading"
+    isAuthLoading
+      ? "Loading jobs"
       : !isSignedIn || !isConvexAuthenticated
         ? "Sign in to see jobs."
         : null;
@@ -2138,7 +2139,12 @@ function JobsPageContent(): JSX.Element {
     <div className="dasti-page-scroll">
       <div className="dasti-page-shell dasti-jobs-page">
 
-        {authStatusMessage ? (
+        {isAuthLoading ? (
+          <div className="dasti-empty-state" role="status" aria-live="polite">
+            <div className="dasti-empty-state__title">Loading jobs</div>
+          </div>
+        ) : null}
+        {authStatusMessage && !isAuthLoading ? (
           <div className="dasti-hint" style={{ padding: "var(--space-5) 0" }}>
             {authStatusMessage}
           </div>
