@@ -173,7 +173,7 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-cv-rail-tabs button\[data-active="true"\]\s*\{[\s\S]*background:\s*var\(--color-surface-raised\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-cv-org-row\[data-active="true"\]\s*\{[\s\S]*border-color:\s*var\(--proposal-chrome-control-active-border,\s*var\(--ac\)\);[\s\S]*background:\s*var\(--proposal-chrome-control-active-bg,\s*var\(--cv-rail-row-active-bg\)\);[\s\S]*box-shadow:\s*none;/,
+      /\.dasti-cv-org-row\[data-active="true"\]\s*\{[\s\S]*border-color:\s*var\(--proposal-chrome-control-active-border,\s*var\(--ac\)\);[\s\S]*background:\s*var\(--sf0\);[\s\S]*background:\s*var\(--proposal-chrome-control-active-bg,\s*var\(--sf0\)\);[\s\S]*background-clip:\s*padding-box;[\s\S]*box-shadow:\s*none;/,
     );
     expect(cvForgeSource).toContain("CV_PAPER_VISUAL_INLINE_SIZE");
     expect(cvForgeSource).toContain('"--cv-paper-visual-inline-size"');

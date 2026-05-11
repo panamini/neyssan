@@ -1,6 +1,7 @@
 import React from "react";
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
@@ -151,6 +152,7 @@ type SortableSectionRowProps = {
   showDragHandle: boolean;
   showMoveControls: boolean;
   dropIndicator?: "before" | "after" | null;
+  suppressSortableTransform: boolean;
   onSelectSection: (sectionId: string, options?: { openEditor?: boolean }) => void;
   onMoveSection: (sectionId: string, direction: -1 | 1) => void;
   children: React.ReactNode;
@@ -165,6 +167,7 @@ function SortableSectionRow({
   showDragHandle,
   showMoveControls,
   dropIndicator = null,
+  suppressSortableTransform,
   onSelectSection,
   onMoveSection,
   children,
@@ -173,15 +176,17 @@ function SortableSectionRow({
     id: sectionId,
     disabled: !showDragHandle,
     transition: {
-      duration: 260,
-      easing: "cubic-bezier(0.2, 0, 0, 1)",
+      duration: 320,
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
     },
   });
+  const rowTransform =
+    suppressSortableTransform || sortable.isDragging ? null : sortable.transform;
   const rowTransition = sortable.transition
-    ? `${sortable.transition}, border-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-normal) var(--motion-ease-emphasized), opacity var(--motion-duration-fast) var(--motion-ease-standard)`
-    : "transform var(--motion-duration-medium) var(--motion-ease-emphasized), border-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-normal) var(--motion-ease-emphasized), opacity var(--motion-duration-fast) var(--motion-ease-standard)";
+    ? `${sortable.transition}, border-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-normal) var(--motion-ease-emphasized), margin-block-start var(--cv-org-insert-motion), margin-block-end var(--cv-org-insert-motion), opacity var(--motion-duration-fast) var(--motion-ease-standard)`
+    : "transform var(--motion-duration-medium) var(--motion-ease-emphasized), border-color var(--motion-duration-fast) var(--motion-ease-standard), box-shadow var(--motion-duration-normal) var(--motion-ease-emphasized), margin-block-start var(--cv-org-insert-motion), margin-block-end var(--cv-org-insert-motion), opacity var(--motion-duration-fast) var(--motion-ease-standard)";
   const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(sortable.transform),
+    transform: CSS.Transform.toString(rowTransform),
     transition: rowTransition,
   };
 
@@ -236,6 +241,37 @@ function SortableSectionRow({
         </span>
       </button>
       <span className="dasti-cv-org-row__actions">{children}</span>
+    </div>
+  );
+}
+
+function CvSectionDragOverlayRow({
+  label,
+  hidden,
+  itemCount,
+  showDragHandle,
+}: {
+  label: string;
+  hidden: boolean;
+  itemCount: number;
+  showDragHandle: boolean;
+}): JSX.Element {
+  return (
+    <div className="dasti-cv-org-row dasti-cv-org-row--drag-overlay">
+      {showDragHandle ? (
+        <span className="dasti-cv-org-handle" aria-hidden="true">
+          <GripHorizontal size={16} strokeWidth={1.8} />
+        </span>
+      ) : (
+        <span className="dasti-cv-org-handle-spacer" aria-hidden="true" />
+      )}
+      <span className="dasti-cv-org-row__main">
+        <span className="dasti-cv-org-row__title">{label}</span>
+        <span className="dasti-cv-org-row__count">
+          {hidden ? "hidden" : itemCount > 1 ? `${itemCount} items` : ""}
+        </span>
+      </span>
+      <span className="dasti-cv-org-row__actions" aria-hidden="true" />
     </div>
   );
 }
@@ -318,6 +354,11 @@ export function CvSectionsOrganizer({
     () => sections.map((section, index) => getSectionId(section, index)),
     [sections],
   );
+  const activeDragSection = React.useMemo(() => {
+    if (!activeDragSectionId) return null;
+    const index = sortableSectionIds.indexOf(activeDragSectionId);
+    return index === -1 ? null : sections[index] ?? null;
+  }, [activeDragSectionId, sections, sortableSectionIds]);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -406,6 +447,7 @@ export function CvSectionsOrganizer({
                     showDragHandle={policy.showDragHandle}
                     showMoveControls={policy.showMoveControls}
                     dropIndicator={dropIndicator}
+                    suppressSortableTransform={activeDragSectionId !== null}
                     onSelectSection={onSelectSection}
                     onMoveSection={onMoveSection}
                   >
@@ -480,6 +522,26 @@ export function CvSectionsOrganizer({
               })}
             </div>
           </SortableContext>
+          <DragOverlay
+            dropAnimation={{
+              duration: 320,
+              easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+            }}
+          >
+            {activeDragSection ? (
+              <CvSectionDragOverlayRow
+                label={formatSectionDisplayTitle(activeDragSection, {
+                  fallback: "Section",
+                })}
+                hidden={hiddenSectionIds.includes(activeDragSectionId ?? "")}
+                itemCount={getItemCount(activeDragSection)}
+                showDragHandle={
+                  getSectionOrganizationControlPolicy(activeDragSection)
+                    .showDragHandle
+                }
+              />
+            ) : null}
+          </DragOverlay>
         </DndContext>
       )}
       <CvAddSectionMenu sections={sections} onAddSection={onAddSection} />
