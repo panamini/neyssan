@@ -20,9 +20,10 @@ function renderStage(props: Partial<React.ComponentProps<typeof ProposalDocument
 }
 
 describe("ProposalDocumentStage proposal actions", () => {
-  it("keeps the local toolbar focused on tone, mode, heading, and templates", () => {
+  it("keeps the local toolbar focused on tone, mode, heading, design, and templates", () => {
     renderStage({
       onOpenHeading: vi.fn(),
+      onOpenDesign: vi.fn(),
       onOpenTemplates: vi.fn(),
     });
 
@@ -43,6 +44,7 @@ describe("ProposalDocumentStage proposal actions", () => {
       screen.getByRole("button", { name: "Preview proposal" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Heading" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Design" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Templates" })).toBeInTheDocument();
   });
 
@@ -68,6 +70,33 @@ describe("ProposalDocumentStage proposal actions", () => {
     );
 
     expect(screen.getByRole("button", { name: "Heading" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  it("wires the Design action in preview and edit modes", () => {
+    const onOpenDesign = vi.fn();
+    const { rerender } = renderStage({ onOpenDesign, mode: "preview" });
+
+    const design = screen.getByRole("button", { name: "Design" });
+    expect(design).toHaveAttribute("data-toolbar-tooltip", "Design");
+    expect(design).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(design);
+    expect(onOpenDesign).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ProposalDocumentStage
+        {...baseProps}
+        mode="edit"
+        designOpen
+        onOpenDesign={onOpenDesign}
+      >
+        <div>Paper body</div>
+      </ProposalDocumentStage>,
+    );
+
+    expect(screen.getByRole("button", { name: "Design" })).toHaveAttribute(
       "aria-expanded",
       "true",
     );

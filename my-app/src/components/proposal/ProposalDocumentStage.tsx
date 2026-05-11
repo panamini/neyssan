@@ -6,6 +6,7 @@ import {
   ClipboardText,
   Eye,
   ImagesSquare,
+  Palette,
   NewspaperClipping,
   PenLine,
   TrashSimple,
@@ -20,10 +21,12 @@ type ProposalDocumentStageProps = {
   hasProposalContent: boolean;
   styleControl?: React.ReactNode;
   templatesOpen?: boolean;
+  designOpen?: boolean;
   headingOpen?: boolean;
   children: React.ReactNode;
   onModeChange: (mode: "preview" | "edit") => void;
   onOpenHeading?: () => void;
+  onOpenDesign?: () => void;
   onOpenTemplates?: () => void;
   onDeleteDraft?: () => void;
   onSaveToLibrary?: () => void;
@@ -53,10 +56,12 @@ export function ProposalDocumentStage({
   hasProposalContent,
   styleControl = null,
   templatesOpen = false,
+  designOpen = false,
   headingOpen = false,
   children,
   onModeChange,
   onOpenHeading,
+  onOpenDesign,
   onOpenTemplates,
   onDeleteDraft,
   onSaveToLibrary,
@@ -119,6 +124,24 @@ export function ProposalDocumentStage({
             >
               <span className="dasti-proposal-skeleton-stage__action-label">
                 Heading
+              </span>
+            </Button>
+          ) : null}
+          {onOpenDesign ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="dasti-proposal-skeleton-stage__primary-action"
+              iconLeft={<Palette size={14} strokeWidth={1.8} />}
+              aria-expanded={designOpen}
+              aria-label="Design"
+              data-toolbar-tooltip="Design"
+              data-stage-tooltip-mode="compact"
+              onClick={onOpenDesign}
+            >
+              <span className="dasti-proposal-skeleton-stage__action-label">
+                Design
               </span>
             </Button>
           ) : null}

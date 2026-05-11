@@ -476,6 +476,7 @@ describe("ProposalRail style tab", () => {
       "/settings?tab=docstyle",
     );
     expect(screen.getByText("Style", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    expect(screen.getAllByTestId("proposal-design-live-preview")).toHaveLength(3);
     expect(screen.getByText("Layout", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
@@ -487,11 +488,11 @@ describe("ProposalRail style tab", () => {
     expect(
       styleLabel.compareDocumentPosition(layoutLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeGreaterThan(0);
-    expect(screen.getByText("Font pair")).toBeInTheDocument();
-    expect(screen.getByText("Accent", { selector: ".forge__rail-label" })).toBeInTheDocument();
-    expect(screen.getByText("Printed name", { selector: ".forge__rail-label" })).toBeInTheDocument();
-    const accentLabel = screen.getByText("Accent", { selector: ".forge__rail-label" });
-    const signatureLabel = screen.getByText("Printed name", { selector: ".forge__rail-label" });
+    expect(screen.getByText("Typography", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    expect(screen.getByText("Color", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    expect(screen.getByText("Signature", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    const accentLabel = screen.getByText("Color", { selector: ".forge__rail-label" });
+    const signatureLabel = screen.getByText("Signature", { selector: ".forge__rail-label" });
     expect(
       accentLabel.compareDocumentPosition(signatureLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeGreaterThan(0);
@@ -568,7 +569,8 @@ describe("ProposalRail style tab", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.getByText("Style 3 · Custom")).toBeInTheDocument();
+    expect(screen.queryByText("Style 3 · Custom")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Customized")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Use Ink accent" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -596,7 +598,8 @@ describe("ProposalRail style tab", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Style" }));
 
-    expect(screen.getByText("Style 1 · Custom")).toBeInTheDocument();
+    expect(screen.queryByText("Style 1 · Custom")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Customized")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reset Style 1" }));
     expect(onResetStyleBundle).toHaveBeenCalledWith("swiss_serif");
   });
@@ -648,7 +651,8 @@ describe("ProposalRail style tab", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.getByText("Style 3 · Custom")).toBeInTheDocument();
+    expect(screen.queryByText("Style 3 · Custom")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Customized")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Use Cobalt accent" })).toHaveAttribute(
       "aria-pressed",
       "true",

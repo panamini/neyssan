@@ -2052,6 +2052,10 @@ body,
   overflow: visible;
 }
 
+.forge-template-panel__content--proposal-design {
+  overflow: auto;
+}
+
 .forge-rail-drawer {
   min-height: 0;
   height: 100%;
