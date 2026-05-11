@@ -42,6 +42,7 @@ export type ForgeCustomPanelRegistration = {
   renderContent: () => React.ReactNode;
   footer?: {
     label: string;
+    icon?: React.ReactNode;
     onSelect: () => void;
   } | null;
 };

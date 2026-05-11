@@ -3,7 +3,7 @@ import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import type { RemirrorJSON } from "remirror";
-import { ArrowSquareOut, FileUser, PenLine, Upload, X } from "@/lib/icons";
+import { ArrowSquareOut, FileUser, FolderSimple, PenLine, Upload, X } from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import FloatingAiToolbar, {
   type InlineAiActionId,
@@ -15,6 +15,7 @@ import {
   useRegisterForgePanel,
   useRegisterForgeTemplates,
 } from "../contexts/ForgeTemplatePanelContext";
+import { useRegisterCvForgeTopbar } from "../contexts/CvForgeTopbarContext";
 import {
   DrawerDocumentTile,
   DrawerUnavailableThumbnail,
@@ -3438,6 +3439,38 @@ export function CvForge(): JSX.Element {
       stylePreset,
     ],
   );
+  const handleOpenImportReview = React.useCallback(() => {
+    setImportReviewOpen(true);
+  }, []);
+  const handleExportStyledPdf = React.useCallback(() => {
+    void handleResumeExport({ format: "pdf", mode: "styled" });
+  }, [handleResumeExport]);
+  const handleExportDocx = React.useCallback(() => {
+    void handleResumeExport({ format: "docx" });
+  }, [handleResumeExport]);
+  const cvTopbarRegistration = React.useMemo(
+    () => ({
+      mode: workspaceMode,
+      hasCurrentCv: Boolean(currentCv),
+      hasTrustedExport,
+      importIssueCount: importReviewBlocks.length,
+      exporting: exportingFormat !== null,
+      onOpenImportReview: handleOpenImportReview,
+      onExportPdf: handleExportStyledPdf,
+      onExportDocx: handleExportDocx,
+    }),
+    [
+      currentCv,
+      exportingFormat,
+      handleExportDocx,
+      handleExportStyledPdf,
+      handleOpenImportReview,
+      hasTrustedExport,
+      importReviewBlocks.length,
+      workspaceMode,
+    ],
+  );
+  useRegisterCvForgeTopbar(cvTopbarRegistration);
 
   const cvWorkbenchShellStyle = {
     width: "100%",
@@ -5055,6 +5088,7 @@ export function CvForge(): JSX.Element {
       ),
       footer: {
         label: "Open Library",
+        icon: <FolderSimple size={13} aria-hidden="true" />,
         onSelect: () => navigate("/documents?type=cvs"),
       },
     }),
@@ -5085,6 +5119,7 @@ export function CvForge(): JSX.Element {
       ),
       footer: {
         label: "Open Library",
+        icon: <FolderSimple size={13} aria-hidden="true" />,
         onSelect: () => navigate("/documents?type=cvs"),
       },
     }),
@@ -6301,9 +6336,6 @@ export function CvForge(): JSX.Element {
             <div className="dasti-cv-skeleton-forge__stage">
               <CvStageBar
                 mode={workspaceMode}
-                hasCurrentCv={Boolean(currentCv)}
-                hasTrustedExport={hasTrustedExport}
-                importIssueCount={importReviewBlocks.length}
                 exporting={exportingFormat !== null}
                 tone={cvTone}
                 resumeOptions={resumeOptions}
@@ -6312,12 +6344,7 @@ export function CvForge(): JSX.Element {
                 onModeChange={setWorkspaceMode}
                 onOpenSections={handleOpenCvSections}
                 onOpenTemplates={handleOpenCvTemplates}
-                onOpenImportReview={() => setImportReviewOpen(true)}
                 onPickResume={handlePickResume}
-                onExportPdf={() =>
-                  void handleResumeExport({ format: "pdf", mode: "styled" })
-                }
-                onExportDocx={() => void handleResumeExport({ format: "docx" })}
               />
               {!isImportReviewBannerDismissed ? (
                 <CvReviewBanner
