@@ -4,8 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ForgeTemplatePanel } from "../ForgeTemplatePanel";
 import CvStageBar from "../cv/CvStageBar";
+import ProposalDesignFields from "../proposal/ProposalDesignFields";
 import ProposalDocumentStage from "../proposal/ProposalDocumentStage";
 import ProposalHeadingFields from "../proposal/ProposalHeadingFields";
+import { CANONICAL_PROPOSAL_TEMPLATE_ID } from "../../../convex/lib/proposals/renderTemplates";
+import { getProposalTemplateBundleDefinition } from "../../lib/proposal-template-bundles";
 import {
   ForgeTemplatePanelProvider,
   useForgeTemplatePanel,
@@ -81,6 +84,7 @@ function ProposalTemplateEntryPoint({
     <>
       <RegisterTemplates surface="proposal" onSelect={onSelect} />
       <RegisterProposalHeading />
+      <RegisterProposalDesign />
       <ProposalDocumentStage
         toneLabel="Natural"
         toneValue="natural"
@@ -88,6 +92,8 @@ function ProposalTemplateEntryPoint({
         hasProposalContent
         headingOpen={open && activeSurface === "proposal-heading"}
         onOpenHeading={() => openSurface("proposal-heading")}
+        designOpen={open && activeSurface === "proposal-design"}
+        onOpenDesign={() => openSurface("proposal-design")}
         templatesOpen={open && activeSurface === "proposal"}
         onOpenTemplates={() => openSurface("proposal")}
         onModeChange={vi.fn()}
@@ -133,6 +139,34 @@ function RegisterProposalHeading(): null {
       }),
       [],
     ),
+  );
+  return null;
+}
+
+function RegisterProposalDesign(): null {
+  useRegisterForgePanel(
+    React.useMemo(() => {
+      const stylePreset = getProposalTemplateBundleDefinition("swiss_serif").stylePreset;
+
+      return {
+        surface: "proposal-design" as const,
+        title: "Design",
+        ariaLabel: "Proposal design",
+        renderContent: () => (
+          <ProposalDesignFields
+            proposalTemplateId={CANONICAL_PROPOSAL_TEMPLATE_ID}
+            onSelectProposalLayout={vi.fn()}
+            stylePreset={stylePreset}
+            styleTemplateBundleId="swiss_serif"
+            onSelectStyleBundle={vi.fn()}
+            onResetStyleBundle={vi.fn()}
+            onSelectStyleTypography={vi.fn()}
+            onSelectStylePalette={vi.fn()}
+            onSelectStyleCustomAccent={vi.fn()}
+          />
+        ),
+      };
+    }, []),
   );
   return null;
 }
@@ -205,6 +239,39 @@ describe("forge template entry points", () => {
     expect(within(panel).getByLabelText("Full name")).toHaveValue("Alex Martin");
     expect(within(panel).queryByRole("tab", { name: "Ask" })).not.toBeInTheDocument();
     expect(within(panel).queryByRole("tab", { name: "Style" })).not.toBeInTheDocument();
+  });
+
+  it("opens proposal design from the proposal stage bar as one scrollable current document panel", () => {
+    renderEntryPoint(
+      "/proposal",
+      <ProposalTemplateEntryPoint onSelect={vi.fn()} />,
+    );
+
+    const design = screen.getByRole("button", { name: "Design" });
+    expect(design).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(design);
+
+    expect(design).toHaveAttribute("aria-expanded", "true");
+    const panel = screen.getByRole("complementary", {
+      name: "Proposal design",
+    });
+    expect(within(panel).queryByRole("tab")).not.toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Style 1" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Style 2" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Style 3" })).toBeInTheDocument();
+    expect(within(panel).getAllByTestId("proposal-design-live-preview")).toHaveLength(3);
+    expect(within(panel).getByText("Typography")).toBeInTheDocument();
+    expect(within(panel).getByText("Color")).toBeInTheDocument();
+    expect(within(panel).getByText("Layout")).toBeInTheDocument();
+    expect(
+      within(panel).getByText("Signature", {
+        selector: ".forge__rail-label",
+      }),
+    ).toBeInTheDocument();
+    expect(within(panel).queryByText("Modified")).not.toBeInTheDocument();
+    expect(within(panel).queryByText("Customize")).not.toBeInTheDocument();
+    expect(within(panel).queryByText("Templates")).not.toBeInTheDocument();
   });
 
   it("browse all templates from a contextual panel goes to the global route", () => {

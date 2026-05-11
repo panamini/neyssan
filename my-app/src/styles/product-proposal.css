@@ -7845,6 +7845,108 @@
   line-height: var(--lx);
 }
 
+.dasti-proposal-design-fields {
+  min-height: 0;
+}
+
+.dasti-proposal-design-style-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-3);
+  padding: 4px;
+}
+
+.dasti-proposal-design-style-card {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ti);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.dasti-proposal-design-style-card:hover,
+.dasti-proposal-design-style-card:focus-visible {
+  background: transparent;
+  outline: none;
+}
+
+.dasti-proposal-design-style-card[data-selected="true"] {
+  box-shadow: none;
+}
+
+.dasti-proposal-design-style-card:hover .dasti-proposal-design-preview,
+.dasti-proposal-design-style-card:focus-visible .dasti-proposal-design-preview {
+  border-color: color-mix(in srgb, var(--ac) 54%, transparent);
+}
+
+.dasti-proposal-design-style-card[data-selected="true"] .dasti-proposal-design-preview {
+  border-color: var(--ac);
+}
+
+.dasti-proposal-design-style-card__custom-dot {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 3px;
+  inset-inline-end: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--ac);
+  box-shadow: 0 0 0 2px var(--paper);
+}
+
+.dasti-proposal-design-preview {
+  width: 100%;
+  aspect-ratio: 0.72;
+  box-sizing: border-box;
+  display: block;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ti) 12%, transparent);
+  border-radius: 9px;
+  background: transparent;
+  box-shadow:
+    0 8px 20px color-mix(in srgb, var(--ti) 14%, transparent);
+}
+
+.dasti-proposal-design-preview__page {
+  display: block;
+  transform-origin: top left;
+  pointer-events: none;
+}
+
+.dasti-proposal-design-style-card__label {
+  overflow: hidden;
+  color: var(--ti);
+  font-size: var(--tx);
+  font-weight: 700;
+  line-height: var(--lx);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dasti-proposal-design-fields__reset {
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tm2);
+}
+
+.dasti-proposal-design-fields__reset:hover,
+.dasti-proposal-design-fields__reset:focus-visible {
+  color: var(--ac);
+  background: transparent;
+  outline: none;
+}
+
 .dasti-proposal-skeleton-rail__layout-eyebrow {
   width: fit-content;
   padding: 2px var(--space-2);

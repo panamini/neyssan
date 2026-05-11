@@ -115,6 +115,8 @@ export function ForgeTemplatePanel(): JSX.Element | null {
           className={`forge-template-panel__content ${
             activeRegistration.surface === "cv-sections"
               ? "forge-template-panel__content--cv-sections"
+              : activeRegistration.surface === "proposal-design"
+                ? "forge-template-panel__content--proposal-design"
               : ""
           }`.trim()}
         >

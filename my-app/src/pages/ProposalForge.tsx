@@ -25,6 +25,7 @@ import ProposalDocumentStage from "../components/proposal/ProposalDocumentStage"
 import ProposalHeadingFields, {
   type ProposalHeadingField,
 } from "../components/proposal/ProposalHeadingFields";
+import ProposalDesignFields from "../components/proposal/ProposalDesignFields";
 import ProposalRail, {
   PROPOSAL_STYLE_OPTIONS,
   type ProposalRailJobMatchSummary,
@@ -10024,6 +10025,67 @@ export function ProposalForge(): JSX.Element {
   const handleOpenProposalHeading = React.useCallback(() => {
     openTemplateSurface("proposal-heading");
   }, [openTemplateSurface]);
+  const proposalDesignPanelRegistration = React.useMemo(
+    () => ({
+      surface: "proposal-design" as const,
+      title: "Design",
+      ariaLabel: "Proposal design",
+      renderContent: () => (
+        <ProposalDesignFields
+          proposalTemplateId={effectiveProposalTemplateId}
+          onSelectProposalLayout={handleProposalLayoutSelect}
+          stylePreset={effectiveProposalStylePresetWithPalette}
+          styleTemplateBundleBaseStyle={effectiveProposalTemplateBundleBaseStyle}
+          styleTemplateBundleId={proposalTemplateBundleId}
+          onSelectStyleBundle={handleProposalStyleBundleSelect}
+          onResetStyleBundle={handleProposalStyleBundleReset}
+          onSelectStyleTypography={handleProposalTypographySelect}
+          onSelectStylePalette={handleProposalPaletteSelect}
+          onSelectStyleCustomAccent={handleProposalCustomAccentSelect}
+          onClearStyleCustomAccent={handleProposalCustomAccentClear}
+          signaturePresent={Boolean(
+            effectiveProposalClosing?.enabled &&
+              effectiveProposalClosing.signatureName,
+          )}
+          handwrittenSignatureAvailable={Boolean(
+            proposalSignatureSettings.imageDataUrl,
+          )}
+          handwrittenSignatureEnabled={Boolean(
+            effectiveProposalClosing?.handwrittenSignatureEnabled,
+          )}
+          onChooseSignature={handleChooseSignature}
+          onToggleSignature={handleToggleSignature}
+          onToggleHandwrittenSignature={handleToggleHandwrittenSignature}
+        />
+      ),
+    }),
+    [
+      effectiveProposalClosing?.enabled,
+      effectiveProposalClosing?.handwrittenSignatureEnabled,
+      effectiveProposalClosing?.signatureName,
+      effectiveProposalStylePresetWithPalette,
+      effectiveProposalTemplateBundleBaseStyle,
+      effectiveProposalTemplateId,
+      handleChooseSignature,
+      handleProposalCustomAccentClear,
+      handleProposalCustomAccentSelect,
+      handleProposalLayoutSelect,
+      handleProposalPaletteSelect,
+      handleProposalStyleBundleReset,
+      handleProposalStyleBundleSelect,
+      handleProposalTypographySelect,
+      handleToggleHandwrittenSignature,
+      handleToggleSignature,
+      proposalSignatureSettings.imageDataUrl,
+      proposalTemplateBundleId,
+    ],
+  );
+  useRegisterForgePanel(proposalDesignPanelRegistration);
+  const proposalDesignOpen =
+    templatePanelOpen && activeTemplateSurface === "proposal-design";
+  const handleOpenProposalDesign = React.useCallback(() => {
+    openTemplateSurface("proposal-design");
+  }, [openTemplateSurface]);
   const shouldAnimateDesktopBriefTransition =
     !isSavedView && !isCompactComposeLayout;
   const shouldRenderBriefCard =
@@ -10790,6 +10852,8 @@ export function ProposalForge(): JSX.Element {
                         styleControl={null}
                         headingOpen={proposalHeadingOpen}
                         onOpenHeading={handleOpenProposalHeading}
+                        designOpen={proposalDesignOpen}
+                        onOpenDesign={handleOpenProposalDesign}
                         templatesOpen={proposalTemplatesOpen}
                         onOpenTemplates={handleOpenProposalTemplates}
                         sourceJobLinked={hasActiveProposalJobContext}

@@ -7,6 +7,7 @@ export type ForgeRailSurface =
   | ForgeTemplateSurface
   | "cv-sections"
   | "proposal-heading"
+  | "proposal-design"
   | "jobs"
   | "documents"
   | "cvs"
