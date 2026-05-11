@@ -8,6 +8,7 @@ import {
   FilePdf,
   FileText,
   ImagesSquare,
+  NewspaperClipping,
   PenLine,
   TrashSimple,
 } from "@/lib/icons";
@@ -22,8 +23,10 @@ type ProposalDocumentStageProps = {
   hasProposalContent: boolean;
   styleControl?: React.ReactNode;
   templatesOpen?: boolean;
+  headingOpen?: boolean;
   children: React.ReactNode;
   onModeChange: (mode: "preview" | "edit") => void;
+  onOpenHeading?: () => void;
   onOpenTemplates?: () => void;
   onCopyText: () => void;
   onDeleteDraft?: () => void;
@@ -57,8 +60,10 @@ export function ProposalDocumentStage({
   hasProposalContent,
   styleControl = null,
   templatesOpen = false,
+  headingOpen = false,
   children,
   onModeChange,
+  onOpenHeading,
   onOpenTemplates,
   onCopyText,
   onDeleteDraft,
@@ -113,16 +118,40 @@ export function ProposalDocumentStage({
               {styleControl}
             </div>
           ) : null}
+          {onOpenHeading ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="dasti-proposal-skeleton-stage__primary-action"
+              iconLeft={<NewspaperClipping size={14} strokeWidth={1.8} />}
+              aria-expanded={headingOpen}
+              aria-label="Heading"
+              data-toolbar-tooltip="Heading"
+              data-stage-tooltip-mode="compact"
+              onClick={onOpenHeading}
+            >
+              <span className="dasti-proposal-skeleton-stage__action-label">
+                Heading
+              </span>
+            </Button>
+          ) : null}
           {onOpenTemplates ? (
             <Button
               type="button"
               size="sm"
               variant="secondary"
+              className="dasti-proposal-skeleton-stage__primary-action"
               iconLeft={<ImagesSquare size={14} strokeWidth={1.8} />}
               aria-expanded={templatesOpen}
+              aria-label="Templates"
+              data-toolbar-tooltip="Templates"
+              data-stage-tooltip-mode="compact"
               onClick={onOpenTemplates}
             >
-              Templates
+              <span className="dasti-proposal-skeleton-stage__action-label">
+                Templates
+              </span>
             </Button>
           ) : null}
           {mode === "edit" ? (

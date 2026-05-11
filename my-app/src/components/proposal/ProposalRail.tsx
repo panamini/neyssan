@@ -36,16 +36,6 @@ import { ProposalColorPickerPopover } from "../ProposalColorPickerPopover";
 import { Button } from "../ui";
 import { Menu, type MenuSection } from "../ui/menu";
 
-type ProposalRailVariableField = {
-  id: string;
-  label: string;
-  value: string;
-  placeholder?: string;
-  multiline?: boolean;
-  onChange: (value: string) => void;
-  onBlur?: () => void;
-};
-
 type ProposalRailCvOption = {
   id: string;
   title: string;
@@ -68,7 +58,7 @@ type ProposalRailLengthOption = {
   selected: boolean;
 };
 
-type ProposalRailTab = "draft" | "ask" | "header" | "style";
+type ProposalRailTab = "draft" | "ask" | "style";
 
 type ProposalRailStyleOption = {
   id: ProposalTemplateBundleId;
@@ -278,7 +268,6 @@ type ProposalRailProps = {
   onToggleSignature?: (enabled: boolean) => void;
   onToggleHandwrittenSignature?: (enabled: boolean) => void;
   aiStream: React.ReactNode;
-  variableFields: ProposalRailVariableField[];
   hasProposalContent: boolean;
   generateLabel: string;
   generateDisabled: boolean;
@@ -344,7 +333,6 @@ export function ProposalRail({
   onToggleSignature,
   onToggleHandwrittenSignature,
   aiStream,
-  variableFields,
   hasProposalContent,
   generateLabel,
   generateDisabled,
@@ -597,77 +585,12 @@ export function ProposalRail({
     />
   );
 
-  const renderVariableField = (field: ProposalRailVariableField) => (
-    <label
-      key={field.id}
-      className={[
-        "dasti-proposal-skeleton-rail__variable-field",
-        field.multiline ? "dasti-proposal-skeleton-rail__variable-field--wide" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {field.multiline ? (
-        <textarea
-          className="ds-field ds-field--textarea"
-          aria-label={field.label}
-          value={field.value}
-          placeholder={field.placeholder}
-          onChange={(event) => field.onChange(event.target.value)}
-          onBlur={field.onBlur}
-        />
-      ) : (
-        <input
-          className="ds-field"
-          aria-label={field.label}
-          value={field.value}
-          placeholder={field.placeholder}
-          onChange={(event) => field.onChange(event.target.value)}
-          onBlur={field.onBlur}
-        />
-      )}
-    </label>
-  );
-
-  const headingFieldGroups = [
-    {
-      id: "applicant",
-      label: "Applicant details",
-      fieldIds: ["applicant-name", "applicant-role", "contact-line"],
-    },
-    {
-      id: "recipient",
-      label: "Recipient details",
-      fieldIds: ["recipient-details"],
-    },
-    {
-      id: "letter-formulas",
-      label: "Letter details",
-      fieldIds: ["proposal-subject", "letter-date", "salutation"],
-    },
-  ]
-    .map((group) => ({
-      ...group,
-      fields: group.fieldIds
-        .map((fieldId) => variableFields.find((field) => field.id === fieldId))
-        .filter((field): field is ProposalRailVariableField => Boolean(field)),
-    }))
-    .filter((group) => group.fields.length > 0);
-
-  const groupedHeadingFieldIds = new Set(
-    headingFieldGroups.flatMap((group) => group.fields.map((field) => field.id)),
-  );
-  const remainingHeadingFields = variableFields.filter(
-    (field) => !groupedHeadingFieldIds.has(field.id),
-  );
-
   return (
     <aside className="forge__rail dasti-proposal-skeleton-rail" aria-label="Proposal rail">
       <div className="dasti-proposal-skeleton-rail__tabs" role="tablist" aria-label="Proposal tools">
         {[
           ["draft", "Draft"],
           ["ask", "Ask"],
-          ["header", "Heading"],
           ["style", "Style"],
         ].map(([id, label]) => (
           <button
@@ -1254,48 +1177,6 @@ export function ProposalRail({
         </section>
       ) : null}
 
-      {activeTab === "header" ? (
-      <section className="forge__rail-section dasti-proposal-skeleton-rail__section dasti-proposal-skeleton-rail__header-details">
-        <div className="dasti-proposal-skeleton-rail__summary-row">
-          <span className="dasti-proposal-skeleton-rail__summary-copy">
-            <span className="forge__rail-label dasti-proposal-skeleton-rail__label">Heading</span>
-          </span>
-        </div>
-        <div className="dasti-proposal-skeleton-rail__drawer-body">
-            {variableFields.length > 0 ? (
-              <div className="dasti-proposal-skeleton-rail__variables">
-                {headingFieldGroups.map((group) => (
-                  <div
-                    key={group.id}
-                    className={`dasti-proposal-skeleton-rail__variable-group dasti-proposal-skeleton-rail__variable-group--${group.id}`}
-                  >
-                    <div className="dasti-proposal-skeleton-rail__variable-group-title">
-                      {group.label}
-                    </div>
-                    <div className="dasti-proposal-skeleton-rail__variable-group-fields">
-                      {group.fields.map(renderVariableField)}
-                    </div>
-                  </div>
-                ))}
-                {remainingHeadingFields.length > 0 ? (
-                  <div className="dasti-proposal-skeleton-rail__variable-group">
-                    <div className="dasti-proposal-skeleton-rail__variable-group-title">
-                      Other heading fields
-                    </div>
-                    <div className="dasti-proposal-skeleton-rail__variable-group-fields">
-                      {remainingHeadingFields.map(renderVariableField)}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <p className="dasti-proposal-skeleton-rail__hint">
-                Generate a draft to edit document header details here.
-              </p>
-            )}
-          </div>
-      </section>
-      ) : null}
     </aside>
   );
 }

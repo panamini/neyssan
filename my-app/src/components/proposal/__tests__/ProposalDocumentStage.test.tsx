@@ -26,6 +26,7 @@ function renderStage(props: Partial<React.ComponentProps<typeof ProposalDocument
 describe("ProposalDocumentStage proposal actions", () => {
   it("keeps the local toolbar focused on tone, mode, templates, and actions", () => {
     renderStage({
+      onOpenHeading: vi.fn(),
       onOpenTemplates: vi.fn(),
     });
 
@@ -45,7 +46,35 @@ describe("ProposalDocumentStage proposal actions", () => {
     expect(
       screen.getByRole("button", { name: "Preview proposal" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Heading" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Templates" })).toBeInTheDocument();
+  });
+
+  it("wires the Heading action in preview and edit modes", () => {
+    const onOpenHeading = vi.fn();
+    const { rerender } = renderStage({ onOpenHeading, mode: "preview" });
+
+    const heading = screen.getByRole("button", { name: "Heading" });
+    expect(heading).toHaveAttribute("data-toolbar-tooltip", "Heading");
+    expect(heading).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(heading);
+    expect(onOpenHeading).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ProposalDocumentStage
+        {...baseProps}
+        mode="edit"
+        headingOpen
+        onOpenHeading={onOpenHeading}
+      >
+        <div>Paper body</div>
+      </ProposalDocumentStage>,
+    );
+
+    expect(screen.getByRole("button", { name: "Heading" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
   });
 
   it("shows undo and redo only while editing", () => {
