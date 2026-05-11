@@ -98,7 +98,7 @@ const PROPOSAL_STYLE_ACCENT_OPTIONS: ProposalRailAccentOption[] = [
 ];
 
 const PROPOSAL_CUSTOM_ACCENT_STARTER_HEX = "#8A8176";
-const STYLE_PREVIEW_WIDTH_PX = 96;
+const STYLE_PREVIEW_WIDTH_PX = 136;
 const STYLE_PREVIEW_SCALE = STYLE_PREVIEW_WIDTH_PX / A4_PAGE_WIDTH_PX;
 
 const PROPOSAL_STYLE_FONT_PAIR_IDS: VerbatiFontPairId[] = [
@@ -205,9 +205,12 @@ function ProposalStylePreview({
   const stylePreset = bundle.stylePreset;
 
   return (
-    <span className="dasti-proposal-design-preview" aria-hidden="true">
+    <span
+      className="forge-template-card__preview dasti-proposal-design-preview"
+      aria-hidden="true"
+    >
       <span
-        className="dasti-proposal-design-preview__page"
+        className="forge-template-card__page dasti-proposal-design-preview__page"
         data-testid="proposal-design-live-preview"
         style={
           {
@@ -377,6 +380,20 @@ export function ProposalDesignFields({
             </button>
           );
         })}
+        {isActiveTemplateBundleCustomized && onResetStyleBundle ? (
+          <button
+            type="button"
+            className="dasti-proposal-skeleton-rail__style-reset dasti-proposal-design-fields__reset"
+            aria-label={`Reset ${activeTemplateBundleLabel}`}
+            title={`Reset ${activeTemplateBundleLabel} to the current Settings color, font, and layout.`}
+            onClick={() => {
+              setIsCustomColorPickerOpen(false);
+              onResetStyleBundle(activeTemplateBundleId);
+            }}
+          >
+            Reset custom style
+          </button>
+        ) : null}
       </div>
       <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Typography</div>
       <ProposalDesignFontPairMenu
@@ -560,20 +577,6 @@ export function ProposalDesignFields({
           <span className="dasti-theme-switch__label">Signature</span>
         </button>
       </div>
-      {isActiveTemplateBundleCustomized && onResetStyleBundle ? (
-        <button
-          type="button"
-          className="dasti-proposal-skeleton-rail__style-reset dasti-proposal-design-fields__reset"
-          aria-label={`Reset ${activeTemplateBundleLabel}`}
-          title={`Reset ${activeTemplateBundleLabel} to the current Settings color, font, and layout.`}
-          onClick={() => {
-            setIsCustomColorPickerOpen(false);
-            onResetStyleBundle(activeTemplateBundleId);
-          }}
-        >
-          Reset custom style
-        </button>
-      ) : null}
     </section>
   );
 }

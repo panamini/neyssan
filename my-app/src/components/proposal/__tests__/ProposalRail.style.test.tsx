@@ -1,4 +1,6 @@
 import React from "react";
+import fs from "node:fs";
+import path from "node:path";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProposalRail } from "../ProposalRail";
@@ -7,6 +9,7 @@ import {
   type ProposalTemplateBundleId,
 } from "../../../lib/proposal-template-bundles";
 import { CANONICAL_PROPOSAL_TEMPLATE_ID } from "../../../../convex/lib/proposals/renderTemplates";
+import { templatePreviewProposal } from "../../../pages/templatePreviewSamples";
 import type { VerbatiStylePreset } from "../../../features/verbati/types";
 
 const baseProps = {
@@ -524,6 +527,80 @@ describe("ProposalRail style tab", () => {
     expect(screen.getByRole("dialog", { name: "Custom accent color" })).toBeInTheDocument();
   });
 
+  it("uses template drawer thumbnail architecture for proposal style previews", () => {
+    render(<ProposalRail {...baseProps} />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+
+    const previews = screen.getAllByTestId("proposal-design-live-preview");
+    expect(previews).toHaveLength(3);
+    for (const previewPage of previews) {
+      expect(previewPage).toHaveClass("forge-template-card__page");
+      expect(previewPage).toHaveClass("dasti-proposal-design-preview__page");
+      expect(previewPage.parentElement).toHaveClass("forge-template-card__preview");
+      expect(previewPage.parentElement).toHaveClass("dasti-proposal-design-preview");
+      expect(previewPage.querySelector(".dasti-proposal-document")).toBeTruthy();
+    }
+  });
+
+  it("keeps proposal style preview sample content isolated to thumbnails", () => {
+    const onSelectStyleBundle = vi.fn();
+    render(
+      <ProposalRail
+        {...baseProps}
+        onSelectStyleBundle={onSelectStyleBundle}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Style 2" }));
+
+    expect(onSelectStyleBundle).toHaveBeenCalledWith("magazine_editorial");
+    const sampleOpening = templatePreviewProposal.content.split("\n\n")[0];
+    const sampleNodes = screen.getAllByText(sampleOpening);
+    expect(sampleNodes.length).toBeGreaterThan(0);
+    for (const node of sampleNodes) {
+      expect(node.closest(".dasti-proposal-design-preview")).toBeTruthy();
+    }
+    expect(
+      Array.from(document.querySelectorAll("textarea")).some(
+        (textarea) => textarea.value === templatePreviewProposal.content,
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps proposal style thumbnail CSS aligned with the templates drawer clip model", () => {
+    const css = fs.readFileSync(
+      path.resolve(process.cwd(), "src/styles/product-proposal.css"),
+      "utf8",
+    );
+
+    expect(css).toMatch(
+      /\.dasti-proposal-design-fields\s*\{[\s\S]*--proposal-design-preview-inline-size:\s*136px;[\s\S]*--proposal-design-preview-gap:\s*12px;/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-design-style-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(\s*2,\s*var\(--proposal-design-preview-inline-size\)\s*\);[\s\S]*gap:\s*var\(--proposal-design-preview-gap\);/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-design-preview\s*\{[\s\S]*overflow:\s*hidden;[\s\S]*border:\s*0;[\s\S]*border-radius:\s*0;[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-design-preview__page\s*\{[\s\S]*position:\s*absolute;[\s\S]*transform-origin:\s*top left;/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-design-fields__reset\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*padding:\s*0 var\(--space-2\);[\s\S]*border:\s*1px solid var\(--border-soft\);[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*var\(--sf1\);/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-skeleton-rail__signature-toggles\s*\{[\s\S]*display:\s*grid;[\s\S]*gap:\s*var\(--space-1\);[\s\S]*\}/,
+    );
+    expect(css).toContain(
+      ".dasti-proposal-design-preview .dasti-proposal-document > .dasti-proposal-document__page ~ .dasti-proposal-document__page",
+    );
+    expect(css).not.toContain(
+      '.dasti-proposal-design-style-card[data-selected="true"] .dasti-proposal-design-preview',
+    );
+  });
+
   it("selects the canonical proposal layout from the Style tab", () => {
     const onSelectProposalLayout = vi.fn();
 
@@ -575,8 +652,15 @@ describe("ProposalRail style tab", () => {
       "aria-pressed",
       "true",
     );
+    const styleGrid = screen.getByLabelText("Proposal style presets");
+    const style3 = screen.getByRole("button", { name: "Style 3" });
+    const reset = screen.getByRole("button", { name: "Reset Style 3" });
+    expect(reset.parentElement).toBe(styleGrid);
+    expect(
+      style3.compareDocumentPosition(reset) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Reset Style 3" }));
+    fireEvent.click(reset);
     expect(onResetStyleBundle).toHaveBeenCalledWith("grid_mono");
   });
 
