@@ -12,7 +12,9 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach } from "vitest";
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { CvForge } from "../CvForge";
+import { ForgeTemplatePanel } from "../../components/ForgeTemplatePanel";
+import { ForgeTemplatePanelProvider } from "../../contexts/ForgeTemplatePanelContext";
+import { CvForge as CvForgePage } from "../CvForge";
 
 const {
   importFileMock,
@@ -25,6 +27,15 @@ const {
   transformEditorSelectionMock: vi.fn(),
   runCvSectionAiActionMock: vi.fn(),
 }));
+
+function CvForge(): JSX.Element {
+  return (
+    <ForgeTemplatePanelProvider>
+      <CvForgePage />
+      <ForgeTemplatePanel />
+    </ForgeTemplatePanelProvider>
+  );
+}
 
 vi.mock("../../components/ProfileReviewCard", () => ({
   ProfileReviewCard: ({
@@ -999,7 +1010,7 @@ async function openSectionsPanel(user: ReturnType<typeof userEvent.setup>) {
   if (!screen.queryByRole("complementary", { name: "CV sections" })) {
     await user.click(screen.getByRole("button", { name: "Sections" }));
   }
-  return screen.getByRole("complementary", { name: "CV sections" });
+  return screen.findByRole("complementary", { name: "CV sections" });
 }
 
 async function clickSectionOrganizerButton(

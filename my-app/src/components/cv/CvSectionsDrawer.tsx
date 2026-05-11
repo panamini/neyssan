@@ -1,5 +1,4 @@
 import React from "react";
-import { X } from "@/lib/icons";
 import CvSectionsOrganizer, {
   type CvSectionsOrganizerProps,
 } from "./CvSectionsOrganizer";
@@ -11,7 +10,7 @@ type CvSectionsDrawerProps = CvSectionsOrganizerProps & {
 
 export function CvSectionsDrawer({
   open,
-  onClose,
+  onClose: _onClose,
   ...organizerProps
 }: CvSectionsDrawerProps): JSX.Element | null {
   if (!open) return null;
@@ -23,17 +22,8 @@ export function CvSectionsDrawer({
     >
       <div className="forge-template-panel__head">
         <span className="forge-template-panel__head-title">Sections</span>
-        <button
-          type="button"
-          className="forge-template-panel__close"
-          aria-label="Close Sections panel"
-          title="Close Sections panel"
-          onClick={onClose}
-        >
-          <X size={15} strokeWidth={1.8} aria-hidden="true" />
-        </button>
       </div>
-      <div className="forge-template-panel__content dasti-cv-sections-drawer">
+      <div className="forge-template-panel__content forge-template-panel__content--cv-sections dasti-cv-sections-drawer">
         <CvSectionsOrganizer {...organizerProps} />
       </div>
     </aside>

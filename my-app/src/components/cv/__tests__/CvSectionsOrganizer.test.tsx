@@ -1,10 +1,12 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import CvSectionsOrganizer from "../CvSectionsOrganizer";
 import type { CvSection } from "../../../types/cvDocument";
+
+const sortableContextMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@dnd-kit/core", async () => {
   const ReactModule = await import("react");
@@ -45,9 +47,16 @@ vi.mock("@dnd-kit/core", async () => {
 });
 
 vi.mock("@dnd-kit/sortable", () => ({
-  SortableContext: ({ children }: { children: React.ReactNode }) => (
-    <>{children}</>
-  ),
+  SortableContext: ({
+    children,
+    items,
+  }: {
+    children: React.ReactNode;
+    items: string[];
+  }) => {
+    sortableContextMock(items);
+    return <>{children}</>;
+  },
   sortableKeyboardCoordinates: vi.fn(),
   useSortable: () => ({
     attributes: { "data-dnd-attribute": "true" },
@@ -109,6 +118,10 @@ function renderOrganizer(overrides: Partial<React.ComponentProps<typeof CvSectio
 }
 
 describe("CvSectionsOrganizer", () => {
+  beforeEach(() => {
+    sortableContextMock.mockClear();
+  });
+
   it("renders section rows with active and hidden state", () => {
     renderOrganizer();
 
@@ -125,6 +138,28 @@ describe("CvSectionsOrganizer", () => {
     expect(screen.getByRole("button", { name: "Skills hidden" })).toBeInTheDocument();
     expect(screen.getByText("2 items")).toBeInTheDocument();
     expect(screen.getByText("hidden")).toBeInTheDocument();
+  });
+
+  it("keeps SortableContext items aligned with rendered section row order", () => {
+    renderOrganizer();
+
+    const renderedRows = Array.from(
+      document.querySelectorAll(".dasti-cv-org-row"),
+    ).map((row) => ({
+      title: row.querySelector(".dasti-cv-org-row__title")?.textContent,
+      count: row.querySelector(".dasti-cv-org-row__count")?.textContent,
+    }));
+
+    expect(renderedRows).toEqual([
+      { title: "Summary", count: "" },
+      { title: "Experience", count: "2 items" },
+      { title: "Skills", count: "hidden" },
+    ]);
+    expect(sortableContextMock).toHaveBeenLastCalledWith([
+      "summary",
+      "experience",
+      "skills",
+    ]);
   });
 
   it("fires move, toggle, delete, add, ask, and reorder callbacks", async () => {
