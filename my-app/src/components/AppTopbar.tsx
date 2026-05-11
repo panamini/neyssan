@@ -255,12 +255,14 @@ export function AppTopbar({
       : "No CV";
   const cvPageCountLabel =
     typeof cvTopbarRegistration?.pageCount === "number" &&
-    cvTopbarRegistration.pageCount > 0
-      ? `${cvTopbarRegistration.pageCount} ${
-          cvTopbarRegistration.pageCount === 1 ? "page" : "pages"
-        }`
+    cvTopbarRegistration.pageCount >= 2
+      ? `${cvTopbarRegistration.pageCount} pages`
       : null;
-
+  const shouldShowImportReviewChip = Boolean(
+    cvTopbarRegistration &&
+      cvTopbarRegistration.importIssueCount > 0 &&
+      !cvTopbarRegistration.importReviewBannerVisible,
+  );
   return (
     <header className="app-topbar">
       <div className="app-topbar__identity">
@@ -329,17 +331,21 @@ export function AppTopbar({
       </button>
       {location.pathname === "/cv" && cvTopbarRegistration ? (
         <>
-          {!cvTopbarRegistration.hasTrustedExport ? (
-            <span
+          {shouldShowImportReviewChip ? (
+            <button
+              type="button"
               className="dasti-cv-ats app-topbar__cv-ats"
               data-state="warn"
-              title="Use standard export until trusted parsing metadata is available."
+              data-actionable="true"
+              aria-label="Review needed"
+              data-toolbar-tooltip="Open import review"
+              onClick={cvTopbarRegistration.onOpenImportReview}
             >
               <span className="dasti-cv-ats__mark" aria-hidden="true">
-                ATS
+                Review
               </span>
-              <span className="dasti-cv-ats__label">ATS review</span>
-            </span>
+              <span className="dasti-cv-ats__label">Review needed</span>
+            </button>
           ) : null}
           <CvShareMenu
             mode={cvTopbarRegistration.mode}

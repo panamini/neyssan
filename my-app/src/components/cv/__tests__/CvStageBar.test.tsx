@@ -21,6 +21,8 @@ describe("CvStageBar", () => {
       <CvStageBar
         {...baseProps}
         onPickResume={onPickResume}
+        onOpenSections={vi.fn()}
+        onOpenTemplates={vi.fn()}
         resumeOptions={[
           {
             id: "resume_alpha",
@@ -61,6 +63,14 @@ describe("CvStageBar", () => {
     expect(editTrigger).not.toHaveAttribute("title");
     expect(previewTrigger).not.toHaveAttribute("title");
     expect(screen.getByText("Natural")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sections" })).toHaveAttribute(
+      "data-stage-tooltip-mode",
+      "compact",
+    );
+    expect(screen.getByRole("button", { name: "Templates" })).toHaveAttribute(
+      "data-stage-tooltip-mode",
+      "compact",
+    );
     expect(screen.queryByText("Natural tone")).not.toBeInTheDocument();
     expect(screen.queryByText("Saved")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();

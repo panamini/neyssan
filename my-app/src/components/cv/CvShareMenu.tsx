@@ -167,6 +167,7 @@ export function CvShareMenu({
             className={triggerClassName}
             aria-label="Share"
             data-toolbar-tooltip="Share"
+            data-share-tooltip-mode={showTriggerLabel ? "compact" : "always"}
           >
             <ShareFat size={15} strokeWidth={1.8} aria-hidden="true" />
             {showTriggerLabel ? (
