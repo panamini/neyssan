@@ -305,6 +305,12 @@ describe("forge rail drawers", () => {
     expect(css).toContain("transform: translateY(-1px)");
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
     expect(css).toMatch(/\.forge-rail-document-tile__badge\s*\{[\s\S]*z-index: 2/);
+    expect(css).toMatch(
+      /\.forge-rail-drawer__thumb-affordance\s*\{[\s\S]*inset-block-end:\s*var\(--space-2\);[\s\S]*inset-inline-start:\s*50%;[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*font-size:\s*var\(--tx\);/,
+    );
+    expect(css).toMatch(
+      /\.forge-rail-drawer__thumb-item:hover \.forge-rail-drawer__thumb-affordance,[\s\S]*\.forge-rail-drawer__thumb-item:focus-within \.forge-rail-drawer__thumb-affordance\s*\{[\s\S]*opacity:\s*1;/,
+    );
   });
 
   it("renders the mixed library drawer with proposals active, all results visible, and selection stable", () => {

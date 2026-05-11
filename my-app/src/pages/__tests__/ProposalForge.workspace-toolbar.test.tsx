@@ -3,11 +3,28 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
+import {
+  ForgeTemplatePanelProvider,
+  useForgeTemplatePanel,
+} from "../../contexts/ForgeTemplatePanelContext";
 
 const proposalDisplaySpy = vi.fn();
 const proposalInputFormSpy = vi.fn();
 const proposalComposeToolbarSpy = vi.fn();
 const useQueryMock = vi.fn(() => null);
+
+function TestForgePanel(): JSX.Element | null {
+  const { activeRegistration, open } = useForgeTemplatePanel();
+  if (!open || !activeRegistration) return null;
+
+  return (
+    <aside aria-label={activeRegistration.ariaLabel ?? activeRegistration.title}>
+      {activeRegistration.kind === "custom"
+        ? activeRegistration.renderContent()
+        : null}
+    </aside>
+  );
+}
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
@@ -130,7 +147,10 @@ vi.mock("../../components/ProposalsList", () => ({
 const renderProposalForge = (entry = "/proposal") =>
   render(
     <MemoryRouter initialEntries={[entry]}>
-      <ProposalForge />
+      <ForgeTemplatePanelProvider>
+        <ProposalForge />
+        <TestForgePanel />
+      </ForgeTemplatePanelProvider>
     </MemoryRouter>,
   );
 
@@ -339,11 +359,14 @@ describe("ProposalForge workbench layout", () => {
     expect(within(rail).getByRole("button", { name: "Medium" })).toBeInTheDocument();
     expect(within(rail).getByRole("textbox", { name: /ask ai/i })).toBeDisabled();
     expect(within(rail).getByRole("button", { name: "Send" })).toBeDisabled();
-    fireEvent.click(within(rail).getByRole("tab", { name: "Heading" }));
-    expect(within(rail).getAllByText("Heading").length).toBeGreaterThan(0);
-    expect(within(rail).getByText("Applicant details")).toBeInTheDocument();
-    expect(within(rail).getByText("Recipient details")).toBeInTheDocument();
-    expect(within(rail).getByText("Letter details")).toBeInTheDocument();
+    expect(within(rail).queryByRole("tab", { name: "Heading" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Heading" }));
+    const headingPanel = screen.getByRole("complementary", {
+      name: "Proposal heading",
+    });
+    expect(within(headingPanel).getByText("Applicant details")).toBeInTheDocument();
+    expect(within(headingPanel).getByText("Recipient details")).toBeInTheDocument();
+    expect(within(headingPanel).getByText("Letter details")).toBeInTheDocument();
     expect(screen.queryByTestId("proposal-compose-toolbar")).toBeNull();
     expect(container.querySelector(".dasti-proposal-compose-panel-stage")).toBeNull();
   });
@@ -353,7 +376,7 @@ describe("ProposalForge workbench layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
-    fireEvent.click(screen.getByRole("tab", { name: "Heading" }));
+    fireEvent.click(screen.getByRole("button", { name: "Heading" }));
     expect(await screen.findByLabelText("Subject line")).toBeInTheDocument();
     expect(screen.queryByText("Ready for edits")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Full name")).toBeInTheDocument();
@@ -369,7 +392,7 @@ describe("ProposalForge workbench layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
-    fireEvent.click(screen.getByRole("tab", { name: "Heading" }));
+    fireEvent.click(screen.getByRole("button", { name: "Heading" }));
     const salutationField = await screen.findByLabelText("Salutation");
     fireEvent.change(salutationField, { target: { value: "H" } });
     fireEvent.change(salutationField, { target: { value: "HR" } });

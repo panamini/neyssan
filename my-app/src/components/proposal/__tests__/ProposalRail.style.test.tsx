@@ -57,7 +57,6 @@ const baseProps = {
   onSelectStylePalette: vi.fn(),
   onSelectStyleCustomAccent: vi.fn(),
   aiStream: null,
-  variableFields: [],
   hasProposalContent: true,
   generateLabel: "Generate",
   generateDisabled: false,
@@ -78,6 +77,15 @@ const baseProps = {
 };
 
 describe("ProposalRail style tab", () => {
+  it("keeps document heading out of the right rail tabs", () => {
+    render(<ProposalRail {...baseProps} />);
+
+    expect(screen.getByRole("tab", { name: "Draft" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Ask" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Style" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Heading" })).not.toBeInTheDocument();
+  });
+
   it("renders new, save, and delete proposal actions under the generate button", () => {
     const onNewProposal = vi.fn();
     const onSaveToLibrary = vi.fn();

@@ -2396,7 +2396,7 @@ body,
   padding: 0 var(--space-3);
   border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--sf1) 92%, transparent);
+  background: color-mix(in srgb, var(--sf1) 96%, transparent);
   color: var(--ti);
   box-shadow: var(--shadow-popover);
   font-size: var(--tx);
@@ -2414,6 +2414,8 @@ body,
 }
 
 .forge-rail-drawer__thumb-affordance svg {
+  width: 12px;
+  height: 12px;
   margin-inline-end: var(--space-1);
 }
 

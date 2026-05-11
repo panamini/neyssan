@@ -21,6 +21,14 @@ export type ProposalHeadingTextKey =
   | "letterDate"
   | "recipientDetails";
 
+type ProposalContactFields = {
+  email?: string | null;
+  phone?: string | null;
+  linkedin?: string | null;
+  website?: string | null;
+  location?: string | null;
+};
+
 function hasOwn(value: object, key: PropertyKey): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
@@ -57,6 +65,66 @@ export function buildProposalApplicantHeaderFromMetadata(
     location: null,
     tag: null,
   };
+}
+
+export function normalizeProposalContactLine(
+  value: string | null | undefined,
+): string {
+  return String(value ?? "")
+    .split(/\s*(?:,|·|•|\|)\s*/g)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export function buildProposalApplicantContactLine(
+  header: ProposalContactFields | null | undefined,
+): string {
+  return normalizeProposalContactLine(
+    [
+      header?.email?.trim() ?? "",
+      header?.phone?.trim() ?? "",
+      header?.location?.trim() ?? "",
+      header?.linkedin?.trim() ?? "",
+      header?.website?.trim() ?? "",
+    ]
+      .filter((value) => value.length > 0)
+      .join(" · "),
+  );
+}
+
+export function mergeProposalContactDefaults<T extends ProposalContactFields>(
+  source: T,
+  defaults: ProposalContactFields | null | undefined,
+): T {
+  return {
+    ...source,
+    email: source.email || defaults?.email || source.email,
+    phone: source.phone || defaults?.phone || source.phone,
+    linkedin: source.linkedin || defaults?.linkedin || source.linkedin,
+    website: source.website || defaults?.website || source.website,
+    location: source.location || defaults?.location || source.location,
+  };
+}
+
+export function resolveAutoHeadingField(args: {
+  current: string | null | undefined;
+  previousAuto: string | null | undefined;
+  nextAuto: string | null | undefined;
+  isInvalidCurrent?: (value: string) => boolean;
+}): string {
+  const current = String(args.current ?? "");
+  const trimmedCurrent = current.trim();
+  const previousAuto = String(args.previousAuto ?? "").trim();
+  const nextAuto = String(args.nextAuto ?? "").trim();
+
+  if (args.isInvalidCurrent?.(trimmedCurrent)) {
+    return nextAuto;
+  }
+  if (!trimmedCurrent || trimmedCurrent === previousAuto) {
+    return nextAuto;
+  }
+  return current;
 }
 
 export function buildProposalHeadingMetadataPatch(args: {

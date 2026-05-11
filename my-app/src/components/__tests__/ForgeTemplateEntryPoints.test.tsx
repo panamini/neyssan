@@ -1,13 +1,15 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ForgeTemplatePanel } from "../ForgeTemplatePanel";
 import CvStageBar from "../cv/CvStageBar";
 import ProposalDocumentStage from "../proposal/ProposalDocumentStage";
+import ProposalHeadingFields from "../proposal/ProposalHeadingFields";
 import {
   ForgeTemplatePanelProvider,
   useForgeTemplatePanel,
+  useRegisterForgePanel,
   useRegisterForgeTemplates,
 } from "../../contexts/ForgeTemplatePanelContext";
 
@@ -78,12 +80,15 @@ function ProposalTemplateEntryPoint({
   return (
     <>
       <RegisterTemplates surface="proposal" onSelect={onSelect} />
+      <RegisterProposalHeading />
       <ProposalDocumentStage
         toneLabel="Natural"
         toneValue="natural"
         mode="edit"
         exporting={false}
         hasProposalContent
+        headingOpen={open && activeSurface === "proposal-heading"}
+        onOpenHeading={() => openSurface("proposal-heading")}
         templatesOpen={open && activeSurface === "proposal"}
         onOpenTemplates={() => openSurface("proposal")}
         onModeChange={vi.fn()}
@@ -95,6 +100,45 @@ function ProposalTemplateEntryPoint({
       </ProposalDocumentStage>
     </>
   );
+}
+
+function RegisterProposalHeading(): null {
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "proposal-heading" as const,
+        title: "Heading",
+        ariaLabel: "Proposal heading",
+        renderContent: () => (
+          <ProposalHeadingFields
+            variableFields={[
+              {
+                id: "applicant-name",
+                label: "Full name",
+                value: "Alex Martin",
+                onChange: vi.fn(),
+              },
+              {
+                id: "recipient-details",
+                label: "Recipient information",
+                value: "Northstar",
+                multiline: true,
+                onChange: vi.fn(),
+              },
+              {
+                id: "proposal-subject",
+                label: "Subject line",
+                value: "Application",
+                onChange: vi.fn(),
+              },
+            ]}
+          />
+        ),
+      }),
+      [],
+    ),
+  );
+  return null;
 }
 
 function renderEntryPoint(
@@ -144,6 +188,27 @@ describe("forge template entry points", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("listitem", { name: "Schematic" }));
     expect(onSelect).toHaveBeenCalledWith("schematic");
+  });
+
+  it("opens proposal heading from the proposal stage bar as a current document panel", () => {
+    renderEntryPoint(
+      "/proposal",
+      <ProposalTemplateEntryPoint onSelect={vi.fn()} />,
+    );
+
+    const heading = screen.getByRole("button", { name: "Heading" });
+    expect(heading).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(heading);
+
+    expect(heading).toHaveAttribute("aria-expanded", "true");
+    const panel = screen.getByRole("complementary", {
+      name: "Proposal heading",
+    });
+    expect(within(panel).getByText("Applicant details")).toBeInTheDocument();
+    expect(within(panel).getByLabelText("Full name")).toHaveValue("Alex Martin");
+    expect(within(panel).queryByRole("tab", { name: "Ask" })).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("tab", { name: "Style" })).not.toBeInTheDocument();
   });
 
   it("browse all templates from a contextual panel goes to the global route", () => {
