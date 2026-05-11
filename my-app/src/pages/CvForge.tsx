@@ -103,7 +103,7 @@ import CvRail, {
   type CvRailTab,
   type CvToneChoice,
 } from "../components/cv/CvRail";
-import CvSectionsDrawer from "../components/cv/CvSectionsDrawer";
+import CvSectionsOrganizer from "../components/cv/CvSectionsOrganizer";
 import ImportReviewSheet, {
   type CvImportReviewBlock,
 } from "../components/cv/ImportReviewSheet";
@@ -2787,7 +2787,6 @@ export function CvForge(): JSX.Element {
   const [resumeActiveTarget, setResumeActiveTarget] =
     React.useState<ResumeActiveTarget | null>(null);
   const [hiddenSectionIds, setHiddenSectionIds] = React.useState<string[]>([]);
-  const [sectionsPanelOpen, setSectionsPanelOpen] = React.useState(false);
   const [cvRailTab, setCvRailTab] = React.useState<CvRailTab>("ai");
   const cvTone = mapDefaultVoicePresetToCvTone(
     defaultProposalSettings?.savedVoicePreset ??
@@ -5102,21 +5101,15 @@ export function CvForge(): JSX.Element {
   useRegisterForgePanel(cvLibraryPanelRegistration);
   const cvTemplatesOpen =
     templatePanelOpen && activeTemplateSurface === "cv";
+  const sectionsPanelOpen =
+    templatePanelOpen && activeTemplateSurface === "cv-sections";
   const handleOpenCvTemplates = React.useCallback(() => {
-    setSectionsPanelOpen(false);
     openTemplateSurface("cv");
   }, [openTemplateSurface]);
 
   const handleOpenCvSections = React.useCallback(() => {
-    closeForgePanel();
-    setSectionsPanelOpen(true);
-  }, [closeForgePanel]);
-
-  React.useEffect(() => {
-    if (templatePanelOpen) {
-      setSectionsPanelOpen(false);
-    }
-  }, [templatePanelOpen]);
+    openTemplateSurface("cv-sections");
+  }, [openTemplateSurface]);
 
   const handleSelectFontPair = React.useCallback(
     (fontPairId: VerbatiFontPairId) => {
@@ -5471,6 +5464,47 @@ export function CvForge(): JSX.Element {
     },
     [currentCv, currentSections, runCvSectionAiAction, showToast],
   );
+
+  const cvSectionsPanelRegistration = React.useMemo(
+    () => ({
+      surface: "cv-sections" as const,
+      title: "Sections",
+      ariaLabel: "CV sections",
+      renderContent: () => (
+        <div className="dasti-cv-sections-drawer">
+          <CvSectionsOrganizer
+            sections={currentSections}
+            hiddenSectionIds={hiddenSectionIds}
+            activeSectionId={activeSectionId}
+            selectedTone={cvTone}
+            onSelectSection={handleSelectSection}
+            onToggleHiddenSection={handleToggleHiddenSection}
+            onDeleteSection={handleDeleteSection}
+            onReorderSections={handleReorderSections}
+            onMoveSection={handleMoveSection}
+            onAskAiForSection={handleAskAiForSection}
+            onRunAskAiForSection={handleRunAskAiForSection}
+            onAddSection={handleAddSection}
+          />
+        </div>
+      ),
+    }),
+    [
+      activeSectionId,
+      currentSections,
+      cvTone,
+      handleAddSection,
+      handleAskAiForSection,
+      handleDeleteSection,
+      handleMoveSection,
+      handleReorderSections,
+      handleRunAskAiForSection,
+      handleSelectSection,
+      handleToggleHiddenSection,
+      hiddenSectionIds,
+    ],
+  );
+  useRegisterForgePanel(cvSectionsPanelRegistration);
 
   const handleRunPageWandForSection = React.useCallback(
     (sectionId: string) => {
@@ -6253,22 +6287,6 @@ export function CvForge(): JSX.Element {
             )}
           </div>
         ) : null}
-        <CvSectionsDrawer
-          open={sectionsPanelOpen}
-          onClose={() => setSectionsPanelOpen(false)}
-          sections={currentSections}
-          hiddenSectionIds={hiddenSectionIds}
-          activeSectionId={activeSectionId}
-          selectedTone={cvTone}
-          onSelectSection={handleSelectSection}
-          onToggleHiddenSection={handleToggleHiddenSection}
-          onDeleteSection={handleDeleteSection}
-          onReorderSections={handleReorderSections}
-          onMoveSection={handleMoveSection}
-          onAskAiForSection={handleAskAiForSection}
-          onRunAskAiForSection={handleRunAskAiForSection}
-          onAddSection={handleAddSection}
-        />
         <>
           <div
             className="dasti-cv-skeleton-forge"

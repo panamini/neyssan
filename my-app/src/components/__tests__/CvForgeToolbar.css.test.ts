@@ -29,6 +29,17 @@ const cvSectionsDrawerSource = readFileSync(
   resolve(process.cwd(), "src/components/cv/CvSectionsDrawer.tsx"),
   "utf8",
 );
+const forgeTemplatePanelSource = readFileSync(
+  resolve(process.cwd(), "src/components/ForgeTemplatePanel.tsx"),
+  "utf8",
+);
+
+function getCssRuleBlock(selector: string): string {
+  const start = productCss.indexOf(selector);
+  if (start === -1) return "";
+  const end = productCss.indexOf("}", start);
+  return end === -1 ? "" : productCss.slice(start, end + 1);
+}
 
 describe("CvForge toolbar CSS contracts", () => {
   it("uses the shared proposal rail shell for the anchored CV edit toolbar", () => {
@@ -172,8 +183,28 @@ describe("CvForge toolbar CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-cv-rail-tabs button\[data-active="true"\]\s*\{[\s\S]*background:\s*var\(--color-surface-raised\);/,
     );
-    expect(productCss).toMatch(
-      /\.dasti-cv-org-row\[data-active="true"\]\s*\{[\s\S]*border-color:\s*var\(--proposal-chrome-control-active-border,\s*var\(--ac\)\);[\s\S]*background:\s*var\(--sf0\);[\s\S]*background:\s*var\(--proposal-chrome-control-active-bg,\s*var\(--sf0\)\);[\s\S]*background-clip:\s*padding-box;[\s\S]*box-shadow:\s*none;/,
+    expect(forgeTemplatePanelSource).toContain(
+      "forge-template-panel__content--cv-sections",
+    );
+    expect(getCssRuleBlock(".forge-template-panel__content")).toContain(
+      "overflow: hidden",
+    );
+    expect(getCssRuleBlock(".forge-template-panel__content--cv-sections")).toContain(
+      "overflow: visible",
+    );
+    const activeSectionRowBlock = getCssRuleBlock(
+      '.dasti-cv-org-row[data-active="true"]',
+    );
+    expect(activeSectionRowBlock).toContain(
+      "border-color: var(--proposal-chrome-control-active-border, var(--ac))",
+    );
+    expect(activeSectionRowBlock).toContain(
+      "background: var(--color-surface-raised, var(--sf1))",
+    );
+    expect(activeSectionRowBlock).toContain("background-clip: padding-box");
+    expect(activeSectionRowBlock).toContain("box-shadow: none");
+    expect(activeSectionRowBlock).not.toContain(
+      "--proposal-chrome-control-active-bg",
     );
     expect(cvForgeSource).toContain("CV_PAPER_VISUAL_INLINE_SIZE");
     expect(cvForgeSource).toContain('"--cv-paper-visual-inline-size"');

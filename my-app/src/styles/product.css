@@ -1917,13 +1917,12 @@ body,
 
 .forge-template-panel__head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
 }
 
-.forge-template-panel__icon,
-.forge-template-panel__close {
+.forge-template-panel__icon {
   width: 30px;
   height: 30px;
   display: inline-grid;
@@ -1934,13 +1933,6 @@ body,
 .forge-template-panel__icon {
   background: var(--sf1);
   color: var(--ti);
-}
-
-.forge-template-panel__close {
-  border: 0;
-  background: transparent;
-  color: var(--tm2);
-  cursor: pointer;
 }
 
 .forge-template-panel__collapse {
@@ -1973,13 +1965,6 @@ body,
   outline: none;
 }
 
-.forge-template-panel__close:hover,
-.forge-template-panel__close:focus-visible {
-  background: var(--sidebar-hover-bg);
-  color: var(--ti);
-  outline: none;
-}
-
 .forge-template-panel__head-action {
   min-height: var(--control-xs);
   align-self: center;
@@ -1992,7 +1977,8 @@ body,
   background: transparent;
   color: var(--tm2);
   font: inherit;
-  font-size: var(--text-caption-size);
+  font-size: var(--tx);
+  line-height: var(--lx);
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
@@ -2052,6 +2038,10 @@ body,
 .forge-template-panel__content {
   min-height: 0;
   overflow: hidden;
+}
+
+.forge-template-panel__content--cv-sections {
+  overflow: visible;
 }
 
 .forge-rail-drawer {
@@ -2194,7 +2184,9 @@ body,
   background: transparent;
   color: var(--tm2);
   font: inherit;
-  font-size: var(--text-caption-size);
+  font-size: var(--tx);
+  line-height: var(--lx);
+  font-weight: 700;
   cursor: pointer;
 }
 

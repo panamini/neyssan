@@ -5,6 +5,7 @@ import type { TemplateFamily } from "../pages/TemplatesPage";
 export type ForgeTemplateSurface = "cv" | "proposal";
 export type ForgeRailSurface =
   | ForgeTemplateSurface
+  | "cv-sections"
   | "jobs"
   | "documents"
   | "cvs"
@@ -35,6 +36,7 @@ export type ForgeTemplateRegistration = {
 export type ForgeCustomPanelRegistration = {
   surface: Exclude<ForgeRailSurface, ForgeTemplateSurface>;
   title: string;
+  ariaLabel?: string;
   subtitle?: string;
   icon?: React.ReactNode;
   renderContent: () => React.ReactNode;

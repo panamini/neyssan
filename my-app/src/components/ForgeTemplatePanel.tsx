@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowSquareOut, CaretLeft, X } from "../lib/icons";
+import { ArrowSquareOut, CaretLeft } from "../lib/icons";
 import { useForgeTemplatePanel } from "../contexts/ForgeTemplatePanelContext";
 import { TemplateDocumentPreview } from "../pages/TemplatesPage";
 import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../lib/document-stage";
@@ -63,7 +63,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
     return (
       <aside
         className="forge-template-panel"
-        aria-label={activeRegistration.title}
+        aria-label={activeRegistration.ariaLabel ?? activeRegistration.title}
         {...panelHoverProps}
       >
         <div className="forge-template-panel__head">
@@ -80,15 +80,6 @@ export function ForgeTemplatePanel(): JSX.Element | null {
               <ArrowSquareOut size={13} aria-hidden="true" />
             </button>
           ) : null}
-          <button
-            type="button"
-            className="forge-template-panel__close"
-            aria-label={`Close ${activeRegistration.title}`}
-            title={`Close ${activeRegistration.title}`}
-            onClick={closePanel}
-          >
-            <X size={15} strokeWidth={1.8} aria-hidden="true" />
-          </button>
         </div>
         {pinned ? (
           <button
@@ -102,7 +93,13 @@ export function ForgeTemplatePanel(): JSX.Element | null {
           </button>
         ) : null}
 
-        <div className="forge-template-panel__content">
+        <div
+          className={`forge-template-panel__content ${
+            activeRegistration.surface === "cv-sections"
+              ? "forge-template-panel__content--cv-sections"
+              : ""
+          }`.trim()}
+        >
           {activeRegistration.renderContent()}
         </div>
       </aside>
@@ -124,15 +121,6 @@ export function ForgeTemplatePanel(): JSX.Element | null {
         >
           Open Templates
           <ArrowSquareOut size={13} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="forge-template-panel__close"
-          aria-label="Close templates"
-          title="Close templates"
-          onClick={closePanel}
-        >
-          <X size={15} strokeWidth={1.8} aria-hidden="true" />
         </button>
       </div>
       {pinned ? (

@@ -49,6 +49,7 @@
 }
 
 .dasti-cv-sections-drawer {
+  height: 100%;
   display: grid;
   gap: var(--space-4);
   align-content: start;
@@ -907,8 +908,7 @@
 .dasti-cv-org-row[data-active="true"] {
   z-index: 1;
   border-color: var(--proposal-chrome-control-active-border, var(--ac));
-  background: var(--sf0);
-  background: var(--proposal-chrome-control-active-bg, var(--sf0));
+  background: var(--color-surface-raised, var(--sf1));
   background-clip: padding-box;
   box-shadow: none;
 }

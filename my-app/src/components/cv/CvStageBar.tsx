@@ -7,6 +7,7 @@ import {
   FolderOpen,
   FolderSimple,
   ImagesSquare,
+  ListNumbers,
   PenLine,
   ShareFat,
 } from "@/lib/icons";
@@ -241,7 +242,7 @@ export function CvStageBar({
             type="button"
             size="sm"
             variant="secondary"
-            iconLeft={<FileUser size={14} strokeWidth={1.8} />}
+            iconLeft={<ListNumbers size={14} strokeWidth={1.8} />}
             aria-expanded={sectionsOpen}
             onClick={onOpenSections}
           >

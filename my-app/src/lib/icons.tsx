@@ -44,6 +44,7 @@ import {
   Link as PhLink,
   ListBullets as PhListBullets,
   ListMagnifyingGlass as PhListMagnifyingGlass,
+  ListNumbers as PhListNumbers,
   MagicWand as PhMagicWand,
   Moon as PhMoon,
   MagnifyingGlass as PhMagnifyingGlass,
@@ -193,6 +194,7 @@ export const Lightning = withCompat(PhLightning);
 export const Link = withCompat(PhLink);
 export const List = withCompat(PhListBullets);
 export const ListMagnifyingGlass = withCompat(PhListMagnifyingGlass);
+export const ListNumbers = withCompat(PhListNumbers);
 export const Loader2 = withCompat(PhSpinnerGap, "bold");
 export const MagnifyingGlass = withCompat(PhMagnifyingGlass);
 export const MagnifyingGlassMinus = withCompat(PhMagnifyingGlassMinus);
