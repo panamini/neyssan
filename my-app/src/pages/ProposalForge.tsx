@@ -8917,6 +8917,19 @@ export function ProposalForge(): JSX.Element {
       null
     );
   }, [attachedCvId, attachedCvTitle]);
+  // Mirrors --app-nav-panel-width-wide from foundation.css so docked drawer
+  // decisions use the remaining page column, not the full window width.
+  const FORGE_DOCKED_PANEL_INLINE_SIZE_PX = 352;
+  const FORGE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH = 1180;
+  const isForgeDrawerDockedDesktop =
+    templatePanelOpen &&
+    templatePanelOpenMode === "pinned" &&
+    viewportWidth >= FORGE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH;
+  const proposalLayoutViewportWidth = Math.max(
+    0,
+    viewportWidth -
+      (isForgeDrawerDockedDesktop ? FORGE_DOCKED_PANEL_INLINE_SIZE_PX : 0),
+  );
   // Page + rail + grid gap + page padding need room before two-pane mode is safe.
   const proposalTwoPaneMinViewportWidth = 1420;
   const proposalPaperVisualInlineSize = `min(100%, ${PROPOSAL_PAPER_VISUAL_INLINE_SIZE})`;
@@ -8925,7 +8938,7 @@ export function ProposalForge(): JSX.Element {
   const proposalWorkspaceShellBlockSize =
     "min(var(--document-viewer-shell-max-block), calc(100dvh - var(--header-height) - (var(--space-4) * 2) - var(--document-viewer-toolbar-block-size) - var(--space-2)))";
   const isCompactComposeLayout =
-    viewportWidth < proposalTwoPaneMinViewportWidth;
+    proposalLayoutViewportWidth < proposalTwoPaneMinViewportWidth;
   const proposalWorkspaceOutputShellInlineSize =
     proposalBaseWorkspaceOutputShellInlineSize;
   const proposalWorkbenchColumnInlineSize =
@@ -9451,7 +9464,7 @@ export function ProposalForge(): JSX.Element {
   const shouldShowDesktopBriefCapsule =
     showBriefCard && !isCompactComposeLayout;
   const shouldLeftAnchorStackedWorkbench =
-    isCompactComposeLayout && viewportWidth >= 768;
+    isCompactComposeLayout && proposalLayoutViewportWidth >= 768;
   const canCollapseComposePanel = !isSavedView && !isCompactComposeLayout;
   const shouldCenterOutputStage =
     !isSavedView &&
@@ -9500,12 +9513,8 @@ export function ProposalForge(): JSX.Element {
     !isComposePanelVisible &&
     !isSavedView &&
     canCollapseComposePanel;
-  const isForgeDrawerDockedDesktop =
-    templatePanelOpen &&
-    templatePanelOpenMode === "pinned" &&
-    viewportWidth >= 1180;
   const shouldAutoCollapseProposalRailForDockedDrawer =
-    isForgeDrawerDockedDesktop && viewportWidth < 1760;
+    isForgeDrawerDockedDesktop && proposalLayoutViewportWidth < 1760;
   const shouldRenderProposalRail =
     !shouldAutoCollapseProposalRailForDockedDrawer;
   const showComposeGridColumn =
