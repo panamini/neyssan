@@ -2145,8 +2145,12 @@ function JobsPageContent(): JSX.Element {
         ) : null}
 
         {isJobsListLoading ? (
-          <div className="dasti-hint" style={{ padding: "var(--space-5) 0" }}>
-            Loading jobs
+          <div
+            className="dasti-empty-state"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="dasti-empty-state__title">Loading jobs</div>
           </div>
         ) : null}
 
