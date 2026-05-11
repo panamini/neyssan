@@ -2819,12 +2819,108 @@ export function ProposalForge(): JSX.Element {
       ? ""
       : storedOutputDraft?.proposalDocumentTitle ?? "",
   );
-  const handleProposalContactLineChange = React.useCallback((value: string) => {
-    setProposalContactLine(value);
-  }, []);
+  const headingDirtyRef = React.useRef({
+    applicantName: Boolean(storedOutputDraft?.proposalApplicantName),
+    applicantRole: Boolean(storedOutputDraft?.proposalApplicantRole),
+    contactLine: Boolean(storedOutputDraft?.proposalContactLine),
+    letterDate: Boolean(storedOutputDraft?.proposalLetterDate),
+    recipientDetails: Boolean(storedOutputDraft?.proposalRecipientDetails),
+    subject: Boolean(storedOutputDraft?.proposalDocumentTitleManual),
+    salutation: Boolean(proposalSalutationValue),
+  });
+  const markHeadingFieldDirty = React.useCallback(
+    (field: keyof typeof headingDirtyRef.current) => {
+      headingDirtyRef.current[field] = true;
+    },
+    [],
+  );
+  const resetHeadingDirtyState = React.useCallback(
+    (next?: Partial<typeof headingDirtyRef.current>) => {
+      headingDirtyRef.current = {
+        applicantName: false,
+        applicantRole: false,
+        contactLine: false,
+        letterDate: false,
+        recipientDetails: false,
+        subject: false,
+        salutation: false,
+        ...next,
+      };
+    },
+    [],
+  );
+  const resolveHeadingFieldFromAuto = React.useCallback(
+    (
+      field: keyof typeof headingDirtyRef.current,
+      args: {
+        current: string | null | undefined;
+        previousAuto: string | null | undefined;
+        nextAuto: string | null | undefined;
+        isInvalidCurrent?: (value: string) => boolean;
+      },
+    ) => {
+      const current = String(args.current ?? "");
+      const trimmedCurrent = current.trim();
+      const previousAuto = String(args.previousAuto ?? "").trim();
+      const nextAuto = String(args.nextAuto ?? "").trim();
+
+      if (args.isInvalidCurrent?.(trimmedCurrent)) {
+        headingDirtyRef.current[field] = false;
+        return nextAuto;
+      }
+      if (!trimmedCurrent || trimmedCurrent === previousAuto) {
+        headingDirtyRef.current[field] = false;
+        return nextAuto;
+      }
+      return current;
+    },
+    [],
+  );
+  const handleProposalDocumentTitleChange = React.useCallback(
+    (value: string) => {
+      markHeadingFieldDirty("subject");
+      setProposalDocumentTitle(value);
+    },
+    [markHeadingFieldDirty],
+  );
+  const handleProposalApplicantNameChange = React.useCallback(
+    (value: string) => {
+      markHeadingFieldDirty("applicantName");
+      setProposalApplicantName(value);
+    },
+    [markHeadingFieldDirty],
+  );
+  const handleProposalApplicantRoleChange = React.useCallback(
+    (value: string) => {
+      markHeadingFieldDirty("applicantRole");
+      setProposalApplicantRole(value);
+    },
+    [markHeadingFieldDirty],
+  );
+  const handleProposalContactLineChange = React.useCallback(
+    (value: string) => {
+      markHeadingFieldDirty("contactLine");
+      setProposalContactLine(value);
+    },
+    [markHeadingFieldDirty],
+  );
   const handleProposalContactLineCommit = React.useCallback(() => {
     setProposalContactLine((current) => normalizeProposalContactLine(current));
   }, []);
+  const handleProposalLetterDateChange = React.useCallback(
+    (value: string) => {
+      markHeadingFieldDirty("letterDate");
+      setProposalLetterDate(value);
+    },
+    [markHeadingFieldDirty],
+  );
+  const handleProposalRecipientDetailsChange = React.useCallback(
+    (value: string) => {
+      markHeadingFieldDirty("recipientDetails");
+      setProposalRecipientDetails(value);
+    },
+    [markHeadingFieldDirty],
+  );
 
   React.useEffect(() => {
     hasCompletedInitialRenderRef.current = true;
@@ -2840,37 +2936,27 @@ export function ProposalForge(): JSX.Element {
       contactLine: defaultPreviewContactLine,
     };
 
-    if (generatedProposalId || proposalContent) {
-      lastAutoApplicantHeaderRef.current = nextAuto;
-      return;
-    }
-
     setProposalApplicantName((current) => {
-      const trimmedCurrent = current.trim();
-      if (isInvalidProposalApplicantName(trimmedCurrent)) {
-        return nextAuto.name;
-      }
-      if (!trimmedCurrent || trimmedCurrent === previousAuto.name) {
-        return nextAuto.name;
-      }
-      return current;
+      return resolveHeadingFieldFromAuto("applicantName", {
+        current,
+        previousAuto: previousAuto.name,
+        nextAuto: nextAuto.name,
+        isInvalidCurrent: isInvalidProposalApplicantName,
+      });
     });
     setProposalApplicantRole((current) => {
-      const trimmedCurrent = current.trim();
-      if (!trimmedCurrent || trimmedCurrent === previousAuto.role) {
-        return nextAuto.role;
-      }
-      return current;
+      return resolveHeadingFieldFromAuto("applicantRole", {
+        current,
+        previousAuto: previousAuto.role,
+        nextAuto: nextAuto.role,
+      });
     });
     setProposalContactLine((current) => {
-      const normalizedCurrent = normalizeProposalContactLine(current);
-      if (
-        !normalizedCurrent ||
-        normalizedCurrent === previousAuto.contactLine
-      ) {
-        return nextAuto.contactLine;
-      }
-      return normalizedCurrent;
+      return resolveHeadingFieldFromAuto("contactLine", {
+        current: normalizeProposalContactLine(current),
+        previousAuto: previousAuto.contactLine,
+        nextAuto: nextAuto.contactLine,
+      });
     });
 
     lastAutoApplicantHeaderRef.current = nextAuto;
@@ -2878,8 +2964,7 @@ export function ProposalForge(): JSX.Element {
     defaultPreviewApplicantHeader.name,
     defaultPreviewApplicantHeader.role,
     defaultPreviewContactLine,
-    generatedProposalId,
-    proposalContent,
+    resolveHeadingFieldFromAuto,
   ]);
   const [savedProposalContent, setSavedProposalContent] = React.useState<
     string | null
@@ -3357,28 +3442,30 @@ export function ProposalForge(): JSX.Element {
       salutation: buildProposalSalutation(autoProposalRecipientDetails),
     };
 
-    if (generatedProposalId || proposalContent) {
-      lastAutoLetterHeaderRef.current = nextAuto;
-      return;
-    }
-
     setProposalRecipientDetails((current) => {
-      const trimmedCurrent = current.trim();
-      const sanitizedCurrent = sanitizeProposalRecipientDetails(trimmedCurrent);
-      if (trimmedCurrent && !sanitizedCurrent) {
-        return nextAuto.recipientDetails;
-      }
-      if (!trimmedCurrent || trimmedCurrent === previousAuto.recipientDetails) {
-        return nextAuto.recipientDetails;
-      }
-      return current;
+      return resolveHeadingFieldFromAuto("recipientDetails", {
+        current,
+        previousAuto: previousAuto.recipientDetails,
+        nextAuto: nextAuto.recipientDetails,
+        isInvalidCurrent: (value) =>
+          Boolean(value && !sanitizeProposalRecipientDetails(value)),
+      });
     });
     setProposalLetterDate((current) => {
-      const trimmedCurrent = current.trim();
-      if (!trimmedCurrent || trimmedCurrent === previousAuto.letterDate) {
-        return nextAuto.letterDate;
-      }
-      return current;
+      return resolveHeadingFieldFromAuto("letterDate", {
+        current,
+        previousAuto: previousAuto.letterDate,
+        nextAuto: nextAuto.letterDate,
+      });
+    });
+    setProposalSalutationValue((current) => {
+      const nextValue = resolveHeadingFieldFromAuto("salutation", {
+        current,
+        previousAuto: previousAuto.salutation,
+        nextAuto: nextAuto.salutation,
+      });
+      proposalSalutationValueRef.current = nextValue;
+      return nextValue;
     });
     setProposalContent((current) => {
       if (!current) {
@@ -3386,7 +3473,10 @@ export function ProposalForge(): JSX.Element {
       }
 
       const currentSalutation = readProposalSalutation(current);
-      if (!currentSalutation || currentSalutation === previousAuto.salutation) {
+      if (
+        !headingDirtyRef.current.salutation &&
+        (!currentSalutation || currentSalutation === previousAuto.salutation)
+      ) {
         return replaceProposalSalutation({
           content: current,
           salutation: nextAuto.salutation,
@@ -3400,8 +3490,7 @@ export function ProposalForge(): JSX.Element {
   }, [
     autoProposalLetterDate,
     autoProposalRecipientDetails,
-    generatedProposalId,
-    proposalContent,
+    resolveHeadingFieldFromAuto,
   ]);
 
   const consumedHandoffIdRef = React.useRef<string | null>(null);
@@ -5592,6 +5681,7 @@ export function ProposalForge(): JSX.Element {
         getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
       );
       setProposalRecipientDetails("");
+      resetHeadingDirtyState();
       setProposalHeaderVisibility(
         buildProposalHeaderVisibilityFromContent(null),
       );
@@ -5631,6 +5721,7 @@ export function ProposalForge(): JSX.Element {
       defaultPreviewApplicantHeader.name,
       defaultPreviewApplicantHeader.role,
       defaultPreviewContactLine,
+      resetHeadingDirtyState,
       settingsAccentHex,
       settingsPaletteOverride,
       settingsStyleChoice,
@@ -5657,6 +5748,7 @@ export function ProposalForge(): JSX.Element {
     setProposalContent("");
     setProposalLibraryStatus("draft");
     setProposalOutputMode("edit");
+    resetHeadingDirtyState();
     writeStoredOutputDraft({
       proposalContent: "",
       proposalType: "cover_letter",
@@ -5710,6 +5802,7 @@ export function ProposalForge(): JSX.Element {
     defaultPreviewApplicantHeader.role,
     defaultPreviewContactLine,
     navigate,
+    resetHeadingDirtyState,
     resetProposalWorkspace,
     writeStoredOutputDraft,
   ]);
@@ -7060,7 +7153,7 @@ export function ProposalForge(): JSX.Element {
       setComposeToolbarModelType(values.modelType);
       setProposalVoicePreset(resolvedVoicePreset);
       setProposalApplicantName((current) =>
-        resolveAutoHeadingField({
+        resolveHeadingFieldFromAuto("applicantName", {
           current,
           previousAuto: previousAuto.name,
           nextAuto: previewApplicantHeader.name,
@@ -7068,14 +7161,14 @@ export function ProposalForge(): JSX.Element {
         }),
       );
       setProposalApplicantRole((current) =>
-        resolveAutoHeadingField({
+        resolveHeadingFieldFromAuto("applicantRole", {
           current,
           previousAuto: previousAuto.role,
           nextAuto: previewApplicantHeader.role,
         }),
       );
       setProposalContactLine((current) =>
-        resolveAutoHeadingField({
+        resolveHeadingFieldFromAuto("contactLine", {
           current: normalizeProposalContactLine(current),
           previousAuto: previousAuto.contactLine,
           nextAuto: nextAutoContactLine,
@@ -7115,6 +7208,7 @@ export function ProposalForge(): JSX.Element {
       cancelPendingComposeDraftSync,
       formatProposalTypeLabel,
       proposalDocumentTitle,
+      resolveHeadingFieldFromAuto,
       resolveProposalVoicePreset,
     ],
   );
@@ -7156,18 +7250,18 @@ export function ProposalForge(): JSX.Element {
       const nextAutoContactLine = buildProposalApplicantContactLine(
         previewApplicantHeader,
       );
-      const nextApplicantName = resolveAutoHeadingField({
+      const nextApplicantName = resolveHeadingFieldFromAuto("applicantName", {
         current: proposalApplicantName,
         previousAuto: previousAuto.name,
         nextAuto: previewApplicantHeader.name,
         isInvalidCurrent: isInvalidProposalApplicantName,
       });
-      const nextApplicantRole = resolveAutoHeadingField({
+      const nextApplicantRole = resolveHeadingFieldFromAuto("applicantRole", {
         current: proposalApplicantRole,
         previousAuto: previousAuto.role,
         nextAuto: previewApplicantHeader.role,
       });
-      const nextContactLine = resolveAutoHeadingField({
+      const nextContactLine = resolveHeadingFieldFromAuto("contactLine", {
         current: normalizeProposalContactLine(proposalContactLine),
         previousAuto: previousAuto.contactLine,
         nextAuto: nextAutoContactLine,
@@ -7355,6 +7449,7 @@ export function ProposalForge(): JSX.Element {
       proposalTemplateBundleId,
       proposalStyleChoice,
       resolvedRuntimeStyleLinkMode,
+      resolveHeadingFieldFromAuto,
       resolveProposalVoicePreset,
       updateProposal,
       defaultPreviewApplicantHeader.location,
@@ -7393,7 +7488,7 @@ export function ProposalForge(): JSX.Element {
       setProposalType(values.proposalType);
       setProposalVoicePreset(resolvedVoicePreset);
       setProposalApplicantName((current) =>
-        resolveAutoHeadingField({
+        resolveHeadingFieldFromAuto("applicantName", {
           current,
           previousAuto: previousAuto.name,
           nextAuto: previewApplicantHeader.name,
@@ -7401,14 +7496,14 @@ export function ProposalForge(): JSX.Element {
         }),
       );
       setProposalApplicantRole((current) =>
-        resolveAutoHeadingField({
+        resolveHeadingFieldFromAuto("applicantRole", {
           current,
           previousAuto: previousAuto.role,
           nextAuto: previewApplicantHeader.role,
         }),
       );
       setProposalContactLine((current) =>
-        resolveAutoHeadingField({
+        resolveHeadingFieldFromAuto("contactLine", {
           current: normalizeProposalContactLine(current),
           previousAuto: previousAuto.contactLine,
           nextAuto: nextAutoContactLine,
@@ -7444,6 +7539,7 @@ export function ProposalForge(): JSX.Element {
       cancelPendingComposeDraftSync,
       formatProposalTypeLabel,
       proposalDocumentTitle,
+      resolveHeadingFieldFromAuto,
       resolveProposalVoicePreset,
     ],
   );
@@ -7523,18 +7619,22 @@ export function ProposalForge(): JSX.Element {
     showToast,
     transformEditorSelectionAction,
   ]);
-  const handleProposalSalutationChange = React.useCallback((value: string) => {
-    const previousSalutation = proposalSalutationValueRef.current;
-    setProposalSalutationValue(value);
-    proposalSalutationValueRef.current = value;
-    setProposalContent((current) =>
-      replaceProposalSalutation({
-        content: current,
-        salutation: value,
-        previousSalutation,
-      }),
-    );
-  }, []);
+  const handleProposalSalutationChange = React.useCallback(
+    (value: string) => {
+      markHeadingFieldDirty("salutation");
+      const previousSalutation = proposalSalutationValueRef.current;
+      setProposalSalutationValue(value);
+      proposalSalutationValueRef.current = value;
+      setProposalContent((current) =>
+        replaceProposalSalutation({
+          content: current,
+          salutation: value,
+          previousSalutation,
+        }),
+      );
+    },
+    [markHeadingFieldDirty],
+  );
 
   const handleProposalStop = React.useCallback(() => {
     setLoading(false);
@@ -9819,7 +9919,7 @@ export function ProposalForge(): JSX.Element {
         label: "Subject line",
         value: proposalDocumentTitle,
         placeholder: "Subject line",
-        onChange: setProposalDocumentTitle,
+        onChange: handleProposalDocumentTitleChange,
         onBlur: () => {
           void handleProposalDocumentCommit();
         },
@@ -9829,7 +9929,7 @@ export function ProposalForge(): JSX.Element {
         label: "Full name",
         value: proposalApplicantName,
         placeholder: "Full name",
-        onChange: setProposalApplicantName,
+        onChange: handleProposalApplicantNameChange,
         onBlur: () => {
           void handleProposalDocumentCommit();
         },
@@ -9839,7 +9939,7 @@ export function ProposalForge(): JSX.Element {
         label: "Target role",
         value: proposalApplicantRole,
         placeholder: "Target role",
-        onChange: setProposalApplicantRole,
+        onChange: handleProposalApplicantRoleChange,
         onBlur: () => {
           void handleProposalDocumentCommit();
         },
@@ -9860,7 +9960,7 @@ export function ProposalForge(): JSX.Element {
         label: "Date",
         value: proposalLetterDate,
         placeholder: "Date",
-        onChange: setProposalLetterDate,
+        onChange: handleProposalLetterDateChange,
         onBlur: () => {
           void handleProposalDocumentCommit();
         },
@@ -9872,7 +9972,7 @@ export function ProposalForge(): JSX.Element {
         placeholder:
           "Hiring manager or team\nCompany name\nCompany city / remote",
         multiline: true,
-        onChange: setProposalRecipientDetails,
+        onChange: handleProposalRecipientDetailsChange,
         onBlur: () => {
           void handleProposalDocumentCommit();
         },
@@ -9892,6 +9992,11 @@ export function ProposalForge(): JSX.Element {
       handleProposalContactLineChange,
       handleProposalContactLineCommit,
       handleProposalDocumentCommit,
+      handleProposalDocumentTitleChange,
+      handleProposalApplicantNameChange,
+      handleProposalApplicantRoleChange,
+      handleProposalLetterDateChange,
+      handleProposalRecipientDetailsChange,
       handleProposalSalutationChange,
       proposalApplicantName,
       proposalApplicantRole,
@@ -10811,7 +10916,9 @@ export function ProposalForge(): JSX.Element {
                             documentTitleEditable={
                               proposalOutputMode === "edit"
                             }
-                            onDocumentTitleChange={setProposalDocumentTitle}
+                            onDocumentTitleChange={
+                              handleProposalDocumentTitleChange
+                            }
                             onDocumentTitleCommit={() => {
                               void handleProposalDocumentCommit();
                             }}
@@ -10823,8 +10930,12 @@ export function ProposalForge(): JSX.Element {
                                 proposalType,
                               },
                             )}
-                            onRailTitleChange={setProposalApplicantName}
-                            onRailMetaChange={setProposalApplicantRole}
+                            onRailTitleChange={
+                              handleProposalApplicantNameChange
+                            }
+                            onRailMetaChange={
+                              handleProposalApplicantRoleChange
+                            }
                             contactLineEditable={proposalOutputMode === "edit"}
                             onContactLineChange={
                               handleProposalContactLineChange
@@ -10833,12 +10944,12 @@ export function ProposalForge(): JSX.Element {
                               handleProposalContactLineCommit
                             }
                             letterDateEditable={proposalOutputMode === "edit"}
-                            onLetterDateChange={setProposalLetterDate}
+                            onLetterDateChange={handleProposalLetterDateChange}
                             recipientDetailsEditable={
                               proposalOutputMode === "edit"
                             }
                             onRecipientDetailsChange={
-                              setProposalRecipientDetails
+                              handleProposalRecipientDetailsChange
                             }
                             salutationEditable={proposalOutputMode === "edit"}
                             salutationPlaceholder={
