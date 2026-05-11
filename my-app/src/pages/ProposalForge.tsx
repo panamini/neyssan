@@ -55,6 +55,7 @@ import {
   useRegisterForgePanel,
   useRegisterForgeTemplates,
 } from "../contexts/ForgeTemplatePanelContext";
+import { useRegisterProposalForgeTopbar } from "../contexts/ProposalForgeTopbarContext";
 import {
   DrawerDocumentTile,
   DrawerUnavailableThumbnail,
@@ -430,6 +431,28 @@ export function resolveLiveProposalLengthLabel(
   if (characterCount <= 1400) return "concise";
   if (characterCount <= 2600) return "standard";
   return "detailed";
+}
+
+function resolveProposalTopbarLengthLabel(args: {
+  content: string | null | undefined;
+  requestedLength: number | null;
+}): "Concise" | "Standard" | "Detailed" | null {
+  const liveLengthLabel = resolveLiveProposalLengthLabel(args.content);
+  const lengthSignal =
+    liveLengthLabel ??
+    (typeof args.requestedLength === "number" &&
+      Number.isFinite(args.requestedLength)
+      ? args.requestedLength <= 1400
+        ? "concise"
+        : args.requestedLength <= 2600
+          ? "standard"
+          : "detailed"
+      : null);
+
+  if (lengthSignal === "concise") return "Concise";
+  if (lengthSignal === "standard") return "Standard";
+  if (lengthSignal === "detailed") return "Detailed";
+  return null;
 }
 
 function normalizeProposalRailJobTitle(
@@ -1907,6 +1930,158 @@ function isPlainProposalWorkspaceRoute(
     !readProposalWorkspaceResetToken(state) &&
     !readProposalEntryIntent(state) &&
     !readProposalJobImportFocus(state)
+  );
+}
+
+type ProposalContextBarProps = {
+  jobTitle: string | null;
+  cvTitle: string | null;
+  onAttachJob: () => void;
+  onClearJob: (() => void) | null;
+  onAttachCv: () => void;
+  onClearCv: (() => void) | null;
+  onOpenSavedProposals: () => void;
+  onOpenTemplates: () => void;
+};
+
+function ProposalContextBar({
+  jobTitle,
+  cvTitle,
+  onAttachJob,
+  onClearJob,
+  onAttachCv,
+  onClearCv,
+  onOpenSavedProposals,
+  onOpenTemplates,
+}: ProposalContextBarProps): JSX.Element {
+  const hasJob = Boolean(jobTitle);
+  const hasCv = Boolean(cvTitle);
+
+  return (
+    <div className="dasti-proposal-context-bar" aria-label="Proposal context">
+      <div className="dasti-proposal-context-bar__chips">
+        <div
+          className="dasti-proposal-context-pill"
+          data-attached={hasJob ? "true" : undefined}
+        >
+          <button
+            type="button"
+            className="dasti-proposal-context-pill__main"
+            onClick={onAttachJob}
+            aria-label={
+              hasJob
+                ? `Change attached job: ${jobTitle}`
+                : "Attach job to this proposal"
+            }
+          >
+            {hasJob ? (
+              <>
+                <span className="dasti-proposal-context-pill__dot" aria-hidden="true" />
+                <span className="dasti-proposal-context-pill__state">
+                  Job attached
+                </span>
+                <span className="dasti-proposal-context-pill__value">
+                  {jobTitle}
+                </span>
+              </>
+            ) : (
+              <span className="dasti-proposal-context-pill__empty">
+                Attach job
+              </span>
+            )}
+          </button>
+          {hasJob ? (
+            <span className="dasti-proposal-context-pill__actions">
+              <button
+                type="button"
+                className="dasti-proposal-context-pill__action"
+                onClick={onAttachJob}
+                aria-label={`Change attached job: ${jobTitle}`}
+              >
+                Change
+              </button>
+              <button
+                type="button"
+                className="dasti-proposal-context-pill__action"
+                onClick={onClearJob ?? undefined}
+                aria-label={`Clear attached job: ${jobTitle}`}
+                disabled={!onClearJob}
+              >
+                Clear
+              </button>
+            </span>
+          ) : null}
+        </div>
+
+        <div
+          className="dasti-proposal-context-pill"
+          data-attached={hasCv ? "true" : undefined}
+        >
+          <button
+            type="button"
+            className="dasti-proposal-context-pill__main"
+            onClick={onAttachCv}
+            aria-label={
+              hasCv ? `Change attached CV: ${cvTitle}` : "Attach CV to this proposal"
+            }
+          >
+            {hasCv ? (
+              <>
+                <span className="dasti-proposal-context-pill__dot" aria-hidden="true" />
+                <span className="dasti-proposal-context-pill__state">
+                  CV attached
+                </span>
+                <span className="dasti-proposal-context-pill__value">
+                  {cvTitle}
+                </span>
+              </>
+            ) : (
+              <span className="dasti-proposal-context-pill__empty">
+                Attach CV
+              </span>
+            )}
+          </button>
+          {hasCv ? (
+            <span className="dasti-proposal-context-pill__actions">
+              <button
+                type="button"
+                className="dasti-proposal-context-pill__action"
+                onClick={onAttachCv}
+                aria-label={`Change attached CV: ${cvTitle}`}
+              >
+                Change
+              </button>
+              <button
+                type="button"
+                className="dasti-proposal-context-pill__action"
+                onClick={onClearCv ?? undefined}
+                aria-label={`Clear attached CV: ${cvTitle}`}
+                disabled={!onClearCv}
+              >
+                Clear
+              </button>
+            </span>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          className="dasti-proposal-context-pill dasti-proposal-context-pill--simple"
+          onClick={onOpenSavedProposals}
+          aria-label="Open saved proposals for this proposal"
+        >
+          Saved proposals
+        </button>
+        <button
+          type="button"
+          className="dasti-proposal-context-pill dasti-proposal-context-pill--simple"
+          onClick={onOpenTemplates}
+          aria-label="Open proposal templates"
+        >
+          Templates
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -9384,20 +9559,53 @@ export function ProposalForge(): JSX.Element {
       },
     ];
   }, [activeCharacterLimitSelection.value]);
-  const proposalDraftStatusMeta = React.useMemo(() => {
-    const liveLengthLabel = resolveLiveProposalLengthLabel(proposalContent);
-    const pageCount = estimateProposalRailPageCount(proposalContent);
-    const pageMetric =
-      pageCount !== null && pageCount >= 2
-        ? `${pageCount.toLocaleString()} pages`
-        : null;
-    return [liveLengthLabel, pageMetric].filter(Boolean).join(" · ");
-  }, [proposalContent]);
-  const proposalDraftStatusTitle = React.useMemo(() => {
-    const characterCount = proposalContent?.trim().length ?? 0;
-    if (characterCount === 0) return null;
-    return `Draft length: ${characterCount.toLocaleString()} chars`;
-  }, [proposalContent]);
+  const proposalTopbarLengthLabel = React.useMemo(
+    () =>
+      resolveProposalTopbarLengthLabel({
+        content: proposalContent,
+        requestedLength: activeCharacterLimitSelection.value,
+      }),
+    [activeCharacterLimitSelection.value, proposalContent],
+  );
+  const proposalTopbarDocumentState = React.useMemo(() => {
+    if (proposalExportingFormat !== null) return "exporting" as const;
+    if (composeSaveStatus === "saving" || isSavingOutputToLibrary) {
+      return "saving" as const;
+    }
+    if (composeSaveStatus === "error") return "error" as const;
+    if (
+      loading ||
+      isLoadingHandoff ||
+      composeGenerateControl.state === "loading"
+    ) {
+      return "generating" as const;
+    }
+    if (composeSaveStatus === "saved" || proposalLibraryStatus === "saved") {
+      return "saved" as const;
+    }
+    return "draft" as const;
+  }, [
+    composeGenerateControl.state,
+    composeSaveStatus,
+    isLoadingHandoff,
+    isSavingOutputToLibrary,
+    loading,
+    proposalExportingFormat,
+    proposalLibraryStatus,
+  ]);
+  const proposalTopbarRegistration = React.useMemo(
+    () => ({
+      title: proposalDocumentTitle.trim() || null,
+      documentState: proposalTopbarDocumentState,
+      lengthLabel: proposalTopbarLengthLabel,
+    }),
+    [
+      proposalDocumentTitle,
+      proposalTopbarDocumentState,
+      proposalTopbarLengthLabel,
+    ],
+  );
+  useRegisterProposalForgeTopbar(proposalTopbarRegistration);
   const hasMeaningfulProposalContent = Boolean(proposalContent?.trim());
   const handleProposalRailLengthSelect = React.useCallback(
     (lengthId: "short" | "medium" | "long") => {
@@ -9820,6 +10028,12 @@ export function ProposalForge(): JSX.Element {
   const handleOpenJobsFromRail = React.useCallback(() => {
     openTemplateSurface("jobs", { mode: "pinned" });
   }, [openTemplateSurface]);
+  const handleOpenCvsFromContextBar = React.useCallback(() => {
+    openTemplateSurface("cvs", { mode: "pinned" });
+  }, [openTemplateSurface]);
+  const handleOpenSavedProposalsFromContextBar = React.useCallback(() => {
+    openTemplateSurface("proposals", { mode: "pinned" });
+  }, [openTemplateSurface]);
   const handleTemplateStartBlank = React.useCallback(() => {
     setIsTemplateJobContextEmptyStateDismissed(true);
     setProposalType("cover_letter");
@@ -10082,47 +10296,66 @@ export function ProposalForge(): JSX.Element {
                     />
                   </>
                 ) : (
-                  <div
-                    className="dasti-proposal-skeleton-forge"
-                    data-forge-drawer-docked={
-                      isForgeDrawerDockedDesktop ? "true" : undefined
-                    }
-                    data-forge-drawer-rail-collapsed={
-                      shouldAutoCollapseProposalRailForDockedDrawer
-                        ? "true"
-                        : undefined
-                    }
-                    style={
-                      {
-                        "--proposal-paper-visual-inline-size":
-                          proposalPaperVisualInlineSize,
-                        "--proposal-workspace-stage-inline-size":
-                          "var(--proposal-paper-visual-inline-size)",
-                        "--proposal-workspace-rail-inline-size": "360px",
-                        "--grid-columns": isCompactComposeLayout
-                          ? "minmax(0, 1fr)"
-                          : isForgeDrawerDockedDesktop && showComposeGridColumn
-                            ? "minmax(0, 1fr) var(--proposal-workspace-rail-inline-size)"
-                          : showComposeGridColumn
-                            ? "minmax(0, var(--proposal-workspace-stage-inline-size)) var(--proposal-workspace-rail-inline-size)"
-                            : "minmax(0, 1fr)",
-                        "--grid-gap": showComposeGridColumn
-                          ? "var(--layout-card-grid)"
-                          : "0px",
-                        "--grid-align": "start",
-                        "--grid-justify":
-                          isForgeDrawerDockedDesktop
-                            ? "stretch"
-                          : shouldAutoCollapseProposalRailForDockedDrawer
-                            ? "center"
-                            : !isCompactComposeLayout && showComposeGridColumn
-                            ? "center"
-                            : shouldCenterOutputStage
+                  <>
+                    <ProposalContextBar
+                      jobTitle={hasActiveProposalJobContext ? briefJobTitle : null}
+                      cvTitle={attachedCvDisplayTitle}
+                      onAttachJob={handleOpenJobsFromRail}
+                      onClearJob={
+                        hasActiveProposalJobContext
+                          ? handleClearJobContext
+                          : null
+                      }
+                      onAttachCv={handleOpenCvsFromContextBar}
+                      onClearCv={
+                        attachedCvId
+                          ? () => handleAttachedCvChange(null)
+                          : null
+                      }
+                      onOpenSavedProposals={handleOpenSavedProposalsFromContextBar}
+                      onOpenTemplates={handleOpenProposalTemplates}
+                    />
+                    <div
+                      className="dasti-proposal-skeleton-forge"
+                      data-forge-drawer-docked={
+                        isForgeDrawerDockedDesktop ? "true" : undefined
+                      }
+                      data-forge-drawer-rail-collapsed={
+                        shouldAutoCollapseProposalRailForDockedDrawer
+                          ? "true"
+                          : undefined
+                      }
+                      style={
+                        {
+                          "--proposal-paper-visual-inline-size":
+                            proposalPaperVisualInlineSize,
+                          "--proposal-workspace-stage-inline-size":
+                            "var(--proposal-paper-visual-inline-size)",
+                          "--proposal-workspace-rail-inline-size": "360px",
+                          "--grid-columns": isCompactComposeLayout
+                            ? "minmax(0, 1fr)"
+                            : isForgeDrawerDockedDesktop && showComposeGridColumn
+                              ? "minmax(0, 1fr) var(--proposal-workspace-rail-inline-size)"
+                            : showComposeGridColumn
+                              ? "minmax(0, var(--proposal-workspace-stage-inline-size)) var(--proposal-workspace-rail-inline-size)"
+                              : "minmax(0, 1fr)",
+                          "--grid-gap": showComposeGridColumn
+                            ? "var(--layout-card-grid)"
+                            : "0px",
+                          "--grid-align": "start",
+                          "--grid-justify":
+                            isForgeDrawerDockedDesktop
+                              ? "stretch"
+                            : shouldAutoCollapseProposalRailForDockedDrawer
                               ? "center"
-                              : "start",
-                      } as ProposalWorkspaceCssVars
-                    }
-                  >
+                              : !isCompactComposeLayout && showComposeGridColumn
+                              ? "center"
+                              : shouldCenterOutputStage
+                                ? "center"
+                                : "start",
+                        } as ProposalWorkspaceCssVars
+                      }
+                    >
                     {shouldRenderProposalRail ? (
                     <ProposalRail
                       jobTitle={briefJobTitle}
@@ -10375,15 +10608,6 @@ export function ProposalForge(): JSX.Element {
 
                     <div className="dasti-flow dasti-proposal-skeleton-forge__stage">
                       <ProposalDocumentStage
-                        statusLabel={
-                          loading
-                            ? "Preparing"
-                            : hasMeaningfulProposalContent
-                              ? "Proposal text"
-                              : "Draft"
-                        }
-                        statusMeta={proposalDraftStatusMeta}
-                        statusTitle={proposalDraftStatusTitle}
                         toneLabel={proposalRailToneLabel}
                         toneValue={proposalRailToneValue}
                         mode={proposalOutputMode}
@@ -10596,7 +10820,8 @@ export function ProposalForge(): JSX.Element {
                         </div>
                       </ProposalDocumentStage>
                     </div>
-                  </div>
+                    </div>
+                  </>
                 )}
               </section>
             </div>

@@ -1,0 +1,61 @@
+import React from "react";
+
+export type ProposalForgeTopbarDocumentState =
+  | "draft"
+  | "saving"
+  | "saved"
+  | "generating"
+  | "exporting"
+  | "error";
+
+export type ProposalForgeTopbarRegistration = {
+  title: string | null;
+  documentState: ProposalForgeTopbarDocumentState;
+  lengthLabel: "Concise" | "Standard" | "Detailed" | null;
+};
+
+type ProposalForgeTopbarContextValue = {
+  registration: ProposalForgeTopbarRegistration | null;
+  setRegistration: (
+    registration: ProposalForgeTopbarRegistration | null,
+  ) => void;
+};
+
+const ProposalForgeTopbarContext =
+  React.createContext<ProposalForgeTopbarContextValue | null>(null);
+
+export function ProposalForgeTopbarProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}): JSX.Element {
+  const [registration, setRegistration] =
+    React.useState<ProposalForgeTopbarRegistration | null>(null);
+  const value = React.useMemo(
+    () => ({ registration, setRegistration }),
+    [registration],
+  );
+
+  return (
+    <ProposalForgeTopbarContext.Provider value={value}>
+      {children}
+    </ProposalForgeTopbarContext.Provider>
+  );
+}
+
+export function useProposalForgeTopbarRegistration(): ProposalForgeTopbarRegistration | null {
+  return React.useContext(ProposalForgeTopbarContext)?.registration ?? null;
+}
+
+export function useRegisterProposalForgeTopbar(
+  registration: ProposalForgeTopbarRegistration | null,
+): void {
+  const setRegistration =
+    React.useContext(ProposalForgeTopbarContext)?.setRegistration;
+
+  React.useEffect(() => {
+    if (!setRegistration) return;
+    setRegistration(registration);
+    return () => setRegistration(null);
+  }, [registration, setRegistration]);
+}

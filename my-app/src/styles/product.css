@@ -2926,10 +2926,29 @@ body,
   color: var(--okt);
 }
 
+.app-topbar__doc-state[data-state="draft"] {
+  border-color: color-mix(in srgb, var(--color-border) 68%, transparent);
+  background: var(--sf2);
+  color: var(--color-text-muted);
+}
+
+.app-topbar__doc-state[data-state="saving"],
+.app-topbar__doc-state[data-state="generating"] {
+  border-color: color-mix(in srgb, var(--ac) 28%, transparent);
+  background: color-mix(in srgb, var(--ac) 12%, var(--sf1));
+  color: var(--ac);
+}
+
 .app-topbar__doc-state[data-state="exporting"] {
   border-color: color-mix(in srgb, var(--ac) 28%, transparent);
   background: color-mix(in srgb, var(--ac) 12%, var(--sf1));
   color: var(--ac);
+}
+
+.app-topbar__doc-state[data-state="error"] {
+  border-color: color-mix(in srgb, var(--er) 28%, transparent);
+  background: var(--erb);
+  color: var(--ert);
 }
 
 .app-topbar__doc-state[data-state="missing"] {
