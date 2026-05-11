@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowSquareOut, CaretLeft } from "../lib/icons";
+import { ArrowSquareOut, CaretLeft, Pin } from "../lib/icons";
 import { useForgeTemplatePanel } from "../contexts/ForgeTemplatePanelContext";
 import { TemplateDocumentPreview } from "../pages/TemplatesPage";
 import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../lib/document-stage";
@@ -13,6 +13,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
   const {
     open,
     openMode,
+    openSurface,
     activeRegistration,
     closePanel,
     cancelPanelClose,
@@ -53,6 +54,9 @@ export function ForgeTemplatePanel(): JSX.Element | null {
     return null;
   }
   const pinned = openMode === "pinned";
+  const handlePinDrawer = () => {
+    openSurface(activeRegistration.surface, { mode: "pinned" });
+  };
 
   if (activeRegistration.kind === "custom") {
     const handleFooter = () => {
@@ -70,18 +74,30 @@ export function ForgeTemplatePanel(): JSX.Element | null {
           <span className="forge-template-panel__head-title">
             {activeRegistration.title}
           </span>
-          {activeRegistration.footer ? (
-            <button
-              type="button"
-              className="forge-template-panel__head-action"
-              onClick={handleFooter}
-            >
-              {activeRegistration.footer.label}
-              {activeRegistration.footer.icon ?? (
-                <ArrowSquareOut size={13} aria-hidden="true" />
-              )}
-            </button>
-          ) : null}
+          <span className="forge-template-panel__head-actions">
+            {!pinned ? (
+              <button
+                type="button"
+                className="forge-template-panel__head-action"
+                onClick={handlePinDrawer}
+              >
+                Pin drawer
+                <Pin size={13} aria-hidden="true" />
+              </button>
+            ) : null}
+            {activeRegistration.footer ? (
+              <button
+                type="button"
+                className="forge-template-panel__head-action"
+                onClick={handleFooter}
+              >
+                {activeRegistration.footer.label}
+                {activeRegistration.footer.icon ?? (
+                  <ArrowSquareOut size={13} aria-hidden="true" />
+                )}
+              </button>
+            ) : null}
+          </span>
         </div>
         {pinned ? (
           <button
@@ -116,16 +132,28 @@ export function ForgeTemplatePanel(): JSX.Element | null {
     >
       <div className="forge-template-panel__head">
         <span className="forge-template-panel__head-title">Templates</span>
-        <button
-          type="button"
-          className="forge-template-panel__head-action"
-          onClick={handleBrowseAllTemplates}
-        >
-          Open Templates
-          {activeRegistration.footer?.icon ?? (
-            <ArrowSquareOut size={13} aria-hidden="true" />
-          )}
-        </button>
+        <span className="forge-template-panel__head-actions">
+          {!pinned ? (
+            <button
+              type="button"
+              className="forge-template-panel__head-action"
+              onClick={handlePinDrawer}
+            >
+              Pin drawer
+              <Pin size={13} aria-hidden="true" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="forge-template-panel__head-action"
+            onClick={handleBrowseAllTemplates}
+          >
+            Open Templates
+            {activeRegistration.footer?.icon ?? (
+              <ArrowSquareOut size={13} aria-hidden="true" />
+            )}
+          </button>
+        </span>
       </div>
       {pinned ? (
         <button
