@@ -2,13 +2,14 @@ import React from "react";
 import clsx from "clsx";
 import {
   Briefcase,
+  CalendarDots,
   FileText,
   FileUser,
-  FolderTree,
+  FolderOpen,
+  FolderSimple,
   Gear,
   type IconProps,
   ImagesSquare,
-  SquaresFour,
 } from "@/lib/icons";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -24,6 +25,7 @@ type RailIconComponent = React.ComponentType<IconProps>;
 type SidebarRailLinkProps = {
   label: string;
   icon: RailIconComponent;
+  activeIcon?: RailIconComponent;
   href: string;
   active: boolean;
   panelOpen?: boolean;
@@ -39,6 +41,7 @@ type SidebarRailLinkProps = {
 type SidebarRailButtonProps = {
   label: string;
   icon: RailIconComponent;
+  activeIcon?: RailIconComponent;
   panelOpen: boolean;
   expanded: boolean;
   active?: boolean;
@@ -55,9 +58,13 @@ function isRouteActive(pathname: string, basePath: string): boolean {
 
 function SidebarRailIcon({
   icon: Icon,
+  activeIcon: ActiveIcon,
 }: {
   icon: RailIconComponent;
+  activeIcon?: RailIconComponent;
 }): JSX.Element {
+  const FillIcon = ActiveIcon ?? Icon;
+
   return (
     <span className="sb-rail-button__icon" aria-hidden="true">
       <Icon
@@ -65,7 +72,7 @@ function SidebarRailIcon({
         size={20}
         weight="regular"
       />
-      <Icon
+      <FillIcon
         className="sb-rail-button__glyph sb-rail-button__glyph--fill"
         size={20}
         weight="fill"
@@ -77,6 +84,7 @@ function SidebarRailIcon({
 function SidebarRailLink({
   label,
   icon,
+  activeIcon,
   href,
   active,
   panelOpen = false,
@@ -114,7 +122,7 @@ function SidebarRailLink({
         onHoverLeave?.();
       }}
     >
-      <SidebarRailIcon icon={icon} />
+      <SidebarRailIcon icon={icon} activeIcon={activeIcon} />
       <span className="sb-rail-button__label">{label}</span>
     </Link>
   );
@@ -123,6 +131,7 @@ function SidebarRailLink({
 function SidebarRailButton({
   label,
   icon,
+  activeIcon,
   panelOpen,
   expanded,
   active = false,
@@ -157,7 +166,7 @@ function SidebarRailButton({
         onHoverLeave?.();
       }}
     >
-      <SidebarRailIcon icon={icon} />
+      <SidebarRailIcon icon={icon} activeIcon={activeIcon} />
       <span className="sb-rail-button__label">{label}</span>
     </button>
   );
@@ -282,7 +291,7 @@ export const Sidebar: React.FC = () => {
           label="Today"
           href="/dashboard"
           active={dashboardActive}
-          icon={SquaresFour}
+          icon={CalendarDots}
           onNavigate={closePanel}
         />
         {proposalContextualRail && finePointer ? (
@@ -389,7 +398,8 @@ export const Sidebar: React.FC = () => {
             onFocusOpen={() => handleFocusPanel("documents")}
             onHoverIntent={() => handleQueuePanel("documents")}
             onHoverLeave={handleQueueClosePanel}
-            icon={FolderTree}
+            icon={FolderSimple}
+            activeIcon={FolderOpen}
             onNavigate={closePanel}
           />
         ) : proposalContextualRail ? (
@@ -402,7 +412,8 @@ export const Sidebar: React.FC = () => {
             onFocusOpen={() => handleFocusPanel("documents")}
             onHoverIntent={() => handleQueuePanel("documents")}
             onHoverLeave={handleQueueClosePanel}
-            icon={FolderTree}
+            icon={FolderSimple}
+            activeIcon={FolderOpen}
           />
         ) : cvContextualRail ? (
           <SidebarRailButton
@@ -414,14 +425,16 @@ export const Sidebar: React.FC = () => {
             onFocusOpen={() => handleFocusPanel("documents")}
             onHoverIntent={() => handleQueuePanel("documents")}
             onHoverLeave={handleQueueClosePanel}
-            icon={FolderTree}
+            icon={FolderSimple}
+            activeIcon={FolderOpen}
           />
         ) : (
           <SidebarRailLink
             label="Projects"
             href="/documents"
             active={projectsActive}
-            icon={FolderTree}
+            icon={FolderSimple}
+            activeIcon={FolderOpen}
             onNavigate={closePanel}
           />
         )}

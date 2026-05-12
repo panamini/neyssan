@@ -314,7 +314,8 @@ describe("forge template entry points", () => {
     expect(within(panel).getByRole("button", { name: "Style 1" })).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Style 2" })).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Style 3" })).toBeInTheDocument();
-    expect(within(panel).getAllByTestId("proposal-design-live-preview")).toHaveLength(3);
+    expect(within(panel).queryByTestId("proposal-design-live-preview")).not.toBeInTheDocument();
+    expect(panel.querySelector(".dasti-proposal-design-preview")).toBeNull();
     expect(within(panel).getByText("Typography")).toBeInTheDocument();
     expect(within(panel).getByText("Color")).toBeInTheDocument();
     expect(within(panel).getByText("Layout")).toBeInTheDocument();

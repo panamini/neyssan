@@ -405,7 +405,7 @@ describe("ProposalForge settings style round-trip", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
     fireEvent.click(screen.getByRole("button", { name: "Style 2" }));
 
     await waitFor(() => {
@@ -470,10 +470,10 @@ describe("ProposalForge settings style round-trip", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Style 2 · Custom")).toBeInTheDocument();
+      expect(screen.getByLabelText("Customized")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Style 2" }));
@@ -483,7 +483,7 @@ describe("ProposalForge settings style round-trip", () => {
         "workshop|quiet-editorial|cobalt|workshop_proposal_margin",
       );
     });
-    expect(screen.queryByText("Style 2 · Custom")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Customized")).not.toBeInTheDocument();
   });
 
   it("does not let partial Settings Style 3 fall through to Sage when selecting Style 3", async () => {
@@ -524,7 +524,7 @@ describe("ProposalForge settings style round-trip", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
     fireEvent.click(screen.getByRole("button", { name: "Style 3" }));
 
     await waitFor(() => {
@@ -544,7 +544,7 @@ describe("ProposalForge settings style round-trip", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
     fireEvent.click(screen.getByRole("button", { name: "Style 2" }));
 
     await waitFor(() => {

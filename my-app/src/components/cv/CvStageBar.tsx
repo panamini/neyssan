@@ -75,25 +75,11 @@ export function CvStageBar({
   );
   return (
     <div className="dasti-cv-stage-bar dasti-toolbar--surface-tooltips">
-      <ToneBadge tone={tone}>
-        {tone.charAt(0).toUpperCase() + tone.slice(1)}
-      </ToneBadge>
-      <span className="dasti-cv-stage-bar__divider" aria-hidden="true" />
       <div
         className="style-segmented dasti-cv-stage-bar__mode"
         role="group"
         aria-label="CV view mode"
       >
-        <button
-          type="button"
-          className="dasti-cv-mode-toggle"
-          data-selected={mode === "edit" ? "true" : undefined}
-          onClick={() => onModeChange("edit")}
-          aria-label="Edit"
-          data-toolbar-tooltip="Edit"
-        >
-          <PenLine size={14} strokeWidth={1.8} aria-hidden="true" />
-        </button>
         <button
           type="button"
           className="dasti-cv-mode-toggle"
@@ -103,6 +89,16 @@ export function CvStageBar({
           data-toolbar-tooltip="Preview"
         >
           <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="dasti-cv-mode-toggle"
+          data-selected={mode === "edit" ? "true" : undefined}
+          onClick={() => onModeChange("edit")}
+          aria-label="Edit"
+          data-toolbar-tooltip="Edit"
+        >
+          <PenLine size={14} strokeWidth={1.8} aria-hidden="true" />
         </button>
       </div>
       <Button
@@ -162,6 +158,9 @@ export function CvStageBar({
           <span className="dasti-cv-stage-bar__action-label">Templates</span>
         </Button>
       ) : null}
+      <ToneBadge tone={tone}>
+        {tone.charAt(0).toUpperCase() + tone.slice(1)}
+      </ToneBadge>
       <Menu
         ariaLabel="Pick resume"
         align="end"

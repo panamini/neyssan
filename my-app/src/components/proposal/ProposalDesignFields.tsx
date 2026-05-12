@@ -20,14 +20,6 @@ import {
   type VerbatiFontPairId,
 } from "../../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../../features/verbati/types";
-import { getProposalDocumentTypography } from "../../lib/proposal-document-typography";
-import {
-  resolvePreviewCanonicalAppearance,
-  serializeProposalDocumentThemeVars,
-} from "../../lib/layout/documentAppearance";
-import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../../lib/document-stage";
-import { templatePreviewApplicant, templatePreviewProposal } from "../../pages/templatePreviewSamples";
-import { ProposalDocumentRenderer } from "../proposal-render/ProposalDocumentRenderer";
 import { ProposalColorPickerPopover } from "../ProposalColorPickerPopover";
 import { Menu } from "../ui/menu";
 
@@ -98,8 +90,6 @@ const PROPOSAL_STYLE_ACCENT_OPTIONS: ProposalRailAccentOption[] = [
 ];
 
 const PROPOSAL_CUSTOM_ACCENT_STARTER_HEX = "#8A8176";
-const STYLE_PREVIEW_WIDTH_PX = 136;
-const STYLE_PREVIEW_SCALE = STYLE_PREVIEW_WIDTH_PX / A4_PAGE_WIDTH_PX;
 
 const PROPOSAL_STYLE_FONT_PAIR_IDS: VerbatiFontPairId[] = [
   "geist-baskervville",
@@ -193,55 +183,6 @@ function ProposalDesignFontPairMenu({
         </button>
       }
     />
-  );
-}
-
-function ProposalStylePreview({
-  bundleId,
-}: {
-  bundleId: ProposalTemplateBundleId;
-}): JSX.Element {
-  const bundle = getProposalTemplateBundleDefinition(bundleId);
-  const stylePreset = bundle.stylePreset;
-
-  return (
-    <span
-      className="forge-template-card__preview dasti-proposal-design-preview"
-      aria-hidden="true"
-    >
-      <span
-        className="forge-template-card__page dasti-proposal-design-preview__page"
-        data-testid="proposal-design-live-preview"
-        style={
-          {
-            width: A4_PAGE_WIDTH_PX,
-            height: A4_PAGE_HEIGHT_PX,
-            transform: `scale(${STYLE_PREVIEW_SCALE})`,
-          } as React.CSSProperties
-        }
-      >
-        <ProposalDocumentRenderer
-          content={templatePreviewProposal.content}
-          proposalType="cover_letter"
-          templateId={bundle.templateId}
-          railTitle={templatePreviewProposal.railTitle}
-          railMeta={templatePreviewProposal.railMeta}
-          contactLine={templatePreviewProposal.contactLine}
-          letterDate={templatePreviewProposal.letterDate}
-          recipientDetails={templatePreviewProposal.recipientDetails}
-          documentTitle={templatePreviewProposal.documentTitle}
-          documentMeta={templatePreviewProposal.documentMeta}
-          applicantHeader={templatePreviewApplicant}
-          headerVisibility={templatePreviewProposal.headerVisibility}
-          documentTypography={getProposalDocumentTypography("direct", stylePreset)}
-          pageWidth={A4_PAGE_WIDTH_PX}
-          stylePreset={stylePreset}
-          documentThemeVars={serializeProposalDocumentThemeVars(
-            resolvePreviewCanonicalAppearance(stylePreset),
-          )}
-        />
-      </span>
-    </span>
   );
 }
 
@@ -347,7 +288,10 @@ export function ProposalDesignFields({
         .
       </div>
       <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Style</div>
-      <div className="dasti-proposal-design-style-grid" aria-label="Proposal style presets">
+      <div
+        className="dasti-proposal-skeleton-rail__style-pills dasti-proposal-design-style-pills"
+        aria-label="Proposal style presets"
+      >
         {PROPOSAL_STYLE_OPTIONS.map((option) => {
           const isSelected = activeTemplateBundleId === option.id;
           const isCustomized = isSelected && isActiveTemplateBundleCustomized;
@@ -356,7 +300,6 @@ export function ProposalDesignFields({
             <button
               key={option.id}
               type="button"
-              className="dasti-proposal-design-style-card"
               aria-label={option.label}
               data-selected={isSelected ? "true" : undefined}
               aria-pressed={isSelected}
@@ -373,10 +316,7 @@ export function ProposalDesignFields({
                   aria-label="Customized"
                 />
               ) : null}
-              <ProposalStylePreview bundleId={option.id} />
-              <span className="dasti-proposal-design-style-card__label">
-                {option.label}
-              </span>
+              {option.label}
             </button>
           );
         })}
@@ -391,7 +331,7 @@ export function ProposalDesignFields({
               onResetStyleBundle(activeTemplateBundleId);
             }}
           >
-            Reset custom style
+            Reset style
           </button>
         ) : null}
       </div>

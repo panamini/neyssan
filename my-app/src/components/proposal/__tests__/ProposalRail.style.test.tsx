@@ -4,12 +4,12 @@ import path from "node:path";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProposalRail } from "../ProposalRail";
+import ProposalDesignFields from "../ProposalDesignFields";
 import {
   getProposalTemplateBundleDefinition,
   type ProposalTemplateBundleId,
 } from "../../../lib/proposal-template-bundles";
 import { CANONICAL_PROPOSAL_TEMPLATE_ID } from "../../../../convex/lib/proposals/renderTemplates";
-import { templatePreviewProposal } from "../../../pages/templatePreviewSamples";
 import type { VerbatiStylePreset } from "../../../features/verbati/types";
 
 const baseProps = {
@@ -79,13 +79,30 @@ const baseProps = {
   onAskAiSubmit: vi.fn(),
 };
 
+const baseDesignProps = {
+  proposalTemplateId: CANONICAL_PROPOSAL_TEMPLATE_ID,
+  onSelectProposalLayout: vi.fn(),
+  stylePreset: baseProps.stylePreset,
+  styleTemplateBundleId: baseProps.styleTemplateBundleId,
+  onSelectStyleBundle: vi.fn(),
+  onSelectStyleTypography: vi.fn(),
+  onSelectStylePalette: vi.fn(),
+  onSelectStyleCustomAccent: vi.fn(),
+};
+
+function renderDesignFields(
+  props: Partial<React.ComponentProps<typeof ProposalDesignFields>> = {},
+) {
+  return render(<ProposalDesignFields {...baseDesignProps} {...props} />);
+}
+
 describe("ProposalRail style tab", () => {
-  it("keeps document heading out of the right rail tabs", () => {
+  it("keeps document heading and style out of the right rail tabs", () => {
     render(<ProposalRail {...baseProps} />);
 
     expect(screen.getByRole("tab", { name: "Draft" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Ask" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Style" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Style" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Heading" })).not.toBeInTheDocument();
   });
 
@@ -357,15 +374,10 @@ describe("ProposalRail style tab", () => {
   it("shows signature action in the Style tab and calls the callback", () => {
     const onChooseSignature = vi.fn();
 
-    render(
-      <ProposalRail
-        {...baseProps}
-        signaturePresent={false}
-        onChooseSignature={onChooseSignature}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    renderDesignFields({
+      signaturePresent: false,
+      onChooseSignature,
+    });
     fireEvent.click(screen.getByRole("switch", { name: "Printed name" }));
 
     expect(onChooseSignature).toHaveBeenCalledTimes(1);
@@ -374,16 +386,10 @@ describe("ProposalRail style tab", () => {
   it("keeps the signature switch active when the draft content has not hydrated yet", () => {
     const onChooseSignature = vi.fn();
 
-    render(
-      <ProposalRail
-        {...baseProps}
-        hasProposalContent={false}
-        signaturePresent={false}
-        onChooseSignature={onChooseSignature}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    renderDesignFields({
+      signaturePresent: false,
+      onChooseSignature,
+    });
     const signatureSwitch = screen.getByRole("switch", { name: "Printed name" });
 
     expect(signatureSwitch).not.toBeDisabled();
@@ -392,15 +398,10 @@ describe("ProposalRail style tab", () => {
   });
 
   it("shows when the structured signature is already present", () => {
-    render(
-      <ProposalRail
-        {...baseProps}
-        signaturePresent
-        onChooseSignature={vi.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    renderDesignFields({
+      signaturePresent: true,
+      onChooseSignature: vi.fn(),
+    });
 
     expect(screen.getByRole("switch", { name: "Printed name" })).toHaveAttribute(
       "aria-checked",
@@ -412,16 +413,11 @@ describe("ProposalRail style tab", () => {
     const onChooseSignature = vi.fn();
     const onToggleSignature = vi.fn();
 
-    render(
-      <ProposalRail
-        {...baseProps}
-        signaturePresent
-        onChooseSignature={onChooseSignature}
-        onToggleSignature={onToggleSignature}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    renderDesignFields({
+      signaturePresent: true,
+      onChooseSignature,
+      onToggleSignature,
+    });
     fireEvent.click(screen.getByRole("switch", { name: "Printed name" }));
 
     expect(onToggleSignature).toHaveBeenCalledWith(false);
@@ -431,18 +427,13 @@ describe("ProposalRail style tab", () => {
   it("toggles hand-drawn signature placement when an image signature is available", () => {
     const onToggleHandwrittenSignature = vi.fn();
 
-    render(
-      <ProposalRail
-        {...baseProps}
-        signaturePresent
-        handwrittenSignatureAvailable
-        handwrittenSignatureEnabled={false}
-        onChooseSignature={vi.fn()}
-        onToggleHandwrittenSignature={onToggleHandwrittenSignature}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    renderDesignFields({
+      signaturePresent: true,
+      handwrittenSignatureAvailable: true,
+      handwrittenSignatureEnabled: false,
+      onChooseSignature: vi.fn(),
+      onToggleHandwrittenSignature,
+    });
     fireEvent.click(screen.getByRole("switch", { name: "Signature" }));
 
     expect(onToggleHandwrittenSignature).toHaveBeenCalledWith(true);
@@ -453,16 +444,11 @@ describe("ProposalRail style tab", () => {
     const onSelectStylePalette = vi.fn();
     const onSelectStyleCustomAccent = vi.fn();
 
-    render(
-      <ProposalRail
-        {...baseProps}
-        onSelectStyleBundle={onSelectStyleBundle}
-        onSelectStylePalette={onSelectStylePalette}
-        onSelectStyleCustomAccent={onSelectStyleCustomAccent}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    renderDesignFields({
+      onSelectStyleBundle,
+      onSelectStylePalette,
+      onSelectStyleCustomAccent,
+    });
 
     expect(
       screen.getAllByText((_, element) =>
@@ -479,7 +465,7 @@ describe("ProposalRail style tab", () => {
       "/settings?tab=docstyle",
     );
     expect(screen.getByText("Style", { selector: ".forge__rail-label" })).toBeInTheDocument();
-    expect(screen.getAllByTestId("proposal-design-live-preview")).toHaveLength(3);
+    expect(screen.queryByTestId("proposal-design-live-preview")).not.toBeInTheDocument();
     expect(screen.getByText("Layout", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
@@ -527,65 +513,47 @@ describe("ProposalRail style tab", () => {
     expect(screen.getByRole("dialog", { name: "Custom accent color" })).toBeInTheDocument();
   });
 
-  it("uses template drawer thumbnail architecture for proposal style previews", () => {
-    render(<ProposalRail {...baseProps} />);
+  it("uses compact pills for proposal style selection instead of live thumbnails", () => {
+    renderDesignFields();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
-
-    const previews = screen.getAllByTestId("proposal-design-live-preview");
-    expect(previews).toHaveLength(3);
-    for (const previewPage of previews) {
-      expect(previewPage).toHaveClass("forge-template-card__page");
-      expect(previewPage).toHaveClass("dasti-proposal-design-preview__page");
-      expect(previewPage.parentElement).toHaveClass("forge-template-card__preview");
-      expect(previewPage.parentElement).toHaveClass("dasti-proposal-design-preview");
-      expect(previewPage.querySelector(".dasti-proposal-document")).toBeTruthy();
-    }
+    const styleGroup = screen.getByLabelText("Proposal style presets");
+    expect(styleGroup).toHaveClass("dasti-proposal-skeleton-rail__style-pills");
+    expect(styleGroup).toHaveClass("dasti-proposal-design-style-pills");
+    expect(within(styleGroup).getAllByRole("button")).toHaveLength(3);
+    expect(screen.queryByTestId("proposal-design-live-preview")).not.toBeInTheDocument();
+    expect(document.querySelector(".dasti-proposal-design-preview")).toBeNull();
+    expect(document.querySelector(".dasti-proposal-document")).toBeNull();
   });
 
-  it("keeps proposal style preview sample content isolated to thumbnails", () => {
+  it("keeps proposal style selection isolated from proposal body content", () => {
     const onSelectStyleBundle = vi.fn();
-    render(
-      <ProposalRail
-        {...baseProps}
-        onSelectStyleBundle={onSelectStyleBundle}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    renderDesignFields({
+      onSelectStyleBundle,
+    });
     fireEvent.click(screen.getByRole("button", { name: "Style 2" }));
 
     expect(onSelectStyleBundle).toHaveBeenCalledWith("magazine_editorial");
-    const sampleOpening = templatePreviewProposal.content.split("\n\n")[0];
-    const sampleNodes = screen.getAllByText(sampleOpening);
-    expect(sampleNodes.length).toBeGreaterThan(0);
-    for (const node of sampleNodes) {
-      expect(node.closest(".dasti-proposal-design-preview")).toBeTruthy();
-    }
-    expect(
-      Array.from(document.querySelectorAll("textarea")).some(
-        (textarea) => textarea.value === templatePreviewProposal.content,
-      ),
-    ).toBe(false);
+    expect(screen.queryByTestId("proposal-design-live-preview")).not.toBeInTheDocument();
+    expect(document.querySelector(".dasti-proposal-document")).toBeNull();
   });
 
-  it("keeps proposal style thumbnail CSS aligned with the templates drawer clip model", () => {
+  it("keeps proposal style selector CSS aligned with the CV Forge pill model", () => {
     const css = fs.readFileSync(
       path.resolve(process.cwd(), "src/styles/product-proposal.css"),
       "utf8",
     );
 
     expect(css).toMatch(
-      /\.dasti-proposal-design-fields\s*\{[\s\S]*--proposal-design-preview-inline-size:\s*136px;[\s\S]*--proposal-design-preview-gap:\s*12px;/,
+      /\.dasti-proposal-skeleton-rail__style-pills,[\s\S]*\.dasti-proposal-skeleton-rail__style-swatches\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-wrap:\s*wrap;[\s\S]*gap:\s*var\(--space-2\);/,
     );
     expect(css).toMatch(
-      /\.dasti-proposal-design-style-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(\s*2,\s*var\(--proposal-design-preview-inline-size\)\s*\);[\s\S]*gap:\s*var\(--proposal-design-preview-gap\);/,
+      /\.dasti-proposal-skeleton-rail__style-pills button\s*\{[\s\S]*min-height:\s*28px;[\s\S]*border:\s*1px solid var\(--border-soft\);[\s\S]*border-radius:\s*var\(--radius-pill\);/,
     );
     expect(css).toMatch(
-      /\.dasti-proposal-design-preview\s*\{[\s\S]*overflow:\s*hidden;[\s\S]*border:\s*0;[\s\S]*border-radius:\s*0;[\s\S]*box-shadow:\s*none;/,
+      /\.dasti-proposal-skeleton-rail__style-pills button\[data-selected="true"\]\s*\{[\s\S]*color:\s*var\(--ac\);[\s\S]*border-color:\s*var\(--ac\);[\s\S]*background:\s*var\(--am-soft\);/,
     );
     expect(css).toMatch(
-      /\.dasti-proposal-design-preview__page\s*\{[\s\S]*position:\s*absolute;[\s\S]*transform-origin:\s*top left;/,
+      /\.dasti-proposal-design-style-pills button\s*\{[\s\S]*position:\s*relative;/,
     );
     expect(css).toMatch(
       /\.dasti-proposal-design-fields__reset\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*padding:\s*0 var\(--space-2\);[\s\S]*border:\s*1px solid var\(--border-soft\);[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*var\(--sf1\);/,
@@ -593,26 +561,17 @@ describe("ProposalRail style tab", () => {
     expect(css).toMatch(
       /\.dasti-proposal-skeleton-rail__signature-toggles\s*\{[\s\S]*display:\s*grid;[\s\S]*gap:\s*var\(--space-1\);[\s\S]*\}/,
     );
-    expect(css).toContain(
-      ".dasti-proposal-design-preview .dasti-proposal-document > .dasti-proposal-document__page ~ .dasti-proposal-document__page",
-    );
-    expect(css).not.toContain(
-      '.dasti-proposal-design-style-card[data-selected="true"] .dasti-proposal-design-preview',
-    );
+    expect(css).not.toContain("dasti-proposal-design-preview");
+    expect(css).not.toContain("proposal-design-preview-inline-size");
   });
 
   it("selects the canonical proposal layout from the Style tab", () => {
     const onSelectProposalLayout = vi.fn();
 
-    render(
-      <ProposalRail
-        {...baseProps}
-        proposalTemplateId={null}
-        onSelectProposalLayout={onSelectProposalLayout}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    renderDesignFields({
+      proposalTemplateId: null,
+      onSelectProposalLayout,
+    });
     fireEvent.click(
       screen.getByRole("button", {
         name: "Minimal layout",
@@ -627,20 +586,15 @@ describe("ProposalRail style tab", () => {
   it("keeps Style 3 selected, highlights ink, and exposes reset when the bundle is customized", () => {
     const onResetStyleBundle = vi.fn();
 
-    render(
-      <ProposalRail
-        {...baseProps}
-        styleTemplateBundleId="grid_mono"
-        stylePreset={{
-          layout: "workshop",
-          typography: "geist-baskervville",
-          palette: "ink",
-        }}
-        onResetStyleBundle={onResetStyleBundle}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    renderDesignFields({
+      styleTemplateBundleId: "grid_mono",
+      stylePreset: {
+        layout: "workshop",
+        typography: "geist-baskervville",
+        palette: "ink",
+      },
+      onResetStyleBundle,
+    });
 
     expect(screen.getByRole("button", { name: "Style 3" })).toHaveAttribute(
       "aria-pressed",
@@ -655,6 +609,7 @@ describe("ProposalRail style tab", () => {
     const styleGrid = screen.getByLabelText("Proposal style presets");
     const style3 = screen.getByRole("button", { name: "Style 3" });
     const reset = screen.getByRole("button", { name: "Reset Style 3" });
+    expect(reset).toHaveTextContent("Reset style");
     expect(reset.parentElement).toBe(styleGrid);
     expect(
       style3.compareDocumentPosition(reset) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -667,20 +622,15 @@ describe("ProposalRail style tab", () => {
   it("compares custom state against the current Settings-backed bundle style", () => {
     const onResetStyleBundle = vi.fn();
 
-    render(
-      <ProposalRail
-        {...baseProps}
-        styleTemplateBundleId="swiss_serif"
-        stylePreset={getProposalTemplateBundleDefinition("swiss_serif").stylePreset}
-        styleTemplateBundleBaseStyle={{
-          ...getProposalTemplateBundleDefinition("swiss_serif").stylePreset,
-          palette: "cobalt",
-        }}
-        onResetStyleBundle={onResetStyleBundle}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    renderDesignFields({
+      styleTemplateBundleId: "swiss_serif",
+      stylePreset: getProposalTemplateBundleDefinition("swiss_serif").stylePreset,
+      styleTemplateBundleBaseStyle: {
+        ...getProposalTemplateBundleDefinition("swiss_serif").stylePreset,
+        palette: "cobalt",
+      },
+      onResetStyleBundle,
+    });
 
     expect(screen.queryByText("Style 1 · Custom")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Customized")).toBeInTheDocument();
@@ -697,8 +647,8 @@ describe("ProposalRail style tab", () => {
       );
 
       return (
-        <ProposalRail
-          {...baseProps}
+        <ProposalDesignFields
+          {...baseDesignProps}
           styleTemplateBundleId={styleTemplateBundleId}
           stylePreset={stylePreset}
           onSelectStyleBundle={(bundleId) => {
@@ -721,7 +671,6 @@ describe("ProposalRail style tab", () => {
 
     render(<StyleHarness />);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
     fireEvent.click(screen.getByRole("button", { name: "Style 3" }));
     expect(screen.getByRole("button", { name: "Style 3" })).toHaveAttribute(
       "aria-pressed",

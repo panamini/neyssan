@@ -22,6 +22,7 @@ describe("CvStageBar", () => {
         {...baseProps}
         onPickResume={onPickResume}
         onOpenSections={vi.fn()}
+        onOpenDesign={vi.fn()}
         onOpenTemplates={vi.fn()}
         resumeOptions={[
           {
@@ -71,6 +72,29 @@ describe("CvStageBar", () => {
       "data-stage-tooltip-mode",
       "compact",
     );
+    expect(
+      previewTrigger.compareDocumentPosition(
+        screen.getByRole("button", { name: "Sections" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+    expect(
+      screen
+        .getByRole("button", { name: "Sections" })
+        .compareDocumentPosition(screen.getByRole("button", { name: "Design" })) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+    expect(
+      screen
+        .getByRole("button", { name: "Design" })
+        .compareDocumentPosition(screen.getByRole("button", { name: "Templates" })) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+    expect(
+      screen
+        .getByRole("button", { name: "Templates" })
+        .compareDocumentPosition(screen.getByText("Natural")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText("Natural tone")).not.toBeInTheDocument();
     expect(screen.queryByText("Saved")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();

@@ -370,7 +370,7 @@ describe("CvForge workspace preview integration", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("tab", { name: "Style" }));
+    await user.click(screen.getByRole("button", { name: "Design" }));
 
     expect(
       screen.getByRole("button", { name: /Geist Bold Baskervville/i }),

@@ -184,7 +184,7 @@ export function CvDesignFields({
         .
       </div>
       <div className="dasti-cv-rail-label">Style</div>
-      <div className="dasti-cv-style-pills" aria-label="CV style presets">
+      <div className="dasti-cv-style-pills dasti-cv-style-pills--slots" aria-label="CV style presets">
         {([1, 2, 3] as const).map((slot) => (
           <button
             key={slot}
@@ -193,19 +193,27 @@ export function CvDesignFields({
             aria-pressed={selectedStyleSlot === slot}
             onClick={() => onSelectStyleSlot(slot)}
           >
-            {`Style ${slot}${selectedStyleSlot === slot && selectedStyleSlotIsCustom ? " - Custom" : ""}`}
+            {`Style ${slot}`}
+            {selectedStyleSlot === slot && selectedStyleSlotIsCustom ? (
+              <span
+                className="dasti-cv-style-pills__custom-dot"
+                title="Customized"
+                aria-label="Customized"
+              />
+            ) : null}
           </button>
         ))}
-      </div>
       {selectedStyleSlot && selectedStyleSlotIsCustom && onResetStyleSlot ? (
         <button
           type="button"
-          className="dasti-cv-rail-secondary-action"
+          className="dasti-cv-rail-secondary-action dasti-cv-style-pills__reset"
+          aria-label={`Reset Style ${selectedStyleSlot}`}
           onClick={onResetStyleSlot}
         >
-          Reset Style {selectedStyleSlot}
+          Reset style
         </button>
       ) : null}
+      </div>
       <div className="dasti-cv-rail-label">Template</div>
       <div className="dasti-cv-style-pills">
         <button

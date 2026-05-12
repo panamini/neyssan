@@ -17,7 +17,6 @@ import { getProposalExtensionSourceLinks } from "../../lib/proposal-source-platf
 import type { VerbatiStylePreset } from "../../features/verbati/types";
 import { Button } from "../ui";
 import { Menu, type MenuSection } from "../ui/menu";
-import ProposalDesignFields from "./ProposalDesignFields";
 export { PROPOSAL_STYLE_OPTIONS } from "./ProposalDesignFields";
 
 type ProposalRailCvOption = {
@@ -42,7 +41,7 @@ type ProposalRailLengthOption = {
   selected: boolean;
 };
 
-type ProposalRailTab = "draft" | "ask" | "style";
+type ProposalRailTab = "draft" | "ask";
 
 export type ProposalRailJobMatchSummary = {
   label: string;
@@ -136,23 +135,6 @@ export function ProposalRail({
   onSelectTone,
   lengthOptions,
   onSelectLength,
-  proposalTemplateId,
-  onSelectProposalLayout,
-  stylePreset,
-  styleTemplateBundleBaseStyle,
-  styleTemplateBundleId,
-  onSelectStyleBundle,
-  onResetStyleBundle,
-  onSelectStyleTypography,
-  onSelectStylePalette,
-  onSelectStyleCustomAccent,
-  onClearStyleCustomAccent,
-  signaturePresent = false,
-  handwrittenSignatureAvailable = false,
-  handwrittenSignatureEnabled = false,
-  onChooseSignature,
-  onToggleSignature,
-  onToggleHandwrittenSignature,
   aiStream,
   hasProposalContent,
   generateLabel,
@@ -359,7 +341,6 @@ export function ProposalRail({
         {[
           ["draft", "Draft"],
           ["ask", "Ask"],
-          ["style", "Style"],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -707,28 +688,6 @@ export function ProposalRail({
           {askAiBusy ? "Applying…" : "Send"}
         </Button>
       </section>
-      ) : null}
-
-      {activeTab === "style" ? (
-        <ProposalDesignFields
-          proposalTemplateId={proposalTemplateId}
-          onSelectProposalLayout={onSelectProposalLayout}
-          stylePreset={stylePreset}
-          styleTemplateBundleBaseStyle={styleTemplateBundleBaseStyle}
-          styleTemplateBundleId={styleTemplateBundleId}
-          onSelectStyleBundle={onSelectStyleBundle}
-          onResetStyleBundle={onResetStyleBundle}
-          onSelectStyleTypography={onSelectStyleTypography}
-          onSelectStylePalette={onSelectStylePalette}
-          onSelectStyleCustomAccent={onSelectStyleCustomAccent}
-          onClearStyleCustomAccent={onClearStyleCustomAccent}
-          signaturePresent={signaturePresent}
-          handwrittenSignatureAvailable={handwrittenSignatureAvailable}
-          handwrittenSignatureEnabled={handwrittenSignatureEnabled}
-          onChooseSignature={onChooseSignature}
-          onToggleSignature={onToggleSignature}
-          onToggleHandwrittenSignature={onToggleHandwrittenSignature}
-        />
       ) : null}
 
     </aside>
