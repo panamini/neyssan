@@ -1438,13 +1438,42 @@
   transition: opacity var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
+.projects-card__select input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.projects-card__select-mark {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 15px;
+  block-size: 15px;
+  border: 1px solid var(--border-strong);
+  border-radius: calc(var(--radius-control) / 2);
+  color: transparent;
+  background: transparent;
+  pointer-events: none;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    border-color var(--motion-duration-fast) var(--motion-ease-standard),
+    color var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.projects-card__select input:checked + .projects-card__select-mark {
+  border-color: var(--ac);
+  background: var(--ac);
+  color: var(--op);
+}
+
 .projects-card:hover .projects-card__select,
 .projects-card:focus-within .projects-card__select,
 .projects-card[data-selected="true"] .projects-card__select {
   opacity: 1;
 }
 
-.projects-card__select input,
 .projects-list__select input {
   accent-color: var(--ac);
   inline-size: 15px;
@@ -1455,8 +1484,8 @@
 .projects-card__type {
   position: absolute;
   z-index: 3;
-  inset-block-start: var(--s2);
-  inset-inline-start: calc(var(--s2) + 34px);
+  inset-block-end: var(--s2);
+  inset-inline-start: var(--s2);
   padding: 3px 7px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
@@ -1645,11 +1674,22 @@
   font: var(--type-small);
 }
 
-.dasti-library-card__footer > span:first-child {
+.dasti-library-card__context,
+.dasti-library-card__updated {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dasti-library-card__context {
+  color: var(--ti);
+  font-weight: var(--font-label-weight);
+}
+
+.dasti-library-card__updated {
+  margin-inline-start: auto;
+  text-align: right;
 }
 
 .dasti-documents-card__menu {

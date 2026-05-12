@@ -7,12 +7,10 @@ import type { Id } from "../../convex/_generated/dataModel";
 import {
   Button,
   Card,
-  CardBody,
   CardFooter,
   CardTitle,
   Input,
   Menu,
-  Pill,
 } from "../components/ui";
 import { ProposalDocumentRenderer } from "../components/proposal-render/ProposalDocumentRenderer";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
@@ -49,8 +47,11 @@ import {
 import {
   Briefcase,
   DotsThree,
+  ArrowSquareOut,
+  Check,
   FilePdf,
   FilePlus,
+  FileUser,
   List,
   SquaresFour,
   TrashSimple,
@@ -564,6 +565,9 @@ function LibraryItemCard({
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
           />
+          <span className="projects-card__select-mark" aria-hidden="true">
+            <Check size={13} strokeWidth={2.2} />
+          </span>
         </label>
         <span className="ds-card__eyebrow dasti-library-card__eyebrow projects-card__type">
           {typeLabel}
@@ -574,7 +578,12 @@ function LibraryItemCard({
           sections={[
             {
               items: [
-                { id: "open", label: item.type === "proposal" ? "Continue" : "Open", onSelect: onOpen },
+                {
+                  id: "open",
+                  label: item.type === "proposal" ? "Continue" : "Open",
+                  icon: <ArrowSquareOut size={14} aria-hidden="true" />,
+                  onSelect: onOpen,
+                },
                 {
                   id: "download",
                   label: "Download PDF",
@@ -588,12 +597,14 @@ function LibraryItemCard({
                         ? {
                             id: "bundle",
                             label: "Download CV + proposal",
+                            icon: <FilePlus size={14} aria-hidden="true" />,
                             disabled: true,
                             description: "Bundle export is not available yet.",
                           }
                         : {
                             id: "pick-cv",
                             label: "Pick CV",
+                            icon: <FileUser size={14} aria-hidden="true" />,
                             onSelect: onOpen,
                           },
                     ]
@@ -601,6 +612,7 @@ function LibraryItemCard({
                 {
                   id: "delete",
                   label: "Delete",
+                  icon: <TrashSimple size={14} aria-hidden="true" />,
                   tone: "danger" as const,
                   onSelect: onDelete,
                 },
@@ -628,13 +640,10 @@ function LibraryItemCard({
       </div>
       <button type="button" className="dasti-documents-card__surface" onClick={onOpen}>
         <CardTitle className="dasti-library-card__title">{item.title}</CardTitle>
-        <CardBody className="dasti-library-card__body">
-          {context}
-        </CardBody>
       </button>
       <CardFooter className="dasti-library-card__footer">
-        <span>{formatUpdatedLabel(item.updatedAt)}</span>
-        <Pill tone="neutral">{context}</Pill>
+        <span className="dasti-library-card__context">{context}</span>
+        <span className="dasti-library-card__updated">{formatUpdatedLabel(item.updatedAt)}</span>
       </CardFooter>
     </Card>
   );
