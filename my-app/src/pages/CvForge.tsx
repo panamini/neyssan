@@ -7044,10 +7044,6 @@ export function CvForge(): JSX.Element {
                 onUndoAiSuggestion={handleUndoAiSuggestion}
                 onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
                 onDismissListAiSuggestion={handleDismissListAiSuggestion}
-                onNewCv={() => {
-                  void handleStartFreshEntryCv();
-                }}
-                onImportPdf={handleImportEntryCv}
               />
             )}
           </div>

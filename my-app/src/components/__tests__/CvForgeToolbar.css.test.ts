@@ -188,7 +188,7 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-cv-stage-footer\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset-block-end:\s*0;[\s\S]*min-height:\s*var\(--cv-stage-footer-block-size,\s*28px\);[\s\S]*padding:\s*2px\s+var\(--space-2\);[\s\S]*border-block-start:\s*1px\s+solid\s+var\(--border-soft\);[\s\S]*background:\s*var\(--bg\);[\s\S]*box-shadow:\s*none;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-cv-stage-footer__zoom-slider\s*\{[\s\S]*appearance:\s*none;[\s\S]*block-size:\s*24px;[\s\S]*accent-color:\s*var\(--cv-zoom-slider-fill\);/,
+      /\.dasti-cv-stage-footer__zoom-slider\s*\{[\s\S]*--cv-zoom-slider-thumb-size:\s*13px;[\s\S]*appearance:\s*none;[\s\S]*block-size:\s*24px;[\s\S]*accent-color:\s*var\(--cv-zoom-slider-fill\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-cv-paper-stage\s+\.dasti-doc-viewport--resume-panel\[data-document-stage="true"\]\s*\{[\s\S]*max-inline-size:\s*100%;[\s\S]*overflow:\s*auto;/,

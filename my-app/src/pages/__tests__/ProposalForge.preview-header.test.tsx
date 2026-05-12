@@ -91,12 +91,14 @@ vi.mock("../../components/ProposalDisplay", () => ({
     contactLine,
     closing,
     mode,
+    showZoomControls,
   }: {
     railTitle?: string | null;
     railMeta?: string | null;
     contactLine?: string | null;
     closing?: { signatureName?: string | null } | null;
     mode?: "preview" | "edit";
+    showZoomControls?: boolean;
   }) => (
     <div data-testid="proposal-display-props">
       {railTitle ?? ""} | {railMeta ?? ""} | {contactLine ?? ""}
@@ -104,6 +106,9 @@ vi.mock("../../components/ProposalDisplay", () => ({
         {closing?.signatureName ?? ""}
       </span>
       <span data-testid="proposal-display-mode">{mode ?? ""}</span>
+      <span data-testid="proposal-display-zoom">
+        {showZoomControls ? "on" : "off"}
+      </span>
     </div>
   ),
   fallbackCopyText: () => "",
@@ -257,5 +262,6 @@ describe("ProposalForge preview applicant fallback", () => {
     expect(screen.getByTestId("proposal-display-props")).not.toHaveTextContent(
       "elena@sample.design",
     );
+    expect(screen.getByTestId("proposal-display-zoom")).toHaveTextContent("on");
   });
 });

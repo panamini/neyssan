@@ -143,8 +143,8 @@ describe("AppTopbar CV controls", () => {
     expect(screen.getByLabelText("Autosaved")).toBeInTheDocument();
     expect(screen.queryByText("1 page")).not.toBeInTheDocument();
     expect(screen.getByText("Autosaved")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Switch resume" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create CV" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "CV actions" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share" })).toHaveTextContent(
@@ -225,14 +225,21 @@ describe("AppTopbar CV controls", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Switch resume" }));
+    const newButton = screen.getByRole("button", { name: "New" });
+    const resumeButton = screen.getByRole("button", { name: "Switch resume" });
+    expect(
+      newButton.compareDocumentPosition(resumeButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(resumeButton);
     await user.click(
       await screen.findByRole("menuitemradio", { name: "Product resume" }),
     );
     expect(onPickResume).toHaveBeenCalledWith("cv_2");
     expect(onNewCv).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Create CV" }));
+    await user.click(screen.getByRole("button", { name: "New" }));
     const createMenu = await screen.findByRole("menu", { name: "Create CV" });
     expect(
       within(createMenu).queryByRole("menuitem", { name: "Delete CV" }),
@@ -240,7 +247,7 @@ describe("AppTopbar CV controls", () => {
     await user.click(within(createMenu).getByRole("menuitem", { name: "New CV" }));
     expect(onNewCv).toHaveBeenCalledTimes(1);
 
-    await user.click(screen.getByRole("button", { name: "Create CV" }));
+    await user.click(screen.getByRole("button", { name: "New" }));
     const importMenu = await screen.findByRole("menu", { name: "Create CV" });
     await user.click(
       within(importMenu).getByRole("menuitem", { name: "Import PDF" }),

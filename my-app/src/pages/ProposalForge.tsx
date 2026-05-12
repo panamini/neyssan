@@ -8,6 +8,7 @@ import {
   Check,
   DotsThree,
   FileUser,
+  FolderSimple,
   FolderTree,
   Paperclip,
   TrashSimple,
@@ -8893,7 +8894,7 @@ export function ProposalForge(): JSX.Element {
       ),
       footer: {
         label: "Open Library",
-        icon: <FolderTree size={13} aria-hidden="true" />,
+        icon: <FolderSimple size={13} aria-hidden="true" />,
         onSelect: () => navigate("/documents?type=proposals"),
       },
     }),
@@ -8925,7 +8926,7 @@ export function ProposalForge(): JSX.Element {
       ),
       footer: {
         label: "Open Library",
-        icon: <FolderTree size={13} aria-hidden="true" />,
+        icon: <FolderSimple size={13} aria-hidden="true" />,
         onSelect: () => navigate("/documents?type=proposals"),
       },
     }),
@@ -11192,7 +11193,7 @@ export function ProposalForge(): JSX.Element {
                               activeCharacterLimitSelection.advisory
                             }
                             showModeToggle={false}
-                            showZoomControls={false}
+                            showZoomControls={true}
                             showPreviewParagraphActions={false}
                             zoomStorageKey={null}
                             previewAnchor="top"

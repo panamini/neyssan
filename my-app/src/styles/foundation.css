@@ -956,6 +956,17 @@
   --grid-gap: var(--layout-card-grid);
   --rail-width: var(--card-rail-md);
 
+  /* Forge drawer spacing */
+  --forge-drawer-panel-padding-block: var(--space-3);
+  --forge-drawer-panel-padding-inline: var(--space-3);
+  --forge-drawer-content-gap: var(--space-2);
+  --forge-drawer-grid-gutter: var(--space-2);
+  --forge-drawer-template-grid-gutter: var(--space-3);
+  --forge-drawer-template-thumb-inline-size: 156px;
+  --forge-drawer-template-thumb-block-size: 220px;
+  --forge-drawer-grid-row-gap: var(--space-3);
+  --forge-drawer-scroll-inset: var(--space-1);
+
   /* Font role aliases */
   --font-app: var(--font-body-family);
   --font-document: var(--font-serif-display);

@@ -1960,9 +1960,9 @@ describe("CvForge workspace mode", () => {
       screen.queryByRole("button", { name: "Import CV" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Import PDF" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "New CV" })).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Import PDF" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New CV" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sections" })).toHaveAttribute(
       "aria-expanded",
       "false",
@@ -4237,8 +4237,7 @@ describe("CvForge workspace mode", () => {
     );
   });
 
-  it("routes rail import pdf through the hidden file input", async () => {
-    const user = userEvent.setup();
+  it("does not duplicate create/import document actions in the right rail", () => {
     const clickSpy = vi
       .spyOn(HTMLInputElement.prototype, "click")
       .mockImplementation(() => undefined);
@@ -4249,9 +4248,11 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Import PDF" }));
-
-    expect(clickSpy).toHaveBeenCalled();
+    const rail = screen.getByRole("complementary", { name: "CV forge rail" });
+    expect(within(rail).queryByText("Create")).not.toBeInTheDocument();
+    expect(within(rail).queryByRole("button", { name: "New CV" })).not.toBeInTheDocument();
+    expect(within(rail).queryByRole("button", { name: "Import PDF" })).not.toBeInTheDocument();
+    expect(clickSpy).not.toHaveBeenCalled();
     clickSpy.mockRestore();
   });
 
