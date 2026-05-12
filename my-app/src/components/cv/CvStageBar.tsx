@@ -1,10 +1,10 @@
 import React from "react";
 import {
+  Layout,
   Eye,
   FileUser,
   FolderOpen,
   FolderSimple,
-  ImagesSquare,
   ListNumbers,
   PenLine,
 } from "@/lib/icons";
@@ -47,6 +47,8 @@ export function CvStageBar({
   onOpenTemplates,
   onPickResume,
 }: CvStageBarProps): JSX.Element {
+  const stageIconSize = 16;
+
   const resumeMenuSections = React.useMemo(
     () => [
       {
@@ -83,22 +85,22 @@ export function CvStageBar({
         <button
           type="button"
           className="dasti-cv-mode-toggle"
-          data-selected={mode === "preview" ? "true" : undefined}
-          onClick={() => onModeChange("preview")}
-          aria-label="Page preview"
-          data-toolbar-tooltip="Preview"
-        >
-          <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="dasti-cv-mode-toggle"
           data-selected={mode === "edit" ? "true" : undefined}
           onClick={() => onModeChange("edit")}
           aria-label="Edit"
           data-toolbar-tooltip="Edit"
         >
-          <PenLine size={14} strokeWidth={1.8} aria-hidden="true" />
+          <PenLine size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="dasti-cv-mode-toggle"
+          data-selected={mode === "preview" ? "true" : undefined}
+          onClick={() => onModeChange("preview")}
+          aria-label="Page preview"
+          data-toolbar-tooltip="Preview"
+        >
+          <Eye size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
         </button>
       </div>
       <Button
@@ -116,7 +118,7 @@ export function CvStageBar({
           size="sm"
           variant="secondary"
           className="dasti-cv-stage-bar__primary-action"
-          iconLeft={<ListNumbers size={14} strokeWidth={1.8} />}
+          iconLeft={<ListNumbers size={stageIconSize} strokeWidth={1.8} />}
           aria-expanded={sectionsOpen}
           aria-label="Sections"
           data-toolbar-tooltip="Sections"
@@ -132,7 +134,7 @@ export function CvStageBar({
           size="sm"
           variant="secondary"
           className="dasti-cv-stage-bar__primary-action"
-          iconLeft={<FileUser size={14} strokeWidth={1.8} />}
+          iconLeft={<FileUser size={stageIconSize} strokeWidth={1.8} />}
           aria-expanded={designOpen}
           aria-label="Design"
           data-toolbar-tooltip="Design"
@@ -148,7 +150,7 @@ export function CvStageBar({
           size="sm"
           variant="secondary"
           className="dasti-cv-stage-bar__primary-action"
-          iconLeft={<ImagesSquare size={14} strokeWidth={1.8} />}
+          iconLeft={<Layout size={stageIconSize} strokeWidth={1.8} />}
           aria-expanded={templatesOpen}
           aria-label="Templates"
           data-toolbar-tooltip="Templates"
@@ -178,13 +180,13 @@ export function CvStageBar({
               className="dasti-cv-stage-bar__pick-icon dasti-cv-stage-bar__pick-icon--closed"
               aria-hidden="true"
             >
-              <FolderSimple size={15} strokeWidth={1.8} />
+              <FolderSimple size={stageIconSize} strokeWidth={1.8} />
             </span>
             <span
               className="dasti-cv-stage-bar__pick-icon dasti-cv-stage-bar__pick-icon--open"
               aria-hidden="true"
             >
-              <FolderOpen size={15} strokeWidth={1.8} />
+              <FolderOpen size={stageIconSize} strokeWidth={1.8} />
             </span>
           </button>
         }

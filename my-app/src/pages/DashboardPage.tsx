@@ -11,7 +11,7 @@ import {
   DotsThree,
   FilePdf,
   FilePlus,
-  ImagesSquare,
+  Layout,
   PencilLine,
   Target,
   TrashSimple,
@@ -262,7 +262,7 @@ export function DashboardPage(): JSX.Element {
             <Button
               variant="secondary"
               onClick={() => navigate("/templates")}
-              iconLeft={<ImagesSquare size={16} aria-hidden="true" />}
+              iconLeft={<Layout size={16} aria-hidden="true" />}
             >
               Start from template
             </Button>

@@ -137,6 +137,8 @@
   --text-title-line: var(--line-4);
   --text-display-size: var(--font-size-6);
   --text-display-line: var(--line-5);
+  --sidebar-icon-text-size: 13px;
+  --sidebar-icon-text-line: 18px;
 
   /* Typography families and weights */
   --font-body-family: "Geist Variable", "Geist", -apple-system,
@@ -434,8 +436,8 @@
   --app-nav-item-radius: var(--radius-control);
 
   --app-nav-icon-size: calc(var(--space-5) - var(--space-1));
-  --app-nav-label-size: var(--text-caption-size);
-  --app-nav-label-line: var(--text-caption-line);
+  --app-nav-label-size: var(--sidebar-icon-text-size);
+  --app-nav-label-line: var(--sidebar-icon-text-line);
   --app-nav-icon-label-gap: calc(var(--space-1) / 2);
 
   --app-nav-panel-width: calc(

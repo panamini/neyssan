@@ -7629,9 +7629,9 @@
 
 .dasti-proposal-skeleton-stage .dasti-icon-button,
 .dasti-proposal-skeleton-stage__actions .dasti-icon-button {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
+  width: var(--hs);
+  height: var(--hs);
+  min-width: var(--hs);
   border-radius: var(--radius-toolbar-control, var(--radius-control));
   box-shadow: none;
 }
@@ -7704,6 +7704,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.dasti-proposal-skeleton-stage__mode button:hover,
+.dasti-proposal-skeleton-stage__mode button:focus-visible {
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+  outline: none;
 }
 
 .dasti-proposal-skeleton-stage__mode button[data-selected="true"] {

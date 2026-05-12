@@ -8,8 +8,8 @@ import {
   FolderOpen,
   FolderSimple,
   Gear,
+  Layout,
   type IconProps,
-  ImagesSquare,
 } from "@/lib/icons";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -449,7 +449,7 @@ export const Sidebar: React.FC = () => {
             onFocusOpen={handleFocusTemplates}
             onHoverIntent={handleQueueTemplates}
             onHoverLeave={handleQueueClosePanel}
-            icon={ImagesSquare}
+            icon={Layout}
             onNavigate={closePanel}
           />
         ) : activeForgeSurface ? (
@@ -462,14 +462,14 @@ export const Sidebar: React.FC = () => {
             onFocusOpen={handleFocusTemplates}
             onHoverIntent={handleQueueTemplates}
             onHoverLeave={handleQueueClosePanel}
-            icon={ImagesSquare}
+            icon={Layout}
           />
         ) : (
           <SidebarRailLink
             label="Templates"
             href="/templates"
             active={templatesActive}
-            icon={ImagesSquare}
+            icon={Layout}
             onNavigate={closePanel}
           />
         )}
