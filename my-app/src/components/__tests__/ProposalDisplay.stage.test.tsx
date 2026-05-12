@@ -179,6 +179,8 @@ describe("ProposalDisplay stage behavior", () => {
     expect(lastCall).toMatchObject({
       fitMode: "contain",
       includeParentMeasurement: false,
+      initialAvailableWidthPx: expect.any(Number),
+      initialAvailableHeightPx: expect.any(Number),
     });
   });
 

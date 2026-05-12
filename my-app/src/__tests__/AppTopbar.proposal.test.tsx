@@ -150,6 +150,9 @@ describe("AppTopbar Proposal document identity", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "New proposal" }));
     expect(onNewProposal).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "New proposal" })).toHaveTextContent(
+      "New",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Proposal actions" }));
     const menu = await screen.findByRole("menu", { name: "Proposal actions" });

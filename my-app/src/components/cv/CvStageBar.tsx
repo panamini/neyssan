@@ -33,7 +33,7 @@ export function CvStageBar({
   onOpenDesign,
   onOpenTemplates,
 }: CvStageBarProps): JSX.Element {
-  const stageIconSize = 16;
+  const stageIconSize = 18;
   return (
     <div className="dasti-cv-stage-bar dasti-toolbar--surface-tooltips">
       <div

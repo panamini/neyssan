@@ -572,12 +572,16 @@ describe("ProposalDisplay CSS contracts", () => {
     expectCssInOrder([
       '.dasti-doc-viewer-shell__surface[data-preview-zoom-footer="true"] {',
       "--proposal-document-frame-inline-size: calc(",
+      "max(",
+      "var(--document-stage-width",
       "var(--document-page-width",
     ]);
     expectCssInOrder([
       ".dasti-proposal-output-shell--workspace .dasti-doc-viewer-shell__surface {",
       '.dasti-proposal-output-shell--workspace\n  .dasti-doc-viewer-shell__surface[data-preview-zoom-footer="true"] {',
       "--proposal-document-frame-inline-size: calc(",
+      "max(",
+      "var(--document-stage-width",
       "var(--document-page-width",
     ]);
     expect(productCss).toMatch(
@@ -585,6 +589,28 @@ describe("ProposalDisplay CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-output-shell--workspace\s+\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s+\.dasti-proposal-sheet__body--document-viewer\s*\{[\s\S]*overflow:\s*visible;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-preview-zoom-footer__status:hover,[\s\S]*?\.dasti-proposal-preview-zoom-footer__status\[aria-expanded="true"\]\s*\{[\s\S]*background:\s*var\(--proposal-chrome-control-hover-bg\);/,
+    );
+    expectCssInOrder([
+      ".dasti-doc-zoom-status {",
+      ".dasti-doc-zoom-status.dasti-proposal-preview-zoom-footer__status {",
+      "border-color: transparent;",
+      "background: transparent;",
+    ]);
+    expectCssInOrder([
+      ".dasti-doc-zoom-status.dasti-proposal-preview-zoom-footer__status:hover,",
+      "background: var(--proposal-chrome-control-hover-bg);",
+    ]);
+    expect(productCss).toMatch(
+      /\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s+\.dasti-proposal-sheet__preview-page,[\s\S]*?\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s+\.dasti-proposal-document__page\s*\{[\s\S]*box-shadow:\s*[\s\S]*var\(--document-viewer-frame-shadow\),[\s\S]*0 12px 28px -24px color-mix\(in srgb, var\(--shadow-color\) 92%, transparent\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-forge__stage\s*\{[\s\S]*position:\s*relative;[\s\S]*z-index:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-rail\s*\{[\s\S]*position:\s*sticky;[\s\S]*z-index:\s*2;[\s\S]*isolation:\s*isolate;/,
     );
   });
 

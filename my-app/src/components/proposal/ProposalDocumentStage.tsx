@@ -66,7 +66,7 @@ export function ProposalDocumentStage({
   onDeleteDraft,
   onSaveToLibrary,
 }: ProposalDocumentStageProps): JSX.Element {
-  const stageIconSize = 16;
+  const stageIconSize = 18;
 
   return (
     <section
