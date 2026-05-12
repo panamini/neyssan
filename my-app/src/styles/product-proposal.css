@@ -2461,8 +2461,8 @@
 
 .dasti-proposal-editor-page__drawer {
   --proposal-card-body-padding: var(--space-4);
-  --proposal-editor-page-close-block-inset: clamp(36px, 5vw, 56px);
-  --proposal-editor-page-close-inline-inset: clamp(32px, 5vw, 56px);
+  --proposal-editor-page-close-block-inset: clamp(32px, 4vw, 48px);
+  --proposal-editor-page-close-inline-inset: var(--proposal-output-editor-inline-padding);
   position: relative;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
@@ -2485,7 +2485,7 @@
   inline-size: min(100%, var(--proposal-document-reading-measure-max));
   min-block-size: 0;
   margin-inline: auto;
-  padding: clamp(36px, 5vw, 56px) clamp(32px, 5vw, 56px);
+  padding: clamp(32px, 4vw, 48px) var(--proposal-output-editor-inline-padding);
   overflow: auto;
 }
 
@@ -7537,7 +7537,18 @@
 }
 
 .dasti-proposal-skeleton-forge[data-forge-drawer-docked="true"] {
+  grid-template-columns:
+    minmax(0, 1fr)
+    var(--proposal-workspace-rail-inline-size);
   justify-content: stretch;
+}
+
+.dasti-proposal-skeleton-forge[data-forge-drawer-rail-collapsed="true"] {
+  grid-template-columns: minmax(0, var(--proposal-workspace-stage-inline-size));
+}
+
+.dasti-proposal-skeleton-forge[data-forge-drawer-docked="true"][data-forge-drawer-rail-collapsed="true"] {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .dasti-proposal-skeleton-stage {
