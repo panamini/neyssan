@@ -857,6 +857,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     "--proposal-scroll-top-strength": activeScrollTopStrength.toFixed(3),
     "--proposal-scroll-bottom-strength": activeScrollBottomStrength.toFixed(3),
   } as React.CSSProperties;
+  const visibleZoomPercent = `${Math.round(zoomLevel * 100)}%`;
   const stageLayout = useDocumentStageLayout({
     enabled: hasDocumentShell,
     measurementRef: stageMeasureRef,
@@ -921,6 +922,16 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           ? "overflow"
           : "fit"
       : "fit";
+  const shouldRenderZoomFooter =
+    enablesDocumentZoom && resolvedDocumentHeaderMode === "hidden";
+  const shouldFitPreviewStageToPage =
+    shouldRenderZoomFooter && previewScrollMode === "natural";
+  const previewStageWidthPx = shouldFitPreviewStageToPage
+    ? stageLayout.pageWidth
+    : stageLayout.stageWidth;
+  const previewStageHeightPx = shouldFitPreviewStageToPage
+    ? renderedDocumentHeight
+    : stageLayout.stageHeight;
   const resolveBodyClassName = React.useCallback(
     ({
       isReadonly = false,
@@ -1602,11 +1613,13 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       </div>
     ) : null;
 
-  const zoomControls = renderZoomControls(
-    isZoomMenuOpen
-      ? "dasti-doc-zoom-menu dasti-doc-zoom-menu--open"
-      : "dasti-doc-zoom-menu",
-  );
+  const zoomControls = shouldRenderZoomFooter
+    ? null
+    : renderZoomControls(
+        isZoomMenuOpen
+          ? "dasti-doc-zoom-menu dasti-doc-zoom-menu--open"
+          : "dasti-doc-zoom-menu",
+      );
   const renderHeaderVisibilityToggle = (
     label: string,
     pressed: boolean,
@@ -1780,9 +1793,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         ref={attachPreviewViewport}
         data-stage-mode={previewStageMode}
         data-document-stage="true"
+        data-zoom-footer={shouldRenderZoomFooter ? "true" : undefined}
         style={{
-          width: `${stageLayout.stageWidth}px`,
-          height: `${isEditable ? renderedDocumentHeight : stageLayout.stageHeight}px`,
+          width: `${isEditable ? stageLayout.stageWidth : previewStageWidthPx}px`,
+          height: `${isEditable ? renderedDocumentHeight : previewStageHeightPx}px`,
         }}
         {...(!isEditable ? viewportPanProps : {})}
       >
@@ -2645,6 +2659,32 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         </div>
       </div>
     ) : null;
+  const previewZoomFooter = shouldRenderZoomFooter ? (
+    <div className="dasti-proposal-preview-zoom-footer" data-no-pan="true">
+      <div
+        className="dasti-proposal-preview-zoom-footer__zoom"
+        aria-label="Proposal zoom controls"
+      >
+        <input
+          className="dasti-proposal-preview-zoom-footer__slider"
+          type="range"
+          min={0}
+          max={DOCUMENT_ZOOM_STEPS.length - 1}
+          step={1}
+          value={zoomIndex}
+          aria-label="Proposal zoom"
+          aria-valuetext={visibleZoomPercent}
+          onChange={(event) => setZoomIndex(Number(event.currentTarget.value))}
+        />
+        <span
+          className="dasti-proposal-preview-zoom-footer__status"
+          aria-label={`Zoom level ${visibleZoomPercent}`}
+        >
+          {visibleZoomPercent}
+        </span>
+      </div>
+    </div>
+  ) : null;
 
   const viewerShell = (
     <div className="dasti-doc-viewer-shell">
@@ -2673,6 +2713,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       <div
         ref={viewerSurfaceRef}
         className="dasti-doc-viewer-shell__surface"
+        data-preview-zoom-footer={shouldRenderZoomFooter ? "true" : undefined}
         style={stageLayoutVars}
       >
         <div
@@ -2743,6 +2784,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               ? null
               : documentCaption}
           {viewerShell}
+          {previewZoomFooter}
         </>
       )}
     </div>

@@ -88,6 +88,8 @@ describe("AppTopbar Proposal document identity", () => {
     expect(
       container.querySelector(".document-title-editor__text"),
     ).toHaveTextContent("Porphyre cover letter");
+    expect(container.querySelectorAll(".app-topbar__doc-divider")).toHaveLength(1);
+    expect(container.querySelectorAll(".app-topbar__toolbar-divider")).toHaveLength(2);
     expect(
       container.querySelector(".app-topbar__doc-title-suffix"),
     ).not.toBeInTheDocument();

@@ -26,4 +26,8 @@ describe("ProposalForge export contract", () => {
     expect(proposalForgeSource).toContain("onExportDocx");
     expect(proposalForgeSource).toContain("onShareSavedProposal");
   });
+
+  it("enables document zoom on the preview ProposalDisplay branch", () => {
+    expect(proposalForgeSource).toContain("showZoomControls={true}");
+  });
 });

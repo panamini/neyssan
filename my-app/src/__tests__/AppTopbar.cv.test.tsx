@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppTopbar } from "../components/AppTopbar";
 import {
@@ -16,9 +16,14 @@ vi.mock("convex/react", () => ({
   useQuery: vi.fn(() => undefined),
 }));
 
-vi.mock("@clerk/clerk-react", () => ({
+const clerkMocks = vi.hoisted(() => ({
   useAuth: vi.fn(() => ({ isLoaded: true, isSignedIn: false })),
   useUser: vi.fn(() => ({ user: null })),
+}));
+
+vi.mock("@clerk/clerk-react", () => ({
+  useAuth: clerkMocks.useAuth,
+  useUser: clerkMocks.useUser,
   UserButton: () => null,
 }));
 
@@ -104,6 +109,11 @@ function RegisterCvTopbar(): null {
 }
 
 describe("AppTopbar CV controls", () => {
+  beforeEach(() => {
+    clerkMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
+    clerkMocks.useUser.mockReturnValue({ user: null });
+  });
+
   it("renders CV status and share controls in the global topbar", async () => {
     const user = userEvent.setup();
 
@@ -127,6 +137,8 @@ describe("AppTopbar CV controls", () => {
     expect(container.querySelector(".app-topbar__doc-identity")).toHaveClass(
       "app-topbar__doc-identity",
     );
+    expect(container.querySelectorAll(".app-topbar__doc-divider")).toHaveLength(1);
+    expect(container.querySelectorAll(".app-topbar__toolbar-divider")).toHaveLength(2);
     expect(
       container.querySelector(".document-title-editor__text"),
     ).toHaveTextContent("Jessica Claire");
@@ -154,11 +166,43 @@ describe("AppTopbar CV controls", () => {
       "data-share-tooltip-mode",
       "compact",
     );
+    expect(screen.getByRole("button", { name: "Sign in" })).toHaveClass(
+      "app-topbar__account-button",
+    );
 
     await user.click(screen.getByRole("button", { name: "Share" }));
     expect(
       await screen.findByRole("menuitem", { name: "Safe-send checklist" }),
     ).toBeInTheDocument();
+  });
+
+  it("renders a signed-in account initial inside the same account button", () => {
+    clerkMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    clerkMocks.useUser.mockReturnValue({
+      user: {
+        firstName: "Nina",
+        username: "nini",
+        primaryEmailAddress: { emailAddress: "nina@example.com" },
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_1"]}>
+        <CvForgeTopbarProvider>
+          <RegisterCvTopbar />
+          <AppTopbar
+            commandPaletteOpen={false}
+            onOpenCommandPalette={vi.fn()}
+          />
+        </CvForgeTopbarProvider>
+      </MemoryRouter>,
+    );
+
+    const accountButton = screen.getByRole("button", {
+      name: "Open account menu",
+    });
+    expect(accountButton).toHaveClass("app-topbar__account-button");
+    expect(accountButton).toHaveTextContent("N");
   });
 
   it("keeps CV switch, create, and destructive actions separated", async () => {

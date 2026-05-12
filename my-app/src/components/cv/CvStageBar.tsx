@@ -119,6 +119,7 @@ export function CvStageBar({
           <span className="dasti-cv-stage-bar__action-label">Templates</span>
         </Button>
       ) : null}
+      <span className="dasti-cv-stage-bar__spacer" aria-hidden="true" />
       <ToneBadge tone={tone}>
         {tone.charAt(0).toUpperCase() + tone.slice(1)}
       </ToneBadge>
