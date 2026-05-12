@@ -3052,6 +3052,14 @@ body,
   line-height: 1;
 }
 
+.app-topbar__doc-save-label {
+  flex: 0 0 auto;
+  color: var(--color-text-subtle);
+  font-size: var(--tx);
+  font-weight: 650;
+  line-height: 1;
+}
+
 .app-topbar__doc-meta-row {
   flex: 0 0 auto;
   display: inline-flex;
@@ -3112,10 +3120,10 @@ body,
 .app-topbar__doc-health-mark {
   display: inline-grid;
   place-items: center;
-  min-width: 26px;
-  min-height: 16px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, currentColor 10%, transparent);
+  min-width: 0;
+  min-height: 0;
+  border-radius: 0;
+  background: transparent;
   font-size: var(--text-meta-size);
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -3225,26 +3233,50 @@ body,
   outline: none;
 }
 
-.app-topbar__doc-menu {
-  width: 20px;
-  min-width: 20px;
-  height: 20px;
+.app-topbar__doc-action,
+.app-topbar__doc-picker {
+  flex: 0 0 auto;
+  min-height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
   appearance: none;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: var(--radius-inline);
   outline: none;
   background: transparent;
   box-shadow: none;
   color: var(--color-text-muted);
-  cursor: pointer;
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: 650;
   line-height: 1;
+  cursor: pointer;
 }
 
-.app-topbar__doc-menu[data-toolbar-tooltip] {
+.app-topbar__doc-action {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0;
+}
+
+.app-topbar__doc-picker {
+  gap: var(--space-1);
+  height: 24px;
+  padding: 0 var(--space-2);
+  color: var(--color-text-subtle);
+}
+
+.app-topbar__doc-picker-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-topbar__doc-action[data-toolbar-tooltip],
+.app-topbar__doc-picker[data-toolbar-tooltip] {
   --dasti-toolbar-tooltip-inset-block-start: calc(100% + var(--space-1));
   --dasti-toolbar-tooltip-inset-block-end: auto;
   --dasti-toolbar-tooltip-inset-inline-start: 50%;
@@ -3252,48 +3284,23 @@ body,
   --dasti-toolbar-tooltip-transform-visible: translate(-50%, 0);
 }
 
-.app-topbar__doc-menu-icon {
-  position: relative;
-  display: inline-grid;
-  width: 16px;
-  height: 16px;
-  place-items: center;
-}
-
-.app-topbar__doc-menu-icon-outline,
-.app-topbar__doc-menu-icon-fill {
-  grid-area: 1 / 1;
-  transition:
-    opacity 140ms ease,
-    transform 140ms ease;
-}
-
-.app-topbar__doc-menu-icon-fill {
-  opacity: 0;
-  transform: scale(0.86);
-}
-
-.app-topbar__doc-menu:hover,
-.app-topbar__doc-menu:focus-visible,
-.app-topbar__doc-menu[aria-expanded="true"] {
+.app-topbar__doc-action:hover,
+.app-topbar__doc-action:focus-visible,
+.app-topbar__doc-picker:hover,
+.app-topbar__doc-picker:focus-visible {
   background: var(--proposal-chrome-control-hover-bg);
-  outline: none;
-  box-shadow: none;
   color: var(--color-text);
 }
 
-.app-topbar__doc-menu:hover .app-topbar__doc-menu-icon-outline,
-.app-topbar__doc-menu:focus-visible .app-topbar__doc-menu-icon-outline,
-.app-topbar__doc-menu[aria-expanded="true"] .app-topbar__doc-menu-icon-outline {
-  opacity: 0;
-  transform: scale(0.86);
+.app-topbar__doc-action[aria-expanded="true"],
+.app-topbar__doc-picker[aria-expanded="true"] {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--color-text);
 }
 
-.app-topbar__doc-menu:hover .app-topbar__doc-menu-icon-fill,
-.app-topbar__doc-menu:focus-visible .app-topbar__doc-menu-icon-fill,
-.app-topbar__doc-menu[aria-expanded="true"] .app-topbar__doc-menu-icon-fill {
-  opacity: 1;
-  transform: scale(1);
+.app-topbar__doc-picker-menu {
+  min-width: 220px;
 }
 
 .app-topbar__share-label {

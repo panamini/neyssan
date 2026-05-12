@@ -2780,6 +2780,7 @@ export function CvForge(): JSX.Element {
     createNewCv,
     importCv,
     renameCv,
+    deleteCv,
     saveCurrentCvStyleOnly,
     isLoading: isCvLibraryLoading,
     isLibraryHydrated,
@@ -3858,6 +3859,65 @@ export function CvForge(): JSX.Element {
     },
     [currentCv, currentCvId, renameCv],
   );
+  const handleDuplicateTopbarCv = React.useCallback(() => {
+    if (!currentCv) {
+      showToast("Open a CV first.", { variant: "warning" });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const nextCvId = uuidv4();
+    const baseTitle =
+      typeof currentCv.title === "string" && currentCv.title.trim()
+        ? currentCv.title.trim()
+        : deriveCvTitleFromSections(currentCv.sections, "Untitled CV");
+    const nextTitle = `Copy of ${baseTitle}`;
+    const copiedCv =
+      typeof structuredClone === "function"
+        ? structuredClone(currentCv)
+        : (JSON.parse(JSON.stringify(currentCv)) as CvDocument);
+
+    void importCv({
+      ...copiedCv,
+      id: nextCvId,
+      title: nextTitle,
+      metadata: {
+        ...cleanCvMetadataForImport(copiedCv.metadata),
+        createdAt: now,
+        updatedAt: now,
+        titleLocked: true,
+      },
+    }).then(() => {
+      loadCv(nextCvId);
+      navigateToSelectedCv(nextCvId);
+      showToast("Duplicated.", { variant: "success" });
+    }).catch(() => {
+      showToast("Duplicate failed.", { variant: "error" });
+    });
+  }, [currentCv, importCv, loadCv, navigateToSelectedCv, showToast]);
+  const handleDeleteTopbarCv = React.useCallback(() => {
+    if (!currentCvId) return;
+    const confirmed = window.confirm("Delete CV?");
+    if (!confirmed) return;
+
+    const nextCv = cvs.find((cv) => String(cv.id) !== String(currentCvId));
+    deleteCv(currentCvId);
+    if (nextCv?.id) {
+      const nextCvId = String(nextCv.id);
+      loadCv(nextCvId);
+      navigateToSelectedCv(nextCvId);
+      return;
+    }
+    void navigate("/cv", { replace: true });
+  }, [currentCvId, cvs, deleteCv, loadCv, navigate, navigateToSelectedCv]);
+  const topbarNewCvRef = React.useRef<() => void>(() => {});
+  const topbarImportCvRef = React.useRef<() => void>(() => {});
+  const handleTopbarNewCv = React.useCallback(() => {
+    topbarNewCvRef.current();
+  }, []);
+  const handleTopbarImportCv = React.useCallback(() => {
+    topbarImportCvRef.current();
+  }, []);
   const cvTopbarRegistration = React.useMemo(
     () => ({
       mode: workspaceMode,
@@ -3865,6 +3925,12 @@ export function CvForge(): JSX.Element {
       documentTitle: currentCv?.title ?? "Untitled CV",
       titlePlaceholder: "Untitled CV",
       onTitleCommit: handleCvTitleCommit,
+      resumeOptions,
+      onPickResume: handlePickResume,
+      onNewCv: handleTopbarNewCv,
+      onImportCv: handleTopbarImportCv,
+      onDuplicateCv: handleDuplicateTopbarCv,
+      onDeleteCv: handleDeleteTopbarCv,
       hasTrustedExport,
       atsAudit,
       importIssueCount: activeImportRecoveryItems.length,
@@ -3882,13 +3948,19 @@ export function CvForge(): JSX.Element {
       cvPreviewPageCount,
       exportingFormat,
       handleCvTitleCommit,
+      handleDeleteTopbarCv,
+      handleDuplicateTopbarCv,
       handleExportDocx,
       handleOpenAtsAudit,
       handleExportStyledPdf,
+      handlePickResume,
+      handleTopbarImportCv,
+      handleTopbarNewCv,
       handleOpenImportReview,
       hasTrustedExport,
       activeImportRecoveryItems.length,
       isImportReviewBannerVisible,
+      resumeOptions,
       workspaceMode,
     ],
   );
@@ -6695,6 +6767,13 @@ export function CvForge(): JSX.Element {
   }, [createNewCv, currentCvId, isEntryPickerBusy, showToast]);
 
   React.useEffect(() => {
+    topbarImportCvRef.current = handleImportEntryCv;
+    topbarNewCvRef.current = () => {
+      void handleStartFreshEntryCv();
+    };
+  }, [handleImportEntryCv, handleStartFreshEntryCv]);
+
+  React.useEffect(() => {
     const state =
       typeof location.state === "object" && location.state !== null
         ? (location.state as Record<string, unknown>)
@@ -6817,7 +6896,6 @@ export function CvForge(): JSX.Element {
                 mode={workspaceMode}
                 exporting={exportingFormat !== null}
                 tone={cvTone}
-                resumeOptions={resumeOptions}
                 templatesOpen={cvTemplatesOpen}
                 sectionsOpen={sectionsPanelOpen}
                 designOpen={cvDesignOpen}
@@ -6825,7 +6903,6 @@ export function CvForge(): JSX.Element {
                 onOpenSections={handleOpenCvSections}
                 onOpenDesign={handleOpenCvDesign}
                 onOpenTemplates={handleOpenCvTemplates}
-                onPickResume={handlePickResume}
               />
               {isImportReviewBannerVisible ? (
                 <CvReviewBanner

@@ -136,7 +136,7 @@ describe("AppTopbar Proposal document identity", () => {
     },
   );
 
-  it("renders Proposal document actions in the global topbar", async () => {
+  it("separates Proposal create from secondary document actions", async () => {
     const onNewProposal = vi.fn();
     const onDuplicateProposal = vi.fn();
     const onDeleteProposal = vi.fn();
@@ -146,18 +146,17 @@ describe("AppTopbar Proposal document identity", () => {
       onDeleteProposal,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Proposal actions" }));
-    const menu = await screen.findByRole("menu", { name: "Proposal actions" });
-
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "New proposal" }));
+    fireEvent.click(screen.getByRole("button", { name: "New proposal" }));
     expect(onNewProposal).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Proposal actions" }));
-    const duplicateMenu = await screen.findByRole("menu", {
-      name: "Proposal actions",
-    });
+    const menu = await screen.findByRole("menu", { name: "Proposal actions" });
+    expect(
+      within(menu).queryByRole("menuitem", { name: "New proposal" }),
+    ).not.toBeInTheDocument();
+
     fireEvent.click(
-      within(duplicateMenu).getByRole("menuitem", {
+      within(menu).getByRole("menuitem", {
         name: "Duplicate proposal",
       }),
     );

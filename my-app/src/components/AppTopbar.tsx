@@ -20,13 +20,18 @@ import {
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
 import { resolveCommandShortcutLabel } from "../lib/app-topbar";
 import {
+  ChevronDown,
   ClipboardText,
+  Copy,
+  DotsThree,
   FilePdf,
   FileText,
+  FolderOpen,
   MagnifyingGlass,
   Plus,
   ShareFat,
   TrashSimple,
+  Upload,
   User,
 } from "../lib/icons";
 
@@ -246,7 +251,7 @@ export function AppTopbar({
   const cvDocumentStateLabel = cvTopbarRegistration?.exporting
     ? "Exporting PDF"
     : cvTopbarRegistration?.hasCurrentCv
-      ? "Saved"
+      ? "Autosaved"
       : "No CV";
   const cvPageCountLabel =
     typeof cvTopbarRegistration?.pageCount === "number" &&
@@ -309,49 +314,192 @@ export function AppTopbar({
           </div>
         )}
         {location.pathname === "/cv" ? (
-          <div
-            className="app-topbar__doc-identity"
-            aria-label={cvDocumentIdentityLabel}
-            title={cvDocumentIdentityLabel}
-          >
-            <span
-              className="app-topbar__doc-state"
-              data-state={
-                cvTopbarRegistration?.exporting
-                  ? "exporting"
-                  : cvTopbarRegistration?.hasCurrentCv
-                    ? "saved"
-                    : "missing"
-              }
-              aria-label={cvDocumentStateLabel}
-              title={cvDocumentStateLabel}
+          <div className="app-topbar__doc-identity-group">
+            <div
+              className="app-topbar__doc-identity"
+              aria-label={cvDocumentIdentityLabel}
+              title={cvDocumentIdentityLabel}
             >
               <span
-                className="app-topbar__doc-dot"
-                data-pulsing={
-                  cvTopbarRegistration?.exporting ? "true" : undefined
+                className="app-topbar__doc-state"
+                data-state={
+                  cvTopbarRegistration?.exporting
+                    ? "exporting"
+                    : cvTopbarRegistration?.hasCurrentCv
+                      ? "saved"
+                      : "missing"
                 }
-                aria-hidden="true"
-              />
-              <FileText size={15} strokeWidth={1.8} aria-hidden="true" />
-            </span>
-            <DocumentTitleEditor
-              className="app-topbar__doc-title"
-              documentTitle={cvDocumentTitleMain}
-              titlePlaceholder={cvDocumentTitlePlaceholder}
-              ariaLabel="CV title"
-              onTitleCommit={(nextTitle) => {
-                cvTopbarRegistration?.onTitleCommit?.(nextTitle);
-              }}
-              disabled={
-                !cvTopbarRegistration?.hasCurrentCv ||
-                !cvTopbarRegistration.onTitleCommit
-              }
-            />
-            {cvPageCountLabel ? (
-              <span className="app-topbar__doc-meta">
-                {cvPageCountLabel}
+                aria-label={cvDocumentStateLabel}
+                title={cvDocumentStateLabel}
+              >
+                <span
+                  className="app-topbar__doc-dot"
+                  data-pulsing={
+                    cvTopbarRegistration?.exporting ? "true" : undefined
+                  }
+                  aria-hidden="true"
+                />
+                <FileText size={15} strokeWidth={1.8} aria-hidden="true" />
               </span>
+              <DocumentTitleEditor
+                className="app-topbar__doc-title"
+                documentTitle={cvDocumentTitleMain}
+                titlePlaceholder={cvDocumentTitlePlaceholder}
+                ariaLabel="CV title"
+                onTitleCommit={(nextTitle) => {
+                  cvTopbarRegistration?.onTitleCommit?.(nextTitle);
+                }}
+                disabled={
+                  !cvTopbarRegistration?.hasCurrentCv ||
+                  !cvTopbarRegistration.onTitleCommit
+                }
+              />
+              <span className="app-topbar__doc-save-label">
+                {cvDocumentStateLabel}
+              </span>
+              {cvPageCountLabel ? (
+                <span className="app-topbar__doc-meta">
+                  {cvPageCountLabel}
+                </span>
+              ) : null}
+            </div>
+            {cvTopbarRegistration ? (
+              <>
+                <Menu
+                  ariaLabel="Switch resume"
+                  align="start"
+                  menuClassName="app-topbar__doc-picker-menu"
+                  sections={[
+                    {
+                      label: "Resumes",
+                      items:
+                        (cvTopbarRegistration.resumeOptions ?? []).length > 0
+                          ? (cvTopbarRegistration.resumeOptions ?? []).map(
+                              (option) => ({
+                                id: option.id,
+                                role: "menuitemradio" as const,
+                                selected: option.selected,
+                                label: option.title,
+                                description:
+                                  option.description ?? "Saved resume.",
+                                onSelect: () =>
+                                  cvTopbarRegistration.onPickResume?.(
+                                    option.id,
+                                  ),
+                              }),
+                            )
+                          : [
+                              {
+                                id: "no-resumes",
+                                label: "No resumes",
+                                description: "Create or import a CV first.",
+                                disabled: true,
+                              },
+                            ],
+                    },
+                    {
+                      items: [
+                        {
+                          id: "open-cv-library",
+                          label: "Open CV library",
+                          icon: <FolderOpen size={15} strokeWidth={1.8} />,
+                          onSelect: () => {
+                            void navigate("/cvs");
+                          },
+                        },
+                      ],
+                    },
+                  ]}
+                  trigger={
+                    <button
+                      type="button"
+                      className="app-topbar__doc-picker"
+                      aria-label="Switch resume"
+                      data-toolbar-tooltip="Switch resume"
+                    >
+                      <span className="app-topbar__doc-picker-label">
+                        Resume
+                      </span>
+                      <ChevronDown
+                        size={13}
+                        strokeWidth={2}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  }
+                />
+                <Menu
+                  ariaLabel="Create CV"
+                  align="start"
+                  sections={[
+                    {
+                      items: [
+                        {
+                          id: "new-cv",
+                          label: "New CV",
+                          icon: <Plus size={15} strokeWidth={1.8} />,
+                          onSelect: cvTopbarRegistration.onNewCv,
+                        },
+                        {
+                          id: "import-pdf",
+                          label: "Import PDF",
+                          icon: <Upload size={15} strokeWidth={1.8} />,
+                          onSelect: cvTopbarRegistration.onImportCv,
+                        },
+                      ],
+                    },
+                  ]}
+                  trigger={
+                    <button
+                      type="button"
+                      className="app-topbar__doc-action app-topbar__doc-action--create"
+                      aria-label="Create CV"
+                      data-toolbar-tooltip="Create CV"
+                    >
+                      <Plus size={14} strokeWidth={1.9} aria-hidden="true" />
+                    </button>
+                  }
+                />
+                <Menu
+                  ariaLabel="CV actions"
+                  align="start"
+                  sections={[
+                    {
+                      items: [
+                        {
+                          id: "duplicate-cv",
+                          label: "Duplicate CV",
+                          icon: <Copy size={15} strokeWidth={1.8} />,
+                          disabled: !cvTopbarRegistration.hasCurrentCv,
+                          onSelect: cvTopbarRegistration.onDuplicateCv,
+                        },
+                        {
+                          id: "delete-cv",
+                          label: "Delete CV",
+                          icon: <TrashSimple size={15} strokeWidth={1.8} />,
+                          tone: "danger",
+                          disabled: !cvTopbarRegistration.hasCurrentCv,
+                          onSelect: cvTopbarRegistration.onDeleteCv,
+                        },
+                      ],
+                    },
+                  ]}
+                  trigger={
+                    <button
+                      type="button"
+                      className="app-topbar__doc-action app-topbar__doc-action--more"
+                      aria-label="CV actions"
+                      data-toolbar-tooltip="CV actions"
+                    >
+                      <DotsThree
+                        size={16}
+                        weight="bold"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  }
+                />
+              </>
             ) : null}
           </div>
         ) : location.pathname === "/proposal" ? (
@@ -390,6 +538,9 @@ export function AppTopbar({
                 }}
                 disabled={!proposalTopbarRegistration?.onTitleCommit}
               />
+              <span className="app-topbar__doc-save-label">
+                {proposalDocumentStateLabel}
+              </span>
               {proposalTopbarRegistration?.lengthLabel ? (
                 <span className="app-topbar__doc-meta">
                   {proposalTopbarRegistration.lengthLabel}
@@ -397,50 +548,59 @@ export function AppTopbar({
               ) : null}
             </div>
             {proposalTopbarRegistration ? (
-              <Menu
-                ariaLabel="Proposal actions"
-                align="start"
-                sections={[
-                  {
-                    items: [
-                      {
-                        id: "new-proposal",
-                        label: "New proposal",
-                        icon: <Plus size={15} strokeWidth={1.8} />,
-                        onSelect: proposalTopbarRegistration.onNewProposal,
-                      },
-                      {
-                        id: "duplicate-proposal",
-                        label: "Duplicate proposal",
-                        icon: <ClipboardText size={15} strokeWidth={1.8} />,
-                        disabled:
-                          !proposalTopbarRegistration.hasProposalContent,
-                        onSelect:
-                          proposalTopbarRegistration.onDuplicateProposal,
-                      },
-                      {
-                        id: "delete-proposal",
-                        label: "Delete proposal",
-                        icon: <TrashSimple size={15} strokeWidth={1.8} />,
-                        tone: "danger",
-                        disabled:
-                          !proposalTopbarRegistration.hasProposalContent,
-                        onSelect: proposalTopbarRegistration.onDeleteProposal,
-                      },
-                    ],
-                  },
-                ]}
-                trigger={
-                  <button
-                    type="button"
-                    className="app-topbar__doc-menu"
-                    aria-label="Proposal actions"
-                    data-toolbar-tooltip="Proposal actions"
-                  >
-                    <Plus size={14} strokeWidth={1.9} aria-hidden="true" />
-                  </button>
-                }
-              />
+              <>
+                <button
+                  type="button"
+                  className="app-topbar__doc-action app-topbar__doc-action--create"
+                  aria-label="New proposal"
+                  data-toolbar-tooltip="New proposal"
+                  onClick={proposalTopbarRegistration.onNewProposal}
+                >
+                  <Plus size={14} strokeWidth={1.9} aria-hidden="true" />
+                </button>
+                <Menu
+                  ariaLabel="Proposal actions"
+                  align="start"
+                  sections={[
+                    {
+                      items: [
+                        {
+                          id: "duplicate-proposal",
+                          label: "Duplicate proposal",
+                          icon: <Copy size={15} strokeWidth={1.8} />,
+                          disabled:
+                            !proposalTopbarRegistration.hasProposalContent,
+                          onSelect:
+                            proposalTopbarRegistration.onDuplicateProposal,
+                        },
+                        {
+                          id: "delete-proposal",
+                          label: "Delete proposal",
+                          icon: <TrashSimple size={15} strokeWidth={1.8} />,
+                          tone: "danger",
+                          disabled:
+                            !proposalTopbarRegistration.hasProposalContent,
+                          onSelect: proposalTopbarRegistration.onDeleteProposal,
+                        },
+                      ],
+                    },
+                  ]}
+                  trigger={
+                    <button
+                      type="button"
+                      className="app-topbar__doc-action app-topbar__doc-action--more"
+                      aria-label="Proposal actions"
+                      data-toolbar-tooltip="Proposal actions"
+                    >
+                      <DotsThree
+                        size={16}
+                        weight="bold"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  }
+                />
+              </>
             ) : null}
           </div>
         ) : null}

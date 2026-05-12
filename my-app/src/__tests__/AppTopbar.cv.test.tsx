@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -73,6 +73,19 @@ function RegisterCvTopbar(): null {
       documentTitle: "Jessica Claire",
       titlePlaceholder: "Untitled CV",
       onTitleCommit: vi.fn(),
+      resumeOptions: [
+        {
+          id: "cv_1",
+          title: "Jessica Claire",
+          description: "6 sections",
+          selected: true,
+        },
+      ],
+      onPickResume: vi.fn(),
+      onNewCv: vi.fn(),
+      onImportCv: vi.fn(),
+      onDuplicateCv: vi.fn(),
+      onDeleteCv: vi.fn(),
       hasTrustedExport: true,
       atsAudit: excellentAudit,
       importIssueCount: 0,
@@ -122,14 +135,17 @@ describe("AppTopbar CV controls", () => {
     ).not.toBeInTheDocument();
     expect(container.querySelector(".app-topbar__actions")).toBeTruthy();
     expect(screen.queryByText("Ready")).not.toBeInTheDocument();
-    expect(screen.queryByText("Saved")).not.toBeInTheDocument();
     expect(screen.queryByText("ATS-ready")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ATS audit looks good" })).toHaveClass(
       "app-topbar__doc-health",
     );
     expect(screen.getByRole("button", { name: "ATS audit looks good" })).toHaveTextContent("ATS");
-    expect(screen.getByLabelText("Saved")).toBeInTheDocument();
+    expect(screen.getByLabelText("Autosaved")).toBeInTheDocument();
     expect(screen.queryByText("1 page")).not.toBeInTheDocument();
+    expect(screen.getByText("Autosaved")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Switch resume" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create CV" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "CV actions" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share" })).toHaveTextContent(
       "Share",
@@ -143,6 +159,105 @@ describe("AppTopbar CV controls", () => {
     expect(
       await screen.findByRole("menuitem", { name: "Safe-send checklist" }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps CV switch, create, and destructive actions separated", async () => {
+    const user = userEvent.setup();
+    const onPickResume = vi.fn();
+    const onNewCv = vi.fn();
+    const onImportCv = vi.fn();
+    const onDuplicateCv = vi.fn();
+    const onDeleteCv = vi.fn();
+
+    function RegisterCvHeaderActions(): null {
+      const registration = React.useMemo(
+        () => ({
+          mode: "edit" as const,
+          hasCurrentCv: true,
+          documentTitle: "Jessica Claire",
+          titlePlaceholder: "Untitled CV",
+          onTitleCommit: vi.fn(),
+          resumeOptions: [
+            {
+              id: "cv_1",
+              title: "Jessica Claire",
+              description: "6 sections",
+              selected: true,
+            },
+            {
+              id: "cv_2",
+              title: "Product resume",
+              description: "5 sections",
+              selected: false,
+            },
+          ],
+          onPickResume,
+          onNewCv,
+          onImportCv,
+          onDuplicateCv,
+          onDeleteCv,
+          hasTrustedExport: true,
+          atsAudit: excellentAudit,
+          importIssueCount: 0,
+          importReviewBannerVisible: false,
+          exporting: false,
+          pageCount: 1,
+          onOpenAtsAudit: vi.fn(),
+          onOpenImportReview: vi.fn(),
+          onExportPdf: vi.fn(),
+          onExportDocx: vi.fn(),
+        }),
+        [],
+      );
+      useRegisterCvForgeTopbar(registration);
+      return null;
+    }
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_1"]}>
+        <CvForgeTopbarProvider>
+          <RegisterCvHeaderActions />
+          <AppTopbar
+            commandPaletteOpen={false}
+            onOpenCommandPalette={vi.fn()}
+          />
+        </CvForgeTopbarProvider>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Switch resume" }));
+    await user.click(
+      await screen.findByRole("menuitemradio", { name: "Product resume" }),
+    );
+    expect(onPickResume).toHaveBeenCalledWith("cv_2");
+    expect(onNewCv).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Create CV" }));
+    const createMenu = await screen.findByRole("menu", { name: "Create CV" });
+    expect(
+      within(createMenu).queryByRole("menuitem", { name: "Delete CV" }),
+    ).not.toBeInTheDocument();
+    await user.click(within(createMenu).getByRole("menuitem", { name: "New CV" }));
+    expect(onNewCv).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "Create CV" }));
+    const importMenu = await screen.findByRole("menu", { name: "Create CV" });
+    await user.click(
+      within(importMenu).getByRole("menuitem", { name: "Import PDF" }),
+    );
+    expect(onImportCv).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "CV actions" }));
+    const actionsMenu = await screen.findByRole("menu", { name: "CV actions" });
+    await user.click(
+      within(actionsMenu).getByRole("menuitem", { name: "Duplicate CV" }),
+    );
+    expect(onDuplicateCv).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "CV actions" }));
+    const deleteMenu = await screen.findByRole("menu", { name: "CV actions" });
+    await user.click(within(deleteMenu).getByRole("menuitem", { name: "Delete CV" }));
+    expect(onDeleteCv).toHaveBeenCalledTimes(1);
   });
 
   it("commits CV title edits from the document identity editor", async () => {
