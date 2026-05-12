@@ -3052,6 +3052,21 @@ body,
   line-height: 1;
 }
 
+.app-topbar__doc-meta-row {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.app-topbar__doc-identity-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
 .app-topbar__doc-health {
   appearance: none;
   flex: 0 0 auto;
@@ -3208,6 +3223,77 @@ body,
   border-color: var(--color-border-hover);
   color: var(--ti);
   outline: none;
+}
+
+.app-topbar__doc-menu {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius-inline);
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.app-topbar__doc-menu[data-toolbar-tooltip] {
+  --dasti-toolbar-tooltip-inset-block-start: calc(100% + var(--space-1));
+  --dasti-toolbar-tooltip-inset-block-end: auto;
+  --dasti-toolbar-tooltip-inset-inline-start: 50%;
+  --dasti-toolbar-tooltip-transform-hidden: translate(-50%, -2px);
+  --dasti-toolbar-tooltip-transform-visible: translate(-50%, 0);
+}
+
+.app-topbar__doc-menu-icon {
+  position: relative;
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+}
+
+.app-topbar__doc-menu-icon-outline,
+.app-topbar__doc-menu-icon-fill {
+  grid-area: 1 / 1;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.app-topbar__doc-menu-icon-fill {
+  opacity: 0;
+  transform: scale(0.86);
+}
+
+.app-topbar__doc-menu:hover,
+.app-topbar__doc-menu:focus-visible,
+.app-topbar__doc-menu[aria-expanded="true"] {
+  background: var(--proposal-chrome-control-hover-bg);
+  outline: none;
+  box-shadow: none;
+  color: var(--color-text);
+}
+
+.app-topbar__doc-menu:hover .app-topbar__doc-menu-icon-outline,
+.app-topbar__doc-menu:focus-visible .app-topbar__doc-menu-icon-outline,
+.app-topbar__doc-menu[aria-expanded="true"] .app-topbar__doc-menu-icon-outline {
+  opacity: 0;
+  transform: scale(0.86);
+}
+
+.app-topbar__doc-menu:hover .app-topbar__doc-menu-icon-fill,
+.app-topbar__doc-menu:focus-visible .app-topbar__doc-menu-icon-fill,
+.app-topbar__doc-menu[aria-expanded="true"] .app-topbar__doc-menu-icon-fill {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .app-topbar__share-label {
