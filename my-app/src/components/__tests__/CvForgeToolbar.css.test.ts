@@ -169,7 +169,7 @@ describe("CvForge toolbar CSS contracts", () => {
     );
   });
 
-  it("keeps CV forge canvas and rail tabs aligned with Proposal forge", () => {
+  it("keeps CV forge canvas and Ask rail aligned with Proposal forge", () => {
     expect(productCss).toMatch(
       /\.dasti-cv-skeleton-forge\s*\{[\s\S]*background:\s*transparent;/,
     );
@@ -180,15 +180,13 @@ describe("CvForge toolbar CSS contracts", () => {
       /@media\s*\(max-width:\s*1419px\)\s*\{[\s\S]*\.dasti-cv-rail\s*\{[\s\S]*max-height:\s*none;[\s\S]*position:\s*static;[\s\S]*padding:\s*var\(--space-5\);[\s\S]*border:\s*1px\s+solid\s+var\(--border-soft\);[\s\S]*border-radius:\s*var\(--r-surface,\s*var\(--radius-card\)\);[\s\S]*background:\s*var\(--sfr\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-cv-rail-tabs\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*padding:\s*var\(--space-1\);[\s\S]*\.dasti-cv-rail-tabs button\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*min-block-size:\s*var\(--control-sm\);/,
+      /\.dasti-cv-rail-heading\s*\{[\s\S]*color:\s*var\(--ti\);[\s\S]*font-weight:\s*750;/,
     );
     expect(cvSectionsDrawerSource).toContain("forge-template-panel");
     expect(cvForgeSource).not.toContain("data-cv-sections-panel-docked");
     expect(productCss).not.toContain("dasti-cv-sections-drawer-backdrop");
     expect(productCss).not.toContain("data-cv-sections-panel-docked");
-    expect(productCss).toMatch(
-      /\.dasti-cv-rail-tabs button\[data-active="true"\]\s*\{[\s\S]*background:\s*var\(--color-surface-raised\);/,
-    );
+    expect(cvRailSource).not.toContain('data-rail-pane="style"');
     expect(forgeTemplatePanelSource).toContain(
       "forge-template-panel__content--cv-sections",
     );

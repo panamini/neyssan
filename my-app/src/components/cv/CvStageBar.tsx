@@ -25,8 +25,10 @@ type CvStageBarProps = {
   resumeOptions: CvStageBarResumeOption[];
   templatesOpen?: boolean;
   sectionsOpen?: boolean;
+  designOpen?: boolean;
   onModeChange: (mode: "edit" | "preview") => void;
   onOpenSections?: () => void;
+  onOpenDesign?: () => void;
   onOpenTemplates?: () => void;
   onPickResume: (cvId: string) => void;
 };
@@ -38,8 +40,10 @@ export function CvStageBar({
   resumeOptions,
   templatesOpen = false,
   sectionsOpen = false,
+  designOpen = false,
   onModeChange,
   onOpenSections,
+  onOpenDesign,
   onOpenTemplates,
   onPickResume,
 }: CvStageBarProps): JSX.Element {
@@ -124,6 +128,22 @@ export function CvStageBar({
           onClick={onOpenSections}
         >
           <span className="dasti-cv-stage-bar__action-label">Sections</span>
+        </Button>
+      ) : null}
+      {onOpenDesign ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          className="dasti-cv-stage-bar__primary-action"
+          iconLeft={<FileUser size={14} strokeWidth={1.8} />}
+          aria-expanded={designOpen}
+          aria-label="Design"
+          data-toolbar-tooltip="Design"
+          data-stage-tooltip-mode="compact"
+          onClick={onOpenDesign}
+        >
+          <span className="dasti-cv-stage-bar__action-label">Design</span>
         </Button>
       ) : null}
       {onOpenTemplates ? (
