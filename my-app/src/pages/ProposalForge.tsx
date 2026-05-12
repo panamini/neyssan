@@ -9612,12 +9612,14 @@ export function ProposalForge(): JSX.Element {
     !isComposePanelVisible &&
     !isSavedView &&
     canCollapseComposePanel;
-  const shouldAutoCollapseProposalRailForDockedDrawer =
-    isForgeDrawerDockedDesktop && proposalLayoutViewportWidth < 1760;
+  // Keep Draft/Ask visible when desktop drawers are pinned, matching CV Forge.
+  const shouldAutoCollapseProposalRailForDockedDrawer = false;
   const shouldRenderProposalRail =
     !shouldAutoCollapseProposalRailForDockedDrawer;
   const showComposeGridColumn =
-    shouldRenderProposalRail && showComposePanel && !isCompactComposeLayout;
+    shouldRenderProposalRail &&
+    showComposePanel &&
+    (isForgeDrawerDockedDesktop || !isCompactComposeLayout);
   const liveWorkbenchMaxWidth = isForgeDrawerDockedDesktop
     ? "100%"
     : isCompactComposeLayout
@@ -10636,10 +10638,10 @@ export function ProposalForge(): JSX.Element {
                         "--proposal-workspace-stage-inline-size":
                           "var(--proposal-paper-visual-inline-size)",
                         "--proposal-workspace-rail-inline-size": "360px",
-                        "--grid-columns": isCompactComposeLayout
-                          ? "minmax(0, 1fr)"
-                          : isForgeDrawerDockedDesktop && showComposeGridColumn
-                            ? "minmax(0, 1fr) var(--proposal-workspace-rail-inline-size)"
+                        "--grid-columns": isForgeDrawerDockedDesktop && showComposeGridColumn
+                          ? "minmax(0, 1fr) var(--proposal-workspace-rail-inline-size)"
+                          : isCompactComposeLayout
+                            ? "minmax(0, 1fr)"
                             : showComposeGridColumn
                               ? "minmax(0, var(--proposal-workspace-stage-inline-size)) var(--proposal-workspace-rail-inline-size)"
                               : "minmax(0, 1fr)",

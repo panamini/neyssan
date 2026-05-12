@@ -233,7 +233,11 @@ describe("ProposalRail style tab", () => {
     );
 
     expect(screen.getByText("No job loaded")).toBeInTheDocument();
-    expect(screen.getByText("Capture, paste, or choose a job.")).toBeInTheDocument();
+    expect(screen.queryByText("Capture, paste, or choose a job.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose from Job Forge" })).toHaveAttribute(
+      "data-toolbar-tooltip",
+      "Choose or paste a job.",
+    );
     expect(screen.getByPlaceholderText("Paste a job offer...")).toBeInTheDocument();
 
     const jobSites = screen.getByLabelText("Job sites");

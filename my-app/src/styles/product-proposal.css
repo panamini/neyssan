@@ -7676,7 +7676,7 @@
 }
 
 .dasti-proposal-skeleton-stage__mode {
-  height: 28px;
+  height: var(--hs);
   flex-shrink: 0;
   display: inline-grid;
   grid-template-columns: repeat(2, 28px);
@@ -7690,7 +7690,8 @@
 }
 
 .dasti-proposal-skeleton-stage__mode button {
-  min-height: 22px;
+  height: 100%;
+  min-height: 0;
   width: 100%;
   min-width: 0;
   padding-inline: 0;
