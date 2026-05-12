@@ -8804,7 +8804,7 @@
   }
 
   .dasti-proposal-skeleton-stage__actions {
-    padding-inline-start: var(--space-1);
+    padding-inline-start: 0;
     margin-inline-start: 0;
   }
 
@@ -8870,6 +8870,12 @@
 
   .dasti-proposal-skeleton-stage__primary-action[data-stage-tooltip-mode="compact"]::after {
     display: block;
+  }
+}
+
+@media (max-width: 760px) {
+  .dasti-proposal-skeleton-stage__bar {
+    padding: calc(var(--space-1) + 1px);
   }
 }
 .dasti-doc-viewport {

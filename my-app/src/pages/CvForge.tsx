@@ -5550,16 +5550,28 @@ export function CvForge(): JSX.Element {
   const sectionsPanelOpen =
     templatePanelOpen && activeTemplateSurface === "cv-sections";
   const handleOpenCvTemplates = React.useCallback(() => {
+    if (cvTemplatesOpen) {
+      closeForgePanel();
+      return;
+    }
     openTemplateSurface("cv");
-  }, [openTemplateSurface]);
+  }, [closeForgePanel, cvTemplatesOpen, openTemplateSurface]);
 
   const handleOpenCvSections = React.useCallback(() => {
+    if (sectionsPanelOpen) {
+      closeForgePanel();
+      return;
+    }
     openTemplateSurface("cv-sections");
-  }, [openTemplateSurface]);
+  }, [closeForgePanel, openTemplateSurface, sectionsPanelOpen]);
 
   const handleOpenCvDesign = React.useCallback(() => {
+    if (cvDesignOpen) {
+      closeForgePanel();
+      return;
+    }
     openTemplateSurface("cv-design");
-  }, [openTemplateSurface]);
+  }, [closeForgePanel, cvDesignOpen, openTemplateSurface]);
 
   const handleSelectFontPair = React.useCallback(
     (fontPairId: VerbatiFontPairId) => {
