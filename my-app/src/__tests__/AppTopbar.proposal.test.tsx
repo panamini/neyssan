@@ -54,6 +54,9 @@ function renderProposalTopbar(
             lengthLabel: null,
             hasProposalContent: true,
             exporting: false,
+            onNewProposal: vi.fn(),
+            onDuplicateProposal: vi.fn(),
+            onDeleteProposal: vi.fn(),
             onCopyText: vi.fn(),
             onExportPdf: vi.fn(),
             onExportDocx: vi.fn(),
@@ -116,11 +119,11 @@ describe("AppTopbar Proposal document identity", () => {
   });
 
   it.each([
-    ["draft" as const, "Draft"],
-    ["saving" as const, "Saving"],
+    ["draft" as const, "Autosaved"],
+    ["saving" as const, "Saving…"],
     ["saved" as const, "Saved"],
-    ["generating" as const, "Generating"],
-    ["exporting" as const, "Exporting"],
+    ["generating" as const, "Saved"],
+    ["exporting" as const, "Saved"],
     ["error" as const, "Save error"],
   ])(
     "exposes %s as %s on the document state dot",
@@ -132,6 +135,43 @@ describe("AppTopbar Proposal document identity", () => {
       );
     },
   );
+
+  it("renders Proposal document actions in the global topbar", async () => {
+    const onNewProposal = vi.fn();
+    const onDuplicateProposal = vi.fn();
+    const onDeleteProposal = vi.fn();
+    renderProposalTopbar({
+      onNewProposal,
+      onDuplicateProposal,
+      onDeleteProposal,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Proposal actions" }));
+    const menu = await screen.findByRole("menu", { name: "Proposal actions" });
+
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "New proposal" }));
+    expect(onNewProposal).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Proposal actions" }));
+    const duplicateMenu = await screen.findByRole("menu", {
+      name: "Proposal actions",
+    });
+    fireEvent.click(
+      within(duplicateMenu).getByRole("menuitem", {
+        name: "Duplicate proposal",
+      }),
+    );
+    expect(onDuplicateProposal).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Proposal actions" }));
+    const deleteMenu = await screen.findByRole("menu", {
+      name: "Proposal actions",
+    });
+    fireEvent.click(
+      within(deleteMenu).getByRole("menuitem", { name: "Delete proposal" }),
+    );
+    expect(onDeleteProposal).toHaveBeenCalledTimes(1);
+  });
 
   it("falls back to the registered placeholder when the document title is empty", () => {
     renderProposalTopbar({ documentTitle: null });
@@ -176,7 +216,7 @@ describe("AppTopbar Proposal document identity", () => {
     fireEvent.click(screen.getByRole("button", { name: "Share proposal" }));
     const menu = await screen.findByRole("menu", { name: "Share proposal" });
     fireEvent.click(
-      within(menu).getByRole("menuitem", { name: "Share saved proposal" }),
+      within(menu).getByRole("menuitem", { name: "Share link" }),
     );
 
     expect(onShareSavedProposal).toHaveBeenCalledTimes(1);

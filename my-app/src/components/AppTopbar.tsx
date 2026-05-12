@@ -21,10 +21,13 @@ import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures"
 import { resolveCommandShortcutLabel } from "../lib/app-topbar";
 import {
   ClipboardText,
+  DotsThree,
   FilePdf,
   FileText,
   MagnifyingGlass,
+  Plus,
   ShareFat,
+  TrashSimple,
   User,
 } from "../lib/icons";
 
@@ -67,9 +70,10 @@ function useTopbarDocumentTitle(): string | null {
       }
       return ids.size;
     })();
-    const savedProposalCount =
+    const proposalCount =
       (proposals ?? readStoredSavedProposalFixtures()).filter(
-        (proposal) => proposal.status === "saved",
+        (proposal) =>
+          proposal.status === "saved" || proposal.status === "draft",
       ).length;
 
     if (pathname === "/cv" || pathname === "/style") {
@@ -103,9 +107,9 @@ function useTopbarDocumentTitle(): string | null {
     }
 
     if (pathname === "/proposals") {
-      return savedProposalCount > 0
-        ? `All cover letters (${savedProposalCount})`
-        : "All cover letters";
+      return proposalCount > 0
+        ? `All proposals (${proposalCount})`
+        : "All proposals";
     }
 
     if (pathname === "/templates") {
@@ -154,7 +158,7 @@ function useBrowserTitle(topbarDocumentTitle: string | null): void {
     } else if (pathname === "/proposals") {
       pageTitle = topbarDocumentTitle
         ? `${topbarDocumentTitle} · two weeks`
-        : "All cover letters · two weeks";
+        : "All proposals · two weeks";
     } else if (pathname === "/documents") {
       pageTitle = "Projects · two weeks";
     } else if (pathname === "/templates") {
@@ -198,12 +202,10 @@ function resolvePageLabel(pathname: string): string {
 function resolveProposalStateLabel(
   state: string | null | undefined,
 ): string {
-  if (state === "exporting") return "Exporting";
-  if (state === "saving") return "Saving";
-  if (state === "saved") return "Saved";
-  if (state === "generating") return "Generating";
+  if (state === "saving") return "Saving…";
   if (state === "error") return "Save error";
-  return "Draft";
+  if (state === "draft") return "Autosaved";
+  return "Saved";
 }
 
 export function AppTopbar({
@@ -276,9 +278,13 @@ export function AppTopbar({
       cvTopbarRegistration.importIssueCount > 0 &&
       !cvTopbarRegistration.importReviewBannerVisible,
   );
-  const cvDocumentTitleMain = topbarDocumentTitle?.trim() || "Active CV";
-  const cvDocumentTitleSuffix = "profile source";
-  const cvDocumentIdentityLabel = `${cvDocumentTitleMain} ${cvDocumentTitleSuffix}`;
+  const cvDocumentTitleMain =
+    cvTopbarRegistration?.documentTitle?.trim() ||
+    topbarDocumentTitle?.trim() ||
+    "Untitled CV";
+  const cvDocumentTitlePlaceholder =
+    cvTopbarRegistration?.titlePlaceholder?.trim() || "Untitled CV";
+  const cvDocumentIdentityLabel = cvDocumentTitleMain;
   const proposalDocumentTitleMain =
     proposalTopbarRegistration?.documentTitle?.trim() ||
     topbarDocumentTitle?.trim() ||
@@ -330,15 +336,19 @@ export function AppTopbar({
               />
               <FileText size={15} strokeWidth={1.8} aria-hidden="true" />
             </span>
-            <span className="app-topbar__doc-title" aria-hidden="true">
-              <span className="app-topbar__doc-title-main">
-                {cvDocumentTitleMain}
-              </span>
-              <span className="app-topbar__doc-title-suffix">
-                {" "}
-                {cvDocumentTitleSuffix}
-              </span>
-            </span>
+            <DocumentTitleEditor
+              className="app-topbar__doc-title"
+              documentTitle={cvDocumentTitleMain}
+              titlePlaceholder={cvDocumentTitlePlaceholder}
+              ariaLabel="CV title"
+              onTitleCommit={(nextTitle) => {
+                cvTopbarRegistration?.onTitleCommit?.(nextTitle);
+              }}
+              disabled={
+                !cvTopbarRegistration?.hasCurrentCv ||
+                !cvTopbarRegistration.onTitleCommit
+              }
+            />
             {cvPageCountLabel ? (
               <span className="app-topbar__doc-meta">
                 {cvPageCountLabel}
@@ -454,65 +464,108 @@ export function AppTopbar({
           </>
         ) : null}
         {location.pathname === "/proposal" && proposalTopbarRegistration ? (
-          <Menu
-            ariaLabel="Share proposal"
-            align="end"
-            sections={[
-              {
-                items: [
-                  {
-                    id: "copy-text",
-                    label: "Copy text",
-                    icon: <ClipboardText size={15} strokeWidth={1.8} />,
-                    disabled: !proposalTopbarRegistration.hasProposalContent,
-                    onSelect: proposalTopbarRegistration.onCopyText,
-                  },
-                  {
-                    id: "download-pdf",
-                    label: "Download PDF",
-                    icon: <FilePdf size={15} strokeWidth={1.8} />,
-                    disabled:
-                      !proposalTopbarRegistration.hasProposalContent ||
-                      proposalTopbarRegistration.exporting,
-                    onSelect: () => proposalTopbarRegistration.onExportPdf("styled"),
-                  },
-                  {
-                    id: "download-docx",
-                    label: "Download DOCX",
-                    icon: <FileText size={15} strokeWidth={1.8} />,
-                    disabled:
-                      !proposalTopbarRegistration.hasProposalContent ||
-                      proposalTopbarRegistration.exporting,
-                    onSelect: proposalTopbarRegistration.onExportDocx,
-                  },
-                  ...(proposalTopbarRegistration.savedShareAvailable &&
-                  proposalTopbarRegistration.onShareSavedProposal
-                    ? [
-                        {
-                          id: "share-saved-proposal",
-                          label: "Share saved proposal",
-                          icon: <ShareFat size={15} strokeWidth={1.8} />,
-                          disabled: !proposalTopbarRegistration.hasProposalContent,
-                          onSelect:
-                            proposalTopbarRegistration.onShareSavedProposal,
-                        },
-                      ]
-                    : []),
-                ],
-              },
-            ]}
-            trigger={
-              <button
-                type="button"
-                className="dasti-icon-button app-topbar__share"
-                aria-label="Share proposal"
-                data-toolbar-tooltip="Share"
-              >
-                <ShareFat size={15} strokeWidth={1.8} aria-hidden="true" />
-                <span className="app-topbar__share-label">Share</span>
-              </button>
-            }
-          />
+          <>
+            <Menu
+              ariaLabel="Proposal actions"
+              align="end"
+              sections={[
+                {
+                  items: [
+                    {
+                      id: "new-proposal",
+                      label: "New proposal",
+                      icon: <Plus size={15} strokeWidth={1.8} />,
+                      onSelect: proposalTopbarRegistration.onNewProposal,
+                    },
+                    {
+                      id: "duplicate-proposal",
+                      label: "Duplicate proposal",
+                      icon: <ClipboardText size={15} strokeWidth={1.8} />,
+                      disabled: !proposalTopbarRegistration.hasProposalContent,
+                      onSelect: proposalTopbarRegistration.onDuplicateProposal,
+                    },
+                    {
+                      id: "delete-proposal",
+                      label: "Delete proposal",
+                      icon: <TrashSimple size={15} strokeWidth={1.8} />,
+                      tone: "danger",
+                      disabled: !proposalTopbarRegistration.hasProposalContent,
+                      onSelect: proposalTopbarRegistration.onDeleteProposal,
+                    },
+                  ],
+                },
+              ]}
+              trigger={
+                <button
+                  type="button"
+                  className="dasti-icon-button app-topbar__share"
+                  aria-label="Proposal actions"
+                  data-toolbar-tooltip="Proposal actions"
+                >
+                  <DotsThree size={16} strokeWidth={1.8} aria-hidden="true" />
+                </button>
+              }
+            />
+            <Menu
+              ariaLabel="Share proposal"
+              align="end"
+              sections={[
+                {
+                  items: [
+                    {
+                      id: "copy-text",
+                      label: "Copy text",
+                      icon: <ClipboardText size={15} strokeWidth={1.8} />,
+                      disabled: !proposalTopbarRegistration.hasProposalContent,
+                      onSelect: proposalTopbarRegistration.onCopyText,
+                    },
+                    {
+                      id: "download-pdf",
+                      label: "Download PDF",
+                      icon: <FilePdf size={15} strokeWidth={1.8} />,
+                      disabled:
+                        !proposalTopbarRegistration.hasProposalContent ||
+                        proposalTopbarRegistration.exporting,
+                      onSelect: () => proposalTopbarRegistration.onExportPdf("styled"),
+                    },
+                    {
+                      id: "download-docx",
+                      label: "Download DOCX",
+                      icon: <FileText size={15} strokeWidth={1.8} />,
+                      disabled:
+                        !proposalTopbarRegistration.hasProposalContent ||
+                        proposalTopbarRegistration.exporting,
+                      onSelect: proposalTopbarRegistration.onExportDocx,
+                    },
+                    ...(proposalTopbarRegistration.savedShareAvailable &&
+                    proposalTopbarRegistration.onShareSavedProposal
+                      ? [
+                          {
+                            id: "share-link",
+                            label: "Share link",
+                            icon: <ShareFat size={15} strokeWidth={1.8} />,
+                            disabled: !proposalTopbarRegistration.hasProposalContent,
+                            onSelect:
+                              proposalTopbarRegistration.onShareSavedProposal,
+                          },
+                        ]
+                      : []),
+                  ],
+                },
+              ]}
+              trigger={
+                <button
+                  type="button"
+                  className="dasti-icon-button app-topbar__share"
+                  aria-label="Share proposal"
+                  data-toolbar-tooltip="Share"
+                >
+                  <ShareFat size={15} strokeWidth={1.8} aria-hidden="true" />
+                  <span className="app-topbar__share-label">Share</span>
+                </button>
+              }
+            />
+          </>
         ) : null}
         <IconButton
           label={
