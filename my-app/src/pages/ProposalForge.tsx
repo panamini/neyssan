@@ -2602,6 +2602,10 @@ export function ProposalForge(): JSX.Element {
     React.useState<ProposalHeaderVisibility>(initialProposalHeaderVisibility);
   const [proposalDocumentTitle, setProposalDocumentTitle] =
     React.useState<string>(storedOutputDraft?.proposalDocumentTitle ?? "");
+  const [proposalDocumentTitleManual, setProposalDocumentTitleManual] =
+    React.useState<boolean>(
+      storedOutputDraft?.proposalDocumentTitleManual === true,
+    );
   const [proposalDocumentMeta, setProposalDocumentMeta] =
     React.useState<string>(storedOutputDraft?.proposalDocumentMeta ?? "");
   const [fallbackInfo, setFallbackInfo] =
@@ -2880,6 +2884,7 @@ export function ProposalForge(): JSX.Element {
   const handleProposalDocumentTitleChange = React.useCallback(
     (value: string) => {
       markHeadingFieldDirty("subject");
+      setProposalDocumentTitleManual(true);
       setProposalDocumentTitle(value);
     },
     [markHeadingFieldDirty],
@@ -3526,6 +3531,7 @@ export function ProposalForge(): JSX.Element {
     setProposalType(null);
     setProposalVoicePreset(null);
     setProposalDocumentTitle("");
+    setProposalDocumentTitleManual(false);
     setProposalDocumentMeta("");
     setGeneratedProposalId(null);
     generatedProposalIdRef.current = null;
@@ -5687,6 +5693,7 @@ export function ProposalForge(): JSX.Element {
         buildProposalHeaderVisibilityFromContent(null),
       );
       setProposalDocumentTitle("");
+      setProposalDocumentTitleManual(false);
       setProposalDocumentMeta("");
       setFallbackInfo(null);
       setGeneratedProposalId(null);
@@ -6271,6 +6278,7 @@ export function ProposalForge(): JSX.Element {
       setProposalRecipientDetails(nextRecipientDetails);
       setProposalHeaderVisibility(nextHeaderVisibility);
       setProposalDocumentTitle(openedSavedProposal.title || "Saved proposal");
+      setProposalDocumentTitleManual(true);
       setProposalDocumentMeta(nextDocumentMeta);
       setGeneratedProposalId(openedSavedProposal._id as Id<"proposals">);
       generatedProposalIdRef.current =
@@ -6359,6 +6367,7 @@ export function ProposalForge(): JSX.Element {
       draftProposal.metadata?.styleLinkMode,
     );
     const nextTitle = draftProposal.title || "Draft proposal";
+    const nextTitleManual = Boolean(draftProposal.title?.trim());
     const nextMeta = nextType ? formatProposalTypeLabel(nextType) : "Draft";
     const nextGeneratedId = draftProposal._id as Id<"proposals">;
     const nextApplicantName =
@@ -6442,6 +6451,7 @@ export function ProposalForge(): JSX.Element {
     setProposalRecipientDetails(nextRecipientDetails);
     setProposalHeaderVisibility(nextHeaderVisibility);
     setProposalDocumentTitle(nextTitle);
+    setProposalDocumentTitleManual(nextTitleManual);
     setProposalDocumentMeta(nextMeta);
     setGeneratedProposalId(nextGeneratedId);
     generatedProposalIdRef.current = nextGeneratedId;
@@ -6497,7 +6507,7 @@ export function ProposalForge(): JSX.Element {
         nextStylePreset?.layout === "modernist"
           ? nextStylePreset.layout
           : null,
-      proposalDocumentTitleManual: false,
+      proposalDocumentTitleManual: nextTitleManual,
       proposalClosing: resolveProposalClosingRef({
         closing: draftProposal.metadata?.closing,
         content: nextContent,
@@ -7147,6 +7157,8 @@ export function ProposalForge(): JSX.Element {
         previousAuto: lastAutoDocumentTitleRef.current,
         nextAuto: nextDocumentTitle,
       });
+      const nextDocumentTitleManual =
+        nextResolvedDocumentTitle.trim() !== nextDocumentTitle.trim();
       setDuplicateSourceJobId(null);
       setLastProposalRequest(values);
       setLoading(true);
@@ -7176,6 +7188,7 @@ export function ProposalForge(): JSX.Element {
         }),
       );
       setProposalDocumentTitle(nextResolvedDocumentTitle);
+      setProposalDocumentTitleManual(nextDocumentTitleManual);
       setProposalDocumentMeta(applicantHeader.email ?? "");
       setProposalContent(null);
       setGeneratedProposalId(null);
@@ -7272,6 +7285,8 @@ export function ProposalForge(): JSX.Element {
         previousAuto: lastAutoDocumentTitleRef.current,
         nextAuto: nextDocumentTitle,
       });
+      const nextDocumentTitleManual =
+        nextResolvedDocumentTitle.trim() !== nextDocumentTitle.trim();
       const previousAutoSalutation =
         lastAutoLetterHeaderRef.current.salutation.trim();
       const manualSalutation = proposalSalutationValueRef.current.trim();
@@ -7328,8 +7343,7 @@ export function ProposalForge(): JSX.Element {
           effectiveProposalStylePresetWithPalette.layout === "modernist"
             ? effectiveProposalStylePresetWithPalette.layout
             : null,
-        proposalDocumentTitleManual:
-          nextResolvedDocumentTitle !== nextDocumentTitle,
+        proposalDocumentTitleManual: nextDocumentTitleManual,
         proposalClosing: resolveProposalClosingRef({
           content: proposalContentWithManualHeading,
           proposalType: values.proposalType,
@@ -7353,6 +7367,7 @@ export function ProposalForge(): JSX.Element {
           getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
       );
       setProposalDocumentTitle(nextResolvedDocumentTitle);
+      setProposalDocumentTitleManual(nextDocumentTitleManual);
       setProposalDocumentMeta(nextDocumentMeta);
       setProposalContent(proposalContentWithManualHeading);
       setGeneratedProposalId(nextProposalId ?? null);
@@ -7484,6 +7499,8 @@ export function ProposalForge(): JSX.Element {
         previousAuto: lastAutoDocumentTitleRef.current,
         nextAuto: nextDocumentTitle,
       });
+      const nextDocumentTitleManual =
+        nextResolvedDocumentTitle.trim() !== nextDocumentTitle.trim();
       setLastProposalRequest(values);
       setLoading(false);
       setProposalType(values.proposalType);
@@ -7516,6 +7533,7 @@ export function ProposalForge(): JSX.Element {
           getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
       );
       setProposalDocumentTitle(nextResolvedDocumentTitle);
+      setProposalDocumentTitleManual(nextDocumentTitleManual);
       setProposalDocumentMeta(applicantHeader.email ?? "");
       setProposalContent(null);
       setGeneratedProposalId(null);
@@ -7866,7 +7884,7 @@ export function ProposalForge(): JSX.Element {
         effectiveProposalStylePresetWithPalette.layout === "modernist"
           ? effectiveProposalStylePresetWithPalette.layout
           : null,
-      proposalDocumentTitleManual: false,
+      proposalDocumentTitleManual,
       proposalClosing: resolveProposalClosingRef({
         closing: storedOutputProposalClosing,
         content: proposalContent,
@@ -7890,6 +7908,7 @@ export function ProposalForge(): JSX.Element {
     proposalRecipientDetails,
     proposalDocumentMeta,
     proposalDocumentTitle,
+    proposalDocumentTitleManual,
     proposalOutputMode,
     proposalStyleChoice,
     effectiveProposalStylePresetWithPalette,
@@ -8430,6 +8449,7 @@ export function ProposalForge(): JSX.Element {
       setProposalRecipientDetails(restoredRecipientDetails);
       setProposalHeaderVisibility(restoredHeaderVisibility);
       setProposalDocumentTitle(savedProposalDocumentTitle);
+      setProposalDocumentTitleManual(Boolean(savedProposalDocumentTitle.trim()));
       setProposalDocumentMeta(savedProposalDocumentMeta);
       setDuplicateSourceJobId(restoredJobId);
       setGeneratedProposalId(duplicatedDraftId);
@@ -8576,6 +8596,7 @@ export function ProposalForge(): JSX.Element {
         buildProposalHeaderVisibilityFromContent(null),
       );
       setProposalDocumentTitle("");
+      setProposalDocumentTitleManual(false);
       setProposalDocumentMeta("");
       setGeneratedProposalId(null);
       setProposalOutputMode("preview");
@@ -8708,6 +8729,7 @@ export function ProposalForge(): JSX.Element {
         }
 
         setProposalDocumentTitle(normalizedTitle);
+        setProposalDocumentTitleManual(Boolean(requestedTitle.trim()));
         setProposalLibraryStatus("saved");
         lastSavedProposalContentRef.current = trimmed;
         lastSavedProposalTitleRef.current = normalizedTitle;
@@ -9749,9 +9771,78 @@ export function ProposalForge(): JSX.Element {
     proposalExportingFormat,
     proposalLibraryStatus,
   ]);
+  const proposalGeneratedDocumentTitle = React.useMemo(
+    () =>
+      buildProfessionalApplicationSubject({
+        jobTitle: composePreviewValues?.jobTitle ?? "",
+        jobDescription: composePreviewValues?.jobDescription ?? "",
+        proposalType,
+      }),
+    [
+      composePreviewValues?.jobDescription,
+      composePreviewValues?.jobTitle,
+      proposalType,
+    ],
+  );
+  const proposalTopbarDocumentTitle =
+    proposalDocumentTitle.trim() ||
+    proposalGeneratedDocumentTitle.trim() ||
+    "Untitled proposal";
+  const handleProposalTopbarTitleCommit = React.useCallback(
+    async (nextTitle: string) => {
+      const requestedTitle = nextTitle.trim();
+      const fallbackTitle =
+        proposalGeneratedDocumentTitle.trim() || "Untitled proposal";
+      const normalizedTitle = requestedTitle || fallbackTitle;
+      const nextManual = Boolean(requestedTitle);
+
+      headingDirtyRef.current.subject = nextManual;
+      setProposalDocumentTitle(normalizedTitle);
+      setProposalDocumentTitleManual(nextManual);
+
+      if (isSavedView) {
+        setSavedProposalDocumentTitle(normalizedTitle);
+        if (!openedSavedProposal) return;
+        try {
+          await persistOpenedSavedProposal({ title: normalizedTitle });
+          lastSavedProposalTitleRef.current = normalizedTitle;
+        } catch (saveError) {
+          console.error("Failed to persist proposal title:", saveError);
+          showToast("Save failed.", {
+            variant: "error",
+            description: "The proposal title could not be updated.",
+          });
+        }
+        return;
+      }
+
+      try {
+        const persistedId = await flushScheduledProposalSave(normalizedTitle);
+        if (persistedId) {
+          lastSavedProposalTitleRef.current = normalizedTitle;
+        }
+      } catch (saveError) {
+        console.error("Failed to persist proposal title:", saveError);
+        showToast("Save failed.", {
+          variant: "error",
+          description: "The proposal title changed locally but could not be saved.",
+        });
+      }
+    },
+    [
+      flushScheduledProposalSave,
+      isSavedView,
+      openedSavedProposal,
+      persistOpenedSavedProposal,
+      proposalGeneratedDocumentTitle,
+      showToast,
+    ],
+  );
   const proposalTopbarRegistration = React.useMemo(
     () => ({
-      title: proposalDocumentTitle.trim() || null,
+      documentTitle: proposalTopbarDocumentTitle,
+      titlePlaceholder: proposalGeneratedDocumentTitle || "Untitled proposal",
+      onTitleCommit: handleProposalTopbarTitleCommit,
       documentState: proposalTopbarDocumentState,
       lengthLabel: proposalTopbarLengthLabel,
       hasProposalContent: isSavedView
@@ -9785,9 +9876,11 @@ export function ProposalForge(): JSX.Element {
       handleCopyOutput,
       handleExportProposalFile,
       handleShareSavedProposal,
+      handleProposalTopbarTitleCommit,
       isSavedView,
       openedSavedProposal,
-      proposalDocumentTitle,
+      proposalGeneratedDocumentTitle,
+      proposalTopbarDocumentTitle,
       proposalContent,
       proposalExportingFormat,
       proposalTopbarDocumentState,
@@ -10691,19 +10784,11 @@ export function ProposalForge(): JSX.Element {
                         sourceCvMeta={
                           attachedCvId ? "Attached to this draft" : null
                         }
-                        draftTitle={proposalDocumentTitle}
-                        draftTitlePlaceholder={buildProfessionalApplicationSubject(
-                          {
-                            jobTitle: composePreviewValues?.jobTitle ?? "",
-                            jobDescription:
-                              composePreviewValues?.jobDescription ?? "",
-                            proposalType,
-                          },
-                        )}
-                        onDraftTitleChange={setProposalDocumentTitle}
-                        onDraftTitleCommit={() => {
-                          void handleProposalDocumentCommit();
-                        }}
+                        proposalTypeLabel={
+                          proposalType
+                            ? formatProposalTypeLabel(proposalType)
+                            : "Letter"
+                        }
                         toneLabel={proposalRailToneLabel}
                         toneOptions={proposalRailToneOptions}
                         onSelectTone={(toneId) => {

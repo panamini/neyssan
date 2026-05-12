@@ -23,10 +23,7 @@ const baseProps = {
   jobMatch: null,
   sourceCvTitle: null,
   sourceCvMeta: null,
-  draftTitle: "Application draft",
-  draftTitlePlaceholder: "Application draft",
-  onDraftTitleChange: vi.fn(),
-  onDraftTitleCommit: vi.fn(),
+  proposalTypeLabel: "Letter",
   toneLabel: "Auto",
   toneOptions: [
     {
