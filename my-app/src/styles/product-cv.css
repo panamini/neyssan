@@ -328,6 +328,8 @@
 }
 
 .dasti-cv-stage-bar {
+  --editor-toolbar-control-block-size: 36px;
+  --editor-toolbar-icon-control-block-size: 34px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -350,8 +352,14 @@
 
 .dasti-cv-stage-bar > .ds-tone {
   flex: 0 1 auto;
+  height: 28px;
   min-width: 0;
   max-width: 120px;
+  padding-inline: var(--space-2);
+  border-color: color-mix(in srgb, currentColor 14%, transparent);
+  background: color-mix(in srgb, var(--sf1) 72%, transparent);
+  box-shadow: none;
+  font-size: var(--tx);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -371,7 +379,7 @@
 }
 
 .dasti-cv-stage-bar__mode {
-  height: var(--hs);
+  height: var(--editor-toolbar-icon-control-block-size);
   flex-shrink: 0;
 }
 
@@ -386,14 +394,14 @@
 
 .dasti-cv-stage-bar .style-segmented {
   display: inline-grid;
-  grid-template-columns: repeat(2, 28px);
+  grid-template-columns: repeat(2, 30px);
   gap: 2px;
   align-items: center;
   justify-items: stretch;
   padding: 2px;
-  border: 1px solid var(--border-soft);
+  border: 1px solid color-mix(in srgb, var(--color-border) 40%, transparent);
   border-radius: var(--radius-toolbar-control, var(--radius-control));
-  background: var(--sf1);
+  background: color-mix(in srgb, var(--sf1) 62%, transparent);
 }
 
 .dasti-cv-stage-bar .style-segmented button {
@@ -423,9 +431,9 @@
 }
 
 .dasti-cv-stage-bar .style-segmented button[data-selected="true"] {
-  background: var(--color-surface-raised);
+  background: var(--proposal-chrome-control-active-bg);
   color: var(--ti);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .dasti-cv-stage-bar__version-history {
@@ -434,12 +442,36 @@
 
 .dasti-cv-stage-bar__primary-action {
   flex: 0 1 auto;
+  height: var(--editor-toolbar-control-block-size);
+  min-height: var(--editor-toolbar-control-block-size);
   min-width: 0;
+  padding-inline: 11px;
   gap: var(--proposal-chrome-tight-gap, var(--space-1));
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--tm2);
+  box-shadow: none;
+  font-size: var(--tx);
+  transform: none;
 }
 
 .dasti-cv-stage-bar__primary-action[data-stage-tooltip-mode="compact"]::after {
   display: none;
+}
+
+.dasti-cv-stage-bar__primary-action:hover:not(:disabled),
+.dasti-cv-stage-bar__primary-action:focus-visible,
+.dasti-cv-stage-bar__primary-action[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--color-border) 44%, transparent);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+  box-shadow: none;
+  transform: none;
+}
+
+.dasti-cv-stage-bar__primary-action[aria-expanded="true"] {
+  background: var(--proposal-chrome-control-active-bg);
 }
 
 .dasti-cv-stage-bar__action-label {
@@ -449,9 +481,9 @@
 }
 
 .dasti-cv-stage-bar__plain-action {
-  width: var(--hs);
-  height: var(--hs);
-  min-width: var(--hs);
+  width: var(--editor-toolbar-icon-control-block-size);
+  height: var(--editor-toolbar-icon-control-block-size);
+  min-width: var(--editor-toolbar-icon-control-block-size);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1862,15 +1894,15 @@ span.dasti-cv-ats {
   white-space: pre-wrap;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 640px) {
   .dasti-cv-stage-bar__spacer {
     min-width: 0;
   }
 
   .dasti-cv-stage-bar__primary-action {
-    width: 28px;
-    min-width: 28px;
-    max-width: 28px;
+    width: var(--editor-toolbar-icon-control-block-size);
+    min-width: var(--editor-toolbar-icon-control-block-size);
+    max-width: var(--editor-toolbar-icon-control-block-size);
     padding-inline: 0;
   }
 

@@ -164,7 +164,6 @@ export function ProposalDocumentStage({
               </span>
             </Button>
           ) : null}
-          <ToneBadge tone={toneValue}>{toneLabel}</ToneBadge>
           {onDeleteDraft || onSaveToLibrary ? (
             <>
               <span className="dasti-icon-cluster__divider" aria-hidden="true" />
@@ -198,6 +197,7 @@ export function ProposalDocumentStage({
           ) : null}
         </div>
         <span className="dasti-proposal-skeleton-stage__spacer" />
+        <ToneBadge tone={toneValue}>{toneLabel}</ToneBadge>
         {mode === "edit" ? (
           <div
             className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__right-actions"

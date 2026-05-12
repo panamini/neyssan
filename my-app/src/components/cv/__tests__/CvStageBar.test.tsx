@@ -67,6 +67,8 @@ describe("CvStageBar", () => {
         .compareDocumentPosition(screen.getByText("Natural")) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Redo" })).not.toBeInTheDocument();
     expect(screen.queryByText("Natural tone")).not.toBeInTheDocument();
     expect(screen.queryByText("Saved")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();

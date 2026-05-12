@@ -39,6 +39,15 @@ function normalizeTitle(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function resolveAccountInitial(user: ReturnType<typeof useUser>["user"]): string {
+  const candidate =
+    user?.firstName?.trim() ||
+    user?.username?.trim() ||
+    user?.primaryEmailAddress?.emailAddress?.trim() ||
+    "";
+  return candidate.charAt(0).toUpperCase() || "U";
+}
+
 function useTopbarDocumentTitle(): string | null {
   const location = useLocation();
   const { currentCv, currentCvId, cvs } = useCvLibrary();
@@ -365,6 +374,7 @@ export function AppTopbar({
             </div>
             {cvTopbarRegistration ? (
               <>
+                <span className="dasti-toolbar__divider app-topbar__doc-divider" aria-hidden="true" />
                 <Menu
                   ariaLabel="Create CV"
                   align="start"
@@ -393,8 +403,9 @@ export function AppTopbar({
                       data-toolbar-tooltip="New"
                     >
                       <Plus size={13} strokeWidth={1.9} aria-hidden="true" />
-                      <span>New</span>
+                      <span className="app-topbar__doc-action-label">New</span>
                       <ChevronDown
+                        className="app-topbar__doc-action-caret"
                         size={13}
                         strokeWidth={2}
                         aria-hidden="true"
@@ -454,10 +465,17 @@ export function AppTopbar({
                       aria-label="Switch resume"
                       data-toolbar-tooltip="Switch resume"
                     >
+                      <FolderOpen
+                        className="app-topbar__doc-picker-icon"
+                        size={15}
+                        strokeWidth={1.8}
+                        aria-hidden="true"
+                      />
                       <span className="app-topbar__doc-picker-label">
                         Resume
                       </span>
                       <ChevronDown
+                        className="app-topbar__doc-picker-caret"
                         size={13}
                         strokeWidth={2}
                         aria-hidden="true"
@@ -554,6 +572,7 @@ export function AppTopbar({
             </div>
             {proposalTopbarRegistration ? (
               <>
+                <span className="dasti-toolbar__divider app-topbar__doc-divider" aria-hidden="true" />
                 <button
                   type="button"
                   className="app-topbar__doc-action app-topbar__doc-action--new app-topbar__doc-action--proposal-new"
@@ -561,7 +580,9 @@ export function AppTopbar({
                   onClick={proposalTopbarRegistration.onNewProposal}
                 >
                   <Plus size={13} strokeWidth={1.9} aria-hidden="true" />
-                  <span>New proposal</span>
+                  <span className="app-topbar__doc-action-label">
+                    New proposal
+                  </span>
                 </button>
                 <Menu
                   ariaLabel="Proposal actions"
@@ -627,6 +648,10 @@ export function AppTopbar({
           <span className="app-topbar__cmdk-label">Search or run command</span>
           <span className="app-topbar__kbd">{shortcutLabel}</span>
         </button>
+        <span
+          className="dasti-toolbar__divider app-topbar__toolbar-divider app-topbar__toolbar-divider--actions"
+          aria-hidden="true"
+        />
         {location.pathname === "/cv" && cvTopbarRegistration ? (
           <>
             {shouldShowImportReviewChip ? (
@@ -672,6 +697,10 @@ export function AppTopbar({
               onOpenImportReview={cvTopbarRegistration.onOpenImportReview}
               onExportPdf={cvTopbarRegistration.onExportPdf}
               onExportDocx={cvTopbarRegistration.onExportDocx}
+            />
+            <span
+              className="dasti-toolbar__divider app-topbar__toolbar-divider app-topbar__toolbar-divider--actions"
+              aria-hidden="true"
             />
           </>
         ) : null}
@@ -736,9 +765,14 @@ export function AppTopbar({
                 </button>
               }
             />
+            <span
+              className="dasti-toolbar__divider app-topbar__toolbar-divider app-topbar__toolbar-divider--actions"
+              aria-hidden="true"
+            />
           </>
         ) : null}
         <IconButton
+          className="app-topbar__account-button"
           label={
             !isAccountReady
               ? "Account loading"
@@ -749,7 +783,13 @@ export function AppTopbar({
           onClick={handleProfile}
           disabled={!isAccountReady}
         >
-          <User size={16} aria-hidden="true" />
+          {isSignedIn ? (
+            <span className="app-topbar__account-initial" aria-hidden="true">
+              {resolveAccountInitial(user)}
+            </span>
+          ) : (
+            <User size={16} aria-hidden="true" />
+          )}
         </IconButton>
         <span className="app-topbar__profile-name" aria-hidden="true">
           {!isAccountReady

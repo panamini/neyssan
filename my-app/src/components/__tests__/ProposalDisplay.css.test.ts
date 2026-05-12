@@ -40,6 +40,21 @@ describe("ProposalDisplay CSS contracts", () => {
     );
   });
 
+  it("keeps Proposal stage primary actions as subtle labeled toolbar controls", () => {
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*36px;[\s\S]*--editor-toolbar-icon-control-block-size:\s*34px;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage__primary-action\s*\{[\s\S]*height:\s*var\(--editor-toolbar-control-block-size\);[\s\S]*padding-inline:\s*11px;[\s\S]*border-color:\s*transparent;[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage__primary-action:hover:not\(:disabled\),[\s\S]*\.dasti-proposal-skeleton-stage__primary-action:focus-visible,[\s\S]*\.dasti-proposal-skeleton-stage__primary-action\[aria-expanded="true"\]\s*\{[\s\S]*background:\s*var\(--proposal-chrome-control-hover-bg\);[\s\S]*box-shadow:\s*none;[\s\S]*transform:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*560px\)\s*\{[\s\S]*\.dasti-proposal-skeleton-stage__primary-action\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*\.dasti-proposal-skeleton-stage__primary-action[\s\S]*\.dasti-proposal-skeleton-stage__action-label\s*\{[\s\S]*display:\s*none;/,
+    );
+  });
+
   it("keeps Proposal rail heading groups tight and gives recipient details a two-line field", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-rail__variable-group-title\s*\{[\s\S]*padding-bottom:\s*var\(--space-1\);/,
@@ -550,6 +565,26 @@ describe("ProposalDisplay CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-editor-page__drawer-card:last-child\s*\{[\s\S]*border-bottom:\s*0;/,
+    );
+  });
+
+  it("sizes Proposal preview zoom chrome from the paper instead of clipping inside the workspace shell", () => {
+    expectCssInOrder([
+      '.dasti-doc-viewer-shell__surface[data-preview-zoom-footer="true"] {',
+      "--proposal-document-frame-inline-size: calc(",
+      "var(--document-page-width",
+    ]);
+    expectCssInOrder([
+      ".dasti-proposal-output-shell--workspace .dasti-doc-viewer-shell__surface {",
+      '.dasti-proposal-output-shell--workspace\n  .dasti-doc-viewer-shell__surface[data-preview-zoom-footer="true"] {',
+      "--proposal-document-frame-inline-size: calc(",
+      "var(--document-page-width",
+    ]);
+    expect(productCss).toMatch(
+      /\.dasti-proposal-output-shell--workspace\s+\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s+\.dasti-proposal-sheet-frame\s*\{[\s\S]*width:\s*var\(--proposal-document-frame-inline-size\);[\s\S]*max-width:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-output-shell--workspace\s+\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s+\.dasti-proposal-sheet__body--document-viewer\s*\{[\s\S]*overflow:\s*visible;/,
     );
   });
 

@@ -157,6 +157,15 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-cv-stage-bar\s*\{[\s\S]*overflow:\s*visible;/,
     );
     expect(productCss).toMatch(
+      /\.dasti-cv-stage-bar\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*36px;[\s\S]*--editor-toolbar-icon-control-block-size:\s*34px;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-bar__primary-action\s*\{[\s\S]*height:\s*var\(--editor-toolbar-control-block-size\);[\s\S]*padding-inline:\s*11px;[\s\S]*border-color:\s*transparent;[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-bar__primary-action:hover:not\(:disabled\),[\s\S]*\.dasti-cv-stage-bar__primary-action:focus-visible,[\s\S]*\.dasti-cv-stage-bar__primary-action\[aria-expanded="true"\]\s*\{[\s\S]*background:\s*var\(--proposal-chrome-control-hover-bg\);[\s\S]*box-shadow:\s*none;[\s\S]*transform:\s*none;/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-cv-stage-bar__plain-action\s*\{[\s\S]*border:\s*1px\s+solid\s+transparent;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
     );
     expect(productCss).toMatch(
@@ -167,6 +176,9 @@ describe("CvForge toolbar CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /@media\s*\(max-width:\s*980px\)\s*\{[\s\S]*\.dasti-cv-skeleton-forge\s*\{[\s\S]*padding-inline:\s*var\(--space-3\);[\s\S]*\.dasti-cv-stage-bar\s*\{[\s\S]*gap:\s*var\(--space-1\);/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.dasti-cv-stage-bar__primary-action\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*\.dasti-cv-stage-bar__primary-action\s+\.dasti-cv-stage-bar__action-label\s*\{[\s\S]*display:\s*none;/,
     );
     expect(productCss).toMatch(
       /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-cv-skeleton-forge\s*\{[\s\S]*padding-inline:\s*var\(--space-2\);[\s\S]*\.dasti-cv-stage-bar\s*\{[\s\S]*padding:\s*calc\(var\(--space-1\) \+ 1px\);/,
