@@ -1,8 +1,6 @@
 import React from "react";
 import {
   ChevronDown,
-  PenLine,
-  Upload,
 } from "@/lib/icons";
 import { Button } from "../ui";
 import AiSuggestionCard from "../ai/AiSuggestionCard";
@@ -67,8 +65,6 @@ type CvRailProps = {
   onUndoAiSuggestion: () => void;
   onAcceptListAiSuggestion: (value: string) => void;
   onDismissListAiSuggestion: (value: string) => void;
-  onNewCv: () => void;
-  onImportPdf: () => void;
 };
 
 export type { CvAddSectionKind };
@@ -137,8 +133,6 @@ export function CvRail({
   onUndoAiSuggestion,
   onAcceptListAiSuggestion,
   onDismissListAiSuggestion,
-  onNewCv,
-  onImportPdf,
 }: CvRailProps): JSX.Element {
   const activeSection = getActiveSection(sections, activeSectionId);
   const [aiPrompt, setAiPrompt] = React.useState("");
@@ -415,29 +409,6 @@ export function CvRail({
           ) : null}
       </div>
 
-      <div className="dasti-cv-rail-footer">
-        <span className="dasti-cv-rail-footer__label">Create</span>
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          onClick={onNewCv}
-          disabled={isImporting}
-          iconLeft={<PenLine size={14} strokeWidth={1.8} />}
-        >
-          New CV
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={onImportPdf}
-          disabled={isImporting}
-          iconLeft={<Upload size={14} strokeWidth={1.8} />}
-        >
-          {isImporting ? "Importing PDF" : "Import PDF"}
-        </Button>
-      </div>
     </aside>
   );
 }

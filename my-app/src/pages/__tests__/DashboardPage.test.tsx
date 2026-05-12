@@ -303,6 +303,7 @@ describe("DashboardPage", () => {
     expect(within(recentSection).queryByText("Aurelien CV")).not.toBeInTheDocument();
     expect(within(recentSection).getAllByText("Senior Frontend Engineer").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".today-preview-card").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".today-preview-card__type").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".work-doc-preview").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".work-doc-preview--rendered").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".work-doc-preview--resume-rendered").length).toBeGreaterThan(0);

@@ -5,7 +5,7 @@ import { useForgeTemplatePanel } from "../contexts/ForgeTemplatePanelContext";
 import { TemplateDocumentPreview } from "../pages/TemplatesPage";
 import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../lib/document-stage";
 
-const TEMPLATE_THUMBNAIL_WIDTH_PX = 136;
+const TEMPLATE_THUMBNAIL_WIDTH_PX = 156;
 const TEMPLATE_THUMBNAIL_SCALE =
   TEMPLATE_THUMBNAIL_WIDTH_PX / A4_PAGE_WIDTH_PX;
 

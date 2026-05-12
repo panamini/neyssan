@@ -366,6 +366,43 @@ export function AppTopbar({
             {cvTopbarRegistration ? (
               <>
                 <Menu
+                  ariaLabel="Create CV"
+                  align="start"
+                  sections={[
+                    {
+                      items: [
+                        {
+                          id: "new-cv",
+                          label: "New CV",
+                          icon: <Plus size={15} strokeWidth={1.8} />,
+                          onSelect: cvTopbarRegistration.onNewCv,
+                        },
+                        {
+                          id: "import-pdf",
+                          label: "Import PDF",
+                          icon: <Upload size={15} strokeWidth={1.8} />,
+                          onSelect: cvTopbarRegistration.onImportCv,
+                        },
+                      ],
+                    },
+                  ]}
+                  trigger={
+                    <button
+                      type="button"
+                      className="app-topbar__doc-action app-topbar__doc-action--new"
+                      data-toolbar-tooltip="New"
+                    >
+                      <Plus size={13} strokeWidth={1.9} aria-hidden="true" />
+                      <span>New</span>
+                      <ChevronDown
+                        size={13}
+                        strokeWidth={2}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  }
+                />
+                <Menu
                   ariaLabel="Switch resume"
                   align="start"
                   menuClassName="app-topbar__doc-picker-menu"
@@ -425,38 +462,6 @@ export function AppTopbar({
                         strokeWidth={2}
                         aria-hidden="true"
                       />
-                    </button>
-                  }
-                />
-                <Menu
-                  ariaLabel="Create CV"
-                  align="start"
-                  sections={[
-                    {
-                      items: [
-                        {
-                          id: "new-cv",
-                          label: "New CV",
-                          icon: <Plus size={15} strokeWidth={1.8} />,
-                          onSelect: cvTopbarRegistration.onNewCv,
-                        },
-                        {
-                          id: "import-pdf",
-                          label: "Import PDF",
-                          icon: <Upload size={15} strokeWidth={1.8} />,
-                          onSelect: cvTopbarRegistration.onImportCv,
-                        },
-                      ],
-                    },
-                  ]}
-                  trigger={
-                    <button
-                      type="button"
-                      className="app-topbar__doc-action app-topbar__doc-action--create"
-                      aria-label="Create CV"
-                      data-toolbar-tooltip="Create CV"
-                    >
-                      <Plus size={14} strokeWidth={1.9} aria-hidden="true" />
                     </button>
                   }
                 />
@@ -551,12 +556,12 @@ export function AppTopbar({
               <>
                 <button
                   type="button"
-                  className="app-topbar__doc-action app-topbar__doc-action--create"
+                  className="app-topbar__doc-action app-topbar__doc-action--new app-topbar__doc-action--proposal-new"
                   aria-label="New proposal"
-                  data-toolbar-tooltip="New proposal"
                   onClick={proposalTopbarRegistration.onNewProposal}
                 >
-                  <Plus size={14} strokeWidth={1.9} aria-hidden="true" />
+                  <Plus size={13} strokeWidth={1.9} aria-hidden="true" />
+                  <span>New proposal</span>
                 </button>
                 <Menu
                   ariaLabel="Proposal actions"

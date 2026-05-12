@@ -2410,6 +2410,7 @@ span.dasti-cv-ats {
     var(--ti) 62%,
     var(--tm2) 38%
   );
+  --cv-zoom-slider-thumb-size: 13px;
   appearance: none;
   flex: 0 1 156px;
   inline-size: clamp(112px, 14vw, 156px);
@@ -2436,9 +2437,9 @@ span.dasti-cv-ats {
 .dasti-cv-stage-footer__zoom-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  inline-size: 12px;
-  block-size: 12px;
-  margin-block-start: -4.5px;
+  inline-size: var(--cv-zoom-slider-thumb-size);
+  block-size: var(--cv-zoom-slider-thumb-size);
+  margin-block-start: calc((var(--cv-zoom-slider-thumb-size) - 3px) / -2);
   border: 1px solid color-mix(in srgb, var(--tm2) 24%, transparent);
   border-radius: 50%;
   background: var(--sfr);
@@ -2452,8 +2453,8 @@ span.dasti-cv-ats {
 }
 
 .dasti-cv-stage-footer__zoom-slider::-moz-range-thumb {
-  inline-size: 12px;
-  block-size: 12px;
+  inline-size: var(--cv-zoom-slider-thumb-size);
+  block-size: var(--cv-zoom-slider-thumb-size);
   border: 1px solid color-mix(in srgb, var(--tm2) 24%, transparent);
   border-radius: 50%;
   background: var(--sfr);

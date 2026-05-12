@@ -527,14 +527,17 @@ function WorkPreviewCard({
         />
       </div>
       <button type="button" className="today-preview-card__surface" onClick={onOpen}>
-        <WorkDocumentPreview item={item} scale={variant === "compact" ? "small" : "default"} />
+        <span className="today-preview-card__preview-shell">
+          <WorkDocumentPreview item={item} scale={variant === "compact" ? "small" : "default"} />
+          <span className="ds-card__eyebrow dasti-library-card__eyebrow today-preview-card__type">
+            {label}
+          </span>
+        </span>
         <span className="today-preview-card__meta">
-          <span className="ds-card__eyebrow">{label}</span>
           <strong>{item.title}</strong>
-          <small>{itemContextLabel(item)}</small>
           <span className="today-preview-card__bottom">
+            <span>{itemContextLabel(item)}</span>
             <span>{formatUpdatedLabel(item.updatedAt)}</span>
-            <span>{itemActionLabel(item)}</span>
           </span>
         </span>
       </button>
