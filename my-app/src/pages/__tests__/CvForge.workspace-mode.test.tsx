@@ -1944,7 +1944,7 @@ describe("CvForge workspace mode", () => {
     setItemSpy.mockRestore();
   });
 
-  it("renders the PR4 skeleton stage, left Sections panel entry, and Ask/Style rail tabs", async () => {
+  it("renders the PR4 skeleton stage, left Sections and Design panel entries, and Ask rail", async () => {
     const user = userEvent.setup();
 
     const { container } = render(
@@ -1956,7 +1956,6 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByRole("complementary", { name: "CV forge rail" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Import CV" }),
     ).not.toBeInTheDocument();
@@ -1968,18 +1967,18 @@ describe("CvForge workspace mode", () => {
       "aria-expanded",
       "false",
     );
+    expect(screen.getByRole("button", { name: "Design" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
     expect(
       screen.queryByRole("tab", { name: "Sections" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Ask" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(screen.queryByRole("tab", { name: "Ask" })).not.toBeInTheDocument();
+    expect(screen.getByText("Ask", { selector: ".dasti-cv-rail-heading" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Structuring sections/i }),
     ).toBeNull();
-
-    await user.click(screen.getByRole("tab", { name: "Ask" }));
 
     expect(
       screen.getByText("Profile fields use direct field editing."),
@@ -1990,14 +1989,19 @@ describe("CvForge workspace mode", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/whole CV/i)).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Style" }));
+    await user.click(screen.getByRole("button", { name: "Design" }));
 
-    expect(container.querySelector(".dasti-cv-style-note")).toHaveTextContent(
-      /^Default settings → Document style\.$/,
+    const designPanel = screen.getByRole("complementary", {
+      name: "CV design",
+    });
+    expect(designPanel).toBeInTheDocument();
+    expect(designPanel.querySelector(".dasti-cv-style-note")).toHaveTextContent(
+      /^Default settings Document style\.$/,
     );
     expect(
-      screen.getByRole("link", { name: "→ Document style" }),
+      within(designPanel).getByRole("link", { name: "Document style" }),
     ).toHaveAttribute("href", "/settings?tab=docstyle");
+    expect(container.querySelector(".dasti-cv-rail [data-rail-pane='style']")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Sections" }));
 
@@ -4366,7 +4370,7 @@ describe("CvForge workspace mode", () => {
       screen.getByText("Preview style: swiss|quiet-editorial|sauge|none"),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Style" }));
+    await user.click(screen.getByRole("button", { name: "Design" }));
 
     expect(screen.getByRole("button", { name: /^Style 1/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Style 2/ })).toBeInTheDocument();
@@ -4405,7 +4409,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("tab", { name: "Style" }));
+    await user.click(screen.getByRole("button", { name: "Design" }));
     await user.click(screen.getByRole("button", { name: "Style 2" }));
 
     await waitFor(() =>
@@ -4463,10 +4467,10 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByRole("tab", { name: "Style" }));
+    await userEvent.click(screen.getByRole("button", { name: "Design" }));
 
     expect(
-      screen.getByRole("button", { name: "Style 2 · Custom" }),
+      screen.getByRole("button", { name: "Style 2 - Custom" }),
     ).toHaveAttribute("aria-pressed", "true");
 
     await userEvent.click(screen.getByRole("button", { name: "Reset Style 2" }));
@@ -4526,10 +4530,10 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByRole("tab", { name: "Style" }));
+    await userEvent.click(screen.getByRole("button", { name: "Design" }));
 
     expect(
-      screen.getByRole("button", { name: "Style 2 · Custom" }),
+      screen.getByRole("button", { name: "Style 2 - Custom" }),
     ).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -4546,7 +4550,7 @@ describe("CvForge workspace mode", () => {
       screen.getByText("Preview style: swiss|quiet-editorial|sauge|none"),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Style" }));
+    await user.click(screen.getByRole("button", { name: "Design" }));
     await user.click(screen.getByRole("button", { name: "Style 2" }));
 
     await waitFor(() =>

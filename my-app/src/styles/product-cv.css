@@ -774,6 +774,13 @@ span.dasti-cv-ats {
   box-shadow: var(--shadow-sm);
 }
 
+.dasti-cv-rail-heading {
+  color: var(--ti);
+  font-size: var(--ts);
+  line-height: var(--ls);
+  font-weight: 750;
+}
+
 .dasti-cv-ai-stream {
   min-height: 34px;
   display: grid;

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ForgeTemplatePanel } from "../ForgeTemplatePanel";
+import CvDesignFields from "../cv/CvDesignFields";
 import CvStageBar from "../cv/CvStageBar";
 import ProposalDesignFields from "../proposal/ProposalDesignFields";
 import ProposalDocumentStage from "../proposal/ProposalDocumentStage";
@@ -56,18 +57,54 @@ function CvTemplateEntryPoint({
   return (
     <>
       <RegisterTemplates surface="cv" onSelect={onSelect} />
+      <RegisterCvDesign />
       <CvStageBar
         mode="edit"
         exporting={false}
         tone="natural"
         resumeOptions={[]}
         templatesOpen={open && activeSurface === "cv"}
+        designOpen={open && activeSurface === "cv-design"}
         onModeChange={vi.fn()}
+        onOpenDesign={() => openSurface("cv-design")}
         onOpenTemplates={() => openSurface("cv")}
         onPickResume={vi.fn()}
       />
     </>
   );
+}
+
+function RegisterCvDesign(): null {
+  useRegisterForgePanel(
+    React.useMemo(() => {
+      const stylePreset = {
+        layout: "workshop" as const,
+        typography: "geist-baskervville" as const,
+        palette: "terre" as const,
+        resumeTemplateId: "workshop_resume_onecol_ats" as const,
+      };
+
+      return {
+        surface: "cv-design" as const,
+        title: "Design",
+        ariaLabel: "CV design",
+        renderContent: () => (
+          <CvDesignFields
+            stylePreset={stylePreset}
+            selectedStyleSlot={1}
+            selectedStyleSlotIsCustom={false}
+            onSelectStyleSlot={vi.fn()}
+            onResetStyleSlot={vi.fn()}
+            onSelectTemplate={vi.fn()}
+            onSelectFontPair={vi.fn()}
+            onSelectAccent={vi.fn()}
+            onSelectCustomAccent={vi.fn()}
+          />
+        ),
+      };
+    }, []),
+  );
+  return null;
 }
 
 function ProposalTemplateEntryPoint({
@@ -202,6 +239,23 @@ describe("forge template entry points", () => {
     expect(screen.getByRole("complementary", { name: "CV templates" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("listitem", { name: "Schematic" }));
     expect(onSelect).toHaveBeenCalledWith("schematic");
+  });
+
+  it("opens CV design from the CV stage bar as a left drawer panel", () => {
+    renderEntryPoint("/cv", <CvTemplateEntryPoint onSelect={vi.fn()} />);
+
+    const design = screen.getByRole("button", { name: "Design" });
+    expect(design).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(design);
+
+    expect(design).toHaveAttribute("aria-expanded", "true");
+    const panel = screen.getByRole("complementary", { name: "CV design" });
+    expect(within(panel).getByRole("button", { name: "Style 1" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Style 2" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Style 3" })).toBeInTheDocument();
+    expect(within(panel).getByText("Font pair")).toBeInTheDocument();
+    expect(within(panel).getByText("Accent")).toBeInTheDocument();
   });
 
   it("opens proposal templates from the proposal stage bar and keeps template selection wired", () => {

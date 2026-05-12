@@ -103,10 +103,12 @@ import {
 import { buildCanonicalResumeRenderModelFromCv } from "../lib/buildCanonicalResumeRenderModel";
 import { deriveCvTitleFromSections } from "../lib/normalize-cv";
 import CvStageBar from "../components/cv/CvStageBar";
+import CvDesignFields, {
+  type CvAccentChoice,
+} from "../components/cv/CvDesignFields";
 import CvReviewBanner from "../components/cv/CvReviewBanner";
 import ImportRecoveryPanel from "../components/ImportRecoveryPanel";
 import CvRail, {
-  type CvAccentChoice,
   type CvAddSectionKind,
   type CvRailAppliedAiEdit,
   type CvRailAiSuggestion,
@@ -5543,6 +5545,8 @@ export function CvForge(): JSX.Element {
   useRegisterForgePanel(cvLibraryPanelRegistration);
   const cvTemplatesOpen =
     templatePanelOpen && activeTemplateSurface === "cv";
+  const cvDesignOpen =
+    templatePanelOpen && activeTemplateSurface === "cv-design";
   const sectionsPanelOpen =
     templatePanelOpen && activeTemplateSurface === "cv-sections";
   const handleOpenCvTemplates = React.useCallback(() => {
@@ -5551,6 +5555,10 @@ export function CvForge(): JSX.Element {
 
   const handleOpenCvSections = React.useCallback(() => {
     openTemplateSurface("cv-sections");
+  }, [openTemplateSurface]);
+
+  const handleOpenCvDesign = React.useCallback(() => {
+    openTemplateSurface("cv-design");
   }, [openTemplateSurface]);
 
   const handleSelectFontPair = React.useCallback(
@@ -5589,6 +5597,39 @@ export function CvForge(): JSX.Element {
     },
     [setStylePreset],
   );
+
+  const cvDesignPanelRegistration = React.useMemo(
+    () => ({
+      surface: "cv-design" as const,
+      title: "Design",
+      ariaLabel: "CV design",
+      renderContent: () => (
+        <CvDesignFields
+          stylePreset={stylePreset}
+          selectedStyleSlot={selectedStyleSlot}
+          selectedStyleSlotIsCustom={selectedStyleSlotIsCustom}
+          onSelectStyleSlot={handleSelectStyleSlot}
+          onResetStyleSlot={handleResetStyleSlot}
+          onSelectTemplate={handleSelectTemplate}
+          onSelectFontPair={handleSelectFontPair}
+          onSelectAccent={handleSelectAccent}
+          onSelectCustomAccent={handleSelectCustomAccent}
+        />
+      ),
+    }),
+    [
+      handleResetStyleSlot,
+      handleSelectAccent,
+      handleSelectCustomAccent,
+      handleSelectFontPair,
+      handleSelectStyleSlot,
+      handleSelectTemplate,
+      selectedStyleSlot,
+      selectedStyleSlotIsCustom,
+      stylePreset,
+    ],
+  );
+  useRegisterForgePanel(cvDesignPanelRegistration);
 
   const handleRunAskAiForSection = React.useCallback(
     async ({
@@ -6748,8 +6789,10 @@ export function CvForge(): JSX.Element {
                 resumeOptions={resumeOptions}
                 templatesOpen={cvTemplatesOpen}
                 sectionsOpen={sectionsPanelOpen}
+                designOpen={cvDesignOpen}
                 onModeChange={setWorkspaceMode}
                 onOpenSections={handleOpenCvSections}
+                onOpenDesign={handleOpenCvDesign}
                 onOpenTemplates={handleOpenCvTemplates}
                 onPickResume={handlePickResume}
               />
@@ -6880,7 +6923,6 @@ export function CvForge(): JSX.Element {
                 sections={currentSections}
                 activeSectionId={activeSectionId}
                 activeTab={cvRailTab}
-                stylePreset={stylePreset}
                 selectedTone={cvTone}
                 aiSuggestion={cvRailAiSuggestion}
                 appliedAiEdit={cvRailAppliedAiEdit}
@@ -6893,14 +6935,6 @@ export function CvForge(): JSX.Element {
                 onUndoAiSuggestion={handleUndoAiSuggestion}
                 onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
                 onDismissListAiSuggestion={handleDismissListAiSuggestion}
-                selectedStyleSlot={selectedStyleSlot}
-                selectedStyleSlotIsCustom={selectedStyleSlotIsCustom}
-                onSelectStyleSlot={handleSelectStyleSlot}
-                onResetStyleSlot={handleResetStyleSlot}
-                onSelectTemplate={handleSelectTemplate}
-                onSelectFontPair={handleSelectFontPair}
-                onSelectAccent={handleSelectAccent}
-                onSelectCustomAccent={handleSelectCustomAccent}
                 onNewCv={() => {
                   void handleStartFreshEntryCv();
                 }}
