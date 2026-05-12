@@ -5,9 +5,9 @@ import {
   ArrowUUpLeft,
   ClipboardText,
   Eye,
-  ImagesSquare,
   Palette,
   NewspaperClipping,
+  Layout,
   PenLine,
   TrashSimple,
 } from "@/lib/icons";
@@ -87,22 +87,22 @@ export function ProposalDocumentStage({
             <button
               type="button"
               className="dasti-proposal-mode-toggle"
-              data-selected={mode === "preview" ? "true" : undefined}
-              onClick={() => onModeChange("preview")}
-              aria-label="Preview proposal"
-              data-toolbar-tooltip="Preview"
-            >
-              <Eye size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="dasti-proposal-mode-toggle"
               data-selected={mode === "edit" ? "true" : undefined}
               onClick={() => onModeChange("edit")}
               aria-label="Edit proposal"
               data-toolbar-tooltip="Edit"
             >
               <PenLine size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="dasti-proposal-mode-toggle"
+              data-selected={mode === "preview" ? "true" : undefined}
+              onClick={() => onModeChange("preview")}
+              aria-label="Preview proposal"
+              data-toolbar-tooltip="Preview"
+            >
+              <Eye size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
             </button>
           </div>
           {styleControl ? (
@@ -152,7 +152,7 @@ export function ProposalDocumentStage({
               size="sm"
               variant="secondary"
               className="dasti-proposal-skeleton-stage__primary-action"
-              iconLeft={<ImagesSquare size={stageIconSize} strokeWidth={1.8} />}
+              iconLeft={<Layout size={stageIconSize} strokeWidth={1.8} />}
               aria-expanded={templatesOpen}
               aria-label="Templates"
               data-toolbar-tooltip="Templates"
@@ -176,7 +176,7 @@ export function ProposalDocumentStage({
                 title="Undo"
                 data-toolbar-tooltip="Undo"
               >
-                <ArrowUUpLeft size={14} strokeWidth={1.8} aria-hidden="true" />
+                <ArrowUUpLeft size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
               </button>
               <button
                 type="button"
@@ -186,7 +186,7 @@ export function ProposalDocumentStage({
                 title="Redo"
                 data-toolbar-tooltip="Redo"
               >
-                <ArrowUDownRight size={14} strokeWidth={1.8} aria-hidden="true" />
+                <ArrowUDownRight size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
               </button>
             </>
           ) : null}
