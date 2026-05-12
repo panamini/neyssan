@@ -9018,7 +9018,7 @@ export function ProposalForge(): JSX.Element {
   }, [attachedCvId, attachedCvTitle]);
   // Mirrors --app-nav-panel-width-wide from foundation.css so docked drawer
   // decisions use the remaining page column, not the full window width.
-  const FORGE_DOCKED_PANEL_INLINE_SIZE_PX = 352;
+  const FORGE_DOCKED_PANEL_INLINE_SIZE_PX = 320;
   const FORGE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH = 1180;
   const isForgeDrawerDockedDesktop =
     templatePanelOpen &&
@@ -9612,8 +9612,8 @@ export function ProposalForge(): JSX.Element {
     !isComposePanelVisible &&
     !isSavedView &&
     canCollapseComposePanel;
-  // Keep Draft/Ask visible when desktop drawers are pinned, matching CV Forge.
-  const shouldAutoCollapseProposalRailForDockedDrawer = false;
+  const shouldAutoCollapseProposalRailForDockedDrawer =
+    isForgeDrawerDockedDesktop && viewportWidth < 1760;
   const shouldRenderProposalRail =
     !shouldAutoCollapseProposalRailForDockedDrawer;
   const showComposeGridColumn =

@@ -232,11 +232,11 @@ describe("forge rail drawers", () => {
     );
 
     expect(css).toMatch(/\.forge-template-panel\s*\{[\s\S]*padding: var\(--space-4\)/);
-    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*column-gap: var\(--space-3\)/);
+    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*column-gap: var\(--space-2\)/);
     expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*row-gap: var\(--space-5\)/);
     expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*margin: calc\(var\(--space-1\) \* -1\)/);
     expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*padding: var\(--space-1\)/);
-    expect(css).toMatch(/\.forge-rail-drawer__grid\s*\{[\s\S]*column-gap: var\(--space-3\)/);
+    expect(css).toMatch(/\.forge-rail-drawer__grid\s*\{[\s\S]*column-gap: var\(--space-2\)/);
     expect(css).toMatch(/\.forge-rail-drawer__grid\s*\{[\s\S]*row-gap: var\(--space-5\)/);
   });
 
@@ -266,7 +266,7 @@ describe("forge rail drawers", () => {
       /\.app-shell\[data-forge-panel-docked="true"\]\s*\{[\s\S]*var\(--app-nav-panel-width-wide\)/,
     );
     expect(proposalSource).toContain("data-forge-drawer-docked");
-    expect(proposalSource).toContain("FORGE_DOCKED_PANEL_INLINE_SIZE_PX = 352");
+    expect(proposalSource).toContain("FORGE_DOCKED_PANEL_INLINE_SIZE_PX = 320");
     expect(proposalSource).toContain("proposalLayoutViewportWidth");
     expect(proposalSource).toContain(
       "proposalLayoutViewportWidth < proposalTwoPaneMinViewportWidth",
@@ -279,7 +279,13 @@ describe("forge rail drawers", () => {
       /\.dasti-proposal-skeleton-forge__stage\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--proposal-workspace-stage-inline-size\)\);[\s\S]*justify-self:\s*center;/,
     );
     expect(proposalCss).toMatch(
-      /\.dasti-proposal-skeleton-forge\[data-forge-drawer-docked="true"\]\s*\{[\s\S]*justify-content:\s*stretch;/,
+      /\.dasti-proposal-skeleton-forge\[data-forge-drawer-docked="true"\]\s*\{[\s\S]*grid-template-columns:[\s\S]*minmax\(0,\s*1fr\)[\s\S]*var\(--proposal-workspace-rail-inline-size\);[\s\S]*justify-content:\s*stretch;/,
+    );
+    expect(proposalCss).toMatch(
+      /\.dasti-proposal-skeleton-forge\[data-forge-drawer-rail-collapsed="true"\]\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*var\(--proposal-workspace-stage-inline-size\)\);/,
+    );
+    expect(proposalCss).toMatch(
+      /\.dasti-proposal-skeleton-forge\[data-forge-drawer-docked="true"\]\[data-forge-drawer-rail-collapsed="true"\]\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/,
     );
     expect(cvCss).toMatch(
       /\.dasti-cv-skeleton-forge\[data-forge-drawer-docked="true"\]\s*\{[\s\S]*grid-template-columns:[\s\S]*minmax\(0,\s*1fr\)[\s\S]*var\(--cv-workspace-rail-inline-size\);[\s\S]*justify-content:\s*stretch;/,

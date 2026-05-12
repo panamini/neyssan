@@ -528,7 +528,7 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-editor-hint\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset-block-start:\s*var\(--space-2\);[\s\S]*inset-inline-end:\s*var\(--space-2\);[\s\S]*z-index:\s*6;[\s\S]*pointer-events:\s*none;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-editor-page__drawer\s*\{[\s\S]*--proposal-editor-page-close-block-inset:\s*clamp\(36px,\s*5vw,\s*56px\);[\s\S]*--proposal-editor-page-close-inline-inset:\s*clamp\(32px,\s*5vw,\s*56px\);/,
+      /\.dasti-proposal-editor-page__drawer\s*\{[\s\S]*--proposal-editor-page-close-block-inset:\s*clamp\(32px,\s*4vw,\s*48px\);[\s\S]*--proposal-editor-page-close-inline-inset:\s*var\(--proposal-output-editor-inline-padding\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-editor-page__drawer\s*\{[\s\S]*background:\s*var\(--sfr\);/,

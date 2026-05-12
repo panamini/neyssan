@@ -1897,7 +1897,7 @@ body,
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: var(--space-3);
-  padding: var(--space-4);
+  padding: var(--space-4) var(--space-3);
   border-inline-end: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
   background: var(--sfr);
   box-shadow: var(--shadow-frost);
@@ -2037,7 +2037,7 @@ body,
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
-  column-gap: var(--space-3);
+  column-gap: var(--space-2);
   row-gap: var(--space-5);
   margin: calc(var(--space-1) * -1);
   padding: var(--space-1);
@@ -2173,7 +2173,7 @@ body,
 .forge-rail-drawer__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: var(--space-3);
+  column-gap: var(--space-2);
   row-gap: var(--space-5);
 }
 

@@ -428,7 +428,7 @@
   --app-sidebar-label-max: 208px;
   --app-sidebar-label-max-compact: 184px;
 
-  --app-nav-rail-width: calc(var(--space-8) + var(--space-2));
+  --app-nav-rail-width: calc(var(--space-8) + var(--space-4));
   --app-nav-rail-pad-inline: var(--space-1);
   --app-nav-rail-pad-block: var(--space-2);
 
@@ -444,11 +444,10 @@
     var(--app-nav-rail-width) +
     var(--app-nav-rail-width) +
     var(--app-nav-rail-width) +
-    var(--app-nav-rail-width) +
-    var(--space-4)
+    var(--app-nav-rail-width)
   );
   --app-nav-panel-width-wide: calc(
-    var(--app-nav-panel-width) + var(--space-7) + var(--space-2)
+    var(--app-nav-panel-width)
   );
   --sidebar-hover-bg: var(--sf2);
   --sidebar-active-bg: var(--sfr);
