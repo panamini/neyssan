@@ -21,7 +21,6 @@ import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures"
 import { resolveCommandShortcutLabel } from "../lib/app-topbar";
 import {
   ClipboardText,
-  DotsThree,
   FilePdf,
   FileText,
   MagnifyingGlass,
@@ -356,44 +355,92 @@ export function AppTopbar({
             ) : null}
           </div>
         ) : location.pathname === "/proposal" ? (
-          <div
-            className="app-topbar__doc-identity"
-            aria-label={proposalDocumentIdentityLabel}
-            title={proposalDocumentIdentityLabel}
-          >
-            <span
-              className="app-topbar__doc-state"
-              data-state={proposalDocumentState}
-              aria-label={proposalDocumentStateLabel}
-              title={proposalDocumentStateLabel}
+          <div className="app-topbar__doc-identity-group">
+            <div
+              className="app-topbar__doc-identity"
+              aria-label={proposalDocumentIdentityLabel}
+              title={proposalDocumentIdentityLabel}
             >
               <span
-                className="app-topbar__doc-dot"
-                data-pulsing={
-                  proposalDocumentState === "saving" ||
-                  proposalDocumentState === "generating" ||
-                  proposalDocumentState === "exporting"
-                    ? "true"
-                    : undefined
-                }
-                aria-hidden="true"
-              />
-              <FileText size={15} strokeWidth={1.8} aria-hidden="true" />
-            </span>
-            <DocumentTitleEditor
-              className="app-topbar__doc-title"
-              documentTitle={proposalDocumentTitleMain}
-              titlePlaceholder={proposalDocumentTitlePlaceholder}
-              ariaLabel="Proposal title"
-              onTitleCommit={(nextTitle) => {
-                proposalTopbarRegistration?.onTitleCommit(nextTitle);
-              }}
-              disabled={!proposalTopbarRegistration?.onTitleCommit}
-            />
-            {proposalTopbarRegistration?.lengthLabel ? (
-              <span className="app-topbar__doc-meta">
-                {proposalTopbarRegistration.lengthLabel}
+                className="app-topbar__doc-state"
+                data-state={proposalDocumentState}
+                aria-label={proposalDocumentStateLabel}
+                title={proposalDocumentStateLabel}
+              >
+                <span
+                  className="app-topbar__doc-dot"
+                  data-pulsing={
+                    proposalDocumentState === "saving" ||
+                    proposalDocumentState === "generating" ||
+                    proposalDocumentState === "exporting"
+                      ? "true"
+                      : undefined
+                  }
+                  aria-hidden="true"
+                />
+                <FileText size={15} strokeWidth={1.8} aria-hidden="true" />
               </span>
+              <DocumentTitleEditor
+                className="app-topbar__doc-title"
+                documentTitle={proposalDocumentTitleMain}
+                titlePlaceholder={proposalDocumentTitlePlaceholder}
+                ariaLabel="Proposal title"
+                onTitleCommit={(nextTitle) => {
+                  proposalTopbarRegistration?.onTitleCommit(nextTitle);
+                }}
+                disabled={!proposalTopbarRegistration?.onTitleCommit}
+              />
+              {proposalTopbarRegistration?.lengthLabel ? (
+                <span className="app-topbar__doc-meta">
+                  {proposalTopbarRegistration.lengthLabel}
+                </span>
+              ) : null}
+            </div>
+            {proposalTopbarRegistration ? (
+              <Menu
+                ariaLabel="Proposal actions"
+                align="start"
+                sections={[
+                  {
+                    items: [
+                      {
+                        id: "new-proposal",
+                        label: "New proposal",
+                        icon: <Plus size={15} strokeWidth={1.8} />,
+                        onSelect: proposalTopbarRegistration.onNewProposal,
+                      },
+                      {
+                        id: "duplicate-proposal",
+                        label: "Duplicate proposal",
+                        icon: <ClipboardText size={15} strokeWidth={1.8} />,
+                        disabled:
+                          !proposalTopbarRegistration.hasProposalContent,
+                        onSelect:
+                          proposalTopbarRegistration.onDuplicateProposal,
+                      },
+                      {
+                        id: "delete-proposal",
+                        label: "Delete proposal",
+                        icon: <TrashSimple size={15} strokeWidth={1.8} />,
+                        tone: "danger",
+                        disabled:
+                          !proposalTopbarRegistration.hasProposalContent,
+                        onSelect: proposalTopbarRegistration.onDeleteProposal,
+                      },
+                    ],
+                  },
+                ]}
+                trigger={
+                  <button
+                    type="button"
+                    className="app-topbar__doc-menu"
+                    aria-label="Proposal actions"
+                    data-toolbar-tooltip="Proposal actions"
+                  >
+                    <Plus size={14} strokeWidth={1.9} aria-hidden="true" />
+                  </button>
+                }
+              />
             ) : null}
           </div>
         ) : null}
@@ -465,47 +512,6 @@ export function AppTopbar({
         ) : null}
         {location.pathname === "/proposal" && proposalTopbarRegistration ? (
           <>
-            <Menu
-              ariaLabel="Proposal actions"
-              align="end"
-              sections={[
-                {
-                  items: [
-                    {
-                      id: "new-proposal",
-                      label: "New proposal",
-                      icon: <Plus size={15} strokeWidth={1.8} />,
-                      onSelect: proposalTopbarRegistration.onNewProposal,
-                    },
-                    {
-                      id: "duplicate-proposal",
-                      label: "Duplicate proposal",
-                      icon: <ClipboardText size={15} strokeWidth={1.8} />,
-                      disabled: !proposalTopbarRegistration.hasProposalContent,
-                      onSelect: proposalTopbarRegistration.onDuplicateProposal,
-                    },
-                    {
-                      id: "delete-proposal",
-                      label: "Delete proposal",
-                      icon: <TrashSimple size={15} strokeWidth={1.8} />,
-                      tone: "danger",
-                      disabled: !proposalTopbarRegistration.hasProposalContent,
-                      onSelect: proposalTopbarRegistration.onDeleteProposal,
-                    },
-                  ],
-                },
-              ]}
-              trigger={
-                <button
-                  type="button"
-                  className="dasti-icon-button app-topbar__share"
-                  aria-label="Proposal actions"
-                  data-toolbar-tooltip="Proposal actions"
-                >
-                  <DotsThree size={16} strokeWidth={1.8} aria-hidden="true" />
-                </button>
-              }
-            />
             <Menu
               ariaLabel="Share proposal"
               align="end"

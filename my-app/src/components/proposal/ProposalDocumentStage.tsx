@@ -165,31 +165,6 @@ export function ProposalDocumentStage({
             </Button>
           ) : null}
           <ToneBadge tone={toneValue}>{toneLabel}</ToneBadge>
-          {mode === "edit" ? (
-            <>
-              <span className="dasti-icon-cluster__divider" aria-hidden="true" />
-              <button
-                type="button"
-                className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
-                onClick={() => runBrowserCommand("undo")}
-                aria-label="Undo"
-                title="Undo"
-                data-toolbar-tooltip="Undo"
-              >
-                <ArrowUUpLeft size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
-                onClick={() => runBrowserCommand("redo")}
-                aria-label="Redo"
-                title="Redo"
-                data-toolbar-tooltip="Redo"
-              >
-                <ArrowUDownRight size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
-              </button>
-            </>
-          ) : null}
           {onDeleteDraft || onSaveToLibrary ? (
             <>
               <span className="dasti-icon-cluster__divider" aria-hidden="true" />
@@ -223,6 +198,35 @@ export function ProposalDocumentStage({
           ) : null}
         </div>
         <span className="dasti-proposal-skeleton-stage__spacer" />
+        {mode === "edit" ? (
+          <div
+            className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__right-actions"
+            role="group"
+            aria-label="Proposal undo redo actions"
+          >
+            <span className="dasti-icon-cluster__divider" aria-hidden="true" />
+            <button
+              type="button"
+              className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
+              onClick={() => runBrowserCommand("undo")}
+              aria-label="Undo"
+              title="Undo"
+              data-toolbar-tooltip="Undo"
+            >
+              <ArrowUUpLeft size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
+              onClick={() => runBrowserCommand("redo")}
+              aria-label="Redo"
+              title="Redo"
+              data-toolbar-tooltip="Redo"
+            >
+              <ArrowUDownRight size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="dasti-proposal-skeleton-stage__paper">{children}</div>

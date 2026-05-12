@@ -6822,6 +6822,16 @@
   --dasti-toolbar-tooltip-text-align: left;
 }
 
+[data-toolbar-tooltip-placement="below"] {
+  --dasti-toolbar-tooltip-inset-block-start: calc(100% + var(--space-1));
+  --dasti-toolbar-tooltip-inset-block-end: auto;
+  --dasti-toolbar-tooltip-inset-inline-start: 50%;
+  --dasti-toolbar-tooltip-transform-hidden: translate(-50%, -2px);
+  --dasti-toolbar-tooltip-transform-visible: translate(-50%, 0);
+  --dasti-toolbar-tooltip-justify-items: center;
+  --dasti-toolbar-tooltip-text-align: center;
+}
+
 [data-toolbar-tooltip]:hover::after,
 [data-toolbar-tooltip]:focus-visible::after {
   opacity: 1;
@@ -7615,6 +7625,12 @@
   flex: 0 0 auto;
   align-items: center;
   position: relative;
+  gap: var(--proposal-chrome-toolbar-gap, var(--space-2));
+}
+
+.dasti-proposal-skeleton-stage__right-actions {
+  flex: 0 0 auto;
+  align-items: center;
   gap: var(--proposal-chrome-toolbar-gap, var(--space-2));
 }
 

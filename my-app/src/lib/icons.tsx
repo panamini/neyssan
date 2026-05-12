@@ -24,6 +24,7 @@ import {
   CornersIn as PhCornersIn,
   Copy as PhCopy,
   DotsThree as PhDotsThree,
+  DotsThreeOutline as PhDotsThreeOutline,
   DotsSixVertical as PhDotsSixVertical,
   Eraser as PhEraser,
   Eye as PhEye,
@@ -172,6 +173,7 @@ export const Command = withCompat(PhCommand);
 export const Copy = withCompat(PhCopy);
 export const CornersIn = withCompat(PhCornersIn);
 export const DotsThree = withCompat(PhDotsThree);
+export const DotsThreeOutline = withCompat(PhDotsThreeOutline);
 export const Eye = withCompat(PhEye);
 export const EyeClosed = withCompat(PhEyeClosed);
 export const EyeSlash = withCompat(PhEyeSlash);
