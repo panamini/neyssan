@@ -66,6 +66,8 @@ export function ProposalDocumentStage({
   onDeleteDraft,
   onSaveToLibrary,
 }: ProposalDocumentStageProps): JSX.Element {
+  const stageIconSize = 16;
+
   return (
     <section
       className="dasti-proposal-skeleton-stage"
@@ -90,7 +92,7 @@ export function ProposalDocumentStage({
               aria-label="Preview proposal"
               data-toolbar-tooltip="Preview"
             >
-              <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
+              <Eye size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -100,7 +102,7 @@ export function ProposalDocumentStage({
               aria-label="Edit proposal"
               data-toolbar-tooltip="Edit"
             >
-              <PenLine size={14} strokeWidth={1.8} aria-hidden="true" />
+              <PenLine size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
             </button>
           </div>
           {styleControl ? (
@@ -114,7 +116,7 @@ export function ProposalDocumentStage({
               size="sm"
               variant="secondary"
               className="dasti-proposal-skeleton-stage__primary-action"
-              iconLeft={<NewspaperClipping size={14} strokeWidth={1.8} />}
+              iconLeft={<NewspaperClipping size={stageIconSize} strokeWidth={1.8} />}
               aria-expanded={headingOpen}
               aria-label="Heading"
               data-toolbar-tooltip="Heading"
@@ -132,7 +134,7 @@ export function ProposalDocumentStage({
               size="sm"
               variant="secondary"
               className="dasti-proposal-skeleton-stage__primary-action"
-              iconLeft={<Palette size={14} strokeWidth={1.8} />}
+              iconLeft={<Palette size={stageIconSize} strokeWidth={1.8} />}
               aria-expanded={designOpen}
               aria-label="Design"
               data-toolbar-tooltip="Design"
@@ -150,7 +152,7 @@ export function ProposalDocumentStage({
               size="sm"
               variant="secondary"
               className="dasti-proposal-skeleton-stage__primary-action"
-              iconLeft={<ImagesSquare size={14} strokeWidth={1.8} />}
+              iconLeft={<ImagesSquare size={stageIconSize} strokeWidth={1.8} />}
               aria-expanded={templatesOpen}
               aria-label="Templates"
               data-toolbar-tooltip="Templates"
@@ -201,7 +203,7 @@ export function ProposalDocumentStage({
                   title="Save proposal to library"
                   data-toolbar-tooltip="Save to library"
                 >
-                  <ClipboardText size={14} strokeWidth={1.8} aria-hidden="true" />
+                  <ClipboardText size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
                 </button>
               ) : null}
               {onDeleteDraft ? (
@@ -214,7 +216,7 @@ export function ProposalDocumentStage({
                   title="Delete draft"
                   data-toolbar-tooltip="Delete draft"
                 >
-                  <TrashSimple size={14} strokeWidth={1.8} aria-hidden="true" />
+                  <TrashSimple size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
                 </button>
               ) : null}
             </>

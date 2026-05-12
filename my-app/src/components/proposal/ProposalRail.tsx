@@ -381,10 +381,6 @@ export function ProposalRail({
               <span className="dasti-proposal-skeleton-rail__summary-text">
                 {compactJobSummary}
               </span>
-            ) : !hasLoadedJobContext ? (
-              <span className="dasti-proposal-skeleton-rail__summary-text">
-                Capture, paste, or choose a job.
-              </span>
             ) : null}
           </span>
           <ChevronDown className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
@@ -397,6 +393,8 @@ export function ProposalRail({
                   type="button"
                   variant="secondary"
                   size="sm"
+                  className="dasti-toolbar-tooltip-trigger--above"
+                  data-toolbar-tooltip="Choose or paste a job."
                   onClick={onOpenJobs}
                   iconLeft={<Briefcase size={14} strokeWidth={1.8} />}
                 >
