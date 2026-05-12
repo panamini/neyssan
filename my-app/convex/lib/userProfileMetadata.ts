@@ -92,6 +92,7 @@ export type UserProfileMetadata = {
   importedAt?: number;
   confidence?: number;
   filename?: string;
+  titleLocked?: boolean;
   verbatiStyle?: UserProfileVerbatiStyle;
   verbatiStyleSlotId?: 1 | 2 | 3;
   verbatiStyleSlotSource?: "factory" | "settings";
@@ -175,6 +176,7 @@ export const userProfileMetadataValidator = v.object({
   importedAt: v.optional(v.number()),
   confidence: v.optional(v.number()),
   filename: v.optional(v.string()),
+  titleLocked: v.optional(v.boolean()),
   verbatiStyle: v.optional(userProfileVerbatiStyleValidator),
   verbatiStyleSlotId: v.optional(documentStyleSlotIdValidator),
   verbatiStyleSlotSource: v.optional(documentStyleSlotSourceValidator),

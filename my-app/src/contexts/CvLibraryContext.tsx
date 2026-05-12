@@ -3943,13 +3943,20 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   }
 
   function renameCvCtx(id: string, newTitle: string): void {
+    let renamedCurrent: CvDocument | null = null;
     setCvs((prev) =>
       prev.map((c) =>
         String(c.id) === String(id) ? applyManualTitle(c, newTitle) : c,
       ),
     );
-    if (currentCv && String(currentCv.id) === String(id)) {
-      safeSetCurrentCv(applyManualTitle(currentCv, newTitle));
+    const activeCv = currentCvRef.current ?? currentCv;
+    if (activeCv && String(activeCv.id) === String(id)) {
+      renamedCurrent = applyManualTitle(activeCv, newTitle);
+      safeSetCurrentCv(renamedCurrent);
+    }
+    if (renamedCurrent) {
+      cacheDocumentLocally(renamedCurrent);
+      void scheduleSave(renamedCurrent);
     }
   }
 
