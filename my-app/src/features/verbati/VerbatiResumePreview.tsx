@@ -1,9 +1,5 @@
 import React from "react";
-import {
-  CornersIn,
-  MagnifyingGlassMinus,
-  MagnifyingGlassPlus,
-} from "@/lib/icons";
+import { Menu } from "../../components/ui";
 import { useDocumentPan } from "../../hooks/use-document-pan";
 import { useDocumentStageLayout } from "../../hooks/use-document-stage-layout";
 import { useDocumentViewportCentering } from "../../hooks/use-document-viewport-centering";
@@ -35,7 +31,6 @@ import {
 import {
   A4_PAGE_HEIGHT_PX,
   A4_PAGE_WIDTH_PX,
-  DOCUMENT_ZOOM_STEPS,
 } from "../../lib/document-stage";
 import {
   readDocumentExportDebugConfig,
@@ -91,6 +86,8 @@ const DEFAULT_RESUME_PREVIEW_METRICS: ResumePreviewMetrics = {
   pageGapPx: 0,
   stackHeightPx: A4_PAGE_HEIGHT_PX,
 };
+const CV_DOCUMENT_ZOOM_STEPS = [0.3, 0.5, 0.8, 1, 1.25, 1.5, 2] as const;
+const CV_DOCUMENT_ZOOM_DEFAULT_INDEX = 3;
 
 function roundPx(value: number) {
   return Math.round(value * 100) / 100;
@@ -98,6 +95,10 @@ function roundPx(value: number) {
 
 function formatZoomPercent(value: number) {
   return `${Math.round(value * 100)}%`;
+}
+
+function formatZoomOptionLabel(value: number) {
+  return `${Math.round(value * 100)} %`;
 }
 
 function normalizeSignatureValue(value: string | undefined | null) {
@@ -292,7 +293,9 @@ export function VerbatiResumePreview({
     () => resolveVerbatiAccentHex(stylePreset),
     [stylePreset],
   );
-  const [zoomIndex, setZoomIndex] = React.useState(1);
+  const [zoomIndex, setZoomIndex] = React.useState(
+    CV_DOCUMENT_ZOOM_DEFAULT_INDEX,
+  );
   const [fitRequestCount, setFitRequestCount] = React.useState(0);
   const [workspaceViewMode, setWorkspaceViewMode] = React.useState<
     "fit-page" | "manual"
@@ -322,7 +325,7 @@ export function VerbatiResumePreview({
       !showsStageZoom || workspaceViewMode === "fit-page"
         ? 1
         : workspaceViewMode === "manual"
-          ? DOCUMENT_ZOOM_STEPS[zoomIndex]
+          ? CV_DOCUMENT_ZOOM_STEPS[zoomIndex]
           : 1,
     fitMode: isWorkspaceMode ? "contain" : "width",
     fillAvailableOnZoom: isWorkspaceMode,
@@ -353,7 +356,7 @@ export function VerbatiResumePreview({
       return 1;
     }
     if (workspaceViewMode === "manual") {
-      return DOCUMENT_ZOOM_STEPS[zoomIndex];
+      return CV_DOCUMENT_ZOOM_STEPS[zoomIndex];
     }
     return 1;
   }, [fitPageScale, showsStageZoom, workspaceViewMode, zoomIndex]);
@@ -418,7 +421,9 @@ export function VerbatiResumePreview({
     {
       enabled: shouldCenterViewport,
       layoutKey: `${userZoom}:${stageLayout.stageWidth}:${stageLayout.stageHeight}:${stageLayout.pageWidth}:${canvasHeightPx}:${effectivePageCount}:${stylePreset.layout}:${rendererVariantId}:${dataSignature}`,
-      recenterKey: fitRequestCount,
+      recenterKey: showStageZoomFooter
+        ? `${fitRequestCount}:${workspaceViewMode}:${zoomIndex}`
+        : fitRequestCount,
       defaultCenterX: isWorkspaceMode ? 0.5 : 0.5,
       defaultCenterY: isWorkspaceMode || effectivePageCount > 1 ? 0 : 0.5,
     },
@@ -584,6 +589,17 @@ export function VerbatiResumePreview({
     ? "inline-editing"
     : dataSignature;
   const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:single:${fitTokenDataSignature}`;
+  const shouldFitViewportToPage =
+    !isWorkspaceMode &&
+    showsStageZoom &&
+    workspaceViewMode === "manual";
+  const viewportWidthPx = shouldFitViewportToPage
+    ? stageLayout.pageWidth
+    : stageLayout.stageWidth;
+  const viewportHeightPx =
+    usesNaturalPageScroll || shouldFitViewportToPage
+      ? canvasHeightPx
+      : stageLayout.stageHeight;
 
   const workspaceZoomFooter = showsStageZoom ? (
     <div className="dasti-cv-stage-footer" data-no-pan="true">
@@ -598,42 +614,17 @@ export function VerbatiResumePreview({
         ) : null}
       </div>
       <div className="dasti-cv-stage-footer__zoom" aria-label="CV zoom controls">
-        <button
-          type="button"
-          className={
-            workspaceViewMode === "fit-page"
-              ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
-              : "dasti-doc-zoom-fit"
-          }
-          onClick={() => {
-            setWorkspaceViewMode("fit-page");
-            setFitRequestCount((count) => count + 1);
-          }}
-          aria-label="Fit page"
-          data-toolbar-tooltip="Fit page"
-        >
-          <CornersIn size={14} strokeWidth={1.8} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="dasti-icon-button dasti-cv-stage-footer__zoom-step"
-          onClick={() => {
-            setWorkspaceViewMode("manual");
-            setZoomIndex((index) => Math.max(0, index - 1));
-          }}
-          disabled={zoomIndex === 0 && workspaceViewMode === "manual"}
-          aria-label="Zoom out"
-          data-toolbar-tooltip="Zoom out"
-        >
-          <MagnifyingGlassMinus size={14} strokeWidth={1.7} aria-hidden="true" />
-        </button>
         <input
           className="dasti-cv-stage-footer__zoom-slider"
           type="range"
           min={0}
-          max={DOCUMENT_ZOOM_STEPS.length - 1}
+          max={CV_DOCUMENT_ZOOM_STEPS.length - 1}
           step={1}
-          value={workspaceViewMode === "fit-page" ? 1 : zoomIndex}
+          value={
+            workspaceViewMode === "fit-page"
+              ? CV_DOCUMENT_ZOOM_DEFAULT_INDEX
+              : zoomIndex
+          }
           aria-label="CV zoom"
           aria-valuetext={visibleZoomPercent}
           onChange={(event) => {
@@ -641,27 +632,49 @@ export function VerbatiResumePreview({
             setZoomIndex(Number(event.currentTarget.value));
           }}
         />
-        <button
-          type="button"
-          className="dasti-icon-button dasti-cv-stage-footer__zoom-step"
-          onClick={() => {
-            setWorkspaceViewMode("manual");
-            setZoomIndex((index) =>
-              Math.min(DOCUMENT_ZOOM_STEPS.length - 1, index + 1),
-            );
-          }}
-          disabled={
-            zoomIndex === DOCUMENT_ZOOM_STEPS.length - 1 &&
-            workspaceViewMode === "manual"
+        <Menu
+          ariaLabel="CV zoom menu"
+          align="end"
+          side="top"
+          menuClassName="dasti-cv-stage-footer__zoom-menu"
+          sections={[
+            {
+              items: [
+                ...CV_DOCUMENT_ZOOM_STEPS.map((step, index) => ({
+                  id: `zoom-${index}`,
+                  label: formatZoomOptionLabel(step),
+                  role: "menuitemradio" as const,
+                  selected:
+                    workspaceViewMode === "manual" && zoomIndex === index,
+                  onSelect: () => {
+                    setWorkspaceViewMode("manual");
+                    setZoomIndex(index);
+                  },
+                })),
+                {
+                  id: "fit-page",
+                  label: "Fit page",
+                  role: "menuitemradio" as const,
+                  selected: workspaceViewMode === "fit-page",
+                  onSelect: () => {
+                    setWorkspaceViewMode("fit-page");
+                    setFitRequestCount((count) => count + 1);
+                  },
+                },
+              ],
+            },
+          ]}
+          trigger={
+            <button
+              type="button"
+              className="dasti-doc-zoom-status dasti-cv-stage-footer__zoom-status"
+              aria-label={`Zoom level ${visibleZoomPercent}`}
+              data-toolbar-tooltip="Zoom presets"
+            >
+              {visibleZoomPercent}
+            </button>
           }
-          aria-label="Zoom in"
-          data-toolbar-tooltip="Zoom in"
-        >
-          <MagnifyingGlassPlus size={14} strokeWidth={1.7} aria-hidden="true" />
-        </button>
-        <span className="dasti-doc-zoom-status" aria-label="Zoom level">
-          {visibleZoomPercent}
-        </span>
+        />
       </div>
     </div>
   ) : null;
@@ -853,8 +866,8 @@ export function VerbatiResumePreview({
         data-document-stage="true"
         data-scroll-mode={scrollMode}
         style={{
-          width: `${stageLayout.stageWidth}px`,
-          height: `${usesNaturalPageScroll ? canvasHeightPx : stageLayout.stageHeight}px`,
+          width: `${viewportWidthPx}px`,
+          height: `${viewportHeightPx}px`,
         }}
         {...viewportPanProps}
       >

@@ -9,8 +9,9 @@
   --cv-paper-visual-inline-size: var(--forge-page-inline-size);
   --cv-workspace-stage-inline-size: var(--cv-paper-visual-inline-size);
   --cv-workspace-rail-inline-size: 360px;
+  --cv-stage-footer-block-size: 28px;
   --cv-stage-footer-reserved-block: calc(
-    var(--document-viewer-toolbar-block-size) + var(--space-5)
+    var(--cv-stage-footer-block-size) + var(--space-2)
   );
   display: grid;
   grid-template-columns:
@@ -55,11 +56,11 @@
 .dasti-cv-sections-drawer {
   height: 100%;
   display: grid;
-  gap: var(--space-4);
+  gap: var(--forge-drawer-content-gap);
   align-content: start;
   min-width: 0;
-  margin: calc(var(--space-1) * -1);
-  padding: var(--space-1);
+  margin: calc(var(--forge-drawer-scroll-inset) * -1);
+  padding: var(--forge-drawer-scroll-inset);
   overflow-x: visible;
   overflow-y: auto;
 }
@@ -77,6 +78,13 @@
 
 .dasti-cv-paper-stage .dasti-doc-viewport--resume {
   margin-inline: auto;
+}
+
+.dasti-cv-paper-stage
+  .dasti-doc-viewport--resume-panel[data-document-stage="true"] {
+  max-inline-size: 100%;
+  overflow: auto;
+  scrollbar-gutter: auto;
 }
 
 .dasti-cv-page-preview-stage {
@@ -171,8 +179,24 @@
 }
 
 .dasti-cv-paper-stage
+  .dasti-doc-viewport--resume-panel[data-document-stage="true"][data-scroll-mode="natural"] {
+  flex: 0 0 auto;
+  max-width: none;
+  max-inline-size: none;
+  overflow: visible;
+}
+
+.dasti-cv-paper-stage
+  .dasti-doc-viewport--resume-panel[data-document-stage="true"][data-scroll-mode="natural"][data-stage-mode="overflow"] {
+  overflow: visible;
+}
+
+.dasti-cv-paper-stage
   .dasti-document-stage__canvas[data-document-page="true"] {
-  box-shadow: var(--document-stage-halo, var(--sh-paper));
+  margin-inline: auto;
+  box-shadow:
+    var(--document-viewer-frame-shadow),
+    0 12px 28px -24px color-mix(in srgb, var(--shadow-color) 92%, transparent);
 }
 
 .dasti-cv-paper-stage [data-inline-paper-editable="true"] {
@@ -736,8 +760,9 @@ span.dasti-cv-ats {
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  padding: var(--space-5);
+  gap: var(--forge-drawer-content-gap);
+  padding: var(--forge-drawer-panel-padding-block)
+    var(--forge-drawer-panel-padding-inline);
   border: 1px solid var(--border-soft);
   border-radius: var(--r-surface, var(--radius-card));
   background: var(--sfr);
@@ -903,7 +928,7 @@ span.dasti-cv-ats {
 
 .dasti-cv-rail-pane {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--forge-drawer-content-gap);
 }
 
 .dasti-cv-sections-organizer {
@@ -1457,23 +1482,6 @@ span.dasti-cv-ats {
   box-shadow:
     0 0 0 2px var(--sf0),
     0 0 0 4px color-mix(in srgb, var(--ac) 42%, transparent);
-}
-
-.dasti-cv-rail-footer {
-  margin-top: auto;
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-soft);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-2);
-}
-
-.dasti-cv-rail-footer__label {
-  color: var(--tm2);
-  font-size: var(--tx);
-  line-height: var(--lx);
-  font-weight: 750;
-  letter-spacing: 0.01em;
 }
 
 .dasti-cv-import-card {
@@ -2346,28 +2354,27 @@ span.dasti-cv-ats {
 
 .dasti-cv-stage-footer {
   position: fixed;
-  inset-inline-start: calc(var(--app-nav-rail-width) + var(--space-4));
-  inset-inline-end: var(--space-4);
-  inset-block-end: var(--space-3);
+  inset-inline-start: var(--app-nav-rail-width);
+  inset-inline-end: 0;
+  inset-block-end: 0;
   z-index: 32;
-  min-height: var(--document-viewer-toolbar-block-size);
+  min-height: var(--cv-stage-footer-block-size, 28px);
   width: auto;
   max-width: none;
   margin: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
-  border: 1px solid var(--proposal-chrome-toolbar-border);
-  border-radius: var(--radius-toolbar-shell, var(--radius-card));
-  background: var(--proposal-chrome-toolbar-bg);
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  border: 0;
+  border-block-start: 1px solid var(--border-soft);
+  border-radius: 0;
+  background: var(--bg);
   color: var(--tm2);
-  box-shadow: var(--shadow-frost, var(--shadow-sm));
-  backdrop-filter: saturate(var(--frost-saturate, 1))
-    blur(var(--frost-blur, 14px));
-  -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
-    blur(var(--frost-blur, 14px));
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   overflow: visible;
 }
 
@@ -2379,7 +2386,8 @@ span.dasti-cv-ats {
 }
 
 .dasti-doc-page-count--resume-footer {
-  min-height: var(--hs);
+  min-height: 24px;
+  height: 24px;
   pointer-events: none;
 }
 
@@ -2388,28 +2396,25 @@ span.dasti-cv-ats {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--proposal-chrome-tight-gap, var(--space-1));
-}
-
-.dasti-cv-stage-footer__zoom-step {
-  flex: 0 0 auto;
+  gap: var(--space-2);
 }
 
 .dasti-cv-stage-footer__zoom-slider {
   --cv-zoom-slider-track: color-mix(
     in srgb,
-    var(--tm2) 34%,
+    var(--tm2) 28%,
     transparent
   );
   --cv-zoom-slider-fill: color-mix(
     in srgb,
-    var(--ti) 46%,
-    var(--tm2) 54%
+    var(--ti) 62%,
+    var(--tm2) 38%
   );
-  flex: 0 1 168px;
-  inline-size: clamp(112px, 16vw, 168px);
-  block-size: var(--hs);
-  margin: 0 var(--space-1);
+  appearance: none;
+  flex: 0 1 156px;
+  inline-size: clamp(112px, 14vw, 156px);
+  block-size: 24px;
+  margin: 0;
   padding: 0;
   background: transparent;
   cursor: pointer;
@@ -2429,14 +2434,15 @@ span.dasti-cv-ats {
 }
 
 .dasti-cv-stage-footer__zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
   appearance: none;
-  inline-size: 14px;
-  block-size: 14px;
-  margin-block-start: -5.5px;
-  border: 1px solid var(--border-strong);
+  inline-size: 12px;
+  block-size: 12px;
+  margin-block-start: -4.5px;
+  border: 1px solid color-mix(in srgb, var(--tm2) 24%, transparent);
   border-radius: 50%;
   background: var(--sfr);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .dasti-cv-stage-footer__zoom-slider::-moz-range-track {
@@ -2446,12 +2452,34 @@ span.dasti-cv-ats {
 }
 
 .dasti-cv-stage-footer__zoom-slider::-moz-range-thumb {
-  inline-size: 14px;
-  block-size: 14px;
-  border: 1px solid var(--border-strong);
+  inline-size: 12px;
+  block-size: 12px;
+  border: 1px solid color-mix(in srgb, var(--tm2) 24%, transparent);
   border-radius: 50%;
   background: var(--sfr);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
+}
+
+.dasti-cv-stage-footer__zoom-status {
+  min-width: 52px;
+  height: 24px;
+  padding: 0 var(--space-2);
+  border-color: transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dasti-cv-stage-footer__zoom-status:hover,
+.dasti-cv-stage-footer__zoom-status:focus-visible,
+.dasti-cv-stage-footer__zoom-status[aria-expanded="true"] {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+  outline: none;
+}
+
+.dasti-cv-stage-footer__zoom-menu {
+  min-inline-size: 132px;
 }
 
 .dasti-doc-viewer-shell--resume-workspace
@@ -2518,6 +2546,11 @@ span.dasti-cv-ats {
 .dasti-doc-viewer-shell--resume-workspace .dasti-doc-viewport--resume {
   margin-inline: auto;
   max-width: 100%;
+}
+
+.dasti-cv-paper-stage
+  .dasti-doc-viewer-shell.dasti-doc-viewer-shell--resume-panel {
+  box-shadow: none;
 }
 
 .dasti-resume-preview-panel--panel {
@@ -5709,7 +5742,6 @@ span.dasti-cv-ats {
 .dark .dasti-cv-pill-suggestions__title,
 .dark .dasti-cv-pill-suggestions__chip button,
 .dark .dasti-cv-rail-label,
-.dark .dasti-cv-rail-footer__label,
 .dark .dasti-resume-style-inspector__layout-badge,
 .dark .dasti-compose-toolbar__cv-kicker,
 .dark .dasti-import-warning-banner__eyebrow,

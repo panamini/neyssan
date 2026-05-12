@@ -148,7 +148,7 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-cv-paper-stage\s+\.dasti-doc-viewer-shell--resume-panel\s*\{[\s\S]*padding:\s*0;[\s\S]*box-shadow:\s*[\s\S]*var\(--document-viewer-frame-shadow\),[\s\S]*0\s+12px\s+28px\s+-24px\s+color-mix\(in\s+srgb,\s*var\(--shadow-color\)\s+92%,\s*transparent\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-cv-paper-stage\s+\.dasti-document-stage__canvas\[data-document-page="true"\]\s*\{[\s\S]*box-shadow:\s*var\(--document-stage-halo,\s*var\(--sh-paper\)\);/,
+      /\.dasti-cv-paper-stage\s+\.dasti-document-stage__canvas\[data-document-page="true"\]\s*\{[\s\S]*box-shadow:\s*[\s\S]*var\(--document-viewer-frame-shadow\),[\s\S]*0\s+12px\s+28px\s+-24px\s+color-mix\(in\s+srgb,\s*var\(--shadow-color\)\s+92%,\s*transparent\);/,
     );
   });
 
@@ -176,13 +176,25 @@ describe("CvForge toolbar CSS contracts", () => {
   it("moves CV workspace zoom into a footer slider", () => {
     expect(verbatiResumePreviewSource).toContain("dasti-cv-stage-footer");
     expect(verbatiResumePreviewSource).toContain('aria-label="CV zoom"');
+    expect(verbatiResumePreviewSource).toContain('ariaLabel="CV zoom menu"');
+    expect(verbatiResumePreviewSource).toContain(
+      "CV_DOCUMENT_ZOOM_STEPS = [0.3, 0.5",
+    );
     expect(verbatiResumePreviewSource).toContain("visibleZoomPercent");
+    expect(verbatiResumePreviewSource).not.toContain("MagnifyingGlassMinus");
+    expect(verbatiResumePreviewSource).not.toContain("MagnifyingGlassPlus");
     expect(verbatiResumePreviewSource).not.toContain("dasti-doc-zoom-bar--rail");
     expect(productCss).toMatch(
-      /\.dasti-cv-stage-footer\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset-block-end:\s*var\(--space-3\);[\s\S]*min-height:\s*var\(--document-viewer-toolbar-block-size\);[\s\S]*border:\s*1px\s+solid\s+var\(--proposal-chrome-toolbar-border\);[\s\S]*background:\s*var\(--proposal-chrome-toolbar-bg\);/,
+      /\.dasti-cv-stage-footer\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset-block-end:\s*0;[\s\S]*min-height:\s*var\(--cv-stage-footer-block-size,\s*28px\);[\s\S]*padding:\s*2px\s+var\(--space-2\);[\s\S]*border-block-start:\s*1px\s+solid\s+var\(--border-soft\);[\s\S]*background:\s*var\(--bg\);[\s\S]*box-shadow:\s*none;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-cv-stage-footer__zoom-slider\s*\{[\s\S]*accent-color:\s*var\(--cv-zoom-slider-fill\);/,
+      /\.dasti-cv-stage-footer__zoom-slider\s*\{[\s\S]*appearance:\s*none;[\s\S]*block-size:\s*24px;[\s\S]*accent-color:\s*var\(--cv-zoom-slider-fill\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-paper-stage\s+\.dasti-doc-viewport--resume-panel\[data-document-stage="true"\]\s*\{[\s\S]*max-inline-size:\s*100%;[\s\S]*overflow:\s*auto;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-footer__zoom-menu\s*\{[\s\S]*min-inline-size:\s*132px;/,
     );
     expect(productCss).toMatch(
       /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-cv-stage-footer__meta\s*\{[\s\S]*display:\s*none;[\s\S]*\.dasti-cv-stage-footer__zoom-slider\s*\{[\s\S]*flex:\s*1 1 auto;/,
