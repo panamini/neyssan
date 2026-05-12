@@ -33,6 +33,10 @@ const forgeTemplatePanelSource = readFileSync(
   resolve(process.cwd(), "src/components/ForgeTemplatePanel.tsx"),
   "utf8",
 );
+const verbatiResumePreviewSource = readFileSync(
+  resolve(process.cwd(), "src/features/verbati/VerbatiResumePreview.tsx"),
+  "utf8",
+);
 
 function getCssRuleBlock(selector: string): string {
   const start = productCss.indexOf(selector);
@@ -166,6 +170,22 @@ describe("CvForge toolbar CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-cv-skeleton-forge\s*\{[\s\S]*padding-inline:\s*var\(--space-2\);[\s\S]*\.dasti-cv-stage-bar\s*\{[\s\S]*padding:\s*calc\(var\(--space-1\) \+ 1px\);/,
+    );
+  });
+
+  it("moves CV workspace zoom into a footer slider", () => {
+    expect(verbatiResumePreviewSource).toContain("dasti-cv-stage-footer");
+    expect(verbatiResumePreviewSource).toContain('aria-label="CV zoom"');
+    expect(verbatiResumePreviewSource).toContain("visibleZoomPercent");
+    expect(verbatiResumePreviewSource).not.toContain("dasti-doc-zoom-bar--rail");
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-footer\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset-block-end:\s*var\(--space-3\);[\s\S]*min-height:\s*var\(--document-viewer-toolbar-block-size\);[\s\S]*border:\s*1px\s+solid\s+var\(--proposal-chrome-toolbar-border\);[\s\S]*background:\s*var\(--proposal-chrome-toolbar-bg\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-footer__zoom-slider\s*\{[\s\S]*accent-color:\s*var\(--cv-zoom-slider-fill\);/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-cv-stage-footer__meta\s*\{[\s\S]*display:\s*none;[\s\S]*\.dasti-cv-stage-footer__zoom-slider\s*\{[\s\S]*flex:\s*1 1 auto;/,
     );
   });
 

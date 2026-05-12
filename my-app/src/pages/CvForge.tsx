@@ -7008,6 +7008,7 @@ export function CvForge(): JSX.Element {
                     inlineEditing={resumeInlineEditing}
                     sectionActions={resumeSectionActions}
                     paperAi={resumePaperAiState}
+                    showStageZoomFooter={Boolean(currentCv)}
                     showPageCount={
                       workspaceMode === "preview" && Boolean(currentCv)
                     }

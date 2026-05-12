@@ -70,6 +70,7 @@ type VerbatiResumePreviewProps = {
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
   showPageCount?: boolean;
+  showStageZoomFooter?: boolean;
   onPageCountChange?: (pageCount: number) => void;
   onRemoveSection?:
     | ((section: {
@@ -93,6 +94,10 @@ const DEFAULT_RESUME_PREVIEW_METRICS: ResumePreviewMetrics = {
 
 function roundPx(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function formatZoomPercent(value: number) {
+  return `${Math.round(value * 100)}%`;
 }
 
 function normalizeSignatureValue(value: string | undefined | null) {
@@ -253,6 +258,7 @@ export function VerbatiResumePreview({
   sectionActions = null,
   paperAi = null,
   showPageCount = false,
+  showStageZoomFooter = false,
   onPageCountChange,
   onRemoveSection,
 }: VerbatiResumePreviewProps): JSX.Element {
@@ -295,6 +301,7 @@ export function VerbatiResumePreview({
     React.useState<ResumePreviewMetrics>(DEFAULT_RESUME_PREVIEW_METRICS);
   const stageMeasureRef = React.useRef<HTMLDivElement | null>(null);
   const isWorkspaceMode = hostMode === "workspace";
+  const showsStageZoom = isWorkspaceMode || showStageZoomFooter;
   const usesNaturalPageScroll = scrollMode === "natural";
   const handlePreviewMetricsChange = React.useCallback(
     (nextMetrics: ResumePreviewMetrics) => {
@@ -312,7 +319,7 @@ export function VerbatiResumePreview({
     enabled: !compareLayouts,
     measurementRef: stageMeasureRef,
     zoomLevel:
-      !isWorkspaceMode || workspaceViewMode === "fit-page"
+      !showsStageZoom || workspaceViewMode === "fit-page"
         ? 1
         : workspaceViewMode === "manual"
           ? DOCUMENT_ZOOM_STEPS[zoomIndex]
@@ -342,14 +349,18 @@ export function VerbatiResumePreview({
     [stageLayout.availableHeight, stageLayout.availableWidth],
   );
   const userZoom = React.useMemo(() => {
-    if (!isWorkspaceMode || workspaceViewMode === "fit-page") {
+    if (!showsStageZoom || workspaceViewMode === "fit-page") {
       return 1;
     }
     if (workspaceViewMode === "manual") {
       return DOCUMENT_ZOOM_STEPS[zoomIndex];
     }
     return 1;
-  }, [fitPageScale, isWorkspaceMode, workspaceViewMode, zoomIndex]);
+  }, [fitPageScale, showsStageZoom, workspaceViewMode, zoomIndex]);
+  const visibleZoomPercent = React.useMemo(
+    () => formatZoomPercent(stageLayout.pageWidth / A4_PAGE_WIDTH_PX),
+    [stageLayout.pageWidth],
+  );
   const usesWorkshopTemplateRenderer =
     !compareLayouts &&
     isWorkshopResumeTemplateId(resolvedResumeTemplateId) &&
@@ -574,73 +585,94 @@ export function VerbatiResumePreview({
     : dataSignature;
   const fitToken = `${stylePreset.layout}:${stylePreset.typography}:${accentToken}:single:${fitTokenDataSignature}`;
 
-  const workspaceZoomControls = isWorkspaceMode ? (
-    <div
-      className="dasti-doc-zoom-bar dasti-doc-zoom-bar--rail"
-      data-no-pan="true"
-    >
-      <button
-        type="button"
-        className={
-          workspaceViewMode === "fit-page"
-            ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
-            : "dasti-doc-zoom-fit"
-        }
-        onClick={() => {
-          setWorkspaceViewMode("fit-page");
-          setFitRequestCount((count) => count + 1);
-        }}
-        aria-label="Fit page"
-        title="Fit page"
-      >
-        <CornersIn size={14} strokeWidth={1.8} aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="dasti-icon-button"
-        onClick={() => {
-          setWorkspaceViewMode("manual");
-          setZoomIndex((index) => Math.max(0, index - 1));
-        }}
-        disabled={zoomIndex === 0 && workspaceViewMode === "manual"}
-        aria-label="Zoom out"
-        title="Zoom out"
-      >
-        <MagnifyingGlassMinus size={14} strokeWidth={1.7} aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="dasti-icon-button"
-        onClick={() => {
-          setWorkspaceViewMode("manual");
-          setZoomIndex((index) =>
-            Math.min(DOCUMENT_ZOOM_STEPS.length - 1, index + 1),
-          );
-        }}
-        disabled={
-          zoomIndex === DOCUMENT_ZOOM_STEPS.length - 1 &&
-          workspaceViewMode === "manual"
-        }
-        aria-label="Zoom in"
-        title="Zoom in"
-      >
-        <MagnifyingGlassPlus size={14} strokeWidth={1.7} aria-hidden="true" />
-      </button>
+  const workspaceZoomFooter = showsStageZoom ? (
+    <div className="dasti-cv-stage-footer" data-no-pan="true">
+      <div className="dasti-cv-stage-footer__meta">
+        {shouldShowPageCount ? (
+          <span
+            className="dasti-doc-page-count dasti-doc-page-count--resume-footer"
+            aria-label="Page count"
+          >
+            {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
+          </span>
+        ) : null}
+      </div>
+      <div className="dasti-cv-stage-footer__zoom" aria-label="CV zoom controls">
+        <button
+          type="button"
+          className={
+            workspaceViewMode === "fit-page"
+              ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
+              : "dasti-doc-zoom-fit"
+          }
+          onClick={() => {
+            setWorkspaceViewMode("fit-page");
+            setFitRequestCount((count) => count + 1);
+          }}
+          aria-label="Fit page"
+          data-toolbar-tooltip="Fit page"
+        >
+          <CornersIn size={14} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="dasti-icon-button dasti-cv-stage-footer__zoom-step"
+          onClick={() => {
+            setWorkspaceViewMode("manual");
+            setZoomIndex((index) => Math.max(0, index - 1));
+          }}
+          disabled={zoomIndex === 0 && workspaceViewMode === "manual"}
+          aria-label="Zoom out"
+          data-toolbar-tooltip="Zoom out"
+        >
+          <MagnifyingGlassMinus size={14} strokeWidth={1.7} aria-hidden="true" />
+        </button>
+        <input
+          className="dasti-cv-stage-footer__zoom-slider"
+          type="range"
+          min={0}
+          max={DOCUMENT_ZOOM_STEPS.length - 1}
+          step={1}
+          value={workspaceViewMode === "fit-page" ? 1 : zoomIndex}
+          aria-label="CV zoom"
+          aria-valuetext={visibleZoomPercent}
+          onChange={(event) => {
+            setWorkspaceViewMode("manual");
+            setZoomIndex(Number(event.currentTarget.value));
+          }}
+        />
+        <button
+          type="button"
+          className="dasti-icon-button dasti-cv-stage-footer__zoom-step"
+          onClick={() => {
+            setWorkspaceViewMode("manual");
+            setZoomIndex((index) =>
+              Math.min(DOCUMENT_ZOOM_STEPS.length - 1, index + 1),
+            );
+          }}
+          disabled={
+            zoomIndex === DOCUMENT_ZOOM_STEPS.length - 1 &&
+            workspaceViewMode === "manual"
+          }
+          aria-label="Zoom in"
+          data-toolbar-tooltip="Zoom in"
+        >
+          <MagnifyingGlassPlus size={14} strokeWidth={1.7} aria-hidden="true" />
+        </button>
+        <span className="dasti-doc-zoom-status" aria-label="Zoom level">
+          {visibleZoomPercent}
+        </span>
+      </div>
     </div>
   ) : null;
 
   const railStartControls =
-    isWorkspaceMode &&
-    (railLeadControl || railStartAddon || workspaceZoomControls) ? (
+    isWorkspaceMode && (railLeadControl || railStartAddon) ? (
       <div className="dasti-proposal-rail-cluster" data-no-pan="true">
         {railLeadControl}
-        {railLeadControl && workspaceZoomControls ? (
-          <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
-        ) : null}
-        {workspaceZoomControls}
         {railStartAddon ? (
           <>
-            {railLeadControl || workspaceZoomControls ? (
+            {railLeadControl ? (
               <div className="dasti-icon-cluster__divider dasti-proposal-rail-cluster__divider" />
             ) : null}
             {railStartAddon}
@@ -767,7 +799,7 @@ export function VerbatiResumePreview({
         viewport.scrollWidth > viewport.clientWidth + 1;
 
       const shouldDeferToNativeViewportScroll =
-        isWorkspaceMode && workspaceViewMode === "manual" && viewportCanScroll;
+        showsStageZoom && workspaceViewMode === "manual" && viewportCanScroll;
 
       if (shouldDeferToNativeViewportScroll) {
         return;
@@ -777,7 +809,7 @@ export function VerbatiResumePreview({
         event.preventDefault();
       }
     },
-    [compareLayouts, isWorkspaceMode, usesNaturalPageScroll, workspaceViewMode],
+    [compareLayouts, showsStageZoom, usesNaturalPageScroll, workspaceViewMode],
   );
 
   React.useEffect(() => {
@@ -908,7 +940,7 @@ export function VerbatiResumePreview({
             </div>
           ) : null}
           {documentStage}
-          {shouldShowPageCount ? (
+          {shouldShowPageCount && !workspaceZoomFooter ? (
             <span
               className="dasti-doc-page-count dasti-doc-page-count--resume-panel"
               aria-label="Page count"
@@ -917,6 +949,7 @@ export function VerbatiResumePreview({
             </span>
           ) : null}
         </div>
+        {workspaceZoomFooter}
       </div>
     );
   }
@@ -964,14 +997,7 @@ export function VerbatiResumePreview({
           </div>
         </div>
       </div>
-      {shouldShowPageCount ? (
-        <span
-          className="dasti-doc-page-count dasti-doc-page-count--resume-workspace"
-          aria-label="Page count"
-        >
-          {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
-        </span>
-      ) : null}
+      {workspaceZoomFooter}
     </div>
   );
 }

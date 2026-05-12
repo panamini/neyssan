@@ -6738,6 +6738,7 @@
 .dasti-proposal-sheet__controls [data-toolbar-tooltip],
 .dasti-proposal-skeleton-stage__bar [data-toolbar-tooltip],
 .dasti-cv-stage-bar [data-toolbar-tooltip],
+.dasti-cv-stage-footer [data-toolbar-tooltip],
 .dasti-proposal-toolbar [data-toolbar-tooltip] {
   --toolbar-attached-surface-gap: 2px;
   --dasti-toolbar-tooltip-inset-block-start: calc(
@@ -6803,6 +6804,7 @@
 .dasti-proposal-sheet__controls [data-toolbar-tooltip]::after,
 .dasti-proposal-skeleton-stage__bar [data-toolbar-tooltip]::after,
 .dasti-cv-stage-bar [data-toolbar-tooltip]::after,
+.dasti-cv-stage-footer [data-toolbar-tooltip]::after,
 .dasti-proposal-toolbar [data-toolbar-tooltip]::after {
   --dasti-toolbar-tooltip-shadow: var(--shadow-sm);
 }
