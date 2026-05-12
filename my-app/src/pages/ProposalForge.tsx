@@ -9913,8 +9913,12 @@ export function ProposalForge(): JSX.Element {
   const proposalTemplatesOpen =
     templatePanelOpen && activeTemplateSurface === "proposal";
   const handleOpenProposalTemplates = React.useCallback(() => {
+    if (proposalTemplatesOpen) {
+      closeForgePanel();
+      return;
+    }
     openTemplateSurface("proposal");
-  }, [openTemplateSurface]);
+  }, [closeForgePanel, openTemplateSurface, proposalTemplatesOpen]);
   const proposalHeadingFields = React.useMemo<ProposalHeadingField[]>(
     () => [
       {
@@ -10025,8 +10029,12 @@ export function ProposalForge(): JSX.Element {
   const proposalHeadingOpen =
     templatePanelOpen && activeTemplateSurface === "proposal-heading";
   const handleOpenProposalHeading = React.useCallback(() => {
+    if (proposalHeadingOpen) {
+      closeForgePanel();
+      return;
+    }
     openTemplateSurface("proposal-heading");
-  }, [openTemplateSurface]);
+  }, [closeForgePanel, openTemplateSurface, proposalHeadingOpen]);
   const proposalDesignPanelRegistration = React.useMemo(
     () => ({
       surface: "proposal-design" as const,
@@ -10086,8 +10094,12 @@ export function ProposalForge(): JSX.Element {
   const proposalDesignOpen =
     templatePanelOpen && activeTemplateSurface === "proposal-design";
   const handleOpenProposalDesign = React.useCallback(() => {
+    if (proposalDesignOpen) {
+      closeForgePanel();
+      return;
+    }
     openTemplateSurface("proposal-design");
-  }, [openTemplateSurface]);
+  }, [closeForgePanel, openTemplateSurface, proposalDesignOpen]);
   const shouldAnimateDesktopBriefTransition =
     !isSavedView && !isCompactComposeLayout;
   const shouldRenderBriefCard =
