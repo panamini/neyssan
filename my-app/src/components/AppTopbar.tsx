@@ -580,9 +580,7 @@ export function AppTopbar({
                   onClick={proposalTopbarRegistration.onNewProposal}
                 >
                   <Plus size={13} strokeWidth={1.9} aria-hidden="true" />
-                  <span className="app-topbar__doc-action-label">
-                    New proposal
-                  </span>
+                  <span className="app-topbar__doc-action-label">New</span>
                 </button>
                 <Menu
                   ariaLabel="Proposal actions"

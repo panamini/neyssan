@@ -21,6 +21,7 @@ import {
 } from "../lib/proposal-generation-ui";
 import FloatingAiToolbar, { type InlineAiActionId } from "./FloatingAiToolbar";
 import FloatingSuggestionToolbar from "./FloatingSuggestionToolbar";
+import { Menu } from "./ui/menu";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
 import { useDocumentPan } from "../hooks/use-document-pan";
@@ -38,7 +39,6 @@ import {
 import {
   A4_PAGE_HEIGHT_PX,
   A4_PAGE_WIDTH_PX,
-  DOCUMENT_ZOOM_STEPS,
 } from "../lib/document-stage";
 import {
   getTextareaSelectionState,
@@ -493,14 +493,22 @@ export function fallbackCopyText(text: string): boolean {
 const isDev = import.meta.env.DEV;
 const PROPOSAL_PREVIEW_ZOOM_STORAGE_KEY =
   "dasti:proposal-preview-zoom-index:v1";
+const PROPOSAL_PREVIEW_ZOOM_STEPS = [
+  0.3, 0.5, 0.8, 1, 1.25, 1.5, 2,
+] as const;
+const PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX = 3;
+
+function formatProposalZoomOptionLabel(value: number) {
+  return `${Math.round(value * 100)} %`;
+}
 
 function readProposalZoomIndex(_storageKey: string | null | undefined) {
-  return 1;
+  return PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX;
 }
 
 function clampProposalZoomIndex(value: number): number {
   return Math.min(
-    DOCUMENT_ZOOM_STEPS.length - 1,
+    PROPOSAL_PREVIEW_ZOOM_STEPS.length - 1,
     Math.max(0, Math.round(value)),
   );
 }
@@ -641,7 +649,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const zoomIndex = isZoomControlled
     ? clampProposalZoomIndex(controlledZoomIndex)
     : internalZoomIndex;
-  const zoomLevel = DOCUMENT_ZOOM_STEPS[zoomIndex];
+  const zoomLevel = PROPOSAL_PREVIEW_ZOOM_STEPS[zoomIndex];
   const setZoomIndex = React.useCallback(
     (nextValue: number | ((currentIndex: number) => number)) => {
       const resolvedIndex = clampProposalZoomIndex(
@@ -868,6 +876,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     includeParentMeasurement: false,
     pageWidthPx: A4_PAGE_WIDTH_PX,
     pageHeightPx: A4_PAGE_HEIGHT_PX,
+    initialAvailableWidthPx: A4_PAGE_WIDTH_PX,
+    initialAvailableHeightPx: A4_PAGE_HEIGHT_PX,
   });
   const stageLayoutVars =
     hasDocumentShell
@@ -1549,9 +1559,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         <button
           type="button"
           className={
-            zoomIndex === 1
-              ? "dasti-doc-zoom-fit dasti-doc-zoom-trigger"
-              : "dasti-doc-zoom-fit dasti-doc-zoom-trigger dasti-doc-zoom-trigger--active"
+              zoomIndex === PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX
+                ? "dasti-doc-zoom-fit dasti-doc-zoom-trigger"
+                : "dasti-doc-zoom-fit dasti-doc-zoom-trigger dasti-doc-zoom-trigger--active"
           }
           onClick={() => {
             setIsZoomMenuOpen((current) => !current);
@@ -1572,12 +1582,12 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           <button
             type="button"
             className={
-              zoomIndex === 1
+              zoomIndex === PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX
                 ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
                 : "dasti-doc-zoom-fit"
             }
             onClick={() => {
-              setZoomIndex(1);
+              setZoomIndex(PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX);
               setFitRequestCount((count) => count + 1);
             }}
             aria-label="Fit page"
@@ -1600,10 +1610,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             className="dasti-icon-button"
             onClick={() =>
               setZoomIndex((i) =>
-                Math.min(DOCUMENT_ZOOM_STEPS.length - 1, i + 1),
+                Math.min(PROPOSAL_PREVIEW_ZOOM_STEPS.length - 1, i + 1),
               )
             }
-            disabled={zoomIndex === DOCUMENT_ZOOM_STEPS.length - 1}
+            disabled={zoomIndex === PROPOSAL_PREVIEW_ZOOM_STEPS.length - 1}
             aria-label="Zoom in"
             data-toolbar-tooltip="Zoom in"
           >
@@ -2669,19 +2679,52 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           className="dasti-proposal-preview-zoom-footer__slider"
           type="range"
           min={0}
-          max={DOCUMENT_ZOOM_STEPS.length - 1}
+          max={PROPOSAL_PREVIEW_ZOOM_STEPS.length - 1}
           step={1}
           value={zoomIndex}
           aria-label="Proposal zoom"
           aria-valuetext={visibleZoomPercent}
           onChange={(event) => setZoomIndex(Number(event.currentTarget.value))}
         />
-        <span
-          className="dasti-proposal-preview-zoom-footer__status"
-          aria-label={`Zoom level ${visibleZoomPercent}`}
-        >
-          {visibleZoomPercent}
-        </span>
+        <Menu
+          ariaLabel="Proposal zoom menu"
+          align="end"
+          side="top"
+          menuClassName="dasti-proposal-preview-zoom-footer__menu"
+          sections={[
+            {
+              items: [
+                ...PROPOSAL_PREVIEW_ZOOM_STEPS.map((step, index) => ({
+                  id: `zoom-${index}`,
+                  label: formatProposalZoomOptionLabel(step),
+                  role: "menuitemradio" as const,
+                  selected: zoomIndex === index,
+                  onSelect: () => setZoomIndex(index),
+                })),
+                {
+                  id: "fit-page",
+                  label: "Fit page",
+                  role: "menuitemradio" as const,
+                  selected: zoomIndex === PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX,
+                  onSelect: () => {
+                    setZoomIndex(PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX);
+                    setFitRequestCount((count) => count + 1);
+                  },
+                },
+              ],
+            },
+          ]}
+          trigger={
+            <button
+              type="button"
+              className="dasti-doc-zoom-status dasti-proposal-preview-zoom-footer__status"
+              aria-label={`Zoom level ${visibleZoomPercent}`}
+              data-toolbar-tooltip="Zoom presets"
+            >
+              {visibleZoomPercent}
+            </button>
+          }
+        />
       </div>
     </div>
   ) : null;

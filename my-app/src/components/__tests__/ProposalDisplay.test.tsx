@@ -813,11 +813,38 @@ describe("ProposalDisplay", () => {
       ),
     ).toBeTruthy();
     expect(screen.getByRole("slider", { name: "Proposal zoom" })).toHaveValue(
-      "1",
+      "3",
     );
+    expect(
+      screen.getByRole("button", { name: "Zoom level 100%" }),
+    ).toHaveClass("dasti-proposal-preview-zoom-footer__status");
     expect(screen.getByText("100%")).toHaveClass(
       "dasti-proposal-preview-zoom-footer__status",
     );
+    expect(
+      screen.getByRole("button", { name: "Zoom level 100%" }),
+    ).toHaveTextContent("100%");
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom level 100%" }));
+
+    expect(
+      screen.getByRole("menuitemradio", { name: "30 %" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitemradio", { name: "50 %" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitemradio", { name: "Fit page" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "30 %" }));
+
+    expect(screen.getByRole("slider", { name: "Proposal zoom" })).toHaveValue(
+      "0",
+    );
+    expect(
+      screen.getByRole("button", { name: "Zoom level 30%" }),
+    ).toHaveTextContent("30%");
   });
 
   it("keeps the uncontrolled zoom state after zooming in", async () => {

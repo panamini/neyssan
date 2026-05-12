@@ -756,22 +756,41 @@
 }
 
 .dasti-proposal-preview-zoom-footer__status {
-  min-width: 42px;
+  min-width: 52px;
   height: 24px;
+  padding: 0 var(--space-2);
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  border-color: transparent;
+  background: transparent;
   color: var(--tm2);
   font-size: var(--tx);
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
-  pointer-events: none;
+  cursor: pointer;
+}
+
+.dasti-proposal-preview-zoom-footer__status:hover,
+.dasti-proposal-preview-zoom-footer__status:focus-visible,
+.dasti-proposal-preview-zoom-footer__status[aria-expanded="true"] {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+  outline: none;
+}
+
+.dasti-proposal-preview-zoom-footer__menu {
+  min-inline-size: 132px;
 }
 
 .dasti-doc-viewer-shell__surface[data-preview-zoom-footer="true"] {
   --proposal-document-frame-inline-size: calc(
-    var(--document-page-width, var(--document-stage-width)) + 2px
+    max(
+        var(--document-stage-width, var(--document-viewer-shell-inline-size)),
+        var(--document-page-width, var(--document-stage-width))
+      ) + 2px
   );
   width: 100%;
   max-width: none;
@@ -1010,6 +1029,24 @@
 
 .dasti-doc-zoom-status {
   min-width: 62px;
+}
+
+.dasti-doc-zoom-status.dasti-proposal-preview-zoom-footer__status {
+  min-width: 52px;
+  height: 24px;
+  padding: 0 var(--space-2);
+  border-color: transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dasti-doc-zoom-status.dasti-proposal-preview-zoom-footer__status:hover,
+.dasti-doc-zoom-status.dasti-proposal-preview-zoom-footer__status:focus-visible,
+.dasti-doc-zoom-status.dasti-proposal-preview-zoom-footer__status[aria-expanded="true"] {
+  border-color: var(--proposal-chrome-control-active-border);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+  outline: none;
 }
 
 .dasti-inline-ai-toolbar {
@@ -1652,7 +1689,10 @@
 .dasti-proposal-output-shell--workspace
   .dasti-doc-viewer-shell__surface[data-preview-zoom-footer="true"] {
   --proposal-document-frame-inline-size: calc(
-    var(--document-page-width, var(--document-stage-width)) + 2px
+    max(
+        var(--document-stage-width, var(--document-viewer-shell-inline-size)),
+        var(--document-page-width, var(--document-stage-width))
+      ) + 2px
   );
   width: 100%;
   max-width: none;
@@ -2593,6 +2633,15 @@
   border-radius: var(--document-paper-radius);
   box-shadow: var(--document-stage-halo);
   overflow: hidden;
+}
+
+.dasti-doc-viewer-shell__surface[data-preview-zoom-footer="true"]
+  .dasti-proposal-sheet__preview-page,
+.dasti-doc-viewer-shell__surface[data-preview-zoom-footer="true"]
+  .dasti-proposal-document__page {
+  box-shadow:
+    var(--document-viewer-frame-shadow),
+    0 12px 28px -24px color-mix(in srgb, var(--shadow-color) 92%, transparent);
 }
 
 .dasti-proposal-sheet__preview-page--stacked {
@@ -7749,7 +7798,9 @@
   width: min(100%, var(--proposal-workspace-stage-inline-size));
   min-width: 0;
   order: 1;
+  position: relative;
   justify-self: center;
+  z-index: 0;
 }
 
 .dasti-proposal-skeleton-forge[data-forge-drawer-docked="true"] {
@@ -7857,7 +7908,7 @@
   min-height: var(--editor-toolbar-control-block-size);
   min-width: 0;
   padding-inline: 11px;
-  gap: var(--proposal-chrome-tight-gap, var(--space-1));
+  gap: calc(var(--proposal-chrome-tight-gap, var(--space-1)) * 0.75);
   border-color: transparent;
   border-radius: var(--radius-pill);
   background: transparent;
@@ -8002,6 +8053,8 @@
   grid-column: 2;
   order: 2;
   position: sticky;
+  z-index: 2;
+  isolation: isolate;
   top: var(--space-5);
   width: var(--proposal-workspace-rail-inline-size);
   max-width: 100%;

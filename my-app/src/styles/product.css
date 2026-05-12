@@ -2982,13 +2982,13 @@ body,
 .app-topbar__doc-state {
   position: relative;
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   display: inline-grid;
   place-items: center;
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
-  background: var(--sf2);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--color-text-muted);
 }
 
@@ -3284,7 +3284,7 @@ body,
 .app-topbar__doc-action--new {
   width: auto;
   min-width: 58px;
-  gap: var(--space-1);
+  gap: calc(var(--space-1) * 0.75);
   padding: 0 var(--space-2);
   border-color: transparent;
   border-radius: var(--radius-pill);

@@ -446,7 +446,7 @@
   min-height: var(--editor-toolbar-control-block-size);
   min-width: 0;
   padding-inline: 11px;
-  gap: var(--proposal-chrome-tight-gap, var(--space-1));
+  gap: calc(var(--proposal-chrome-tight-gap, var(--space-1)) * 0.75);
   border-color: transparent;
   border-radius: var(--radius-pill);
   background: transparent;
