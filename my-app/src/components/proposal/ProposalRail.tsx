@@ -5,11 +5,9 @@ import {
   ChevronDown,
   FilePdf,
   FileUser,
-  FloppyDisk,
-  Plus,
-  TrashSimple,
   X,
 } from "../../lib/icons";
+import type { FormValues } from "../ProposalInputForm.schemas";
 import type { ProposalTemplateBundleId } from "../../lib/proposal-template-bundles";
 import type { ProposalTemplateId } from "../../../convex/lib/proposals/renderTemplates";
 import type { ProposalPaletteId } from "../../lib/proposal-style-display";
@@ -41,6 +39,13 @@ type ProposalRailLengthOption = {
   selected: boolean;
 };
 
+type ProposalRailTypeOption = {
+  id: FormValues["proposalType"];
+  label: string;
+  description?: string;
+  selected: boolean;
+};
+
 type ProposalRailTab = "draft" | "ask";
 
 export type ProposalRailJobMatchSummary = {
@@ -61,6 +66,8 @@ type ProposalRailProps = {
   sourceCvTitle: string | null;
   sourceCvMeta: string | null;
   proposalTypeLabel: string;
+  proposalTypeOptions: ProposalRailTypeOption[];
+  onSelectProposalType: (proposalType: FormValues["proposalType"]) => void;
   toneLabel: string;
   toneOptions: ProposalRailToneOption[];
   onSelectTone: (toneId: string | null) => void;
@@ -85,14 +92,10 @@ type ProposalRailProps = {
   onToggleSignature?: (enabled: boolean) => void;
   onToggleHandwrittenSignature?: (enabled: boolean) => void;
   aiStream: React.ReactNode;
-  hasProposalContent: boolean;
   generateLabel: string;
   generateDisabled: boolean;
   generateState: "idle" | "loading" | "success" | "error";
   onGenerateDraft: () => void;
-  onNewProposal?: () => void;
-  onSaveToLibrary?: () => void;
-  onDeleteProposal?: () => void;
   cvOptions: ProposalRailCvOption[];
   onSelectCv: (cvId: string) => void;
   onClearCv: () => void;
@@ -124,20 +127,18 @@ export function ProposalRail({
   sourceCvTitle,
   sourceCvMeta,
   proposalTypeLabel,
+  proposalTypeOptions,
+  onSelectProposalType,
   toneLabel,
   toneOptions,
   onSelectTone,
   lengthOptions,
   onSelectLength,
   aiStream,
-  hasProposalContent,
   generateLabel,
   generateDisabled,
   generateState,
   onGenerateDraft,
-  onNewProposal,
-  onSaveToLibrary,
-  onDeleteProposal,
   cvOptions,
   onSelectCv,
   onClearCv,
@@ -253,6 +254,23 @@ export function ProposalRail({
     toneOptions.find((option) => option.selected) ?? toneOptions[0] ?? null;
   const selectedLengthOption =
     lengthOptions.find((option) => option.selected) ?? lengthOptions[1] ?? lengthOptions[0] ?? null;
+
+  const proposalTypeMenuSections = React.useMemo<MenuSection[]>(
+    () => [
+      {
+        label: "Document type",
+        items: proposalTypeOptions.map((option) => ({
+          id: option.id,
+          role: "menuitemradio" as const,
+          selected: option.selected,
+          label: option.label,
+          description: option.description,
+          onSelect: () => onSelectProposalType(option.id),
+        })),
+      },
+    ],
+    [onSelectProposalType, proposalTypeOptions],
+  );
 
   const toneMenuSections = React.useMemo<MenuSection[]>(
     () => [
@@ -567,12 +585,26 @@ export function ProposalRail({
         <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Draft</div>
         <div className="dasti-proposal-skeleton-rail__draft-setup">
           <div className="dasti-proposal-skeleton-rail__draft-setup-body">
-            <div className="dasti-proposal-skeleton-rail__setup-row">
-              <span className="dasti-proposal-skeleton-rail__setup-label">Type</span>
-              <span className="dasti-proposal-skeleton-rail__setup-value">
-                {proposalTypeLabel || "Letter"}
-              </span>
-            </div>
+            <Menu
+              ariaLabel="Document type"
+              align="start"
+              side="bottom"
+              matchTriggerWidth
+              sections={proposalTypeMenuSections}
+              trigger={
+                <button
+                  type="button"
+                  aria-label="Document type"
+                  className="dasti-proposal-skeleton-rail__setup-row dasti-proposal-skeleton-rail__setup-row--button"
+                >
+                  <span className="dasti-proposal-skeleton-rail__setup-label">Type</span>
+                  <span className="dasti-proposal-skeleton-rail__setup-value">
+                    {proposalTypeLabel || "Letter"}
+                  </span>
+                  <ChevronDown className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
+                </button>
+              }
+            />
             <div className="dasti-proposal-skeleton-rail__control-stack">
               <Menu
                 ariaLabel={sourceCvTitle ? "Source CV" : "Pick a CV"}
@@ -613,51 +645,6 @@ export function ProposalRail({
             >
               {generateLabel}
             </Button>
-            {onNewProposal || onSaveToLibrary || onDeleteProposal ? (
-              <div
-                className="dasti-proposal-skeleton-rail__draft-actions"
-                role="group"
-                aria-label="Draft actions"
-              >
-                {onNewProposal ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={onNewProposal}
-                    iconLeft={<Plus size={14} strokeWidth={1.8} />}
-                  >
-                    New proposal
-                  </Button>
-                ) : null}
-                {onSaveToLibrary ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={onSaveToLibrary}
-                    disabled={!hasProposalContent}
-                    aria-label="Save proposal to library"
-                    title="Save proposal to library"
-                    iconLeft={<FloppyDisk size={14} strokeWidth={1.8} />}
-                  >
-                    Save to library
-                  </Button>
-                ) : null}
-                {onDeleteProposal ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={onDeleteProposal}
-                    disabled={!hasProposalContent}
-                    iconLeft={<TrashSimple size={14} strokeWidth={1.8} />}
-                  >
-                    Delete proposal
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
           </div>
         </div>
       </section>

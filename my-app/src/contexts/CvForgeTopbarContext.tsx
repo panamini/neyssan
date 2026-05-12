@@ -4,6 +4,9 @@ import type { AtsAuditResult } from "../lib/ats-audit/types";
 export type CvForgeTopbarRegistration = {
   mode: "edit" | "preview";
   hasCurrentCv: boolean;
+  documentTitle?: string;
+  titlePlaceholder?: string;
+  onTitleCommit?: (nextTitle: string) => void;
   hasTrustedExport: boolean;
   atsAudit: AtsAuditResult | null;
   importIssueCount: number;

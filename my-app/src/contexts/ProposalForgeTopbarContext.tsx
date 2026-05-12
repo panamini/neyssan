@@ -17,6 +17,9 @@ export type ProposalForgeTopbarRegistration = {
   hasProposalContent: boolean;
   exporting: boolean;
   savedShareAvailable?: boolean;
+  onNewProposal: () => void;
+  onDuplicateProposal: () => void;
+  onDeleteProposal: () => void;
   onCopyText: () => void;
   onExportPdf: (mode: "ats" | "styled") => void;
   onExportDocx: () => void;

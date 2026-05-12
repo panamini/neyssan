@@ -323,6 +323,7 @@ const _CvMetadataBase = z.object({
   locale: z.string().optional(),
   authorId: z.string().optional(),
   lastEditedBy: z.string().optional(),
+  titleLocked: z.boolean().optional(),
   authoritativeResume: z
     .object({
       source: z.literal("mistral_v3"),

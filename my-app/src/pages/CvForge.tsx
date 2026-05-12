@@ -101,7 +101,10 @@ import {
   type LibraryProposalRecord,
 } from "../lib/application-library";
 import { buildCanonicalResumeRenderModelFromCv } from "../lib/buildCanonicalResumeRenderModel";
-import { deriveCvTitleFromSections } from "../lib/normalize-cv";
+import {
+  deriveCvTitleCandidateFromSections,
+  deriveCvTitleFromSections,
+} from "../lib/normalize-cv";
 import CvStageBar from "../components/cv/CvStageBar";
 import CvDesignFields, {
   type CvAccentChoice,
@@ -2776,6 +2779,7 @@ export function CvForge(): JSX.Element {
     cvs,
     createNewCv,
     importCv,
+    renameCv,
     saveCurrentCvStyleOnly,
     isLoading: isCvLibraryLoading,
     isLibraryHydrated,
@@ -3843,10 +3847,24 @@ export function CvForge(): JSX.Element {
   const handleCvPreviewPageCountChange = React.useCallback((pageCount: number) => {
     setCvPreviewPageCount((current) => (current === pageCount ? current : pageCount));
   }, []);
+  const handleCvTitleCommit = React.useCallback(
+    (nextTitle: string) => {
+      if (!currentCvId || !currentCv) return;
+      const resolvedTitle =
+        nextTitle.trim() ||
+        deriveCvTitleCandidateFromSections(currentCv.sections) ||
+        "Untitled CV";
+      renameCv(currentCvId, resolvedTitle);
+    },
+    [currentCv, currentCvId, renameCv],
+  );
   const cvTopbarRegistration = React.useMemo(
     () => ({
       mode: workspaceMode,
       hasCurrentCv: Boolean(currentCv),
+      documentTitle: currentCv?.title ?? "Untitled CV",
+      titlePlaceholder: "Untitled CV",
+      onTitleCommit: handleCvTitleCommit,
       hasTrustedExport,
       atsAudit,
       importIssueCount: activeImportRecoveryItems.length,
@@ -3863,6 +3881,7 @@ export function CvForge(): JSX.Element {
       atsAudit,
       cvPreviewPageCount,
       exportingFormat,
+      handleCvTitleCommit,
       handleExportDocx,
       handleOpenAtsAudit,
       handleExportStyledPdf,

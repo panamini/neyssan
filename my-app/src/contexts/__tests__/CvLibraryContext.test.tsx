@@ -1470,10 +1470,14 @@ describe('CvLibraryContext', () => {
     await waitFor(() => expect(ctx.currentCv).not.toBeNull());
 
     const currentId = ctx.currentCvId;
+    const initialLibrarySize = ctx.cvs.length;
     act(() => {
       ctx.renameCv(currentId, 'My Custom CV');
     });
     await waitFor(() => expect(ctx.currentCv.title).toBe('My Custom CV'));
+    expect(ctx.currentCvId).toBe(currentId);
+    expect(ctx.cvs).toHaveLength(initialLibrarySize);
+    expect(ctx.currentCv.metadata?.titleLocked).toBe(true);
 
     const profileSection = ctx.currentCv.sections.find((section: any) => section.type === 'profile');
     const profileItem = profileSection.structuredContent[0];
@@ -1487,6 +1491,46 @@ describe('CvLibraryContext', () => {
 
     await waitFor(() => expect(ctx.currentCv.title).toBe('My Custom CV'));
     expect(ctx.cvs[0].title).toBe('My Custom CV');
+    expect(ctx.cvs).toHaveLength(initialLibrarySize);
+    expect(ctx.currentCvId).toBe(currentId);
+  });
+
+  it('does not auto-retitle a manually locked placeholder title or duplicate the CV', async () => {
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+    await waitFor(() => expect(ctx).toBeDefined());
+
+    act(() => {
+      ctx.createNewCv();
+    });
+    await waitFor(() => expect(ctx.currentCv).not.toBeNull());
+
+    const currentId = ctx.currentCvId;
+    const initialLibrarySize = ctx.cvs.length;
+    act(() => {
+      ctx.renameCv(currentId, 'Imported CV');
+    });
+    await waitFor(() => expect(ctx.currentCv.title).toBe('Imported CV'));
+    expect(ctx.currentCv.metadata?.titleLocked).toBe(true);
+
+    const profileSection = ctx.currentCv.sections.find((section: any) => section.type === 'profile');
+    const profileItem = profileSection.structuredContent[0];
+
+    act(() => {
+      ctx.updateStructuredItem(profileSection.id, profileItem.id, {
+        name: 'Jane Doe',
+        desiredPosition: 'Product Manager',
+      });
+    });
+
+    await waitFor(() => expect(ctx.currentCv.title).toBe('Imported CV'));
+    expect(ctx.currentCvId).toBe(currentId);
+    expect(ctx.cvs).toHaveLength(initialLibrarySize);
+    expect(ctx.cvs.filter((cv: any) => String(cv.id) === String(currentId))).toHaveLength(1);
   });
 
   it('promotes a meaningful current CV before replacing it with a fresh draft', async () => {

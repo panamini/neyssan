@@ -24,6 +24,27 @@ const baseProps = {
   sourceCvTitle: null,
   sourceCvMeta: null,
   proposalTypeLabel: "Letter",
+  proposalTypeOptions: [
+    {
+      id: "cover_letter" as const,
+      label: "Letter",
+      description: "A focused cover letter.",
+      selected: true,
+    },
+    {
+      id: "freelance_proposal" as const,
+      label: "Proposal",
+      description: "A freelance proposal.",
+      selected: false,
+    },
+    {
+      id: "application_message" as const,
+      label: "Message",
+      description: "A short application note.",
+      selected: false,
+    },
+  ],
+  onSelectProposalType: vi.fn(),
   toneLabel: "Auto",
   toneOptions: [
     {
@@ -57,7 +78,6 @@ const baseProps = {
   onSelectStylePalette: vi.fn(),
   onSelectStyleCustomAccent: vi.fn(),
   aiStream: null,
-  hasProposalContent: true,
   generateLabel: "Generate",
   generateDisabled: false,
   generateState: "idle" as const,
@@ -103,38 +123,42 @@ describe("ProposalRail style tab", () => {
     expect(screen.queryByRole("tab", { name: "Heading" })).not.toBeInTheDocument();
   });
 
-  it("renders new, save, and delete proposal actions under the generate button", () => {
-    const onNewProposal = vi.fn();
-    const onSaveToLibrary = vi.fn();
-    const onDeleteProposal = vi.fn();
+  it("keeps document lifecycle actions out of the Draft panel", () => {
+    render(<ProposalRail {...baseProps} />);
+
+    expect(
+      screen.queryByRole("button", { name: "New proposal" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save proposal to library" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Delete proposal" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate" })).toBeInTheDocument();
+  });
+
+  it("opens the Type row as a document type selector", async () => {
+    const onSelectProposalType = vi.fn();
 
     render(
       <ProposalRail
         {...baseProps}
-        onNewProposal={onNewProposal}
-        onSaveToLibrary={onSaveToLibrary}
-        onDeleteProposal={onDeleteProposal}
+        onSelectProposalType={onSelectProposalType}
       />,
     );
 
-    const actions = screen.getByRole("group", { name: "Draft actions" });
-    expect(within(actions).getByRole("button", { name: "New proposal" })).toHaveClass(
-      "ds-btn--ghost",
+    fireEvent.click(screen.getByRole("button", { name: "Document type" }));
+    const menu = await screen.findByRole("menu", { name: "Document type" });
+
+    expect(
+      within(menu).getByRole("menuitemradio", { name: "Letter" }),
+    ).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(
+      within(menu).getByRole("menuitemradio", { name: "Proposal" }),
     );
-    expect(
-      within(actions).getByRole("button", { name: "Save proposal to library" }),
-    ).toHaveClass("ds-btn--ghost");
-    expect(
-      within(actions).getByRole("button", { name: "Delete proposal" }),
-    ).toHaveClass("ds-btn--ghost");
 
-    fireEvent.click(within(actions).getByRole("button", { name: "New proposal" }));
-    fireEvent.click(within(actions).getByRole("button", { name: "Save proposal to library" }));
-    fireEvent.click(within(actions).getByRole("button", { name: "Delete proposal" }));
-
-    expect(onNewProposal).toHaveBeenCalledTimes(1);
-    expect(onSaveToLibrary).toHaveBeenCalledTimes(1);
-    expect(onDeleteProposal).toHaveBeenCalledTimes(1);
+    expect(onSelectProposalType).toHaveBeenCalledWith("freelance_proposal");
   });
 
   it("opens attached CV actions through the shared sidecar menu contract", async () => {
@@ -196,21 +220,6 @@ describe("ProposalRail style tab", () => {
     expect(
       within(menu).getByRole("menuitem", { name: "Remove attached CV" }),
     ).toBeInTheDocument();
-  });
-
-  it("disables save and delete proposal actions when the draft has no content", () => {
-    render(
-      <ProposalRail
-        {...baseProps}
-        hasProposalContent={false}
-        onSaveToLibrary={vi.fn()}
-        onDeleteProposal={vi.fn()}
-      />,
-    );
-
-    const actions = screen.getByRole("group", { name: "Draft actions" });
-    expect(within(actions).getByRole("button", { name: "Save proposal to library" })).toBeDisabled();
-    expect(within(actions).getByRole("button", { name: "Delete proposal" })).toBeDisabled();
   });
 
   it("opens the empty job context drawer with a clear empty hierarchy", () => {

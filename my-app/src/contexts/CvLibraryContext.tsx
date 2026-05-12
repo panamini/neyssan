@@ -79,10 +79,23 @@ function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 function applyAutoTitleIfPlaceholder(doc: CvDocument): CvDocument {
+  if (doc.metadata?.titleLocked === true) return doc;
   if (!isPlaceholderCvTitle(doc.title)) return doc;
   const derived = deriveCvTitleCandidateFromSections(doc.sections);
   if (!derived || derived === doc.title) return doc;
   return { ...doc, title: derived };
+}
+
+function applyManualTitle(doc: CvDocument, newTitle: string): CvDocument {
+  return {
+    ...doc,
+    title: newTitle,
+    metadata: {
+      ...(doc.metadata ?? {}),
+      updatedAt: new Date().toISOString(),
+      titleLocked: true,
+    },
+  };
 }
 
 function readUpdatedAtMs(doc: CvDocument | null | undefined): number | null {
@@ -3932,11 +3945,11 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   function renameCvCtx(id: string, newTitle: string): void {
     setCvs((prev) =>
       prev.map((c) =>
-        String(c.id) === String(id) ? { ...c, title: newTitle } : c,
+        String(c.id) === String(id) ? applyManualTitle(c, newTitle) : c,
       ),
     );
     if (currentCv && String(currentCv.id) === String(id)) {
-      safeSetCurrentCv({ ...currentCv, title: newTitle });
+      safeSetCurrentCv(applyManualTitle(currentCv, newTitle));
     }
   }
 

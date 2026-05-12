@@ -6,7 +6,6 @@ import {
   ArrowSquareOut,
   Briefcase,
   Check,
-  ClipboardText,
   DotsThree,
   FileUser,
   FolderTree,
@@ -34,7 +33,6 @@ import {
   CoverLetterStartSurface,
   type CoverLetterStartSurfaceImportState,
 } from "../components/CoverLetterStartSurface";
-import ProposalSaveDialog from "../components/ProposalSaveDialog";
 import ProposalDisplay, {
   fallbackCopyText,
   getDisplayedProposalText,
@@ -1319,7 +1317,7 @@ export function ProposalLibraryDrawer({
       <ForgeDrawerSearch
         value={query}
         onChange={setQuery}
-        placeholder="Search saved proposals"
+        placeholder="Search proposals"
         storageKey="twoweeks:forge-drawer:recent-proposal-searches"
       />
       <div className="forge-rail-drawer__grid" role="list">
@@ -1340,7 +1338,7 @@ export function ProposalLibraryDrawer({
         />
         {filteredItems.map((item) => renderProposalItem(item))}
         {filteredItems.length === 0 ? (
-          <p className="forge-rail-drawer__empty">No saved proposals found.</p>
+          <p className="forge-rail-drawer__empty">No proposals found.</p>
         ) : null}
       </div>
     </div>
@@ -2627,7 +2625,6 @@ export function ProposalForge(): JSX.Element {
   const [proposalExportingFormat, setProposalExportingFormat] = React.useState<
     string | null
   >(null);
-  const [isSaveDialogOpen, setIsSaveDialogOpen] = React.useState(false);
   const [lastProposalRequest, setLastProposalRequest] =
     React.useState<FormValues | null>(null);
   const [composePreviewValues, setComposePreviewValues] =
@@ -6166,7 +6163,7 @@ export function ProposalForge(): JSX.Element {
       resolveProposalStyleLinkMode(openedSavedProposal.metadata?.styleLinkMode),
     );
     setSavedProposalDocumentTitle(
-      openedSavedProposal.title || "Saved proposal",
+      openedSavedProposal.title || "Untitled proposal",
     );
     const nextContent = resolveProposalStoredText({
       content: openedSavedProposal.content,
@@ -6277,7 +6274,7 @@ export function ProposalForge(): JSX.Element {
       );
       setProposalRecipientDetails(nextRecipientDetails);
       setProposalHeaderVisibility(nextHeaderVisibility);
-      setProposalDocumentTitle(openedSavedProposal.title || "Saved proposal");
+      setProposalDocumentTitle(openedSavedProposal.title || "Untitled proposal");
       setProposalDocumentTitleManual(true);
       setProposalDocumentMeta(nextDocumentMeta);
       setGeneratedProposalId(openedSavedProposal._id as Id<"proposals">);
@@ -6288,7 +6285,7 @@ export function ProposalForge(): JSX.Element {
       setIsBriefExpanded(false);
       lastSavedProposalContentRef.current = nextContent;
       lastSavedProposalTitleRef.current =
-        openedSavedProposal.title || "Saved proposal";
+        openedSavedProposal.title || "Untitled proposal";
       lastPersistedComposeTokenRef.current = null;
       composeAutosavePrimedRef.current = true;
       setComposeSaveStatus("idle");
@@ -6366,7 +6363,7 @@ export function ProposalForge(): JSX.Element {
     const nextStyleLinkMode = resolveProposalStyleLinkMode(
       draftProposal.metadata?.styleLinkMode,
     );
-    const nextTitle = draftProposal.title || "Draft proposal";
+    const nextTitle = draftProposal.title || "Untitled proposal";
     const nextTitleManual = Boolean(draftProposal.title?.trim());
     const nextMeta = nextType ? formatProposalTypeLabel(nextType) : "Draft";
     const nextGeneratedId = draftProposal._id as Id<"proposals">;
@@ -8268,7 +8265,7 @@ export function ProposalForge(): JSX.Element {
   );
 
   const handleCopySavedProposalToDraft = React.useCallback(
-    async (options?: { showFeedback?: boolean }) => {
+    async (options?: { showFeedback?: boolean; copyTitle?: boolean }) => {
       if (!openedSavedProposal || !savedProposalContent) {
         return;
       }
@@ -8302,6 +8299,8 @@ export function ProposalForge(): JSX.Element {
       const shouldRestoreSavedDetachedStyle =
         savedProposalStyleLinkMode === "proposal_local";
       const restoredJobId = openedSavedProposal.metadata?.jobId?.trim() || null;
+      const restoredSourceJobDescription =
+        openedSavedProposal.metadata?.sourceJobDescription?.trim() || null;
       const restoredApplicantName =
         resolveProposalHeadingText(
           openedSavedProposal.metadata,
@@ -8337,6 +8336,14 @@ export function ProposalForge(): JSX.Element {
           openedSavedProposal.metadata?.headerShowRecipientDetails,
       });
       let duplicatedDraftId: Id<"proposals"> | null = null;
+      const restoredDocumentTitle =
+        savedProposalDocumentTitle.trim() ||
+        openedSavedProposal.title ||
+        "Untitled proposal";
+      const nextDraftTitle = options?.copyTitle
+        ? `Copy of ${restoredDocumentTitle}`
+        : restoredDocumentTitle;
+      let restoredModelType = composeToolbarModelType;
 
       if (canPersistProposalState) {
         const duplicateMetadata: ProposalDocumentMetadata = {
@@ -8351,42 +8358,36 @@ export function ProposalForge(): JSX.Element {
             headerVisibility: restoredHeaderVisibility,
           }),
         };
-        void createProposal({
-          title:
-            savedProposalDocumentTitle.trim() ||
-            openedSavedProposal.title ||
-            "Draft proposal",
-          content: savedProposalContent,
-          sections: [{ type: "text", content: savedProposalContent }],
-          status: "draft",
-          metadata: duplicateMetadata,
-        })
-          .then((createdId) => {
-            const nextId = createdId as Id<"proposals">;
-            setGeneratedProposalId(nextId);
-            generatedProposalIdRef.current = nextId;
-          })
-          .catch((error) => {
-            console.error(
-              "Failed to duplicate saved proposal to draft:",
-              error,
-            );
-          });
+        try {
+          duplicatedDraftId = (await createProposal({
+            title: nextDraftTitle,
+            content: savedProposalContent,
+            sections: [{ type: "text", content: savedProposalContent }],
+            status: "draft",
+            metadata: duplicateMetadata,
+          })) as Id<"proposals">;
+        } catch (error) {
+          console.error(
+            "Failed to duplicate saved proposal to draft:",
+            error,
+          );
+        }
       }
 
       if (typeof window !== "undefined") {
         try {
           const existingComposeDraft = readStoredProposalComposeDraft() ?? {};
+          restoredModelType =
+            existingComposeDraft.modelType === "chatgpt" ||
+            existingComposeDraft.modelType === "mistral-small-latest" ||
+            existingComposeDraft.modelType === "mistral-medium-latest" ||
+            existingComposeDraft.modelType === "mistral-large-latest" ||
+            existingComposeDraft.modelType === "mistral-agent"
+              ? existingComposeDraft.modelType
+              : composeToolbarModelType;
           const composeDraft: StoredProposalComposeDraft = {
             proposalType: savedProposalType ?? "cover_letter",
-            modelType:
-              existingComposeDraft.modelType === "chatgpt" ||
-              existingComposeDraft.modelType === "mistral-small-latest" ||
-              existingComposeDraft.modelType === "mistral-medium-latest" ||
-              existingComposeDraft.modelType === "mistral-large-latest" ||
-              existingComposeDraft.modelType === "mistral-agent"
-                ? existingComposeDraft.modelType
-                : composeToolbarModelType,
+            modelType: restoredModelType,
           };
 
           const normalizedRestoredToolbarVoicePreset =
@@ -8413,9 +8414,7 @@ export function ProposalForge(): JSX.Element {
 
       setProposalContent(savedProposalContent);
       setProposalType(savedProposalType);
-      setComposeToolbarModelType(
-        composeDraft.modelType ?? composeToolbarModelType,
-      );
+      setComposeToolbarModelType(restoredModelType);
       setProposalVoicePreset(savedProposalVoicePreset);
       setComposeToolbarVoicePreset(
         normalizeComposeToolbarVoicePreset(restoredRequestedVoicePreset),
@@ -8448,8 +8447,8 @@ export function ProposalForge(): JSX.Element {
       setProposalLetterDate(restoredLetterDate);
       setProposalRecipientDetails(restoredRecipientDetails);
       setProposalHeaderVisibility(restoredHeaderVisibility);
-      setProposalDocumentTitle(savedProposalDocumentTitle);
-      setProposalDocumentTitleManual(Boolean(savedProposalDocumentTitle.trim()));
+      setProposalDocumentTitle(nextDraftTitle);
+      setProposalDocumentTitleManual(Boolean(nextDraftTitle.trim()));
       setProposalDocumentMeta(savedProposalDocumentMeta);
       setDuplicateSourceJobId(restoredJobId);
       setGeneratedProposalId(duplicatedDraftId);
@@ -8510,7 +8509,7 @@ export function ProposalForge(): JSX.Element {
     const shareTitle =
       openedSavedProposal.title.trim() ||
       savedProposalDocumentTitle.trim() ||
-      "Saved proposal";
+      "Untitled proposal";
     const shareUrl =
       typeof window === "undefined"
         ? ""
@@ -8562,6 +8561,12 @@ export function ProposalForge(): JSX.Element {
     showToast,
   ]);
   const handleDeleteOutput = React.useCallback(async () => {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("Delete proposal?")
+    ) {
+      return;
+    }
     if (generatedProposalId && !canPersistProposalState) {
       showConvexAuthRequiredToast("Delete");
       return;
@@ -8642,6 +8647,12 @@ export function ProposalForge(): JSX.Element {
   ]);
   const handleDeleteSavedProposal = React.useCallback(async () => {
     if (!openedSavedProposal) return;
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("Delete proposal?")
+    ) {
+      return;
+    }
     if (!canPersistProposalState) {
       showConvexAuthRequiredToast("Delete");
       return;
@@ -8666,105 +8677,6 @@ export function ProposalForge(): JSX.Element {
     showToast,
     updateProposalRoute,
   ]);
-
-  const saveDialogTitle = React.useMemo(
-    () =>
-      proposalDocumentTitle.trim() ||
-      (proposalType
-        ? formatProposalTypeLabel(proposalType)
-        : "Generated proposal"),
-    [formatProposalTypeLabel, proposalDocumentTitle, proposalType],
-  );
-
-  const handleOpenSaveDialog = React.useCallback(() => {
-    if (!proposalContent || isSavingOutputToLibrary) {
-      return;
-    }
-    if (!canPersistProposalState) {
-      showConvexAuthRequiredToast("Save");
-      return;
-    }
-
-    setIsSaveDialogOpen(true);
-  }, [
-    canPersistProposalState,
-    isSavingOutputToLibrary,
-    proposalContent,
-    showConvexAuthRequiredToast,
-  ]);
-
-  const handleSaveOutputToLibrary = React.useCallback(
-    async (requestedTitle: string) => {
-      if (!proposalContent || isSavingOutputToLibrary) {
-        return;
-      }
-      if (!canPersistProposalState) {
-        showConvexAuthRequiredToast("Save");
-        return;
-      }
-
-      const trimmed = proposalContent.trim();
-      if (!trimmed) {
-        return;
-      }
-
-      const normalizedTitle =
-        requestedTitle.trim() ||
-        proposalDocumentTitle.trim() ||
-        (proposalType
-          ? formatProposalTypeLabel(proposalType)
-          : "Generated proposal");
-
-      setIsSavingOutputToLibrary(true);
-      try {
-        const persistedProposalId = await flushScheduledProposalSave(
-          normalizedTitle,
-          {
-            force: true,
-            status: "saved",
-          },
-        );
-        if (!persistedProposalId) {
-          return;
-        }
-
-        setProposalDocumentTitle(normalizedTitle);
-        setProposalDocumentTitleManual(Boolean(requestedTitle.trim()));
-        setProposalLibraryStatus("saved");
-        lastSavedProposalContentRef.current = trimmed;
-        lastSavedProposalTitleRef.current = normalizedTitle;
-        setIsSaveDialogOpen(false);
-        setComposeSaveStatus("saved");
-        showToast("Saved to library.", {
-          variant: "success",
-          description: "This proposal stays open and will keep autosaving.",
-        });
-      } catch (saveError) {
-        console.error("Failed to save proposal draft to library:", saveError);
-        showToast("Save failed.", {
-          variant: "error",
-          description: "The proposal could not be saved to the library.",
-        });
-      } finally {
-        setIsSavingOutputToLibrary(false);
-      }
-    },
-    [
-      cancelPendingComposeDraftSync,
-      canPersistProposalState,
-      flushScheduledProposalSave,
-      isSavingOutputToLibrary,
-      proposalContent,
-      proposalDocumentTitle,
-      proposalType,
-      formatProposalTypeLabel,
-      showConvexAuthRequiredToast,
-      showToast,
-      navigate,
-      search,
-      writeStoredOutputDraft,
-    ],
-  );
 
   const sourceCvOptions = React.useMemo(
     () =>
@@ -8969,7 +8881,7 @@ export function ProposalForge(): JSX.Element {
   const proposalsPanelRegistration = React.useMemo(
     () => ({
       surface: "proposals" as const,
-      title: "Saved proposals",
+      title: "Proposals",
       icon: <FolderTree size={16} aria-hidden="true" />,
       renderContent: () => (
         <ProposalLibraryDrawer
@@ -9746,29 +9658,17 @@ export function ProposalForge(): JSX.Element {
     [activeCharacterLimitSelection.value, proposalContent],
   );
   const proposalTopbarDocumentState = React.useMemo(() => {
-    if (proposalExportingFormat !== null) return "exporting" as const;
     if (composeSaveStatus === "saving" || isSavingOutputToLibrary) {
       return "saving" as const;
     }
     if (composeSaveStatus === "error") return "error" as const;
-    if (
-      loading ||
-      isLoadingHandoff ||
-      composeGenerateControl.state === "loading"
-    ) {
-      return "generating" as const;
-    }
     if (composeSaveStatus === "saved" || proposalLibraryStatus === "saved") {
       return "saved" as const;
     }
     return "draft" as const;
   }, [
-    composeGenerateControl.state,
     composeSaveStatus,
-    isLoadingHandoff,
     isSavingOutputToLibrary,
-    loading,
-    proposalExportingFormat,
     proposalLibraryStatus,
   ]);
   const proposalGeneratedDocumentTitle = React.useMemo(
@@ -9783,6 +9683,61 @@ export function ProposalForge(): JSX.Element {
       composePreviewValues?.jobTitle,
       proposalType,
     ],
+  );
+  const proposalTypeOptions = React.useMemo(
+    () =>
+      [
+        {
+          id: "cover_letter" as const,
+          label: "Letter",
+          description: "A focused cover letter for the selected job.",
+        },
+        {
+          id: "freelance_proposal" as const,
+          label: "Proposal",
+          description: "A client-facing proposal for freelance work.",
+        },
+        {
+          id: "application_message" as const,
+          label: "Message",
+          description: "A shorter application note.",
+        },
+      ].map((option) => ({
+        ...option,
+        selected: (proposalType ?? "cover_letter") === option.id,
+      })),
+    [proposalType],
+  );
+  const handleProposalTypeSelect = React.useCallback(
+    (nextProposalType: FormValues["proposalType"]) => {
+      setProposalType(nextProposalType);
+      const nextDraft: StoredProposalComposeDraft = {
+        ...(composePreviewValues ?? readStoredProposalComposeDraft() ?? {}),
+        proposalType: nextProposalType,
+      };
+      writeStoredProposalComposeDraft(nextDraft);
+      setComposePreviewValues(nextDraft);
+      setOutputSourceComposeDraft((current) => ({
+        ...(current ?? nextDraft),
+        proposalType: nextProposalType,
+      }));
+      setComposeDraftInitialSeed((current) => ({
+        ...(current ?? nextDraft),
+        proposalType: nextProposalType,
+      }));
+
+      const nextAutoTitle = buildProfessionalApplicationSubject({
+        jobTitle: nextDraft.jobTitle ?? "",
+        jobDescription: nextDraft.jobDescription ?? "",
+        proposalType: nextProposalType,
+      });
+      if (!proposalDocumentTitleManual) {
+        setProposalDocumentTitle(nextAutoTitle);
+        lastAutoDocumentTitleRef.current = nextAutoTitle;
+      }
+      setComposeFormInstanceKey((currentKey) => currentKey + 1);
+    },
+    [composePreviewValues, proposalDocumentTitleManual],
   );
   const proposalTopbarDocumentTitle =
     proposalDocumentTitle.trim() ||
@@ -9838,6 +9793,134 @@ export function ProposalForge(): JSX.Element {
       showToast,
     ],
   );
+  const handleNewProposalDocument = React.useCallback(() => {
+    const hasPendingAutosave =
+      composeSaveStatus === "saving" ||
+      pendingQueuedComposeSnapshotRef.current !== null ||
+      composeAutosaveTimeoutRef.current !== null;
+    if (
+      hasPendingAutosave &&
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Autosave is still finishing. Start a new proposal anyway?",
+      )
+    ) {
+      return;
+    }
+    handleNewProposalDraft();
+  }, [composeSaveStatus, handleNewProposalDraft]);
+  const handleDuplicateProposalDocument = React.useCallback(async () => {
+    if (isSavedView) {
+      await handleCopySavedProposalToDraft({ copyTitle: true });
+      return;
+    }
+
+    const trimmedContent = proposalContent?.trim();
+    if (!trimmedContent) {
+      return;
+    }
+
+    const baseTitle =
+      proposalDocumentTitle.trim() ||
+      proposalGeneratedDocumentTitle.trim() ||
+      "Untitled proposal";
+    const copiedTitle = `Copy of ${baseTitle}`;
+    const metadata = proposalPersistenceMetadata;
+
+    cancelPendingComposeDraftSync();
+    if (canPersistProposalState) {
+      try {
+        const createdId = (await createProposal({
+          title: copiedTitle,
+          content: trimmedContent,
+          sections: [{ type: "text", content: trimmedContent }],
+          status: "draft",
+          metadata,
+        })) as Id<"proposals">;
+        setGeneratedProposalId(createdId);
+        generatedProposalIdRef.current = createdId;
+        lastPersistedComposeTokenRef.current = null;
+        composeAutosavePrimedRef.current = false;
+      } catch (duplicateError) {
+        console.error("Failed to duplicate proposal:", duplicateError);
+        showToast("Duplicate failed.", {
+          variant: "error",
+          description: "The proposal copy could not be created.",
+        });
+        return;
+      }
+    } else {
+      setGeneratedProposalId(null);
+      generatedProposalIdRef.current = null;
+    }
+
+    setProposalDocumentTitle(copiedTitle);
+    setProposalDocumentTitleManual(true);
+    setProposalLibraryStatus("draft");
+    setProposalOutputMode("edit");
+    setComposeSaveStatus("idle");
+    const currentOutputDraft = readStoredProposalOutputDraft();
+    writeStoredOutputDraft({
+      proposalTemplateId: effectiveProposalTemplateId ?? fallbackProposalTemplateId,
+      proposalVerbatiStyle: serializeVerbatiStyle(
+        effectiveProposalStylePresetWithPalette,
+      ),
+      proposalStyleLinkMode: resolvedRuntimeStyleLinkMode,
+      proposalStyleChoice,
+      proposalApplicantName,
+      proposalApplicantRole,
+      proposalContactLine,
+      proposalLetterDate,
+      proposalRecipientDetails,
+      proposalHeaderShowSender: proposalHeaderVisibility.showSender,
+      proposalHeaderShowDate: proposalHeaderVisibility.showDate,
+      proposalHeaderShowSubject: proposalHeaderVisibility.showSubject,
+      proposalHeaderShowRecipient: proposalHeaderVisibility.showRecipient,
+      proposalHeaderShowRecipientDetails:
+        proposalHeaderVisibility.showRecipientDetails,
+      proposalDocumentMeta,
+      paletteOverride: proposalPaletteOverride,
+      customAccentHex: proposalCustomAccentHex,
+      templateBundleId: proposalTemplateBundleId,
+      typographyOverride: effectiveProposalStylePresetWithPalette.typography,
+      layoutOverride:
+        effectiveProposalStylePresetWithPalette.layout === "swiss" ||
+        effectiveProposalStylePresetWithPalette.layout === "editorial" ||
+        effectiveProposalStylePresetWithPalette.layout === "modernist"
+          ? effectiveProposalStylePresetWithPalette.layout
+          : null,
+      characterLimitMode: draftCharacterLimitMode ?? null,
+      characterLimitValue: draftCharacterLimitValue ?? null,
+      ...(currentOutputDraft ?? {}),
+      proposalContent: trimmedContent,
+      proposalType: proposalType ?? "cover_letter",
+      proposalVoicePreset,
+      proposalDocumentTitle: copiedTitle,
+      proposalDocumentTitleManual: true,
+      generatedProposalId: generatedProposalIdRef.current,
+      proposalOutputMode: "edit" as const,
+    });
+    showToast("Duplicated.", {
+      variant: "success",
+      description: "A copy of this proposal is ready to edit.",
+    });
+    updateProposalRoute("compose");
+  }, [
+    canPersistProposalState,
+    cancelPendingComposeDraftSync,
+    createProposal,
+    handleCopySavedProposalToDraft,
+    isSavedView,
+    proposalContent,
+    proposalDocumentTitle,
+    proposalGeneratedDocumentTitle,
+    proposalPersistenceMetadata,
+    proposalType,
+    proposalVoicePreset,
+    showToast,
+    updateProposalRoute,
+    writeStoredOutputDraft,
+  ]);
   const proposalTopbarRegistration = React.useMemo(
     () => ({
       documentTitle: proposalTopbarDocumentTitle,
@@ -9850,6 +9933,17 @@ export function ProposalForge(): JSX.Element {
         : Boolean(proposalContent?.trim()),
       exporting: proposalExportingFormat !== null,
       savedShareAvailable: Boolean(isSavedView && openedSavedProposal),
+      onNewProposal: handleNewProposalDocument,
+      onDuplicateProposal: () => {
+        void handleDuplicateProposalDocument();
+      },
+      onDeleteProposal: () => {
+        if (isSavedView) {
+          void handleDeleteSavedProposal();
+          return;
+        }
+        void handleDeleteOutput();
+      },
       onCopyText: () => {
         void handleCopyOutput();
       },
@@ -9874,7 +9968,11 @@ export function ProposalForge(): JSX.Element {
     }),
     [
       handleCopyOutput,
+      handleDeleteOutput,
+      handleDeleteSavedProposal,
+      handleDuplicateProposalDocument,
       handleExportProposalFile,
+      handleNewProposalDocument,
       handleShareSavedProposal,
       handleProposalTopbarTitleCommit,
       isSavedView,
@@ -10654,40 +10752,6 @@ export function ProposalForge(): JSX.Element {
                 void navigate(`/proposal?${params.toString()}`);
               }}
               signatureSettings={proposalSignatureSettings}
-              savedViewActions={
-                <div
-                  className="dasti-proposal-saved-view-toolbar dasti-proposal-saved-view-toolbar--compact-actions dasti-toolbar--surface-tooltips"
-                  role="group"
-                  aria-label="Saved proposal actions"
-                >
-                  <button
-                    type="button"
-                    className="dasti-icon-button"
-                    data-toolbar-tooltip="Duplicate to draft"
-                    onClick={() => handleCopySavedProposalToDraft()}
-                    disabled={!openedSavedProposal || !savedProposalContent}
-                    aria-label="Duplicate to draft"
-                  >
-                    <ClipboardText size={16} strokeWidth={1.8} />
-                  </button>
-                  <button
-                    type="button"
-                    className="dasti-icon-button"
-                    data-toolbar-tooltip="Delete proposal"
-                    onClick={() => {
-                      void handleDeleteSavedProposal();
-                    }}
-                    disabled={!openedSavedProposal}
-                    aria-label="Delete proposal"
-                  >
-                    <TrashSimple
-                      size={16}
-                      strokeWidth={1.8}
-                      aria-hidden="true"
-                    />
-                  </button>
-                </div>
-              }
             />
           </section>
         ) : (
@@ -10789,6 +10853,8 @@ export function ProposalForge(): JSX.Element {
                             ? formatProposalTypeLabel(proposalType)
                             : "Letter"
                         }
+                        proposalTypeOptions={proposalTypeOptions}
+                        onSelectProposalType={handleProposalTypeSelect}
                         toneLabel={proposalRailToneLabel}
                         toneOptions={proposalRailToneOptions}
                         onSelectTone={(toneId) => {
@@ -10866,7 +10932,6 @@ export function ProposalForge(): JSX.Element {
                             ? handleClearJobContext
                             : undefined
                         }
-                        hasProposalContent={hasMeaningfulProposalContent}
                         generateLabel={composeGenerateControl.label}
                         generateDisabled={
                           composeGenerateControl.disabled ||
@@ -10875,11 +10940,6 @@ export function ProposalForge(): JSX.Element {
                         }
                         generateState={composeGenerateControl.state}
                         onGenerateDraft={handleGenerateFromCollapsedToolbar}
-                        onNewProposal={handleNewProposalDraft}
-                        onSaveToLibrary={handleOpenSaveDialog}
-                        onDeleteProposal={() => {
-                          void handleDeleteOutput();
-                        }}
                         askAiValue={railAskAiValue}
                         askAiBusy={railAskAiBusy}
                         askAiDisabled={!hasMeaningfulProposalContent}
@@ -11156,14 +11216,6 @@ export function ProposalForge(): JSX.Element {
           </>
         )}
       </div>
-      <ProposalSaveDialog
-        open={isSaveDialogOpen}
-        currentTitle={saveDialogTitle}
-        onClose={() => setIsSaveDialogOpen(false)}
-        onSave={(nextTitle) => {
-          void handleSaveOutputToLibrary(nextTitle);
-        }}
-      />
     </div>
   );
 }

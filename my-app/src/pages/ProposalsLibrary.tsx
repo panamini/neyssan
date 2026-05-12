@@ -16,7 +16,7 @@ import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import { clearActiveLocalCvId } from "../lib/proposal-personalization";
 
 const PROPOSAL_TONE_FILTER_OPTIONS = [
-  { value: "all", label: "All tones", description: "Show every saved tone." },
+  { value: "all", label: "All tones", description: "Show every tone." },
   {
     value: "engaging",
     label: "Warm",
@@ -41,9 +41,9 @@ const PROPOSAL_SORT_OPTIONS = [
   {
     value: "newest",
     label: "Newest first",
-    description: "Recently saved first.",
+    description: "Recently updated first.",
   },
-  { value: "oldest", label: "Oldest first", description: "Oldest saved first." },
+  { value: "oldest", label: "Oldest first", description: "Oldest updated first." },
   { value: "title", label: "Title", description: "Alphabetical by title." },
 ] as const;
 
@@ -136,7 +136,7 @@ export function ProposalsLibrary(): JSX.Element {
   >("newest");
   const statusFilter = React.useMemo(() => {
     const value = new URLSearchParams(location.search).get("status");
-    return value === "sent" ? "sent" : "saved";
+    return value === "sent" ? "sent" : "documents";
   }, [location.search]);
 
   const handleCreateProposal = React.useCallback(() => {
@@ -157,7 +157,7 @@ export function ProposalsLibrary(): JSX.Element {
           ? proposal.status === "sent" ||
             proposal.status === "exported" ||
             proposal.status === "submitted"
-          : proposal.status === "saved",
+          : proposal.status === "saved" || proposal.status === "draft",
       )
       .filter((proposal) => {
         if (
@@ -184,12 +184,16 @@ export function ProposalsLibrary(): JSX.Element {
       })
       .sort((a, b) => {
         if (sortOrder === "oldest") {
-          return a._creationTime - b._creationTime;
+          return (
+            (a.updatedAt ?? a._creationTime) - (b.updatedAt ?? b._creationTime)
+          );
         }
         if (sortOrder === "title") {
           return (a.title ?? "").localeCompare(b.title ?? "");
         }
-        return b._creationTime - a._creationTime;
+        return (
+          (b.updatedAt ?? b._creationTime) - (a.updatedAt ?? a._creationTime)
+        );
       });
   }, [proposals, searchQuery, sortOrder, statusFilter, toneFilter]);
 
@@ -201,7 +205,7 @@ export function ProposalsLibrary(): JSX.Element {
           ? proposal.status === "sent" ||
             proposal.status === "exported" ||
             proposal.status === "submitted"
-          : proposal.status === "saved",
+          : proposal.status === "saved" || proposal.status === "draft",
       ).length,
     [proposals, statusFilter],
   );
@@ -223,7 +227,7 @@ export function ProposalsLibrary(): JSX.Element {
   const authStatusMessage = !isLoaded || isConvexAuthLoading
     ? "Loading…"
     : !isSignedIn || !isConvexAuthenticated
-      ? "Sign in to view saved cover letters."
+      ? "Sign in to view your proposals."
       : null;
   const hasActiveLibraryFilters =
     searchQuery.trim().length > 0 || toneFilter !== "all";
@@ -241,14 +245,14 @@ export function ProposalsLibrary(): JSX.Element {
       >
         <div className="dasti-page-header">
           <div className="dasti-stack">
-            <h1 className="dasti-stack__title">All cover letters</h1>
+            <h1 className="dasti-stack__title">All proposals</h1>
           </div>
           <div className="dasti-page-actions">
             <button
               onClick={handleCreateProposal}
               className="dasti-icon-button dasti-library-create-button"
-              aria-label="Create new cover letter"
-              title="Create new cover letter"
+              aria-label="Create new proposal"
+              title="Create new proposal"
             >
               <Plus size={20} strokeWidth={1.75} aria-hidden />
             </button>
@@ -265,31 +269,31 @@ export function ProposalsLibrary(): JSX.Element {
           <>
             <div className="dasti-proposal-library-utility-row">
               <label className="dasti-proposal-library-utility-row__search">
-                <span className="sr-only">Search all cover letters</span>
+                <span className="sr-only">Search all proposals</span>
                 <Input
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search all cover letters"
-                  aria-label="Search all cover letters"
+                  placeholder="Search all proposals"
+                  aria-label="Search all proposals"
                   className="dasti-proposal-library-utility-row__input"
                 />
               </label>
               <LibraryFilterMenu
-                label="Filter all cover letters by tone"
+                label="Filter all proposals by tone"
                 value={toneFilter}
                 options={PROPOSAL_TONE_FILTER_OPTIONS}
                 onChange={setToneFilter}
               />
               <LibraryFilterMenu
-                label="Sort all cover letters"
+                label="Sort all proposals"
                 value={sortOrder}
                 options={PROPOSAL_SORT_OPTIONS}
                 onChange={setSortOrder}
               />
               <span className="dasti-proposal-library-utility-row__count">
                 {sorted.length === proposalCount
-                  ? `${proposalCount} ${statusFilter}`
+                  ? `${proposalCount} document${proposalCount === 1 ? "" : "s"}`
                   : `${sorted.length} of ${proposalCount}`}
               </span>
             </div>
@@ -297,16 +301,16 @@ export function ProposalsLibrary(): JSX.Element {
               <div className="dasti-empty-state">
                 <FileText size={32} strokeWidth={1.2} />
                 <div className="dasti-empty-state__title">
-                  No cover letters match this search
+                  No proposals match this search
                 </div>
                 <p className="dasti-empty-state__subtitle">
-                  Search checks the title, saved text, and imported job offer.
+                  Search checks the title, document text, and imported job offer.
                 </p>
               </div>
             ) : (
               <div className="dasti-grid-auto">
                 {sorted.map((p) => {
-              const date = formatUiDate(p._creationTime) ?? "";
+              const date = formatUiDate(p.updatedAt ?? p._creationTime) ?? "";
               const label = typeLabel(p.metadata?.proposalType);
               const tone = toneLabel(p.metadata?.voicePreset);
               const isConfirming = confirmingId === p._id;
@@ -324,8 +328,12 @@ export function ProposalsLibrary(): JSX.Element {
                   <button
                     onClick={() => {
                       const params = new URLSearchParams();
-                      params.set("view", "saved");
-                      params.set("id", String(p._id));
+                      if (p.status === "draft") {
+                        params.set("draftId", String(p._id));
+                      } else {
+                        params.set("view", "saved");
+                        params.set("id", String(p._id));
+                      }
                       void navigate(`/proposal?${params.toString()}`);
                     }}
                     className="ds-card dasti-doc-card dasti-doc-card--library dasti-doc-card--proposal-library"
@@ -349,7 +357,7 @@ export function ProposalsLibrary(): JSX.Element {
                               : "dasti-doc-card__snippet dasti-doc-card__snippet--library dasti-doc-card__snippet--muted"
                           }
                         >
-                          {snippet || "Draft preview appears here."}
+                          {snippet || "Preview appears here once the document has content."}
                         </p>
                       </div>
 
@@ -434,17 +442,17 @@ export function ProposalsLibrary(): JSX.Element {
           <div className="dasti-empty-state">
             <FileText size={32} strokeWidth={1.2} />
             <div className="dasti-empty-state__title">
-              {statusFilter === "sent" ? "No sent cover letters yet" : "No cover letters yet"}
+              {statusFilter === "sent" ? "No sent proposals yet" : "No proposals yet"}
             </div>
             <p className="dasti-empty-state__subtitle">
-              Generated drafts will appear here with their title, tone, and a readable excerpt.
+              Proposals appear here automatically with their title, type, and last update.
             </p>
             <button
               onClick={handleCreateProposal}
               className="dasti-button dasti-button--primary dasti-button--pill"
             >
               <Plus size={14} />
-              Write your first cover letter
+              New proposal
             </button>
           </div>
         ) : null}

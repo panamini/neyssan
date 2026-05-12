@@ -70,6 +70,9 @@ function RegisterCvTopbar(): null {
     () => ({
       mode: "preview" as const,
       hasCurrentCv: true,
+      documentTitle: "Jessica Claire",
+      titlePlaceholder: "Untitled CV",
+      onTitleCommit: vi.fn(),
       hasTrustedExport: true,
       atsAudit: excellentAudit,
       importIssueCount: 0,
@@ -104,15 +107,19 @@ describe("AppTopbar CV controls", () => {
     );
 
     expect(screen.queryByText("Working on:")).not.toBeInTheDocument();
-    expect(screen.getByTitle("Jessica Claire profile source")).toHaveClass(
+    expect(container.querySelector(".app-topbar__doc-identity")).toHaveAttribute(
+      "title",
+      "Jessica Claire",
+    );
+    expect(container.querySelector(".app-topbar__doc-identity")).toHaveClass(
       "app-topbar__doc-identity",
     );
     expect(
-      container.querySelector(".app-topbar__doc-title-main"),
+      container.querySelector(".document-title-editor__text"),
     ).toHaveTextContent("Jessica Claire");
     expect(
       container.querySelector(".app-topbar__doc-title-suffix"),
-    ).toHaveTextContent("profile source");
+    ).not.toBeInTheDocument();
     expect(container.querySelector(".app-topbar__actions")).toBeTruthy();
     expect(screen.queryByText("Ready")).not.toBeInTheDocument();
     expect(screen.queryByText("Saved")).not.toBeInTheDocument();
@@ -136,6 +143,55 @@ describe("AppTopbar CV controls", () => {
     expect(
       await screen.findByRole("menuitem", { name: "Safe-send checklist" }),
     ).toBeInTheDocument();
+  });
+
+  it("commits CV title edits from the document identity editor", async () => {
+    const user = userEvent.setup();
+    const onTitleCommit = vi.fn();
+
+    function RegisterEditableTitle(): null {
+      const registration = React.useMemo(
+        () => ({
+          mode: "edit" as const,
+          hasCurrentCv: true,
+          documentTitle: "Jessica Claire",
+          titlePlaceholder: "Untitled CV",
+          onTitleCommit,
+          hasTrustedExport: true,
+          atsAudit: excellentAudit,
+          importIssueCount: 0,
+          importReviewBannerVisible: false,
+          exporting: false,
+          pageCount: 1,
+          onOpenAtsAudit: vi.fn(),
+          onOpenImportReview: vi.fn(),
+          onExportPdf: vi.fn(),
+          onExportDocx: vi.fn(),
+        }),
+        [],
+      );
+      useRegisterCvForgeTopbar(registration);
+      return null;
+    }
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_1"]}>
+        <CvForgeTopbarProvider>
+          <RegisterEditableTitle />
+          <AppTopbar
+            commandPaletteOpen={false}
+            onOpenCommandPalette={vi.fn()}
+          />
+        </CvForgeTopbarProvider>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit CV title" }));
+    const input = screen.getByLabelText("CV title");
+    await user.clear(input);
+    await user.type(input, "Security Guard Resume{Enter}");
+
+    expect(onTitleCommit).toHaveBeenCalledWith("Security Guard Resume");
   });
 
   it("does not show ATS or export review language for untrusted export metadata", () => {
