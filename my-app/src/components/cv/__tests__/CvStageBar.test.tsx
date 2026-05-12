@@ -1,6 +1,5 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import CvStageBar from "../CvStageBar";
 
@@ -9,51 +8,24 @@ const baseProps = {
   exporting: false,
   tone: "natural" as const,
   onModeChange: vi.fn(),
-  onPickResume: vi.fn(),
 };
 
 describe("CvStageBar", () => {
-  it("shows a compact pick resume menu and selects saved resumes", async () => {
-    const user = userEvent.setup();
-    const onPickResume = vi.fn();
-
+  it("keeps document switching out of the stage bar", () => {
     render(
       <CvStageBar
         {...baseProps}
-        onPickResume={onPickResume}
         onOpenSections={vi.fn()}
         onOpenDesign={vi.fn()}
         onOpenTemplates={vi.fn()}
-        resumeOptions={[
-          {
-            id: "resume_alpha",
-            title: "Product resume",
-            description: "6 sections",
-            selected: true,
-          },
-          {
-            id: "resume_beta",
-            title: "Design resume",
-            description: "5 sections",
-            selected: false,
-          },
-        ]}
       />,
     );
 
-    const pickResumeTrigger = screen.getByRole("button", {
-      name: /Pick resume/i,
-    });
-    expect(pickResumeTrigger).toBeInTheDocument();
-    expect(pickResumeTrigger).toHaveClass("dasti-cv-stage-bar__plain-action");
-    expect(pickResumeTrigger).not.toHaveAttribute("title");
-    expect(pickResumeTrigger).toHaveAttribute(
-      "data-toolbar-tooltip",
-      "Pick resume",
-    );
     expect(screen.queryByText("Pick resume")).not.toBeInTheDocument();
     expect(
-      pickResumeTrigger.closest(".dasti-toolbar--surface-tooltips"),
+      screen
+        .getByRole("button", { name: "Edit" })
+        .closest(".dasti-toolbar--surface-tooltips"),
     ).toBeTruthy();
     const editTrigger = screen.getByRole("button", { name: "Edit" });
     const previewTrigger = screen.getByRole("button", {
@@ -106,13 +78,5 @@ describe("CvStageBar", () => {
     expect(
       screen.queryByRole("button", { name: /New CV/i }),
     ).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /Pick resume/i }));
-    expect(pickResumeTrigger).toHaveAttribute("aria-expanded", "true");
-    await user.click(
-      await screen.findByRole("menuitemradio", { name: /Design resume/i }),
-    );
-
-    expect(onPickResume).toHaveBeenCalledWith("resume_beta");
   });
 });

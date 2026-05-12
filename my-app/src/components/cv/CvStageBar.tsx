@@ -3,26 +3,16 @@ import {
   Layout,
   Eye,
   FileUser,
-  FolderOpen,
-  FolderSimple,
   ListNumbers,
   PenLine,
 } from "@/lib/icons";
-import { Button, Menu, ToneBadge } from "../ui";
+import { Button, ToneBadge } from "../ui";
 import type { CvToneChoice } from "./CvRail";
-
-export type CvStageBarResumeOption = {
-  id: string;
-  title: string;
-  description: string | null;
-  selected: boolean;
-};
 
 type CvStageBarProps = {
   mode: "edit" | "preview";
   exporting: boolean;
   tone: CvToneChoice;
-  resumeOptions: CvStageBarResumeOption[];
   templatesOpen?: boolean;
   sectionsOpen?: boolean;
   designOpen?: boolean;
@@ -30,14 +20,11 @@ type CvStageBarProps = {
   onOpenSections?: () => void;
   onOpenDesign?: () => void;
   onOpenTemplates?: () => void;
-  onPickResume: (cvId: string) => void;
 };
 
 export function CvStageBar({
   mode,
-  exporting,
   tone,
-  resumeOptions,
   templatesOpen = false,
   sectionsOpen = false,
   designOpen = false,
@@ -45,36 +32,8 @@ export function CvStageBar({
   onOpenSections,
   onOpenDesign,
   onOpenTemplates,
-  onPickResume,
 }: CvStageBarProps): JSX.Element {
   const stageIconSize = 16;
-
-  const resumeMenuSections = React.useMemo(
-    () => [
-      {
-        label: "Pick resume",
-        items:
-          resumeOptions.length > 0
-            ? resumeOptions.map((option) => ({
-                id: option.id,
-                role: "menuitemradio" as const,
-                selected: option.selected,
-                label: option.title,
-                description: option.description ?? "Saved resume.",
-                onSelect: () => onPickResume(option.id),
-              }))
-            : [
-                {
-                  id: "no-resumes",
-                  label: "No resumes available",
-                  description: "Import or create a resume first.",
-                  disabled: true,
-                },
-              ],
-      },
-    ],
-    [onPickResume, resumeOptions],
-  );
   return (
     <div className="dasti-cv-stage-bar dasti-toolbar--surface-tooltips">
       <div
@@ -163,34 +122,6 @@ export function CvStageBar({
       <ToneBadge tone={tone}>
         {tone.charAt(0).toUpperCase() + tone.slice(1)}
       </ToneBadge>
-      <Menu
-        ariaLabel="Pick resume"
-        align="end"
-        menuClassName="dasti-cv-stage-bar__resume-menu"
-        sections={resumeMenuSections}
-        trigger={
-          <button
-            type="button"
-            className="dasti-cv-stage-bar__plain-action dasti-cv-stage-bar__pick-resume"
-            disabled={exporting}
-            aria-label="Pick resume"
-            data-toolbar-tooltip="Pick resume"
-          >
-            <span
-              className="dasti-cv-stage-bar__pick-icon dasti-cv-stage-bar__pick-icon--closed"
-              aria-hidden="true"
-            >
-              <FolderSimple size={stageIconSize} strokeWidth={1.8} />
-            </span>
-            <span
-              className="dasti-cv-stage-bar__pick-icon dasti-cv-stage-bar__pick-icon--open"
-              aria-hidden="true"
-            >
-              <FolderOpen size={stageIconSize} strokeWidth={1.8} />
-            </span>
-          </button>
-        }
-      />
     </div>
   );
 }

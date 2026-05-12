@@ -7,6 +7,12 @@ export type CvForgeTopbarRegistration = {
   documentTitle?: string;
   titlePlaceholder?: string;
   onTitleCommit?: (nextTitle: string) => void;
+  resumeOptions?: CvForgeTopbarResumeOption[];
+  onPickResume?: (cvId: string) => void;
+  onNewCv?: () => void;
+  onImportCv?: () => void;
+  onDuplicateCv?: () => void;
+  onDeleteCv?: () => void;
   hasTrustedExport: boolean;
   atsAudit: AtsAuditResult | null;
   importIssueCount: number;
@@ -17,6 +23,13 @@ export type CvForgeTopbarRegistration = {
   onOpenImportReview: () => void;
   onExportPdf: () => void;
   onExportDocx: () => void;
+};
+
+export type CvForgeTopbarResumeOption = {
+  id: string;
+  title: string;
+  description: string | null;
+  selected: boolean;
 };
 
 type CvForgeTopbarContextValue = {

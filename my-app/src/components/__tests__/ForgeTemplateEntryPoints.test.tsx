@@ -62,13 +62,11 @@ function CvTemplateEntryPoint({
         mode="edit"
         exporting={false}
         tone="natural"
-        resumeOptions={[]}
         templatesOpen={open && activeSurface === "cv"}
         designOpen={open && activeSurface === "cv-design"}
         onModeChange={vi.fn()}
         onOpenDesign={() => openSurface("cv-design")}
         onOpenTemplates={() => openSurface("cv")}
-        onPickResume={vi.fn()}
       />
     </>
   );
