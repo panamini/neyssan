@@ -7604,13 +7604,13 @@
   flex: 0 0 auto;
   align-items: center;
   position: relative;
-  padding-inline-start: var(--space-2);
-  margin-inline-start: var(--space-1);
+  gap: var(--proposal-chrome-toolbar-gap, var(--space-2));
 }
 
 .dasti-proposal-skeleton-stage__primary-action {
   flex: 0 1 auto;
   min-width: 0;
+  gap: var(--proposal-chrome-tight-gap, var(--space-1));
 }
 
 .dasti-proposal-skeleton-stage__primary-action[data-stage-tooltip-mode="compact"]::after {
@@ -7621,15 +7621,6 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.dasti-proposal-skeleton-stage__actions::before {
-  content: "";
-  position: absolute;
-  inset-block: 6px;
-  inset-inline-start: 0;
-  width: 1px;
-  background: color-mix(in srgb, var(--ti) 10%, transparent);
 }
 
 .dasti-proposal-skeleton-stage__actions .dasti-icon-cluster__divider {
@@ -7803,7 +7794,7 @@
 
 .dasti-proposal-skeleton-rail__tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-1);
   padding: var(--space-1);
   border: 1px solid var(--color-border);
@@ -7847,61 +7838,22 @@
 
 .dasti-proposal-design-fields {
   min-height: 0;
-  --proposal-design-preview-inline-size: 136px;
-  --proposal-design-preview-block-size: calc(
-    var(--proposal-design-preview-inline-size) * 297 / 210
-  );
-  --proposal-design-preview-gap: 12px;
 }
 
-.dasti-proposal-design-style-grid {
-  display: grid;
-  grid-template-columns: repeat(
-    2,
-    var(--proposal-design-preview-inline-size)
-  );
-  align-items: start;
-  justify-content: start;
-  gap: var(--proposal-design-preview-gap);
-  padding: 4px;
-}
-
-.dasti-proposal-design-style-card {
+.dasti-proposal-design-style-pills {
   position: relative;
-  min-width: 0;
-  display: grid;
-  gap: var(--space-2);
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--ti);
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
+  width: 100%;
 }
 
-.dasti-proposal-design-style-card:hover,
-.dasti-proposal-design-style-card:focus-visible {
-  background: transparent;
-  outline: none;
-}
-
-.dasti-proposal-design-style-card[data-selected="true"] {
-  box-shadow: none;
-}
-
-.dasti-proposal-design-style-card:hover .dasti-proposal-design-style-card__label,
-.dasti-proposal-design-style-card:focus-visible .dasti-proposal-design-style-card__label,
-.dasti-proposal-design-style-card[data-selected="true"] .dasti-proposal-design-style-card__label {
-  color: var(--ac);
+.dasti-proposal-design-style-pills button {
+  position: relative;
 }
 
 .dasti-proposal-design-style-card__custom-dot {
   position: absolute;
   z-index: 2;
-  inset-block-start: 3px;
-  inset-inline-end: 5px;
+  inset-block-start: -3px;
+  inset-inline-end: -3px;
   width: 8px;
   height: 8px;
   border-radius: var(--radius-pill);
@@ -7909,52 +7861,12 @@
   box-shadow: 0 0 0 2px var(--paper);
 }
 
-.dasti-proposal-design-preview {
-  width: var(--proposal-design-preview-inline-size);
-  height: var(--proposal-design-preview-block-size);
-  box-sizing: border-box;
-  display: block;
-  position: relative;
-  overflow: hidden;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.dasti-proposal-design-preview__page {
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  display: block;
-  transform-origin: top left;
-  pointer-events: none;
-}
-
-.dasti-proposal-design-preview .dasti-proposal-document {
-  background: transparent;
-}
-
-.dasti-proposal-design-preview .dasti-proposal-document > .dasti-proposal-document__page ~ .dasti-proposal-document__page {
-  display: none;
-}
-
-.dasti-proposal-design-style-card__label {
-  overflow: hidden;
-  color: var(--ti);
-  font-size: var(--tx);
-  font-weight: 700;
-  line-height: var(--lx);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .dasti-proposal-design-fields__reset {
   align-self: start;
   justify-self: start;
   width: fit-content;
   min-height: var(--control-sm);
+  margin-inline-start: auto;
   margin-block-start: 0;
   padding: 0 var(--space-2);
   border: 1px solid var(--border-soft);

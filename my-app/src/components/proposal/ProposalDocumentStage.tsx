@@ -72,7 +72,6 @@ export function ProposalDocumentStage({
       aria-label="Proposal document stage"
     >
       <div className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-toolbar--surface-tooltips">
-        <ToneBadge tone={toneValue}>{toneLabel}</ToneBadge>
         <div
           className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__actions"
           role="group"
@@ -86,22 +85,22 @@ export function ProposalDocumentStage({
             <button
               type="button"
               className="dasti-proposal-mode-toggle"
-              data-selected={mode === "edit" ? "true" : undefined}
-              onClick={() => onModeChange("edit")}
-              aria-label="Edit proposal"
-              data-toolbar-tooltip="Edit"
-            >
-              <PenLine size={14} strokeWidth={1.8} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="dasti-proposal-mode-toggle"
               data-selected={mode === "preview" ? "true" : undefined}
               onClick={() => onModeChange("preview")}
               aria-label="Preview proposal"
               data-toolbar-tooltip="Preview"
             >
               <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="dasti-proposal-mode-toggle"
+              data-selected={mode === "edit" ? "true" : undefined}
+              onClick={() => onModeChange("edit")}
+              aria-label="Edit proposal"
+              data-toolbar-tooltip="Edit"
+            >
+              <PenLine size={14} strokeWidth={1.8} aria-hidden="true" />
             </button>
           </div>
           {styleControl ? (
@@ -163,6 +162,7 @@ export function ProposalDocumentStage({
               </span>
             </Button>
           ) : null}
+          <ToneBadge tone={toneValue}>{toneLabel}</ToneBadge>
           {mode === "edit" ? (
             <>
               <span className="dasti-icon-cluster__divider" aria-hidden="true" />

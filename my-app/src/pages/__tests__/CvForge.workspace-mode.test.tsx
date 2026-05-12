@@ -4469,9 +4469,11 @@ describe("CvForge workspace mode", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Design" }));
 
-    expect(
-      screen.getByRole("button", { name: "Style 2 - Custom" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Style 2" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByLabelText("Customized")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Reset Style 2" }));
 
@@ -4532,9 +4534,11 @@ describe("CvForge workspace mode", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Design" }));
 
-    expect(
-      screen.getByRole("button", { name: "Style 2 - Custom" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Style 2" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByLabelText("Customized")).toBeInTheDocument();
   });
 
   it("applies template and font edits to the cv preview", async () => {

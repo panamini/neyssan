@@ -46,6 +46,23 @@ describe("ProposalDocumentStage proposal actions", () => {
     expect(screen.getByRole("button", { name: "Heading" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Design" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Templates" })).toBeInTheDocument();
+    const preview = screen.getByRole("button", { name: "Preview proposal" });
+    const heading = screen.getByRole("button", { name: "Heading" });
+    const design = screen.getByRole("button", { name: "Design" });
+    const templates = screen.getByRole("button", { name: "Templates" });
+    const tone = screen.getByText("Warm tone");
+    expect(
+      preview.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+    expect(
+      heading.compareDocumentPosition(design) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+    expect(
+      design.compareDocumentPosition(templates) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+    expect(
+      templates.compareDocumentPosition(tone) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
   });
 
   it("wires the Heading action in preview and edit modes", () => {

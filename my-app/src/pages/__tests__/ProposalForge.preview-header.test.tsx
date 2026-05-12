@@ -155,7 +155,7 @@ describe("ProposalForge preview applicant fallback", () => {
     fireEvent.change(screen.getByLabelText("Full name"), {
       target: { value: "Alex Martin" },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
 
     const signatureSwitch = await screen.findByRole("switch", {
       name: "Printed name",
@@ -204,7 +204,7 @@ describe("ProposalForge preview applicant fallback", () => {
       );
     });
 
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
     fireEvent.click(await screen.findByRole("switch", { name: "Printed name" }));
 
     await waitFor(() => {

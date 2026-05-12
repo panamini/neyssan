@@ -484,7 +484,7 @@ describe("ProposalForge draft persistence", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Style 2" })).toHaveAttribute(

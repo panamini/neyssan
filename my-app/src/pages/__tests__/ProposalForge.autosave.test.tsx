@@ -429,7 +429,7 @@ describe("ProposalForge autosave", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
     fireEvent.click(screen.getByRole("button", { name: "Use Ochre accent" }));
 
     await waitForAutosave();
@@ -584,7 +584,7 @@ describe("ProposalForge autosave", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
     fireEvent.click(screen.getByRole("button", { name: "Style 3" }));
 
     expect(screen.getByRole("button", { name: "Style 3" })).toHaveAttribute(
@@ -594,7 +594,7 @@ describe("ProposalForge autosave", () => {
     expect(screen.getByTestId("proposal-autosave-style")).toHaveTextContent(
       "|ink",
     );
-    expect(screen.queryByText("Style 3 · Custom")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Customized")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Use Cobalt accent" }));
 
@@ -602,7 +602,7 @@ describe("ProposalForge autosave", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.getByText("Style 3 · Custom")).toBeInTheDocument();
+    expect(screen.getByLabelText("Customized")).toBeInTheDocument();
     expect(screen.getByTestId("proposal-autosave-style")).toHaveTextContent(
       "|cobalt",
     );
