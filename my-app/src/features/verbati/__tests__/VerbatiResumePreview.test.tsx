@@ -693,7 +693,9 @@ describe("VerbatiResumePreview", () => {
     });
     viewport!.scrollTop = 0;
 
-    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    fireEvent.change(screen.getByRole("slider", { name: "CV zoom" }), {
+      target: { value: "4" },
+    });
     fireEvent.wheel(page!, { deltaY: 140 });
 
     expect(viewport!.scrollTop).toBe(0);
