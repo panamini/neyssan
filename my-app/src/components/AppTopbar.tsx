@@ -8,6 +8,7 @@ import { useCvForgeTopbarRegistration } from "../contexts/CvForgeTopbarContext";
 import { useProposalForgeTopbarRegistration } from "../contexts/ProposalForgeTopbarContext";
 import { IconButton, Menu } from "./ui";
 import CvShareMenu from "./cv/CvShareMenu";
+import DocumentTitleEditor from "./DocumentTitleEditor";
 import {
   PROPOSAL_COMPOSE_DRAFT_UPDATED_EVENT,
   readStoredProposalComposeDraft,
@@ -279,11 +280,13 @@ export function AppTopbar({
   const cvDocumentTitleSuffix = "profile source";
   const cvDocumentIdentityLabel = `${cvDocumentTitleMain} ${cvDocumentTitleSuffix}`;
   const proposalDocumentTitleMain =
-    proposalTopbarRegistration?.title?.trim() ||
+    proposalTopbarRegistration?.documentTitle?.trim() ||
     topbarDocumentTitle?.trim() ||
-    "Proposal draft";
-  const proposalDocumentTitleSuffix = "application package";
-  const proposalDocumentIdentityLabel = `${proposalDocumentTitleMain} ${proposalDocumentTitleSuffix}`;
+    "Untitled proposal";
+  const proposalDocumentTitlePlaceholder =
+    proposalTopbarRegistration?.titlePlaceholder?.trim() ||
+    "Untitled proposal";
+  const proposalDocumentIdentityLabel = proposalDocumentTitleMain;
   const proposalDocumentState =
     proposalTopbarRegistration?.documentState ?? "draft";
   const proposalDocumentStateLabel =
@@ -367,15 +370,16 @@ export function AppTopbar({
               />
               <FileText size={15} strokeWidth={1.8} aria-hidden="true" />
             </span>
-            <span className="app-topbar__doc-title" aria-hidden="true">
-              <span className="app-topbar__doc-title-main">
-                {proposalDocumentTitleMain}
-              </span>
-              <span className="app-topbar__doc-title-suffix">
-                {" "}
-                {proposalDocumentTitleSuffix}
-              </span>
-            </span>
+            <DocumentTitleEditor
+              className="app-topbar__doc-title"
+              documentTitle={proposalDocumentTitleMain}
+              titlePlaceholder={proposalDocumentTitlePlaceholder}
+              ariaLabel="Proposal title"
+              onTitleCommit={(nextTitle) => {
+                proposalTopbarRegistration?.onTitleCommit(nextTitle);
+              }}
+              disabled={!proposalTopbarRegistration?.onTitleCommit}
+            />
             {proposalTopbarRegistration?.lengthLabel ? (
               <span className="app-topbar__doc-meta">
                 {proposalTopbarRegistration.lengthLabel}

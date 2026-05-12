@@ -60,10 +60,7 @@ type ProposalRailProps = {
   jobMatch: ProposalRailJobMatchSummary | null;
   sourceCvTitle: string | null;
   sourceCvMeta: string | null;
-  draftTitle: string;
-  draftTitlePlaceholder: string;
-  onDraftTitleChange: (value: string) => void;
-  onDraftTitleCommit: () => void;
+  proposalTypeLabel: string;
   toneLabel: string;
   toneOptions: ProposalRailToneOption[];
   onSelectTone: (toneId: string | null) => void;
@@ -126,10 +123,7 @@ export function ProposalRail({
   jobMatch,
   sourceCvTitle,
   sourceCvMeta,
-  draftTitle,
-  draftTitlePlaceholder,
-  onDraftTitleChange,
-  onDraftTitleCommit,
+  proposalTypeLabel,
   toneLabel,
   toneOptions,
   onSelectTone,
@@ -329,6 +323,29 @@ export function ProposalRail({
           data-toolbar-tooltip={selectedToneOption?.description ?? "Proposal tone"}
         >
           <span>{toneLabel}</span>
+          <ChevronDown className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
+        </button>
+      }
+    />
+  );
+
+  const renderDraftToneSelect = () => (
+    <Menu
+      ariaLabel="Tone"
+      align="start"
+      side="bottom"
+      matchTriggerWidth
+      sections={toneMenuSections}
+      trigger={
+        <button
+          type="button"
+          className="dasti-proposal-skeleton-rail__setup-row dasti-proposal-skeleton-rail__setup-row--button dasti-toolbar-tooltip-trigger--above"
+          data-toolbar-tooltip={selectedToneOption?.description ?? "Proposal tone"}
+        >
+          <span className="dasti-proposal-skeleton-rail__setup-label">Tone</span>
+          <span className="dasti-proposal-skeleton-rail__setup-value">
+            {toneLabel}
+          </span>
           <ChevronDown className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
         </button>
       }
@@ -550,17 +567,12 @@ export function ProposalRail({
         <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Draft</div>
         <div className="dasti-proposal-skeleton-rail__draft-setup">
           <div className="dasti-proposal-skeleton-rail__draft-setup-body">
-            <label className="dasti-proposal-skeleton-rail__variable-field">
-              <input
-                className="ds-field"
-                value={draftTitle}
-                placeholder={draftTitlePlaceholder}
-                title="Name this draft."
-                onChange={(event) => onDraftTitleChange(event.target.value)}
-                onBlur={onDraftTitleCommit}
-                aria-label="Draft title"
-              />
-            </label>
+            <div className="dasti-proposal-skeleton-rail__setup-row">
+              <span className="dasti-proposal-skeleton-rail__setup-label">Type</span>
+              <span className="dasti-proposal-skeleton-rail__setup-value">
+                {proposalTypeLabel || "Letter"}
+              </span>
+            </div>
             <div className="dasti-proposal-skeleton-rail__control-stack">
               <Menu
                 ariaLabel={sourceCvTitle ? "Source CV" : "Pick a CV"}
@@ -572,10 +584,11 @@ export function ProposalRail({
                 trigger={
                   <button
                     type="button"
-                    className="ds-btn ds-btn--md ds-btn--secondary dasti-proposal-skeleton-rail__cv-button"
+                    className="dasti-proposal-skeleton-rail__setup-row dasti-proposal-skeleton-rail__setup-row--button dasti-proposal-skeleton-rail__attached-button"
                     title="Choose the CV used for this draft."
                   >
-                    <span>
+                    <span className="dasti-proposal-skeleton-rail__setup-label">Attached</span>
+                    <span className="dasti-proposal-skeleton-rail__setup-copy">
                       <strong>{sourceCvTitle || "Pick a CV"}</strong>
                       {sourceCvMeta ? <small>{sourceCvMeta}</small> : null}
                     </span>
@@ -587,7 +600,7 @@ export function ProposalRail({
               />
             </div>
             <div className="dasti-proposal-skeleton-rail__control-stack">
-              {renderToneSelect("md")}
+              {renderDraftToneSelect()}
             </div>
             <Button
               type="button"

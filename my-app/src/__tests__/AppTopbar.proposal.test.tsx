@@ -47,7 +47,9 @@ function renderProposalTopbar(
       <ProposalForgeTopbarProvider>
         <RegisterProposalTopbar
           registration={{
-            title: "Porphyre cover letter",
+            documentTitle: "Porphyre cover letter",
+            titlePlaceholder: "Untitled proposal",
+            onTitleCommit: vi.fn(),
             documentState: "draft",
             lengthLabel: null,
             hasProposalContent: true,
@@ -76,16 +78,29 @@ describe("AppTopbar Proposal document identity", () => {
     expect(screen.queryByText("Working on:")).not.toBeInTheDocument();
     expect(screen.queryByText("Ready")).not.toBeInTheDocument();
     expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
+    expect(container.querySelector(".app-topbar__doc-identity")).toHaveAttribute(
+      "title",
+      "Porphyre cover letter",
+    );
     expect(
-      screen.getByTitle("Porphyre cover letter application package"),
-    ).toHaveClass("app-topbar__doc-identity");
-    expect(
-      container.querySelector(".app-topbar__doc-title-main"),
+      container.querySelector(".document-title-editor__text"),
     ).toHaveTextContent("Porphyre cover letter");
     expect(
       container.querySelector(".app-topbar__doc-title-suffix"),
-    ).toHaveTextContent("application package");
+    ).not.toBeInTheDocument();
     expect(container.querySelector(".app-topbar__actions")).toBeTruthy();
+  });
+
+  it("commits proposal title edits from the topbar", () => {
+    const onTitleCommit = vi.fn();
+    renderProposalTopbar({ onTitleCommit });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Proposal title" }));
+    const input = screen.getByRole("textbox", { name: "Proposal title" });
+    fireEvent.change(input, { target: { value: " Renamed proposal " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(onTitleCommit).toHaveBeenCalledWith("Renamed proposal");
   });
 
   it.each([
@@ -118,10 +133,12 @@ describe("AppTopbar Proposal document identity", () => {
     },
   );
 
-  it("falls back to Proposal draft when the registered title is empty", () => {
-    renderProposalTopbar({ title: null });
+  it("falls back to the registered placeholder when the document title is empty", () => {
+    renderProposalTopbar({ documentTitle: null });
 
-    expect(screen.getByTitle("Proposal draft application package")).toHaveClass(
+    expect(
+      screen.getByLabelText("Untitled proposal"),
+    ).toHaveClass(
       "app-topbar__doc-identity",
     );
   });

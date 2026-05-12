@@ -2905,8 +2905,58 @@ body,
   white-space: nowrap;
 }
 
+.document-title-editor {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.document-title-editor__trigger,
+.document-title-editor__input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: 0;
+}
+
+.document-title-editor__trigger {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 0;
+  cursor: text;
+  text-align: left;
+}
+
+.document-title-editor__trigger:disabled {
+  cursor: default;
+}
+
+.document-title-editor__trigger:focus-visible,
+.document-title-editor__input:focus-visible {
+  outline: 2px solid var(--fr);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.document-title-editor__text,
+.document-title-editor__input {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-title-editor__input {
+  padding: 0;
+  outline: none;
+}
+
 .app-topbar__doc-title-main,
-.app-topbar__doc-title-suffix {
+.app-topbar__doc-title-suffix,
+.document-title-editor__text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

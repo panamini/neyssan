@@ -9,7 +9,9 @@ export type ProposalForgeTopbarDocumentState =
   | "error";
 
 export type ProposalForgeTopbarRegistration = {
-  title: string | null;
+  documentTitle: string | null;
+  titlePlaceholder: string;
+  onTitleCommit: (nextTitle: string) => void;
   documentState: ProposalForgeTopbarDocumentState;
   lengthLabel: "Concise" | "Standard" | "Detailed" | null;
   hasProposalContent: boolean;
