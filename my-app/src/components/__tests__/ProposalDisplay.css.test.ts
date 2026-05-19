@@ -40,6 +40,30 @@ describe("ProposalDisplay CSS contracts", () => {
     );
   });
 
+  it("keeps Proposal paper stage and preview frame responsive like CV Forge collapse mode", () => {
+    expect(productCss).toMatch(
+      /\.dasti-proposal-paper-stage\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--proposal-paper-visual-inline-size\)\);[\s\S]*margin-inline:\s*auto;[\s\S]*min-width:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;[\s\S]*box-sizing:\s*border-box;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-output-shell--workspace[\s\S]*\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*minmax\(0,\s*100%\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-output-shell--workspace[\s\S]*\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\][\s\S]*\.dasti-proposal-sheet-frame\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-proposal-skeleton-forge\s*\{[\s\S]*--proposal-paper-visual-inline-size:\s*var\(--forge-page-inline-size-mobile\);[\s\S]*\.dasti-proposal-paper-stage\s*\{[\s\S]*width:\s*var\(--proposal-paper-visual-inline-size\);/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-proposal-skeleton-forge\s*\{[\s\S]*padding-inline:\s*var\(--space-2\);/,
+    );
+  });
+
   it("keeps Proposal stage primary actions as subtle labeled toolbar controls", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*36px;[\s\S]*--editor-toolbar-icon-control-block-size:\s*34px;/,
@@ -51,7 +75,10 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-skeleton-stage__primary-action:hover:not\(:disabled\),[\s\S]*\.dasti-proposal-skeleton-stage__primary-action:focus-visible,[\s\S]*\.dasti-proposal-skeleton-stage__primary-action\[aria-expanded="true"\]\s*\{[\s\S]*background:\s*var\(--proposal-chrome-control-hover-bg\);[\s\S]*box-shadow:\s*none;[\s\S]*transform:\s*none;/,
     );
     expect(productCss).toMatch(
-      /@media\s*\(max-width:\s*560px\)\s*\{[\s\S]*\.dasti-proposal-skeleton-stage__primary-action\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*\.dasti-proposal-skeleton-stage__primary-action[\s\S]*\.dasti-proposal-skeleton-stage__action-label\s*\{[\s\S]*display:\s*none;/,
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.dasti-proposal-skeleton-stage__primary-action\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*\.dasti-proposal-skeleton-stage__primary-action[\s\S]*\.dasti-proposal-skeleton-stage__action-label\s*\{[\s\S]*display:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.dasti-proposal-skeleton-stage__actions,[\s\S]*\.dasti-proposal-skeleton-stage__right-actions\s*\{[\s\S]*gap:\s*var\(--space-1\);/,
     );
   });
 
@@ -585,7 +612,7 @@ describe("ProposalDisplay CSS contracts", () => {
       "var(--document-page-width",
     ]);
     expect(productCss).toMatch(
-      /\.dasti-proposal-output-shell--workspace\s+\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s+\.dasti-proposal-sheet-frame\s*\{[\s\S]*width:\s*var\(--proposal-document-frame-inline-size\);[\s\S]*max-width:\s*none;/,
+      /\.dasti-proposal-output-shell--workspace\s+\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s+\.dasti-proposal-sheet-frame\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-output-shell--workspace\s+\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s+\.dasti-proposal-sheet__body--document-viewer\s*\{[\s\S]*overflow:\s*visible;/,
