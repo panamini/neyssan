@@ -1805,7 +1805,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         data-document-stage="true"
         data-zoom-footer={shouldRenderZoomFooter ? "true" : undefined}
         style={{
-          width: `${isEditable ? stageLayout.stageWidth : previewStageWidthPx}px`,
+          width: isEditable
+            ? `min(100%, ${stageLayout.stageWidth}px)`
+            : "100%",
           height: `${isEditable ? renderedDocumentHeight : previewStageHeightPx}px`,
         }}
         {...(!isEditable ? viewportPanProps : {})}
@@ -1820,7 +1822,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             .filter(Boolean)
             .join(" ")}
           style={{
-            width: `${stageLayout.pageWidth}px`,
+            width: "100%",
+            maxWidth: isEditable ? `${stageLayout.pageWidth}px` : undefined,
+            minWidth: 0,
             height: `${renderedDocumentHeight}px`,
           }}
         >
@@ -1829,7 +1833,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               className="dasti-proposal-sheet__preview-page dasti-proposal-sheet__preview-page--editable"
               data-document-page="true"
               style={{
-                width: `${stageLayout.pageWidth}px`,
+                width: "100%",
+                maxWidth: "100%",
+                minWidth: 0,
                 height: `${renderedDocumentHeight}px`,
               }}
               ref={editablePageRef}

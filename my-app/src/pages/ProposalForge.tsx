@@ -11088,7 +11088,7 @@ export function ProposalForge(): JSX.Element {
                                 "var(--proposal-workspace-output-shell-inline-size)",
                             } as React.CSSProperties
                           }
-                          className="dasti-proposal-output-shell dasti-proposal-output-shell--workspace"
+                          className="dasti-proposal-paper-stage dasti-proposal-output-shell dasti-proposal-output-shell--workspace"
                         >
                           <ProposalDisplay
                             proposalContent={proposalContent}

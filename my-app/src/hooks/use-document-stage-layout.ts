@@ -1,4 +1,5 @@
 import React from "react";
+import { flushSync } from "react-dom";
 import {
   A4_PAGE_HEIGHT_PX,
   A4_PAGE_WIDTH_PX,
@@ -87,7 +88,29 @@ export function useDocumentStageLayout({
 
     let frameId: number | null = null;
 
-    const measure = () => {
+    const updateMeasurement = (
+      availableWidth: number,
+      availableHeight: number,
+      sync = false,
+    ) => {
+      const applyMeasurement = () => {
+        setMeasurement((current) =>
+          Math.abs(current.availableWidth - availableWidth) > 0.5 ||
+          Math.abs(current.availableHeight - availableHeight) > 0.5
+            ? { availableWidth, availableHeight }
+            : current,
+        );
+      };
+
+      if (sync) {
+        flushSync(applyMeasurement);
+        return;
+      }
+
+      applyMeasurement();
+    };
+
+    const measure = (sync = false) => {
       const availableWidth = Math.max(
         measureAvailableSize(node, "width"),
         includeParentMeasurement && node.parentElement
@@ -105,12 +128,7 @@ export function useDocumentStageLayout({
         return;
       }
 
-      setMeasurement((current) =>
-        Math.abs(current.availableWidth - availableWidth) > 0.5 ||
-        Math.abs(current.availableHeight - availableHeight) > 0.5
-          ? { availableWidth, availableHeight }
-          : current,
-      );
+      updateMeasurement(availableWidth, availableHeight, sync);
     };
 
     const scheduleMeasure = () => {
@@ -127,8 +145,13 @@ export function useDocumentStageLayout({
     measure();
     scheduleMeasure();
 
+    const measureResize = () => measure(true);
+
+    window.addEventListener("resize", measureResize);
+    window.visualViewport?.addEventListener("resize", measureResize);
+
     const resizeObserver = new ResizeObserver(() => {
-      scheduleMeasure();
+      measure();
     });
     resizeObserver.observe(node);
     if (node.parentElement) {
@@ -139,6 +162,8 @@ export function useDocumentStageLayout({
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId);
       }
+      window.removeEventListener("resize", measureResize);
+      window.visualViewport?.removeEventListener("resize", measureResize);
       resizeObserver.disconnect();
     };
   }, [enabled, includeParentMeasurement, measurementRef]);
