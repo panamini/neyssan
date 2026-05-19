@@ -3153,9 +3153,9 @@ body,
 }
 
 .app-topbar__doc-health[data-state="success"] {
-  border-color: color-mix(in srgb, var(--ok) 24%, transparent);
-  background: var(--okb);
-  color: var(--okt);
+  border-color: var(--border-soft);
+  background: var(--sf1);
+  color: var(--tm2);
 }
 
 .app-topbar__doc-health[data-state="warn"] {

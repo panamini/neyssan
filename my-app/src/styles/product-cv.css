@@ -614,6 +614,40 @@ span.dasti-cv-ats {
   text-overflow: ellipsis;
 }
 
+.dasti-cv-ats-sheet .ds-sheet__close {
+  display: none;
+}
+
+.dasti-cv-ats-sheet__collapse {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 0;
+  z-index: 2;
+  width: 26px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--sf1);
+  color: var(--tm2);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-cv-ats-sheet__collapse:hover,
+.dasti-cv-ats-sheet__collapse:focus-visible {
+  background: var(--sf2);
+  color: var(--ti);
+  box-shadow: var(--shadow-frost);
+  outline: none;
+}
+
 .dasti-cv-ats-panel {
   display: grid;
   gap: var(--space-4);

@@ -115,6 +115,12 @@ describe("sidebar visual CSS contracts", () => {
       /\.app-topbar__doc-health\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*padding:\s*0 var\(--app-topbar-control-padding-inline\);/,
     );
     expect(productCss).toMatch(
+      /\.app-topbar__doc-health\[data-state="success"\]\s*\{[\s\S]*border-color:\s*var\(--border-soft\);[\s\S]*background:\s*var\(--sf1\);/,
+    );
+    expect(productCss).toMatch(
+      /\.app-topbar__doc-health\[data-state="warn"\]\s*\{[\s\S]*border-color:\s*color-mix\(in srgb,\s*var\(--wa\) 30%,\s*transparent\);/,
+    );
+    expect(productCss).toMatch(
       /\.app-topbar__doc-action\s*\{[\s\S]*width:\s*var\(--control-sm\);[\s\S]*height:\s*var\(--control-sm\);/,
     );
     expect(productCss).toMatch(

@@ -15,6 +15,7 @@ import {
   CaretDown as PhCaretDown,
   CaretCircleRight as PhCaretCircleRight,
   CaretLeft as PhCaretLeft,
+  CaretRight as PhCaretRight,
   CaretUp as PhCaretUp,
   Check as PhCheck,
   Briefcase as PhBriefcase,
@@ -163,6 +164,7 @@ export const CalendarDots = withCompat(PhCalendarDots);
 export const CaretCircleRight = withCompat(PhCaretCircleRight);
 export const CaretDownIcon = withCompat(PhCaretDown);
 export const CaretLeft = withCompat(PhCaretLeft);
+export const CaretRight = withCompat(PhCaretRight);
 export const CaretUpIcon = withCompat(PhCaretUp);
 export const Check = withCompat(PhCheck);
 export const Briefcase = withCompat(PhBriefcase);

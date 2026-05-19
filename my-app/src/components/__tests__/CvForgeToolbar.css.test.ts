@@ -185,6 +185,15 @@ describe("CvForge toolbar CSS contracts", () => {
     );
   });
 
+  it("uses a centered side handle for the ATS audit drawer close control", () => {
+    expect(productCss).toMatch(
+      /\.dasti-cv-ats-sheet \.ds-sheet__close\s*\{[\s\S]*display:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-ats-sheet__collapse\s*\{[\s\S]*inset-block-start:\s*50%;[\s\S]*inset-inline-start:\s*0;[\s\S]*width:\s*26px;[\s\S]*height:\s*42px;[\s\S]*transform:\s*translate\(-50%,\s*-50%\);/,
+    );
+  });
+
   it("moves CV workspace zoom into a footer slider", () => {
     expect(verbatiResumePreviewSource).toContain("dasti-cv-stage-footer");
     expect(verbatiResumePreviewSource).toContain('aria-label="CV zoom"');
