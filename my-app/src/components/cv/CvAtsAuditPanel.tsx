@@ -1,4 +1,5 @@
 import React from "react";
+import { CaretRight } from "@/lib/icons";
 import { Button, Pill, Sheet } from "../ui";
 import type {
   AtsAuditCategory,
@@ -94,6 +95,7 @@ export function CvAtsAuditPanel({
       onOpenChange={onOpenChange}
       title="ATS audit"
       description="Heuristic checks from the editable CV and export model. This does not guarantee parser compatibility."
+      className="dasti-cv-ats-sheet"
       footer={
         <Button
           type="button"
@@ -105,6 +107,14 @@ export function CvAtsAuditPanel({
         </Button>
       }
     >
+      <button
+        type="button"
+        className="dasti-cv-ats-sheet__collapse"
+        aria-label="Close ATS audit"
+        onClick={() => onOpenChange(false)}
+      >
+        <CaretRight size={14} strokeWidth={1.8} aria-hidden="true" />
+      </button>
       {audit ? (
         <div className="dasti-cv-ats-panel">
           <div className="dasti-cv-ats-panel__summary">
