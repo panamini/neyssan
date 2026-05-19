@@ -93,15 +93,50 @@ describe("sidebar visual CSS contracts", () => {
   });
 
   it("keeps the topbar command shortcut as a tokenized pill", () => {
+    expect(productCss).toContain("--app-topbar-control-gap");
+    expect(productCss).toContain("--app-topbar-control-padding-inline");
+    expect(productCss).toContain("--app-topbar-command-padding-inline");
     expect(productCss).toMatch(
-      /\.app-topbar__cmdk\s*\{[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*var\(--sf1\);/,
+      /\.app-topbar__cmdk\s*\{[\s\S]*gap:\s*var\(--app-topbar-actions-gap\);[\s\S]*padding:\s*0 var\(--app-topbar-command-padding-inline\);[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*var\(--sf1\);/,
     );
     expect(productCss).toMatch(
       /\.app-topbar__kbd\s*\{[\s\S]*border:\s*1px solid var\(--border-soft\);/,
     );
+    expect(productCss).toMatch(
+      /\.app-topbar__doc-action--new\s*\{[\s\S]*background:\s*color-mix\(in srgb,\s*var\(--ac\) 7%,\s*var\(--sf1\)\);[\s\S]*color:\s*color-mix\(in srgb,\s*var\(--ac\) 82%,\s*var\(--ti\)\);/,
+    );
+    expect(productCss).toMatch(
+      /\.app-topbar__doc-action,\s*\.app-topbar__doc-picker\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*border-radius:\s*var\(--radius-pill\);/,
+    );
+    expect(productCss).toMatch(
+      /\.app-topbar__doc-identity\s*\{[\s\S]*gap:\s*var\(--app-topbar-control-padding-inline\);[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*padding:\s*0 var\(--app-topbar-control-padding-inline\);/,
+    );
+    expect(productCss).toMatch(
+      /\.app-topbar__doc-health\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*padding:\s*0 var\(--app-topbar-control-padding-inline\);/,
+    );
+    expect(productCss).toMatch(
+      /\.app-topbar__doc-action\s*\{[\s\S]*width:\s*var\(--control-sm\);[\s\S]*height:\s*var\(--control-sm\);/,
+    );
+    expect(productCss).toMatch(
+      /\.app-topbar__doc-picker\s*\{[\s\S]*gap:\s*var\(--app-topbar-control-gap\);[\s\S]*height:\s*var\(--control-sm\);[\s\S]*padding:\s*0 var\(--app-topbar-control-padding-inline\);/,
+    );
+    expect(productCss).toMatch(
+      /\.app-topbar__account-button\s*\{[\s\S]*background:\s*color-mix\(in srgb,\s*var\(--sf1\) 88%,\s*transparent\);[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.app-topbar__account-initial\s*\{[\s\S]*display:\s*inline-grid;[\s\S]*place-items:\s*center;[\s\S]*transform:\s*translateY\(0\.5px\);/,
+    );
   });
 
   it("defines a reusable responsive forge document identity contract", () => {
+    expect(productCss).toContain("--app-topbar-edge-inline");
+    expect(productCss).toContain("--app-topbar-doc-identity-inline-size");
+    expect(productCss).toContain(
+      "--app-topbar-doc-identity-inline-size-compact",
+    );
+    expect(productCss).toContain(
+      "--app-topbar-doc-identity-inline-size-collapsed",
+    );
     expect(productCss).toContain(".app-topbar__doc-identity");
     expect(productCss).toContain(".app-topbar__doc-state");
     expect(productCss).toContain(".app-topbar__doc-title");
@@ -123,10 +158,16 @@ describe("sidebar visual CSS contracts", () => {
       '.app-topbar__doc-state[data-state="error"]',
     );
     expect(productCss).toMatch(
-      /@media\s*\(max-width:\s*1023px\)\s*\{[\s\S]*\.app-topbar__doc-title-suffix\s*\{[\s\S]*display:\s*none;/,
+      /@media\s*\(max-width:\s*1320px\)\s*\{[\s\S]*--app-topbar-doc-identity-inline-size:\s*var\(\s*--app-topbar-doc-identity-inline-size-compact\s*\);[\s\S]*\.app-topbar__doc-save-label,[\s\S]*\.app-topbar__doc-meta,[\s\S]*\.app-topbar__doc-divider,[\s\S]*\.app-topbar__toolbar-divider--actions\s*\{[\s\S]*display:\s*none;/,
     );
     expect(productCss).toMatch(
-      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.app-topbar__doc-title,[\s\S]*\.app-topbar__doc-meta\s*\{[\s\S]*display:\s*none;/,
+      /@media\s*\(max-width:\s*1180px\)\s*\{[\s\S]*\.app-topbar__doc-title-suffix\s*\{[\s\S]*display:\s*none;[\s\S]*\.app-topbar__doc-action-label,[\s\S]*\.app-topbar__doc-action-caret,[\s\S]*\.app-topbar__doc-picker-label,[\s\S]*\.app-topbar__doc-picker-caret\s*\{[\s\S]*display:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*--app-topbar-doc-identity-inline-size:\s*var\(\s*--app-topbar-doc-identity-inline-size-collapsed\s*\);[\s\S]*\.app-topbar__doc-title\s*\{[\s\S]*position:\s*absolute;[\s\S]*opacity:\s*0;[\s\S]*\.app-topbar__doc-title\.document-title-editor--editing\s*\{[\s\S]*position:\s*fixed;[\s\S]*opacity:\s*1;/,
+    );
+    expect(productCss).toMatch(
+      /\.app-topbar__doc-title\.document-title-editor--editing\s*\{[\s\S]*position:\s*fixed;[\s\S]*--app-topbar-title-editor-inline-size/,
     );
   });
 

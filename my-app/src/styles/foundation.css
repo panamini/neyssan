@@ -449,6 +449,18 @@
   --app-nav-panel-width-wide: calc(
     var(--app-nav-panel-width)
   );
+  --app-topbar-edge-inline: 12px;
+  --app-topbar-gap: 8px;
+  --app-topbar-actions-gap: 8px;
+  --app-topbar-control-gap: 4px;
+  --app-topbar-control-padding-inline: 8px;
+  --app-topbar-command-padding-inline: 12px;
+  --app-topbar-doc-cluster-gap: 8px;
+  --app-topbar-doc-identity-inline-size: 224px;
+  --app-topbar-doc-identity-inline-size-compact: 160px;
+  --app-topbar-doc-identity-inline-size-collapsed: var(--control-sm);
+  --app-topbar-command-inline-size: 206px;
+  --app-topbar-title-editor-inline-size: 520px;
   --sidebar-hover-bg: var(--sf2);
   --sidebar-active-bg: var(--sfr);
   --sidebar-hover-ink: var(--ti);
