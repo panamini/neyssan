@@ -40,8 +40,10 @@ test.describe("Proposal Forge mobile document geometry", () => {
   async function seedProposalDraft(
     page: import("@playwright/test").Page,
     outputMode: ProposalOutputMode = "preview",
+    proposalContent =
+      "Dear team,\n\nFreshly generated proposal body with enough content to render the document preview.\n\nBest,",
   ) {
-    await page.addInitScript((mode) => {
+    await page.addInitScript(({ mode, content }) => {
       const cvDocument = {
         id: "cv_alpha",
         title: "Alex Martin Resume",
@@ -81,8 +83,7 @@ test.describe("Proposal Forge mobile document geometry", () => {
       window.localStorage.setItem(
         "dasti:proposal-output-draft:v1",
         JSON.stringify({
-          proposalContent:
-            "Dear team,\n\nFreshly generated proposal body with enough content to render the document preview.\n\nBest,",
+          proposalContent: content,
           proposalType: "cover_letter",
           proposalVoicePreset: "signature",
           proposalTemplateId: null,
@@ -115,7 +116,7 @@ test.describe("Proposal Forge mobile document geometry", () => {
         "dasti:proposal-attached-cv-id:v1",
         cvDocument.id,
       );
-    }, outputMode);
+    }, { mode: outputMode, content: proposalContent });
   }
 
   async function readGeometry(
@@ -423,11 +424,58 @@ test.describe("Proposal Forge mobile document geometry", () => {
     );
   });
 
-  test("keeps the collapsed tone pill inside the Proposal toolbar", async ({
+  test("uses the full desktop page width after expanding in edit mode and switching to preview", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 491, height: 928 });
-    await seedProposalDraft(page);
+    await seedProposalDraft(page, "edit");
+    await page.goto(`${APP_URL}/proposal`);
+    await expect(
+      page.locator(".dasti-proposal-sheet__preview-page--editable"),
+    ).toBeVisible();
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole("button", { name: "Preview proposal" }).click();
+    await expect(
+      page.locator(
+        ".dasti-proposal-output-shell--workspace .dasti-proposal-sheet__preview-scale-shell",
+      ),
+    ).toBeVisible();
+
+    const previewFit = await readWorkspacePageFit(page);
+    expect(previewFit).toEqual({
+      missing: false,
+      viewportWidth: 1280,
+      toolbar: {
+        left: expect.any(Number),
+        right: expect.any(Number),
+        width: expect.any(Number),
+      },
+      workspace: {
+        left: expect.any(Number),
+        right: expect.any(Number),
+        width: expect.any(Number),
+      },
+      visiblePages: expect.any(Array),
+    });
+    expect(previewFit.toolbar.width).toBeGreaterThan(780);
+    expect(previewFit.visiblePages).toHaveLength(1);
+    expect(previewFit.visiblePages[0]?.width).toBeGreaterThan(780);
+    expect(
+      Math.abs((previewFit.visiblePages[0]?.left ?? 0) - previewFit.toolbar.left),
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(
+        (previewFit.visiblePages[0]?.width ?? 0) - previewFit.toolbar.width,
+      ),
+    ).toBeLessThanOrEqual(1);
+  });
+
+  test("keeps collapsed Proposal undo and redo controls inside the toolbar", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 491, height: 928 });
+    await seedProposalDraft(page, "edit");
 
     await page.goto(`${APP_URL}/proposal`);
     await expect(
@@ -441,11 +489,27 @@ test.describe("Proposal Forge mobile document geometry", () => {
       const tone = document.querySelector(
         ".dasti-proposal-skeleton-stage__bar > .ds-tone",
       );
-      if (!toolbar || !tone) {
+      const rightActions = document.querySelector(
+        ".dasti-proposal-skeleton-stage__right-actions",
+      );
+      const undoButton = document.querySelector(
+        '.dasti-proposal-skeleton-stage__right-actions [aria-label="Undo"]',
+      );
+      const redoButton = document.querySelector(
+        '.dasti-proposal-skeleton-stage__right-actions [aria-label="Redo"]',
+      );
+      if (!toolbar || !tone || !rightActions || !undoButton || !redoButton) {
         return { missing: true };
       }
       const toolbarRect = toolbar.getBoundingClientRect();
       const toneRect = tone.getBoundingClientRect();
+      const rightActionsRect = rightActions.getBoundingClientRect();
+      const undoRect = undoButton.getBoundingClientRect();
+      const redoRect = redoButton.getBoundingClientRect();
+      const rightActionsStyles = rightActions
+        ? window.getComputedStyle(rightActions)
+        : null;
+      const toneStyles = window.getComputedStyle(tone);
       return {
         missing: false,
         toolbarWidth: toolbarRect.width,
@@ -454,6 +518,11 @@ test.describe("Proposal Forge mobile document geometry", () => {
         toneRight: toneRect.right,
         toolbarLeft: toolbarRect.left,
         toneLeft: toneRect.left,
+        rightActionsDisplay: rightActionsStyles?.display ?? null,
+        rightActionsRight: rightActionsRect.right,
+        undoRight: undoRect.right,
+        redoRight: redoRect.right,
+        toneDisplay: toneStyles.display,
       };
     });
 
@@ -465,13 +534,18 @@ test.describe("Proposal Forge mobile document geometry", () => {
       toneRight: expect.any(Number),
       toolbarLeft: expect.any(Number),
       toneLeft: expect.any(Number),
+      rightActionsDisplay: "flex",
+      rightActionsRight: expect.any(Number),
+      undoRight: expect.any(Number),
+      redoRight: expect.any(Number),
+      toneDisplay: "none",
     });
     expect(toolbarFit.toolbarWidth).toBeGreaterThan(320);
-    expect(toolbarFit.toneWidth).toBeGreaterThan(60);
-    expect(toolbarFit.toneRight).toBeLessThanOrEqual(
+    expect(toolbarFit.rightActionsRight).toBeLessThanOrEqual(
       toolbarFit.toolbarRight + 1,
     );
-    expect(toolbarFit.toneLeft).toBeGreaterThanOrEqual(toolbarFit.toolbarLeft - 1);
+    expect(toolbarFit.undoRight).toBeLessThanOrEqual(toolbarFit.toolbarRight + 1);
+    expect(toolbarFit.redoRight).toBeLessThanOrEqual(toolbarFit.toolbarRight + 1);
   });
 
   test("does not keep the old editable page width for a frame after the viewport collapses", async ({
@@ -620,5 +694,236 @@ test.describe("Proposal Forge mobile document geometry", () => {
     expect(finalFit.visiblePages).toHaveLength(1);
     expect(finalFit.visiblePages[0]?.width).toBeGreaterThan(320);
     expect(finalFit.visiblePages[0]?.right).toBeLessThanOrEqual(491);
+  });
+
+  test("switches Proposal preview and edit modes without animating the page", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 491, height: 928 });
+    await seedProposalDraft(page);
+    await page.goto(`${APP_URL}/proposal`);
+    await expect(
+      page.locator(".dasti-proposal-output-shell--workspace"),
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "Edit proposal" }).click();
+    await expect(page.locator(".dasti-proposal-editor-page")).toBeVisible();
+
+    const editFrame = await page.evaluate(() => {
+      const editorPage = document.querySelector(".dasti-proposal-editor-page");
+      const editablePage = document.querySelector(
+        ".dasti-proposal-sheet__preview-page--editable",
+      );
+      const editorStyles = editorPage
+        ? window.getComputedStyle(editorPage)
+        : null;
+      const pageStyles = editablePage
+        ? window.getComputedStyle(editablePage)
+        : null;
+      const rect = editablePage?.getBoundingClientRect();
+      return {
+        missing: !editorPage || !editablePage || !rect,
+        editorAnimationName: editorStyles?.animationName ?? null,
+        editorAnimationDuration: editorStyles?.animationDuration ?? null,
+        pageAnimationName: pageStyles?.animationName ?? null,
+        pageWidth: rect?.width ?? 0,
+        pageRight: rect?.right ?? 0,
+      };
+    });
+
+    expect(editFrame).toEqual({
+      missing: false,
+      editorAnimationName: "none",
+      editorAnimationDuration: "0s",
+      pageAnimationName: "none",
+      pageWidth: expect.any(Number),
+      pageRight: expect.any(Number),
+    });
+    expect(editFrame.pageWidth).toBeLessThanOrEqual(322);
+    expect(editFrame.pageRight).toBeLessThanOrEqual(491);
+
+    await page.getByRole("button", { name: "Preview proposal" }).click();
+    await expect(
+      page.locator(
+        ".dasti-proposal-output-shell--workspace .dasti-proposal-sheet__preview-scale-shell",
+      ),
+    ).toBeVisible();
+    const previewFrame = await readWorkspacePageFit(page);
+    expect(previewFrame).toEqual({
+      missing: false,
+      viewportWidth: 491,
+      toolbar: {
+        left: expect.any(Number),
+        right: expect.any(Number),
+        width: expect.any(Number),
+      },
+      workspace: {
+        left: expect.any(Number),
+        right: expect.any(Number),
+        width: expect.any(Number),
+      },
+      visiblePages: expect.any(Array),
+    });
+    expect(previewFrame.visiblePages[0]?.right).toBeLessThanOrEqual(491);
+  });
+
+  test("keeps the collapsed CV page stable when leaving Proposal", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 491, height: 928 });
+    await seedProposalDraft(page);
+    await page.goto(`${APP_URL}/proposal`);
+    await expect(
+      page.locator(".dasti-proposal-output-shell--workspace"),
+    ).toBeVisible();
+
+    await page.locator('a[href="/cv"]').click();
+    const frameSamples = await page.evaluate(async () => {
+      const read = () => {
+        const cvStage = document.querySelector(
+          ".dasti-cv-skeleton-forge__stage",
+        );
+        const cvPage = document.querySelector(
+          '.dasti-document-stage__canvas[data-document-page="true"]',
+        );
+        if (!cvStage || !cvPage) {
+          return { missing: true };
+        }
+        const stageRect = cvStage.getBoundingClientRect();
+        const pageRect = cvPage.getBoundingClientRect();
+        const pageStyles = window.getComputedStyle(cvPage);
+        return {
+          missing: false,
+          stageLeft: stageRect.left,
+          stageWidth: stageRect.width,
+          pageLeft: pageRect.left,
+          pageWidth: pageRect.width,
+          pageRight: pageRect.right,
+          pageAnimationName: pageStyles.animationName,
+          pageTransform: pageStyles.transform,
+        };
+      };
+
+      const samples: ReturnType<typeof read>[] = [];
+      for (let index = 0; index < 12; index += 1) {
+        samples.push(read());
+        await new Promise<void>((resolve) =>
+          window.requestAnimationFrame(() => resolve()),
+        );
+      }
+      return samples;
+    });
+
+    for (const sample of frameSamples) {
+      expect(sample).toEqual({
+        missing: false,
+        stageLeft: expect.any(Number),
+        stageWidth: expect.any(Number),
+        pageLeft: expect.any(Number),
+        pageWidth: expect.any(Number),
+        pageRight: expect.any(Number),
+        pageAnimationName: "none",
+        pageTransform: "none",
+      });
+      expect(sample.stageWidth).toBeLessThanOrEqual(322);
+      expect(sample.pageWidth).toBeLessThanOrEqual(322);
+      expect(sample.pageRight).toBeLessThanOrEqual(491);
+    }
+  });
+
+  test("stacks the collapsed Proposal rail below the full readonly preview", async ({
+    page,
+  }) => {
+    const longProposalContent = [
+      "Dear Hiring Manager,",
+      "",
+      "Monitoring building security systems-CCTV feeds, electronic door locks, and lighting controls-is a recurring responsibility that shapes the daily workflow. Each shift involves verifying that cameras and locks are operational, adjusting lighting to maintain visibility without waste, and documenting any irregularities for follow-up. The role also depends on clear communication with visitors, staff, and emergency contacts, whether signing individuals in and out, escorting them through the premises, or reporting maintenance issues that could compromise safety.",
+      "",
+      "The work extends beyond the front desk, requiring regular patrols of multiple floors and outdoor areas to check for unauthorized access, equipment failures, or environmental hazards like leaks during storms. These rounds ensure that security measures remain effective and that any disruptions are addressed promptly, maintaining continuity for county operations.",
+      "",
+      "I would welcome the opportunity to discuss my interest in the role.",
+    ].join("\n");
+
+    await page.setViewportSize({ width: 491, height: 928 });
+    await seedProposalDraft(page, "preview", longProposalContent);
+    await page.goto(`${APP_URL}/proposal`);
+    await expect(
+      page.locator(".dasti-proposal-output-shell--workspace"),
+    ).toBeVisible();
+    await expect(page.locator(".dasti-proposal-skeleton-rail")).toBeVisible();
+
+    const stackedLayout = await page.evaluate(() => {
+      const rail = document.querySelector(".dasti-proposal-skeleton-rail");
+      const previewStage = document.querySelector(
+        ".dasti-proposal-sheet__preview-stage",
+      );
+      const previewPage = document.querySelector(
+        ".dasti-proposal-sheet__preview-page",
+      );
+      const outputShell = document.querySelector(
+        ".dasti-proposal-output-shell--workspace",
+      );
+      const viewerShell = document.querySelector(".dasti-doc-viewer-shell");
+      const viewerSurface = document.querySelector(
+        '.dasti-doc-viewer-shell__surface[data-preview-zoom-footer="true"]',
+      );
+      const forge = document.querySelector(".dasti-proposal-skeleton-forge");
+      if (
+        !rail ||
+        !previewStage ||
+        !previewPage ||
+        !outputShell ||
+        !viewerShell ||
+        !viewerSurface ||
+        !forge
+      ) {
+        return { missing: true };
+      }
+      const toRect = (element: Element) => {
+        const rect = element.getBoundingClientRect();
+        const styles = window.getComputedStyle(element);
+        return {
+          top: rect.top,
+          bottom: rect.bottom,
+          height: rect.height,
+          position: styles.position,
+          overflow: styles.overflow,
+        };
+      };
+      return {
+        missing: false,
+        forgeRowGap: Number.parseFloat(window.getComputedStyle(forge).rowGap),
+        rail: toRect(rail),
+        previewStage: toRect(previewStage),
+        previewPage: toRect(previewPage),
+        outputShell: toRect(outputShell),
+        viewerShell: toRect(viewerShell),
+        viewerSurface: toRect(viewerSurface),
+      };
+    });
+
+    expect(stackedLayout).toEqual({
+      missing: false,
+      forgeRowGap: expect.any(Number),
+      rail: expect.any(Object),
+      previewStage: expect.any(Object),
+      previewPage: expect.any(Object),
+      outputShell: expect.any(Object),
+      viewerShell: expect.any(Object),
+      viewerSurface: expect.any(Object),
+    });
+    expect(stackedLayout.viewerShell.height).toBeGreaterThanOrEqual(
+      stackedLayout.previewStage.height - 1,
+    );
+    expect(stackedLayout.outputShell.height).toBeGreaterThanOrEqual(
+      stackedLayout.previewStage.height - 1,
+    );
+    expect(stackedLayout.rail.top).toBeGreaterThanOrEqual(
+      stackedLayout.previewStage.bottom + stackedLayout.forgeRowGap - 1,
+    );
+    expect(stackedLayout.rail.top).toBeGreaterThanOrEqual(
+      stackedLayout.previewPage.bottom + stackedLayout.forgeRowGap - 1,
+    );
+    expect(stackedLayout.forgeRowGap).toBeGreaterThan(8);
   });
 });

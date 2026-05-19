@@ -849,6 +849,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     hasDocumentShell &&
     usesDocumentRenderer &&
     !isEditable;
+  const shouldRenderZoomFooter =
+    enablesDocumentZoom && resolvedDocumentHeaderMode === "hidden";
+  const shouldUseParentPreviewMeasurement =
+    shouldRenderZoomFooter && previewScrollMode === "natural";
   const activeScrollTop = isEditable
     ? showEditableScrollTop
     : showPreviewScrollTop;
@@ -873,7 +877,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     fitMode: usesDocumentRenderer && !isEditable ? previewFitMode : "width",
     fillAvailableOnZoom:
       usesDocumentRenderer && !isEditable && previewFitMode === "contain",
-    includeParentMeasurement: false,
+    includeParentMeasurement: shouldUseParentPreviewMeasurement,
     pageWidthPx: A4_PAGE_WIDTH_PX,
     pageHeightPx: A4_PAGE_HEIGHT_PX,
     initialAvailableWidthPx: A4_PAGE_WIDTH_PX,
@@ -932,8 +936,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           ? "overflow"
           : "fit"
       : "fit";
-  const shouldRenderZoomFooter =
-    enablesDocumentZoom && resolvedDocumentHeaderMode === "hidden";
   const shouldFitPreviewStageToPage =
     shouldRenderZoomFooter && previewScrollMode === "natural";
   const previewStageWidthPx = shouldFitPreviewStageToPage
