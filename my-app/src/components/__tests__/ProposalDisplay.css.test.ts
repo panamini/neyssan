@@ -64,6 +64,12 @@ describe("ProposalDisplay CSS contracts", () => {
     );
   });
 
+  it("does not animate the Proposal editor page when switching preview and edit modes", () => {
+    expect(productCss).toMatch(
+      /\.dasti-proposal-editor-page\s*\{[\s\S]*animation:\s*none;/,
+    );
+  });
+
   it("keeps Proposal stage primary actions as subtle labeled toolbar controls", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*36px;[\s\S]*--editor-toolbar-icon-control-block-size:\s*34px;/,

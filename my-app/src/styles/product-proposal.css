@@ -1678,6 +1678,18 @@
   min-height: var(--proposal-workspace-shell-block-size);
 }
 
+.dasti-proposal-output-shell--workspace
+  .dasti-doc-viewer-shell:has(
+    > .dasti-doc-viewer-shell__surface[data-preview-zoom-footer="true"]
+  ),
+.dasti-proposal-output-shell--workspace
+  .dasti-doc-viewer-shell__surface[data-preview-zoom-footer="true"] {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+}
+
 .dasti-proposal-output-shell--workspace .dasti-doc-viewer-shell__surface {
   display: flex;
   flex-direction: column;
@@ -2676,7 +2688,7 @@
     var(--proposal-document-paper)
   );
   border-radius: inherit;
-  animation: dasti-fade-in 200ms ease-out both;
+  animation: none;
 }
 
 .dasti-proposal-editor-page::before {
@@ -9236,6 +9248,8 @@
 @media (max-width: 1419px) {
   .dasti-proposal-skeleton-forge {
     grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--space-3);
+    column-gap: 0;
   }
 
   .dasti-proposal-skeleton-forge__stage,
@@ -9325,7 +9339,7 @@
   }
 
   .dasti-proposal-skeleton-stage__bar > .ds-tone {
-    max-width: 84px;
+    display: none;
   }
 
   .dasti-proposal-skeleton-stage__actions,
