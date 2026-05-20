@@ -2517,6 +2517,12 @@ body,
   margin-inline-end: var(--space-1);
 }
 
+.forge-rail-drawer__row-main .forge-rail-drawer__row-affordance {
+  color: var(--ti);
+  font-size: var(--tx);
+  line-height: var(--lx);
+}
+
 .forge-rail-drawer__row:hover .forge-rail-drawer__row-affordance,
 .forge-rail-drawer__row:focus-within .forge-rail-drawer__row-affordance {
   opacity: 1;
@@ -5272,6 +5278,10 @@ body,
 .dasti-composer-drawer .dasti-proposal-skeleton-rail__ask-section > .ds-btn:last-child {
   width: 100%;
   justify-content: center;
+}
+
+.dasti-proposal-skeleton-rail__composer-menu {
+  z-index: calc(var(--z-modal) + 2);
 }
 
 .dasti-composer-drawer__overlay {
