@@ -8309,12 +8309,16 @@
   gap: 0;
   border-color: color-mix(
     in srgb,
-    var(--color-border-contrast) 72%,
+    var(--paper-dark-body-ink) 44%,
     transparent
   );
   border-radius: var(--radius-toolbar-control, var(--radius-control));
-  background: color-mix(in srgb, var(--proposal-document-paper) 92%, var(--sf1));
-  color: var(--ti);
+  background: color-mix(
+    in srgb,
+    var(--proposal-document-paper) 18%,
+    transparent
+  );
+  color: color-mix(in srgb, var(--paper-dark-body-ink) 74%, transparent);
   box-shadow: none;
 }
 
@@ -8328,11 +8332,15 @@
   .dasti-proposal-skeleton-stage__ask-handle:focus-visible {
   border-color: color-mix(
     in srgb,
-    var(--color-border-contrast) 86%,
+    var(--paper-dark-body-ink) 62%,
     transparent
   );
-  background: color-mix(in srgb, var(--proposal-document-paper) 84%, var(--sf2));
-  color: var(--ti);
+  background: color-mix(
+    in srgb,
+    var(--proposal-document-paper) 32%,
+    transparent
+  );
+  color: var(--paper-dark-body-ink);
   box-shadow: none;
 }
 
