@@ -58,6 +58,8 @@ import {
 } from "./lib/onboarding-replay-event";
 import { useThemeMode } from "./lib/theme-mode";
 
+const FORGE_PANEL_DOCK_MIN_WIDTH = 1180;
+
 /**
  * AppShell — structure exacte du squelette dasti-v16 :
  *   <div class="app">           flex-row h:100vh overflow:hidden
@@ -89,8 +91,13 @@ function AppShellFrame(): JSX.Element {
   const {
     open: forgePanelOpen,
     openMode: forgePanelOpenMode,
+    activeSurface: forgePanelActiveSurface,
+    openSurface: openForgePanelSurface,
     closePanel: closeForgePanel,
   } = useForgeTemplatePanel();
+  const responsiveCollapsedForgePanelRef = React.useRef<
+    ReturnType<typeof useForgeTemplatePanel>["activeSurface"]
+  >(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = React.useState(false);
   const [onboardingReplayOpen, setOnboardingReplayOpen] = React.useState(false);
   const [onboardingReplayInitialStepId, setOnboardingReplayInitialStepId] =
@@ -161,13 +168,53 @@ function AppShellFrame(): JSX.Element {
   }, [location.pathname, location.search, location.state, navigate]);
 
   React.useEffect(() => {
+    responsiveCollapsedForgePanelRef.current = null;
     closeForgePanel();
   }, [closeForgePanel, location.pathname]);
+
+  const forgePanelDockableRoute =
+    location.pathname === "/proposal" ||
+    location.pathname === "/cv" ||
+    location.pathname === "/settings";
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const syncResponsiveDockedPanel = () => {
+      if (window.innerWidth < FORGE_PANEL_DOCK_MIN_WIDTH) {
+        if (forgePanelOpenMode === "pinned" && forgePanelActiveSurface) {
+          responsiveCollapsedForgePanelRef.current = forgePanelActiveSurface;
+          closeForgePanel();
+        }
+        return;
+      }
+
+      const surfaceToRestore = responsiveCollapsedForgePanelRef.current;
+      if (surfaceToRestore) {
+        responsiveCollapsedForgePanelRef.current = null;
+        openForgePanelSurface(surfaceToRestore, { mode: "pinned" });
+      }
+    };
+
+    syncResponsiveDockedPanel();
+    window.addEventListener("resize", syncResponsiveDockedPanel);
+    return () => {
+      window.removeEventListener("resize", syncResponsiveDockedPanel);
+    };
+  }, [
+    closeForgePanel,
+    forgePanelActiveSurface,
+    forgePanelDockableRoute,
+    forgePanelOpenMode,
+    openForgePanelSurface,
+  ]);
 
   const forgePanelDocked =
     forgePanelOpen &&
     forgePanelOpenMode === "pinned" &&
-    (location.pathname === "/proposal" || location.pathname === "/cv");
+    forgePanelDockableRoute;
 
   return (
     <div

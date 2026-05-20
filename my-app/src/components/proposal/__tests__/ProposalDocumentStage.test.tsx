@@ -1,11 +1,9 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ProposalDocumentStage from "../ProposalDocumentStage";
 
 const baseProps = {
-  toneLabel: "Warm tone",
-  toneValue: "warm" as const,
   mode: "preview" as const,
   hasProposalContent: true,
   onModeChange: vi.fn(),
@@ -19,15 +17,32 @@ function renderStage(props: Partial<React.ComponentProps<typeof ProposalDocument
   );
 }
 
+function rect(left: number, width: number, top = 0): DOMRect {
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    right: left + width,
+    bottom: top + 100,
+    width,
+    height: 100,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
 describe("ProposalDocumentStage proposal actions", () => {
-  it("keeps the local toolbar focused on tone, mode, heading, design, and templates", () => {
+  it("groups document controls before writing actions and keeps tone out of the toolbar", () => {
     renderStage({
       onOpenHeading: vi.fn(),
       onOpenDesign: vi.fn(),
       onOpenTemplates: vi.fn(),
+      onOpenDraft: vi.fn(),
+      onOpenAsk: vi.fn(),
     });
 
-    expect(screen.queryByText("Draft")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tone: Warm tone" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Warm tone")).not.toBeInTheDocument();
     expect(screen.queryByText("Proposal text")).not.toBeInTheDocument();
     expect(screen.queryByText("Preparing")).not.toBeInTheDocument();
     expect(screen.queryByText("Standard")).not.toBeInTheDocument();
@@ -36,7 +51,6 @@ describe("ProposalDocumentStage proposal actions", () => {
     expect(screen.queryByText("standard")).not.toBeInTheDocument();
     expect(screen.queryByText("concise")).not.toBeInTheDocument();
     expect(screen.queryByText("detailed")).not.toBeInTheDocument();
-    expect(screen.getByText("Warm tone")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Edit proposal" }),
     ).toBeInTheDocument();
@@ -46,11 +60,24 @@ describe("ProposalDocumentStage proposal actions", () => {
     expect(screen.getByRole("button", { name: "Heading" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Design" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Templates" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Draft proposal" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Document controls" })).toBeInTheDocument();
+    const proposalToolbar = screen.getByRole("group", { name: "Proposal toolbar" });
+    expect(screen.getByRole("group", { name: "Primary writing action" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Ask action" })).not.toBeInTheDocument();
+    expect(proposalToolbar.querySelector(".dasti-icon-cluster__divider")).toBeNull();
+    expect(within(proposalToolbar).getByRole("button", { name: "Draft proposal" })).toBeInTheDocument();
+    expect(within(proposalToolbar).queryByRole("button", { name: "Ask" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask" })).toHaveAttribute("title", "Ask");
+    expect(screen.getByRole("button", { name: "Ask" }).closest(".dasti-proposal-skeleton-stage__bar")).toBeNull();
+    expect(screen.getByRole("button", { name: "Ask" }).closest(".dasti-proposal-skeleton-stage__ask-handle-layer")).toBeTruthy();
     const preview = screen.getByRole("button", { name: "Preview proposal" });
     const heading = screen.getByRole("button", { name: "Heading" });
     const design = screen.getByRole("button", { name: "Design" });
     const templates = screen.getByRole("button", { name: "Templates" });
-    const tone = screen.getByText("Warm tone");
+    const draft = screen.getByRole("button", { name: "Draft proposal" });
+    const ask = screen.getByRole("button", { name: "Ask" });
     expect(
       preview.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeGreaterThan(0);
@@ -61,7 +88,10 @@ describe("ProposalDocumentStage proposal actions", () => {
       design.compareDocumentPosition(templates) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeGreaterThan(0);
     expect(
-      templates.compareDocumentPosition(tone) & Node.DOCUMENT_POSITION_FOLLOWING,
+      templates.compareDocumentPosition(draft) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeGreaterThan(0);
+    expect(
+      draft.compareDocumentPosition(ask) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeGreaterThan(0);
   });
 
@@ -90,35 +120,6 @@ describe("ProposalDocumentStage proposal actions", () => {
       "aria-expanded",
       "true",
     );
-  });
-
-  it("cycles tone on click and opens settings on long press", () => {
-    vi.useFakeTimers();
-    const onCycleTone = vi.fn();
-    const onOpenToneSettings = vi.fn();
-
-    try {
-      renderStage({ onCycleTone, onOpenToneSettings });
-
-      const tone = screen.getByRole("button", { name: "Tone: Warm tone" });
-      expect(tone).toHaveAttribute(
-        "data-toolbar-tooltip",
-        "Click to change tone. Hold for settings.",
-      );
-
-      fireEvent.click(tone);
-      expect(onCycleTone).toHaveBeenCalledTimes(1);
-      expect(onOpenToneSettings).not.toHaveBeenCalled();
-
-      fireEvent.pointerDown(tone);
-      vi.advanceTimersByTime(450);
-      expect(onOpenToneSettings).toHaveBeenCalledTimes(1);
-      fireEvent.pointerUp(tone);
-      fireEvent.click(tone);
-      expect(onCycleTone).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it("wires the Design action in preview and edit modes", () => {
@@ -162,6 +163,357 @@ describe("ProposalDocumentStage proposal actions", () => {
 
     expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Redo" })).toBeInTheDocument();
+  });
+
+  it("wires Draft proposal and Ask without generating directly", () => {
+    const onOpenDraft = vi.fn();
+    const onOpenAsk = vi.fn();
+
+    renderStage({ onOpenDraft, onOpenAsk });
+
+    fireEvent.click(screen.getByRole("button", { name: "Draft proposal" }));
+    expect(onOpenDraft).toHaveBeenCalledTimes(1);
+    expect(onOpenAsk).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(onOpenAsk).toHaveBeenCalledTimes(1);
+    expect(onOpenDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("collapses Edit and Preview into one mode toggle in ultra compact paper width", () => {
+    const onModeChange = vi.fn();
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        callback(0);
+        return 1;
+      });
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, "cancelAnimationFrame")
+      .mockImplementation(() => undefined);
+    const rectSpy = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function getMockRect(this: Element) {
+        if (this.classList.contains("dasti-proposal-skeleton-stage")) {
+          return rect(0, 900);
+        }
+        if (this.classList.contains("dasti-proposal-sheet__preview-page")) {
+          return rect(128, 238);
+        }
+        return rect(0, 900);
+      });
+
+    try {
+      const { rerender } = render(
+        <ProposalDocumentStage
+          {...baseProps}
+          mode="preview"
+          onModeChange={onModeChange}
+        >
+          <div className="dasti-proposal-sheet__preview-page">Paper</div>
+        </ProposalDocumentStage>,
+      );
+
+      expect(screen.queryByRole("button", { name: "Edit proposal" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Preview proposal" })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Switch to Edit" }));
+      expect(onModeChange).toHaveBeenCalledWith("edit");
+
+      rerender(
+        <ProposalDocumentStage
+          {...baseProps}
+          mode="edit"
+          onModeChange={onModeChange}
+        >
+          <div className="dasti-proposal-sheet__preview-page">Paper</div>
+        </ProposalDocumentStage>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Switch to Preview" }));
+      expect(onModeChange).toHaveBeenCalledWith("preview");
+    } finally {
+      rectSpy.mockRestore();
+      requestAnimationFrameSpy.mockRestore();
+      cancelAnimationFrameSpy.mockRestore();
+    }
+  });
+
+  it.each([
+    ["30% zoom", 128, 238, "ultraCompact", "ultra", "iconOnly", "outside", "label", "labeled", 378, 300],
+    ["50% zoom", 128, 397, "compact", "compact", "short", "outside", "label", "labeled", 537, 397],
+    ["medium paper", 128, 520, "medium", null, "short", "outside", "label", "labeled", 660, 520],
+    ["100% zoom", 128, 794, "wide", null, "full", "outside", "label", "labeled", 934, 680],
+    ["125% zoom", 128, 900, "wide", null, "full", "edge-tab", "icon", "edgeTab", 968, 680],
+  ])("anchors the toolbar to the rendered proposal paper rect at %s", (_, left, width, toolbarMode, density, draftDensity, askPlacement, askDensity, askMode, askHandleLeft, toolbarWidth) => {
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        callback(0);
+        return 1;
+      });
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, "cancelAnimationFrame")
+      .mockImplementation(() => undefined);
+    const rectSpy = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function getMockRect(this: Element) {
+        if (this.classList.contains("dasti-proposal-skeleton-stage")) {
+          return rect(0, 900);
+        }
+        if (this.classList.contains("dasti-proposal-sheet__preview-page")) {
+          return rect(left, width, 96);
+        }
+        return rect(0, 900);
+      });
+
+    try {
+      const { container } = render(
+        <ProposalDocumentStage {...baseProps} onOpenDraft={vi.fn()} onOpenAsk={vi.fn()}>
+          <div className="dasti-proposal-sheet__preview-page">Paper</div>
+        </ProposalDocumentStage>,
+      );
+
+      const toolbar = container.querySelector<HTMLElement>(
+        ".dasti-proposal-skeleton-stage__bar",
+      );
+      expect(toolbar?.style.getPropertyValue("--proposal-toolbar-paper-left")).toBe(
+        `${left}px`,
+      );
+      expect(toolbar?.style.getPropertyValue("--proposal-toolbar-paper-width")).toBe(
+        `${width}px`,
+      );
+      expect(toolbar?.style.getPropertyValue("--proposal-command-toolbar-width")).toBe(
+        `${toolbarWidth}px`,
+      );
+      expect(toolbar?.style.getPropertyValue("--proposal-command-toolbar-min-width")).toBe(
+        "300px",
+      );
+      expect(
+        toolbar?.style.getPropertyValue("--proposal-ask-handle-inline-start"),
+      ).toBe(`${askHandleLeft}px`);
+      const askHandleLayer = container.querySelector<HTMLElement>(
+        ".dasti-proposal-skeleton-stage__ask-handle-layer",
+      );
+      expect(
+        askHandleLayer?.style.getPropertyValue("--proposal-toolbar-paper-left"),
+      ).toBe(`${left}px`);
+      expect(
+        askHandleLayer?.style.getPropertyValue("--proposal-toolbar-paper-width"),
+      ).toBe(`${width}px`);
+      expect(
+        askHandleLayer?.style.getPropertyValue("--proposal-ask-handle-block-start"),
+      ).toBe("112px");
+      expect(
+        askHandleLayer?.style.getPropertyValue("--proposal-ask-handle-inline-start"),
+      ).toBe(`${askHandleLeft}px`);
+      const stage = container.querySelector(".dasti-proposal-skeleton-stage");
+      if (density) {
+        expect(stage).toHaveAttribute("data-toolbar-density", density);
+      } else {
+        expect(stage).not.toHaveAttribute("data-toolbar-density");
+      }
+      expect(stage).toHaveAttribute("data-toolbar-mode", toolbarMode);
+      expect(stage).toHaveAttribute("data-draft-label-mode", draftDensity);
+      expect(stage).toHaveAttribute("data-ask-mode", askMode);
+      expect(stage).toHaveAttribute(
+        "data-draft-density",
+        draftDensity === "iconOnly" ? "icon" : draftDensity,
+      );
+      expect(stage).toHaveAttribute("data-ask-placement", askPlacement);
+      expect(stage).toHaveAttribute("data-ask-density", askDensity);
+    } finally {
+      rectSpy.mockRestore();
+      requestAnimationFrameSpy.mockRestore();
+      cancelAnimationFrameSpy.mockRestore();
+    }
+  });
+
+  it("keeps Ask outside the paper when the visible canvas has enough right gutter", () => {
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        callback(0);
+        return 1;
+      });
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, "cancelAnimationFrame")
+      .mockImplementation(() => undefined);
+    const rectSpy = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function getMockRect(this: Element) {
+        if (this.classList.contains("dasti-proposal-skeleton-stage")) {
+          return rect(0, 1200, 0);
+        }
+        if (this.classList.contains("dasti-proposal-sheet__preview-page")) {
+          return rect(128, 680, 64);
+        }
+        return rect(0, 1200, 0);
+      });
+
+    try {
+      const { container } = render(
+        <ProposalDocumentStage {...baseProps} onOpenDraft={vi.fn()} onOpenAsk={vi.fn()}>
+          <div className="dasti-proposal-sheet__preview-page">Paper</div>
+        </ProposalDocumentStage>,
+      );
+
+      const askHandleLayer = container.querySelector<HTMLElement>(
+        ".dasti-proposal-skeleton-stage__ask-handle-layer",
+      );
+      expect(
+        askHandleLayer?.style.getPropertyValue("--proposal-ask-handle-inline-start"),
+      ).toBe("820px");
+      const stage = container.querySelector(".dasti-proposal-skeleton-stage");
+      expect(stage).toHaveAttribute("data-ask-placement", "outside");
+      expect(stage).toHaveAttribute("data-ask-density", "label");
+    } finally {
+      rectSpy.mockRestore();
+      requestAnimationFrameSpy.mockRestore();
+      cancelAnimationFrameSpy.mockRestore();
+    }
+  });
+
+  it("uses the forge canvas instead of the paper-sized stage for Ask placement", () => {
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        callback(0);
+        return 1;
+      });
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, "cancelAnimationFrame")
+      .mockImplementation(() => undefined);
+    const rectSpy = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function getMockRect(this: Element) {
+        if (this.classList.contains("dasti-proposal-skeleton-forge")) {
+          return rect(0, 1200, 0);
+        }
+        if (this.classList.contains("dasti-proposal-skeleton-stage")) {
+          return rect(128, 794, 0);
+        }
+        if (this.classList.contains("dasti-proposal-sheet__preview-page")) {
+          return rect(128, 794, 96);
+        }
+        return rect(0, 1200, 0);
+      });
+
+    try {
+      const { container } = render(
+        <div className="dasti-proposal-skeleton-forge">
+          <ProposalDocumentStage
+            {...baseProps}
+            onOpenDraft={vi.fn()}
+            onOpenAsk={vi.fn()}
+          >
+            <div className="dasti-proposal-sheet__preview-page">Paper</div>
+          </ProposalDocumentStage>
+        </div>,
+      );
+
+      const askHandleLayer = container.querySelector<HTMLElement>(
+        ".dasti-proposal-skeleton-stage__ask-handle-layer",
+      );
+      expect(
+        askHandleLayer?.style.getPropertyValue("--proposal-ask-handle-inline-start"),
+      ).toBe("934px");
+      const stage = container.querySelector(".dasti-proposal-skeleton-stage");
+      expect(stage).toHaveAttribute("data-ask-placement", "outside");
+      expect(stage).toHaveAttribute("data-ask-density", "label");
+    } finally {
+      rectSpy.mockRestore();
+      requestAnimationFrameSpy.mockRestore();
+      cancelAnimationFrameSpy.mockRestore();
+    }
+  });
+
+  it("makes Draft icon-only from actual narrow viewport width", () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 500,
+    });
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        callback(0);
+        return 1;
+      });
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, "cancelAnimationFrame")
+      .mockImplementation(() => undefined);
+    const rectSpy = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function getMockRect(this: Element) {
+        if (this.classList.contains("dasti-proposal-skeleton-stage")) {
+          return rect(0, 900);
+        }
+        if (this.classList.contains("dasti-proposal-sheet__preview-page")) {
+          return rect(32, 680);
+        }
+        return rect(0, 900);
+      });
+
+    try {
+      const { container } = render(
+        <ProposalDocumentStage {...baseProps} onOpenDraft={vi.fn()} onOpenAsk={vi.fn()}>
+          <div className="dasti-proposal-sheet__preview-page">Paper</div>
+        </ProposalDocumentStage>,
+      );
+
+      const stage = container.querySelector(".dasti-proposal-skeleton-stage");
+      expect(stage).toHaveAttribute("data-draft-density", "icon");
+    } finally {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: originalInnerWidth,
+      });
+      rectSpy.mockRestore();
+      requestAnimationFrameSpy.mockRestore();
+      cancelAnimationFrameSpy.mockRestore();
+    }
+  });
+
+  it("positions Ask from the paper top instead of the toolbar baseline", () => {
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        callback(0);
+        return 1;
+      });
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, "cancelAnimationFrame")
+      .mockImplementation(() => undefined);
+    const rectSpy = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function getMockRect(this: Element) {
+        if (this.classList.contains("dasti-proposal-skeleton-stage")) {
+          return rect(0, 900, 0);
+        }
+        if (this.classList.contains("dasti-proposal-sheet__preview-page")) {
+          return rect(128, 238, 96);
+        }
+        return rect(0, 900, 0);
+      });
+
+    try {
+      const { container } = render(
+        <ProposalDocumentStage {...baseProps} onOpenDraft={vi.fn()} onOpenAsk={vi.fn()}>
+          <div className="dasti-proposal-sheet__preview-page">Paper</div>
+        </ProposalDocumentStage>,
+      );
+
+      const askHandleLayer = container.querySelector<HTMLElement>(
+        ".dasti-proposal-skeleton-stage__ask-handle-layer",
+      );
+      expect(
+        askHandleLayer?.style.getPropertyValue("--proposal-ask-handle-block-start"),
+      ).toBe("112px");
+    } finally {
+      rectSpy.mockRestore();
+      requestAnimationFrameSpy.mockRestore();
+      cancelAnimationFrameSpy.mockRestore();
+    }
   });
 
   it("uses shared app tooltips without native titles for stage mode triggers", () => {

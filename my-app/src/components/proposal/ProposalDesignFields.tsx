@@ -278,15 +278,6 @@ export function ProposalDesignFields({
       className="forge__rail-section dasti-proposal-skeleton-rail__section dasti-proposal-skeleton-rail__style dasti-proposal-design-fields"
       data-rail-pane="style"
     >
-      <div className="dasti-proposal-skeleton-rail__style-note">
-        Style inherited from selected CV when available.
-        <br />
-        Default settings{" "}
-        <a className="dasti-proposal-skeleton-rail__link" href="/settings?tab=docstyle">
-          → Document style
-        </a>
-        .
-      </div>
       <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Style</div>
       <div
         className="dasti-proposal-skeleton-rail__style-pills dasti-proposal-design-style-pills"

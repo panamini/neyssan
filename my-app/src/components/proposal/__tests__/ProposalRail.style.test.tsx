@@ -222,7 +222,72 @@ describe("ProposalRail style tab", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens Ask AI compact menus upward above the composer drawer", async () => {
+  it("renders the Ask composer as a prompt surface without removing Draft", async () => {
+    const onAskAiChange = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        activeTab="ask"
+        hideTabs
+        askAiValue=""
+        askAiPlaceholder="Rewrite instruction"
+        askAiHint="Apply change"
+        onAskAiChange={onAskAiChange}
+      />,
+    );
+
+    expect(screen.queryByRole("tab", { name: "Draft" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Ask AI", { selector: ".forge__rail-label" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Canva/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/one clear prompt is enough/i)).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Rewrite instruction")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send" })).toHaveAttribute(
+      "data-toolbar-tooltip",
+      "Apply change",
+    );
+    expect(screen.getByRole("button", { name: "Send" })).toHaveAttribute(
+      "data-toolbar-tooltip-placement",
+      "below",
+    );
+    expect(screen.getByRole("button", { name: "Send" })).toHaveClass(
+      "dasti-proposal-skeleton-rail__ask-send",
+    );
+
+    const suggestions = screen.getByLabelText("Ask suggestions");
+    expect(within(suggestions).getByRole("button", { name: "Make it warmer" })).toBeInTheDocument();
+    expect(within(suggestions).getByRole("button", { name: "Shorten it" })).toBeInTheDocument();
+
+    fireEvent.click(within(suggestions).getByRole("button", { name: "Strengthen the close" }));
+    expect(onAskAiChange).toHaveBeenCalledWith("Strengthen the close");
+  });
+
+  it("hides Ask suggestion rows after an instruction is typed", () => {
+    render(
+      <ProposalRail
+        {...baseProps}
+        activeTab="ask"
+        hideTabs
+        askAiValue="Make the opening more direct"
+        askAiPlaceholder="Rewrite instruction"
+      />,
+    );
+
+    expect(screen.queryByLabelText("Ask suggestions")).not.toBeInTheDocument();
+  });
+
+  it("keeps the Draft panel available outside the Ask drawer", () => {
+    render(<ProposalRail {...baseProps} />);
+
+    expect(screen.getByRole("tab", { name: "Draft" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Document type" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate" })).toBeInTheDocument();
+    expect(screen.getByText("Job context")).toBeInTheDocument();
+  });
+
+  it("opens Ask compact menus upward above the composer drawer", async () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       writable: true,
@@ -556,19 +621,10 @@ describe("ProposalRail style tab", () => {
     });
 
     expect(
-      screen.getAllByText((_, element) =>
-        Boolean(
-          element?.textContent?.includes(
-            "Style inherited from selected CV when available.",
-          ),
-        ),
-      ).length,
-    ).toBeGreaterThan(0);
-    expect(screen.getByText(/Default settings/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "→ Document style" })).toHaveAttribute(
-      "href",
-      "/settings?tab=docstyle",
-    );
+      screen.queryByText(/Style inherited from selected CV when available/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Default settings/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "→ Document style" })).not.toBeInTheDocument();
     expect(screen.getByText("Style", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(screen.queryByTestId("proposal-design-live-preview")).not.toBeInTheDocument();
     expect(screen.getByText("Layout", { selector: ".forge__rail-label" })).toBeInTheDocument();

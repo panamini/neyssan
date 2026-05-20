@@ -119,6 +119,13 @@ type ProposalRailProps = {
   hideTabs?: boolean;
 };
 
+const PROPOSAL_ASK_AI_SUGGESTIONS = [
+  "Make it warmer",
+  "Shorten it",
+  "Strengthen the close",
+  "Adapt it to the job",
+] as const;
+
 export function ProposalRail({
   jobTitle,
   company,
@@ -266,6 +273,7 @@ export function ProposalRail({
     toneOptions.find((option) => option.selected) ?? toneOptions[0] ?? null;
   const selectedLengthOption =
     lengthOptions.find((option) => option.selected) ?? lengthOptions[1] ?? lengthOptions[0] ?? null;
+  const showAskSuggestions = hideTabs && askAiValue.trim().length === 0;
 
   const proposalTypeMenuSections = React.useMemo<MenuSection[]>(
     () => [
@@ -673,15 +681,16 @@ export function ProposalRail({
 
       {activeTab === "ask" ? (
       <section className="forge__rail-section dasti-proposal-skeleton-rail__section dasti-proposal-skeleton-rail__ask-section dasti-toolbar--surface-tooltips">
-        <div className="dasti-proposal-skeleton-rail__ask-header">
-          <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Ask</div>
-        </div>
+        {!hideTabs ? (
+          <div className="dasti-proposal-skeleton-rail__ask-header">
+            <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Ask</div>
+          </div>
+        ) : null}
         <div className="dasti-proposal-skeleton-rail__ask-hub">
           <label
-            className="dasti-proposal-skeleton-rail__ask-field dasti-toolbar-tooltip-trigger--above"
-            data-toolbar-tooltip="Describe the change you want to apply to the current draft."
+            className="dasti-proposal-skeleton-rail__ask-field"
           >
-            <span className="sr-only">Ask AI</span>
+            <span className="sr-only">Ask</span>
             <textarea
               className="ds-field ds-field--textarea"
               value={askAiValue}
@@ -690,22 +699,39 @@ export function ProposalRail({
               onChange={(event) => onAskAiChange(event.target.value)}
             />
           </label>
+          {showAskSuggestions ? (
+            <div className="dasti-proposal-skeleton-rail__ask-suggestions" aria-label="Ask suggestions">
+              {PROPOSAL_ASK_AI_SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  className="dasti-proposal-skeleton-rail__ask-suggestion"
+                  disabled={askAiDisabled || askAiBusy}
+                  onClick={() => onAskAiChange(suggestion)}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="dasti-proposal-skeleton-rail__ask-controls">
             {renderLengthSelect("sm")}
             {renderToneSelect("sm")}
+            <button
+              type="button"
+              className="dasti-proposal-skeleton-rail__ask-send dasti-toolbar-tooltip-trigger--above"
+              aria-label="Send"
+              title={askAiBusy ? "Applying" : "Send"}
+              data-toolbar-tooltip={askAiHint}
+              data-toolbar-tooltip-placement="below"
+              disabled={askAiDisabled || askAiBusy || !askAiValue.trim()}
+              onClick={onAskAiSubmit}
+            >
+              <PaperPlaneRight size={15} strokeWidth={1.8} aria-hidden="true" />
+              <span className="sr-only">{askAiBusy ? "Applying..." : "Send"}</span>
+            </button>
           </div>
         </div>
-        <Button
-          type="button"
-          variant="primary"
-          size="md"
-          data-toolbar-tooltip={askAiHint}
-          disabled={askAiDisabled || askAiBusy || !askAiValue.trim()}
-          onClick={onAskAiSubmit}
-          iconLeft={<PaperPlaneRight size={15} strokeWidth={1.8} />}
-        >
-          {askAiBusy ? "Applying…" : "Send"}
-        </Button>
       </section>
       ) : null}
 

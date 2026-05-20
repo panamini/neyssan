@@ -312,8 +312,14 @@ export function AppTopbar({
     resolveProposalStateLabel(proposalDocumentState);
   const isForgeDocumentRoute =
     location.pathname === "/cv" || location.pathname === "/proposal";
+  const documentRoute =
+    location.pathname === "/proposal"
+      ? "proposal"
+      : location.pathname === "/cv"
+        ? "cv"
+        : undefined;
   return (
-    <header className="app-topbar">
+    <header className="app-topbar" data-document-route={documentRoute}>
       <div className="app-topbar__identity">
         {isForgeDocumentRoute ? null : (
           <div className="app-topbar__crumb" aria-label="Breadcrumb">
@@ -526,7 +532,7 @@ export function AppTopbar({
             ) : null}
           </div>
         ) : location.pathname === "/proposal" ? (
-          <div className="app-topbar__doc-identity-group">
+          <div className="app-topbar__doc-identity-group app-topbar__doc-identity-group--proposal">
             <div
               className="app-topbar__doc-identity"
               aria-label={proposalDocumentIdentityLabel}
@@ -576,6 +582,9 @@ export function AppTopbar({
                 <button
                   type="button"
                   className="app-topbar__doc-action app-topbar__doc-action--new app-topbar__doc-action--proposal-new"
+                  data-has-content={
+                    proposalTopbarRegistration.hasProposalContent ? "true" : undefined
+                  }
                   aria-label="New proposal"
                   onClick={proposalTopbarRegistration.onNewProposal}
                 >

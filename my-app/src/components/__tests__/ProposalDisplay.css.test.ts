@@ -48,7 +48,7 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-skeleton-stage\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;[\s\S]*box-sizing:\s*border-box;/,
+      /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*--proposal-command-toolbar-min-width:\s*300px;[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*width:\s*var\(--proposal-command-toolbar-width,\s*min\(100%,\s*var\(--proposal-toolbar-paper-width,\s*100%\)\)\);[\s\S]*min-width:\s*var\(--proposal-command-toolbar-min-width\);[\s\S]*margin-inline-start:\s*var\(--proposal-command-toolbar-left,\s*var\(--proposal-toolbar-paper-left,\s*0\)\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-output-shell--workspace[\s\S]*\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*minmax\(0,\s*100%\);/,
@@ -85,6 +85,90 @@ describe("ProposalDisplay CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.dasti-proposal-skeleton-stage__actions,[\s\S]*\.dasti-proposal-skeleton-stage__right-actions\s*\{[\s\S]*gap:\s*var\(--space-1\);/,
+    );
+  });
+
+  it("keeps Proposal toolbar button geometry tied to action hierarchy", () => {
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage__ask-handle-layer\s*\{[\s\S]*inset-block-start:\s*var\(--proposal-ask-handle-block-start,\s*var\(--space-3\)\);[\s\S]*inset-inline-start:\s*var\(--proposal-ask-handle-inline-start,\s*calc\(100vw - 56px\)\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage__ask-handle\s*\{[^}]*pointer-events:\s*auto;/,
+    );
+    expect(productCss).not.toMatch(
+      /\.dasti-proposal-skeleton-stage__ask-handle\s*\{[^}]*box-shadow:\s*var\(--shadow-frost/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-forge\[data-forge-drawer-rail-collapsed="true"\][\s\S]*?\.dasti-proposal-skeleton-stage__actions--document[\s\S]*?\.dasti-proposal-skeleton-stage__primary-action[\s\S]*?border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage\[data-toolbar-density="ultra"\][\s\S]*?\.dasti-proposal-skeleton-stage__actions--document[\s\S]*?\.dasti-proposal-skeleton-stage__primary-action,\s*\.dasti-proposal-skeleton-stage\[data-toolbar-density="ultra"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--ask\s*\{[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage__primary-action--draft\s*>\s*span\[aria-hidden="true"\]\s*\{[\s\S]*color:\s*var\(--color-accent\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage\[data-draft-density="full"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--draft[\s\S]*?\.dasti-proposal-skeleton-stage__action-label--full\s*\{[\s\S]*display:\s*inline;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage\[data-draft-density="short"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--draft[\s\S]*?\.dasti-proposal-skeleton-stage__action-label--short\s*\{[\s\S]*display:\s*inline;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage\[data-draft-density="icon"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--draft\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage\[data-ask-placement="edge-tab"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--ask\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage\[data-ask-density="icon"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--ask\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-forge\[data-forge-drawer-rail-collapsed="true"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--draft\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
+    );
+    expect(productCss).not.toMatch(
+      /\.dasti-proposal-skeleton-stage\[data-toolbar-density="ultra"\]\s+\.dasti-proposal-skeleton-stage__primary-action\s*\{[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
+    );
+  });
+
+  it("keeps selected-source clear actions quiet and tokenized", () => {
+    expect(productCss).toMatch(
+      /\.forge-rail-drawer__draft-remove\s*\{[\s\S]*border:\s*1px solid transparent;[\s\S]*border-radius:\s*var\(--radius-control\);[\s\S]*background:\s*transparent;/,
+    );
+  });
+
+  it("keeps the Ask drawer overlay from blocking document scroll", () => {
+    expect(productCss).toMatch(
+      /\.dasti-composer-drawer\s*\{[\s\S]*border-radius:\s*var\(--radius-surface,\s*var\(--radius-card\)\);[\s\S]*overflow:\s*hidden;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-composer-drawer__body\s*\{[\s\S]*padding:\s*2px\s+var\(--space-3\)\s+var\(--space-2\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-composer-drawer\s+\.ds-sheet__title--hidden\s*\{[\s\S]*clip-path:\s*inset\(50%\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-composer-drawer\[data-title-hidden="true"\]\s+\.ds-sheet__header\s*\{[\s\S]*justify-content:\s*flex-end;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-composer-drawer__overlay\s*\{[\s\S]*pointer-events:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-composer-drawer-root\s*\{[\s\S]*pointer-events:\s*none;[\s\S]*overflow:\s*visible;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-composer-drawer-root\s+\.dasti-composer-drawer\s*\{[\s\S]*pointer-events:\s*auto;/,
+    );
+  });
+
+  it("keeps the composer Ask prompt flat inside the drawer surface", () => {
+    expect(productCss).toMatch(
+      /\.dasti-composer-drawer\s+\.dasti-proposal-skeleton-rail__ask-hub\s*\{[\s\S]*border:\s*0;[\s\S]*border-radius:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-composer-drawer[\s\S]*?\.dasti-proposal-skeleton-rail__ask-hub[\s\S]*?\.dasti-proposal-skeleton-rail__ask-field[\s\S]*?textarea\s*\{[\s\S]*padding-inline:\s*var\(--space-1\);[\s\S]*background:\s*transparent;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-composer-drawer[\s\S]*?\.dasti-proposal-skeleton-rail__ask-hub[\s\S]*?\.dasti-proposal-skeleton-rail__ask-controls\s*\{[\s\S]*padding-inline:\s*var\(--space-1\);[\s\S]*padding-block-end:\s*var\(--space-1\);/,
     );
   });
 
@@ -200,7 +284,8 @@ describe("ProposalDisplay CSS contracts", () => {
     expectCssInOrder([
       ".dasti-proposal-skeleton-forge {",
       "--proposal-paper-visual-inline-size: var(--forge-page-inline-size);",
-      "--proposal-workspace-stage-inline-size: var(--proposal-paper-visual-inline-size);",
+      "--proposal-workspace-stage-inline-size: var(",
+      "--proposal-paper-visual-inline-size",
       "--proposal-workspace-rail-inline-size: 360px;",
     ]);
     expectCssInOrder([
@@ -638,6 +723,9 @@ describe("ProposalDisplay CSS contracts", () => {
     ]);
     expect(productCss).toMatch(
       /\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s+\.dasti-proposal-sheet__preview-page,[\s\S]*?\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s+\.dasti-proposal-document__page\s*\{[\s\S]*box-shadow:\s*[\s\S]*var\(--document-viewer-frame-shadow\),[\s\S]*0 12px 28px -24px color-mix\(in srgb, var\(--shadow-color\) 92%, transparent\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-sheet__preview-scale-shell\s*\{[\s\S]*inset-inline-start:\s*50%;[\s\S]*transform-origin:\s*top center;/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-forge__stage\s*\{[\s\S]*position:\s*relative;[\s\S]*z-index:\s*0;/,

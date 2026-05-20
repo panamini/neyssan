@@ -59,6 +59,9 @@ import {
 import { getFactoryDocumentStyleSlot } from "../lib/document-style-slots";
 import { ProposalColorPickerPopover } from "../components/ProposalColorPickerPopover";
 import type { ToneBadgeTone } from "../components/ui/tone-badge";
+import {
+  normalizeSettingsTab,
+} from "../lib/settings-tabs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1108,34 +1111,9 @@ function SignatureSelector({
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-type SettingsTab =
-  | "account"
-  | "preferences"
-  | "docstyle"
-  | "voice"
-  | "billing"
-  | "team"
-  | "danger";
-
-const SETTINGS_TABS: Array<{ id: SettingsTab; label: string }> = [
-  { id: "account", label: "Account" },
-  { id: "preferences", label: "Preferences" },
-  { id: "docstyle", label: "Document style" },
-  { id: "voice", label: "Voice & tone" },
-  { id: "billing", label: "Billing" },
-  { id: "team", label: "Team" },
-  { id: "danger", label: "Danger zone" },
-];
-
-function normalizeSettingsTab(value: string | null): SettingsTab {
-  return SETTINGS_TABS.some((tab) => tab.id === value)
-    ? (value as SettingsTab)
-    : "account";
-}
-
 export function SettingsPage(): JSX.Element {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const activeTab = normalizeSettingsTab(searchParams.get("tab"));
   const { currentCvId } = useCvLibrary();
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
@@ -1455,10 +1433,6 @@ export function SettingsPage(): JSX.Element {
     },
     [flashSaved, isSignedIn, setCurrentProposalSettings],
   );
-
-  const selectSettingsTab = (tab: SettingsTab) => {
-    setSearchParams({ tab });
-  };
 
   const accountDisplayName =
     user?.fullName ??
