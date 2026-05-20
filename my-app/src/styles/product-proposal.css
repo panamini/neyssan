@@ -8297,28 +8297,24 @@
   .dasti-proposal-skeleton-stage__ask-handle,
 .dasti-proposal-skeleton-stage[data-ask-mode="edgeTab"]
   .dasti-proposal-skeleton-stage__ask-handle {
-  inline-size: var(--editor-toolbar-icon-control-block-size);
-  block-size: var(--editor-toolbar-icon-control-block-size);
-  width: var(--editor-toolbar-icon-control-block-size);
-  height: var(--editor-toolbar-icon-control-block-size);
-  min-width: var(--editor-toolbar-icon-control-block-size);
-  min-height: var(--editor-toolbar-icon-control-block-size);
-  max-width: var(--editor-toolbar-icon-control-block-size);
-  max-height: var(--editor-toolbar-icon-control-block-size);
+  inline-size: calc(var(--control-sm) + var(--space-1));
+  block-size: calc(var(--control-sm) + var(--space-1));
+  width: calc(var(--control-sm) + var(--space-1));
+  height: calc(var(--control-sm) + var(--space-1));
+  min-width: calc(var(--control-sm) + var(--space-1));
+  min-height: calc(var(--control-sm) + var(--space-1));
+  max-width: calc(var(--control-sm) + var(--space-1));
+  max-height: calc(var(--control-sm) + var(--space-1));
   padding-inline: 0;
   gap: 0;
-  border-color: color-mix(
-    in srgb,
-    var(--paper-dark-body-ink) 44%,
-    transparent
-  );
+  border-color: transparent;
   border-radius: var(--radius-toolbar-control, var(--radius-control));
   background: color-mix(
     in srgb,
-    var(--proposal-document-paper) 18%,
-    transparent
+    var(--proposal-document-paper) 88%,
+    var(--paper-dark-body-ink) 12%
   );
-  color: color-mix(in srgb, var(--paper-dark-body-ink) 74%, transparent);
+  color: color-mix(in srgb, var(--paper-dark-body-ink) 78%, transparent);
   box-shadow: none;
 }
 
@@ -8330,15 +8326,11 @@
   .dasti-proposal-skeleton-stage__ask-handle:hover:not(:disabled),
 .dasti-proposal-skeleton-stage[data-ask-mode="edgeTab"]
   .dasti-proposal-skeleton-stage__ask-handle:focus-visible {
-  border-color: color-mix(
-    in srgb,
-    var(--paper-dark-body-ink) 62%,
-    transparent
-  );
+  border-color: transparent;
   background: color-mix(
     in srgb,
-    var(--proposal-document-paper) 32%,
-    transparent
+    var(--proposal-document-paper) 80%,
+    var(--paper-dark-body-ink) 20%
   );
   color: var(--paper-dark-body-ink);
   box-shadow: none;

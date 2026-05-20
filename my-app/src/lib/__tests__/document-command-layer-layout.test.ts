@@ -12,9 +12,9 @@ const TOOLBAR_MIN_WIDTH = 300;
 const TOOLBAR_HEIGHT = 44;
 const SAFE_MARGIN = 12;
 const GAP = 12;
-const ASK_ICON_WIDTH = 32;
+const ASK_ICON_WIDTH = 36;
 const ASK_LABEL_WIDTH = 76;
-const ASK_HEIGHT = 32;
+const ASK_HEIGHT = 36;
 const PAPER_TOP = 80;
 
 function right(rect: CommandLayerRect) {
