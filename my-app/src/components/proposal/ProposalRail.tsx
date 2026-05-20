@@ -322,8 +322,13 @@ export function ProposalRail({
     <Menu
       ariaLabel="Length"
       align="start"
-      side="bottom"
+      side={size === "sm" ? "top" : "bottom"}
       matchTriggerWidth={size === "md"}
+      menuClassName={
+        hideTabs && size === "sm"
+          ? "dasti-proposal-skeleton-rail__composer-menu"
+          : undefined
+      }
       sections={lengthMenuSections}
       trigger={
         <button
@@ -343,8 +348,13 @@ export function ProposalRail({
     <Menu
       ariaLabel="Tone"
       align={size === "sm" ? "end" : "start"}
-      side="bottom"
+      side={size === "sm" ? "top" : "bottom"}
       matchTriggerWidth={size === "md"}
+      menuClassName={
+        hideTabs && size === "sm"
+          ? "dasti-proposal-skeleton-rail__composer-menu"
+          : undefined
+      }
       sections={toneMenuSections}
       trigger={
         <button

@@ -388,12 +388,12 @@ describe("forge rail drawers", () => {
     );
 
     expect(css).toMatch(/\.forge-template-panel\s*\{[\s\S]*padding: var\(--space-4\)/);
-    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*column-gap: var\(--space-2\)/);
-    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*row-gap: var\(--space-5\)/);
-    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*margin: calc\(var\(--space-1\) \* -1\)/);
-    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*padding: var\(--space-1\)/);
-    expect(css).toMatch(/\.forge-rail-drawer__grid\s*\{[\s\S]*column-gap: var\(--space-2\)/);
-    expect(css).toMatch(/\.forge-rail-drawer__grid\s*\{[\s\S]*row-gap: var\(--space-5\)/);
+    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*column-gap: var\(--forge-drawer-template-grid-gutter\)/);
+    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*row-gap: var\(--forge-drawer-grid-row-gap\)/);
+    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*margin: calc\(var\(--forge-drawer-scroll-inset\) \* -1\)/);
+    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*padding: var\(--forge-drawer-scroll-inset\)/);
+    expect(css).toMatch(/\.forge-rail-drawer__grid\s*\{[\s\S]*column-gap: var\(--forge-drawer-grid-gutter\)/);
+    expect(css).toMatch(/\.forge-rail-drawer__grid\s*\{[\s\S]*row-gap: var\(--forge-drawer-grid-row-gap\)/);
   });
 
   it("keeps the Draft generate footer from painting a separate tray", () => {
@@ -497,6 +497,9 @@ describe("forge rail drawers", () => {
     );
     expect(css).toMatch(
       /\.forge-rail-drawer__row-affordance\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*padding:\s*0 var\(--space-3\);[\s\S]*font-size:\s*var\(--tx\);/,
+    );
+    expect(css).toMatch(
+      /\.forge-rail-drawer__row-main \.forge-rail-drawer__row-affordance\s*\{[\s\S]*font-size:\s*var\(--tx\);[\s\S]*line-height:\s*var\(--lx\);/,
     );
     expect(css).toMatch(
       /\.forge-rail-drawer__row-affordance svg,[\s\S]*\.forge-rail-drawer__row-affordance-icon,[\s\S]*\.forge-rail-drawer__thumb-affordance svg\s*\{[\s\S]*width:\s*var\(--app-sidebar-icon-size\);[\s\S]*height:\s*var\(--app-sidebar-icon-size\);/,

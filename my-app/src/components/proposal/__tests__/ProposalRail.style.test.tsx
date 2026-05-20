@@ -222,6 +222,101 @@ describe("ProposalRail style tab", () => {
     ).toBeInTheDocument();
   });
 
+  it("opens Ask AI compact menus upward above the composer drawer", async () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 1180,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: 780,
+    });
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        activeTab="ask"
+        hideTabs
+      />,
+    );
+
+    const lengthTrigger = screen.getByRole("button", { name: "Standard" });
+    vi.spyOn(lengthTrigger, "getBoundingClientRect").mockReturnValue({
+      x: 760,
+      y: 520,
+      top: 520,
+      left: 760,
+      right: 860,
+      bottom: 552,
+      width: 100,
+      height: 32,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    fireEvent.click(lengthTrigger);
+    const lengthMenu = await screen.findByRole("menu", { name: "Length" });
+    vi.spyOn(lengthMenu, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 220,
+      bottom: 120,
+      width: 220,
+      height: 120,
+      toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => expect(lengthMenu).toHaveAttribute("data-side", "top"));
+    expect(lengthMenu).toHaveClass(
+      "dasti-proposal-skeleton-rail__composer-menu",
+    );
+
+    const toneTrigger = screen.getByRole("button", { name: "Auto" });
+    vi.spyOn(toneTrigger, "getBoundingClientRect").mockReturnValue({
+      x: 868,
+      y: 520,
+      top: 520,
+      left: 868,
+      right: 968,
+      bottom: 552,
+      width: 100,
+      height: 32,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    fireEvent.click(toneTrigger);
+    const toneMenu = await screen.findByRole("menu", { name: "Tone" });
+    vi.spyOn(toneMenu, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 220,
+      bottom: 160,
+      width: 220,
+      height: 160,
+      toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => expect(toneMenu).toHaveAttribute("data-side", "top"));
+    expect(toneMenu).toHaveClass(
+      "dasti-proposal-skeleton-rail__composer-menu",
+    );
+
+    const productCss = fs.readFileSync(
+      path.join(process.cwd(), "src/styles/product.css"),
+      "utf8",
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-rail__composer-menu\s*\{[\s\S]*z-index:\s*calc\(var\(--z-modal\) \+ 2\);/,
+    );
+  });
+
   it("opens the empty job context drawer with a clear empty hierarchy", () => {
     const onOpenJobs = vi.fn();
 
