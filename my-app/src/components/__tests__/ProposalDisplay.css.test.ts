@@ -104,8 +104,8 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-forge\[data-forge-drawer-rail-collapsed="true"\][\s\S]*?\.dasti-proposal-skeleton-stage__actions--document[\s\S]*?\.dasti-proposal-skeleton-stage__primary-action[\s\S]*?border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
     );
-    expect(productCss).toMatch(
-      /\.dasti-proposal-skeleton-stage\[data-toolbar-density="ultra"\][\s\S]*?\.dasti-proposal-skeleton-stage__actions--document[\s\S]*?\.dasti-proposal-skeleton-stage__primary-action,\s*\.dasti-proposal-skeleton-stage\[data-toolbar-density="ultra"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--ask\s*\{[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
+    expect(productCss).not.toContain(
+      ".dasti-proposal-skeleton-stage__primary-action--ask",
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-stage__primary-action--draft\s*>\s*span\[aria-hidden="true"\]\s*\{[\s\S]*color:\s*var\(--color-accent\);/,
@@ -120,16 +120,13 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-skeleton-stage\[data-draft-density="icon"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--draft\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-skeleton-stage\[data-ask-placement="edge-tab"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--ask\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
+      /\.dasti-proposal-skeleton-stage__ask-handle\s*\{[\s\S]*inline-size:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*block-size:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*border-color:\s*var\(--color-border-contrast\);[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);[\s\S]*background:\s*var\(--color-surface-raised\);[\s\S]*color:\s*var\(--color-text-muted\);[\s\S]*box-shadow:\s*none;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-skeleton-stage\[data-ask-density="icon"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--ask\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
+      /\.dasti-proposal-skeleton-stage__ask-handle:hover:not\(:disabled\),[\s\S]*\.dasti-proposal-skeleton-stage__ask-handle:focus-visible,[\s\S]*\.dasti-proposal-skeleton-stage__ask-handle\[aria-expanded="true"\]\s*\{[\s\S]*border-color:\s*var\(--color-border-contrast\);[\s\S]*background:\s*var\(--color-surface-2\);[\s\S]*color:\s*var\(--color-text\);[\s\S]*box-shadow:\s*none;/,
     );
-    expect(productCss).toMatch(
-      /\.dasti-proposal-skeleton-stage\[data-ask-mode="iconOnly"\][\s\S]*?\.dasti-proposal-skeleton-stage__ask-handle,[\s\S]*?\.dasti-proposal-skeleton-stage\[data-ask-mode="edgeTab"\][\s\S]*?\.dasti-proposal-skeleton-stage__ask-handle\s*\{[\s\S]*inline-size:\s*var\(--control-md\);[\s\S]*border-color:\s*transparent;[\s\S]*background:\s*color-mix\([\s\S]*var\(--proposal-document-paper\)\s*88%,[\s\S]*var\(--paper-dark-body-ink\)\s*12%[\s\S]*\);[\s\S]*box-shadow:\s*none;/,
-    );
-    expect(productCss).toMatch(
-      /\.dasti-proposal-skeleton-stage\[data-ask-mode="iconOnly"\][\s\S]*?\.dasti-proposal-skeleton-stage__ask-handle:hover:not\(:disabled\),[\s\S]*\.dasti-proposal-skeleton-stage\[data-ask-mode="edgeTab"\][\s\S]*?\.dasti-proposal-skeleton-stage__ask-handle:focus-visible\s*\{[\s\S]*border-color:\s*transparent;[\s\S]*background:\s*color-mix\([\s\S]*var\(--proposal-document-paper\)\s*80%,[\s\S]*var\(--paper-dark-body-ink\)\s*20%[\s\S]*\);[\s\S]*box-shadow:\s*none;/,
+    expect(productCss).not.toMatch(
+      /\.dasti-proposal-skeleton-stage__ask-handle\s*\{[\s\S]*var\(--proposal-document-paper\)/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-forge\[data-forge-drawer-rail-collapsed="true"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--draft\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,

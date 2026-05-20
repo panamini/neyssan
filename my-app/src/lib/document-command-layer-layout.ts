@@ -12,7 +12,7 @@ export type CommandLayerToolbarMode =
   | "ultraCompact";
 export type CommandLayerDraftLabelMode = "full" | "short" | "iconOnly";
 export type CommandLayerModeControlMode = "split" | "toggle";
-export type CommandLayerAskMode = "labeled" | "iconOnly" | "edgeTab";
+export type CommandLayerAskMode = "iconOnly" | "edgeTab";
 
 export type ComputeDocumentCommandLayerLayoutInput = {
   canvasRect: CommandLayerRect;
@@ -22,7 +22,6 @@ export type ComputeDocumentCommandLayerLayoutInput = {
   toolbarMinWidth: number;
   toolbarHeight: number;
   askHandle: {
-    labeledWidth: number;
     iconWidth: number;
     height: number;
   };
@@ -154,27 +153,20 @@ export function computeDocumentCommandLayerLayout(
   const modeControlMode: CommandLayerModeControlMode =
     toolbarMode === "ultraCompact" ? "toggle" : "split";
 
-  const labeledAskLeft = right(input.paperRect) + input.gap;
+  const iconAskLeft = right(input.paperRect) + input.gap;
   const askTop = input.paperRect.top + input.topOffset;
-  const labeledAskFits =
-    labeledAskLeft + input.askHandle.labeledWidth <= canvasSafeRight;
   const iconAskFits =
-    labeledAskLeft + input.askHandle.iconWidth <= canvasSafeRight;
+    iconAskLeft + input.askHandle.iconWidth <= canvasSafeRight;
 
   let askMode: CommandLayerAskMode;
   let askWidth: number;
   let askLeft: number;
   let askOutsidePaper: boolean;
 
-  if (labeledAskFits) {
-    askMode = "labeled";
-    askWidth = input.askHandle.labeledWidth;
-    askLeft = labeledAskLeft;
-    askOutsidePaper = true;
-  } else if (iconAskFits) {
+  if (iconAskFits) {
     askMode = "iconOnly";
     askWidth = input.askHandle.iconWidth;
-    askLeft = labeledAskLeft;
+    askLeft = iconAskLeft;
     askOutsidePaper = true;
   } else {
     askMode = "edgeTab";

@@ -12,9 +12,8 @@ const TOOLBAR_MIN_WIDTH = 300;
 const TOOLBAR_HEIGHT = 44;
 const SAFE_MARGIN = 12;
 const GAP = 12;
-const ASK_ICON_WIDTH = 40;
-const ASK_LABEL_WIDTH = 76;
-const ASK_HEIGHT = 40;
+const ASK_ICON_WIDTH = 32;
+const ASK_HEIGHT = 32;
 const PAPER_TOP = 80;
 
 function right(rect: CommandLayerRect) {
@@ -73,7 +72,6 @@ describe("computeDocumentCommandLayerLayout", () => {
         toolbarMinWidth: TOOLBAR_MIN_WIDTH,
         toolbarHeight: TOOLBAR_HEIGHT,
         askHandle: {
-          labeledWidth: ASK_LABEL_WIDTH,
           iconWidth: ASK_ICON_WIDTH,
           height: ASK_HEIGHT,
         },
@@ -97,13 +95,8 @@ describe("computeDocumentCommandLayerLayout", () => {
       expect(intersects(layout.askRect, makeDraftRect(layout.toolbarRect, draftWidth))).toBe(false);
 
       const safeRight = right(canvasRect) - SAFE_MARGIN;
-      const outsideLabeledFits = right(paperRect) + GAP + ASK_LABEL_WIDTH <= safeRight;
       const outsideIconFits = right(paperRect) + GAP + ASK_ICON_WIDTH <= safeRight;
-      if (outsideLabeledFits) {
-        expect(layout.askMode).toBe("labeled");
-        expect(layout.askOutsidePaper).toBe(true);
-        expect(layout.askRect.left).toBeGreaterThanOrEqual(right(paperRect) + GAP - 0.5);
-      } else if (outsideIconFits) {
+      if (outsideIconFits) {
         expect(layout.askMode).toBe("iconOnly");
         expect(layout.askOutsidePaper).toBe(true);
         expect(layout.askRect.left).toBeGreaterThanOrEqual(right(paperRect) + GAP - 0.5);
@@ -162,7 +155,6 @@ describe("computeDocumentCommandLayerLayout", () => {
       toolbarMinWidth: TOOLBAR_MIN_WIDTH,
       toolbarHeight: TOOLBAR_HEIGHT,
       askHandle: {
-        labeledWidth: ASK_LABEL_WIDTH,
         iconWidth: ASK_ICON_WIDTH,
         height: ASK_HEIGHT,
       },
