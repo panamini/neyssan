@@ -7957,6 +7957,17 @@
   text-overflow: ellipsis;
 }
 
+.dasti-proposal-skeleton-stage__tone-toggle {
+  cursor: pointer;
+}
+
+.dasti-proposal-skeleton-stage__tone-toggle:hover,
+.dasti-proposal-skeleton-stage__tone-toggle:focus-visible {
+  border-color: color-mix(in srgb, currentColor 22%, transparent);
+  background: color-mix(in srgb, var(--sf2) 82%, transparent);
+  outline: none;
+}
+
 .dasti-proposal-skeleton-stage__bar > .dasti-icon-button {
   flex: 0 0 auto;
 }

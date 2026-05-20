@@ -9,6 +9,8 @@ export type ForgeRailSurface =
   | "cv-design"
   | "proposal-heading"
   | "proposal-design"
+  | "proposal-draft"
+  | "proposal-paste-job"
   | "jobs"
   | "documents"
   | "cvs"
@@ -42,6 +44,10 @@ export type ForgeCustomPanelRegistration = {
   ariaLabel?: string;
   subtitle?: string;
   icon?: React.ReactNode;
+  backAction?: {
+    ariaLabel: string;
+    onSelect: () => void;
+  } | null;
   renderContent: () => React.ReactNode;
   footer?: {
     label: string;

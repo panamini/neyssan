@@ -1931,6 +1931,27 @@ body,
   gap: var(--space-1);
 }
 
+.forge-template-panel__head-title-group {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.forge-template-panel__head-back {
+  flex: 0 0 auto;
+  width: var(--control-xs);
+  height: var(--control-xs);
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--tm2);
+  cursor: pointer;
+}
+
 .forge-template-panel__icon {
   width: 30px;
   height: 30px;
@@ -2005,7 +2026,9 @@ body,
 }
 
 .forge-template-panel__head-action:hover,
-.forge-template-panel__head-action:focus-visible {
+.forge-template-panel__head-action:focus-visible,
+.forge-template-panel__head-back:hover,
+.forge-template-panel__head-back:focus-visible {
   background: var(--sidebar-hover-bg);
   color: var(--ti);
   outline: none;
@@ -2213,6 +2236,194 @@ body,
   outline: none;
 }
 
+.forge-rail-drawer--draft {
+  gap: 0;
+}
+
+.forge-rail-drawer__draft-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: var(--layout-card-gap);
+  margin: calc(var(--forge-drawer-scroll-inset) * -1);
+  padding:
+    var(--forge-drawer-scroll-inset)
+    var(--forge-drawer-scroll-inset)
+    calc(var(--forge-drawer-scroll-inset) + var(--control-md) + var(--space-5));
+}
+
+.forge-rail-drawer__draft-section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.forge-rail-drawer--draft .forge-rail-drawer__section-title {
+  color: var(--tm2);
+  font-size: var(--text-caption-size);
+  letter-spacing: var(--app-sidebar-section-tracking);
+  line-height: var(--text-caption-line);
+  text-transform: uppercase;
+}
+
+.forge-rail-drawer__draft-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: calc(var(--control-md) * 2);
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-control);
+  background: var(--sf1);
+  color: var(--tm2);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard);
+}
+
+.forge-rail-drawer__draft-card-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  padding: var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--tm2);
+  font: inherit;
+  font-size: var(--tx);
+  line-height: var(--lx);
+  text-align: left;
+  cursor: pointer;
+}
+
+.forge-rail-drawer__draft-card:hover,
+.forge-rail-drawer__draft-card:focus-within {
+  border-color: color-mix(in srgb, var(--color-border-strong) 72%, transparent);
+  background: var(--sidebar-hover-bg);
+}
+
+.forge-rail-drawer__draft-card-main:focus-visible {
+  outline: none;
+}
+
+.forge-rail-drawer__draft-card-copy {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.forge-rail-drawer__draft-card-copy strong,
+.forge-rail-drawer__draft-card-copy span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.forge-rail-drawer__draft-card-copy strong {
+  color: var(--ti);
+  font-weight: 700;
+}
+
+.forge-rail-drawer__draft-remove {
+  flex: 0 0 auto;
+  margin-inline: auto var(--space-2);
+  width: var(--control-xs);
+  height: var(--control-xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-pill);
+  background: var(--sf0);
+  color: var(--tm2);
+  cursor: pointer;
+}
+
+.forge-rail-drawer__draft-remove:hover,
+.forge-rail-drawer__draft-remove:focus-visible {
+  border-color: color-mix(in srgb, var(--color-border-strong) 72%, transparent);
+  background: var(--sidebar-hover-bg);
+  color: var(--ti);
+  outline: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .forge-rail-drawer__draft-remove {
+    opacity: 0;
+    transition:
+      opacity var(--duration-fast) var(--ease-standard);
+  }
+
+  .forge-rail-drawer__draft-card:hover .forge-rail-drawer__draft-remove,
+  .forge-rail-drawer__draft-card:focus-within .forge-rail-drawer__draft-remove {
+    opacity: 1;
+  }
+}
+
+.forge-rail-drawer__draft-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--control-md);
+  width: 100%;
+  padding: 0 var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-radius: var(--radius-control);
+  background: var(--sf1);
+  color: var(--ti);
+  font: inherit;
+  font-size: var(--tx);
+  line-height: var(--lx);
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.forge-rail-drawer__draft-row:hover,
+.forge-rail-drawer__draft-row:focus-visible {
+  border-color: color-mix(in srgb, var(--color-border-strong) 72%, transparent);
+  background: var(--sidebar-hover-bg);
+  outline: none;
+}
+
+.forge-rail-drawer__draft-row svg,
+.forge-rail-drawer--draft .dasti-proposal-skeleton-rail__chevron {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+.forge-rail-drawer--draft .dasti-proposal-skeleton-rail__setup-row {
+  justify-content: space-between;
+}
+
+.forge-rail-drawer__draft-footer {
+  position: sticky;
+  inset-block-end: 0;
+  display: grid;
+  gap: var(--space-2);
+  padding-block: var(--space-2) 0;
+  border-block-start: 0;
+  background: transparent;
+}
+
+.forge-rail-drawer__draft-generate {
+  width: 100%;
+  justify-content: center;
+}
+
+.forge-rail-drawer__paste-job-input {
+  min-block-size: calc(var(--control-md) * 4);
+  max-block-size: min(44dvh, calc(var(--control-md) * 8));
+  overflow-y: auto;
+  resize: vertical;
+}
+
 .forge-rail-drawer__row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -2281,22 +2492,28 @@ body,
   width: max-content;
   max-width: 100%;
   margin-block-start: var(--space-1);
+  min-height: var(--control-sm);
   display: inline-flex;
   align-items: center;
-  padding: 0 var(--space-2);
+  justify-content: center;
+  padding: 0 var(--space-3);
   border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--sf1) 92%, transparent);
+  background: color-mix(in srgb, var(--sf1) 96%, transparent);
   color: var(--ti) !important;
   box-shadow: var(--shadow-popover);
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line);
+  font-size: var(--tx);
+  line-height: var(--lx);
   font-weight: 700;
   opacity: 0;
   transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
-.forge-rail-drawer__row-affordance svg {
+.forge-rail-drawer__row-affordance svg,
+.forge-rail-drawer__row-affordance-icon,
+.forge-rail-drawer__thumb-affordance svg {
+  width: var(--app-sidebar-icon-size);
+  height: var(--app-sidebar-icon-size);
   margin-inline-end: var(--space-1);
 }
 
@@ -2420,12 +2637,6 @@ body,
     box-shadow var(--duration-fast) var(--ease-standard),
     transform var(--duration-fast) var(--ease-standard);
   white-space: nowrap;
-}
-
-.forge-rail-drawer__thumb-affordance svg {
-  width: 12px;
-  height: 12px;
-  margin-inline-end: var(--space-1);
 }
 
 .forge-rail-drawer__thumb-item:hover .forge-rail-drawer__thumb-affordance,
@@ -4896,4 +5107,184 @@ body,
 .dark .sb-recent__badge,
 .dark .onb-replay__supported-sites-head strong {
   font-weight: 640;
+}
+
+.dasti-composer-drawer {
+  inset-block-start: calc(var(--header-height, 0px) + var(--space-3));
+  inset-block-end: auto;
+  inset-inline-end: var(--space-3);
+  width: min(380px, calc(100vw - (var(--space-3) * 2)));
+  max-height: calc(100dvh - var(--header-height, 0px) - (var(--space-3) * 2));
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-surface, var(--radius-card));
+  box-shadow: var(--sh2, var(--shc));
+}
+
+.dasti-composer-drawer .ds-sheet__header {
+  min-block-size: 34px;
+  justify-content: flex-end;
+  padding: 4px 8px 0;
+  border-bottom: 0;
+}
+
+.dasti-composer-drawer .ds-sheet__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.dasti-composer-drawer .ds-sheet__description {
+  display: none;
+}
+
+.dasti-composer-drawer .ds-sheet__close {
+  width: 28px;
+  height: 28px;
+}
+
+.dasti-composer-drawer__body {
+  padding: 2px var(--space-3) var(--space-3);
+  gap: var(--space-2);
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail,
+.dasti-composer-drawer .dasti-cv-rail {
+  position: static;
+  top: auto;
+  width: 100%;
+  max-height: none;
+  min-block-size: 0;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail {
+  --proposal-rail-control-block-size: 42px;
+  gap: var(--space-2);
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__section {
+  gap: var(--space-2);
+  padding-block-end: var(--space-3);
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__section:not(.dasti-proposal-skeleton-rail__job-context) {
+  order: 1;
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__job-context {
+  order: 2;
+  padding-block-start: 0;
+  padding-block-end: 0;
+}
+
+.dasti-proposal-skeleton-rail__draft-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-2);
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail--composer .dasti-proposal-skeleton-rail__draft-head {
+  display: flex;
+  justify-content: flex-end;
+  margin-block-end: -2px;
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail--composer .dasti-proposal-skeleton-rail__draft-head > div:first-child {
+  display: none;
+}
+
+.dasti-proposal-skeleton-rail__helper {
+  margin: var(--space-1) 0 0;
+  color: var(--tm2);
+  font-size: var(--tx);
+  line-height: var(--lx);
+}
+
+.dasti-proposal-skeleton-rail__job-top-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__draft-setup-body {
+  gap: 7px;
+  padding: 8px;
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__setup-row {
+  min-block-size: 42px;
+  padding-block: 0;
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__summary-row {
+  min-block-size: 42px;
+  padding: 8px 10px;
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__summary-row .dasti-proposal-skeleton-rail__label {
+  display: none;
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__title,
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__summary-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__drawer-body {
+  gap: var(--space-2);
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__empty-job-context,
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__active-job-context {
+  padding: 8px;
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__job-offer-input {
+  min-block-size: 72px;
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__job-site-tokens {
+  max-height: 52px;
+  overflow: hidden;
+}
+
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__draft-setup-body > .ds-btn:last-child,
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__ask-section > .ds-btn:last-child {
+  width: 100%;
+  justify-content: center;
+}
+
+.dasti-composer-drawer__overlay {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+@media (max-width: 640px) {
+  .dasti-composer-drawer {
+    inset-block-start: var(--space-2);
+    inset-inline-end: var(--space-2);
+    width: calc(100vw - (var(--space-2) * 2));
+    max-height: calc(100dvh - (var(--space-2) * 2));
+  }
 }

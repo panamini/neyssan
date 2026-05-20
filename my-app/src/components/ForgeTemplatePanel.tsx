@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowSquareOut, CaretLeft, Pin } from "../lib/icons";
+import { ArrowLeft, ArrowSquareOut, CaretLeft, Pin } from "../lib/icons";
 import { useForgeTemplatePanel } from "../contexts/ForgeTemplatePanelContext";
 import { TemplateDocumentPreview } from "../pages/TemplatesPage";
 import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../lib/document-stage";
@@ -71,8 +71,21 @@ export function ForgeTemplatePanel(): JSX.Element | null {
         {...panelHoverProps}
       >
         <div className="forge-template-panel__head">
-          <span className="forge-template-panel__head-title">
-            {activeRegistration.title}
+          <span className="forge-template-panel__head-title-group">
+            {activeRegistration.backAction ? (
+              <button
+                type="button"
+                className="forge-template-panel__head-back"
+                aria-label={activeRegistration.backAction.ariaLabel}
+                title={activeRegistration.backAction.ariaLabel}
+                onClick={activeRegistration.backAction.onSelect}
+              >
+                <ArrowLeft size={14} aria-hidden="true" />
+              </button>
+            ) : null}
+            <span className="forge-template-panel__head-title">
+              {activeRegistration.title}
+            </span>
           </span>
           <span className="forge-template-panel__head-actions">
             {!pinned ? (

@@ -18,6 +18,7 @@ import {
   CaretRight as PhCaretRight,
   CaretUp as PhCaretUp,
   Check as PhCheck,
+  ChatCircleText as PhChatCircleText,
   Briefcase as PhBriefcase,
   ClipboardText as PhClipboardText,
   Command as PhCommand,
@@ -167,6 +168,7 @@ export const CaretLeft = withCompat(PhCaretLeft);
 export const CaretRight = withCompat(PhCaretRight);
 export const CaretUpIcon = withCompat(PhCaretUp);
 export const Check = withCompat(PhCheck);
+export const ChatCircleText = withCompat(PhChatCircleText);
 export const Briefcase = withCompat(PhBriefcase);
 export const ClipboardText = withCompat(PhClipboardText);
 export const ChevronDown = withCompat(PhCaretDown);
