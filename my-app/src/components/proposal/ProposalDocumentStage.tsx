@@ -71,9 +71,7 @@ const COMMAND_LAYER_TOOLBAR_HEIGHT = 44;
 const COMMAND_LAYER_SAFE_MARGIN = 12;
 const COMMAND_LAYER_GAP = 12;
 const COMMAND_LAYER_TOP_OFFSET = 16;
-const ASK_HANDLE_ICON_WIDTH = 40;
-const ASK_HANDLE_LABEL_WIDTH = 76;
-const ASK_HANDLE_HEIGHT = 40;
+const ASK_HANDLE_ICON_SIZE = 32;
 
 const PAPER_ANCHOR_SELECTOR = [
   ".dasti-proposal-sheet__preview-page:not(.dasti-proposal-sheet__preview-page--stacked)",
@@ -118,12 +116,12 @@ export function ProposalDocumentStage({
   const [modeControlMode, setModeControlMode] =
     React.useState<CommandLayerModeControlMode>("split");
   const [askMode, setAskMode] =
-    React.useState<CommandLayerAskMode>("labeled");
+    React.useState<CommandLayerAskMode>("iconOnly");
   const isUltraCompactToolbar = modeControlMode === "toggle";
   const nextMode = mode === "edit" ? "preview" : "edit";
   const modeToggleLabel =
     mode === "edit" ? "Switch to Preview" : "Switch to Edit";
-  const askTooltip = askMode === "labeled" ? undefined : "Ask";
+  const askTooltip = "Ask";
 
   React.useLayoutEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -174,7 +172,7 @@ export function ProposalDocumentStage({
         setToolbarMode("wide");
         setDraftLabelMode("full");
         setModeControlMode("split");
-        setAskMode("labeled");
+        setAskMode("iconOnly");
         return;
       }
 
@@ -186,9 +184,8 @@ export function ProposalDocumentStage({
         toolbarMinWidth: COMMAND_LAYER_TOOLBAR_MIN_WIDTH,
         toolbarHeight: COMMAND_LAYER_TOOLBAR_HEIGHT,
         askHandle: {
-          labeledWidth: ASK_HANDLE_LABEL_WIDTH,
-          iconWidth: ASK_HANDLE_ICON_WIDTH,
-          height: ASK_HANDLE_HEIGHT,
+          iconWidth: ASK_HANDLE_ICON_SIZE,
+          height: ASK_HANDLE_ICON_SIZE,
         },
         safeMargin: COMMAND_LAYER_SAFE_MARGIN,
         gap: COMMAND_LAYER_GAP,
@@ -286,7 +283,7 @@ export function ProposalDocumentStage({
             : "compact"
       }
       data-ask-placement={askMode === "edgeTab" ? "edge-tab" : "outside"}
-      data-ask-density={askMode === "labeled" ? "label" : "icon"}
+      data-ask-density="icon"
       data-draft-density={
         draftLabelMode === "iconOnly" ? "icon" : draftLabelMode
       }
@@ -502,26 +499,19 @@ export function ProposalDocumentStage({
           className="dasti-proposal-skeleton-stage__ask-handle-layer dasti-toolbar--surface-tooltips"
           style={toolbarAnchorStyle}
         >
-          <Button
+          <button
             type="button"
-            size="sm"
-            variant="secondary"
-            className="dasti-proposal-skeleton-stage__ask-handle dasti-proposal-skeleton-stage__primary-action dasti-proposal-skeleton-stage__primary-action--ask"
-            iconLeft={<ChatCircleText size={stageIconSize} strokeWidth={1.8} />}
+            className="dasti-icon-button dasti-proposal-skeleton-stage__ask-handle"
             aria-expanded={composerMode === "ask"}
             aria-label="Ask"
+            title="Ask"
             data-testid="proposal-ask-handle"
             data-toolbar-tooltip={askTooltip}
             data-stage-tooltip-mode="compact"
             onClick={onOpenAsk}
           >
-            <span className="dasti-proposal-skeleton-stage__action-label dasti-proposal-skeleton-stage__action-label--full">
-              Ask
-            </span>
-            <span className="dasti-proposal-skeleton-stage__action-label dasti-proposal-skeleton-stage__action-label--short">
-              Ask
-            </span>
-          </Button>
+            <ChatCircleText size={16} strokeWidth={1.8} aria-hidden="true" />
+          </button>
         </div>
       ) : null}
 
