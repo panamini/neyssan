@@ -38,6 +38,9 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*overflow:\s*visible;/,
     );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage__bar\s+\[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-skeleton-stage__ask-handle\[data-toolbar-tooltip\]\s*\{[\s\S]*--dasti-toolbar-tooltip-inset-block-start:\s*auto;[\s\S]*--dasti-toolbar-tooltip-inset-block-end:\s*calc\([\s\S]*100%\s*\+\s*var\(--toolbar-trigger-tooltip-gap\)[\s\S]*\);/,
+    );
   });
 
   it("keeps Proposal paper stage and preview frame responsive like CV Forge collapse mode", () => {
@@ -72,7 +75,7 @@ describe("ProposalDisplay CSS contracts", () => {
 
   it("keeps Proposal stage primary actions as subtle labeled toolbar controls", () => {
     expect(productCss).toMatch(
-      /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*36px;[\s\S]*--editor-toolbar-icon-control-block-size:\s*34px;/,
+      /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*var\(--control-sm\);[\s\S]*--editor-toolbar-icon-control-block-size:\s*var\(--control-sm\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-stage__primary-action\s*\{[\s\S]*height:\s*var\(--editor-toolbar-control-block-size\);[\s\S]*padding-inline:\s*11px;[\s\S]*border-color:\s*transparent;[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
@@ -121,6 +124,12 @@ describe("ProposalDisplay CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-stage\[data-ask-density="icon"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--ask\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage\[data-ask-mode="iconOnly"\][\s\S]*?\.dasti-proposal-skeleton-stage__ask-handle,[\s\S]*?\.dasti-proposal-skeleton-stage\[data-ask-mode="edgeTab"\][\s\S]*?\.dasti-proposal-skeleton-stage__ask-handle\s*\{[\s\S]*border-color:\s*color-mix\([\s\S]*var\(--color-border-contrast\)\s*72%,[\s\S]*background:\s*color-mix\(in srgb,\s*var\(--proposal-document-paper\)\s*92%,\s*var\(--sf1\)\);[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage\[data-ask-mode="iconOnly"\][\s\S]*?\.dasti-proposal-skeleton-stage__ask-handle:hover:not\(:disabled\),[\s\S]*\.dasti-proposal-skeleton-stage\[data-ask-mode="edgeTab"\][\s\S]*?\.dasti-proposal-skeleton-stage__ask-handle:focus-visible\s*\{[\s\S]*background:\s*color-mix\(in srgb,\s*var\(--proposal-document-paper\)\s*84%,\s*var\(--sf2\)\);[\s\S]*box-shadow:\s*none;/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-forge\[data-forge-drawer-rail-collapsed="true"\][\s\S]*?\.dasti-proposal-skeleton-stage__primary-action--draft\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,

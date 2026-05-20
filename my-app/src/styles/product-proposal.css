@@ -7116,6 +7116,17 @@
   --dasti-toolbar-tooltip-transform-visible: translate(-50%, 0);
 }
 
+.dasti-proposal-skeleton-stage__bar [data-toolbar-tooltip],
+.dasti-proposal-skeleton-stage__ask-handle[data-toolbar-tooltip] {
+  --toolbar-trigger-tooltip-gap: var(--space-1);
+  --dasti-toolbar-tooltip-inset-block-start: auto;
+  --dasti-toolbar-tooltip-inset-block-end: calc(
+    100% + var(--toolbar-trigger-tooltip-gap)
+  );
+  --dasti-toolbar-tooltip-transform-hidden: translate(-50%, 2px);
+  --dasti-toolbar-tooltip-transform-visible: translate(-50%, 0);
+}
+
 .dasti-compose-toolbar__bar [data-toolbar-tooltip]::after,
 .dasti-compose-toolbar__collapsed-shell [data-toolbar-tooltip]::after,
 .dasti-proposal-saved-view-toolbar [data-toolbar-tooltip]::after,
@@ -7895,8 +7906,8 @@
 }
 
 .dasti-proposal-skeleton-stage__bar {
-  --editor-toolbar-control-block-size: 36px;
-  --editor-toolbar-icon-control-block-size: 34px;
+  --editor-toolbar-control-block-size: var(--control-sm);
+  --editor-toolbar-icon-control-block-size: var(--control-sm);
   --proposal-command-toolbar-min-width: 300px;
   min-height: 0;
   display: grid;
@@ -7965,7 +7976,7 @@
   align-items: center;
   justify-content: center;
   flex-wrap: nowrap;
-  gap: var(--space-3);
+  gap: var(--space-2);
   padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
   border: 1px solid var(--proposal-chrome-toolbar-border);
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
@@ -8296,10 +8307,32 @@
   max-height: var(--editor-toolbar-icon-control-block-size);
   padding-inline: 0;
   gap: 0;
-  border-color: color-mix(in srgb, var(--color-border) 36%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--color-border-contrast) 72%,
+    transparent
+  );
   border-radius: var(--radius-toolbar-control, var(--radius-control));
-  background: transparent;
-  color: var(--tm2);
+  background: color-mix(in srgb, var(--proposal-document-paper) 92%, var(--sf1));
+  color: var(--ti);
+  box-shadow: none;
+}
+
+.dasti-proposal-skeleton-stage[data-ask-mode="iconOnly"]
+  .dasti-proposal-skeleton-stage__ask-handle:hover:not(:disabled),
+.dasti-proposal-skeleton-stage[data-ask-mode="iconOnly"]
+  .dasti-proposal-skeleton-stage__ask-handle:focus-visible,
+.dasti-proposal-skeleton-stage[data-ask-mode="edgeTab"]
+  .dasti-proposal-skeleton-stage__ask-handle:hover:not(:disabled),
+.dasti-proposal-skeleton-stage[data-ask-mode="edgeTab"]
+  .dasti-proposal-skeleton-stage__ask-handle:focus-visible {
+  border-color: color-mix(
+    in srgb,
+    var(--color-border-contrast) 86%,
+    transparent
+  );
+  background: color-mix(in srgb, var(--proposal-document-paper) 84%, var(--sf2));
+  color: var(--ti);
   box-shadow: none;
 }
 
@@ -9692,8 +9725,8 @@
 
 @media (max-width: 1180px) {
   .dasti-proposal-skeleton-stage__bar {
-    --editor-toolbar-control-block-size: 36px;
-    --editor-toolbar-icon-control-block-size: 36px;
+    --editor-toolbar-control-block-size: var(--control-sm);
+    --editor-toolbar-icon-control-block-size: var(--control-sm);
     gap: var(--space-2);
   }
 
