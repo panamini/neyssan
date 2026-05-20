@@ -8297,14 +8297,14 @@
   .dasti-proposal-skeleton-stage__ask-handle,
 .dasti-proposal-skeleton-stage[data-ask-mode="edgeTab"]
   .dasti-proposal-skeleton-stage__ask-handle {
-  inline-size: calc(var(--control-sm) + var(--space-1));
-  block-size: calc(var(--control-sm) + var(--space-1));
-  width: calc(var(--control-sm) + var(--space-1));
-  height: calc(var(--control-sm) + var(--space-1));
-  min-width: calc(var(--control-sm) + var(--space-1));
-  min-height: calc(var(--control-sm) + var(--space-1));
-  max-width: calc(var(--control-sm) + var(--space-1));
-  max-height: calc(var(--control-sm) + var(--space-1));
+  inline-size: var(--control-md);
+  block-size: var(--control-md);
+  width: var(--control-md);
+  height: var(--control-md);
+  min-width: var(--control-md);
+  min-height: var(--control-md);
+  max-width: var(--control-md);
+  max-height: var(--control-md);
   padding-inline: 0;
   gap: 0;
   border-color: transparent;

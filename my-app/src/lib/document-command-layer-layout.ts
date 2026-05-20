@@ -51,7 +51,7 @@ const DRAFT_FULL_MIN_AVAILABLE_WIDTH = 520;
 const DRAFT_FULL_MIN_PAPER_WIDTH = 640;
 const DRAFT_SHORT_MIN_AVAILABLE_WIDTH = 360;
 const DRAFT_ICON_VIEWPORT_MAX_WIDTH = 520;
-const ASK_EDGE_OVERLAP = 12;
+const ASK_EDGE_INSET = 8;
 const ASK_EDGE_VIEWPORT_ANCHOR_MAX_WIDTH = 520;
 
 function right(rect: CommandLayerRect) {
@@ -183,7 +183,7 @@ export function computeDocumentCommandLayerLayout(
     const edgeTabPreferredLeft =
       input.canvasRect.width < ASK_EDGE_VIEWPORT_ANCHOR_MAX_WIDTH
         ? edgeTabMaxLeft
-        : Math.min(right(input.paperRect) - askWidth + ASK_EDGE_OVERLAP, edgeTabMaxLeft);
+        : Math.min(right(input.paperRect) - askWidth - ASK_EDGE_INSET, edgeTabMaxLeft);
     askLeft = clamp(
       edgeTabPreferredLeft,
       canvasSafeLeft,
@@ -204,7 +204,7 @@ export function computeDocumentCommandLayerLayout(
     askWidth = input.askHandle.iconWidth;
     const edgeTabMaxLeft = Math.max(canvasSafeLeft, edgeTabSafeRight - askWidth);
     askLeft = clamp(
-      edgeTabMaxLeft,
+      Math.min(right(input.paperRect) - askWidth - ASK_EDGE_INSET, edgeTabMaxLeft),
       canvasSafeLeft,
       edgeTabMaxLeft,
     );

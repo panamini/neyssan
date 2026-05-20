@@ -71,9 +71,9 @@ const COMMAND_LAYER_TOOLBAR_HEIGHT = 44;
 const COMMAND_LAYER_SAFE_MARGIN = 12;
 const COMMAND_LAYER_GAP = 12;
 const COMMAND_LAYER_TOP_OFFSET = 16;
-const ASK_HANDLE_ICON_WIDTH = 36;
+const ASK_HANDLE_ICON_WIDTH = 40;
 const ASK_HANDLE_LABEL_WIDTH = 76;
-const ASK_HANDLE_HEIGHT = 36;
+const ASK_HANDLE_HEIGHT = 40;
 
 const PAPER_ANCHOR_SELECTOR = [
   ".dasti-proposal-sheet__preview-page:not(.dasti-proposal-sheet__preview-page--stacked)",

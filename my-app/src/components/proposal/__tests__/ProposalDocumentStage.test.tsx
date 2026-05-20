@@ -243,7 +243,7 @@ describe("ProposalDocumentStage proposal actions", () => {
     ["50% zoom", 128, 397, "compact", "compact", "short", "outside", "label", "labeled", 537, 397],
     ["medium paper", 128, 520, "medium", null, "short", "outside", "label", "labeled", 660, 520],
     ["100% zoom", 128, 794, "wide", null, "full", "outside", "label", "labeled", 934, 680],
-    ["125% zoom", 128, 900, "wide", null, "full", "edge-tab", "icon", "edgeTab", 976, 680],
+    ["125% zoom", 128, 900, "wide", null, "full", "edge-tab", "icon", "edgeTab", 972, 680],
   ])("anchors the toolbar to the rendered proposal paper rect at %s", (_, left, width, toolbarMode, density, draftDensity, askPlacement, askDensity, askMode, askHandleLeft, toolbarWidth) => {
     const requestAnimationFrameSpy = vi
       .spyOn(window, "requestAnimationFrame")
