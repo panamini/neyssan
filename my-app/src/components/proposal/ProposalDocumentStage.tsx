@@ -71,9 +71,9 @@ const COMMAND_LAYER_TOOLBAR_HEIGHT = 44;
 const COMMAND_LAYER_SAFE_MARGIN = 12;
 const COMMAND_LAYER_GAP = 12;
 const COMMAND_LAYER_TOP_OFFSET = 16;
-const ASK_HANDLE_ICON_WIDTH = 44;
+const ASK_HANDLE_ICON_WIDTH = 32;
 const ASK_HANDLE_LABEL_WIDTH = 76;
-const ASK_HANDLE_HEIGHT = 36;
+const ASK_HANDLE_HEIGHT = 32;
 
 const PAPER_ANCHOR_SELECTOR = [
   ".dasti-proposal-sheet__preview-page:not(.dasti-proposal-sheet__preview-page--stacked)",
@@ -123,6 +123,7 @@ export function ProposalDocumentStage({
   const nextMode = mode === "edit" ? "preview" : "edit";
   const modeToggleLabel =
     mode === "edit" ? "Switch to Preview" : "Switch to Edit";
+  const askTooltip = askMode === "labeled" ? undefined : "Ask";
 
   React.useLayoutEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -312,7 +313,6 @@ export function ProposalDocumentStage({
                 className="dasti-icon-button dasti-proposal-mode-toggle dasti-proposal-mode-toggle--single"
                 onClick={() => onModeChange(nextMode)}
                 aria-label={modeToggleLabel}
-                title={modeToggleLabel}
                 data-toolbar-tooltip={modeToggleLabel}
               >
                 {mode === "edit" ? (
@@ -420,7 +420,6 @@ export function ProposalDocumentStage({
                 className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
                 onClick={() => runBrowserCommand("undo")}
                 aria-label="Undo"
-                title="Undo"
                 data-toolbar-tooltip="Undo"
               >
                 <ArrowUUpLeft size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
@@ -430,7 +429,6 @@ export function ProposalDocumentStage({
                 className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
                 onClick={() => runBrowserCommand("redo")}
                 aria-label="Redo"
-                title="Redo"
                 data-toolbar-tooltip="Redo"
               >
                 <ArrowUDownRight size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
@@ -450,7 +448,6 @@ export function ProposalDocumentStage({
                   onClick={onSaveToLibrary}
                   disabled={!hasProposalContent}
                   aria-label="Save proposal to library"
-                  title="Save proposal to library"
                   data-toolbar-tooltip="Save to library"
                 >
                   <ClipboardText size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
@@ -463,7 +460,6 @@ export function ProposalDocumentStage({
                   onClick={onDeleteDraft}
                   disabled={!hasProposalContent}
                   aria-label="Delete draft"
-                  title="Delete draft"
                   data-toolbar-tooltip="Delete draft"
                 >
                   <TrashSimple size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
@@ -485,7 +481,6 @@ export function ProposalDocumentStage({
                 iconLeft={<PaperPlaneRight size={stageIconSize} strokeWidth={1.8} />}
                 aria-expanded={composerMode === "draft"}
                 aria-label="Draft proposal"
-                title="Draft proposal"
                 data-testid="proposal-draft-button"
                 data-toolbar-tooltip="Draft proposal"
                 data-stage-tooltip-mode="compact"
@@ -515,9 +510,8 @@ export function ProposalDocumentStage({
             iconLeft={<ChatCircleText size={stageIconSize} strokeWidth={1.8} />}
             aria-expanded={composerMode === "ask"}
             aria-label="Ask"
-            title="Ask"
             data-testid="proposal-ask-handle"
-            data-toolbar-tooltip="Ask"
+            data-toolbar-tooltip={askTooltip}
             data-stage-tooltip-mode="compact"
             onClick={onOpenAsk}
           >

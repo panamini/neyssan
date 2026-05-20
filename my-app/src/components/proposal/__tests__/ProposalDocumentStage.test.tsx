@@ -69,7 +69,7 @@ describe("ProposalDocumentStage proposal actions", () => {
     expect(proposalToolbar.querySelector(".dasti-icon-cluster__divider")).toBeNull();
     expect(within(proposalToolbar).getByRole("button", { name: "Draft proposal" })).toBeInTheDocument();
     expect(within(proposalToolbar).queryByRole("button", { name: "Ask" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ask" })).toHaveAttribute("title", "Ask");
+    expect(screen.getByRole("button", { name: "Ask" })).not.toHaveAttribute("title");
     expect(screen.getByRole("button", { name: "Ask" }).closest(".dasti-proposal-skeleton-stage__bar")).toBeNull();
     expect(screen.getByRole("button", { name: "Ask" }).closest(".dasti-proposal-skeleton-stage__ask-handle-layer")).toBeTruthy();
     const preview = screen.getByRole("button", { name: "Preview proposal" });
@@ -243,7 +243,7 @@ describe("ProposalDocumentStage proposal actions", () => {
     ["50% zoom", 128, 397, "compact", "compact", "short", "outside", "label", "labeled", 537, 397],
     ["medium paper", 128, 520, "medium", null, "short", "outside", "label", "labeled", 660, 520],
     ["100% zoom", 128, 794, "wide", null, "full", "outside", "label", "labeled", 934, 680],
-    ["125% zoom", 128, 900, "wide", null, "full", "edge-tab", "icon", "edgeTab", 968, 680],
+    ["125% zoom", 128, 900, "wide", null, "full", "edge-tab", "icon", "edgeTab", 980, 680],
   ])("anchors the toolbar to the rendered proposal paper rect at %s", (_, left, width, toolbarMode, density, draftDensity, askPlacement, askDensity, askMode, askHandleLeft, toolbarWidth) => {
     const requestAnimationFrameSpy = vi
       .spyOn(window, "requestAnimationFrame")
@@ -516,16 +516,24 @@ describe("ProposalDocumentStage proposal actions", () => {
     }
   });
 
-  it("uses shared app tooltips without native titles for stage mode triggers", () => {
-    renderStage();
+  it("uses shared app tooltips without native titles for stage toolbar controls", () => {
+    renderStage({
+      onOpenDraft: vi.fn(),
+      onOpenAsk: vi.fn(),
+    });
 
     const edit = screen.getByRole("button", { name: "Edit proposal" });
     const preview = screen.getByRole("button", { name: "Preview proposal" });
+    const draft = screen.getByRole("button", { name: "Draft proposal" });
+    const ask = screen.getByRole("button", { name: "Ask" });
 
     expect(edit).toHaveAttribute("data-toolbar-tooltip", "Edit");
     expect(preview).toHaveAttribute("data-toolbar-tooltip", "Preview");
     expect(edit).not.toHaveAttribute("title");
     expect(preview).not.toHaveAttribute("title");
+    expect(draft).not.toHaveAttribute("title");
+    expect(ask).not.toHaveAttribute("title");
+    expect(ask).not.toHaveAttribute("data-toolbar-tooltip");
     expect(edit.closest(".dasti-toolbar--surface-tooltips")).toBeTruthy();
   });
 });
