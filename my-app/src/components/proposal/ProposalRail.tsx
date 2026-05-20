@@ -5,6 +5,7 @@ import {
   ChevronDown,
   FilePdf,
   FileUser,
+  PaperPlaneRight,
   X,
 } from "../../lib/icons";
 import type { FormValues } from "../ProposalInputForm.schemas";
@@ -46,7 +47,7 @@ type ProposalRailTypeOption = {
   selected: boolean;
 };
 
-type ProposalRailTab = "draft" | "ask";
+export type ProposalRailTab = "draft" | "ask";
 
 export type ProposalRailJobMatchSummary = {
   label: string;
@@ -94,7 +95,7 @@ type ProposalRailProps = {
   aiStream: React.ReactNode;
   generateLabel: string;
   generateDisabled: boolean;
-  generateState: "idle" | "loading" | "success" | "error";
+  generateState: string;
   onGenerateDraft: () => void;
   cvOptions: ProposalRailCvOption[];
   onSelectCv: (cvId: string) => void;
@@ -113,6 +114,9 @@ type ProposalRailProps = {
   askAiHint: string;
   onAskAiChange: (value: string) => void;
   onAskAiSubmit: () => void;
+  activeTab?: ProposalRailTab;
+  onActiveTabChange?: (tab: ProposalRailTab) => void;
+  hideTabs?: boolean;
 };
 
 export function ProposalRail({
@@ -156,8 +160,16 @@ export function ProposalRail({
   askAiHint,
   onAskAiChange,
   onAskAiSubmit,
+  activeTab: controlledActiveTab,
+  onActiveTabChange,
+  hideTabs = false,
 }: ProposalRailProps): JSX.Element {
-  const [activeTab, setActiveTab] = React.useState<ProposalRailTab>("draft");
+  const [uncontrolledActiveTab, setUncontrolledActiveTab] = React.useState<ProposalRailTab>("draft");
+  const activeTab = controlledActiveTab ?? uncontrolledActiveTab;
+  const setActiveTab = React.useCallback((tab: ProposalRailTab) => {
+    setUncontrolledActiveTab(tab);
+    onActiveTabChange?.(tab);
+  }, [onActiveTabChange]);
   const [jobContextOpen, setJobContextOpen] = React.useState(false);
   const [jobTextEditing, setJobTextEditing] = React.useState(false);
   const jobOfferTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -181,9 +193,9 @@ export function ProposalRail({
 
   React.useEffect(() => {
     if (!hasActiveJobContext) {
-      setJobContextOpen(true);
+      setJobContextOpen(!hideTabs);
     }
-  }, [hasActiveJobContext]);
+  }, [hasActiveJobContext, hideTabs]);
 
   React.useEffect(() => {
     if (jobContextState !== "pasted") {
@@ -371,7 +383,11 @@ export function ProposalRail({
   );
 
   return (
-    <aside className="forge__rail dasti-proposal-skeleton-rail" aria-label="Proposal rail">
+    <aside
+      className={`forge__rail dasti-proposal-skeleton-rail${hideTabs ? " dasti-proposal-skeleton-rail--composer" : ""}`}
+      aria-label="Proposal rail"
+    >
+      {hideTabs ? null : (
       <div className="dasti-proposal-skeleton-rail__tabs" role="tablist" aria-label="Proposal tools">
         {[
           ["draft", "Draft"],
@@ -390,6 +406,7 @@ export function ProposalRail({
           </button>
         ))}
       </div>
+      )}
 
       {aiStream ? <div className="dasti-proposal-skeleton-rail__process">{aiStream}</div> : null}
 
@@ -435,6 +452,9 @@ export function ProposalRail({
                 >
                   Choose from Job Forge
                 </Button>
+                <p className="dasti-proposal-skeleton-rail__helper">
+                  Paste a job offer below. I’ll use it with the selected CV, tone, and document type to generate a first proposal.
+                </p>
                 <textarea
                   ref={jobOfferTextareaRef}
                   className="ds-field ds-field--textarea dasti-proposal-skeleton-rail__job-offer-input"
@@ -492,17 +512,6 @@ export function ProposalRail({
                   >
                     {jobTextEditing ? "Preview" : "Edit job text"}
                   </Button>
-                  {onClearJobContext ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Clear job context"
-                      onClick={onClearJobContext}
-                    >
-                      Clear
-                    </Button>
-                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -543,31 +552,6 @@ export function ProposalRail({
                 ) : null}
               </div>
             ) : null}
-            {jobContextState === "loaded" ? (
-              <div className="dasti-proposal-skeleton-rail__job-actions">
-                {onOpenJobs ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={onOpenJobs}
-                  >
-                    Change job
-                  </Button>
-                ) : null}
-                {onClearJobContext ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Clear job context"
-                    onClick={onClearJobContext}
-                  >
-                    Clear
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
             {jobMatch ? (
               <div className={`dasti-proposal-skeleton-rail__match dasti-proposal-skeleton-rail__match--${jobMatch.tone}`}>
                 <span className="dasti-proposal-skeleton-rail__match-dot" aria-hidden="true" />
@@ -582,7 +566,32 @@ export function ProposalRail({
       </section>
 
       <section className="forge__rail-section dasti-proposal-skeleton-rail__section">
-        <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Draft</div>
+        <div className="dasti-proposal-skeleton-rail__draft-head">
+          <div>
+            <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Draft</div>
+            <p className="dasti-proposal-skeleton-rail__helper">
+              {hasActiveJobContext
+                ? "Tune the draft, then generate from this job and CV."
+                : "Choose or paste a job offer, then generate a first proposal."}
+            </p>
+          </div>
+          <div className="dasti-proposal-skeleton-rail__job-top-actions">
+            <Button type="button" variant="ghost" size="sm" onClick={onOpenJobs}>
+              {hasActiveJobContext ? "Change job" : "Choose job"}
+            </Button>
+            {hasActiveJobContext && onClearJobContext ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={jobContextOpen ? "Clear job context" : "Clear job"}
+                onClick={onClearJobContext}
+              >
+                Clear
+              </Button>
+            ) : null}
+          </div>
+        </div>
         <div className="dasti-proposal-skeleton-rail__draft-setup">
           <div className="dasti-proposal-skeleton-rail__draft-setup-body">
             <Menu
@@ -642,6 +651,7 @@ export function ProposalRail({
               disabled={generateDisabled}
               data-state={generateState}
               onClick={onGenerateDraft}
+              iconLeft={<PaperPlaneRight size={15} strokeWidth={1.8} />}
             >
               {generateLabel}
             </Button>
@@ -682,6 +692,7 @@ export function ProposalRail({
           data-toolbar-tooltip={askAiHint}
           disabled={askAiDisabled || askAiBusy || !askAiValue.trim()}
           onClick={onAskAiSubmit}
+          iconLeft={<PaperPlaneRight size={15} strokeWidth={1.8} />}
         >
           {askAiBusy ? "Applying…" : "Send"}
         </Button>

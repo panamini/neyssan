@@ -92,6 +92,35 @@ describe("ProposalDocumentStage proposal actions", () => {
     );
   });
 
+  it("cycles tone on click and opens settings on long press", () => {
+    vi.useFakeTimers();
+    const onCycleTone = vi.fn();
+    const onOpenToneSettings = vi.fn();
+
+    try {
+      renderStage({ onCycleTone, onOpenToneSettings });
+
+      const tone = screen.getByRole("button", { name: "Tone: Warm tone" });
+      expect(tone).toHaveAttribute(
+        "data-toolbar-tooltip",
+        "Click to change tone. Hold for settings.",
+      );
+
+      fireEvent.click(tone);
+      expect(onCycleTone).toHaveBeenCalledTimes(1);
+      expect(onOpenToneSettings).not.toHaveBeenCalled();
+
+      fireEvent.pointerDown(tone);
+      vi.advanceTimersByTime(450);
+      expect(onOpenToneSettings).toHaveBeenCalledTimes(1);
+      fireEvent.pointerUp(tone);
+      fireEvent.click(tone);
+      expect(onCycleTone).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("wires the Design action in preview and edit modes", () => {
     const onOpenDesign = vi.fn();
     const { rerender } = renderStage({ onOpenDesign, mode: "preview" });

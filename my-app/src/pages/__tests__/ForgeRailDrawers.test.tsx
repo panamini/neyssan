@@ -1,11 +1,13 @@
 import React from "react";
 import fs from "node:fs";
 import path from "node:path";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  ProposalDraftDrawer,
   ProposalJobsDrawer,
+  ProposalPasteJobDrawer,
   ProjectsLibraryDrawer,
   ProposalCvDrawer,
   ProposalLibraryDrawer,
@@ -52,6 +54,36 @@ const hydrateCvDocument = vi.fn(async () => ({
   metadata: {},
 }) as unknown as CvDocument);
 
+const proposalTypeOptions = [
+  {
+    id: "cover_letter" as const,
+    label: "Letter",
+    description: "A focused cover letter.",
+    selected: true,
+  },
+  {
+    id: "freelance_proposal" as const,
+    label: "Proposal",
+    description: "A client proposal.",
+    selected: false,
+  },
+];
+
+const toneOptions = [
+  {
+    id: null,
+    label: "Auto",
+    description: "Choose tone automatically.",
+    selected: true,
+  },
+  {
+    id: "expert",
+    label: "Formal",
+    description: "Formal and composed.",
+    selected: false,
+  },
+];
+
 function proposalItem(id: string, title: string): LibraryItem {
   return {
     id: `proposal:${id}`,
@@ -89,9 +121,129 @@ function cvItem(id: string, title: string): LibraryItem {
 }
 
 describe("forge rail drawers", () => {
+  it("keeps loaded Proposal Draft sources compact and opens settings menus upward", async () => {
+    const onOpenJobs = vi.fn();
+    const onOpenPasteJob = vi.fn();
+    const onClearJobContext = vi.fn();
+    const onOpenCvs = vi.fn();
+    const onClearCv = vi.fn();
+
+    render(
+      <>
+        <h2>Draft</h2>
+        <ProposalDraftDrawer
+          jobTitle="Building Security Guard"
+          jobMeta="AM · linkedin.com"
+          jobSummary="Security role"
+          jobContextKind="saved"
+          sourceCvTitle="Robert Cooper"
+          proposalTypeLabel="Letter"
+          proposalTypeOptions={proposalTypeOptions}
+          onSelectProposalType={vi.fn()}
+          toneLabel="Formal"
+          toneOptions={toneOptions}
+          onSelectTone={vi.fn()}
+          generateLabel="Generate"
+          generateDisabled={false}
+          generateState="idle"
+          onGenerateDraft={vi.fn()}
+          onOpenJobs={onOpenJobs}
+          onOpenPasteJob={onOpenPasteJob}
+          onClearJobContext={onClearJobContext}
+          onOpenCvs={onOpenCvs}
+          onClearCv={onClearCv}
+        />
+      </>,
+    );
+
+    expect(screen.getAllByText("Draft")).toHaveLength(1);
+    expect(
+      screen.queryByText("Choose a job and CV, then generate a first proposal."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("JOB")).toBeInTheDocument();
+    expect(screen.getByText("CV")).toBeInTheDocument();
+    expect(screen.getByText("SETTINGS")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Choose saved job" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Replace with saved job" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Replace with pasted job" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Pick a CV" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Change CV" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Attached to this draft")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change job: Building Security Guard" }));
+    expect(onOpenJobs).toHaveBeenCalledTimes(1);
+    expect(onOpenPasteJob).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Remove job context" }));
+    expect(onClearJobContext).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Change attached CV: Robert Cooper" }));
+    expect(onOpenCvs).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Remove attached CV" }));
+    expect(onClearCv).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Document type" }));
+    const typeMenu = await screen.findByRole("menu", { name: "Document type" });
+    await waitFor(() => expect(typeMenu).toHaveAttribute("data-side", "top"));
+  });
+
+  it("keeps empty Proposal Draft source actions explicit", () => {
+    render(
+      <ProposalDraftDrawer
+        jobTitle=""
+        jobMeta={null}
+        jobSummary={null}
+        jobContextKind="empty"
+        sourceCvTitle={null}
+        proposalTypeLabel="Letter"
+        proposalTypeOptions={proposalTypeOptions}
+        onSelectProposalType={vi.fn()}
+        toneLabel="Auto"
+        toneOptions={toneOptions}
+        onSelectTone={vi.fn()}
+        generateLabel="Generate"
+        generateDisabled={false}
+        generateState="idle"
+        onGenerateDraft={vi.fn()}
+        onOpenJobs={vi.fn()}
+        onOpenPasteJob={vi.fn()}
+        onOpenCvs={vi.fn()}
+        onClearCv={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByText("Choose a job and CV, then generate a first proposal."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("JOB")).toBeInTheDocument();
+    expect(screen.getByText("CV")).toBeInTheDocument();
+    expect(screen.getByText("SETTINGS")).toBeInTheDocument();
+    expect(screen.queryByText("No job loaded")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose saved job" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Paste job offer" })).toBeInTheDocument();
+    expect(screen.queryByText("No CV attached")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pick a CV" })).toBeInTheDocument();
+  });
+
+  it("uses a larger adaptive textarea for pasted job context", () => {
+    render(
+      <ProposalPasteJobDrawer
+        value="About the job\nJob Summary\nLong pasted offer"
+        onChange={vi.fn()}
+        onCommit={vi.fn()}
+        onDone={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Paste a job offer")).toHaveClass(
+      "forge-rail-drawer__paste-job-input",
+    );
+    expect(screen.getByRole("button", { name: "Use job context" })).toBeInTheDocument();
+  });
+
   it("wires job drawer primary and external actions", () => {
     const onSelectJob = vi.fn();
     const onOpenJob = vi.fn();
+    const onOpenPasteJob = vi.fn();
     render(
       <ProposalJobsDrawer
         jobs={[
@@ -105,8 +257,12 @@ describe("forge rail drawers", () => {
         ]}
         onSelectJob={onSelectJob}
         onOpenJob={onOpenJob}
+        onOpenPasteJob={onOpenPasteJob}
       />,
     );
+
+    fireEvent.click(screen.getByRole("button", { name: "Paste job offer" }));
+    expect(onOpenPasteJob).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getAllByRole("button", { name: /Employment lawyer/i })[0]);
     expect(onSelectJob).toHaveBeenCalledWith("job-one");
@@ -240,6 +396,26 @@ describe("forge rail drawers", () => {
     expect(css).toMatch(/\.forge-rail-drawer__grid\s*\{[\s\S]*row-gap: var\(--space-5\)/);
   });
 
+  it("keeps the Draft generate footer from painting a separate tray", () => {
+    const css = fs.readFileSync(
+      path.join(process.cwd(), "src/styles/product.css"),
+      "utf8",
+    );
+
+    const bodyBlock = css.match(
+      /\.forge-rail-drawer__draft-body\s*\{[^}]*\}/,
+    )?.[0];
+    const footerBlock = css.match(
+      /\.forge-rail-drawer__draft-footer\s*\{[^}]*\}/,
+    )?.[0];
+
+    expect(bodyBlock).toContain(
+      "calc(var(--forge-drawer-scroll-inset) + var(--control-md) + var(--space-5))",
+    );
+    expect(footerBlock).toContain("background: transparent;");
+    expect(footerBlock).toContain("border-block-start: 0;");
+  });
+
   it("keeps forge page rails collapsible when a pinned drawer needs the space", () => {
     const productCss = fs.readFileSync(
       path.join(process.cwd(), "src/styles/product.css"),
@@ -318,6 +494,12 @@ describe("forge rail drawers", () => {
     expect(css).toMatch(/\.forge-rail-document-tile__badge\s*\{[\s\S]*z-index: 2/);
     expect(css).toMatch(
       /\.forge-rail-drawer__thumb-affordance\s*\{[\s\S]*inset-block-end:\s*var\(--space-2\);[\s\S]*inset-inline-start:\s*50%;[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*font-size:\s*var\(--tx\);/,
+    );
+    expect(css).toMatch(
+      /\.forge-rail-drawer__row-affordance\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*padding:\s*0 var\(--space-3\);[\s\S]*font-size:\s*var\(--tx\);/,
+    );
+    expect(css).toMatch(
+      /\.forge-rail-drawer__row-affordance svg,[\s\S]*\.forge-rail-drawer__row-affordance-icon,[\s\S]*\.forge-rail-drawer__thumb-affordance svg\s*\{[\s\S]*width:\s*var\(--app-sidebar-icon-size\);[\s\S]*height:\s*var\(--app-sidebar-icon-size\);/,
     );
     expect(css).toMatch(
       /\.forge-rail-drawer__thumb-item:hover \.forge-rail-drawer__thumb-affordance,[\s\S]*\.forge-rail-drawer__thumb-item:focus-within \.forge-rail-drawer__thumb-affordance\s*\{[\s\S]*opacity:\s*1;/,

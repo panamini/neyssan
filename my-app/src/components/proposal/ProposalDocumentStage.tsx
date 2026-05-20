@@ -1,13 +1,16 @@
 import React from "react";
-import { Button, ToneBadge } from "../ui";
+import clsx from "clsx";
+import { Button } from "../ui";
 import {
   ArrowUDownRight,
   ArrowUUpLeft,
+  ChatCircleText,
   ClipboardText,
   Eye,
   Palette,
   NewspaperClipping,
   Layout,
+  PaperPlaneRight,
   PenLine,
   TrashSimple,
 } from "@/lib/icons";
@@ -28,6 +31,11 @@ type ProposalDocumentStageProps = {
   onOpenHeading?: () => void;
   onOpenDesign?: () => void;
   onOpenTemplates?: () => void;
+  onOpenDraft?: () => void;
+  onOpenAsk?: () => void;
+  onCycleTone?: () => void;
+  onOpenToneSettings?: () => void;
+  composerMode?: "draft" | "ask" | null;
   onDeleteDraft?: () => void;
   onSaveToLibrary?: () => void;
   sourceJobLinked?: boolean;
@@ -63,10 +71,54 @@ export function ProposalDocumentStage({
   onOpenHeading,
   onOpenDesign,
   onOpenTemplates,
+  onOpenDraft,
+  onOpenAsk,
+  onCycleTone,
+  onOpenToneSettings,
+  composerMode = null,
   onDeleteDraft,
   onSaveToLibrary,
 }: ProposalDocumentStageProps): JSX.Element {
   const stageIconSize = 18;
+  const toneLongPressTimerRef = React.useRef<number | null>(null);
+  const toneLongPressTriggeredRef = React.useRef(false);
+  const toneIsInteractive = Boolean(onCycleTone || onOpenToneSettings);
+  const clearToneLongPressTimer = React.useCallback(() => {
+    if (toneLongPressTimerRef.current === null) return;
+    window.clearTimeout(toneLongPressTimerRef.current);
+    toneLongPressTimerRef.current = null;
+  }, []);
+  const handleTonePointerDown = React.useCallback(() => {
+    if (!onOpenToneSettings) return;
+    clearToneLongPressTimer();
+    toneLongPressTriggeredRef.current = false;
+    toneLongPressTimerRef.current = window.setTimeout(() => {
+      toneLongPressTimerRef.current = null;
+      toneLongPressTriggeredRef.current = true;
+      onOpenToneSettings();
+    }, 450);
+  }, [clearToneLongPressTimer, onOpenToneSettings]);
+  const handleTonePointerEnd = React.useCallback(() => {
+    clearToneLongPressTimer();
+  }, [clearToneLongPressTimer]);
+  const handleToneClick = React.useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (toneLongPressTriggeredRef.current) {
+        toneLongPressTriggeredRef.current = false;
+        event.preventDefault();
+        return;
+      }
+      onCycleTone?.();
+    },
+    [onCycleTone],
+  );
+
+  React.useEffect(
+    () => () => {
+      clearToneLongPressTimer();
+    },
+    [clearToneLongPressTimer],
+  );
 
   return (
     <section
@@ -164,6 +216,15 @@ export function ProposalDocumentStage({
               </span>
             </Button>
           ) : null}
+          {onOpenDraft || onOpenAsk ? (
+            <span className="dasti-icon-cluster__divider" aria-hidden="true" />
+          ) : null}
+          {onOpenDraft ? (
+            <Button type="button" size="sm" variant="primary" className="dasti-proposal-skeleton-stage__primary-action" iconLeft={<PaperPlaneRight size={stageIconSize} strokeWidth={1.8} />} aria-expanded={composerMode === "draft"} aria-label="Draft" data-toolbar-tooltip="Draft and generate" data-stage-tooltip-mode="compact" onClick={onOpenDraft}>Draft</Button>
+          ) : null}
+          {onOpenAsk ? (
+            <Button type="button" size="sm" variant="secondary" className="dasti-proposal-skeleton-stage__primary-action" iconLeft={<ChatCircleText size={stageIconSize} strokeWidth={1.8} />} aria-expanded={composerMode === "ask"} aria-label="Ask" data-toolbar-tooltip="Ask" data-stage-tooltip-mode="compact" onClick={onOpenAsk}>Ask</Button>
+          ) : null}
           {onDeleteDraft || onSaveToLibrary ? (
             <>
               <span className="dasti-icon-cluster__divider" aria-hidden="true" />
@@ -197,7 +258,29 @@ export function ProposalDocumentStage({
           ) : null}
         </div>
         <span className="dasti-proposal-skeleton-stage__spacer" />
-        <ToneBadge tone={toneValue}>{toneLabel}</ToneBadge>
+        {toneIsInteractive ? (
+          <button
+            type="button"
+            className={clsx(
+              "ds-tone",
+              `ds-tone--${toneValue}`,
+              "dasti-proposal-skeleton-stage__tone-toggle",
+            )}
+            aria-label={`Tone: ${toneLabel}`}
+            data-toolbar-tooltip="Click to change tone. Hold for settings."
+            onPointerDown={handleTonePointerDown}
+            onPointerUp={handleTonePointerEnd}
+            onPointerCancel={handleTonePointerEnd}
+            onPointerLeave={handleTonePointerEnd}
+            onClick={handleToneClick}
+          >
+            {toneLabel}
+          </button>
+        ) : (
+          <span className={clsx("ds-tone", `ds-tone--${toneValue}`)}>
+            {toneLabel}
+          </span>
+        )}
         {mode === "edit" ? (
           <div
             className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__right-actions"

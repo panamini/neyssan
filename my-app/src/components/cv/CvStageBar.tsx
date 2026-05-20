@@ -20,6 +20,8 @@ type CvStageBarProps = {
   onOpenSections?: () => void;
   onOpenDesign?: () => void;
   onOpenTemplates?: () => void;
+  askOpen?: boolean;
+  onOpenAsk?: () => void;
 };
 
 export function CvStageBar({
@@ -32,6 +34,8 @@ export function CvStageBar({
   onOpenSections,
   onOpenDesign,
   onOpenTemplates,
+  askOpen = false,
+  onOpenAsk,
 }: CvStageBarProps): JSX.Element {
   const stageIconSize = 18;
   return (
@@ -117,6 +121,21 @@ export function CvStageBar({
           onClick={onOpenTemplates}
         >
           <span className="dasti-cv-stage-bar__action-label">Templates</span>
+        </Button>
+      ) : null}
+      {onOpenAsk ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="primary"
+          className="dasti-cv-stage-bar__primary-action"
+          aria-expanded={askOpen}
+          aria-label="Ask"
+          data-toolbar-tooltip="Ask"
+          data-stage-tooltip-mode="compact"
+          onClick={onOpenAsk}
+        >
+          <span className="dasti-cv-stage-bar__action-label">Ask</span>
         </Button>
       ) : null}
       <span className="dasti-cv-stage-bar__spacer" aria-hidden="true" />

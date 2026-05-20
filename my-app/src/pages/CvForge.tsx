@@ -111,6 +111,7 @@ import CvDesignFields, {
 } from "../components/cv/CvDesignFields";
 import CvReviewBanner from "../components/cv/CvReviewBanner";
 import ImportRecoveryPanel from "../components/ImportRecoveryPanel";
+import ComposerDrawer from "../components/ComposerDrawer";
 import CvRail, {
   type CvAddSectionKind,
   type CvRailAppliedAiEdit,
@@ -2869,6 +2870,7 @@ export function CvForge(): JSX.Element {
     React.useState<ResumeActiveTarget | null>(null);
   const [hiddenSectionIds, setHiddenSectionIds] = React.useState<string[]>([]);
   const [cvRailTab, setCvRailTab] = React.useState<CvRailTab>("ai");
+  const [cvComposerOpen, setCvComposerOpen] = React.useState(false);
   const cvTone = mapDefaultVoicePresetToCvTone(
     defaultProposalSettings?.savedVoicePreset ??
       defaultProposalSettings?.voicePreset,
@@ -6903,6 +6905,8 @@ export function CvForge(): JSX.Element {
                 onOpenSections={handleOpenCvSections}
                 onOpenDesign={handleOpenCvDesign}
                 onOpenTemplates={handleOpenCvTemplates}
+                askOpen={cvComposerOpen}
+                onOpenAsk={() => setCvComposerOpen(true)}
               />
               {isImportReviewBannerVisible ? (
                 <CvReviewBanner
@@ -7027,7 +7031,13 @@ export function CvForge(): JSX.Element {
                 </div>
               )}
             </div>
-            {shouldAutoCollapseCvRailForDockedDrawer ? null : (
+            <ComposerDrawer
+              open={cvComposerOpen}
+              onOpenChange={setCvComposerOpen}
+              title="Ask"
+              description="Improve the selected CV section."
+              ariaLabel="CV composer drawer"
+            >
               <CvRail
                 sections={currentSections}
                 activeSectionId={activeSectionId}
@@ -7044,8 +7054,9 @@ export function CvForge(): JSX.Element {
                 onUndoAiSuggestion={handleUndoAiSuggestion}
                 onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
                 onDismissListAiSuggestion={handleDismissListAiSuggestion}
+                hideTabs
               />
-            )}
+            </ComposerDrawer>
           </div>
           <SectionEditorSheet
             open={sectionEditorOpen}
