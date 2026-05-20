@@ -1,5 +1,5 @@
 import React from "react";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { ForgeTemplatePanel } from "../ForgeTemplatePanel";
@@ -226,7 +226,7 @@ describe("Sidebar permanent rail", () => {
   it("keeps Settings anchored at the bottom of the rail", () => {
     renderSidebar();
 
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveClass(
+    expect(screen.getByRole("button", { name: "Settings" })).toHaveClass(
       "sb-rail-button--bottom",
     );
   });
@@ -254,12 +254,37 @@ describe("Sidebar permanent rail", () => {
     renderSidebar(path);
 
     const currentItem =
-      path === "/proposal" || path === "/cv"
+      path === "/proposal" || path === "/cv" || path === "/settings"
         ? screen.getByRole("button", { name: label })
         : screen.getByRole("link", { name: label });
     expect(currentItem).toHaveAttribute(
       "aria-current",
       "page",
+    );
+  });
+
+  it("opens Settings in the shared rail drawer and switches settings panes", async () => {
+    renderSidebar("/dashboard");
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/settings");
+    await waitFor(() => {
+      expect(
+        screen.getByRole("complementary", { name: "Settings sections" }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("button", { name: /Document style/ }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Document style/ }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/settings?tab=docstyle",
+    );
+    expect(screen.getByRole("button", { name: "Settings" })).toHaveClass(
+      "sb-rail-button--panel-open",
     );
   });
 
@@ -495,6 +520,23 @@ describe("Sidebar permanent rail", () => {
     expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
   });
 
+  it("hides the pin action when the drawer cannot dock at the current width", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    window.innerWidth = 900;
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    fireEvent.pointerEnter(screen.getByLabelText("CV"), {
+      pointerType: "mouse",
+    });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Pin drawer" })).not.toBeInTheDocument();
+  });
+
   it("pins a peek drawer from the drawer pin action", () => {
     vi.useFakeTimers();
     mockFinePointer(true);
@@ -535,10 +577,30 @@ describe("Sidebar permanent rail", () => {
 
     fireEvent.pointerLeave(cv, { pointerType: "mouse" });
     act(() => {
-      vi.advanceTimersByTime(180);
+      vi.advanceTimersByTime(360);
     });
 
     expect(screen.queryByRole("complementary", { name: "Attach CV" })).not.toBeInTheDocument();
+  });
+
+  it("does not flicker closed immediately after leaving a hover trigger", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    const cv = screen.getByRole("link", { name: "CV" });
+    fireEvent.pointerEnter(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
+
+    fireEvent.pointerLeave(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(180);
+    });
+
+    expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
   });
 
   it("keeps a pinned drawer stable across other hovers", () => {

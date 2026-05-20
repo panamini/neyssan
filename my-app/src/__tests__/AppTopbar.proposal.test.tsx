@@ -1,4 +1,6 @@
 import React from "react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -29,6 +31,11 @@ vi.mock("../contexts/CvLibraryContext", () => ({
     cvs: [],
   }),
 }));
+
+const productCss = readFileSync(
+  resolve(process.cwd(), "src/styles/product.css"),
+  "utf8",
+);
 
 function RegisterProposalTopbar({
   registration,
@@ -94,6 +101,30 @@ describe("AppTopbar Proposal document identity", () => {
       container.querySelector(".app-topbar__doc-title-suffix"),
     ).not.toBeInTheDocument();
     expect(container.querySelector(".app-topbar__actions")).toBeTruthy();
+    expect(container.querySelector(".app-topbar")).toHaveAttribute(
+      "data-document-route",
+      "proposal",
+    );
+    expect(
+      container.querySelector(".app-topbar__doc-identity-group"),
+    ).toHaveClass("app-topbar__doc-identity-group--proposal");
+  });
+
+  it("keeps the Proposal title slot layout-stable across compact and full title states", () => {
+    expect(productCss).toContain(
+      '.app-topbar[data-document-route="proposal"]',
+    );
+    expect(productCss).toContain(
+      ".app-topbar__doc-identity-group--proposal",
+    );
+    expect(productCss).toContain("flex: 0 0 auto;");
+    expect(productCss).toContain(
+      "var(--app-topbar-doc-identity-inline-size) + (var(--control-sm) * 2)",
+    );
+    expect(productCss).toContain("text-overflow: ellipsis;");
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.app-topbar\[data-document-route="proposal"\]\s*\{[\s\S]*--app-topbar-doc-identity-inline-size:\s*var\([\s\S]*--app-topbar-doc-identity-inline-size-compact[\s\S]*\.app-topbar\[data-document-route="proposal"\]\s+\.app-topbar__doc-title\s*\{[\s\S]*position:\s*static;[\s\S]*opacity:\s*1;/,
+    );
   });
 
   it("commits proposal title edits from the topbar", () => {
@@ -150,9 +181,9 @@ describe("AppTopbar Proposal document identity", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "New proposal" }));
     expect(onNewProposal).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "New proposal" })).toHaveTextContent(
-      "New",
-    );
+    const newProposalButton = screen.getByRole("button", { name: "New proposal" });
+    expect(newProposalButton).toHaveTextContent("New");
+    expect(newProposalButton).toHaveAttribute("data-has-content", "true");
 
     fireEvent.click(screen.getByRole("button", { name: "Proposal actions" }));
     const menu = await screen.findByRole("menu", { name: "Proposal actions" });

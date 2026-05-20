@@ -11,14 +11,30 @@ import {
   Layout,
   type IconProps,
 } from "@/lib/icons";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   type ForgeRailSurface,
   type ForgeTemplateSurface,
+  useRegisterForgePanel,
   useForgeTemplatePanel,
 } from "../contexts/ForgeTemplatePanelContext";
+import {
+  SETTINGS_TABS,
+  getSettingsTabPath,
+  normalizeSettingsTab,
+  type SettingsTab,
+} from "../lib/settings-tabs";
 
 const MOBILE_HIDE_WIDTH = 480;
+
+const SETTINGS_DRAWER_GROUPS: Array<{
+  label: string;
+  tabs: SettingsTab[];
+}> = [
+  { label: "Account", tabs: ["account", "team", "danger"] },
+  { label: "Defaults", tabs: ["preferences", "docstyle", "voice"] },
+  { label: "Payment", tabs: ["billing"] },
+];
 
 type RailIconComponent = React.ComponentType<IconProps>;
 
@@ -32,7 +48,7 @@ type SidebarRailLinkProps = {
   expanded?: boolean;
   hoverEnabled?: boolean;
   className?: string;
-  onNavigate?: () => void;
+  onClick?: () => void;
   onHoverIntent?: () => void;
   onHoverLeave?: () => void;
   onFocusOpen?: () => void;
@@ -46,6 +62,7 @@ type SidebarRailButtonProps = {
   expanded: boolean;
   active?: boolean;
   hoverEnabled?: boolean;
+  className?: string;
   onClick: () => void;
   onHoverIntent?: () => void;
   onHoverLeave?: () => void;
@@ -91,7 +108,7 @@ function SidebarRailLink({
   expanded,
   hoverEnabled = true,
   className,
-  onNavigate,
+  onClick,
   onHoverIntent,
   onHoverLeave,
   onFocusOpen,
@@ -109,7 +126,7 @@ function SidebarRailLink({
       aria-label={label}
       aria-current={active ? "page" : undefined}
       aria-expanded={expanded}
-      onClick={onNavigate}
+      onClick={onClick}
       onFocus={onFocusOpen}
       onPointerEnter={(event) => {
         if (event.pointerType === "touch") return;
@@ -136,6 +153,7 @@ function SidebarRailButton({
   expanded,
   active = false,
   hoverEnabled = true,
+  className,
   onClick,
   onHoverIntent,
   onHoverLeave,
@@ -149,6 +167,7 @@ function SidebarRailButton({
         active && "sb-rail-button--route-active",
         active && "sb-rail-button--active",
         panelOpen && "sb-rail-button--panel-open",
+        className,
       )}
       aria-label={label}
       aria-current={active ? "page" : undefined}
@@ -172,8 +191,54 @@ function SidebarRailButton({
   );
 }
 
+function SettingsDrawerContent({
+  activeTab,
+  onSelectTab,
+}: {
+  activeTab: string;
+  onSelectTab: (tabId: (typeof SETTINGS_TABS)[number]["id"]) => void;
+}): JSX.Element {
+  return (
+    <div className="forge-rail-drawer forge-rail-drawer--settings">
+      <div className="forge-rail-drawer__list" role="list">
+        {SETTINGS_DRAWER_GROUPS.map((group) => (
+          <React.Fragment key={group.label}>
+            <div className="forge-rail-drawer__category-label">
+              {group.label}
+            </div>
+            {group.tabs.map((tabId) => {
+              const tab = SETTINGS_TABS.find((candidate) => candidate.id === tabId);
+              if (!tab) return null;
+              const active = activeTab === tab.id;
+              return (
+                <article
+                  key={tab.id}
+                  className="forge-rail-drawer__row"
+                  data-state={active ? "current" : undefined}
+                  role="listitem"
+                >
+                  <button
+                    type="button"
+                    className="forge-rail-drawer__row-main"
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => onSelectTab(tab.id)}
+                  >
+                    <strong>{tab.label}</strong>
+                    <span>{tab.description}</span>
+                  </button>
+                </article>
+              );
+            })}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export const Sidebar: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const {
     activeSurface: activeTemplateSurface,
     open: templatePanelOpen,
@@ -183,6 +248,27 @@ export const Sidebar: React.FC = () => {
     queueOpenSurface,
     queueClosePanel,
   } = useForgeTemplatePanel();
+  const activeSettingsTab = normalizeSettingsTab(
+    new URLSearchParams(location.search).get("tab"),
+  );
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "settings" as const,
+        title: "",
+        ariaLabel: "Settings sections",
+        renderContent: () => (
+          <SettingsDrawerContent
+            activeTab={activeSettingsTab}
+            onSelectTab={(tabId) => {
+              navigate(getSettingsTabPath(tabId));
+            }}
+          />
+        ),
+      }),
+      [activeSettingsTab, navigate],
+    ),
+  );
   const [finePointer, setFinePointer] = React.useState(() =>
     typeof window !== "undefined" && typeof window.matchMedia === "function"
       ? window.matchMedia("(hover: hover) and (pointer: fine)").matches
@@ -191,6 +277,7 @@ export const Sidebar: React.FC = () => {
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1280 : window.innerWidth,
   );
+  const pendingSettingsPanelOpenRef = React.useRef(false);
 
   React.useEffect(() => {
     const handleResize = () => {
@@ -218,10 +305,6 @@ export const Sidebar: React.FC = () => {
     };
   }, []);
 
-  if (viewportWidth < MOBILE_HIDE_WIDTH) {
-    return null;
-  }
-
   const { pathname } = location;
   const dashboardActive = pathname === "/" || isRouteActive(pathname, "/dashboard");
   const jobsActive = isRouteActive(pathname, "/jobs");
@@ -245,6 +328,23 @@ export const Sidebar: React.FC = () => {
   const panelOpenFor = (surface: ForgeRailSurface) =>
     templatePanelOpen && activeTemplateSurface === surface;
 
+  React.useEffect(() => {
+    if (!settingsActive || !pendingSettingsPanelOpenRef.current) {
+      return;
+    }
+    pendingSettingsPanelOpenRef.current = false;
+    const timer = window.setTimeout(() => {
+      openTemplateSurface("settings", { mode: "pinned" });
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [openTemplateSurface, settingsActive]);
+
+  if (viewportWidth < MOBILE_HIDE_WIDTH) {
+    return null;
+  }
+
   const handleOpenTemplates = () => {
     if (!activeForgeSurface) {
       return;
@@ -256,6 +356,18 @@ export const Sidebar: React.FC = () => {
 
   const handleOpenProposalPanel = (surface: ForgeRailSurface) => {
     togglePinnedSurface(surface, {
+      unpinBehavior: finePointer ? "peek" : "close",
+    });
+  };
+
+  const handleOpenSettingsPanel = () => {
+    if (!settingsActive) {
+      pendingSettingsPanelOpenRef.current = true;
+      navigate(getSettingsTabPath(activeSettingsTab));
+      return;
+    }
+
+    togglePinnedSurface("settings", {
       unpinBehavior: finePointer ? "peek" : "close",
     });
   };
@@ -292,7 +404,7 @@ export const Sidebar: React.FC = () => {
           href="/dashboard"
           active={dashboardActive}
           icon={CalendarDots}
-          onNavigate={closePanel}
+          onClick={closePanel}
         />
         {proposalContextualRail && finePointer ? (
           <SidebarRailLink
@@ -306,7 +418,7 @@ export const Sidebar: React.FC = () => {
             onHoverIntent={() => handleQueuePanel("jobs")}
             onHoverLeave={handleQueueClosePanel}
             icon={Briefcase}
-            onNavigate={closePanel}
+            onClick={closePanel}
           />
         ) : proposalContextualRail ? (
           <SidebarRailButton
@@ -326,7 +438,7 @@ export const Sidebar: React.FC = () => {
             href="/jobs"
             active={jobsActive}
             icon={Briefcase}
-            onNavigate={closePanel}
+            onClick={closePanel}
           />
         )}
         {(proposalContextualRail || cvContextualRail) && finePointer ? (
@@ -341,7 +453,7 @@ export const Sidebar: React.FC = () => {
             onHoverIntent={() => handleQueuePanel("cvs")}
             onHoverLeave={handleQueueClosePanel}
             icon={FileUser}
-            onNavigate={closePanel}
+            onClick={closePanel}
           />
         ) : proposalContextualRail || cvContextualRail ? (
           <SidebarRailButton
@@ -362,7 +474,7 @@ export const Sidebar: React.FC = () => {
             href="/cv"
             active={cvActive}
             icon={FileUser}
-            onNavigate={closePanel}
+            onClick={closePanel}
           />
         )}
         {proposalContextualRail ? (
@@ -384,7 +496,7 @@ export const Sidebar: React.FC = () => {
             href="/proposal"
             active={proposalActive}
             icon={FileText}
-            onNavigate={closePanel}
+            onClick={closePanel}
           />
         )}
         {(proposalContextualRail || cvContextualRail) && finePointer ? (
@@ -400,7 +512,7 @@ export const Sidebar: React.FC = () => {
             onHoverLeave={handleQueueClosePanel}
             icon={FolderSimple}
             activeIcon={FolderOpen}
-            onNavigate={closePanel}
+            onClick={closePanel}
           />
         ) : proposalContextualRail ? (
           <SidebarRailButton
@@ -435,7 +547,7 @@ export const Sidebar: React.FC = () => {
             active={projectsActive}
             icon={FolderSimple}
             activeIcon={FolderOpen}
-            onNavigate={closePanel}
+            onClick={closePanel}
           />
         )}
         {activeForgeSurface && finePointer ? (
@@ -450,7 +562,7 @@ export const Sidebar: React.FC = () => {
             onHoverIntent={handleQueueTemplates}
             onHoverLeave={handleQueueClosePanel}
             icon={Layout}
-            onNavigate={closePanel}
+            onClick={closePanel}
           />
         ) : activeForgeSurface ? (
           <SidebarRailButton
@@ -470,16 +582,18 @@ export const Sidebar: React.FC = () => {
             href="/templates"
             active={templatesActive}
             icon={Layout}
-            onNavigate={closePanel}
+            onClick={closePanel}
           />
         )}
-        <SidebarRailLink
+        <SidebarRailButton
           label="Settings"
-          href="/settings"
           active={settingsActive}
+          panelOpen={panelOpenFor("settings")}
+          expanded={panelOpenFor("settings")}
           icon={Gear}
           className="sb-rail-button--bottom"
-          onNavigate={closePanel}
+          hoverEnabled={false}
+          onClick={handleOpenSettingsPanel}
         />
       </nav>
     </aside>

@@ -493,17 +493,24 @@ export function fallbackCopyText(text: string): boolean {
 const isDev = import.meta.env.DEV;
 const PROPOSAL_PREVIEW_ZOOM_STORAGE_KEY =
   "dasti:proposal-preview-zoom-index:v1";
-const PROPOSAL_PREVIEW_ZOOM_STEPS = [
+const PROPOSAL_PREVIEW_ZOOM_STEPS: readonly number[] = [
   0.3, 0.5, 0.8, 1, 1.25, 1.5, 2,
-] as const;
+];
 const PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX = 3;
+const PROPOSAL_PREVIEW_ZOOM_DEFAULT_LEVEL =
+  PROPOSAL_PREVIEW_ZOOM_STEPS[PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX];
+const PROPOSAL_PREVIEW_ZOOM_MIN = PROPOSAL_PREVIEW_ZOOM_STEPS[0];
+const PROPOSAL_PREVIEW_ZOOM_MAX =
+  PROPOSAL_PREVIEW_ZOOM_STEPS[PROPOSAL_PREVIEW_ZOOM_STEPS.length - 1];
+const PROPOSAL_PREVIEW_ZOOM_SLIDER_STEP = 0.01;
+const PROPOSAL_PREVIEW_ZOOM_BUTTON_STEP = 0.1;
 
 function formatProposalZoomOptionLabel(value: number) {
   return `${Math.round(value * 100)} %`;
 }
 
-function readProposalZoomIndex(_storageKey: string | null | undefined) {
-  return PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX;
+function readProposalZoomLevel(_storageKey: string | null | undefined): number {
+  return PROPOSAL_PREVIEW_ZOOM_DEFAULT_LEVEL;
 }
 
 function clampProposalZoomIndex(value: number): number {
@@ -511,6 +518,31 @@ function clampProposalZoomIndex(value: number): number {
     PROPOSAL_PREVIEW_ZOOM_STEPS.length - 1,
     Math.max(0, Math.round(value)),
   );
+}
+
+function clampProposalZoomLevel(value: number): number {
+  if (!Number.isFinite(value)) return PROPOSAL_PREVIEW_ZOOM_DEFAULT_LEVEL;
+  return Math.min(
+    PROPOSAL_PREVIEW_ZOOM_MAX,
+    Math.max(PROPOSAL_PREVIEW_ZOOM_MIN, value),
+  );
+}
+
+function getNearestProposalZoomIndex(value: number): number {
+  let nearestIndex = PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  PROPOSAL_PREVIEW_ZOOM_STEPS.forEach((step, index) => {
+    const distance = Math.abs(step - value);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  });
+  return nearestIndex;
+}
+
+function proposalZoomLevelsEqual(a: number, b: number): boolean {
+  return Math.abs(a - b) < 0.005;
 }
 
 const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
@@ -620,8 +652,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     normalizedEditorAiJobContext,
   );
 
-  const [internalZoomIndex, setInternalZoomIndex] = React.useState(() =>
-    readProposalZoomIndex(zoomStorageKey),
+  const [internalZoomLevel, setInternalZoomLevel] = React.useState(() =>
+    readProposalZoomLevel(zoomStorageKey),
   );
   const [isZoomMenuOpen, setIsZoomMenuOpen] = React.useState(false);
   const [documentPageCount, setDocumentPageCount] = React.useState(1);
@@ -646,23 +678,30 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const [editableTextareaBlockSize, setEditableTextareaBlockSize] =
     React.useState(0);
   const isZoomControlled = typeof controlledZoomIndex === "number";
-  const zoomIndex = isZoomControlled
-    ? clampProposalZoomIndex(controlledZoomIndex)
-    : internalZoomIndex;
-  const zoomLevel = PROPOSAL_PREVIEW_ZOOM_STEPS[zoomIndex];
-  const setZoomIndex = React.useCallback(
-    (nextValue: number | ((currentIndex: number) => number)) => {
-      const resolvedIndex = clampProposalZoomIndex(
-        typeof nextValue === "function" ? nextValue(zoomIndex) : nextValue,
+  const controlledZoomLevel = isZoomControlled
+    ? PROPOSAL_PREVIEW_ZOOM_STEPS[clampProposalZoomIndex(controlledZoomIndex)]
+    : null;
+  const zoomLevel = isZoomControlled
+    ? (controlledZoomLevel ?? PROPOSAL_PREVIEW_ZOOM_DEFAULT_LEVEL)
+    : internalZoomLevel;
+  const nearestZoomIndex = getNearestProposalZoomIndex(zoomLevel);
+  const isDefaultZoom = proposalZoomLevelsEqual(
+    zoomLevel,
+    PROPOSAL_PREVIEW_ZOOM_DEFAULT_LEVEL,
+  );
+  const setZoomLevel = React.useCallback(
+    (nextValue: number | ((currentLevel: number) => number)) => {
+      const resolvedLevel = clampProposalZoomLevel(
+        typeof nextValue === "function" ? nextValue(zoomLevel) : nextValue,
       );
 
       if (!isZoomControlled) {
-        setInternalZoomIndex(resolvedIndex);
+        setInternalZoomLevel(resolvedLevel);
       }
 
-      onZoomIndexChange?.(resolvedIndex);
+      onZoomIndexChange?.(getNearestProposalZoomIndex(resolvedLevel));
     },
-    [isZoomControlled, onZoomIndexChange, zoomIndex],
+    [isZoomControlled, onZoomIndexChange, zoomLevel],
   );
   const editableTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const editablePageRef = React.useRef<HTMLDivElement | null>(null);
@@ -996,7 +1035,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       return;
     }
 
-    setInternalZoomIndex(readProposalZoomIndex(zoomStorageKey));
+    setInternalZoomLevel(readProposalZoomLevel(zoomStorageKey));
     setFitRequestCount((count) => count + 1);
   }, [isZoomControlled, zoomStorageKey]);
 
@@ -1561,7 +1600,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         <button
           type="button"
           className={
-              zoomIndex === PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX
+              isDefaultZoom
                 ? "dasti-doc-zoom-fit dasti-doc-zoom-trigger"
                 : "dasti-doc-zoom-fit dasti-doc-zoom-trigger dasti-doc-zoom-trigger--active"
           }
@@ -1584,12 +1623,12 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           <button
             type="button"
             className={
-              zoomIndex === PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX
+              isDefaultZoom
                 ? "dasti-doc-zoom-fit dasti-doc-zoom-fit--active"
                 : "dasti-doc-zoom-fit"
             }
             onClick={() => {
-              setZoomIndex(PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX);
+              setZoomLevel(PROPOSAL_PREVIEW_ZOOM_DEFAULT_LEVEL);
               setFitRequestCount((count) => count + 1);
             }}
             aria-label="Fit page"
@@ -1600,8 +1639,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           <button
             type="button"
             className="dasti-icon-button"
-            onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}
-            disabled={zoomIndex === 0}
+            onClick={() =>
+              setZoomLevel((level) => level - PROPOSAL_PREVIEW_ZOOM_BUTTON_STEP)
+            }
+            disabled={zoomLevel <= PROPOSAL_PREVIEW_ZOOM_MIN}
             aria-label="Zoom out"
             data-toolbar-tooltip="Zoom out"
           >
@@ -1611,11 +1652,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             type="button"
             className="dasti-icon-button"
             onClick={() =>
-              setZoomIndex((i) =>
-                Math.min(PROPOSAL_PREVIEW_ZOOM_STEPS.length - 1, i + 1),
-              )
+              setZoomLevel((level) => level + PROPOSAL_PREVIEW_ZOOM_BUTTON_STEP)
             }
-            disabled={zoomIndex === PROPOSAL_PREVIEW_ZOOM_STEPS.length - 1}
+            disabled={zoomLevel >= PROPOSAL_PREVIEW_ZOOM_MAX}
             aria-label="Zoom in"
             data-toolbar-tooltip="Zoom in"
           >
@@ -2336,7 +2375,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               style={{
                 width: `${A4_PAGE_WIDTH_PX}px`,
                 height: `${renderedUnscaledDocumentHeight}px`,
-                transform: `scale(${previewDocumentScale})`,
+                transform: `translateX(-50%) scale(${previewDocumentScale})`,
               }}
             >
               <div
@@ -2558,7 +2597,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           {inlineProofingOverlay}
           <textarea
             ref={attachEditableTextarea}
-            value={proposalContent}
+            value={proposalContent ?? ""}
             onChange={(event) => {
               setAiSuggestion(null);
               onContentChange?.(event.target.value);
@@ -2643,11 +2682,11 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             >
               {isLetterLike ? (
                 <div className="max-w-none">
-                  {renderPlainLetterBody(proposalContent)}
+                  {renderPlainLetterBody(proposalContent ?? "")}
                 </div>
               ) : (
                 <div className="max-w-none">
-                  {renderPlainPreviewBody(proposalContent)}
+                  {renderPlainPreviewBody(proposalContent ?? "")}
                 </div>
               )}
             </div>
@@ -2686,13 +2725,13 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         <input
           className="dasti-proposal-preview-zoom-footer__slider"
           type="range"
-          min={0}
-          max={PROPOSAL_PREVIEW_ZOOM_STEPS.length - 1}
-          step={1}
-          value={zoomIndex}
+          min={PROPOSAL_PREVIEW_ZOOM_MIN}
+          max={PROPOSAL_PREVIEW_ZOOM_MAX}
+          step={PROPOSAL_PREVIEW_ZOOM_SLIDER_STEP}
+          value={zoomLevel}
           aria-label="Proposal zoom"
           aria-valuetext={visibleZoomPercent}
-          onChange={(event) => setZoomIndex(Number(event.currentTarget.value))}
+          onChange={(event) => setZoomLevel(Number(event.currentTarget.value))}
         />
         <Menu
           ariaLabel="Proposal zoom menu"
@@ -2706,16 +2745,16 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   id: `zoom-${index}`,
                   label: formatProposalZoomOptionLabel(step),
                   role: "menuitemradio" as const,
-                  selected: zoomIndex === index,
-                  onSelect: () => setZoomIndex(index),
+                  selected: nearestZoomIndex === index,
+                  onSelect: () => setZoomLevel(step),
                 })),
                 {
                   id: "fit-page",
                   label: "Fit page",
                   role: "menuitemradio" as const,
-                  selected: zoomIndex === PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX,
+                  selected: isDefaultZoom,
                   onSelect: () => {
-                    setZoomIndex(PROPOSAL_PREVIEW_ZOOM_DEFAULT_INDEX);
+                    setZoomLevel(PROPOSAL_PREVIEW_ZOOM_DEFAULT_LEVEL);
                     setFitRequestCount((count) => count + 1);
                   },
                 },

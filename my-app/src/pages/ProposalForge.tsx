@@ -692,21 +692,6 @@ function normalizeComposeToolbarVoicePreset(
     : null;
 }
 
-function resolveProposalToneBadgeTone(
-  preset: FormValues["voicePreset"] | null | undefined,
-): "auto" | "warm" | "formal" | "natural" {
-  switch (preset) {
-    case "expert":
-      return "formal";
-    case "signature":
-      return "natural";
-    case "engaging":
-      return "warm";
-    default:
-      return "auto";
-  }
-}
-
 function hasOwnProperty(
   value: unknown,
   key: string,
@@ -10387,9 +10372,6 @@ export function ProposalForge(): JSX.Element {
   const proposalRailToneLabel = getVoicePresetDisplayLabel(
     proposalRailTonePreset ?? null,
   );
-  const proposalRailToneValue = resolveProposalToneBadgeTone(
-    proposalRailTonePreset,
-  );
   const proposalRailToneOptions = React.useMemo(
     () => [
       {
@@ -10425,24 +10407,6 @@ export function ProposalForge(): JSX.Element {
     ],
     [proposalRailTonePreset],
   );
-  const handleCycleProposalTone = React.useCallback(() => {
-    const currentIndex = proposalRailToneOptions.findIndex(
-      (option) => option.selected,
-    );
-    const nextOption =
-      proposalRailToneOptions[
-        (currentIndex >= 0 ? currentIndex + 1 : 0) %
-          proposalRailToneOptions.length
-      ];
-    const nextToneId = nextOption?.id;
-    handleToolbarVoicePresetChange(
-      nextToneId === "engaging" ||
-        nextToneId === "signature" ||
-        nextToneId === "expert"
-        ? nextToneId
-        : null,
-    );
-  }, [handleToolbarVoicePresetChange, proposalRailToneOptions]);
   const proposalRailJobMatch = React.useMemo(
     () =>
       resolveProposalRailJobMatch(
@@ -11360,11 +11324,12 @@ export function ProposalForge(): JSX.Element {
                     <ComposerDrawer
                       open={proposalComposerMode === "ask"}
                       onOpenChange={(open) => {
+                        if (!open && railAskAiBusy) return;
                         if (!open) setProposalComposerMode(null);
                       }}
-                      title="Ask AI"
-                      description="Writing controls for the current proposal."
-                      ariaLabel="Proposal composer drawer"
+                      title="Ask"
+                      titleHidden
+                      ariaLabel="Ask"
                     >
                       <ProposalRail
                         jobTitle={briefJobTitle}
@@ -11478,11 +11443,11 @@ export function ProposalForge(): JSX.Element {
                         askAiValue={railAskAiValue}
                         askAiBusy={railAskAiBusy}
                         askAiDisabled={!hasMeaningfulProposalContent}
-                        askAiPlaceholder="Tell me what to change: make it warmer, shorten the opening, strengthen the close, or adapt it to the job…"
+                        askAiPlaceholder="Ask for a change"
                         askAiHint={
                           hasMeaningfulProposalContent
-                            ? "Applies to current draft."
-                            : "Generate a draft first."
+                            ? "Apply change"
+                            : "Draft first"
                         }
                         onAskAiChange={setRailAskAiValue}
                         onAskAiSubmit={() => {
@@ -11544,10 +11509,6 @@ export function ProposalForge(): JSX.Element {
 
                     <div className="dasti-flow dasti-proposal-skeleton-forge__stage">
                       <ProposalDocumentStage
-                        toneLabel={proposalRailToneLabel}
-                        toneValue={proposalRailToneValue}
-                        onCycleTone={handleCycleProposalTone}
-                        onOpenToneSettings={handleOpenDraftFromStage}
                         mode={proposalOutputMode}
                         hasProposalContent={hasMeaningfulProposalContent}
                         styleControl={null}

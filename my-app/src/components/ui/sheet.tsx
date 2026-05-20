@@ -10,11 +10,13 @@ export interface SheetProps {
   onOpenChange: (open: boolean) => void;
   side?: "right" | "bottom";
   title: string;
+  titleHidden?: boolean;
   description?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
   ariaLabel?: string;
   className?: string;
+  rootClassName?: string;
   overlayClassName?: string;
   bodyClassName?: string;
   footerClassName?: string;
@@ -43,11 +45,13 @@ export function Sheet({
   onOpenChange,
   side = "right",
   title,
+  titleHidden = false,
   description,
   children,
   footer,
   ariaLabel,
   className,
+  rootClassName,
   overlayClassName,
   bodyClassName,
   footerClassName,
@@ -147,7 +151,7 @@ export function Sheet({
 
   return (
     <BodyPortal>
-      <div className="ds-sheet-root" data-side={side}>
+      <div className={clsx("ds-sheet-root", rootClassName)} data-side={side}>
         <button
           type="button"
           className={clsx("ds-sheet__overlay", overlayClassName)}
@@ -161,6 +165,7 @@ export function Sheet({
           data-state={surfaceState}
           role="dialog"
           aria-modal="true"
+          data-title-hidden={titleHidden ? "true" : undefined}
           aria-label={ariaLabel}
           aria-labelledby={ariaLabel ? undefined : titleId}
           aria-describedby={description ? descriptionId : undefined}
@@ -175,7 +180,13 @@ export function Sheet({
             }
           >
             <div>
-              <h3 id={titleId} className="ds-sheet__title">
+              <h3
+                id={titleId}
+                className={clsx(
+                  "ds-sheet__title",
+                  titleHidden ? "ds-sheet__title--hidden" : null,
+                )}
+              >
                 {title}
               </h3>
               {description ? (

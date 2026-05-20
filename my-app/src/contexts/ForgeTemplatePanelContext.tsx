@@ -14,7 +14,8 @@ export type ForgeRailSurface =
   | "jobs"
   | "documents"
   | "cvs"
-  | "proposals";
+  | "proposals"
+  | "settings";
 
 export type ForgePanelOpenMode = "peek" | "pinned";
 
@@ -102,6 +103,9 @@ const ForgeTemplatePanelContext =
   React.createContext<ForgeTemplatePanelContextValue>(
     DEFAULT_FORGE_TEMPLATE_PANEL_CONTEXT,
   );
+
+const HOVER_OPEN_DELAY_MS = 150;
+const HOVER_CLOSE_DELAY_MS = 360;
 
 export function ForgeTemplatePanelProvider({
   children,
@@ -237,7 +241,7 @@ export function ForgeTemplatePanelProvider({
         setOpenMode("peek");
         setPinnedSurface(null);
         setOpen(true);
-      }, 150);
+      }, HOVER_OPEN_DELAY_MS);
     },
     [clearCloseIntent, clearOpenIntent],
   );
@@ -253,7 +257,7 @@ export function ForgeTemplatePanelProvider({
       setOpen(false);
       setOpenMode(null);
       setActiveSurface(null);
-    }, 180);
+    }, HOVER_CLOSE_DELAY_MS);
   }, [clearCloseIntent]);
 
   const cancelPanelClose = React.useCallback(() => {

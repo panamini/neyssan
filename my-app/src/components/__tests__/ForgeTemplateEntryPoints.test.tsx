@@ -121,8 +121,6 @@ function ProposalTemplateEntryPoint({
       <RegisterProposalHeading />
       <RegisterProposalDesign />
       <ProposalDocumentStage
-        toneLabel="Natural"
-        toneValue="natural"
         mode="edit"
         hasProposalContent
         headingOpen={open && activeSurface === "proposal-heading"}

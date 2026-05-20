@@ -8,6 +8,13 @@ import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../lib/document-stage";
 const TEMPLATE_THUMBNAIL_WIDTH_PX = 156;
 const TEMPLATE_THUMBNAIL_SCALE =
   TEMPLATE_THUMBNAIL_WIDTH_PX / A4_PAGE_WIDTH_PX;
+const FORGE_PANEL_DOCK_MIN_WIDTH = 1180;
+
+function canDockForgePanel(): boolean {
+  return typeof window !== "undefined"
+    ? window.innerWidth >= FORGE_PANEL_DOCK_MIN_WIDTH
+    : false;
+}
 
 export function ForgeTemplatePanel(): JSX.Element | null {
   const {
@@ -20,6 +27,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
     queueClosePanel,
   } = useForgeTemplatePanel();
   const navigate = useNavigate();
+  const [pinAvailable, setPinAvailable] = React.useState(canDockForgePanel);
 
   const handleBrowseAllTemplates = () => {
     closePanel();
@@ -38,6 +46,18 @@ export function ForgeTemplatePanel(): JSX.Element | null {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [closePanel, open]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => {
+      setPinAvailable(canDockForgePanel());
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   const panelHoverProps = {
     onPointerEnter: (event: React.PointerEvent<HTMLElement>) => {
@@ -66,7 +86,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
 
     return (
       <aside
-        className="forge-template-panel"
+        className={`forge-template-panel forge-template-panel--${activeRegistration.surface}`}
         aria-label={activeRegistration.ariaLabel ?? activeRegistration.title}
         {...panelHoverProps}
       >
@@ -88,7 +108,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
             </span>
           </span>
           <span className="forge-template-panel__head-actions">
-            {!pinned ? (
+            {!pinned && pinAvailable ? (
               <button
                 type="button"
                 className="forge-template-panel__head-action"
@@ -148,7 +168,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
       <div className="forge-template-panel__head">
         <span className="forge-template-panel__head-title">Templates</span>
         <span className="forge-template-panel__head-actions">
-          {!pinned ? (
+          {!pinned && pinAvailable ? (
             <button
               type="button"
               className="forge-template-panel__head-action"
