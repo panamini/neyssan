@@ -21,6 +21,9 @@ body,
   overflow: hidden;
   position: relative;
   z-index: 10;
+  transition:
+    width var(--duration-fast) var(--ease-standard),
+    flex-basis var(--duration-fast) var(--ease-standard);
 }
 
 .sb--compact {
@@ -592,6 +595,30 @@ body,
 .sb-rail-button--active.sb-rail-button--panel-open .sb-rail-button__icon {
   background: var(--sf2);
   color: var(--ti);
+}
+
+@media (max-width: 767px) {
+  :root {
+    --app-nav-rail-width: var(--app-nav-rail-width-compact);
+  }
+
+  .sb {
+    overflow: visible;
+  }
+
+  .sb__nav {
+    overflow: visible;
+  }
+
+  .sb-rail-button {
+    position: relative;
+  }
+
+  .sb-rail-button__label {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
 }
 
 .sb-utility-link {
@@ -1902,6 +1929,8 @@ body,
   border-inline-end: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
   background: var(--sf1);
   box-shadow: var(--shadow-frost);
+  transition:
+    inset-inline-start var(--duration-fast) var(--ease-standard);
 }
 
 .forge-template-panel--settings {

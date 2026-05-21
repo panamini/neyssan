@@ -13,12 +13,25 @@ const productCssPaths = [
 const productCss = productCssPaths
   .map((stylePath) => readFileSync(resolve(process.cwd(), stylePath), "utf8"))
   .join("\n");
+const foundationCss = readFileSync(
+  resolve(process.cwd(), "src/styles/foundation.css"),
+  "utf8",
+);
 const dsCss = readFileSync(resolve(process.cwd(), "src/styles/ds-v2.css"), "utf8");
 
 describe("sidebar visual CSS contracts", () => {
   it("uses permanent rail tokens and icon-tile active state", () => {
+    expect(foundationCss).toMatch(
+      /--app-nav-rail-width:\s*calc\(var\(--space-8\) \+ var\(--space-4\)\);/,
+    );
+    expect(foundationCss).toMatch(
+      /--app-nav-rail-width-compact:\s*var\(--space-8\);/,
+    );
     expect(productCss).toMatch(
       /\.sb\s*\{[\s\S]*width:\s*var\(--app-nav-rail-width\);[\s\S]*flex:\s*0 0 var\(--app-nav-rail-width\);/,
+    );
+    expect(productCss).toMatch(
+      /\.sb\s*\{[\s\S]*transition:\s*[\s\S]*width var\(--duration-fast\) var\(--ease-standard\),[\s\S]*flex-basis var\(--duration-fast\) var\(--ease-standard\);/,
     );
     expect(productCss).toMatch(
       /\.sb__nav\s*\{[\s\S]*padding:\s*var\(--app-nav-rail-pad-block\) var\(--app-nav-rail-pad-inline\);/,
@@ -29,6 +42,13 @@ describe("sidebar visual CSS contracts", () => {
     expect(productCss).toMatch(
       /\.sb-rail-button__label\s*\{[\s\S]*font-size:\s*var\(--app-nav-label-size\);[\s\S]*line-height:\s*var\(--app-nav-label-line\);/,
     );
+    expect(productCss).toMatch(
+      /@media \(max-width:\s*767px\)\s*\{[\s\S]*--app-nav-rail-width:\s*var\(--app-nav-rail-width-compact\);[\s\S]*\.sb-rail-button\s*\{[\s\S]*position:\s*relative;[\s\S]*\.sb-rail-button__label\s*\{[\s\S]*visibility:\s*hidden;[\s\S]*opacity:\s*0;[\s\S]*pointer-events:\s*none;/,
+    );
+    const baseRailLabelRule =
+      productCss.match(/\.sb-rail-button__label\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(baseRailLabelRule).not.toContain("display: none;");
+    expect(productCss).toContain('[data-toolbar-tooltip-placement="inline-end"]');
     expect(productCss).toMatch(
       /\.sb-rail-button:hover\s*\{[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--tm2\);/,
     );
@@ -76,6 +96,9 @@ describe("sidebar visual CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.forge-template-panel\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset-inline-start:\s*var\(--app-nav-rail-width\);/,
+    );
+    expect(productCss).toMatch(
+      /\.forge-template-panel\s*\{[\s\S]*transition:\s*[\s\S]*inset-inline-start var\(--duration-fast\) var\(--ease-standard\);/,
     );
     expect(productCss).toContain(".forge-template-panel__collapse");
     expect(productCss).toMatch(

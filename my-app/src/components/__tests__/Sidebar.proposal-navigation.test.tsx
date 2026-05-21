@@ -189,7 +189,8 @@ describe("Sidebar permanent rail", () => {
   it("renders Templates as a global link outside forge routes", () => {
     renderSidebar();
 
-    expect(primaryNavItems().map((item) => item.getAttribute("aria-label"))).toEqual([
+    const items = primaryNavItems();
+    expect(items.map((item) => item.getAttribute("aria-label"))).toEqual([
       "Today",
       "Jobs",
       "CV",
@@ -198,6 +199,9 @@ describe("Sidebar permanent rail", () => {
       "Templates",
       "Settings",
     ]);
+    expect(items.every((item) => !item.hasAttribute("data-toolbar-tooltip"))).toBe(
+      true,
+    );
     expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
       "href",
       "/templates",
@@ -226,6 +230,46 @@ describe("Sidebar permanent rail", () => {
   it("keeps Settings anchored at the bottom of the rail", () => {
     renderSidebar();
 
+    expect(screen.getByRole("button", { name: "Settings" })).toHaveClass(
+      "sb-rail-button--bottom",
+    );
+  });
+
+  it("keeps the compact rail rendered and discoverable at 390px", () => {
+    window.innerWidth = 390;
+
+    const { container } = renderSidebar("/proposal");
+
+    const sidebar = container.querySelector(".sb");
+    expect(sidebar).toBeInTheDocument();
+    expect(sidebar).toHaveAttribute("data-rail-compact", "true");
+
+    const items = primaryNavItems();
+    expect(items.map((item) => item.getAttribute("aria-label"))).toEqual([
+      "Today",
+      "Jobs",
+      "CV",
+      "Proposal",
+      "Projects",
+      "Templates",
+      "Settings",
+    ]);
+    for (const item of items) {
+      expect(item).toHaveAttribute("aria-label");
+      expect(item).toHaveAttribute(
+        "data-toolbar-tooltip",
+        item.getAttribute("aria-label"),
+      );
+      expect(item).toHaveAttribute(
+        "data-toolbar-tooltip-placement",
+        "inline-end",
+      );
+    }
+
+    expect(screen.getByRole("button", { name: "Proposal" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getByRole("button", { name: "Settings" })).toHaveClass(
       "sb-rail-button--bottom",
     );
@@ -336,6 +380,33 @@ describe("Sidebar permanent rail", () => {
     fireEvent.click(proposal);
     expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
     expect(screen.queryByRole("complementary", { name: "CV library" })).not.toBeInTheDocument();
+  });
+
+  it("pins the CV drawer from the active CV rail item on fine pointer CV Forge", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/cv", <RegisterCvPanels />);
+
+    const cv = screen.getByRole("button", { name: "CV" });
+    expect(cv).toHaveAttribute("aria-current", "page");
+    expect(cv).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.pointerEnter(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(screen.getByRole("complementary", { name: "CV library" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Collapse drawer" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/cv");
+
+    fireEvent.click(cv);
+
+    expect(cv).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("complementary", { name: "CV library" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/cv");
   });
 
   it("keeps CV Forge Jobs as direct navigation and Projects as mixed library", () => {
