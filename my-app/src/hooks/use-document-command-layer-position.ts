@@ -61,6 +61,13 @@ function styleEntryMatches(
   return current[key] === value;
 }
 
+function splitSelectorList(selector: string) {
+  return selector
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 export function useDocumentCommandLayerPosition({
   stageRef,
   paperRef,
@@ -134,9 +141,7 @@ export function useDocumentCommandLayerPosition({
         ? stage.closest<HTMLElement>(commandCanvasSelector) ?? stage
         : stage;
       const commandCanvasRect = commandCanvas.getBoundingClientRect();
-      const anchorCandidates = Array.from(
-        paper.querySelectorAll<HTMLElement>(paperAnchorSelector),
-      );
+      const anchorSelectorGroups = splitSelectorList(paperAnchorSelector);
       const stickyTokens = window.getComputedStyle(document.documentElement);
       const stickyTopViewport =
         readCssPixelVariable(stickyTokens, "--header-height") +
@@ -151,22 +156,24 @@ export function useDocumentCommandLayerPosition({
           ? measuredToolbarHeight
           : toolbarHeight;
       const anchorCandidate =
-        (anchorCandidates.length > 0
-          ? anchorCandidates
-              .map((candidate) => {
-                const rect = candidate.getBoundingClientRect();
-                const visibleBlock =
-                  Math.min(rect.bottom, window.innerHeight) -
-                  Math.max(rect.top, stickyTopViewport);
-                return {
-                  element: candidate,
-                  rect,
-                  score: Math.max(0, visibleBlock) * Math.max(0, rect.width),
-                  distance: Math.abs(rect.top - stickyTopViewport),
-                };
-              })
-              .sort((a, b) => b.score - a.score || a.distance - b.distance)[0]
-          : null) ?? {
+        anchorSelectorGroups
+          .map((selector) =>
+            Array.from(paper.querySelectorAll<HTMLElement>(selector)),
+          )
+          .find((candidates) => candidates.length > 0)
+          ?.map((candidate) => {
+            const rect = candidate.getBoundingClientRect();
+            const visibleBlock =
+              Math.min(rect.bottom, window.innerHeight) -
+              Math.max(rect.top, stickyTopViewport);
+            return {
+              element: candidate,
+              rect,
+              score: Math.max(0, visibleBlock) * Math.max(0, rect.width),
+              distance: Math.abs(rect.top - stickyTopViewport),
+            };
+          })
+          .sort((a, b) => b.score - a.score || a.distance - b.distance)[0] ?? {
           element: paper,
           rect: paper.getBoundingClientRect(),
         };

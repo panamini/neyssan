@@ -94,6 +94,60 @@ function CommandLayerHarness({
   );
 }
 
+function CommandLayerPriorityHarness() {
+  const stageRef = React.useRef<HTMLElement | null>(null);
+  const paperRef = React.useRef<HTMLDivElement | null>(null);
+  const commandLayer = useDocumentCommandLayerPosition({
+    stageRef,
+    paperRef,
+    paperAnchorSelector: ".paper-anchor,.fallback-anchor",
+    commandCanvasSelector: ".command-canvas",
+    cssVarPrefix: "proposal",
+    toolbarSelector: "[data-testid='cv-toolbar']",
+    toolbarNaturalWidth: 520,
+    toolbarMinWidth: 300,
+    toolbarHeight: 44,
+    askHandle: {
+      iconWidth: 32,
+      height: 32,
+    },
+    safeMargin: 12,
+    gap: 12,
+    askOffsetFromPaperTop: 16,
+  });
+
+  return (
+    <div
+      className="command-canvas"
+      data-testid="command-canvas"
+      data-rect={encodeRect(0, 0, 1280, 720)}
+    >
+      <section
+        ref={stageRef}
+        data-testid="command-stage"
+        data-rect={encodeRect(0, 0, 1280, 720)}
+      >
+        <div data-testid="cv-toolbar" data-rect={encodeRect(0, 0, 520, 44)} />
+        <div ref={paperRef}>
+          <div
+            className="paper-anchor"
+            data-testid="paper-anchor"
+            data-rect={encodeRect(565, 140, 238, 337)}
+          />
+          <div
+            className="fallback-anchor"
+            data-testid="fallback-anchor"
+            data-rect={encodeRect(0, 104, 1280, 616)}
+          />
+        </div>
+        <output data-testid="toolbar-inline-start">
+          {commandLayer.style["--proposal-command-toolbar-inline-start"] ?? ""}
+        </output>
+      </section>
+    </div>
+  );
+}
+
 describe("useDocumentCommandLayerPosition", () => {
   let rectSpy: ReturnType<typeof vi.spyOn>;
 
@@ -175,6 +229,16 @@ describe("useDocumentCommandLayerPosition", () => {
     await waitFor(() => {
       expect(screen.getByTestId("ask-inline-start")).toHaveTextContent(
         "341px",
+      );
+    });
+  });
+
+  it("keeps low-zoom toolbar anchored to the prioritized paper page instead of the wider fallback", async () => {
+    render(<CommandLayerPriorityHarness />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toolbar-inline-start")).toHaveTextContent(
+        "534px",
       );
     });
   });
