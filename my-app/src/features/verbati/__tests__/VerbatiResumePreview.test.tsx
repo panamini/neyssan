@@ -8,16 +8,20 @@ import { A4_PAGE_WIDTH_PX } from "../../../lib/document-stage";
 
 const useDocumentStageLayoutMock = vi.fn(
   ({
+    zoomLevel = 1,
+    fitMode = "width",
     pageHeightPx = 1123,
   }: {
+    zoomLevel?: number;
+    fitMode?: "width" | "contain" | "none";
     pageHeightPx?: number;
   }) => ({
     availableWidth: 794,
     availableHeight: 1123,
-    stageWidth: 794,
+    stageWidth: fitMode === "none" ? 794 : 794,
     stageHeight: Math.min(1123, pageHeightPx),
-    pageWidth: 794,
-    pageHeight: pageHeightPx,
+    pageWidth: fitMode === "none" ? A4_PAGE_WIDTH_PX * zoomLevel : 794,
+    pageHeight: fitMode === "none" ? pageHeightPx * zoomLevel : pageHeightPx,
     overflowX: false,
     overflowY: pageHeightPx > 1123,
     isFit: true,
@@ -46,7 +50,11 @@ vi.mock("../../../hooks/use-document-pan", () => ({
 }));
 
 vi.mock("../../../hooks/use-document-stage-layout", () => ({
-  useDocumentStageLayout: (args: { pageHeightPx?: number }) =>
+  useDocumentStageLayout: (args: {
+    zoomLevel?: number;
+    fitMode?: "width" | "contain" | "none";
+    pageHeightPx?: number;
+  }) =>
     useDocumentStageLayoutMock(args),
 }));
 
@@ -704,6 +712,111 @@ describe("VerbatiResumePreview", () => {
         enabled: false,
       }),
     );
+  });
+
+  it.each([0.3, 0.5, 0.9, 1, 1.5, 2])(
+    "keeps CV manual zoom at %s without fit remapping",
+    (zoom) => {
+      render(
+        <VerbatiResumePreview
+          data={resumeMock}
+          stylePreset={{
+            layout: "swiss",
+            typography: "quiet-editorial",
+            palette: "sauge",
+          }}
+          hostMode="workspace"
+        />,
+      );
+
+      fireEvent.change(screen.getByRole("slider", { name: "CV zoom" }), {
+        target: { value: String(zoom) },
+      });
+
+      expect(screen.getByTestId("cv-zoom-display")).toHaveTextContent(
+        `${Math.round(zoom * 100)}%`,
+      );
+      if (zoom !== 1) {
+        expect(useDocumentStageLayoutMock.mock.lastCall?.[0]).toEqual(
+          expect.objectContaining({
+            fitMode: "none",
+            zoomLevel: zoom,
+          }),
+        );
+      }
+      expect(
+        Number.parseFloat(screen.getByTestId("cv-paper").style.width),
+      ).toBeCloseTo(A4_PAGE_WIDTH_PX * zoom, zoom === 1 ? 0 : 2);
+    },
+  );
+
+  it("keeps manual zoom display stable when the measured stage width changes", () => {
+    useDocumentStageLayoutMock
+      .mockReturnValueOnce({
+        availableWidth: 390,
+        availableHeight: 800,
+        stageWidth: 390,
+        stageHeight: 552.03,
+        pageWidth: 390,
+        pageHeight: 552.03,
+        overflowX: false,
+        overflowY: false,
+        isFit: true,
+      })
+      .mockReturnValueOnce({
+        availableWidth: 390,
+        availableHeight: 800,
+        stageWidth: 794,
+        stageHeight: 1123,
+        pageWidth: 238.2,
+        pageHeight: 336.9,
+        overflowX: false,
+        overflowY: false,
+        isFit: false,
+      })
+      .mockReturnValueOnce({
+        availableWidth: 1280,
+        availableHeight: 1123,
+        stageWidth: 794,
+        stageHeight: 1123,
+        pageWidth: 238.2,
+        pageHeight: 336.9,
+        overflowX: false,
+        overflowY: false,
+        isFit: false,
+      });
+
+    const { rerender } = render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("slider", { name: "CV zoom" }), {
+      target: { value: "0.3" },
+    });
+
+    expect(screen.getByTestId("cv-zoom-display")).toHaveTextContent("30%");
+
+    rerender(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        hostMode="workspace"
+      />,
+    );
+
+    expect(screen.getByTestId("cv-zoom-display")).toHaveTextContent("30%");
   });
 
   it("keeps workspace fit geometry single-page while exposing stacked scroll height", async () => {

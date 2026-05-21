@@ -8,18 +8,12 @@ import {
   PenLine,
 } from "@/lib/icons";
 import { Button } from "../ui";
-import type {
-  CommandLayerAskMode,
-  CommandLayerModeControlMode,
-  CommandLayerToolbarMode,
-} from "@/lib/document-command-layer-layout";
+import type { CommandLayerModeControlMode } from "@/lib/document-command-layer-layout";
 
 type CvStageBarProps = {
   mode: "edit" | "preview";
   toolbarStyle?: React.CSSProperties;
-  toolbarMode?: CommandLayerToolbarMode;
   modeControlMode?: CommandLayerModeControlMode;
-  askMode?: CommandLayerAskMode;
   commandLayerSticky?: boolean;
   templatesOpen?: boolean;
   sectionsOpen?: boolean;
@@ -35,9 +29,7 @@ type CvStageBarProps = {
 export function CvStageBar({
   mode,
   toolbarStyle,
-  toolbarMode = "wide",
   modeControlMode = "split",
-  askMode = "iconOnly",
   commandLayerSticky = false,
   templatesOpen = false,
   sectionsOpen = false,
@@ -58,15 +50,8 @@ export function CvStageBar({
   return (
     <>
       <div
-        className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-cv-stage-bar-layer dasti-toolbar--surface-tooltips"
+        className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-toolbar--surface-tooltips"
         data-sticky={commandLayerSticky ? "true" : undefined}
-        data-toolbar-density={
-          toolbarMode === "wide" || toolbarMode === "medium"
-            ? undefined
-            : toolbarMode === "ultraCompact"
-              ? "ultra"
-              : "compact"
-        }
         data-testid="cv-toolbar"
         style={toolbarStyle}
       >
@@ -199,14 +184,13 @@ export function CvStageBar({
       </div>
       {onOpenAsk ? (
         <div
-          className="dasti-proposal-skeleton-stage__ask-handle-layer dasti-cv-stage-bar__ask-handle-layer dasti-toolbar--surface-tooltips"
+          className="dasti-proposal-skeleton-stage__ask-handle-layer dasti-toolbar--surface-tooltips"
           data-sticky={commandLayerSticky ? "true" : undefined}
-          data-ask-placement={askMode === "edgeTab" ? "edge-tab" : "outside"}
           style={toolbarStyle}
         >
           <button
             type="button"
-            className="dasti-icon-button dasti-proposal-skeleton-stage__ask-handle dasti-cv-stage-bar__ask-handle"
+            className="dasti-icon-button dasti-proposal-skeleton-stage__ask-handle"
             aria-expanded={askOpen}
             aria-label="Ask"
             title="Ask"

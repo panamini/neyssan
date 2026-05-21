@@ -9,7 +9,7 @@ type UseDocumentStageLayoutOptions = {
   enabled?: boolean;
   measurementRef: React.RefObject<HTMLElement | null>;
   zoomLevel?: number;
-  fitMode?: "width" | "contain";
+  fitMode?: "width" | "contain" | "none";
   fillAvailableOnZoom?: boolean;
   includeParentMeasurement?: boolean;
   pageWidthPx?: number;
@@ -171,12 +171,14 @@ export function useDocumentStageLayout({
   const widthFitScale = measurement.availableWidth / pageWidthPx;
   const heightFitScale = measurement.availableHeight / pageHeightPx;
   const fitScale = enabled
-    ? Math.min(
-        1,
-        fitMode === "contain"
-          ? Math.min(widthFitScale, heightFitScale)
-          : widthFitScale,
-      )
+    ? fitMode === "none"
+      ? 1
+      : Math.min(
+          1,
+          fitMode === "contain"
+            ? Math.min(widthFitScale, heightFitScale)
+            : widthFitScale,
+        )
     : 1;
   const usesFilledOverflowStage =
     enabled && fillAvailableOnZoom && zoomLevel > 1 + 0.001;

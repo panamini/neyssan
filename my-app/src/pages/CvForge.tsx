@@ -62,6 +62,9 @@ import { normalizeResponsibilityAiResultForSource } from "../components/structur
 import { useToast } from "../components/ui/toast";
 import { useDocumentCommandLayerPosition } from "../hooks/use-document-command-layer-position";
 import {
+  getCommandLayerToolbarDensity,
+} from "../lib/document-command-layer-layout";
+import {
   buildAuthoritativeResumeDebugSnapshot,
   buildAuthoritativeResumeExportModel,
   readAuthoritativeResumeFromCv,
@@ -169,7 +172,6 @@ const CV_COMMAND_LAYER_ASK_HANDLE = {
 const CV_PAPER_ANCHOR_SELECTOR = [
   ".dasti-document-stage__canvas[data-document-page='true']",
   ".dasti-doc-viewport--resume-panel[data-document-stage='true']",
-  ".dasti-resume-mini-preview",
 ].join(",");
 const CV_COMMAND_LAYER_CANVAS_SELECTOR = ".dasti-cv-skeleton-forge";
 
@@ -4073,7 +4075,7 @@ export function CvForge(): JSX.Element {
     paperRef: paperStageRef,
     paperAnchorSelector: CV_PAPER_ANCHOR_SELECTOR,
     commandCanvasSelector: CV_COMMAND_LAYER_CANVAS_SELECTOR,
-    cssVarPrefix: "cv",
+    cssVarPrefix: "proposal",
     toolbarSelector: "[data-testid='cv-toolbar']",
     toolbarNaturalWidth: CV_COMMAND_LAYER_TOOLBAR_NATURAL_WIDTH,
     toolbarMinWidth: CV_COMMAND_LAYER_TOOLBAR_MIN_WIDTH,
@@ -7036,17 +7038,26 @@ export function CvForge(): JSX.Element {
           >
             <div
               ref={cvDocumentStageRef}
-              className="dasti-cv-skeleton-forge__stage"
+              className="dasti-cv-skeleton-forge__stage dasti-proposal-skeleton-stage"
+              data-testid="cv-canvas"
+              data-toolbar-mode={cvCommandToolbarMode}
+              data-mode-control-mode={cvCommandModeControlMode}
+              data-ask-mode={cvCommandAskMode}
               data-command-layer-sticky={
                 cvCommandLayerSticky ? "true" : undefined
               }
+              data-toolbar-density={getCommandLayerToolbarDensity(
+                cvCommandToolbarMode,
+              )}
+              data-ask-placement={
+                cvCommandAskMode === "edgeTab" ? "edge-tab" : "outside"
+              }
+              data-ask-density="icon"
             >
               <CvStageBar
                 mode={workspaceMode}
                 toolbarStyle={cvCommandLayerStyle}
-                toolbarMode={cvCommandToolbarMode}
                 modeControlMode={cvCommandModeControlMode}
-                askMode={cvCommandAskMode}
                 commandLayerSticky={cvCommandLayerSticky}
                 templatesOpen={cvTemplatesOpen}
                 sectionsOpen={sectionsPanelOpen}

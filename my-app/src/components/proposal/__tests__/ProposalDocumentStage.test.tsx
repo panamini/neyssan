@@ -296,7 +296,7 @@ describe("ProposalDocumentStage proposal actions", () => {
       "outside",
       "icon",
       "iconOnly",
-      378,
+      409,
       300,
     ],
     [
@@ -345,10 +345,10 @@ describe("ProposalDocumentStage proposal actions", () => {
       "wide",
       null,
       "full",
-      "edge-tab",
+      "outside",
       "icon",
-      "edgeTab",
-      980,
+      "iconOnly",
+      930,
       680,
     ],
   ])(
@@ -435,7 +435,7 @@ describe("ProposalDocumentStage proposal actions", () => {
           askHandleLayer?.style.getPropertyValue(
             "--proposal-ask-handle-block-start",
           ),
-        ).toBe("112px");
+        ).toBe("40px");
         expect(
           askHandleLayer?.style.getPropertyValue(
             "--proposal-ask-handle-inline-start",
@@ -622,7 +622,7 @@ describe("ProposalDocumentStage proposal actions", () => {
     }
   });
 
-  it("positions Ask from the paper top instead of the toolbar baseline", () => {
+  it("positions Ask from the shared command layer baseline", () => {
     const requestAnimationFrameSpy = vi
       .spyOn(window, "requestAnimationFrame")
       .mockImplementation((callback) => {
@@ -662,7 +662,7 @@ describe("ProposalDocumentStage proposal actions", () => {
         askHandleLayer?.style.getPropertyValue(
           "--proposal-ask-handle-block-start",
         ),
-      ).toBe("112px");
+      ).toBe("40px");
     } finally {
       rectSpy.mockRestore();
       requestAnimationFrameSpy.mockRestore();

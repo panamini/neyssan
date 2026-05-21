@@ -21,6 +21,10 @@ const cvRailSource = readFileSync(
   resolve(process.cwd(), "src/components/cv/CvRail.tsx"),
   "utf8",
 );
+const cvStageBarSource = readFileSync(
+  resolve(process.cwd(), "src/components/cv/CvStageBar.tsx"),
+  "utf8",
+);
 const cvSectionsOrganizerSource = readFileSync(
   resolve(process.cwd(), "src/components/cv/CvSectionsOrganizer.tsx"),
   "utf8",
@@ -146,6 +150,9 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-cv-skeleton-forge__stage\s*\{[\s\S]*--document-command-layer-rest-gutter:\s*calc\([\s\S]*var\(--space-4\)\s*\+\s*var\(--space-2\)[\s\S]*\);[\s\S]*gap:\s*var\(--space-2\);[\s\S]*padding-block-start:\s*var\(--document-command-layer-rest-gutter\);/,
     );
     expect(productCss).toMatch(
+      /\.dasti-cv-skeleton-forge__stage\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*var\(--control-sm\);[\s\S]*--editor-toolbar-icon-control-block-size:\s*var\(--control-sm\);/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-cv-page-preview-stage\s+\.dasti-doc-viewer-shell--resume-panel\s*\{[\s\S]*padding:\s*0;[\s\S]*box-shadow:\s*none;/,
     );
     expect(productCss).toMatch(
@@ -205,7 +212,23 @@ describe("CvForge toolbar CSS contracts", () => {
     expect(verbatiResumePreviewSource).toContain(
       "CV_DOCUMENT_ZOOM_STEPS = [0.3, 0.5",
     );
+    expect(verbatiResumePreviewSource).toContain(
+      "const CV_DOCUMENT_ZOOM_SLIDER_STEP = 0.01",
+    );
+    expect(verbatiResumePreviewSource).toContain(
+      "clampCvDocumentZoomLevel(Number(event.currentTarget.value))",
+    );
     expect(verbatiResumePreviewSource).toContain("visibleZoomPercent");
+    expect(verbatiResumePreviewSource).not.toContain(
+      "onStageGeometryChange?: (geometryKey: string) => void",
+    );
+    expect(cvForgeSource).not.toContain(
+      "const [cvCommandLayerRefreshKey, setCvCommandLayerRefreshKey]",
+    );
+    expect(cvForgeSource).not.toContain(
+      'refreshKey: `${workspaceMode}:${cvCommandLayerRefreshKey}`',
+    );
+    expect(cvForgeSource).not.toContain("cvCommandLayerGeometryKey");
     expect(verbatiResumePreviewSource).not.toContain("MagnifyingGlassMinus");
     expect(verbatiResumePreviewSource).not.toContain("MagnifyingGlassPlus");
     expect(verbatiResumePreviewSource).not.toContain(
@@ -225,6 +248,38 @@ describe("CvForge toolbar CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-cv-stage-footer__meta\s*\{[\s\S]*display:\s*none;[\s\S]*\.dasti-cv-stage-footer__zoom-slider\s*\{[\s\S]*flex:\s*1 1 auto;/,
+    );
+  });
+
+  it("uses the Proposal Ask handle surface tokens in CV Forge", () => {
+    expect(cvStageBarSource).toMatch(
+      /className="dasti-icon-button dasti-proposal-skeleton-stage__ask-handle"/,
+    );
+    expect(cvStageBarSource).toContain(
+      'className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-toolbar--surface-tooltips"',
+    );
+    expect(cvForgeSource).toContain(
+      'className="dasti-cv-skeleton-forge__stage dasti-proposal-skeleton-stage"',
+    );
+    expect(cvForgeSource).toContain(
+      'data-toolbar-density={getCommandLayerToolbarDensity(',
+    );
+    expect(cvForgeSource).toContain('cssVarPrefix: "proposal"');
+    expect(cvForgeSource).toContain(
+      "\".dasti-document-stage__canvas[data-document-page='true']\"",
+    );
+    expect(cvForgeSource).toContain(
+      "\".dasti-doc-viewport--resume-panel[data-document-stage='true']\"",
+    );
+    expect(cvForgeSource).not.toContain(".dasti-resume-mini-preview");
+    expect(cvStageBarSource).not.toContain("dasti-cv-stage-bar__ask-handle\"");
+    expect(cvStageBarSource).not.toContain("dasti-cv-stage-bar-layer");
+    expect(cvStageBarSource).not.toContain("data-toolbar-density=");
+    expect(productCss).not.toMatch(/\.dasti-cv-stage-bar__ask-handle\s*\{/);
+    expect(productCss).not.toContain(".dasti-cv-stage-bar-layer");
+    expect(productCss).not.toContain(".dasti-cv-stage-bar__ask-handle-layer");
+    expect(productCss).not.toMatch(
+      /\.dark\s+\.dasti-cv-stage-bar__mode button,[\s\S]*\.dark\s+\.dasti-cv-stage-bar__primary-action,[\s\S]*\.dark\s+\.dasti-cv-stage-bar__ask-handle\s*\{[\s\S]*background:\s*transparent;/,
     );
   });
 
