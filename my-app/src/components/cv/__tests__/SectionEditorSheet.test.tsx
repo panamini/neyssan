@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SectionEditorSheet } from "../SectionEditorSheet";
 import type { CvSection } from "../../../types/cvDocument";
@@ -45,5 +45,393 @@ describe("SectionEditorSheet", () => {
 
     expect(screen.getByLabelText("Name")).toHaveValue("Grace Hopper");
     expect(screen.getByLabelText("Target Role")).toHaveValue("Engineering Manager");
+  });
+
+  it("keeps X close as save-and-close for edited fields", () => {
+    const onOpenChange = vi.fn();
+    const onSave = vi.fn();
+
+    render(
+      <SectionEditorSheet
+        open
+        section={buildProfileSection("Ada Lovelace", "Product Designer")}
+        onOpenChange={onOpenChange}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Ada Byron" },
+    });
+    fireEvent.click(screen.getByLabelText("Close panel"));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        structuredContent: [
+          expect.objectContaining({
+            name: "Ada Byron",
+            desiredPosition: "Product Designer",
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("keeps overlay close as save-and-close for edited fields", () => {
+    const onOpenChange = vi.fn();
+    const onSave = vi.fn();
+
+    render(
+      <SectionEditorSheet
+        open
+        section={buildProfileSection("Ada Lovelace", "Product Designer")}
+        onOpenChange={onOpenChange}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Ada Byron" },
+    });
+    fireEvent.click(screen.getByLabelText("Close panel background"));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        structuredContent: [
+          expect.objectContaining({
+            name: "Ada Byron",
+            desiredPosition: "Product Designer",
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("keeps Escape close as save-and-close for edited fields", () => {
+    const onOpenChange = vi.fn();
+    const onSave = vi.fn();
+
+    render(
+      <SectionEditorSheet
+        open
+        section={buildProfileSection("Ada Lovelace", "Product Designer")}
+        onOpenChange={onOpenChange}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Ada Byron" },
+    });
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        structuredContent: [
+          expect.objectContaining({
+            name: "Ada Byron",
+            desiredPosition: "Product Designer",
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("keeps compact Save as save-and-close for edited fields", () => {
+    const onOpenChange = vi.fn();
+    const onSave = vi.fn();
+
+    render(
+      <SectionEditorSheet
+        open
+        section={buildProfileSection("Ada Lovelace", "Product Designer")}
+        onOpenChange={onOpenChange}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Ada Byron" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        structuredContent: [
+          expect.objectContaining({
+            name: "Ada Byron",
+            desiredPosition: "Product Designer",
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("keeps the 350ms autosave-on-field-edit behavior", () => {
+    vi.useFakeTimers();
+    const onSave = vi.fn();
+
+    try {
+      render(
+        <SectionEditorSheet
+          open
+          section={buildProfileSection("Ada Lovelace", "Product Designer")}
+          onOpenChange={vi.fn()}
+          onSave={onSave}
+        />,
+      );
+
+      fireEvent.change(screen.getByLabelText("Name"), {
+        target: { value: "Ada Byron" },
+      });
+
+      act(() => {
+        vi.advanceTimersByTime(349);
+      });
+      expect(onSave).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(onSave).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          structuredContent: [
+            expect.objectContaining({
+              name: "Ada Byron",
+              desiredPosition: "Product Designer",
+            }),
+          ],
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps discard/revert behavior as a compact affordance", () => {
+    const onOpenChange = vi.fn();
+    const onSave = vi.fn();
+
+    render(
+      <SectionEditorSheet
+        open
+        section={buildProfileSection("Ada Lovelace", "Product Designer")}
+        onOpenChange={onOpenChange}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Name"), {
+      target: { value: "Ada Byron" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        structuredContent: [
+          expect.objectContaining({
+            name: "Ada Lovelace",
+            desiredPosition: "Product Designer",
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("uses island chrome without the old footer Cancel action", () => {
+    render(
+      <SectionEditorSheet
+        open
+        section={buildProfileSection("Ada Lovelace", "Product Designer")}
+        onOpenChange={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    expect(document.body.querySelector(".ds-island-panel")).toBeInTheDocument();
+    expect(document.body.querySelector(".ds-sheet__footer")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Discard changes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      "profile",
+      buildProfileSection("Ada Lovelace", "Product Designer"),
+      "Target Role",
+    ],
+    [
+      "contact",
+      {
+        ...buildProfileSection("Ada Lovelace", "Product Designer"),
+        id: "contact",
+        type: "contact",
+        title: "Contact",
+      } as CvSection,
+      "Email",
+    ],
+    [
+      "summary",
+      {
+        id: "summary",
+        type: "summary",
+        title: "Summary",
+        blocks: [{ id: "summary-block", type: "text", title: "Summary", content: "Builder." }],
+        structuredContent: [{ id: "summary-item", summary: "Builder." }],
+      } as CvSection,
+      "Summary body",
+    ],
+    [
+      "experience",
+      {
+        id: "experience",
+        type: "experience",
+        title: "Experience",
+        blocks: [],
+        structuredContent: [
+          {
+            id: "experience-1",
+            company: "Analytical Engines",
+            position: "Engineer",
+            responsibilities: "Built useful machines.",
+          },
+        ],
+      } as CvSection,
+      "Role 1",
+    ],
+    [
+      "education",
+      {
+        id: "education",
+        type: "education",
+        title: "Education",
+        blocks: [],
+        structuredContent: [
+          {
+            id: "education-1",
+            degree: "MSc",
+            institution: "London",
+            fieldOfStudy: "Math",
+          },
+        ],
+      } as CvSection,
+      "Degree 1",
+    ],
+    [
+      "projects",
+      {
+        id: "projects",
+        type: "projects",
+        title: "Projects",
+        blocks: [],
+        structuredContent: [
+          {
+            id: "project-1",
+            title: "Compiler",
+            meta: "TypeScript",
+            description: "Built a compiler.",
+          },
+        ],
+      } as CvSection,
+      "Name 1",
+    ],
+    [
+      "skills",
+      {
+        id: "skills",
+        type: "skills",
+        title: "Skills",
+        blocks: [],
+        structuredContent: [{ id: "skill-1", name: "TypeScript" }],
+      } as CvSection,
+      "Skill",
+    ],
+    [
+      "languages",
+      {
+        id: "languages",
+        type: "languages",
+        title: "Languages",
+        blocks: [],
+        structuredContent: [{ id: "language-1", name: "English", level: "Native" }],
+      } as CvSection,
+      "Language",
+    ],
+    [
+      "hobbies",
+      {
+        id: "hobbies",
+        type: "custom",
+        title: "Hobbies",
+        blocks: [],
+        structuredContent: [{ id: "hobby-1", name: "Chess" }],
+      } as CvSection,
+      "Hobby",
+    ],
+    [
+      "achievements",
+      {
+        id: "achievements",
+        type: "achievements",
+        title: "Achievements",
+        blocks: [],
+        structuredContent: [{ id: "achievement-1", text: "Shipped the system." }],
+      } as CvSection,
+      "Line 1",
+    ],
+    [
+      "certifications",
+      {
+        id: "certifications",
+        type: "certifications",
+        title: "Certifications",
+        blocks: [],
+        structuredContent: [
+          {
+            id: "certification-1",
+            certificationName: "AWS",
+            issuingOrganization: "Amazon",
+          },
+        ],
+      } as CvSection,
+      "Name 1",
+    ],
+    [
+      "custom text",
+      {
+        id: "custom",
+        type: "custom",
+        title: "Additional Information",
+        blocks: [
+          {
+            id: "custom-block",
+            type: "text",
+            title: "Additional Information",
+            content: "Open source work.",
+            plainText: "Open source work.",
+          },
+        ],
+        structuredContent: [],
+      } as CvSection,
+      "Body",
+    ],
+  ])("renders the %s editor body through the shared island shell", (_name, section, label) => {
+    render(
+      <SectionEditorSheet
+        open
+        section={section}
+        onOpenChange={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    expect(document.body.querySelector(".ds-island-panel")).toBeInTheDocument();
+    expect(screen.getByLabelText(label)).toBeInTheDocument();
   });
 });

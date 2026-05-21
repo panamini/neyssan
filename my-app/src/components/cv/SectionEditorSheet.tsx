@@ -15,7 +15,7 @@ import {
 } from "remirror/extensions";
 import type { RemirrorJSON } from "remirror";
 import { api } from "../../../convex/_generated/api";
-import { Button, Sheet } from "../ui";
+import { Button, IslandPanel } from "../ui";
 import AiSuggestionCard from "../ai/AiSuggestionCard";
 import type { CvSection } from "../../types/cvDocument";
 import { formatSectionDisplayTitle } from "../../lib/cv-section-organization";
@@ -35,25 +35,6 @@ function getSectionItemCount(section: CvSection | null): number {
     return section.blocks.length;
   }
   return 0;
-}
-
-function getSectionHelper(section: CvSection | null): string {
-  if (!section) return "Pick a section in the paper or rail to start.";
-  switch (section.type) {
-    case "profile":
-    case "contact":
-      return "Edit name, target role, and contact fields.";
-    case "experience":
-      return "Edit roles, companies, dates, and bullet points.";
-    case "education":
-      return "Edit schools, degrees, dates, and location.";
-    case "skills":
-      return "Edit skill chips and proficiency labels.";
-    case "languages":
-      return "Edit languages and proficiency labels.";
-    default:
-      return "Edit this section without changing parser or export behavior.";
-  }
 }
 
 type SectionEditorSheetProps = {
@@ -1075,21 +1056,20 @@ export function SectionEditorSheet({
     if (!editableSection) return null;
     return (
       <div className="dasti-cv-section-stack">
-        <div className="dasti-cv-section-card__head">
-          <span />
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            iconLeft={<Wand2 size={14} strokeWidth={1.8} />}
-            disabled={isSummaryAiLoading}
-            onClick={() => void runSummaryRewriteAi()}
-          >
-            {isSummaryAiLoading ? "Rewriting" : "Rewrite summary"}
-          </Button>
-        </div>
         <div className="dasti-cv-section-field dasti-cv-section-field--wide">
-          <span>{textInputLabel(title, "body")}</span>
+          <div className="dasti-cv-section-field__topline">
+            <span className="sr-only">{textInputLabel(title, "body")}</span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              iconLeft={<Wand2 size={14} strokeWidth={1.8} />}
+              disabled={isSummaryAiLoading}
+              onClick={() => void runSummaryRewriteAi()}
+            >
+              {isSummaryAiLoading ? "Rewriting" : "Rewrite"}
+            </Button>
+          </div>
           <DrawerRichTextEditor
             key={`${String(editableSection.id ?? "summary")}:summary`}
             ariaLabel="Summary body"
@@ -1145,7 +1125,7 @@ export function SectionEditorSheet({
               >
                 {fieldAiLoadingKey === `experience:${String(item.id ?? index)}`
                   ? "Improving"
-                  : "Improve responsibilities"}
+                  : "Improve"}
               </Button>
             </div>
             <Field
@@ -1310,7 +1290,7 @@ export function SectionEditorSheet({
               >
                 {fieldAiLoadingKey === `projects:${String(item.id ?? index)}`
                   ? "Improving"
-                  : "Improve description"}
+                  : "Improve"}
               </Button>
             </div>
             <Field
@@ -1493,10 +1473,7 @@ export function SectionEditorSheet({
           >
             Add
           </Button>
-        </form>
-
-        {sectionId && onRunListAiSuggestion ? (
-          <div className="dasti-cv-pill-editor__toolbar">
+          {sectionId && onRunListAiSuggestion ? (
             <Button
               type="button"
               variant="secondary"
@@ -1511,8 +1488,8 @@ export function SectionEditorSheet({
                   ? "Refresh suggestions"
                   : "Suggest with AI"}
             </Button>
-          </div>
-        ) : null}
+          ) : null}
+        </form>
 
         {scopedListSuggestion ? (
           <div
@@ -1732,23 +1709,24 @@ export function SectionEditorSheet({
     const suggestionKey = `text:${getSectionDraftKey(editableSection) ?? "section"}`;
     return (
       <div className="dasti-cv-section-stack">
-        <div className="dasti-cv-section-card__head">
-          <span />
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            iconLeft={<Wand2 size={14} strokeWidth={1.8} />}
-            disabled={fieldAiLoadingKey === suggestionKey}
-            onClick={() => void runTextSectionAi()}
-          >
-            {fieldAiLoadingKey === suggestionKey ? "Cleaning" : "Clean up text"}
-          </Button>
-        </div>
-        <label className="dasti-cv-section-field dasti-cv-section-field--wide">
-          <span>{textInputLabel(title, "body")}</span>
+        <div className="dasti-cv-section-field dasti-cv-section-field--wide">
+          <span className="sr-only">{textInputLabel(title, "body")}</span>
+          <span className="dasti-cv-section-field__topline">
+            <span aria-hidden="true" />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              iconLeft={<Wand2 size={14} strokeWidth={1.8} />}
+              disabled={fieldAiLoadingKey === suggestionKey}
+              onClick={() => void runTextSectionAi()}
+            >
+              {fieldAiLoadingKey === suggestionKey ? "Cleaning" : "Rewrite"}
+            </Button>
+          </span>
           <textarea
             className="ds-field ds-field--textarea"
+            aria-label={textInputLabel(title, "body")}
             value={readSectionText(editableSection)}
             onKeyDown={(event) => {
               if (event.key === "Enter") event.stopPropagation();
@@ -1757,7 +1735,7 @@ export function SectionEditorSheet({
               commitSection(updateTextBlock(editableSection, event.currentTarget.value))
             }
           />
-        </label>
+        </div>
         {fieldAiSuggestion?.key === suggestionKey ? (
           <AiSuggestionCard
             compact
@@ -1808,7 +1786,7 @@ export function SectionEditorSheet({
   }
 
   return (
-    <Sheet
+    <IslandPanel
       open={open}
       onOpenChange={(nextOpen) => {
         if (nextOpen) {
@@ -1818,35 +1796,22 @@ export function SectionEditorSheet({
         saveAndClose();
       }}
       title={title}
-      description={getSectionHelper(section)}
+      meta={itemCount > 1 ? `${itemCount} items` : undefined}
+      ariaLabel={title}
       className="dasti-cv-section-sheet-panel"
-      overlayClassName="dasti-cv-section-sheet-overlay"
-      footer={
-        <>
-          <Button type="button" variant="ghost" size="md" onClick={closeAndDiscard}>
-            Cancel
-          </Button>
-          <span className="dasti-proposal-safe-send__footer-spacer" />
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            onClick={saveAndClose}
-          >
-            Save
-          </Button>
-        </>
-      }
+      discardAction={{
+        label: "Discard changes",
+        onClick: closeAndDiscard,
+      }}
+      saveAction={{
+        label: "Save",
+        onClick: saveAndClose,
+      }}
     >
       <div className="dasti-cv-section-sheet">
-        {itemCount > 1 ? (
-          <div className="dasti-cv-section-sheet__summary">
-            <span>{itemCount} items</span>
-          </div>
-        ) : null}
         {renderBody()}
       </div>
-    </Sheet>
+    </IslandPanel>
   );
 }
 

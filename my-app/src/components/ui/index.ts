@@ -31,3 +31,5 @@ export { Menu } from "./menu";
 export type { MenuItem, MenuProps, MenuSection } from "./menu";
 export { Sheet } from "./sheet";
 export type { SheetProps } from "./sheet";
+export { IslandPanel } from "./island-panel";
+export type { IslandPanelProps } from "./island-panel";

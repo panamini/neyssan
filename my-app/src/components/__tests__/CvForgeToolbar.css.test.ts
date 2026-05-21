@@ -199,6 +199,18 @@ describe("CvForge toolbar CSS contracts", () => {
     );
   });
 
+  it("keeps the command-layer CV toolbar from wrapping left in compact sticky states", () => {
+    const compactStageBarRule = productCss.match(
+      /@media\s*\(max-width:\s*1419px\)\s*\{[\s\S]*?\.dasti-cv-stage-bar\s*\{(?<rule>[\s\S]*?)\}/,
+    )?.groups?.rule;
+
+    expect(compactStageBarRule).not.toContain("flex-wrap: wrap");
+    expect(compactStageBarRule).toContain("flex-wrap: nowrap");
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-bar\s*\{[\s\S]*flex-wrap:\s*nowrap;/,
+    );
+  });
+
   it("uses a centered side handle for the ATS audit drawer close control", () => {
     expect(productCss).toMatch(
       /\.dasti-cv-ats-sheet \.ds-sheet__close\s*\{[\s\S]*display:\s*none;/,

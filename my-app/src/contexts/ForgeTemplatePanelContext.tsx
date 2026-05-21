@@ -17,7 +17,7 @@ export type ForgeRailSurface =
   | "proposals"
   | "settings";
 
-export type ForgePanelOpenMode = "peek" | "pinned";
+export type ForgePanelOpenMode = "closed" | "peek" | "overlay" | "docked";
 
 export type ForgeTemplateItem = {
   id: string;
@@ -63,17 +63,13 @@ export type ForgePanelRegistration =
 
 type ForgeTemplatePanelContextValue = {
   open: boolean;
-  openMode: ForgePanelOpenMode | null;
+  openMode: ForgePanelOpenMode;
   activeSurface: ForgeRailSurface | null;
-  pinnedSurface: ForgeRailSurface | null;
+  dockedSurface: ForgeRailSurface | null;
   activeRegistration: ForgePanelRegistration | null;
   openSurface: (
     surface: ForgeRailSurface,
     options?: { mode?: ForgePanelOpenMode },
-  ) => void;
-  togglePinnedSurface: (
-    surface: ForgeRailSurface,
-    options?: { unpinBehavior?: "peek" | "close" },
   ) => void;
   closePanel: () => void;
   queueOpenSurface: (surface: ForgeRailSurface) => void;
@@ -85,12 +81,11 @@ type ForgeTemplatePanelContextValue = {
 
 const DEFAULT_FORGE_TEMPLATE_PANEL_CONTEXT: ForgeTemplatePanelContextValue = {
   open: false,
-  openMode: null,
+  openMode: "closed",
   activeSurface: null,
-  pinnedSurface: null,
+  dockedSurface: null,
   activeRegistration: null,
   openSurface: () => undefined,
-  togglePinnedSurface: () => undefined,
   closePanel: () => undefined,
   queueOpenSurface: () => undefined,
   queueClosePanel: () => undefined,
@@ -115,16 +110,15 @@ export function ForgeTemplatePanelProvider({
   const openIntentTimerRef = React.useRef<number | null>(null);
   const closeIntentTimerRef = React.useRef<number | null>(null);
   const [open, setOpen] = React.useState(false);
-  const [openMode, setOpenMode] = React.useState<ForgePanelOpenMode | null>(
-    null,
-  );
+  const [openMode, setOpenMode] =
+    React.useState<ForgePanelOpenMode>("closed");
   const [activeSurface, setActiveSurface] =
     React.useState<ForgeRailSurface | null>(null);
-  const [pinnedSurface, setPinnedSurface] =
+  const [dockedSurface, setDockedSurface] =
     React.useState<ForgeRailSurface | null>(null);
   const activeSurfaceRef = React.useRef<ForgeRailSurface | null>(null);
-  const openModeRef = React.useRef<ForgePanelOpenMode | null>(null);
-  const pinnedSurfaceRef = React.useRef<ForgeRailSurface | null>(null);
+  const openModeRef = React.useRef<ForgePanelOpenMode>("closed");
+  const dockedSurfaceRef = React.useRef<ForgeRailSurface | null>(null);
   const [registrations, setRegistrations] = React.useState<
     Partial<Record<ForgeRailSurface, ForgePanelRegistration>>
   >({});
@@ -138,8 +132,8 @@ export function ForgeTemplatePanelProvider({
   }, [openMode]);
 
   React.useEffect(() => {
-    pinnedSurfaceRef.current = pinnedSurface;
-  }, [pinnedSurface]);
+    dockedSurfaceRef.current = dockedSurface;
+  }, [dockedSurface]);
 
   const clearOpenIntent = React.useCallback(() => {
     if (openIntentTimerRef.current === null) return;
@@ -158,58 +152,18 @@ export function ForgeTemplatePanelProvider({
       surface: ForgeRailSurface,
       options?: { mode?: ForgePanelOpenMode },
     ) => {
-      const mode = options?.mode ?? "pinned";
+      const mode =
+        options?.mode ?? (openModeRef.current === "docked" ? "docked" : "overlay");
       clearOpenIntent();
       clearCloseIntent();
-      activeSurfaceRef.current = surface;
+      const nextSurface = mode === "closed" ? null : surface;
+      activeSurfaceRef.current = nextSurface;
       openModeRef.current = mode;
-      pinnedSurfaceRef.current = mode === "pinned" ? surface : null;
-      setActiveSurface(surface);
+      dockedSurfaceRef.current = mode === "docked" ? surface : null;
+      setActiveSurface(nextSurface);
       setOpenMode(mode);
-      setPinnedSurface(mode === "pinned" ? surface : null);
-      setOpen(true);
-    },
-    [clearCloseIntent, clearOpenIntent],
-  );
-
-  const togglePinnedSurface = React.useCallback(
-    (
-      surface: ForgeRailSurface,
-      options?: { unpinBehavior?: "peek" | "close" },
-    ) => {
-      clearOpenIntent();
-      clearCloseIntent();
-      const samePinnedSurface =
-        pinnedSurfaceRef.current === surface &&
-        activeSurfaceRef.current === surface &&
-        openModeRef.current === "pinned";
-
-      if (samePinnedSurface) {
-        pinnedSurfaceRef.current = null;
-        setPinnedSurface(null);
-        if (options?.unpinBehavior === "close") {
-          activeSurfaceRef.current = null;
-          openModeRef.current = null;
-          setOpen(false);
-          setOpenMode(null);
-          setActiveSurface(null);
-          return;
-        }
-        setOpen(true);
-        activeSurfaceRef.current = surface;
-        openModeRef.current = "peek";
-        setOpenMode("peek");
-        setActiveSurface(surface);
-        return;
-      }
-
-      setOpen(true);
-      activeSurfaceRef.current = surface;
-      openModeRef.current = "pinned";
-      pinnedSurfaceRef.current = surface;
-      setOpenMode("pinned");
-      setPinnedSurface(surface);
-      setActiveSurface(surface);
+      setDockedSurface(mode === "docked" ? surface : null);
+      setOpen(mode !== "closed");
     },
     [clearCloseIntent, clearOpenIntent],
   );
@@ -218,28 +172,35 @@ export function ForgeTemplatePanelProvider({
     clearOpenIntent();
     clearCloseIntent();
     activeSurfaceRef.current = null;
-    openModeRef.current = null;
-    pinnedSurfaceRef.current = null;
+    openModeRef.current = "closed";
+    dockedSurfaceRef.current = null;
     setOpen(false);
-    setOpenMode(null);
-    setPinnedSurface(null);
+    setOpenMode("closed");
+    setDockedSurface(null);
     setActiveSurface(null);
   }, [clearCloseIntent, clearOpenIntent]);
 
   const queueOpenSurface = React.useCallback(
     (surface: ForgeRailSurface) => {
-      if (pinnedSurfaceRef.current) return;
+      if (openModeRef.current === "overlay" || openModeRef.current === "docked") {
+        return;
+      }
       clearOpenIntent();
       clearCloseIntent();
       openIntentTimerRef.current = window.setTimeout(() => {
         openIntentTimerRef.current = null;
-        if (pinnedSurfaceRef.current) return;
+        if (
+          openModeRef.current === "overlay" ||
+          openModeRef.current === "docked"
+        ) {
+          return;
+        }
         activeSurfaceRef.current = surface;
         openModeRef.current = "peek";
-        pinnedSurfaceRef.current = null;
+        dockedSurfaceRef.current = null;
         setActiveSurface(surface);
         setOpenMode("peek");
-        setPinnedSurface(null);
+        setDockedSurface(null);
         setOpen(true);
       }, HOVER_OPEN_DELAY_MS);
     },
@@ -247,15 +208,15 @@ export function ForgeTemplatePanelProvider({
   );
 
   const queueClosePanel = React.useCallback(() => {
-    if (pinnedSurfaceRef.current) return;
+    if (openModeRef.current !== "peek") return;
     clearCloseIntent();
     closeIntentTimerRef.current = window.setTimeout(() => {
       closeIntentTimerRef.current = null;
-      if (pinnedSurfaceRef.current) return;
+      if (openModeRef.current !== "peek") return;
       activeSurfaceRef.current = null;
-      openModeRef.current = null;
+      openModeRef.current = "closed";
       setOpen(false);
-      setOpenMode(null);
+      setOpenMode("closed");
       setActiveSurface(null);
     }, HOVER_CLOSE_DELAY_MS);
   }, [clearCloseIntent]);
@@ -331,10 +292,9 @@ export function ForgeTemplatePanelProvider({
       open,
       openMode,
       activeSurface,
-      pinnedSurface,
+      dockedSurface,
       activeRegistration,
       openSurface,
-      togglePinnedSurface,
       closePanel,
       queueOpenSurface,
       queueClosePanel,
@@ -350,12 +310,11 @@ export function ForgeTemplatePanelProvider({
       open,
       openMode,
       openSurface,
-      pinnedSurface,
+      dockedSurface,
       queueClosePanel,
       queueOpenSurface,
       registerTemplates,
       registerPanel,
-      togglePinnedSurface,
     ],
   );
 

@@ -21,9 +21,6 @@ body,
   overflow: hidden;
   position: relative;
   z-index: 10;
-  transition:
-    width var(--duration-fast) var(--ease-standard),
-    flex-basis var(--duration-fast) var(--ease-standard);
 }
 
 .sb--compact {
@@ -1931,8 +1928,6 @@ body,
   border-inline-end: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
   background: var(--sf1);
   box-shadow: var(--shadow-frost);
-  transition:
-    inset-inline-start var(--duration-fast) var(--ease-standard);
 }
 
 .forge-template-panel--settings {

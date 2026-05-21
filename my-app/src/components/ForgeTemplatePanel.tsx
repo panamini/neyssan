@@ -8,13 +8,6 @@ import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../lib/document-stage";
 const TEMPLATE_THUMBNAIL_WIDTH_PX = 156;
 const TEMPLATE_THUMBNAIL_SCALE =
   TEMPLATE_THUMBNAIL_WIDTH_PX / A4_PAGE_WIDTH_PX;
-const FORGE_PANEL_DOCK_MIN_WIDTH = 1180;
-
-function canDockForgePanel(): boolean {
-  return typeof window !== "undefined"
-    ? window.innerWidth >= FORGE_PANEL_DOCK_MIN_WIDTH
-    : false;
-}
 
 export function ForgeTemplatePanel(): JSX.Element | null {
   const {
@@ -27,7 +20,6 @@ export function ForgeTemplatePanel(): JSX.Element | null {
     queueClosePanel,
   } = useForgeTemplatePanel();
   const navigate = useNavigate();
-  const [pinAvailable, setPinAvailable] = React.useState(canDockForgePanel);
 
   const handleBrowseAllTemplates = () => {
     closePanel();
@@ -47,18 +39,6 @@ export function ForgeTemplatePanel(): JSX.Element | null {
     };
   }, [closePanel, open]);
 
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    const handleResize = () => {
-      setPinAvailable(canDockForgePanel());
-    };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
-
   const panelHoverProps = {
     onPointerEnter: (event: React.PointerEvent<HTMLElement>) => {
       if (event.pointerType === "touch") return;
@@ -73,9 +53,10 @@ export function ForgeTemplatePanel(): JSX.Element | null {
   if (!open || !activeRegistration) {
     return null;
   }
-  const pinned = openMode === "pinned";
+  const docked = openMode === "docked";
+  const showCollapse = openMode === "overlay" || docked;
   const handlePinDrawer = () => {
-    openSurface(activeRegistration.surface, { mode: "pinned" });
+    openSurface(activeRegistration.surface, { mode: "docked" });
   };
 
   if (activeRegistration.kind === "custom") {
@@ -87,6 +68,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
     return (
       <aside
         className={`forge-template-panel forge-template-panel--${activeRegistration.surface}`}
+        data-mode={openMode}
         aria-label={activeRegistration.ariaLabel ?? activeRegistration.title}
         {...panelHoverProps}
       >
@@ -108,7 +90,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
             </span>
           </span>
           <span className="forge-template-panel__head-actions">
-            {!pinned && pinAvailable ? (
+            {!docked ? (
               <button
                 type="button"
                 className="forge-template-panel__head-action"
@@ -132,7 +114,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
             ) : null}
           </span>
         </div>
-        {pinned ? (
+        {showCollapse ? (
           <button
             type="button"
             className="forge-template-panel__collapse"
@@ -162,13 +144,14 @@ export function ForgeTemplatePanel(): JSX.Element | null {
   return (
     <aside
       className="forge-template-panel"
+      data-mode={openMode}
       aria-label={activeRegistration.title}
       {...panelHoverProps}
     >
       <div className="forge-template-panel__head">
         <span className="forge-template-panel__head-title">Templates</span>
         <span className="forge-template-panel__head-actions">
-          {!pinned && pinAvailable ? (
+          {!docked ? (
             <button
               type="button"
               className="forge-template-panel__head-action"
@@ -184,13 +167,11 @@ export function ForgeTemplatePanel(): JSX.Element | null {
             onClick={handleBrowseAllTemplates}
           >
             Open Templates
-            {activeRegistration.footer?.icon ?? (
-              <ArrowSquareOut size={13} aria-hidden="true" />
-            )}
+            <ArrowSquareOut size={13} aria-hidden="true" />
           </button>
         </span>
       </div>
-      {pinned ? (
+      {showCollapse ? (
         <button
           type="button"
           className="forge-template-panel__collapse"
