@@ -7909,6 +7909,10 @@
 
 .dasti-proposal-skeleton-stage__bar {
   --proposal-command-toolbar-min-width: 300px;
+  position: fixed;
+  z-index: 5;
+  inset-block-start: var(--proposal-command-toolbar-block-start, var(--space-3));
+  inset-inline-start: var(--proposal-command-toolbar-inline-start, var(--proposal-toolbar-paper-left, 0));
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -7920,7 +7924,7 @@
   box-sizing: border-box;
   overflow: visible;
   margin-inline: 0;
-  margin-inline-start: var(--proposal-command-toolbar-left, var(--proposal-toolbar-paper-left, 0));
+  margin-inline-start: 0;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -7988,6 +7992,96 @@
     blur(var(--frost-blur, 14px));
 }
 
+.dark .dasti-proposal-skeleton-stage__toolbar-main {
+  border-color: var(--color-border-contrast);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.dark .dasti-proposal-skeleton-stage__mode,
+.dark .dasti-proposal-skeleton-stage .dasti-proposal-mode-toggle--single {
+  border-color: var(--color-border-contrast);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.dark .dasti-proposal-skeleton-stage__mode button,
+.dark .dasti-proposal-skeleton-stage__action-plain,
+.dark
+  .dasti-proposal-skeleton-stage__primary-action:not(.dasti-proposal-skeleton-stage__primary-action--draft) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.dark .dasti-proposal-skeleton-stage__mode button:hover,
+.dark .dasti-proposal-skeleton-stage__mode button:focus-visible,
+.dark .dasti-proposal-skeleton-stage__mode button[data-selected="true"],
+.dark .dasti-proposal-skeleton-stage .dasti-proposal-mode-toggle--single:hover,
+.dark .dasti-proposal-skeleton-stage .dasti-proposal-mode-toggle--single:focus-visible,
+.dark .dasti-proposal-skeleton-stage__action-plain:hover,
+.dark .dasti-proposal-skeleton-stage__action-plain:focus-visible,
+.dark .dasti-proposal-skeleton-stage__action-plain[aria-expanded="true"],
+.dark
+  .dasti-proposal-skeleton-stage__primary-action:not(.dasti-proposal-skeleton-stage__primary-action--draft):hover:not(:disabled),
+.dark
+  .dasti-proposal-skeleton-stage__primary-action:not(.dasti-proposal-skeleton-stage__primary-action--draft):focus-visible,
+.dark
+  .dasti-proposal-skeleton-stage__primary-action:not(.dasti-proposal-skeleton-stage__primary-action--draft)[aria-expanded="true"] {
+  border-color: var(--color-border-contrast);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  box-shadow: none;
+}
+
+.dark .dasti-proposal-skeleton-stage__primary-action--draft {
+  border-color: color-mix(in srgb, var(--color-accent) 28%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 10%,
+    var(--color-surface-raised)
+  );
+  color: var(--color-accent-hover);
+  box-shadow: none;
+}
+
+.dark .dasti-proposal-skeleton-stage__primary-action--draft:hover:not(:disabled),
+.dark .dasti-proposal-skeleton-stage__primary-action--draft:focus-visible,
+.dark .dasti-proposal-skeleton-stage__primary-action--draft[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--color-accent) 38%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 16%,
+    var(--color-surface-raised)
+  );
+  color: var(--color-accent-hover);
+  box-shadow: none;
+}
+
+.dark .dasti-proposal-skeleton-stage__primary-action--draft[aria-expanded="true"] {
+  background: color-mix(
+    in srgb,
+    var(--color-accent-soft) 72%,
+    var(--color-surface-raised)
+  );
+  color: var(--color-accent-hover);
+}
+
+.dark
+  .dasti-proposal-skeleton-stage__primary-action--draft:hover:not(:disabled)
+  > span[aria-hidden="true"],
+.dark
+  .dasti-proposal-skeleton-stage__primary-action--draft:focus-visible
+  > span[aria-hidden="true"],
+.dark
+  .dasti-proposal-skeleton-stage__primary-action--draft[aria-expanded="true"]
+  > span[aria-hidden="true"] {
+  color: currentColor;
+}
+
 .dasti-proposal-skeleton-stage__ask-handle-layer {
   position: fixed;
   z-index: 4;
@@ -8020,6 +8114,28 @@
   color: var(--color-text-muted);
   box-shadow: none;
   pointer-events: auto;
+}
+
+.dark .dasti-proposal-skeleton-stage__ask-handle {
+  border-color: var(--color-border-contrast);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  box-shadow: var(--shadow-sm);
+}
+
+.dark .dasti-proposal-skeleton-stage__ask-handle:hover:not(:disabled),
+.dark .dasti-proposal-skeleton-stage__ask-handle:focus-visible {
+  border-color: var(--color-border-selected);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border-selected);
+}
+
+.dark .dasti-proposal-skeleton-stage__ask-handle[aria-expanded="true"] {
+  border-color: var(--color-border-selected);
+  background: var(--color-surface);
+  color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-border-selected);
 }
 
 .dasti-proposal-skeleton-stage__actions {

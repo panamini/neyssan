@@ -73,6 +73,8 @@ const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
 const JOB_DETAIL_LINKED_PROPOSALS_LIMIT = 12;
 const JOB_DETAIL_SHADOW_ROWS_LIMIT = 8;
+const JOB_LIST_DEFAULT_LIMIT = 80;
+const JOB_LIST_MAX_LIMIT = 120;
 const jobExtractionShadowValidationStatus = v.union(
   v.literal("valid"),
   v.literal("invalid_json"),
@@ -784,6 +786,24 @@ async function listJobsForProfileId(ctx: any, profileId: string) {
     .withIndex("by_user_updated", (q: any) => q.eq("userId", profileId))
     .order("desc")
     .collect();
+}
+
+async function listRecentJobsForProfileId(
+  ctx: any,
+  profileId: string,
+  limit: number,
+) {
+  const orderedQuery = ctx.db
+    .query("jobs")
+    .withIndex("by_user_updated", (q: any) => q.eq("userId", profileId))
+    .order("desc");
+
+  if (typeof orderedQuery.take === "function") {
+    return orderedQuery.take(limit);
+  }
+
+  const jobs = await orderedQuery.collect();
+  return jobs.slice(0, limit);
 }
 
 async function archiveActiveSampleJobsForProfile(ctx: any, profileId: string) {
@@ -1648,10 +1668,22 @@ function normalizeProjectionProfiles(
   return normalizedProfiles;
 }
 
+function normalizeJobListLimit(limit: unknown) {
+  const numericLimit = typeof limit === "number" ? Math.floor(limit) : JOB_LIST_DEFAULT_LIMIT;
+  if (!Number.isFinite(numericLimit)) {
+    return JOB_LIST_DEFAULT_LIMIT;
+  }
+  return Math.max(1, Math.min(JOB_LIST_MAX_LIMIT, numericLimit));
+}
+
 async function listProjectedJobsForProfiles(
   ctx: any,
   profiles: JobsProjectionProfile[],
-  options?: { includeArchived?: boolean; trackMatchRead?: boolean },
+  options?: {
+    includeArchived?: boolean;
+    trackMatchRead?: boolean;
+    limit?: number;
+  },
 ) {
   const normalizedProfiles = normalizeProjectionProfiles(profiles);
   if (normalizedProfiles.length === 0) {
@@ -1660,10 +1692,15 @@ async function listProjectedJobsForProfiles(
 
   const primaryProfile = normalizedProfiles[0] ?? null;
 
+  const projectionLimit =
+    typeof options?.limit === "number" ? normalizeJobListLimit(options.limit) : null;
   const jobGroups = await Promise.all(
-    normalizedProfiles.map((profile) =>
-      listJobsForProfileId(ctx, String(profile._id ?? profile.id ?? "")),
-    ),
+    normalizedProfiles.map((profile) => {
+      const profileId = String(profile._id ?? profile.id ?? "");
+      return projectionLimit === null
+        ? listJobsForProfileId(ctx, profileId)
+        : listRecentJobsForProfileId(ctx, profileId, projectionLimit);
+    }),
   );
   const jobs = jobGroups.flat();
 
@@ -2504,7 +2541,9 @@ export const recordStructuredMatchReview = mutation({
 });
 
 export const listForUser = query({
-  args: {},
+  args: {
+    limit: v.optional(v.number()),
+  },
   returns: v.array(
     v.object({
       id: v.string(),
@@ -2534,7 +2573,7 @@ export const listForUser = query({
       linkedDocumentCount: v.number(),
     }),
   ),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
@@ -2545,7 +2584,9 @@ export const listForUser = query({
       return [];
     }
 
-    return listProjectedJobsForProfiles(ctx, profiles);
+    return listProjectedJobsForProfiles(ctx, profiles, {
+      limit: normalizeJobListLimit(args.limit),
+    });
   },
 });
 
@@ -2655,7 +2696,9 @@ export const exportLiveMatchReviewRecordsForUser = query({
 });
 
 export const listArchivedForUser = query({
-  args: {},
+  args: {
+    limit: v.optional(v.number()),
+  },
   returns: v.array(
     v.object({
       id: v.string(),
@@ -2685,7 +2728,7 @@ export const listArchivedForUser = query({
       linkedDocumentCount: v.number(),
     }),
   ),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
@@ -2698,6 +2741,7 @@ export const listArchivedForUser = query({
 
     return listProjectedJobsForProfiles(ctx, profiles, {
       includeArchived: true,
+      limit: normalizeJobListLimit(args.limit),
     });
   },
 });

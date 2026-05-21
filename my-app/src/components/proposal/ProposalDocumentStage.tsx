@@ -59,6 +59,8 @@ type ToolbarAnchorStyle = React.CSSProperties & {
   "--proposal-toolbar-paper-width"?: string;
   "--proposal-command-toolbar-left"?: string;
   "--proposal-command-toolbar-top"?: string;
+  "--proposal-command-toolbar-inline-start"?: string;
+  "--proposal-command-toolbar-block-start"?: string;
   "--proposal-command-toolbar-width"?: string;
   "--proposal-command-toolbar-min-width"?: string;
   "--proposal-ask-handle-inline-start"?: string;
@@ -70,7 +72,7 @@ const COMMAND_LAYER_TOOLBAR_NATURAL_WIDTH = 680;
 const COMMAND_LAYER_TOOLBAR_HEIGHT = 44;
 const COMMAND_LAYER_SAFE_MARGIN = 12;
 const COMMAND_LAYER_GAP = 12;
-const COMMAND_LAYER_TOP_OFFSET = 16;
+const ASK_OFFSET_FROM_PAPER_TOP = 16;
 const ASK_HANDLE_ICON_SIZE = 32;
 
 const PAPER_ANCHOR_SELECTOR = [
@@ -84,6 +86,13 @@ const COMMAND_LAYER_CANVAS_SELECTOR = ".dasti-proposal-skeleton-forge";
 function runBrowserCommand(command: "undo" | "redo") {
   if (typeof document === "undefined" || !document.execCommand) return;
   document.execCommand(command);
+}
+
+function readCssPixelVariable(styles: CSSStyleDeclaration, name: string) {
+  const rawValue = styles.getPropertyValue(name).trim();
+  if (!rawValue) return 0;
+  const parsedValue = Number.parseFloat(rawValue);
+  return Number.isFinite(parsedValue) ? parsedValue : 0;
 }
 
 export function ProposalDocumentStage({
@@ -117,6 +126,7 @@ export function ProposalDocumentStage({
     React.useState<CommandLayerModeControlMode>("split");
   const [askMode, setAskMode] =
     React.useState<CommandLayerAskMode>("iconOnly");
+  const [commandLayerSticky, setCommandLayerSticky] = React.useState(false);
   const isUltraCompactToolbar = modeControlMode === "toggle";
   const nextMode = mode === "edit" ? "preview" : "edit";
   const modeToggleLabel =
@@ -139,7 +149,29 @@ export function ProposalDocumentStage({
       const commandCanvas =
         stage.closest<HTMLElement>(COMMAND_LAYER_CANVAS_SELECTOR) ?? stage;
       const commandCanvasRect = commandCanvas.getBoundingClientRect();
-      const anchorRect = anchor.getBoundingClientRect();
+      const anchorCandidates = Array.from(
+        paper.querySelectorAll<HTMLElement>(PAPER_ANCHOR_SELECTOR),
+      );
+      const stickyTokens = window.getComputedStyle(document.documentElement);
+      const stickyTopViewport =
+        readCssPixelVariable(stickyTokens, "--header-height") +
+        readCssPixelVariable(stickyTokens, "--space-5");
+      const anchorRect = (anchorCandidates.length > 0
+        ? anchorCandidates
+            .map((candidate) => {
+              const rect = candidate.getBoundingClientRect();
+              const visibleBlock =
+                Math.min(rect.bottom, window.innerHeight) -
+                Math.max(rect.top, stickyTopViewport);
+              return {
+                rect,
+                score: Math.max(0, visibleBlock) * Math.max(0, rect.width),
+                distance: Math.abs(rect.top - stickyTopViewport),
+              };
+            })
+            .sort((a, b) => b.score - a.score || a.distance - b.distance)[0]
+            ?.rect
+        : null) ?? anchor.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
       const visibleCanvasLeft = Math.max(commandCanvasRect.left, 0);
       const visibleCanvasRight = viewportWidth;
@@ -173,6 +205,7 @@ export function ProposalDocumentStage({
         setDraftLabelMode("full");
         setModeControlMode("split");
         setAskMode("iconOnly");
+        setCommandLayerSticky(false);
         return;
       }
 
@@ -183,13 +216,14 @@ export function ProposalDocumentStage({
         toolbarNaturalWidth: COMMAND_LAYER_TOOLBAR_NATURAL_WIDTH,
         toolbarMinWidth: COMMAND_LAYER_TOOLBAR_MIN_WIDTH,
         toolbarHeight: COMMAND_LAYER_TOOLBAR_HEIGHT,
+        stickyTop: stickyTopViewport - stageRect.top,
         askHandle: {
           iconWidth: ASK_HANDLE_ICON_SIZE,
           height: ASK_HANDLE_ICON_SIZE,
         },
         safeMargin: COMMAND_LAYER_SAFE_MARGIN,
         gap: COMMAND_LAYER_GAP,
-        topOffset: COMMAND_LAYER_TOP_OFFSET,
+        askOffsetFromPaperTop: ASK_OFFSET_FROM_PAPER_TOP,
         viewportWidth,
       });
 
@@ -197,12 +231,15 @@ export function ProposalDocumentStage({
       setDraftLabelMode(commandLayer.draftLabelMode);
       setModeControlMode(commandLayer.modeControlMode);
       setAskMode(commandLayer.askMode);
+      setCommandLayerSticky(commandLayer.toolbarSticky);
 
       setToolbarAnchorStyle((current) => {
         const nextLeft = `${Math.max(0, paperRect.left)}px`;
         const nextWidth = `${paperRect.width}px`;
         const nextCommandToolbarLeft = `${commandLayer.toolbarRect.left}px`;
         const nextCommandToolbarTop = `${commandLayer.toolbarRect.top}px`;
+        const nextCommandToolbarInlineStart = `${stageRect.left + commandLayer.toolbarRect.left}px`;
+        const nextCommandToolbarBlockStart = `${stageRect.top + commandLayer.toolbarRect.top}px`;
         const nextCommandToolbarWidth = `${commandLayer.toolbarRect.width}px`;
         const nextCommandToolbarMinWidth = `${COMMAND_LAYER_TOOLBAR_MIN_WIDTH}px`;
         const nextAskHandleInlineStart = `${stageRect.left + commandLayer.askRect.left}px`;
@@ -212,6 +249,8 @@ export function ProposalDocumentStage({
           current["--proposal-toolbar-paper-width"] === nextWidth &&
           current["--proposal-command-toolbar-left"] === nextCommandToolbarLeft &&
           current["--proposal-command-toolbar-top"] === nextCommandToolbarTop &&
+          current["--proposal-command-toolbar-inline-start"] === nextCommandToolbarInlineStart &&
+          current["--proposal-command-toolbar-block-start"] === nextCommandToolbarBlockStart &&
           current["--proposal-command-toolbar-width"] === nextCommandToolbarWidth &&
           current["--proposal-command-toolbar-min-width"] === nextCommandToolbarMinWidth &&
           current["--proposal-ask-handle-inline-start"] === nextAskHandleInlineStart &&
@@ -224,6 +263,8 @@ export function ProposalDocumentStage({
           "--proposal-toolbar-paper-width": nextWidth,
           "--proposal-command-toolbar-left": nextCommandToolbarLeft,
           "--proposal-command-toolbar-top": nextCommandToolbarTop,
+          "--proposal-command-toolbar-inline-start": nextCommandToolbarInlineStart,
+          "--proposal-command-toolbar-block-start": nextCommandToolbarBlockStart,
           "--proposal-command-toolbar-width": nextCommandToolbarWidth,
           "--proposal-command-toolbar-min-width": nextCommandToolbarMinWidth,
           "--proposal-ask-handle-inline-start": nextAskHandleInlineStart,
@@ -275,6 +316,7 @@ export function ProposalDocumentStage({
       data-draft-label-mode={draftLabelMode}
       data-mode-control-mode={modeControlMode}
       data-ask-mode={askMode}
+      data-command-layer-sticky={commandLayerSticky ? "true" : undefined}
       data-toolbar-density={
         toolbarMode === "wide" || toolbarMode === "medium"
           ? undefined
@@ -291,6 +333,7 @@ export function ProposalDocumentStage({
     >
       <div
         className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-toolbar--surface-tooltips"
+        data-sticky={commandLayerSticky ? "true" : undefined}
         data-testid="proposal-toolbar"
         style={toolbarAnchorStyle}
       >
@@ -497,6 +540,7 @@ export function ProposalDocumentStage({
       {onOpenAsk ? (
         <div
           className="dasti-proposal-skeleton-stage__ask-handle-layer dasti-toolbar--surface-tooltips"
+          data-sticky={commandLayerSticky ? "true" : undefined}
           style={toolbarAnchorStyle}
         >
           <button
