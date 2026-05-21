@@ -1,18 +1,26 @@
 import React from "react";
 import {
+  ChatCircleText,
   Layout,
   Eye,
   FileUser,
   ListNumbers,
   PenLine,
 } from "@/lib/icons";
-import { Button, ToneBadge } from "../ui";
-import type { CvToneChoice } from "./CvRail";
+import { Button } from "../ui";
+import type {
+  CommandLayerAskMode,
+  CommandLayerModeControlMode,
+  CommandLayerToolbarMode,
+} from "@/lib/document-command-layer-layout";
 
 type CvStageBarProps = {
   mode: "edit" | "preview";
-  exporting: boolean;
-  tone: CvToneChoice;
+  toolbarStyle?: React.CSSProperties;
+  toolbarMode?: CommandLayerToolbarMode;
+  modeControlMode?: CommandLayerModeControlMode;
+  askMode?: CommandLayerAskMode;
+  commandLayerSticky?: boolean;
   templatesOpen?: boolean;
   sectionsOpen?: boolean;
   designOpen?: boolean;
@@ -26,7 +34,11 @@ type CvStageBarProps = {
 
 export function CvStageBar({
   mode,
-  tone,
+  toolbarStyle,
+  toolbarMode = "wide",
+  modeControlMode = "split",
+  askMode = "iconOnly",
+  commandLayerSticky = false,
   templatesOpen = false,
   sectionsOpen = false,
   designOpen = false,
@@ -38,111 +50,176 @@ export function CvStageBar({
   onOpenAsk,
 }: CvStageBarProps): JSX.Element {
   const stageIconSize = 18;
+  const isUltraCompactToolbar = modeControlMode === "toggle";
+  const nextMode = mode === "edit" ? "preview" : "edit";
+  const modeToggleLabel =
+    mode === "edit" ? "Switch to Preview" : "Switch to Edit";
+
   return (
-    <div className="dasti-cv-stage-bar dasti-toolbar--surface-tooltips">
+    <>
       <div
-        className="style-segmented dasti-cv-stage-bar__mode"
-        role="group"
-        aria-label="CV view mode"
+        className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-cv-stage-bar-layer dasti-toolbar--surface-tooltips"
+        data-sticky={commandLayerSticky ? "true" : undefined}
+        data-toolbar-density={
+          toolbarMode === "wide" || toolbarMode === "medium"
+            ? undefined
+            : toolbarMode === "ultraCompact"
+              ? "ultra"
+              : "compact"
+        }
+        data-testid="cv-toolbar"
+        style={toolbarStyle}
       >
-        <button
-          type="button"
-          className="dasti-cv-mode-toggle"
-          data-selected={mode === "edit" ? "true" : undefined}
-          onClick={() => onModeChange("edit")}
-          aria-label="Edit"
-          data-toolbar-tooltip="Edit"
+        <div
+          className="dasti-proposal-skeleton-stage__toolbar-main dasti-cv-stage-bar"
+          role="group"
+          aria-label="CV toolbar"
         >
-          <PenLine size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="dasti-cv-mode-toggle"
-          data-selected={mode === "preview" ? "true" : undefined}
-          onClick={() => onModeChange("preview")}
-          aria-label="Page preview"
-          data-toolbar-tooltip="Preview"
-        >
-          <Eye size={stageIconSize} strokeWidth={1.8} aria-hidden="true" />
-        </button>
+          <div
+            className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__actions dasti-proposal-skeleton-stage__actions--document dasti-cv-stage-bar__actions"
+            role="group"
+            aria-label="Document controls"
+          >
+            {isUltraCompactToolbar ? (
+              <button
+                type="button"
+                className="dasti-icon-button dasti-proposal-mode-toggle dasti-proposal-mode-toggle--single dasti-cv-mode-toggle dasti-cv-mode-toggle--single"
+                onClick={() => onModeChange(nextMode)}
+                aria-label={modeToggleLabel}
+                data-toolbar-tooltip={modeToggleLabel}
+              >
+                {mode === "edit" ? (
+                  <PenLine
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Eye
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
+            ) : (
+              <div
+                className="style-segmented dasti-proposal-skeleton-stage__mode dasti-cv-stage-bar__mode"
+                role="group"
+                aria-label="CV view mode"
+              >
+                <button
+                  type="button"
+                  className="dasti-proposal-mode-toggle dasti-cv-mode-toggle"
+                  data-selected={mode === "edit" ? "true" : undefined}
+                  onClick={() => onModeChange("edit")}
+                  aria-label="Edit"
+                  data-toolbar-tooltip="Edit"
+                >
+                  <PenLine
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                </button>
+                <button
+                  type="button"
+                  className="dasti-proposal-mode-toggle dasti-cv-mode-toggle"
+                  data-selected={mode === "preview" ? "true" : undefined}
+                  onClick={() => onModeChange("preview")}
+                  aria-label="Page preview"
+                  data-toolbar-tooltip="Preview"
+                >
+                  <Eye
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
+            )}
+            {onOpenSections ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="dasti-proposal-skeleton-stage__primary-action dasti-cv-stage-bar__primary-action"
+                iconLeft={
+                  <ListNumbers size={stageIconSize} strokeWidth={1.8} />
+                }
+                aria-expanded={sectionsOpen}
+                aria-label="Sections"
+                data-toolbar-tooltip="Sections"
+                data-stage-tooltip-mode="compact"
+                onClick={onOpenSections}
+              >
+                <span className="dasti-proposal-skeleton-stage__action-label dasti-cv-stage-bar__action-label">
+                  Sections
+                </span>
+              </Button>
+            ) : null}
+            {onOpenDesign ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="dasti-proposal-skeleton-stage__primary-action dasti-cv-stage-bar__primary-action"
+                iconLeft={<FileUser size={stageIconSize} strokeWidth={1.8} />}
+                aria-expanded={designOpen}
+                aria-label="Design"
+                data-toolbar-tooltip="Design"
+                data-stage-tooltip-mode="compact"
+                onClick={onOpenDesign}
+              >
+                <span className="dasti-proposal-skeleton-stage__action-label dasti-cv-stage-bar__action-label">
+                  Design
+                </span>
+              </Button>
+            ) : null}
+            {onOpenTemplates ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="dasti-proposal-skeleton-stage__primary-action dasti-cv-stage-bar__primary-action"
+                iconLeft={<Layout size={stageIconSize} strokeWidth={1.8} />}
+                aria-expanded={templatesOpen}
+                aria-label="Templates"
+                data-toolbar-tooltip="Templates"
+                data-stage-tooltip-mode="compact"
+                onClick={onOpenTemplates}
+              >
+                <span className="dasti-proposal-skeleton-stage__action-label dasti-cv-stage-bar__action-label">
+                  Templates
+                </span>
+              </Button>
+            ) : null}
+          </div>
+        </div>
       </div>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className="dasti-cv-stage-bar__version-history"
-        disabled
-      >
-        Version history
-      </Button>
-      {onOpenSections ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          className="dasti-cv-stage-bar__primary-action"
-          iconLeft={<ListNumbers size={stageIconSize} strokeWidth={1.8} />}
-          aria-expanded={sectionsOpen}
-          aria-label="Sections"
-          data-toolbar-tooltip="Sections"
-          data-stage-tooltip-mode="compact"
-          onClick={onOpenSections}
-        >
-          <span className="dasti-cv-stage-bar__action-label">Sections</span>
-        </Button>
-      ) : null}
-      {onOpenDesign ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          className="dasti-cv-stage-bar__primary-action"
-          iconLeft={<FileUser size={stageIconSize} strokeWidth={1.8} />}
-          aria-expanded={designOpen}
-          aria-label="Design"
-          data-toolbar-tooltip="Design"
-          data-stage-tooltip-mode="compact"
-          onClick={onOpenDesign}
-        >
-          <span className="dasti-cv-stage-bar__action-label">Design</span>
-        </Button>
-      ) : null}
-      {onOpenTemplates ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          className="dasti-cv-stage-bar__primary-action"
-          iconLeft={<Layout size={stageIconSize} strokeWidth={1.8} />}
-          aria-expanded={templatesOpen}
-          aria-label="Templates"
-          data-toolbar-tooltip="Templates"
-          data-stage-tooltip-mode="compact"
-          onClick={onOpenTemplates}
-        >
-          <span className="dasti-cv-stage-bar__action-label">Templates</span>
-        </Button>
-      ) : null}
       {onOpenAsk ? (
-        <Button
-          type="button"
-          size="sm"
-          variant="primary"
-          className="dasti-cv-stage-bar__primary-action"
-          aria-expanded={askOpen}
-          aria-label="Ask"
-          data-toolbar-tooltip="Ask"
-          data-stage-tooltip-mode="compact"
-          onClick={onOpenAsk}
+        <div
+          className="dasti-proposal-skeleton-stage__ask-handle-layer dasti-cv-stage-bar__ask-handle-layer dasti-toolbar--surface-tooltips"
+          data-sticky={commandLayerSticky ? "true" : undefined}
+          data-ask-placement={askMode === "edgeTab" ? "edge-tab" : "outside"}
+          style={toolbarStyle}
         >
-          <span className="dasti-cv-stage-bar__action-label">Ask</span>
-        </Button>
+          <button
+            type="button"
+            className="dasti-icon-button dasti-proposal-skeleton-stage__ask-handle dasti-cv-stage-bar__ask-handle"
+            aria-expanded={askOpen}
+            aria-label="Ask"
+            title="Ask"
+            data-testid="cv-ask-handle"
+            data-toolbar-tooltip="Ask"
+            data-stage-tooltip-mode="compact"
+            onClick={onOpenAsk}
+          >
+            <ChatCircleText size={16} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+        </div>
       ) : null}
-      <span className="dasti-cv-stage-bar__spacer" aria-hidden="true" />
-      <ToneBadge tone={tone}>
-        {tone.charAt(0).toUpperCase() + tone.slice(1)}
-      </ToneBadge>
-    </div>
+    </>
   );
 }
 

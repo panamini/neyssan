@@ -83,9 +83,13 @@ describe("CvForge toolbar CSS contracts", () => {
   });
 
   it("keeps the CV organize helper copy short enough for one rail line", () => {
-    expect(cvSectionsOrganizerSource).toContain("Open a section row to edit its items.");
+    expect(cvSectionsOrganizerSource).toContain(
+      "Open a section row to edit its items.",
+    );
     expect(cvSectionsOrganizerSource).toContain("dasti-cv-sections-organizer");
-    expect(cvSectionsOrganizerSource).not.toContain('data-rail-pane="sections"');
+    expect(cvSectionsOrganizerSource).not.toContain(
+      'data-rail-pane="sections"',
+    );
     expect(cvSectionsOrganizerSource).not.toContain(
       "Each section opens its own editor.",
     );
@@ -139,7 +143,7 @@ describe("CvForge toolbar CSS contracts", () => {
 
   it("matches Proposal paper geometry and material on the CV preview stage", () => {
     expect(productCss).toMatch(
-      /\.dasti-cv-skeleton-forge__stage\s*\{[\s\S]*gap:\s*var\(--space-2\);/,
+      /\.dasti-cv-skeleton-forge__stage\s*\{[\s\S]*--document-command-layer-rest-gutter:\s*calc\([\s\S]*var\(--space-4\)\s*\+\s*var\(--space-2\)[\s\S]*\);[\s\S]*gap:\s*var\(--space-2\);[\s\S]*padding-block-start:\s*var\(--document-command-layer-rest-gutter\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-cv-page-preview-stage\s+\.dasti-doc-viewer-shell--resume-panel\s*\{[\s\S]*padding:\s*0;[\s\S]*box-shadow:\s*none;/,
@@ -157,7 +161,7 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-cv-stage-bar\s*\{[\s\S]*overflow:\s*visible;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-cv-stage-bar\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*36px;[\s\S]*--editor-toolbar-icon-control-block-size:\s*34px;/,
+      /\.dasti-cv-stage-bar\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*var\(--control-sm\);[\s\S]*--editor-toolbar-icon-control-block-size:\s*var\(--control-sm\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-cv-stage-bar__primary-action\s*\{[\s\S]*height:\s*var\(--editor-toolbar-control-block-size\);[\s\S]*padding-inline:\s*11px;[\s\S]*border-color:\s*transparent;[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
@@ -204,7 +208,9 @@ describe("CvForge toolbar CSS contracts", () => {
     expect(verbatiResumePreviewSource).toContain("visibleZoomPercent");
     expect(verbatiResumePreviewSource).not.toContain("MagnifyingGlassMinus");
     expect(verbatiResumePreviewSource).not.toContain("MagnifyingGlassPlus");
-    expect(verbatiResumePreviewSource).not.toContain("dasti-doc-zoom-bar--rail");
+    expect(verbatiResumePreviewSource).not.toContain(
+      "dasti-doc-zoom-bar--rail",
+    );
     expect(productCss).toMatch(
       /\.dasti-cv-stage-footer\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset-block-end:\s*0;[\s\S]*min-height:\s*var\(--cv-stage-footer-block-size,\s*28px\);[\s\S]*padding:\s*2px\s+var\(--space-2\);[\s\S]*border-block-start:\s*1px\s+solid\s+var\(--border-soft\);[\s\S]*background:\s*var\(--bg\);[\s\S]*box-shadow:\s*none;/,
     );
@@ -246,9 +252,9 @@ describe("CvForge toolbar CSS contracts", () => {
     expect(getCssRuleBlock(".forge-template-panel__content")).toContain(
       "overflow: hidden",
     );
-    expect(getCssRuleBlock(".forge-template-panel__content--cv-sections")).toContain(
-      "overflow: visible",
-    );
+    expect(
+      getCssRuleBlock(".forge-template-panel__content--cv-sections"),
+    ).toContain("overflow: visible");
     const activeSectionRowBlock = getCssRuleBlock(
       '.dasti-cv-org-row[data-active="true"]',
     );

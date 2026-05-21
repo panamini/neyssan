@@ -3,7 +3,14 @@ import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import type { RemirrorJSON } from "remirror";
-import { ArrowSquareOut, FileUser, FolderSimple, PenLine, Upload, X } from "@/lib/icons";
+import {
+  ArrowSquareOut,
+  FileUser,
+  FolderSimple,
+  PenLine,
+  Upload,
+  X,
+} from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import FloatingAiToolbar, {
   type InlineAiActionId,
@@ -53,6 +60,7 @@ import {
 } from "../components/remirror-editor/utils/conversion";
 import { normalizeResponsibilityAiResultForSource } from "../components/structured-blocks/ExperienceEducationModal";
 import { useToast } from "../components/ui/toast";
+import { useDocumentCommandLayerPosition } from "../hooks/use-document-command-layer-position";
 import {
   buildAuthoritativeResumeDebugSnapshot,
   buildAuthoritativeResumeExportModel,
@@ -147,6 +155,23 @@ import {
 } from "../lib/resumeResponsibilityAuthority";
 
 const CV_PAPER_VISUAL_INLINE_SIZE = `${Math.round(A4_PAGE_WIDTH_PX * 100) / 100}px`;
+const CV_COMMAND_LAYER_TOOLBAR_MIN_WIDTH = 300;
+const CV_COMMAND_LAYER_TOOLBAR_NATURAL_WIDTH = 520;
+const CV_COMMAND_LAYER_TOOLBAR_HEIGHT = 44;
+const CV_COMMAND_LAYER_SAFE_MARGIN = 12;
+const CV_COMMAND_LAYER_GAP = 12;
+const CV_ASK_OFFSET_FROM_PAPER_TOP = 16;
+const CV_ASK_HANDLE_ICON_SIZE = 32;
+const CV_COMMAND_LAYER_ASK_HANDLE = {
+  iconWidth: CV_ASK_HANDLE_ICON_SIZE,
+  height: CV_ASK_HANDLE_ICON_SIZE,
+};
+const CV_PAPER_ANCHOR_SELECTOR = [
+  ".dasti-document-stage__canvas[data-document-page='true']",
+  ".dasti-doc-viewport--resume-panel[data-document-stage='true']",
+  ".dasti-resume-mini-preview",
+].join(",");
+const CV_COMMAND_LAYER_CANVAS_SELECTOR = ".dasti-cv-skeleton-forge";
 
 type CvForgeWorkspaceMode = "edit" | "preview";
 type CvForgeCanonicalJob = {
@@ -166,6 +191,10 @@ type InlinePaperSelectionState = {
   anchor: EditorSelectionAnchor;
   editTarget: ActivePaperEditTarget;
   range: Range | null;
+};
+type CvAskSelectionContext = {
+  selectedText: string;
+  editTarget: ActivePaperEditTarget;
 };
 type PaperTextAiSuggestion = NonNullable<
   ResumePaperAiState["textSuggestion"]
@@ -2286,7 +2315,9 @@ function readCvForgeDrawerRecentSearches(storageKey: string): string[] {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]");
     return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === "string").slice(0, 5)
+      ? parsed
+          .filter((item): item is string => typeof item === "string")
+          .slice(0, 5)
       : [];
   } catch {
     return [];
@@ -2315,12 +2346,14 @@ function useCvForgeDrawerRecentSearches(storageKey: string) {
     (value: string) => {
       const normalized = value.trim();
       if (!normalized) return;
-      writeRecentSearches([
-        normalized,
-        ...recentSearches.filter(
-          (item) => item.toLowerCase() !== normalized.toLowerCase(),
-        ),
-      ].slice(0, 5));
+      writeRecentSearches(
+        [
+          normalized,
+          ...recentSearches.filter(
+            (item) => item.toLowerCase() !== normalized.toLowerCase(),
+          ),
+        ].slice(0, 5),
+      );
     },
     [recentSearches, writeRecentSearches],
   );
@@ -2346,7 +2379,8 @@ function CvForgeDrawerSearch({
   const [focused, setFocused] = React.useState(false);
   const { recentSearches, rememberSearch, clearRecentSearches } =
     useCvForgeDrawerRecentSearches(storageKey);
-  const showRecentSearches = focused && value.trim() === "" && recentSearches.length > 0;
+  const showRecentSearches =
+    focused && value.trim() === "" && recentSearches.length > 0;
   const commitSearch = React.useCallback(() => {
     rememberSearch(value);
   }, [rememberSearch, value]);
@@ -2374,7 +2408,11 @@ function CvForgeDrawerSearch({
         <div className="forge-rail-drawer__recent-searches" role="listbox">
           <div className="forge-rail-drawer__recent-searches-head">
             <span>Recent searches</span>
-            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={clearRecentSearches}>
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={clearRecentSearches}
+            >
               Clear
             </button>
           </div>
@@ -2436,7 +2474,9 @@ function CvForgeDrawerPreview({
   actionPill?: React.ReactNode;
 }): JSX.Element {
   if (item.type === "proposal") {
-    return <DrawerDocumentTile item={item} badge={badge} actionPill={actionPill} />;
+    return (
+      <DrawerDocumentTile item={item} badge={badge} actionPill={actionPill} />
+    );
   }
 
   const sourceId = cvForgeDrawerSourceId(item);
@@ -2517,7 +2557,10 @@ export function CvForgeCvDrawer({
     const alternatives = filteredItems.filter(
       (item) => currentCvId !== cvForgeDrawerSourceId(item),
     );
-    return (alternatives.length >= 2 ? alternatives : filteredItems).slice(0, 2);
+    return (alternatives.length >= 2 ? alternatives : filteredItems).slice(
+      0,
+      2,
+    );
   }, [currentCvId, filteredItems]);
   const handleShowAll = () => {
     setQuery("");
@@ -2577,7 +2620,11 @@ export function CvForgeCvDrawer({
       <div className="forge-rail-drawer__grid" role="list">
         <CvForgeDrawerSectionTitle
           title="Recently viewed"
-          actionLabel={filteredItems.length > recentItems.length ? "Show all CVs" : undefined}
+          actionLabel={
+            filteredItems.length > recentItems.length
+              ? "Show all CVs"
+              : undefined
+          }
           onAction={handleShowAll}
         />
         {recentItems.map((item) => renderItem(item, "recent-"))}
@@ -2611,7 +2658,9 @@ export function CvForgeLibraryDrawer({
   onOpenLibraryType: (type: "cvs" | "proposals") => void;
 }): JSX.Element {
   const [query, setQuery] = React.useState("");
-  const [filter, setFilter] = React.useState<"all" | "cvs" | "proposals">("cvs");
+  const [filter, setFilter] = React.useState<"all" | "cvs" | "proposals">(
+    "cvs",
+  );
   const allResultsRef = React.useRef<HTMLDivElement | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const filteredItems = items.filter((item) => {
@@ -2631,7 +2680,10 @@ export function CvForgeLibraryDrawer({
       const sourceId = item.id.slice(item.id.indexOf(":") + 1);
       return currentCvId !== sourceId;
     });
-    return (alternatives.length >= 2 ? alternatives : filteredItems).slice(0, 2);
+    return (alternatives.length >= 2 ? alternatives : filteredItems).slice(
+      0,
+      2,
+    );
   }, [currentCvId, filteredItems]);
   const renderItem = (item: LibraryItem, keyPrefix = "") => {
     const sourceId = cvForgeDrawerSourceId(item);
@@ -2647,7 +2699,9 @@ export function CvForgeLibraryDrawer({
           type="button"
           className="forge-template-card forge-rail-drawer__thumb-button"
           aria-label={
-            item.type === "cv" ? `Open CV: ${item.title}` : `Open proposal: ${item.title}`
+            item.type === "cv"
+              ? `Open CV: ${item.title}`
+              : `Open proposal: ${item.title}`
           }
           aria-pressed={item.type === "cv" ? selected : undefined}
           onClick={() => {
@@ -2693,7 +2747,11 @@ export function CvForgeLibraryDrawer({
         onChange={setQuery}
         placeholder="Search library"
       />
-      <div className="forge-rail-drawer__tabs" role="tablist" aria-label="Library filter">
+      <div
+        className="forge-rail-drawer__tabs"
+        role="tablist"
+        aria-label="Library filter"
+      >
         {[
           ["all", "All"],
           ["cvs", "CVs"],
@@ -2858,6 +2916,7 @@ export function CvForge(): JSX.Element {
     | undefined;
   const cvImportInputRef = React.useRef<HTMLInputElement | null>(null);
   const consumedCvForgeActionRef = React.useRef<string | null>(null);
+  const cvDocumentStageRef = React.useRef<HTMLDivElement | null>(null);
   const paperStageRef = React.useRef<HTMLDivElement | null>(null);
   const inlinePaperSelectionDebounceRef = React.useRef<number | null>(null);
   const [workspaceMode, setWorkspaceMode] =
@@ -2896,6 +2955,8 @@ export function CvForge(): JSX.Element {
   const latestInlineSectionsRef = React.useRef<CvSection[]>([]);
   const [inlinePaperSelectionState, setInlinePaperSelectionState] =
     React.useState<InlinePaperSelectionState | null>(null);
+  const [cvAskSelectionContext, setCvAskSelectionContext] =
+    React.useState<CvAskSelectionContext | null>(null);
   const activeInlinePaperAiRequestIdRef = React.useRef<string | null>(null);
   const [isApplyingInlinePaperAi, setIsApplyingInlinePaperAi] =
     React.useState(false);
@@ -2917,8 +2978,9 @@ export function CvForge(): JSX.Element {
     React.useState<string[]>([]);
   const [acceptedImportReviewCvIds, setAcceptedImportReviewCvIds] =
     React.useState<string[]>([]);
-  const [cvPreviewPageCount, setCvPreviewPageCount] =
-    React.useState<number | null>(null);
+  const [cvPreviewPageCount, setCvPreviewPageCount] = React.useState<
+    number | null
+  >(null);
   const currentSections = React.useMemo<CvSection[]>(
     () => (currentCv?.sections ?? []) as CvSection[],
     [currentCv?.sections],
@@ -3013,7 +3075,9 @@ export function CvForge(): JSX.Element {
     [],
   );
   const activeSettingsCvStylePreset = React.useMemo(() => {
-    const activeSlot = resolveDocumentStyleSlotId(documentStylePresets?.activeSlot);
+    const activeSlot = resolveDocumentStyleSlotId(
+      documentStylePresets?.activeSlot,
+    );
     const source = activeSlot
       ? documentStylePresets?.[`preset${activeSlot}`]
       : null;
@@ -3054,7 +3118,9 @@ export function CvForge(): JSX.Element {
     currentCv,
     persistStyle: saveCurrentCvStyleOnly,
     fallbackStylePreset:
-      activeSettingsCvStylePreset ?? defaultProposalSettings?.verbatiStyle ?? null,
+      activeSettingsCvStylePreset ??
+      defaultProposalSettings?.verbatiStyle ??
+      null,
     debounceMs: 700,
     logPrefix: "[CvForge]",
   });
@@ -3847,9 +3913,14 @@ export function CvForge(): JSX.Element {
   const handleExportDocx = React.useCallback(() => {
     void handleResumeExport({ format: "docx" });
   }, [handleResumeExport]);
-  const handleCvPreviewPageCountChange = React.useCallback((pageCount: number) => {
-    setCvPreviewPageCount((current) => (current === pageCount ? current : pageCount));
-  }, []);
+  const handleCvPreviewPageCountChange = React.useCallback(
+    (pageCount: number) => {
+      setCvPreviewPageCount((current) =>
+        current === pageCount ? current : pageCount,
+      );
+    },
+    [],
+  );
   const handleCvTitleCommit = React.useCallback(
     (nextTitle: string) => {
       if (!currentCvId || !currentCv) return;
@@ -3889,13 +3960,15 @@ export function CvForge(): JSX.Element {
         updatedAt: now,
         titleLocked: true,
       },
-    }).then(() => {
-      loadCv(nextCvId);
-      navigateToSelectedCv(nextCvId);
-      showToast("Duplicated.", { variant: "success" });
-    }).catch(() => {
-      showToast("Duplicate failed.", { variant: "error" });
-    });
+    })
+      .then(() => {
+        loadCv(nextCvId);
+        navigateToSelectedCv(nextCvId);
+        showToast("Duplicated.", { variant: "success" });
+      })
+      .catch(() => {
+        showToast("Duplicate failed.", { variant: "error" });
+      });
   }, [currentCv, importCv, loadCv, navigateToSelectedCv, showToast]);
   const handleDeleteTopbarCv = React.useCallback(() => {
     if (!currentCvId) return;
@@ -3989,6 +4062,28 @@ export function CvForge(): JSX.Element {
     isForgeDrawerDockedDesktop && viewportWidth < 1760;
   const showJobBriefContext = Boolean(requestedJobId);
   const isEntryPickerBusy = isCreatingEntryCv || isImportingEntryCv;
+  const {
+    style: cvCommandLayerStyle,
+    toolbarMode: cvCommandToolbarMode,
+    modeControlMode: cvCommandModeControlMode,
+    askMode: cvCommandAskMode,
+    commandLayerSticky: cvCommandLayerSticky,
+  } = useDocumentCommandLayerPosition({
+    stageRef: cvDocumentStageRef,
+    paperRef: paperStageRef,
+    paperAnchorSelector: CV_PAPER_ANCHOR_SELECTOR,
+    commandCanvasSelector: CV_COMMAND_LAYER_CANVAS_SELECTOR,
+    cssVarPrefix: "cv",
+    toolbarSelector: "[data-testid='cv-toolbar']",
+    toolbarNaturalWidth: CV_COMMAND_LAYER_TOOLBAR_NATURAL_WIDTH,
+    toolbarMinWidth: CV_COMMAND_LAYER_TOOLBAR_MIN_WIDTH,
+    toolbarHeight: CV_COMMAND_LAYER_TOOLBAR_HEIGHT,
+    askHandle: CV_COMMAND_LAYER_ASK_HANDLE,
+    safeMargin: CV_COMMAND_LAYER_SAFE_MARGIN,
+    gap: CV_COMMAND_LAYER_GAP,
+    askOffsetFromPaperTop: CV_ASK_OFFSET_FROM_PAPER_TOP,
+    refreshKey: workspaceMode,
+  });
 
   const handleClearJobContext = React.useCallback(() => {
     const nextParams = new URLSearchParams(search);
@@ -4017,6 +4112,7 @@ export function CvForge(): JSX.Element {
   const handleAskAiForSection = React.useCallback(
     (sectionId: string) => {
       setInlineEditTarget(null);
+      setCvAskSelectionContext(null);
       const section = findSectionById(currentSections, sectionId);
       setCvRailAiSuggestion(null);
       setActiveSectionId(sectionId);
@@ -4026,6 +4122,26 @@ export function CvForge(): JSX.Element {
     },
     [currentSections],
   );
+
+  const handleOpenCvAsk = React.useCallback(() => {
+    const selectionContext = inlinePaperSelectionState
+      ? {
+          selectedText: inlinePaperSelectionState.text,
+          editTarget: inlinePaperSelectionState.editTarget,
+        }
+      : null;
+    const target = selectionContext?.editTarget ?? inlineEditTarget;
+    setCvAskSelectionContext(selectionContext);
+
+    if (target) {
+      const section = findSectionById(currentSections, target.sectionId);
+      setActiveSectionId(target.sectionId);
+      setResumeActiveTarget(getSectionTarget(section));
+      setCvRailTab("ai");
+    }
+
+    setCvComposerOpen(true);
+  }, [currentSections, inlineEditTarget, inlinePaperSelectionState]);
 
   const handleSectionChange = React.useCallback(
     (nextSection: CvSection) => {
@@ -4962,25 +5078,26 @@ export function CvForge(): JSX.Element {
     [currentSections, persistSections, showToast],
   );
 
-  const handleRunInlinePaperAiAction = React.useCallback(
-    async (actionId: InlineAiActionId, instruction: string) => {
-      if (!inlinePaperSelectionState) return;
+  const runInlinePaperAiForSelectionContext = React.useCallback(
+    async (
+      context: CvAskSelectionContext,
+      actionId: InlineAiActionId,
+      instruction: string,
+    ) => {
       const escape = (value: string) =>
         typeof CSS !== "undefined" && typeof CSS.escape === "function"
           ? CSS.escape(value)
           : value.replace(/"/g, '\\"');
       const editableElement = document.querySelector<HTMLElement>(
         `[data-inline-paper-editable="true"][data-paper-section-id="${escape(
-          inlinePaperSelectionState.editTarget.sectionId,
-        )}"][data-paper-field-path="${escape(
-          inlinePaperSelectionState.editTarget.fieldPath,
-        )}"]`,
+          context.editTarget.sectionId,
+        )}"][data-paper-field-path="${escape(context.editTarget.fieldPath)}"]`,
       );
       if (!editableElement) return;
 
       const interactionId = createAiInteractionId();
       const requestId = interactionId;
-      const target = inlinePaperSelectionState.editTarget;
+      const target = context.editTarget;
       const section = findSectionById(currentSections, target.sectionId);
       const sectionLabel = section?.title || "Section";
       activeInlinePaperAiRequestIdRef.current = requestId;
@@ -5001,20 +5118,20 @@ export function CvForge(): JSX.Element {
         setCvRailAiSuggestion({
           sectionId: target.sectionId,
           sectionLabel,
-          beforeText: inlinePaperSelectionState.text,
+          beforeText: context.selectedText,
           afterText: "",
           state: "loading",
           interactionId,
           inlineTarget: {
             editTarget: target,
-            selectedText: inlinePaperSelectionState.text,
+            selectedText: context.selectedText,
             actionId,
           },
         });
         const result = await transformEditorSelectionAction({
           mode: actionId,
           instruction,
-          selectedText: inlinePaperSelectionState.text,
+          selectedText: context.selectedText,
         });
         const normalizedResult = normalizeEditorAiTextResult(result, actionId);
         if (!normalizedResult) {
@@ -5055,18 +5172,19 @@ export function CvForge(): JSX.Element {
         setCvRailAiSuggestion({
           sectionId: target.sectionId,
           sectionLabel,
-          beforeText: inlinePaperSelectionState.text,
+          beforeText: context.selectedText,
           afterText: normalizedResult.text,
           state: "ready",
           interactionId,
           inlineTarget: {
             editTarget: target,
-            selectedText: inlinePaperSelectionState.text,
+            selectedText: context.selectedText,
             actionId: normalizedResult.actionId,
           },
         });
         focusPreviewSection(target.sectionId);
         setInlinePaperSelectionState(null);
+        setCvAskSelectionContext(null);
         activeInlinePaperAiRequestIdRef.current = null;
         recordAiInteractionEvent({
           name: "ai_completed",
@@ -5112,11 +5230,34 @@ export function CvForge(): JSX.Element {
         }
       }
     },
-    [
-      currentSections,
-      inlinePaperSelectionState,
-      transformEditorSelectionAction,
-    ],
+    [currentSections, transformEditorSelectionAction],
+  );
+
+  const handleRunInlinePaperAiAction = React.useCallback(
+    async (actionId: InlineAiActionId, instruction: string) => {
+      if (!inlinePaperSelectionState) return;
+      await runInlinePaperAiForSelectionContext(
+        {
+          selectedText: inlinePaperSelectionState.text,
+          editTarget: inlinePaperSelectionState.editTarget,
+        },
+        actionId,
+        instruction,
+      );
+    },
+    [inlinePaperSelectionState, runInlinePaperAiForSelectionContext],
+  );
+
+  const handleRunCvAskForSelection = React.useCallback(
+    async (args: { prompt: string; actionId: InlineAiActionId }) => {
+      if (!cvAskSelectionContext) return;
+      await runInlinePaperAiForSelectionContext(
+        cvAskSelectionContext,
+        args.actionId,
+        args.prompt,
+      );
+    },
+    [cvAskSelectionContext, runInlinePaperAiForSelectionContext],
   );
 
   const handleAddSection = React.useCallback(
@@ -5325,8 +5466,9 @@ export function CvForge(): JSX.Element {
         (sourceStyle?.palette as VerbatiStylePreset["palette"] | undefined) ??
         factorySlot.appearance.palette;
       const accentHex =
-        (typeof source?.accentHex === "string" ? source.accentHex : undefined) ??
-        (sourceStyle?.accentHex as string | undefined);
+        (typeof source?.accentHex === "string"
+          ? source.accentHex
+          : undefined) ?? (sourceStyle?.accentHex as string | undefined);
       const resumeTemplateId =
         sourceStyle?.resumeTemplateId ?? factorySlot.defaultCvTemplateId;
 
@@ -5375,11 +5517,7 @@ export function CvForge(): JSX.Element {
     }
 
     return !stylesEqual(stylePreset, cvStyleSlotPresets[selectedStyleSlot]);
-  }, [
-    cvStyleSlotPresets,
-    selectedStyleSlot,
-    stylePreset,
-  ]);
+  }, [cvStyleSlotPresets, selectedStyleSlot, stylePreset]);
 
   const getCvStyleSlotName = React.useCallback(
     (slot: 1 | 2 | 3, source: "factory" | "settings") => {
@@ -5500,12 +5638,18 @@ export function CvForge(): JSX.Element {
       {
         id: "workshop-onecol",
         label: "Minimal",
-        preview: { kind: "Resume" as const, family: "workshop-onecol" as const },
+        preview: {
+          kind: "Resume" as const,
+          family: "workshop-onecol" as const,
+        },
       },
       {
         id: "workshop-twocol",
         label: "French",
-        preview: { kind: "Resume" as const, family: "workshop-twocol" as const },
+        preview: {
+          kind: "Resume" as const,
+          family: "workshop-twocol" as const,
+        },
       },
     ],
     [],
@@ -5528,11 +5672,7 @@ export function CvForge(): JSX.Element {
         }
       },
     }),
-    [
-      activeCvTemplatePanelItemId,
-      cvTemplatePanelItems,
-      handleSelectTemplate,
-    ],
+    [activeCvTemplatePanelItemId, cvTemplatePanelItems, handleSelectTemplate],
   );
   useRegisterForgeTemplates(cvTemplatePanelRegistration);
   const cvLibraryDrawerItems = React.useMemo(
@@ -5636,8 +5776,7 @@ export function CvForge(): JSX.Element {
     ],
   );
   useRegisterForgePanel(cvLibraryPanelRegistration);
-  const cvTemplatesOpen =
-    templatePanelOpen && activeTemplateSurface === "cv";
+  const cvTemplatesOpen = templatePanelOpen && activeTemplateSurface === "cv";
   const cvDesignOpen =
     templatePanelOpen && activeTemplateSurface === "cv-design";
   const sectionsPanelOpen =
@@ -6744,29 +6883,30 @@ export function CvForge(): JSX.Element {
     ],
   );
 
-  const handleStartFreshEntryCv = React.useCallback(async (
-    resumeTemplateId?: ResumeTemplateId | null,
-  ) => {
-    if (isEntryPickerBusy) {
-      return;
-    }
+  const handleStartFreshEntryCv = React.useCallback(
+    async (resumeTemplateId?: ResumeTemplateId | null) => {
+      if (isEntryPickerBusy) {
+        return;
+      }
 
-    setIsCreatingEntryCv(true);
-    setEntryPickerTransitionCvId(ENTRY_PICKER_PENDING_ROUTE_ID);
-    setPendingFreshEntryBaseCvId(currentCvId ?? "__none__");
-    try {
-      await createNewCv(undefined, {
-        forceV1: true,
-        resumeTemplateId: resumeTemplateId ?? undefined,
-      });
-    } catch (error) {
-      setEntryPickerTransitionCvId(null);
-      setPendingFreshEntryBaseCvId(null);
-      showToast("Create failed.", { variant: "error" });
-    } finally {
-      setIsCreatingEntryCv(false);
-    }
-  }, [createNewCv, currentCvId, isEntryPickerBusy, showToast]);
+      setIsCreatingEntryCv(true);
+      setEntryPickerTransitionCvId(ENTRY_PICKER_PENDING_ROUTE_ID);
+      setPendingFreshEntryBaseCvId(currentCvId ?? "__none__");
+      try {
+        await createNewCv(undefined, {
+          forceV1: true,
+          resumeTemplateId: resumeTemplateId ?? undefined,
+        });
+      } catch (error) {
+        setEntryPickerTransitionCvId(null);
+        setPendingFreshEntryBaseCvId(null);
+        showToast("Create failed.", { variant: "error" });
+      } finally {
+        setIsCreatingEntryCv(false);
+      }
+    },
+    [createNewCv, currentCvId, isEntryPickerBusy, showToast],
+  );
 
   React.useEffect(() => {
     topbarImportCvRef.current = handleImportEntryCv;
@@ -6783,7 +6923,8 @@ export function CvForge(): JSX.Element {
     const params = new URLSearchParams(location.search);
     const queryCvForgeAction = params.get("cvForgeAction");
     const cvForgeAction =
-      state?.cvForgeAction === "createBlank" || state?.cvForgeAction === "importCv"
+      state?.cvForgeAction === "createBlank" ||
+      state?.cvForgeAction === "importCv"
         ? state.cvForgeAction
         : queryCvForgeAction;
     const resumeTemplateId = resolveCvTemplateIntent(params.get("templateId"));
@@ -6893,11 +7034,20 @@ export function CvForge(): JSX.Element {
             }
             style={cvWorkbenchShellStyle}
           >
-            <div className="dasti-cv-skeleton-forge__stage">
+            <div
+              ref={cvDocumentStageRef}
+              className="dasti-cv-skeleton-forge__stage"
+              data-command-layer-sticky={
+                cvCommandLayerSticky ? "true" : undefined
+              }
+            >
               <CvStageBar
                 mode={workspaceMode}
-                exporting={exportingFormat !== null}
-                tone={cvTone}
+                toolbarStyle={cvCommandLayerStyle}
+                toolbarMode={cvCommandToolbarMode}
+                modeControlMode={cvCommandModeControlMode}
+                askMode={cvCommandAskMode}
+                commandLayerSticky={cvCommandLayerSticky}
                 templatesOpen={cvTemplatesOpen}
                 sectionsOpen={sectionsPanelOpen}
                 designOpen={cvDesignOpen}
@@ -6906,7 +7056,7 @@ export function CvForge(): JSX.Element {
                 onOpenDesign={handleOpenCvDesign}
                 onOpenTemplates={handleOpenCvTemplates}
                 askOpen={cvComposerOpen}
-                onOpenAsk={() => setCvComposerOpen(true)}
+                onOpenAsk={handleOpenCvAsk}
               />
               {isImportReviewBannerVisible ? (
                 <CvReviewBanner
@@ -7045,10 +7195,12 @@ export function CvForge(): JSX.Element {
                 selectedTone={cvTone}
                 aiSuggestion={cvRailAiSuggestion}
                 appliedAiEdit={cvRailAppliedAiEdit}
+                askSelectionContext={cvAskSelectionContext}
                 isImporting={isImportingEntryCv}
                 onActiveTabChange={setCvRailTab}
                 onSelectSection={handleSelectSection}
                 onRunAskAiForSection={handleRunAskAiForSection}
+                onRunAskAiForSelection={handleRunCvAskForSelection}
                 onAcceptAiSuggestion={handleAcceptAiSuggestion}
                 onDiscardAiSuggestion={handleDiscardAiSuggestion}
                 onUndoAiSuggestion={handleUndoAiSuggestion}

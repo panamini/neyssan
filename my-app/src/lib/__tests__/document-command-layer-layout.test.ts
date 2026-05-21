@@ -5,17 +5,24 @@ import {
 } from "../document-command-layer-layout";
 
 const VIEWPORT_WIDTHS = [390, 480, 768, 1024, 1280, 1440] as const;
-const ZOOMS = [0.3, 0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+const ZOOMS = [0.3, 0.5, 0.75, 1, 1.25, 1.3, 1.5, 2] as const;
+const HARD_INVARIANT_ZOOMS = [0.3, 0.5, 1, 1.3] as const;
+const THEMES = ["light", "dark"] as const;
+const SURFACES = [
+  { name: "Proposal Forge", toolbarNaturalWidth: 680 },
+  { name: "CV Forge", toolbarNaturalWidth: 520 },
+] as const;
 const BASE_PAPER_WIDTH = 794;
 const BASE_PAPER_HEIGHT = 1123;
 const TOOLBAR_MIN_WIDTH = 300;
 const TOOLBAR_HEIGHT = 44;
 const SAFE_MARGIN = 12;
 const GAP = 12;
+const STICKY_TOP = 78;
 const ASK_OFFSET_FROM_PAPER_TOP = 16;
 const ASK_ICON_WIDTH = 32;
 const ASK_HEIGHT = 32;
-const PAPER_TOP = 80;
+const PAPER_TOP = STICKY_TOP + TOOLBAR_HEIGHT + GAP;
 
 function right(rect: CommandLayerRect) {
   return rect.left + rect.width;
@@ -45,7 +52,10 @@ function makePaperRect(viewportWidth: number, zoom: number): CommandLayerRect {
   };
 }
 
-function makeDraftRect(toolbarRect: CommandLayerRect, draftWidth: number): CommandLayerRect {
+function makeDraftRect(
+  toolbarRect: CommandLayerRect,
+  draftWidth: number,
+): CommandLayerRect {
   return {
     left: right(toolbarRect) - draftWidth - 8,
     top: toolbarRect.top + 5,
@@ -55,7 +65,11 @@ function makeDraftRect(toolbarRect: CommandLayerRect, draftWidth: number): Comma
 }
 
 describe("computeDocumentCommandLayerLayout", () => {
-  it.each(VIEWPORT_WIDTHS.flatMap((width) => ZOOMS.map((zoom) => [width, zoom] as const)))(
+  it.each(
+    VIEWPORT_WIDTHS.flatMap((width) =>
+      ZOOMS.map((zoom) => [width, zoom] as const),
+    ),
+  )(
     "keeps command geometry deterministic at %ipx and %sx zoom",
     (viewportWidth, zoom) => {
       const canvasRect = {
@@ -72,7 +86,7 @@ describe("computeDocumentCommandLayerLayout", () => {
         toolbarNaturalWidth: 680,
         toolbarMinWidth: TOOLBAR_MIN_WIDTH,
         toolbarHeight: TOOLBAR_HEIGHT,
-        stickyTop: 78,
+        stickyTop: STICKY_TOP,
         askHandle: {
           iconWidth: ASK_ICON_WIDTH,
           height: ASK_HEIGHT,
@@ -83,13 +97,26 @@ describe("computeDocumentCommandLayerLayout", () => {
         viewportWidth,
       });
 
-      expect(layout.toolbarRect.width).toBeGreaterThanOrEqual(TOOLBAR_MIN_WIDTH);
-      expect(layout.toolbarRect.top).toBeLessThanOrEqual(paperRect.top);
-      expect(layout.toolbarRect.top).toBeGreaterThanOrEqual(Math.min(78, paperRect.top - GAP - TOOLBAR_HEIGHT));
-      expect(layout.askRect.top).toBeGreaterThanOrEqual(bottom(layout.toolbarRect) + GAP);
-      expect(layout.askRect.top).toBeLessThanOrEqual(
-        bottom(layout.toolbarRect) + GAP + ASK_OFFSET_FROM_PAPER_TOP,
+      expect(layout.toolbarRect.width).toBeGreaterThanOrEqual(
+        TOOLBAR_MIN_WIDTH,
       );
+      expect(layout.toolbarRect.top).toBeLessThanOrEqual(paperRect.top);
+      expect(layout.toolbarRect.top).toBeGreaterThanOrEqual(
+        Math.min(STICKY_TOP, paperRect.top - GAP - TOOLBAR_HEIGHT),
+      );
+      expect(layout.toolbarSticky).toBe(false);
+      expect(bottom(layout.toolbarRect) + GAP).toBeLessThanOrEqual(
+        paperRect.top + 0.5,
+      );
+      if (intersects(layout.askRect, layout.toolbarRect)) {
+        expect(layout.askRect.top).toBeGreaterThanOrEqual(
+          bottom(layout.toolbarRect) + GAP,
+        );
+      } else {
+        expect(layout.askRect.top).toBe(
+          bottom(layout.toolbarRect) + GAP + ASK_OFFSET_FROM_PAPER_TOP,
+        );
+      }
       expect(intersects(layout.askRect, layout.toolbarRect)).toBe(false);
 
       const draftWidth =
@@ -98,23 +125,34 @@ describe("computeDocumentCommandLayerLayout", () => {
           : layout.draftLabelMode === "short"
             ? 82
             : 34;
-      expect(intersects(layout.askRect, makeDraftRect(layout.toolbarRect, draftWidth))).toBe(false);
+      expect(
+        intersects(
+          layout.askRect,
+          makeDraftRect(layout.toolbarRect, draftWidth),
+        ),
+      ).toBe(false);
 
       const safeRight = right(canvasRect) - SAFE_MARGIN;
-      const outsideIconFits = right(paperRect) + GAP + ASK_ICON_WIDTH <= safeRight;
+      const outsideIconFits =
+        right(paperRect) + GAP + ASK_ICON_WIDTH <= safeRight;
       if (outsideIconFits && layout.askOutsidePaper) {
         expect(layout.askMode).toBe("iconOnly");
-        expect(layout.askRect.left).toBeGreaterThanOrEqual(right(paperRect) + GAP - 0.5);
+        expect(layout.askRect.left).toBeGreaterThanOrEqual(
+          right(paperRect) + GAP - 0.5,
+        );
       } else {
         expect(layout.askMode).toBe("edgeTab");
         expect(layout.askConstrained).toBe(true);
-        expect(layout.askRect.left).toBeGreaterThanOrEqual(canvasRect.left + SAFE_MARGIN - 0.5);
+        expect(layout.askRect.left).toBeGreaterThanOrEqual(
+          canvasRect.left + SAFE_MARGIN - 0.5,
+        );
         expect(right(layout.askRect)).toBeLessThanOrEqual(safeRight + 0.5);
       }
 
       if (!layout.toolbarClamped) {
         const paperCenter = paperRect.left + paperRect.width / 2;
-        const toolbarCenter = layout.toolbarRect.left + layout.toolbarRect.width / 2;
+        const toolbarCenter =
+          layout.toolbarRect.left + layout.toolbarRect.width / 2;
         expect(Math.abs(toolbarCenter - paperCenter)).toBeLessThanOrEqual(0.5);
       }
 
@@ -140,6 +178,64 @@ describe("computeDocumentCommandLayerLayout", () => {
     },
   );
 
+  it.each(
+    SURFACES.flatMap((surface) =>
+      THEMES.flatMap((theme) =>
+        HARD_INVARIANT_ZOOMS.map(
+          (zoom) =>
+            [surface.name, theme, zoom, surface.toolbarNaturalWidth] as const,
+        ),
+      ),
+    ),
+  )(
+    "keeps %s toolbar above paper at rest in %s mode at %sx zoom",
+    (_surfaceName, _theme, zoom, toolbarNaturalWidth) => {
+      const viewportWidth = 1280;
+      const canvasRect = {
+        left: 0,
+        top: 0,
+        width: viewportWidth,
+        height: 900,
+      };
+      const paperRect = makePaperRect(viewportWidth, zoom);
+      const layout = computeDocumentCommandLayerLayout({
+        canvasRect,
+        paperRect,
+        zoom,
+        toolbarNaturalWidth,
+        toolbarMinWidth: TOOLBAR_MIN_WIDTH,
+        toolbarHeight: TOOLBAR_HEIGHT,
+        stickyTop: STICKY_TOP,
+        askHandle: {
+          iconWidth: ASK_ICON_WIDTH,
+          height: ASK_HEIGHT,
+        },
+        safeMargin: SAFE_MARGIN,
+        gap: GAP,
+        askOffsetFromPaperTop: ASK_OFFSET_FROM_PAPER_TOP,
+        viewportWidth,
+      });
+
+      expect(layout.toolbarSticky).toBe(false);
+      expect(layout.commandLayerY).toBe(paperRect.top - TOOLBAR_HEIGHT - GAP);
+      expect(bottom(layout.toolbarRect) + GAP).toBeLessThanOrEqual(
+        paperRect.top + 0.5,
+      );
+      expect(intersects(layout.toolbarRect, paperRect)).toBe(false);
+      expect(intersects(layout.askRect, layout.toolbarRect)).toBe(false);
+      expect(layout.toolbarRect.width).toBeGreaterThanOrEqual(
+        TOOLBAR_MIN_WIDTH,
+      );
+
+      if (!layout.toolbarClamped) {
+        const paperCenter = paperRect.left + paperRect.width / 2;
+        const toolbarCenter =
+          layout.toolbarRect.left + layout.toolbarRect.width / 2;
+        expect(Math.abs(toolbarCenter - paperCenter)).toBeLessThanOrEqual(0.5);
+      }
+    },
+  );
+
   it("anchors constrained Ask to the viewport edge in the narrow collapsed window", () => {
     const canvasRect = {
       left: 0,
@@ -159,7 +255,7 @@ describe("computeDocumentCommandLayerLayout", () => {
       toolbarNaturalWidth: 680,
       toolbarMinWidth: TOOLBAR_MIN_WIDTH,
       toolbarHeight: TOOLBAR_HEIGHT,
-      stickyTop: 78,
+      stickyTop: STICKY_TOP,
       askHandle: {
         iconWidth: ASK_ICON_WIDTH,
         height: ASK_HEIGHT,
@@ -192,7 +288,7 @@ describe("computeDocumentCommandLayerLayout", () => {
       toolbarNaturalWidth: 680,
       toolbarMinWidth: TOOLBAR_MIN_WIDTH,
       toolbarHeight: TOOLBAR_HEIGHT,
-      stickyTop: 78,
+      stickyTop: STICKY_TOP,
       askHandle: {
         iconWidth: ASK_ICON_WIDTH,
         height: ASK_HEIGHT,
@@ -204,9 +300,11 @@ describe("computeDocumentCommandLayerLayout", () => {
     });
 
     expect(layout.toolbarSticky).toBe(true);
-    expect(layout.commandLayerY).toBe(78);
-    expect(layout.toolbarRect.top).toBe(78);
-    expect(layout.askRect.top).toBe(150);
+    expect(layout.commandLayerY).toBe(STICKY_TOP);
+    expect(layout.toolbarRect.top).toBe(STICKY_TOP);
+    expect(layout.askRect.top).toBe(
+      STICKY_TOP + TOOLBAR_HEIGHT + GAP + ASK_OFFSET_FROM_PAPER_TOP,
+    );
   });
 
   it("keeps the command layer pinned to the same sticky top near the paper bottom", () => {
@@ -227,7 +325,7 @@ describe("computeDocumentCommandLayerLayout", () => {
       toolbarNaturalWidth: 680,
       toolbarMinWidth: TOOLBAR_MIN_WIDTH,
       toolbarHeight: TOOLBAR_HEIGHT,
-      stickyTop: 78,
+      stickyTop: STICKY_TOP,
       askHandle: {
         iconWidth: ASK_ICON_WIDTH,
         height: ASK_HEIGHT,
@@ -239,8 +337,10 @@ describe("computeDocumentCommandLayerLayout", () => {
     });
 
     expect(layout.toolbarSticky).toBe(true);
-    expect(layout.commandLayerY).toBe(78);
-    expect(layout.toolbarRect.top).toBe(78);
-    expect(layout.askRect.top).toBe(150);
+    expect(layout.commandLayerY).toBe(STICKY_TOP);
+    expect(layout.toolbarRect.top).toBe(STICKY_TOP);
+    expect(layout.askRect.top).toBe(
+      STICKY_TOP + TOOLBAR_HEIGHT + GAP + ASK_OFFSET_FROM_PAPER_TOP,
+    );
   });
 });

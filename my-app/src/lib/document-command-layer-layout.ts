@@ -104,7 +104,10 @@ function draftLabelModeFor({
   // full label needs room for all toolbar groups; short label is allowed only
   // above the minimum compact command width; ultra/narrow windows are icon-only.
   if (toolbarMode === "ultraCompact") return "iconOnly";
-  if (viewportWidth !== undefined && viewportWidth < DRAFT_ICON_VIEWPORT_MAX_WIDTH) {
+  if (
+    viewportWidth !== undefined &&
+    viewportWidth < DRAFT_ICON_VIEWPORT_MAX_WIDTH
+  ) {
     return "iconOnly";
   }
   if (
@@ -123,23 +126,39 @@ export function computeDocumentCommandLayerLayout(
   const canvasSafeLeft = input.canvasRect.left + input.safeMargin;
   const canvasSafeRight = right(input.canvasRect) - input.safeMargin;
   const edgeTabSafeRight = canvasSafeRight;
-  const canvasSafeWidth = Math.max(0, canvasSafeRight - canvasSafeLeft);
   const paperCenterX = centerX(input.paperRect);
+  const iconAskLeft = right(input.paperRect) + input.gap;
+  const iconAskFits =
+    iconAskLeft + input.askHandle.iconWidth <= canvasSafeRight;
+  const reservedAskInlineSize = iconAskFits
+    ? 0
+    : input.askHandle.iconWidth + input.gap;
+  const toolbarSafeRight = Math.max(
+    canvasSafeLeft,
+    iconAskFits
+      ? Math.min(canvasSafeRight, iconAskLeft - input.gap)
+      : canvasSafeRight - reservedAskInlineSize,
+  );
+  const toolbarSafeWidth = Math.max(0, toolbarSafeRight - canvasSafeLeft);
   const unclampedToolbarWidth = Math.max(
     input.toolbarMinWidth,
-    Math.min(input.toolbarNaturalWidth, Math.max(input.paperRect.width, input.toolbarMinWidth)),
+    Math.min(
+      input.toolbarNaturalWidth,
+      Math.max(input.paperRect.width, input.toolbarMinWidth),
+    ),
   );
   const toolbarWidth =
-    canvasSafeWidth >= input.toolbarMinWidth
-      ? Math.min(unclampedToolbarWidth, canvasSafeWidth)
+    toolbarSafeWidth >= input.toolbarMinWidth
+      ? Math.min(unclampedToolbarWidth, toolbarSafeWidth)
       : input.toolbarMinWidth;
   const desiredToolbarLeft = paperCenterX - toolbarWidth / 2;
   const toolbarLeft = clamp(
     desiredToolbarLeft,
     canvasSafeLeft,
-    canvasSafeRight - toolbarWidth,
+    toolbarSafeRight - toolbarWidth,
   );
-  const commandLayerNormalY = input.paperRect.top - input.gap - input.toolbarHeight;
+  const commandLayerNormalY =
+    input.paperRect.top - input.gap - input.toolbarHeight;
   const commandLayerSticky = commandLayerNormalY < input.stickyTop;
   const commandLayerY = Math.max(commandLayerNormalY, input.stickyTop);
   const toolbarRect = {
@@ -159,14 +178,11 @@ export function computeDocumentCommandLayerLayout(
   const modeControlMode: CommandLayerModeControlMode =
     toolbarMode === "ultraCompact" ? "toggle" : "split";
 
-  const iconAskLeft = right(input.paperRect) + input.gap;
   const askTop =
     commandLayerY +
     input.toolbarHeight +
     input.gap +
     input.askOffsetFromPaperTop;
-  const iconAskFits =
-    iconAskLeft + input.askHandle.iconWidth <= canvasSafeRight;
 
   let askMode: CommandLayerAskMode;
   let askWidth: number;
@@ -181,16 +197,18 @@ export function computeDocumentCommandLayerLayout(
   } else {
     askMode = "edgeTab";
     askWidth = input.askHandle.iconWidth;
-    const edgeTabMaxLeft = Math.max(canvasSafeLeft, edgeTabSafeRight - askWidth);
+    const edgeTabMaxLeft = Math.max(
+      canvasSafeLeft,
+      edgeTabSafeRight - askWidth,
+    );
     const edgeTabPreferredLeft =
       input.canvasRect.width < ASK_EDGE_VIEWPORT_ANCHOR_MAX_WIDTH
         ? edgeTabMaxLeft
-        : Math.min(right(input.paperRect) - askWidth - ASK_EDGE_INSET, edgeTabMaxLeft);
-    askLeft = clamp(
-      edgeTabPreferredLeft,
-      canvasSafeLeft,
-      edgeTabMaxLeft,
-    );
+        : Math.min(
+            right(input.paperRect) - askWidth - ASK_EDGE_INSET,
+            edgeTabMaxLeft,
+          );
+    askLeft = clamp(edgeTabPreferredLeft, canvasSafeLeft, edgeTabMaxLeft);
     askOutsidePaper = askLeft >= right(input.paperRect) + input.gap - 0.5;
   }
 
@@ -204,9 +222,15 @@ export function computeDocumentCommandLayerLayout(
   if (intersects(askRect, toolbarRect)) {
     askMode = "edgeTab";
     askWidth = input.askHandle.iconWidth;
-    const edgeTabMaxLeft = Math.max(canvasSafeLeft, edgeTabSafeRight - askWidth);
+    const edgeTabMaxLeft = Math.max(
+      canvasSafeLeft,
+      edgeTabSafeRight - askWidth,
+    );
     askLeft = clamp(
-      Math.min(right(input.paperRect) - askWidth - ASK_EDGE_INSET, edgeTabMaxLeft),
+      Math.min(
+        right(input.paperRect) - askWidth - ASK_EDGE_INSET,
+        edgeTabMaxLeft,
+      ),
       canvasSafeLeft,
       edgeTabMaxLeft,
     );
