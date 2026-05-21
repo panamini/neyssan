@@ -1,84 +1,74 @@
-import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import CvStageBar from "../CvStageBar";
 
-const baseProps = {
-  mode: "edit" as const,
-  exporting: false,
-  tone: "natural" as const,
-  onModeChange: vi.fn(),
-};
-
-describe("CvStageBar", () => {
-  it("keeps document switching out of the stage bar", () => {
+describe("CvStageBar command layer", () => {
+  it("renders CV document tools without Draft or toolbar Ask", () => {
     render(
       <CvStageBar
-        {...baseProps}
+        mode="preview"
+        onModeChange={vi.fn()}
         onOpenSections={vi.fn()}
         onOpenDesign={vi.fn()}
         onOpenTemplates={vi.fn()}
+        onOpenAsk={vi.fn()}
       />,
     );
 
-    expect(screen.queryByText("Pick resume")).not.toBeInTheDocument();
+    const toolbar = screen.getByTestId("cv-toolbar");
+
     expect(
-      screen
-        .getByRole("button", { name: "Edit" })
-        .closest(".dasti-toolbar--surface-tooltips"),
-    ).toBeTruthy();
-    const editTrigger = screen.getByRole("button", { name: "Edit" });
-    const previewTrigger = screen.getByRole("button", {
-      name: "Page preview",
-    });
-    expect(editTrigger).toHaveAttribute("data-toolbar-tooltip", "Edit");
-    expect(previewTrigger).toHaveAttribute("data-toolbar-tooltip", "Preview");
-    expect(editTrigger).not.toHaveAttribute("title");
-    expect(previewTrigger).not.toHaveAttribute("title");
-    expect(screen.getByText("Natural")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sections" })).toHaveAttribute(
-      "data-stage-tooltip-mode",
-      "compact",
-    );
-    expect(screen.getByRole("button", { name: "Templates" })).toHaveAttribute(
-      "data-stage-tooltip-mode",
-      "compact",
-    );
+      within(toolbar).getByRole("button", { name: "Edit" }),
+    ).toBeInTheDocument();
     expect(
-      previewTrigger.compareDocumentPosition(
-        screen.getByRole("button", { name: "Sections" }),
-      ) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeGreaterThan(0);
+      within(toolbar).getByRole("button", { name: "Page preview" }),
+    ).toBeInTheDocument();
     expect(
-      screen
-        .getByRole("button", { name: "Sections" })
-        .compareDocumentPosition(screen.getByRole("button", { name: "Design" })) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeGreaterThan(0);
+      within(toolbar).getByRole("button", { name: "Sections" }),
+    ).toBeInTheDocument();
     expect(
-      screen
-        .getByRole("button", { name: "Design" })
-        .compareDocumentPosition(screen.getByRole("button", { name: "Templates" })) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeGreaterThan(0);
+      within(toolbar).getByRole("button", { name: "Design" }),
+    ).toBeInTheDocument();
     expect(
-      screen
-        .getByRole("button", { name: "Templates" })
-        .compareDocumentPosition(screen.getByText("Natural")) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Redo" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Natural tone")).not.toBeInTheDocument();
-    expect(screen.queryByText("Saved")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
-    expect(screen.queryByText("ATS-ready")).not.toBeInTheDocument();
-    expect(screen.queryByText("OK")).not.toBeInTheDocument();
+      within(toolbar).getByRole("button", { name: "Templates" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /Import CV/i }),
+      within(toolbar).queryByRole("button", { name: /Draft/i }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /New CV/i }),
+      within(toolbar).queryByRole("button", { name: "Ask" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByTestId("cv-ask-handle")).toHaveAttribute(
+      "aria-label",
+      "Ask",
+    );
+  });
+
+  it("wires document toolbar actions to left-drawer modes and Ask to the side handle", () => {
+    const onOpenSections = vi.fn();
+    const onOpenDesign = vi.fn();
+    const onOpenTemplates = vi.fn();
+    const onOpenAsk = vi.fn();
+
+    render(
+      <CvStageBar
+        mode="edit"
+        onModeChange={vi.fn()}
+        onOpenSections={onOpenSections}
+        onOpenDesign={onOpenDesign}
+        onOpenTemplates={onOpenTemplates}
+        onOpenAsk={onOpenAsk}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Sections" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
+    fireEvent.click(screen.getByRole("button", { name: "Templates" }));
+    fireEvent.click(screen.getByTestId("cv-ask-handle"));
+
+    expect(onOpenSections).toHaveBeenCalledTimes(1);
+    expect(onOpenDesign).toHaveBeenCalledTimes(1);
+    expect(onOpenTemplates).toHaveBeenCalledTimes(1);
+    expect(onOpenAsk).toHaveBeenCalledTimes(1);
   });
 });

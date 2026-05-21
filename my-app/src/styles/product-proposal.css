@@ -2732,7 +2732,9 @@
 .dasti-proposal-editor-page__drawer {
   --proposal-card-body-padding: var(--space-4);
   --proposal-editor-page-close-block-inset: clamp(32px, 4vw, 48px);
-  --proposal-editor-page-close-inline-inset: var(--proposal-output-editor-inline-padding);
+  --proposal-editor-page-close-inline-inset: var(
+    --proposal-output-editor-inline-padding
+  );
   position: relative;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
@@ -7897,6 +7899,7 @@
 }
 
 .dasti-proposal-skeleton-stage {
+  --document-command-layer-rest-gutter: calc(var(--space-4) + var(--space-2));
   --editor-toolbar-control-block-size: var(--control-sm);
   --editor-toolbar-icon-control-block-size: var(--control-sm);
   position: relative;
@@ -7905,20 +7908,30 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  padding-block-start: var(--document-command-layer-rest-gutter);
 }
 
 .dasti-proposal-skeleton-stage__bar {
   --proposal-command-toolbar-min-width: 300px;
   position: fixed;
   z-index: 5;
-  inset-block-start: var(--proposal-command-toolbar-block-start, var(--space-3));
-  inset-inline-start: var(--proposal-command-toolbar-inline-start, var(--proposal-toolbar-paper-left, 0));
+  inset-block-start: var(
+    --proposal-command-toolbar-block-start,
+    var(--space-3)
+  );
+  inset-inline-start: var(
+    --proposal-command-toolbar-inline-start,
+    var(--proposal-toolbar-paper-left, 0)
+  );
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: var(--space-2);
-  width: var(--proposal-command-toolbar-width, min(100%, var(--proposal-toolbar-paper-width, 100%)));
+  width: var(
+    --proposal-command-toolbar-width,
+    min(100%, var(--proposal-toolbar-paper-width, 100%))
+  );
   max-width: none;
   min-width: var(--proposal-command-toolbar-min-width);
   box-sizing: border-box;
@@ -8011,7 +8024,9 @@
 .dark .dasti-proposal-skeleton-stage__mode button,
 .dark .dasti-proposal-skeleton-stage__action-plain,
 .dark
-  .dasti-proposal-skeleton-stage__primary-action:not(.dasti-proposal-skeleton-stage__primary-action--draft) {
+  .dasti-proposal-skeleton-stage__primary-action:not(
+    .dasti-proposal-skeleton-stage__primary-action--draft
+  ) {
   border-color: transparent;
   background: transparent;
   color: var(--color-text-muted);
@@ -8021,16 +8036,24 @@
 .dark .dasti-proposal-skeleton-stage__mode button:focus-visible,
 .dark .dasti-proposal-skeleton-stage__mode button[data-selected="true"],
 .dark .dasti-proposal-skeleton-stage .dasti-proposal-mode-toggle--single:hover,
-.dark .dasti-proposal-skeleton-stage .dasti-proposal-mode-toggle--single:focus-visible,
+.dark
+  .dasti-proposal-skeleton-stage
+  .dasti-proposal-mode-toggle--single:focus-visible,
 .dark .dasti-proposal-skeleton-stage__action-plain:hover,
 .dark .dasti-proposal-skeleton-stage__action-plain:focus-visible,
 .dark .dasti-proposal-skeleton-stage__action-plain[aria-expanded="true"],
 .dark
-  .dasti-proposal-skeleton-stage__primary-action:not(.dasti-proposal-skeleton-stage__primary-action--draft):hover:not(:disabled),
+  .dasti-proposal-skeleton-stage__primary-action:not(
+    .dasti-proposal-skeleton-stage__primary-action--draft
+  ):hover:not(:disabled),
 .dark
-  .dasti-proposal-skeleton-stage__primary-action:not(.dasti-proposal-skeleton-stage__primary-action--draft):focus-visible,
+  .dasti-proposal-skeleton-stage__primary-action:not(
+    .dasti-proposal-skeleton-stage__primary-action--draft
+  ):focus-visible,
 .dark
-  .dasti-proposal-skeleton-stage__primary-action:not(.dasti-proposal-skeleton-stage__primary-action--draft)[aria-expanded="true"] {
+  .dasti-proposal-skeleton-stage__primary-action:not(
+    .dasti-proposal-skeleton-stage__primary-action--draft
+  )[aria-expanded="true"] {
   border-color: var(--color-border-contrast);
   background: var(--color-surface-2);
   color: var(--color-text);
@@ -8048,9 +8071,11 @@
   box-shadow: none;
 }
 
-.dark .dasti-proposal-skeleton-stage__primary-action--draft:hover:not(:disabled),
+.dark
+  .dasti-proposal-skeleton-stage__primary-action--draft:hover:not(:disabled),
 .dark .dasti-proposal-skeleton-stage__primary-action--draft:focus-visible,
-.dark .dasti-proposal-skeleton-stage__primary-action--draft[aria-expanded="true"] {
+.dark
+  .dasti-proposal-skeleton-stage__primary-action--draft[aria-expanded="true"] {
   border-color: color-mix(in srgb, var(--color-accent) 38%, transparent);
   background: color-mix(
     in srgb,
@@ -8061,7 +8086,8 @@
   box-shadow: none;
 }
 
-.dark .dasti-proposal-skeleton-stage__primary-action--draft[aria-expanded="true"] {
+.dark
+  .dasti-proposal-skeleton-stage__primary-action--draft[aria-expanded="true"] {
   background: color-mix(
     in srgb,
     var(--color-accent-soft) 72%,
@@ -8086,7 +8112,10 @@
   position: fixed;
   z-index: 4;
   inset-block-start: var(--proposal-ask-handle-block-start, var(--space-3));
-  inset-inline-start: var(--proposal-ask-handle-inline-start, calc(100vw - 56px));
+  inset-inline-start: var(
+    --proposal-ask-handle-inline-start,
+    calc(100vw - 56px)
+  );
   width: auto;
   max-width: max-content;
   margin: 0;
@@ -8202,7 +8231,8 @@
   background: var(--proposal-chrome-control-active-bg);
 }
 
-.dasti-proposal-skeleton-stage__primary-action--draft > span[aria-hidden="true"] {
+.dasti-proposal-skeleton-stage__primary-action--draft
+  > span[aria-hidden="true"] {
   color: var(--color-accent);
 }
 
@@ -9775,7 +9805,6 @@
     .dasti-proposal-skeleton-stage__action-label {
     display: none;
   }
-
 }
 
 @media (max-width: 1180px) {
@@ -9829,7 +9858,6 @@
     .dasti-proposal-skeleton-stage__action-label {
     display: none;
   }
-
 }
 
 @media (max-width: 760px) {
@@ -10383,15 +10411,13 @@
   background: transparent;
 }
 
-.dasti-composer-drawer
-  .dasti-proposal-skeleton-rail__ask-hub:focus-within {
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__ask-hub:focus-within {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
 }
 
-.dasti-composer-drawer
-  .dasti-proposal-skeleton-rail__ask-suggestions {
+.dasti-composer-drawer .dasti-proposal-skeleton-rail__ask-suggestions {
   padding-inline: var(--space-1);
 }
 
