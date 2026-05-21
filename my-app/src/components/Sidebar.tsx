@@ -25,7 +25,7 @@ import {
   type SettingsTab,
 } from "../lib/settings-tabs";
 
-const MOBILE_HIDE_WIDTH = 480;
+const COMPACT_RAIL_WIDTH = 768;
 
 const SETTINGS_DRAWER_GROUPS: Array<{
   label: string;
@@ -47,6 +47,7 @@ type SidebarRailLinkProps = {
   panelOpen?: boolean;
   expanded?: boolean;
   hoverEnabled?: boolean;
+  compact?: boolean;
   className?: string;
   onClick?: () => void;
   onHoverIntent?: () => void;
@@ -62,6 +63,7 @@ type SidebarRailButtonProps = {
   expanded: boolean;
   active?: boolean;
   hoverEnabled?: boolean;
+  compact: boolean;
   className?: string;
   onClick: () => void;
   onHoverIntent?: () => void;
@@ -107,6 +109,7 @@ function SidebarRailLink({
   panelOpen = false,
   expanded,
   hoverEnabled = true,
+  compact = false,
   className,
   onClick,
   onHoverIntent,
@@ -126,6 +129,8 @@ function SidebarRailLink({
       aria-label={label}
       aria-current={active ? "page" : undefined}
       aria-expanded={expanded}
+      data-toolbar-tooltip={compact ? label : undefined}
+      data-toolbar-tooltip-placement={compact ? "inline-end" : undefined}
       onClick={onClick}
       onFocus={onFocusOpen}
       onPointerEnter={(event) => {
@@ -153,6 +158,7 @@ function SidebarRailButton({
   expanded,
   active = false,
   hoverEnabled = true,
+  compact,
   className,
   onClick,
   onHoverIntent,
@@ -172,6 +178,8 @@ function SidebarRailButton({
       aria-label={label}
       aria-current={active ? "page" : undefined}
       aria-expanded={expanded}
+      data-toolbar-tooltip={compact ? label : undefined}
+      data-toolbar-tooltip-placement={compact ? "inline-end" : undefined}
       onClick={onClick}
       onFocus={onFocusOpen}
       onPointerEnter={(event) => {
@@ -341,9 +349,7 @@ export const Sidebar: React.FC = () => {
     };
   }, [openTemplateSurface, settingsActive]);
 
-  if (viewportWidth < MOBILE_HIDE_WIDTH) {
-    return null;
-  }
+  const compactRail = viewportWidth < COMPACT_RAIL_WIDTH;
 
   const handleOpenTemplates = () => {
     if (!activeForgeSurface) {
@@ -397,13 +403,18 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="sb" data-rail="permanent">
+    <aside
+      className="sb"
+      data-rail="permanent"
+      data-rail-compact={compactRail ? "true" : undefined}
+    >
       <nav className="sb__nav sb__nav--rail" aria-label="Primary navigation">
         <SidebarRailLink
           label="Today"
           href="/dashboard"
           active={dashboardActive}
           icon={CalendarDots}
+          compact={compactRail}
           onClick={closePanel}
         />
         {proposalContextualRail && finePointer ? (
@@ -418,6 +429,7 @@ export const Sidebar: React.FC = () => {
             onHoverIntent={() => handleQueuePanel("jobs")}
             onHoverLeave={handleQueueClosePanel}
             icon={Briefcase}
+            compact={compactRail}
             onClick={closePanel}
           />
         ) : proposalContextualRail ? (
@@ -431,6 +443,7 @@ export const Sidebar: React.FC = () => {
             onHoverIntent={() => handleQueuePanel("jobs")}
             onHoverLeave={handleQueueClosePanel}
             icon={Briefcase}
+            compact={compactRail}
           />
         ) : (
           <SidebarRailLink
@@ -438,10 +451,11 @@ export const Sidebar: React.FC = () => {
             href="/jobs"
             active={jobsActive}
             icon={Briefcase}
+            compact={compactRail}
             onClick={closePanel}
           />
         )}
-        {(proposalContextualRail || cvContextualRail) && finePointer ? (
+        {proposalContextualRail && finePointer ? (
           <SidebarRailLink
             label="CV"
             href="/cv"
@@ -453,7 +467,22 @@ export const Sidebar: React.FC = () => {
             onHoverIntent={() => handleQueuePanel("cvs")}
             onHoverLeave={handleQueueClosePanel}
             icon={FileUser}
+            compact={compactRail}
             onClick={closePanel}
+          />
+        ) : cvContextualRail ? (
+          <SidebarRailButton
+            label="CV"
+            panelOpen={panelOpenFor("cvs")}
+            expanded={panelOpenFor("cvs")}
+            active={cvActive}
+            hoverEnabled={finePointer}
+            onClick={() => handleOpenProposalPanel("cvs")}
+            onFocusOpen={() => handleFocusPanel("cvs")}
+            onHoverIntent={() => handleQueuePanel("cvs")}
+            onHoverLeave={handleQueueClosePanel}
+            icon={FileUser}
+            compact={compactRail}
           />
         ) : proposalContextualRail || cvContextualRail ? (
           <SidebarRailButton
@@ -467,6 +496,7 @@ export const Sidebar: React.FC = () => {
             onHoverIntent={() => handleQueuePanel("cvs")}
             onHoverLeave={handleQueueClosePanel}
             icon={FileUser}
+            compact={compactRail}
           />
         ) : (
           <SidebarRailLink
@@ -474,6 +504,7 @@ export const Sidebar: React.FC = () => {
             href="/cv"
             active={cvActive}
             icon={FileUser}
+            compact={compactRail}
             onClick={closePanel}
           />
         )}
@@ -489,6 +520,7 @@ export const Sidebar: React.FC = () => {
             onHoverIntent={() => handleQueuePanel("proposals")}
             onHoverLeave={handleQueueClosePanel}
             icon={FileText}
+            compact={compactRail}
           />
         ) : (
           <SidebarRailLink
@@ -496,6 +528,7 @@ export const Sidebar: React.FC = () => {
             href="/proposal"
             active={proposalActive}
             icon={FileText}
+            compact={compactRail}
             onClick={closePanel}
           />
         )}
@@ -512,6 +545,7 @@ export const Sidebar: React.FC = () => {
             onHoverLeave={handleQueueClosePanel}
             icon={FolderSimple}
             activeIcon={FolderOpen}
+            compact={compactRail}
             onClick={closePanel}
           />
         ) : proposalContextualRail ? (
@@ -526,6 +560,7 @@ export const Sidebar: React.FC = () => {
             onHoverLeave={handleQueueClosePanel}
             icon={FolderSimple}
             activeIcon={FolderOpen}
+            compact={compactRail}
           />
         ) : cvContextualRail ? (
           <SidebarRailButton
@@ -539,6 +574,7 @@ export const Sidebar: React.FC = () => {
             onHoverLeave={handleQueueClosePanel}
             icon={FolderSimple}
             activeIcon={FolderOpen}
+            compact={compactRail}
           />
         ) : (
           <SidebarRailLink
@@ -547,6 +583,7 @@ export const Sidebar: React.FC = () => {
             active={projectsActive}
             icon={FolderSimple}
             activeIcon={FolderOpen}
+            compact={compactRail}
             onClick={closePanel}
           />
         )}
@@ -562,6 +599,7 @@ export const Sidebar: React.FC = () => {
             onHoverIntent={handleQueueTemplates}
             onHoverLeave={handleQueueClosePanel}
             icon={Layout}
+            compact={compactRail}
             onClick={closePanel}
           />
         ) : activeForgeSurface ? (
@@ -575,6 +613,7 @@ export const Sidebar: React.FC = () => {
             onHoverIntent={handleQueueTemplates}
             onHoverLeave={handleQueueClosePanel}
             icon={Layout}
+            compact={compactRail}
           />
         ) : (
           <SidebarRailLink
@@ -582,6 +621,7 @@ export const Sidebar: React.FC = () => {
             href="/templates"
             active={templatesActive}
             icon={Layout}
+            compact={compactRail}
             onClick={closePanel}
           />
         )}
@@ -593,6 +633,7 @@ export const Sidebar: React.FC = () => {
           icon={Gear}
           className="sb-rail-button--bottom"
           hoverEnabled={false}
+          compact={compactRail}
           onClick={handleOpenSettingsPanel}
         />
       </nav>
