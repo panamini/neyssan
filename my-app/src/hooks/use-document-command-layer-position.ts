@@ -1,4 +1,5 @@
 import React from "react";
+import { flushSync } from "react-dom";
 import {
   computeDocumentCommandLayerLayout,
   type CommandLayerAskMode,
@@ -260,12 +261,15 @@ export function useDocumentCommandLayerPosition({
       if (frameId !== null) return;
       frameId = window.requestAnimationFrame(updateCommandLayerAnchor);
     };
-    const handleWindowResize = () => {
+    const updateCommandLayerAnchorImmediately = () => {
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId);
         frameId = null;
       }
-      updateCommandLayerAnchor();
+      flushSync(updateCommandLayerAnchor);
+    };
+    const handleWindowResize = () => {
+      updateCommandLayerAnchorImmediately();
     };
 
     scheduleCommandLayerAnchorUpdate();
@@ -273,7 +277,7 @@ export function useDocumentCommandLayerPosition({
     resizeObserver =
       typeof ResizeObserver === "undefined"
         ? null
-        : new ResizeObserver(scheduleCommandLayerAnchorUpdate);
+        : new ResizeObserver(updateCommandLayerAnchorImmediately);
     if (stageRef.current) resizeObserver?.observe(stageRef.current);
     const commandCanvas = commandCanvasSelector
       ? stageRef.current?.closest<HTMLElement>(commandCanvasSelector)
@@ -295,6 +299,7 @@ export function useDocumentCommandLayerPosition({
     }
 
     window.addEventListener("resize", handleWindowResize);
+    window.visualViewport?.addEventListener("resize", handleWindowResize);
     window.addEventListener("scroll", scheduleCommandLayerAnchorUpdate, true);
 
     return () => {
@@ -303,6 +308,7 @@ export function useDocumentCommandLayerPosition({
       paperMutationObserver?.disconnect();
       stageMutationObserver?.disconnect();
       window.removeEventListener("resize", handleWindowResize);
+      window.visualViewport?.removeEventListener("resize", handleWindowResize);
       window.removeEventListener(
         "scroll",
         scheduleCommandLayerAnchorUpdate,
