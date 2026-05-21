@@ -148,6 +148,72 @@ function CommandLayerPriorityHarness() {
   );
 }
 
+function LowZoomScrollHarness({ scrollOffset = 0 }: { scrollOffset?: number }) {
+  const stageRef = React.useRef<HTMLElement | null>(null);
+  const paperRef = React.useRef<HTMLDivElement | null>(null);
+  const pageLeft = 565;
+  const pageWidth = 238;
+  const commandLayer = useDocumentCommandLayerPosition({
+    stageRef,
+    paperRef,
+    paperAnchorSelector: ".paper-anchor",
+    commandCanvasSelector: ".command-canvas",
+    cssVarPrefix: "proposal",
+    toolbarSelector: "[data-testid='cv-toolbar']",
+    toolbarNaturalWidth: 520,
+    toolbarMinWidth: 300,
+    toolbarHeight: 44,
+    askHandle: {
+      iconWidth: 32,
+      height: 32,
+    },
+    safeMargin: 12,
+    gap: 12,
+    askOffsetFromPaperTop: 16,
+    refreshKey: scrollOffset,
+  });
+
+  return (
+    <div
+      className="command-canvas"
+      data-testid="command-canvas"
+      data-rect={encodeRect(0, -scrollOffset, 1280, 1200)}
+    >
+      <section
+        ref={stageRef}
+        data-testid="command-stage"
+        data-rect={encodeRect(0, -scrollOffset, 1280, 1200)}
+      >
+        <div data-testid="cv-toolbar" data-rect={encodeRect(0, 0, 300, 44)} />
+        <div ref={paperRef}>
+          <div
+            className="paper-anchor"
+            data-testid="cv-paper-page-1"
+            data-rect={encodeRect(pageLeft, 134 - scrollOffset, pageWidth, 382)}
+          />
+          <div
+            className="paper-anchor"
+            data-testid="cv-paper-page-2"
+            data-rect={encodeRect(pageLeft, 550 - scrollOffset, pageWidth, 382)}
+          />
+        </div>
+        <output data-testid="toolbar-inline-start">
+          {commandLayer.style["--proposal-command-toolbar-inline-start"] ?? ""}
+        </output>
+        <output data-testid="toolbar-width">
+          {commandLayer.style["--proposal-command-toolbar-width"] ?? ""}
+        </output>
+        <output data-testid="toolbar-block-start">
+          {commandLayer.style["--proposal-command-toolbar-block-start"] ?? ""}
+        </output>
+        <output data-testid="paper-center">
+          {pageLeft + pageWidth / 2}px
+        </output>
+      </section>
+    </div>
+  );
+}
+
 describe("useDocumentCommandLayerPosition", () => {
   let rectSpy: ReturnType<typeof vi.spyOn>;
 
@@ -240,6 +306,41 @@ describe("useDocumentCommandLayerPosition", () => {
       expect(screen.getByTestId("toolbar-inline-start")).toHaveTextContent(
         "534px",
       );
+    });
+  });
+
+  it("keeps the 30% CV toolbar centered on the same paper while vertical scroll makes it sticky", async () => {
+    const { rerender } = render(<LowZoomScrollHarness scrollOffset={0} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toolbar-inline-start")).toHaveTextContent(
+        "534px",
+      );
+    });
+    expect(screen.getByTestId("paper-center")).toHaveTextContent("684px");
+
+    rerender(<LowZoomScrollHarness scrollOffset={90} />);
+
+    act(() => {
+      window.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toolbar-block-start")).toHaveTextContent(
+        "66px",
+      );
+      const toolbarLeft = Number.parseFloat(
+        screen.getByTestId("toolbar-inline-start").textContent ?? "",
+      );
+      const toolbarWidth = Number.parseFloat(
+        screen.getByTestId("toolbar-width").textContent ?? "",
+      );
+      const paperCenter = Number.parseFloat(
+        screen.getByTestId("paper-center").textContent ?? "",
+      );
+
+      expect(toolbarLeft).toBeCloseTo(534, 0);
+      expect(toolbarLeft + toolbarWidth / 2).toBeCloseTo(paperCenter, 0);
     });
   });
 

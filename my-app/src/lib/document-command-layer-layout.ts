@@ -232,9 +232,15 @@ export function computeDocumentCommandLayerLayout(
   };
 
   if (intersects(askRect, toolbarRect)) {
-    toolbarPlacement = makeToolbarPlacement(askRect.left - input.gap);
-    toolbarRect = toolbarPlacement.rect;
-    askPlacement = placeAsk();
+    const rightOfToolbarAskLeft = right(toolbarRect) + input.gap;
+    if (rightOfToolbarAskLeft + input.askHandle.iconWidth <= canvasSafeRight) {
+      askPlacement = {
+        mode: "iconOnly" as const,
+        width: input.askHandle.iconWidth,
+        left: rightOfToolbarAskLeft,
+        outsidePaper: rightOfToolbarAskLeft >= right(input.paperRect),
+      };
+    }
     askRect = {
       left: askPlacement.left,
       top: askTop,
@@ -259,6 +265,13 @@ export function computeDocumentCommandLayerLayout(
         height: input.askHandle.height,
       };
     }
+  }
+
+  if (intersects(askRect, toolbarRect)) {
+    askRect = {
+      ...askRect,
+      top: toolbarRect.top + toolbarRect.height + input.gap,
+    };
   }
 
   const askMode: CommandLayerAskMode = askPlacement.mode;
