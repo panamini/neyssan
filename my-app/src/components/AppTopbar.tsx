@@ -26,7 +26,7 @@ import {
   DotsThree,
   FilePdf,
   FileText,
-  FolderOpen,
+  FileUser,
   MagnifyingGlass,
   Plus,
   ShareFat,
@@ -354,7 +354,11 @@ export function AppTopbar({
                   }
                   aria-hidden="true"
                 />
-                <FileText size={15} strokeWidth={1.8} aria-hidden="true" />
+                <FileText
+                  className="app-topbar__icon"
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
               </span>
               <DocumentTitleEditor
                 className="app-topbar__doc-title"
@@ -390,13 +394,20 @@ export function AppTopbar({
                         {
                           id: "new-cv",
                           label: "New CV",
-                          icon: <Plus size={15} strokeWidth={1.8} />,
+                          icon: (
+                            <Plus className="app-topbar__icon" strokeWidth={1.8} />
+                          ),
                           onSelect: cvTopbarRegistration.onNewCv,
                         },
                         {
                           id: "import-pdf",
                           label: "Import PDF",
-                          icon: <Upload size={15} strokeWidth={1.8} />,
+                          icon: (
+                            <Upload
+                              className="app-topbar__icon"
+                              strokeWidth={1.8}
+                            />
+                          ),
                           onSelect: cvTopbarRegistration.onImportCv,
                         },
                       ],
@@ -408,11 +419,14 @@ export function AppTopbar({
                       className="app-topbar__doc-action app-topbar__doc-action--new"
                       data-toolbar-tooltip="New"
                     >
-                      <Plus size={13} strokeWidth={1.9} aria-hidden="true" />
+                      <Plus
+                        className="app-topbar__icon"
+                        strokeWidth={1.9}
+                        aria-hidden="true"
+                      />
                       <span className="app-topbar__doc-action-label">New</span>
                       <ChevronDown
-                        className="app-topbar__doc-action-caret"
-                        size={13}
+                        className="app-topbar__doc-action-caret app-topbar__icon--compact"
                         strokeWidth={2}
                         aria-hidden="true"
                       />
@@ -456,7 +470,12 @@ export function AppTopbar({
                         {
                           id: "open-cv-library",
                           label: "Open CV library",
-                          icon: <FolderOpen size={15} strokeWidth={1.8} />,
+                          icon: (
+                            <FileUser
+                              className="app-topbar__icon"
+                              strokeWidth={1.8}
+                            />
+                          ),
                           onSelect: () => {
                             void navigate("/cvs");
                           },
@@ -471,9 +490,8 @@ export function AppTopbar({
                       aria-label="Switch resume"
                       data-toolbar-tooltip="Switch resume"
                     >
-                      <FolderOpen
-                        className="app-topbar__doc-picker-icon"
-                        size={15}
+                      <FileUser
+                        className="app-topbar__doc-picker-icon app-topbar__icon"
                         strokeWidth={1.8}
                         aria-hidden="true"
                       />
@@ -481,8 +499,7 @@ export function AppTopbar({
                         Resume
                       </span>
                       <ChevronDown
-                        className="app-topbar__doc-picker-caret"
-                        size={13}
+                        className="app-topbar__doc-picker-caret app-topbar__icon--compact"
                         strokeWidth={2}
                         aria-hidden="true"
                       />
@@ -498,14 +515,19 @@ export function AppTopbar({
                         {
                           id: "duplicate-cv",
                           label: "Duplicate CV",
-                          icon: <Copy size={15} strokeWidth={1.8} />,
+                          icon: <Copy className="app-topbar__icon" strokeWidth={1.8} />,
                           disabled: !cvTopbarRegistration.hasCurrentCv,
                           onSelect: cvTopbarRegistration.onDuplicateCv,
                         },
                         {
                           id: "delete-cv",
                           label: "Delete CV",
-                          icon: <TrashSimple size={15} strokeWidth={1.8} />,
+                          icon: (
+                            <TrashSimple
+                              className="app-topbar__icon"
+                              strokeWidth={1.8}
+                            />
+                          ),
                           tone: "danger",
                           disabled: !cvTopbarRegistration.hasCurrentCv,
                           onSelect: cvTopbarRegistration.onDeleteCv,
@@ -521,7 +543,7 @@ export function AppTopbar({
                       data-toolbar-tooltip="CV actions"
                     >
                       <DotsThree
-                        size={16}
+                        className="app-topbar__icon"
                         weight="bold"
                         aria-hidden="true"
                       />
@@ -555,7 +577,11 @@ export function AppTopbar({
                   }
                   aria-hidden="true"
                 />
-                <FileText size={15} strokeWidth={1.8} aria-hidden="true" />
+                <FileText
+                  className="app-topbar__icon"
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
               </span>
               <DocumentTitleEditor
                 className="app-topbar__doc-title"
@@ -588,7 +614,11 @@ export function AppTopbar({
                   aria-label="New proposal"
                   onClick={proposalTopbarRegistration.onNewProposal}
                 >
-                  <Plus size={13} strokeWidth={1.9} aria-hidden="true" />
+                  <Plus
+                    className="app-topbar__icon"
+                    strokeWidth={1.9}
+                    aria-hidden="true"
+                  />
                   <span className="app-topbar__doc-action-label">New</span>
                 </button>
                 <Menu
@@ -600,7 +630,7 @@ export function AppTopbar({
                         {
                           id: "duplicate-proposal",
                           label: "Duplicate proposal",
-                          icon: <Copy size={15} strokeWidth={1.8} />,
+                          icon: <Copy className="app-topbar__icon" strokeWidth={1.8} />,
                           disabled:
                             !proposalTopbarRegistration.hasProposalContent,
                           onSelect:
@@ -609,7 +639,12 @@ export function AppTopbar({
                         {
                           id: "delete-proposal",
                           label: "Delete proposal",
-                          icon: <TrashSimple size={15} strokeWidth={1.8} />,
+                          icon: (
+                            <TrashSimple
+                              className="app-topbar__icon"
+                              strokeWidth={1.8}
+                            />
+                          ),
                           tone: "danger",
                           disabled:
                             !proposalTopbarRegistration.hasProposalContent,
@@ -626,7 +661,7 @@ export function AppTopbar({
                       data-toolbar-tooltip="Proposal actions"
                     >
                       <DotsThree
-                        size={16}
+                        className="app-topbar__icon"
                         weight="bold"
                         aria-hidden="true"
                       />
@@ -648,8 +683,7 @@ export function AppTopbar({
           onClick={onOpenCommandPalette}
         >
           <MagnifyingGlass
-            className="app-topbar__cmdk-icon"
-            size={15}
+            className="app-topbar__cmdk-icon app-topbar__icon"
             aria-hidden="true"
           />
           <span className="app-topbar__cmdk-label">Search or run command</span>
@@ -722,14 +756,24 @@ export function AppTopbar({
                     {
                       id: "copy-text",
                       label: "Copy text",
-                      icon: <ClipboardText size={15} strokeWidth={1.8} />,
+                      icon: (
+                        <ClipboardText
+                          className="app-topbar__icon"
+                          strokeWidth={1.8}
+                        />
+                      ),
                       disabled: !proposalTopbarRegistration.hasProposalContent,
                       onSelect: proposalTopbarRegistration.onCopyText,
                     },
                     {
                       id: "download-pdf",
                       label: "Download PDF",
-                      icon: <FilePdf size={15} strokeWidth={1.8} />,
+                      icon: (
+                        <FilePdf
+                          className="app-topbar__icon"
+                          strokeWidth={1.8}
+                        />
+                      ),
                       disabled:
                         !proposalTopbarRegistration.hasProposalContent ||
                         proposalTopbarRegistration.exporting,
@@ -738,7 +782,12 @@ export function AppTopbar({
                     {
                       id: "download-docx",
                       label: "Download DOCX",
-                      icon: <FileText size={15} strokeWidth={1.8} />,
+                      icon: (
+                        <FileText
+                          className="app-topbar__icon"
+                          strokeWidth={1.8}
+                        />
+                      ),
                       disabled:
                         !proposalTopbarRegistration.hasProposalContent ||
                         proposalTopbarRegistration.exporting,
@@ -750,7 +799,12 @@ export function AppTopbar({
                           {
                             id: "share-link",
                             label: "Share link",
-                            icon: <ShareFat size={15} strokeWidth={1.8} />,
+                            icon: (
+                              <ShareFat
+                                className="app-topbar__icon"
+                                strokeWidth={1.8}
+                              />
+                            ),
                             disabled: !proposalTopbarRegistration.hasProposalContent,
                             onSelect:
                               proposalTopbarRegistration.onShareSavedProposal,
@@ -767,7 +821,11 @@ export function AppTopbar({
                   aria-label="Share proposal"
                   data-toolbar-tooltip="Share"
                 >
-                  <ShareFat size={15} strokeWidth={1.8} aria-hidden="true" />
+                  <ShareFat
+                    className="app-topbar__icon"
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
                   <span className="app-topbar__share-label">Share</span>
                 </button>
               }
@@ -795,7 +853,10 @@ export function AppTopbar({
               {resolveAccountInitial(user)}
             </span>
           ) : (
-            <User size={16} aria-hidden="true" />
+            <User
+              className="app-topbar__icon"
+              aria-hidden="true"
+            />
           )}
         </IconButton>
         <span className="app-topbar__profile-name" aria-hidden="true">

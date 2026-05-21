@@ -57,19 +57,37 @@ function CvTemplateEntryPoint({
   return (
     <>
       <RegisterTemplates surface="cv" onSelect={onSelect} />
+      <RegisterCvSections />
       <RegisterCvDesign />
       <CvStageBar
         mode="edit"
         exporting={false}
         tone="natural"
         templatesOpen={open && activeSurface === "cv"}
+        sectionsOpen={open && activeSurface === "cv-sections"}
         designOpen={open && activeSurface === "cv-design"}
         onModeChange={vi.fn()}
+        onOpenSections={() => openSurface("cv-sections")}
         onOpenDesign={() => openSurface("cv-design")}
         onOpenTemplates={() => openSurface("cv")}
       />
     </>
   );
+}
+
+function RegisterCvSections(): null {
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "cv-sections" as const,
+        title: "Sections",
+        ariaLabel: "CV sections",
+        renderContent: () => <div>Sections drawer content</div>,
+      }),
+      [],
+    ),
+  );
+  return null;
 }
 
 function RegisterCvDesign(): null {
@@ -120,6 +138,7 @@ function ProposalTemplateEntryPoint({
       <RegisterTemplates surface="proposal" onSelect={onSelect} />
       <RegisterProposalHeading />
       <RegisterProposalDesign />
+      <RegisterProposalDraft />
       <ProposalDocumentStage
         mode="edit"
         hasProposalContent
@@ -129,6 +148,7 @@ function ProposalTemplateEntryPoint({
         onOpenDesign={() => openSurface("proposal-design")}
         templatesOpen={open && activeSurface === "proposal"}
         onOpenTemplates={() => openSurface("proposal")}
+        onOpenDraft={() => openSurface("proposal-draft")}
         onModeChange={vi.fn()}
       >
         <div>Proposal paper</div>
@@ -204,6 +224,21 @@ function RegisterProposalDesign(): null {
   return null;
 }
 
+function RegisterProposalDraft(): null {
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "proposal-draft" as const,
+        title: "Draft",
+        ariaLabel: "Proposal draft",
+        renderContent: () => <div>Draft drawer content</div>,
+      }),
+      [],
+    ),
+  );
+  return null;
+}
+
 function renderEntryPoint(
   path: string,
   children: React.ReactNode,
@@ -232,7 +267,10 @@ describe("forge template entry points", () => {
     fireEvent.click(templates);
 
     expect(templates).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("complementary", { name: "CV templates" })).toBeInTheDocument();
+    const panel = screen.getByRole("complementary", { name: "CV templates" });
+    expect(panel).toHaveAttribute("data-mode", "overlay");
+    expect(within(panel).getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("listitem", { name: "Schematic" }));
     expect(onSelect).toHaveBeenCalledWith("schematic");
   });
@@ -247,11 +285,33 @@ describe("forge template entry points", () => {
 
     expect(design).toHaveAttribute("aria-expanded", "true");
     const panel = screen.getByRole("complementary", { name: "CV design" });
+    expect(panel).toHaveAttribute("data-mode", "overlay");
+    expect(within(panel).getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Style 1" })).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Style 2" })).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Style 3" })).toBeInTheDocument();
     expect(within(panel).getByText("Font pair")).toBeInTheDocument();
     expect(within(panel).getByText("Accent")).toBeInTheDocument();
+  });
+
+  it("opens CV sections from the CV stage bar as overlay", () => {
+    renderEntryPoint("/cv", <CvTemplateEntryPoint onSelect={vi.fn()} />);
+
+    const sections = screen.getByRole("button", { name: "Sections" });
+    expect(sections).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(sections);
+
+    expect(sections).toHaveAttribute("aria-expanded", "true");
+    const panel = screen.getByRole("complementary", { name: "CV sections" });
+    expect(panel).toHaveAttribute("data-mode", "overlay");
+    expect(within(panel).getByText("Sections drawer content")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole("button", { name: "Collapse drawer" }));
+    expect(
+      screen.queryByRole("complementary", { name: "CV sections" }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens proposal templates from the proposal stage bar and keeps template selection wired", () => {
@@ -263,9 +323,12 @@ describe("forge template entry points", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Templates" }));
 
-    expect(
-      screen.getByRole("complementary", { name: "Proposal templates" }),
-    ).toBeInTheDocument();
+    const panel = screen.getByRole("complementary", {
+      name: "Proposal templates",
+    });
+    expect(panel).toHaveAttribute("data-mode", "overlay");
+    expect(within(panel).getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("listitem", { name: "Schematic" }));
     expect(onSelect).toHaveBeenCalledWith("schematic");
   });
@@ -285,6 +348,9 @@ describe("forge template entry points", () => {
     const panel = screen.getByRole("complementary", {
       name: "Proposal heading",
     });
+    expect(panel).toHaveAttribute("data-mode", "overlay");
+    expect(within(panel).getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
     expect(within(panel).getByText("Applicant details")).toBeInTheDocument();
     expect(within(panel).getByLabelText("Full name")).toHaveValue("Alex Martin");
     expect(within(panel).queryByRole("tab", { name: "Ask" })).not.toBeInTheDocument();
@@ -306,6 +372,9 @@ describe("forge template entry points", () => {
     const panel = screen.getByRole("complementary", {
       name: "Proposal design",
     });
+    expect(panel).toHaveAttribute("data-mode", "overlay");
+    expect(within(panel).getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
     expect(within(panel).queryByRole("tab")).not.toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Style 1" })).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Style 2" })).toBeInTheDocument();
@@ -324,6 +393,129 @@ describe("forge template entry points", () => {
     expect(within(panel).queryByText("Customize")).not.toBeInTheDocument();
     expect(within(panel).queryByText("Templates")).not.toBeInTheDocument();
   });
+
+  it("opens proposal draft from the proposal stage bar as overlay", () => {
+    renderEntryPoint(
+      "/proposal",
+      <ProposalTemplateEntryPoint onSelect={vi.fn()} />,
+    );
+
+    fireEvent.click(screen.getByTestId("proposal-draft-button"));
+
+    const panel = screen.getByRole("complementary", {
+      name: "Proposal draft",
+    });
+    expect(panel).toHaveAttribute("data-mode", "overlay");
+    expect(within(panel).getByText("Draft drawer content")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
+  });
+
+  it("keeps toolbar hover passive and reserves drawer opening for clicks", () => {
+    renderEntryPoint("/cv", <CvTemplateEntryPoint onSelect={vi.fn()} />);
+
+    fireEvent.pointerEnter(screen.getByRole("button", { name: "Sections" }), {
+      pointerType: "mouse",
+    });
+    fireEvent.pointerEnter(screen.getByRole("button", { name: "Design" }), {
+      pointerType: "mouse",
+    });
+    fireEvent.pointerEnter(screen.getByRole("button", { name: "Templates" }), {
+      pointerType: "mouse",
+    });
+
+    expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["/cv", "Sections", "CV sections", <CvTemplateEntryPoint key="cv" onSelect={vi.fn()} />],
+    ["/cv", "Design", "CV design", <CvTemplateEntryPoint key="cv" onSelect={vi.fn()} />],
+    ["/cv", "Templates", "CV templates", <CvTemplateEntryPoint key="cv" onSelect={vi.fn()} />],
+    [
+      "/proposal",
+      "Heading",
+      "Proposal heading",
+      <ProposalTemplateEntryPoint key="proposal" onSelect={vi.fn()} />,
+    ],
+    [
+      "/proposal",
+      "Design",
+      "Proposal design",
+      <ProposalTemplateEntryPoint key="proposal" onSelect={vi.fn()} />,
+    ],
+    [
+      "/proposal",
+      "Templates",
+      "Proposal templates",
+      <ProposalTemplateEntryPoint key="proposal" onSelect={vi.fn()} />,
+    ],
+  ])(
+    "pins %s toolbar %s panel into docked mode",
+    (path, buttonName, panelName, entryPoint) => {
+      renderEntryPoint(path, entryPoint);
+
+      fireEvent.click(screen.getByRole("button", { name: buttonName }));
+      const panel = screen.getByRole("complementary", { name: panelName });
+      expect(panel).toHaveAttribute("data-mode", "overlay");
+      expect(
+        within(panel).getByRole("button", { name: "Pin drawer" }),
+      ).toBeInTheDocument();
+
+      fireEvent.click(within(panel).getByRole("button", { name: "Pin drawer" }));
+
+      expect(panel).toHaveAttribute("data-mode", "docked");
+      expect(
+        within(panel).queryByRole("button", { name: "Pin drawer" }),
+      ).not.toBeInTheDocument();
+      expect(
+        within(panel).getByRole("button", { name: "Collapse drawer" }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ["/cv", "Templates", "Sections", "CV sections", <CvTemplateEntryPoint key="cv" onSelect={vi.fn()} />],
+    ["/cv", "Templates", "Design", "CV design", <CvTemplateEntryPoint key="cv" onSelect={vi.fn()} />],
+    [
+      "/proposal",
+      "Templates",
+      "Heading",
+      "Proposal heading",
+      <ProposalTemplateEntryPoint key="proposal" onSelect={vi.fn()} />,
+    ],
+    [
+      "/proposal",
+      "Templates",
+      "Design",
+      "Proposal design",
+      <ProposalTemplateEntryPoint key="proposal" onSelect={vi.fn()} />,
+    ],
+  ])(
+    "keeps %s toolbar %s panel docked when switching to %s",
+    (path, firstButtonName, nextButtonName, nextPanelName, entryPoint) => {
+      renderEntryPoint(path, entryPoint);
+
+      fireEvent.click(screen.getByRole("button", { name: firstButtonName }));
+      fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
+      expect(screen.getByRole("complementary")).toHaveAttribute(
+        "data-mode",
+        "docked",
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: nextButtonName }));
+
+      const nextPanel = screen.getByRole("complementary", {
+        name: nextPanelName,
+      });
+      expect(nextPanel).toHaveAttribute("data-mode", "docked");
+      expect(
+        within(nextPanel).queryByRole("button", { name: "Pin drawer" }),
+      ).not.toBeInTheDocument();
+      expect(
+        within(nextPanel).getByRole("button", { name: "Collapse drawer" }),
+      ).toBeInTheDocument();
+    },
+  );
 
   it("browse all templates from a contextual panel goes to the global route", () => {
     renderEntryPoint(

@@ -30,9 +30,8 @@ describe("sidebar visual CSS contracts", () => {
     expect(productCss).toMatch(
       /\.sb\s*\{[\s\S]*width:\s*var\(--app-nav-rail-width\);[\s\S]*flex:\s*0 0 var\(--app-nav-rail-width\);/,
     );
-    expect(productCss).toMatch(
-      /\.sb\s*\{[\s\S]*transition:\s*[\s\S]*width var\(--duration-fast\) var\(--ease-standard\),[\s\S]*flex-basis var\(--duration-fast\) var\(--ease-standard\);/,
-    );
+    const sidebarRule = productCss.match(/\.sb\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(sidebarRule).not.toMatch(/\btransition\b/);
     expect(productCss).toMatch(
       /\.sb__nav\s*\{[\s\S]*padding:\s*[\s\S]*var\(--app-nav-rail-pad-block-start\) var\(--app-nav-rail-pad-inline\)[\s\S]*var\(--app-nav-rail-pad-block\);/,
     );
@@ -87,19 +86,19 @@ describe("sidebar visual CSS contracts", () => {
     );
   });
 
-  it("docks pinned forge drawers as a shell column without changing peek overlay behavior", () => {
+  it("docks only explicit docked forge drawers as a shell column", () => {
     expect(productCss).toMatch(
       /\.app-shell\[data-forge-panel-docked="true"\]\s*\{[\s\S]*grid-template-columns:\s*auto[\s\S]*var\(--app-nav-panel-width-wide\)[\s\S]*minmax\(0,\s*1fr\)/,
     );
     expect(productCss).toMatch(
-      /\.app-shell\[data-forge-panel-docked="true"\] \.forge-template-panel\s*\{[\s\S]*position:\s*relative;[\s\S]*grid-column:\s*2;[\s\S]*width:\s*var\(--app-nav-panel-width-wide\);/,
+      /\.app-shell\[data-forge-panel-docked="true"\]\s+\.forge-template-panel\[data-mode="docked"\]\s*\{[\s\S]*position:\s*relative;[\s\S]*grid-column:\s*2;[\s\S]*width:\s*var\(--app-nav-panel-width-wide\);/,
     );
     expect(productCss).toMatch(
       /\.forge-template-panel\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset-inline-start:\s*var\(--app-nav-rail-width\);/,
     );
-    expect(productCss).toMatch(
-      /\.forge-template-panel\s*\{[\s\S]*transition:\s*[\s\S]*inset-inline-start var\(--duration-fast\) var\(--ease-standard\);/,
-    );
+    const forgePanelRule =
+      productCss.match(/\.forge-template-panel\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(forgePanelRule).not.toMatch(/\btransition\b/);
     expect(productCss).toContain(".forge-template-panel__collapse");
     expect(productCss).toMatch(
       /\.forge-template-panel__collapse\s*\{[\s\S]*inset-inline-end:\s*0;[\s\S]*transform:\s*translate\(50%,\s*-50%\);/,

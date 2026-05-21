@@ -382,7 +382,7 @@ describe("Sidebar permanent rail", () => {
     expect(screen.queryByRole("complementary", { name: "CV library" })).not.toBeInTheDocument();
   });
 
-  it("pins the CV drawer from the active CV rail item on fine pointer CV Forge", () => {
+  it("pins the active CV peek drawer from the active CV rail item", () => {
     vi.useFakeTimers();
     mockFinePointer(true);
     renderSidebar("/cv", <RegisterCvPanels />);
@@ -404,9 +404,27 @@ describe("Sidebar permanent rail", () => {
     fireEvent.click(cv);
 
     expect(cv).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("complementary", { name: "CV library" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "CV library" })).toHaveAttribute(
+      "data-mode",
+      "docked",
+    );
+    expect(screen.queryByRole("button", { name: "Pin drawer" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
+  });
+
+  it("keeps a direct CV rail click as overlay without requiring a second click", () => {
+    mockFinePointer(true);
+    renderSidebar("/cv", <RegisterCvPanels />);
+
+    const cv = screen.getByRole("button", { name: "CV" });
+    fireEvent.click(cv);
+    expect(screen.getByRole("complementary", { name: "CV library" })).toHaveAttribute(
+      "data-mode",
+      "overlay",
+    );
+    expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
   });
 
   it("keeps CV Forge Jobs as direct navigation and Projects as mixed library", () => {
@@ -516,7 +534,7 @@ describe("Sidebar permanent rail", () => {
     },
   );
 
-  it("pins the saved proposals drawer from Proposal click on Proposal Forge", () => {
+  it("opens the saved proposals drawer as overlay from Proposal click on Proposal Forge", () => {
     mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
@@ -524,9 +542,34 @@ describe("Sidebar permanent rail", () => {
 
     expect(
       screen.getByRole("complementary", { name: "Saved proposals" }),
-    ).toBeInTheDocument();
+    ).toHaveAttribute("data-mode", "overlay");
     expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+  });
+
+  it("pins the saved proposals peek drawer from Proposal rail click", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    const proposal = screen.getByRole("button", { name: "Proposal" });
+    fireEvent.pointerEnter(proposal, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(
+      screen.getByRole("complementary", { name: "Saved proposals" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+
+    fireEvent.click(proposal);
+
+    expect(
+      screen.getByRole("complementary", { name: "Saved proposals" }),
+    ).toHaveAttribute("data-mode", "docked");
+    expect(screen.queryByRole("button", { name: "Pin drawer" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
   });
 
   it("opens proposal drawers from rail hover on fine pointer devices", () => {
@@ -591,7 +634,7 @@ describe("Sidebar permanent rail", () => {
     expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
   });
 
-  it("hides the pin action when the drawer cannot dock at the current width", () => {
+  it("switches to pinned drawer chrome without physical reflow when the viewport is narrow", () => {
     vi.useFakeTimers();
     mockFinePointer(true);
     window.innerWidth = 900;
@@ -605,10 +648,19 @@ describe("Sidebar permanent rail", () => {
     });
 
     expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
+
+    expect(screen.getByRole("complementary", { name: "Attach CV" })).toHaveAttribute(
+      "data-mode",
+      "docked",
+    );
     expect(screen.queryByRole("button", { name: "Pin drawer" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
   });
 
-  it("pins a peek drawer from the drawer pin action", () => {
+  it("docks a peek drawer from the drawer pin action when width supports it", () => {
     vi.useFakeTimers();
     mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
@@ -623,7 +675,10 @@ describe("Sidebar permanent rail", () => {
     expect(cv).toHaveClass("sb-rail-button--panel-open");
 
     fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
-    expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Attach CV" })).toHaveAttribute(
+      "data-mode",
+      "docked",
+    );
     expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
 
     fireEvent.pointerLeave(cv, { pointerType: "mouse" });
@@ -674,7 +729,7 @@ describe("Sidebar permanent rail", () => {
     expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
   });
 
-  it("keeps a pinned drawer stable across other hovers", () => {
+  it("keeps a docked drawer stable across other hovers", () => {
     vi.useFakeTimers();
     mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
@@ -699,11 +754,13 @@ describe("Sidebar permanent rail", () => {
     expect(screen.queryByRole("complementary", { name: "Attach CV" })).not.toBeInTheDocument();
   });
 
-  it("closes and unpins drawers from the collapse handle", () => {
+  it("closes docked drawers from the collapse handle", () => {
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
     fireEvent.click(screen.getByRole("button", { name: "Jobs" }));
     expect(screen.getByRole("complementary", { name: "Attach job" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
+    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse drawer" }));
 

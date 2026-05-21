@@ -3096,7 +3096,7 @@ describe("CvForge workspace mode", () => {
         importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name,
       ).toBe("Unsaved Name"),
     );
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
 
     await waitFor(() =>
       expect(
@@ -3499,7 +3499,7 @@ describe("CvForge workspace mode", () => {
     );
 
     await clickSectionOrganizerButton(user, /^Summary$/i);
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
     const saved = getLastSavedSummaryItem(importCv);
@@ -3621,7 +3621,7 @@ describe("CvForge workspace mode", () => {
       screen.queryByRole("button", { name: "Warm" }),
     ).not.toBeInTheDocument();
     expect(
-      document.body.querySelector(".dasti-cv-section-sheet-overlay"),
+      document.body.querySelector(".ds-island-panel"),
     ).toBeInTheDocument();
 
     await waitFor(() =>

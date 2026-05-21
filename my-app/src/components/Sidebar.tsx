@@ -250,8 +250,8 @@ export const Sidebar: React.FC = () => {
   const {
     activeSurface: activeTemplateSurface,
     open: templatePanelOpen,
+    openMode: templatePanelOpenMode,
     openSurface: openTemplateSurface,
-    togglePinnedSurface,
     closePanel,
     queueOpenSurface,
     queueClosePanel,
@@ -342,7 +342,7 @@ export const Sidebar: React.FC = () => {
     }
     pendingSettingsPanelOpenRef.current = false;
     const timer = window.setTimeout(() => {
-      openTemplateSurface("settings", { mode: "pinned" });
+      openTemplateSurface("settings");
     }, 0);
     return () => {
       window.clearTimeout(timer);
@@ -351,19 +351,36 @@ export const Sidebar: React.FC = () => {
 
   const compactRail = viewportWidth < COMPACT_RAIL_WIDTH;
 
+  const openOrDockPanel = (surface: ForgeRailSurface) => {
+    if (
+      templatePanelOpen &&
+      activeTemplateSurface === surface &&
+      templatePanelOpenMode === "peek"
+    ) {
+      openTemplateSurface(surface, { mode: "docked" });
+      return;
+    }
+
+    if (
+      templatePanelOpen &&
+      activeTemplateSurface === surface &&
+      templatePanelOpenMode === "docked"
+    ) {
+      return;
+    }
+
+    openTemplateSurface(surface);
+  };
+
   const handleOpenTemplates = () => {
     if (!activeForgeSurface) {
       return;
     }
-    togglePinnedSurface(activeForgeSurface, {
-      unpinBehavior: finePointer ? "peek" : "close",
-    });
+    openOrDockPanel(activeForgeSurface);
   };
 
   const handleOpenProposalPanel = (surface: ForgeRailSurface) => {
-    togglePinnedSurface(surface, {
-      unpinBehavior: finePointer ? "peek" : "close",
-    });
+    openOrDockPanel(surface);
   };
 
   const handleOpenSettingsPanel = () => {
@@ -373,17 +390,21 @@ export const Sidebar: React.FC = () => {
       return;
     }
 
-    togglePinnedSurface("settings", {
-      unpinBehavior: finePointer ? "peek" : "close",
-    });
+    openOrDockPanel("settings");
   };
 
   const handleFocusPanel = (surface: ForgeRailSurface) => {
+    if (templatePanelOpenMode === "overlay" || templatePanelOpenMode === "docked") {
+      return;
+    }
     openTemplateSurface(surface, { mode: "peek" });
   };
 
   const handleFocusTemplates = () => {
     if (!activeForgeSurface) {
+      return;
+    }
+    if (templatePanelOpenMode === "overlay" || templatePanelOpenMode === "docked") {
       return;
     }
     openTemplateSurface(activeForgeSurface, { mode: "peek" });

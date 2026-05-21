@@ -3,7 +3,7 @@ import {
   ChatCircleText,
   Layout,
   Eye,
-  FileUser,
+  Palette,
   ListNumbers,
   PenLine,
 } from "@/lib/icons";
@@ -149,7 +149,7 @@ export function CvStageBar({
                 size="sm"
                 variant="secondary"
                 className="dasti-proposal-skeleton-stage__primary-action dasti-cv-stage-bar__primary-action"
-                iconLeft={<FileUser size={stageIconSize} strokeWidth={1.8} />}
+                iconLeft={<Palette size={stageIconSize} strokeWidth={1.8} />}
                 aria-expanded={designOpen}
                 aria-label="Design"
                 data-toolbar-tooltip="Design"

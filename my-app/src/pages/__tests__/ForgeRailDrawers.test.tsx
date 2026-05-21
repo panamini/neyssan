@@ -416,7 +416,7 @@ describe("forge rail drawers", () => {
     expect(footerBlock).toContain("border-block-start: 0;");
   });
 
-  it("keeps forge page rails collapsible when a pinned drawer needs the space", () => {
+  it("keeps forge page rails collapsible when a docked drawer needs the space", () => {
     const productCss = fs.readFileSync(
       path.join(process.cwd(), "src/styles/product.css"),
       "utf8",
