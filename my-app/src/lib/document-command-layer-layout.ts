@@ -13,6 +13,8 @@ export type CommandLayerToolbarMode =
 export type CommandLayerDraftLabelMode = "full" | "short" | "iconOnly";
 export type CommandLayerModeControlMode = "split" | "toggle";
 export type CommandLayerAskMode = "iconOnly" | "edgeTab";
+export type CommandLayerToolbarDensity = "compact" | "ultra" | undefined;
+export type CommandLayerLabelDensity = "full" | "short" | "icon";
 
 export type ComputeDocumentCommandLayerLayoutInput = {
   canvasRect: CommandLayerRect;
@@ -89,6 +91,19 @@ function toolbarModeFor(width: number): CommandLayerToolbarMode {
   return "ultraCompact";
 }
 
+export function getCommandLayerToolbarDensity(
+  toolbarMode: CommandLayerToolbarMode,
+): CommandLayerToolbarDensity {
+  if (toolbarMode === "wide" || toolbarMode === "medium") return undefined;
+  return toolbarMode === "ultraCompact" ? "ultra" : "compact";
+}
+
+export function getCommandLayerLabelDensity(
+  labelMode: CommandLayerDraftLabelMode,
+): CommandLayerLabelDensity {
+  return labelMode === "iconOnly" ? "icon" : labelMode;
+}
+
 function draftLabelModeFor({
   availableWidth,
   paperWidth,
@@ -127,19 +142,6 @@ export function computeDocumentCommandLayerLayout(
   const canvasSafeRight = right(input.canvasRect) - input.safeMargin;
   const edgeTabSafeRight = canvasSafeRight;
   const paperCenterX = centerX(input.paperRect);
-  const iconAskLeft = right(input.paperRect) + input.gap;
-  const iconAskFits =
-    iconAskLeft + input.askHandle.iconWidth <= canvasSafeRight;
-  const reservedAskInlineSize = iconAskFits
-    ? 0
-    : input.askHandle.iconWidth + input.gap;
-  const toolbarSafeRight = Math.max(
-    canvasSafeLeft,
-    iconAskFits
-      ? Math.min(canvasSafeRight, iconAskLeft - input.gap)
-      : canvasSafeRight - reservedAskInlineSize,
-  );
-  const toolbarSafeWidth = Math.max(0, toolbarSafeRight - canvasSafeLeft);
   const unclampedToolbarWidth = Math.max(
     input.toolbarMinWidth,
     Math.min(
@@ -147,101 +149,135 @@ export function computeDocumentCommandLayerLayout(
       Math.max(input.paperRect.width, input.toolbarMinWidth),
     ),
   );
-  const toolbarWidth =
-    toolbarSafeWidth >= input.toolbarMinWidth
-      ? Math.min(unclampedToolbarWidth, toolbarSafeWidth)
-      : input.toolbarMinWidth;
-  const desiredToolbarLeft = paperCenterX - toolbarWidth / 2;
-  const toolbarLeft = clamp(
-    desiredToolbarLeft,
-    canvasSafeLeft,
-    toolbarSafeRight - toolbarWidth,
-  );
   const commandLayerNormalY =
     input.paperRect.top - input.gap - input.toolbarHeight;
   const commandLayerSticky = commandLayerNormalY < input.stickyTop;
   const commandLayerY = Math.max(commandLayerNormalY, input.stickyTop);
-  const toolbarRect = {
-    left: toolbarLeft,
-    top: commandLayerY,
-    width: toolbarWidth,
-    height: input.toolbarHeight,
+
+  const makeToolbarPlacement = (toolbarSafeRight: number) => {
+    const toolbarSafeWidth = Math.max(0, toolbarSafeRight - canvasSafeLeft);
+    const toolbarWidth =
+      toolbarSafeWidth >= input.toolbarMinWidth
+        ? Math.min(unclampedToolbarWidth, toolbarSafeWidth)
+        : input.toolbarMinWidth;
+    const desiredToolbarLeft = paperCenterX - toolbarWidth / 2;
+    const toolbarLeft = clamp(
+      desiredToolbarLeft,
+      canvasSafeLeft,
+      toolbarSafeRight - toolbarWidth,
+    );
+    return {
+      desiredLeft: desiredToolbarLeft,
+      rect: {
+        left: toolbarLeft,
+        top: commandLayerY,
+        width: toolbarWidth,
+        height: input.toolbarHeight,
+      },
+    };
   };
-  const toolbarClamped = Math.abs(toolbarLeft - desiredToolbarLeft) > 0.5;
-  const toolbarMode = toolbarModeFor(toolbarWidth);
+
+  let toolbarPlacement = makeToolbarPlacement(canvasSafeRight);
+  let toolbarRect = toolbarPlacement.rect;
+
+  const askTop = commandLayerY;
+
+  const placeAsk = () => {
+    const paperSideAskLeft = right(input.paperRect) + input.gap;
+    const toolbarSideAskLeft = right(toolbarRect) + input.gap;
+    const canUsePaperSide =
+      paperSideAskLeft >= right(toolbarRect) + input.gap - 0.5 &&
+      paperSideAskLeft + input.askHandle.iconWidth <= canvasSafeRight;
+    if (canUsePaperSide) {
+      return {
+        mode: "iconOnly" as const,
+        width: input.askHandle.iconWidth,
+        left: paperSideAskLeft,
+        outsidePaper: true,
+      };
+    }
+
+    const edgeTabInset = Math.max(input.gap, ASK_EDGE_INSET);
+    const edgeTabMaxLeft = Math.max(
+      canvasSafeLeft,
+      edgeTabSafeRight - input.askHandle.iconWidth - edgeTabInset,
+    );
+    const edgeTabPreferredLeft =
+      input.canvasRect.width < ASK_EDGE_VIEWPORT_ANCHOR_MAX_WIDTH
+        ? edgeTabMaxLeft
+        : Math.min(
+            Math.max(
+              right(input.paperRect) -
+                input.askHandle.iconWidth -
+                ASK_EDGE_INSET,
+              toolbarSideAskLeft,
+            ),
+            edgeTabMaxLeft,
+          );
+    const edgeTabLeft = clamp(
+      edgeTabPreferredLeft,
+      canvasSafeLeft,
+      edgeTabMaxLeft,
+    );
+    return {
+      mode: "edgeTab" as const,
+      width: input.askHandle.iconWidth,
+      left: edgeTabLeft,
+      outsidePaper: edgeTabLeft >= right(input.paperRect) + input.gap - 0.5,
+    };
+  };
+
+  let askPlacement = placeAsk();
+  let askRect = {
+    left: askPlacement.left,
+    top: askTop,
+    width: askPlacement.width,
+    height: input.askHandle.height,
+  };
+
+  if (intersects(askRect, toolbarRect)) {
+    toolbarPlacement = makeToolbarPlacement(askRect.left - input.gap);
+    toolbarRect = toolbarPlacement.rect;
+    askPlacement = placeAsk();
+    askRect = {
+      left: askPlacement.left,
+      top: askTop,
+      width: askPlacement.width,
+      height: input.askHandle.height,
+    };
+  }
+
+  if (intersects(askRect, toolbarRect)) {
+    const leftOfToolbarAskLeft = toolbarRect.left - input.gap - askRect.width;
+    if (leftOfToolbarAskLeft >= canvasSafeLeft) {
+      askPlacement = {
+        mode: "edgeTab" as const,
+        width: input.askHandle.iconWidth,
+        left: leftOfToolbarAskLeft,
+        outsidePaper: false,
+      };
+      askRect = {
+        left: askPlacement.left,
+        top: askTop,
+        width: askPlacement.width,
+        height: input.askHandle.height,
+      };
+    }
+  }
+
+  const askMode: CommandLayerAskMode = askPlacement.mode;
+  const askOutsidePaper = askPlacement.outsidePaper;
+  const toolbarClamped =
+    Math.abs(toolbarRect.left - toolbarPlacement.desiredLeft) > 0.5;
+  const toolbarMode = toolbarModeFor(toolbarRect.width);
   const draftLabelMode = draftLabelModeFor({
-    availableWidth: toolbarWidth,
+    availableWidth: toolbarRect.width,
     paperWidth: input.paperRect.width,
     viewportWidth: input.viewportWidth,
     toolbarMode,
   });
   const modeControlMode: CommandLayerModeControlMode =
     toolbarMode === "ultraCompact" ? "toggle" : "split";
-
-  const askTop =
-    commandLayerY +
-    input.toolbarHeight +
-    input.gap +
-    input.askOffsetFromPaperTop;
-
-  let askMode: CommandLayerAskMode;
-  let askWidth: number;
-  let askLeft: number;
-  let askOutsidePaper: boolean;
-
-  if (iconAskFits) {
-    askMode = "iconOnly";
-    askWidth = input.askHandle.iconWidth;
-    askLeft = iconAskLeft;
-    askOutsidePaper = true;
-  } else {
-    askMode = "edgeTab";
-    askWidth = input.askHandle.iconWidth;
-    const edgeTabMaxLeft = Math.max(
-      canvasSafeLeft,
-      edgeTabSafeRight - askWidth,
-    );
-    const edgeTabPreferredLeft =
-      input.canvasRect.width < ASK_EDGE_VIEWPORT_ANCHOR_MAX_WIDTH
-        ? edgeTabMaxLeft
-        : Math.min(
-            right(input.paperRect) - askWidth - ASK_EDGE_INSET,
-            edgeTabMaxLeft,
-          );
-    askLeft = clamp(edgeTabPreferredLeft, canvasSafeLeft, edgeTabMaxLeft);
-    askOutsidePaper = askLeft >= right(input.paperRect) + input.gap - 0.5;
-  }
-
-  let askRect = {
-    left: askLeft,
-    top: askTop,
-    width: askWidth,
-    height: input.askHandle.height,
-  };
-
-  if (intersects(askRect, toolbarRect)) {
-    askMode = "edgeTab";
-    askWidth = input.askHandle.iconWidth;
-    const edgeTabMaxLeft = Math.max(
-      canvasSafeLeft,
-      edgeTabSafeRight - askWidth,
-    );
-    askLeft = clamp(
-      Math.min(
-        right(input.paperRect) - askWidth - ASK_EDGE_INSET,
-        edgeTabMaxLeft,
-      ),
-      canvasSafeLeft,
-      edgeTabMaxLeft,
-    );
-    askRect = {
-      left: askLeft,
-      top: bottom(toolbarRect) + input.gap,
-      width: askWidth,
-      height: input.askHandle.height,
-    };
-    askOutsidePaper = askLeft >= right(input.paperRect) + input.gap - 0.5;
-  }
 
   return {
     toolbarMode,

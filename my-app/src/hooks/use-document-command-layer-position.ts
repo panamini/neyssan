@@ -93,14 +93,42 @@ export function useDocumentCommandLayerPosition({
     if (typeof window === "undefined") return undefined;
 
     let frameId: number | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+    let paperMutationObserver: MutationObserver | null = null;
+    let observedPaperRoot: HTMLElement | null = null;
+    let observedAnchor: HTMLElement | null = null;
+    const observePaperAnchor = (anchor: HTMLElement) => {
+      if (observedAnchor === anchor) return;
+      if (observedAnchor) resizeObserver?.unobserve(observedAnchor);
+      observedAnchor = anchor;
+      resizeObserver?.observe(anchor);
+    };
+    const observePaperRoot = (paperRoot: HTMLElement) => {
+      if (
+        observedPaperRoot === paperRoot ||
+        typeof MutationObserver === "undefined"
+      ) {
+        return;
+      }
+      paperMutationObserver?.disconnect();
+      observedPaperRoot = paperRoot;
+      paperMutationObserver = new MutationObserver(
+        scheduleCommandLayerAnchorUpdate,
+      );
+      paperMutationObserver.observe(paperRoot, {
+        attributes: true,
+        childList: true,
+        subtree: true,
+      });
+    };
+
     const updateCommandLayerAnchor = () => {
       frameId = null;
       const stage = stageRef.current;
       const paper = paperRef.current;
       if (!stage || !paper) return;
+      observePaperRoot(paper);
 
-      const anchor =
-        paper.querySelector<HTMLElement>(paperAnchorSelector) ?? paper;
       const stageRect = stage.getBoundingClientRect();
       const commandCanvas = commandCanvasSelector
         ? stage.closest<HTMLElement>(commandCanvasSelector) ?? stage
@@ -122,7 +150,7 @@ export function useDocumentCommandLayerPosition({
         measuredToolbarHeight > 0 && measuredToolbarHeight < 96
           ? measuredToolbarHeight
           : toolbarHeight;
-      const anchorRect =
+      const anchorCandidate =
         (anchorCandidates.length > 0
           ? anchorCandidates
               .map((candidate) => {
@@ -131,17 +159,22 @@ export function useDocumentCommandLayerPosition({
                   Math.min(rect.bottom, window.innerHeight) -
                   Math.max(rect.top, stickyTopViewport);
                 return {
+                  element: candidate,
                   rect,
                   score: Math.max(0, visibleBlock) * Math.max(0, rect.width),
                   distance: Math.abs(rect.top - stickyTopViewport),
                 };
               })
               .sort((a, b) => b.score - a.score || a.distance - b.distance)[0]
-              ?.rect
-          : null) ?? anchor.getBoundingClientRect();
+          : null) ?? {
+          element: paper,
+          rect: paper.getBoundingClientRect(),
+        };
+      observePaperAnchor(anchorCandidate.element);
+      const anchorRect = anchorCandidate.rect;
       const viewportWidth = window.innerWidth;
       const visibleCanvasLeft = Math.max(commandCanvasRect.left, 0);
-      const visibleCanvasRight = viewportWidth;
+      const visibleCanvasRight = Math.min(commandCanvasRect.right, viewportWidth);
       const visibleCanvasTop = Math.max(commandCanvasRect.top, 0);
       const visibleCanvasBottom = Math.min(
         commandCanvasRect.bottom,
@@ -223,7 +256,7 @@ export function useDocumentCommandLayerPosition({
 
     scheduleCommandLayerAnchorUpdate();
 
-    const resizeObserver =
+    resizeObserver =
       typeof ResizeObserver === "undefined"
         ? null
         : new ResizeObserver(scheduleCommandLayerAnchorUpdate);
@@ -234,10 +267,18 @@ export function useDocumentCommandLayerPosition({
     if (commandCanvas && commandCanvas !== stageRef.current) {
       resizeObserver?.observe(commandCanvas);
     }
-    if (paperRef.current) resizeObserver?.observe(paperRef.current);
-    const anchor =
-      paperRef.current?.querySelector<HTMLElement>(paperAnchorSelector);
-    if (anchor) resizeObserver?.observe(anchor);
+    const paperRoot = paperRef.current;
+    if (paperRoot) resizeObserver?.observe(paperRoot);
+    if (paperRoot) observePaperRoot(paperRoot);
+    const stageMutationObserver =
+      typeof MutationObserver === "undefined" || !stageRef.current
+        ? null
+        : new MutationObserver(scheduleCommandLayerAnchorUpdate);
+    if (stageRef.current) {
+      stageMutationObserver?.observe(stageRef.current, {
+        childList: true,
+      });
+    }
 
     window.addEventListener("resize", scheduleCommandLayerAnchorUpdate);
     window.addEventListener("scroll", scheduleCommandLayerAnchorUpdate, true);
@@ -245,6 +286,8 @@ export function useDocumentCommandLayerPosition({
     return () => {
       if (frameId !== null) window.cancelAnimationFrame(frameId);
       resizeObserver?.disconnect();
+      paperMutationObserver?.disconnect();
+      stageMutationObserver?.disconnect();
       window.removeEventListener("resize", scheduleCommandLayerAnchorUpdate);
       window.removeEventListener(
         "scroll",

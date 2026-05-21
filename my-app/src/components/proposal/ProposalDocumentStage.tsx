@@ -14,6 +14,10 @@ import {
   TrashSimple,
 } from "@/lib/icons";
 import { useDocumentCommandLayerPosition } from "@/hooks/use-document-command-layer-position";
+import {
+  getCommandLayerLabelDensity,
+  getCommandLayerToolbarDensity,
+} from "@/lib/document-command-layer-layout";
 
 type SafeSendState = "clear" | "warn" | "danger";
 
@@ -133,18 +137,10 @@ export function ProposalDocumentStage({
       data-mode-control-mode={modeControlMode}
       data-ask-mode={askMode}
       data-command-layer-sticky={commandLayerSticky ? "true" : undefined}
-      data-toolbar-density={
-        toolbarMode === "wide" || toolbarMode === "medium"
-          ? undefined
-          : toolbarMode === "ultraCompact"
-            ? "ultra"
-            : "compact"
-      }
+      data-toolbar-density={getCommandLayerToolbarDensity(toolbarMode)}
       data-ask-placement={askMode === "edgeTab" ? "edge-tab" : "outside"}
       data-ask-density="icon"
-      data-draft-density={
-        draftLabelMode === "iconOnly" ? "icon" : draftLabelMode
-      }
+      data-draft-density={getCommandLayerLabelDensity(draftLabelMode)}
       aria-label="Proposal document stage"
     >
       <div

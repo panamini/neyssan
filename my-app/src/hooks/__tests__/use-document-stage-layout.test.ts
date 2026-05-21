@@ -221,4 +221,37 @@ describe("useDocumentStageLayout", () => {
 
     parent.remove();
   });
+
+  it.each([390, 480, 768, 1024, 1280].flatMap((width) =>
+    [0.3, 0.5, 0.9, 1, 1.5, 2].map((zoom) => [width, zoom] as const),
+  ))(
+    "keeps manual zoom as the page scale at %ipx and %sx",
+    async (width, zoom) => {
+      const measurementRef = {
+        current: createMeasurementNode({ width, height: 820 }),
+      } as React.RefObject<HTMLDivElement>;
+
+      const { result } = renderHook(() =>
+        useDocumentStageLayout({
+          measurementRef,
+          zoomLevel: zoom,
+          fitMode: "none",
+        }),
+      );
+
+      await waitFor(() => {
+        expect(result.current.availableWidth).toBe(width);
+      });
+
+      expect(result.current.fitScale).toBe(1);
+      expect(result.current.pageWidth).toBeCloseTo(
+        A4_PAGE_WIDTH_PX * zoom,
+        2,
+      );
+      expect(result.current.pageHeight).toBeCloseTo(
+        A4_PAGE_HEIGHT_PX * zoom,
+        2,
+      );
+    },
+  );
 });
