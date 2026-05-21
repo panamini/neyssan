@@ -34,7 +34,7 @@ describe("sidebar visual CSS contracts", () => {
       /\.sb\s*\{[\s\S]*transition:\s*[\s\S]*width var\(--duration-fast\) var\(--ease-standard\),[\s\S]*flex-basis var\(--duration-fast\) var\(--ease-standard\);/,
     );
     expect(productCss).toMatch(
-      /\.sb__nav\s*\{[\s\S]*padding:\s*var\(--app-nav-rail-pad-block\) var\(--app-nav-rail-pad-inline\);/,
+      /\.sb__nav\s*\{[\s\S]*padding:\s*[\s\S]*var\(--app-nav-rail-pad-block-start\) var\(--app-nav-rail-pad-inline\)[\s\S]*var\(--app-nav-rail-pad-block\);/,
     );
     expect(productCss).toMatch(
       /\.sb-rail-button\s*\{[\s\S]*width:\s*100%;[\s\S]*min-height:\s*var\(--app-nav-item-block-size\);[\s\S]*border-radius:\s*var\(--app-nav-item-radius\);/,

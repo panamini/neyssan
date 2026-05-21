@@ -431,6 +431,7 @@
   --app-nav-rail-width: calc(var(--space-8) + var(--space-4));
   --app-nav-rail-width-compact: var(--space-8);
   --app-nav-rail-pad-inline: var(--space-1);
+  --app-nav-rail-pad-block-start: calc(var(--space-1) / 2);
   --app-nav-rail-pad-block: var(--space-2);
 
   --app-nav-item-block-size: calc(var(--space-7) + var(--space-4));
