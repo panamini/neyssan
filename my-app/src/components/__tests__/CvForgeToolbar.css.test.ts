@@ -168,7 +168,10 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-cv-stage-bar\s*\{[\s\S]*overflow:\s*visible;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-cv-stage-bar\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*var\(--control-sm\);[\s\S]*--editor-toolbar-icon-control-block-size:\s*var\(--control-sm\);/,
+      /\.dasti-cv-stage-bar\s*\{[\s\S]*min-height:\s*0;[\s\S]*gap:\s*var\([\s\S]*--proposal-command-toolbar-shell-gap,/,
+    );
+    expect(productCss).not.toMatch(
+      /\.dasti-cv-stage-bar\s*\{[^}]*--editor-toolbar-icon-control-block-size:\s*var\(--control-sm\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-cv-stage-bar__primary-action\s*\{[\s\S]*height:\s*var\(--editor-toolbar-control-block-size\);[\s\S]*padding-inline:\s*11px;[\s\S]*border-color:\s*transparent;[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,

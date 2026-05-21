@@ -111,6 +111,12 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*var\(--control-sm\);[\s\S]*--editor-toolbar-icon-control-block-size:\s*var\(--control-sm\);/,
     );
     expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage\[data-toolbar-density="compact"\][\s\S]*?\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*calc\(var\(--control-sm\) - 2px\);[\s\S]*--editor-toolbar-icon-control-block-size:\s*calc\(var\(--control-sm\) - 2px\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-proposal-skeleton-stage\[data-toolbar-density="ultra"\][\s\S]*?\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*calc\(var\(--control-sm\) - 4px\);[\s\S]*--editor-toolbar-icon-control-block-size:\s*calc\(var\(--control-sm\) - 4px\);/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-stage__primary-action\s*\{[\s\S]*height:\s*var\(--editor-toolbar-control-block-size\);[\s\S]*padding-inline:\s*11px;[\s\S]*border-color:\s*transparent;[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
     );
     expect(productCss).toMatch(

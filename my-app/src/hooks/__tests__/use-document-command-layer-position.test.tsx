@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useDocumentCommandLayerPosition } from "../use-document-command-layer-position";
 
@@ -66,17 +66,26 @@ function CommandLayerHarness({
   return (
     <div
       className="command-canvas"
+      data-testid="command-canvas"
       data-rect={encodeRect(0, 0, 1280, 720)}
     >
-      <section ref={stageRef} data-rect={encodeRect(0, 0, 1280, 720)}>
+      <section
+        ref={stageRef}
+        data-testid="command-stage"
+        data-rect={encodeRect(0, 0, 1280, 720)}
+      >
         <div data-testid="cv-toolbar" data-rect={encodeRect(0, 0, 520, 44)} />
         <div ref={paperRef}>
           <div
             key={anchorKey}
             className="paper-anchor"
+            data-testid="paper-anchor"
             data-rect={encodeRect(anchorLeft, 134, anchorWidth, 382)}
           />
         </div>
+        <output data-testid="toolbar-inline-start">
+          {commandLayer.style["--proposal-command-toolbar-inline-start"] ?? ""}
+        </output>
         <output data-testid="ask-inline-start">
           {commandLayer.style["--proposal-ask-handle-inline-start"] ?? ""}
         </output>
@@ -122,7 +131,7 @@ describe("useDocumentCommandLayerPosition", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("ask-inline-start")).toHaveTextContent("830px");
+      expect(screen.getByTestId("ask-inline-start")).toHaveTextContent("822px");
     });
 
     rerender(
@@ -135,7 +144,7 @@ describe("useDocumentCommandLayerPosition", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("ask-inline-start")).toHaveTextContent(
-        "439.5px",
+        "341px",
       );
     });
   });
@@ -151,7 +160,7 @@ describe("useDocumentCommandLayerPosition", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("ask-inline-start")).toHaveTextContent("830px");
+      expect(screen.getByTestId("ask-inline-start")).toHaveTextContent("822px");
     });
 
     rerender(
@@ -165,8 +174,42 @@ describe("useDocumentCommandLayerPosition", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("ask-inline-start")).toHaveTextContent(
-        "439.5px",
+        "341px",
       );
     });
+  });
+
+  it("updates command toolbar placement in the resize event before the next animation frame", async () => {
+    render(
+      <CommandLayerHarness
+        anchorKey="stable-page"
+        anchorLeft={288}
+        anchorWidth={794}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toolbar-inline-start")).toHaveTextContent(
+        "425px",
+      );
+    });
+
+    const canvas = screen.getByTestId("command-canvas");
+    const stage = screen.getByTestId("command-stage");
+    const anchor = screen.getByTestId("paper-anchor");
+    canvas.setAttribute("data-rect", encodeRect(0, 0, 900, 720));
+    stage.setAttribute("data-rect", encodeRect(0, 0, 900, 720));
+    anchor.setAttribute("data-rect", encodeRect(158, 134, 673, 382));
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 900,
+    });
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    expect(screen.getByTestId("toolbar-inline-start")).toHaveTextContent(
+      "234.5px",
+    );
   });
 });

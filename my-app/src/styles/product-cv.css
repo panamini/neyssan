@@ -331,24 +331,31 @@
 }
 
 .dasti-cv-stage-bar {
-  --editor-toolbar-control-block-size: var(--control-sm);
-  --editor-toolbar-icon-control-block-size: var(--control-sm);
   grid-column: 1;
   justify-self: center;
   width: max-content;
   max-width: 100%;
   min-width: 0;
-  min-height: var(--document-viewer-toolbar-block-size);
+  min-height: 0;
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: var(--proposal-chrome-toolbar-gap, var(--space-2));
+  gap: var(
+    --proposal-command-toolbar-shell-gap,
+    var(--proposal-chrome-toolbar-gap, var(--space-2))
+  );
   overflow: visible;
-  padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
+  padding: var(
+    --proposal-command-toolbar-shell-padding,
+    var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px))
+  );
   border: 1px solid var(--proposal-chrome-toolbar-border);
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
   background: var(--proposal-chrome-toolbar-bg);
-  box-shadow: var(--shadow-frost, var(--shadow-sm));
+  box-shadow: var(
+    --proposal-command-toolbar-shadow,
+    var(--shadow-frost, var(--shadow-sm))
+  );
   backdrop-filter: saturate(var(--frost-saturate, 1))
     blur(var(--frost-blur, 14px));
   -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
@@ -1804,12 +1811,33 @@ span.dasti-cv-ats {
   font-weight: 650;
 }
 
+.dasti-cv-section-field__topline {
+  min-height: var(--control-sm);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.dasti-cv-section-field__topline > .ds-btn {
+  flex: 0 0 auto;
+}
+
 .dasti-cv-section-field--wide {
   grid-column: 1 / -1;
 }
 
 .dasti-cv-section-field textarea {
   min-height: 112px;
+}
+
+.dasti-cv-pill-editor__input {
+  align-items: end;
+}
+
+.dasti-cv-pill-editor__input > .ds-btn {
+  flex: 0 0 auto;
 }
 
 .dasti-ai-applied-status__undo {

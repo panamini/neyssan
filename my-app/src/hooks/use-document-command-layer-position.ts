@@ -253,6 +253,13 @@ export function useDocumentCommandLayerPosition({
       if (frameId !== null) return;
       frameId = window.requestAnimationFrame(updateCommandLayerAnchor);
     };
+    const handleWindowResize = () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+        frameId = null;
+      }
+      updateCommandLayerAnchor();
+    };
 
     scheduleCommandLayerAnchorUpdate();
 
@@ -280,7 +287,7 @@ export function useDocumentCommandLayerPosition({
       });
     }
 
-    window.addEventListener("resize", scheduleCommandLayerAnchorUpdate);
+    window.addEventListener("resize", handleWindowResize);
     window.addEventListener("scroll", scheduleCommandLayerAnchorUpdate, true);
 
     return () => {
@@ -288,7 +295,7 @@ export function useDocumentCommandLayerPosition({
       resizeObserver?.disconnect();
       paperMutationObserver?.disconnect();
       stageMutationObserver?.disconnect();
-      window.removeEventListener("resize", scheduleCommandLayerAnchorUpdate);
+      window.removeEventListener("resize", handleWindowResize);
       window.removeEventListener(
         "scroll",
         scheduleCommandLayerAnchorUpdate,

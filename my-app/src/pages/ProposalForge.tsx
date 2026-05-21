@@ -9056,7 +9056,7 @@ export function ProposalForge(): JSX.Element {
         /* commit handler already surfaces save errors */
       }
       void navigate(`/proposal?jobId=${encodeURIComponent(jobId)}`);
-      openTemplateSurface("proposal-draft", { mode: "pinned" });
+      openTemplateSurface("proposal-draft");
     },
     [handleProposalDocumentCommit, navigate, openTemplateSurface],
   );
@@ -9068,7 +9068,7 @@ export function ProposalForge(): JSX.Element {
     [closeForgePanel, navigate],
   );
   const handleOpenPasteJobFromDraft = React.useCallback(() => {
-    openTemplateSurface("proposal-paste-job", { mode: "pinned" });
+    openTemplateSurface("proposal-paste-job");
   }, [openTemplateSurface]);
   const handleSelectCvFromRailDrawer = React.useCallback(
     async (cvId: string) => {
@@ -9081,7 +9081,7 @@ export function ProposalForge(): JSX.Element {
         return;
       }
       handleAttachedCvChange(cvId);
-      openTemplateSurface("proposal-draft", { mode: "pinned" });
+      openTemplateSurface("proposal-draft");
     },
     [handleAttachedCvChange, hydrateCvDocument, openTemplateSurface, showToast],
   );
@@ -9157,7 +9157,7 @@ export function ProposalForge(): JSX.Element {
       icon: <Briefcase size={16} aria-hidden="true" />,
       backAction: {
         ariaLabel: "Back to Draft",
-        onSelect: () => openTemplateSurface("proposal-draft", { mode: "pinned" }),
+        onSelect: () => openTemplateSurface("proposal-draft"),
       },
       renderContent: () => (
         <ProposalJobsDrawer
@@ -9190,7 +9190,7 @@ export function ProposalForge(): JSX.Element {
       icon: <FileUser size={16} aria-hidden="true" />,
       backAction: {
         ariaLabel: "Back to Draft",
-        onSelect: () => openTemplateSurface("proposal-draft", { mode: "pinned" }),
+        onSelect: () => openTemplateSurface("proposal-draft"),
       },
       renderContent: () => (
         <ProposalCvDrawer
@@ -9299,7 +9299,7 @@ export function ProposalForge(): JSX.Element {
   const FORGE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH = 1180;
   const isForgeDrawerDockedDesktop =
     templatePanelOpen &&
-    templatePanelOpenMode === "pinned" &&
+    templatePanelOpenMode === "docked" &&
     viewportWidth >= FORGE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH;
   const proposalLayoutViewportWidth = Math.max(
     0,
@@ -10940,17 +10940,17 @@ export function ProposalForge(): JSX.Element {
   }, []);
 
   const handleOpenJobsFromRail = React.useCallback(() => {
-    openTemplateSurface("jobs", { mode: "pinned" });
+    openTemplateSurface("jobs");
   }, [openTemplateSurface]);
   const handleOpenDraftFromStage = React.useCallback(() => {
     setProposalComposerMode(null);
-    openTemplateSurface("proposal-draft", { mode: "pinned" });
+    openTemplateSurface("proposal-draft");
   }, [openTemplateSurface]);
   const handleOpenCvsFromDraft = React.useCallback(() => {
-    openTemplateSurface("cvs", { mode: "pinned" });
+    openTemplateSurface("cvs");
   }, [openTemplateSurface]);
   const handleReturnToDraftFromPasteJob = React.useCallback(() => {
-    openTemplateSurface("proposal-draft", { mode: "pinned" });
+    openTemplateSurface("proposal-draft");
   }, [openTemplateSurface]);
   const proposalDraftOpen =
     templatePanelOpen && activeTemplateSurface === "proposal-draft";

@@ -46,6 +46,10 @@ function intersects(a: CommandLayerRect, b: CommandLayerRect) {
   );
 }
 
+function expectedAskPaperGap(paperWidth: number) {
+  return paperWidth >= 360 ? GAP : Math.min(4, GAP);
+}
+
 function makePaperRect(viewportWidth: number, zoom: number): CommandLayerRect {
   const width = Math.round(BASE_PAPER_WIDTH * zoom * 100) / 100;
   const height = Math.round(BASE_PAPER_HEIGHT * zoom * 100) / 100;
@@ -113,7 +117,9 @@ describe("computeDocumentCommandLayerLayout", () => {
       expect(bottom(layout.toolbarRect) + GAP).toBeLessThanOrEqual(
         paperRect.top + 0.5,
       );
-      expect(layout.askRect.top).toBe(layout.commandLayerY);
+      expect(layout.askRect.top).toBe(
+        Math.max(paperRect.top + ASK_OFFSET_FROM_PAPER_TOP, STICKY_TOP),
+      );
       expect(intersects(layout.askRect, layout.toolbarRect)).toBe(false);
 
       const draftWidth =
@@ -131,9 +137,12 @@ describe("computeDocumentCommandLayerLayout", () => {
 
       const safeRight = right(canvasRect) - SAFE_MARGIN;
       if (layout.askMode === "iconOnly") {
+        const askPaperGap = expectedAskPaperGap(paperRect.width);
         expect(layout.askRect.left).toBeGreaterThanOrEqual(
-          Math.min(right(paperRect) + GAP, right(layout.toolbarRect) + GAP) -
-            0.5,
+          Math.min(
+            right(paperRect) + askPaperGap,
+            right(layout.toolbarRect) + GAP,
+          ) - 0.5,
         );
       } else {
         expect(layout.askConstrained).toBe(true);
@@ -299,6 +308,42 @@ describe("computeDocumentCommandLayerLayout", () => {
     expect(layout.askMode).toBe("iconOnly");
     expect(layout.askOutsidePaper).toBe(true);
     expect(layout.askRect.left).toBe(right(paperRect) + GAP);
+  });
+
+  it("uses a tighter Ask gap for very small rendered papers", () => {
+    const paperRect = {
+      left: 521,
+      top: PAPER_TOP,
+      width: 238.2,
+      height: 336.9,
+    };
+    const layout = computeDocumentCommandLayerLayout({
+      canvasRect: {
+        left: 0,
+        top: 0,
+        width: 1280,
+        height: 720,
+      },
+      paperRect,
+      zoom: 0.3,
+      toolbarNaturalWidth: 300,
+      toolbarMinWidth: TOOLBAR_MIN_WIDTH,
+      toolbarHeight: TOOLBAR_HEIGHT,
+      stickyTop: STICKY_TOP,
+      askHandle: {
+        iconWidth: ASK_ICON_WIDTH,
+        height: ASK_HEIGHT,
+      },
+      safeMargin: SAFE_MARGIN,
+      gap: GAP,
+      askOffsetFromPaperTop: ASK_OFFSET_FROM_PAPER_TOP,
+      viewportWidth: 1280,
+    });
+
+    expect(layout.askMode).toBe("iconOnly");
+    expect(layout.askRect.left).toBe(
+      right(paperRect) + expectedAskPaperGap(paperRect.width),
+    );
   });
 
   it("clamps Ask near the visible paper edge instead of jumping back to the toolbar side", () => {
@@ -530,8 +575,12 @@ describe("computeDocumentCommandLayerLayout", () => {
         toolbarNaturalWidth: 520,
       });
 
-      expect(proposal.askRect.top).toBe(proposal.commandLayerY);
-      expect(cv.askRect.top).toBe(cv.commandLayerY);
+      expect(proposal.askRect.top).toBe(
+        Math.max(paperRect.top + ASK_OFFSET_FROM_PAPER_TOP, STICKY_TOP),
+      );
+      expect(cv.askRect.top).toBe(
+        Math.max(paperRect.top + ASK_OFFSET_FROM_PAPER_TOP, STICKY_TOP),
+      );
       expect(cv.askRect.top).toBe(proposal.askRect.top);
       expect(intersects(proposal.askRect, proposal.toolbarRect)).toBe(false);
       expect(intersects(cv.askRect, cv.toolbarRect)).toBe(false);

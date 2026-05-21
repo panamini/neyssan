@@ -4058,7 +4058,7 @@ export function CvForge(): JSX.Element {
   } as React.CSSProperties;
   const isForgeDrawerDockedDesktop =
     templatePanelOpen &&
-    templatePanelOpenMode === "pinned" &&
+    templatePanelOpenMode === "docked" &&
     viewportWidth >= 1180;
   const shouldAutoCollapseCvRailForDockedDrawer =
     isForgeDrawerDockedDesktop && viewportWidth < 1760;
