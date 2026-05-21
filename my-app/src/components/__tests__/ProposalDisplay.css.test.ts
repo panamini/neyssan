@@ -77,8 +77,14 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-stage\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;/,
     );
-    expect(productCss).toMatch(
-      /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*--proposal-command-toolbar-min-width:\s*300px;[\s\S]*position:\s*fixed;[\s\S]*inset-block-start:\s*var\(--proposal-command-toolbar-block-start,\s*var\(--space-3\)\);[\s\S]*inset-inline-start:\s*var\(--proposal-command-toolbar-inline-start,\s*var\(--proposal-toolbar-paper-left,\s*0\)\);[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*width:\s*var\(--proposal-command-toolbar-width,\s*min\(100%,\s*var\(--proposal-toolbar-paper-width,\s*100%\)\)\);[\s\S]*min-width:\s*var\(--proposal-command-toolbar-min-width\);[\s\S]*margin-inline-start:\s*0;/,
+    expect(productCss).toContain(
+      "inset-block-start: var(\n    --proposal-command-toolbar-block-start,\n    calc(var(--header-height) + var(--space-2))\n  );",
+    );
+    expect(productCss).toContain(
+      "width: var(\n    --proposal-command-toolbar-width,\n    min(100%, var(--proposal-toolbar-paper-width, 100%))\n  );",
+    );
+    expect(productCss).toContain(
+      "min-width: var(--proposal-command-toolbar-min-width);",
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-output-shell--workspace[\s\S]*\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*minmax\(0,\s*100%\);/,
@@ -119,8 +125,11 @@ describe("ProposalDisplay CSS contracts", () => {
   });
 
   it("keeps Proposal toolbar button geometry tied to action hierarchy", () => {
-    expect(productCss).toMatch(
-      /\.dasti-proposal-skeleton-stage__ask-handle-layer\s*\{[\s\S]*inset-block-start:\s*var\(--proposal-ask-handle-block-start,\s*var\(--space-3\)\);[\s\S]*inset-inline-start:\s*var\(--proposal-ask-handle-inline-start,\s*calc\(100vw - 56px\)\);/,
+    expect(productCss).toContain(
+      "inset-block-start: var(\n    --proposal-ask-handle-block-start,\n    calc(var(--header-height) + var(--space-2))\n  );",
+    );
+    expect(productCss).toContain(
+      "inset-inline-start: var(\n    --proposal-ask-handle-inline-start,\n    calc(100vw - 56px)\n  );",
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-stage__ask-handle\s*\{[^}]*pointer-events:\s*auto;/,

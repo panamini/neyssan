@@ -7917,7 +7917,7 @@
   z-index: 5;
   inset-block-start: var(
     --proposal-command-toolbar-block-start,
-    var(--space-3)
+    calc(var(--header-height) + var(--space-2))
   );
   inset-inline-start: var(
     --proposal-command-toolbar-inline-start,
@@ -8111,7 +8111,10 @@
 .dasti-proposal-skeleton-stage__ask-handle-layer {
   position: fixed;
   z-index: 4;
-  inset-block-start: var(--proposal-ask-handle-block-start, var(--space-3));
+  inset-block-start: var(
+    --proposal-ask-handle-block-start,
+    calc(var(--header-height) + var(--space-2))
+  );
   inset-inline-start: var(
     --proposal-ask-handle-inline-start,
     calc(100vw - 56px)

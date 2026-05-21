@@ -334,7 +334,10 @@
   --editor-toolbar-icon-control-block-size: var(--control-sm);
   position: fixed;
   z-index: 5;
-  inset-block-start: var(--cv-command-toolbar-block-start, var(--space-3));
+  inset-block-start: var(
+    --cv-command-toolbar-block-start,
+    calc(var(--header-height) + var(--space-2))
+  );
   inset-inline-start: var(
     --cv-command-toolbar-inline-start,
     var(--cv-toolbar-paper-left, 0)
@@ -579,7 +582,10 @@
 .dasti-cv-stage-bar__ask-handle-layer {
   position: fixed;
   z-index: 4;
-  inset-block-start: var(--cv-ask-handle-block-start, var(--space-3));
+  inset-block-start: var(
+    --cv-ask-handle-block-start,
+    calc(var(--header-height) + var(--space-2))
+  );
   inset-inline-start: var(--cv-ask-handle-inline-start, calc(100vw - 56px));
   width: auto;
   max-width: max-content;
