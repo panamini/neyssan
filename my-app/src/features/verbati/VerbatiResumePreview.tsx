@@ -288,6 +288,7 @@ export function VerbatiResumePreview({
     React.useState<HTMLDivElement | null>(null);
   const [stableWorkshopPageCount, setStableWorkshopPageCount] =
     React.useState(1);
+  const [currentDocumentPage, setCurrentDocumentPage] = React.useState(1);
   const dataSignature = React.useMemo(
     () => buildResumeDataSignature(data),
     [data],
@@ -411,13 +412,33 @@ export function VerbatiResumePreview({
     onPageCountChange?.(effectivePageCount);
   }, [effectivePageCount, onPageCountChange]);
   const shouldShowPageCount = showPageCount && effectivePageCount > 1;
+  const pageGapPx = usesWorkshopTemplateRenderer
+    ? RESUME_TEMPLATE_PAGE_GAP_PX
+    : resumePreviewMetrics.pageGapPx * previewScale;
+  const updateCurrentDocumentPage = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node || effectivePageCount <= 1 || stageLayout.pageHeight <= 0) {
+        setCurrentDocumentPage(1);
+        return;
+      }
+
+      const pageStride = stageLayout.pageHeight + pageGapPx;
+      const visibleMidpoint = node.scrollTop + node.clientHeight / 2;
+      const nextPage = Math.min(
+        effectivePageCount,
+        Math.max(1, Math.floor(visibleMidpoint / pageStride) + 1),
+      );
+
+      setCurrentDocumentPage((current) =>
+        current === nextPage ? current : nextPage,
+      );
+    },
+    [effectivePageCount, pageGapPx, stageLayout.pageHeight],
+  );
   const pageBreakMarkers = React.useMemo(() => {
     if (effectivePageCount <= 1) {
       return [];
     }
-    const pageGapPx = usesWorkshopTemplateRenderer
-      ? RESUME_TEMPLATE_PAGE_GAP_PX
-      : resumePreviewMetrics.pageGapPx * previewScale;
 
     return Array.from({ length: effectivePageCount - 1 }, (_, index) => {
       const pageIndex = index + 1;
@@ -428,10 +449,8 @@ export function VerbatiResumePreview({
     });
   }, [
     effectivePageCount,
-    previewScale,
-    resumePreviewMetrics.pageGapPx,
+    pageGapPx,
     stageLayout.pageHeight,
-    usesWorkshopTemplateRenderer,
   ]);
   const stageMode =
     stageLayout.overflowX ||
@@ -461,8 +480,9 @@ export function VerbatiResumePreview({
       setResumeViewportNode(node);
       attachViewport(node);
       attachCenterViewport(node);
+      updateCurrentDocumentPage(node);
     },
-    [attachCenterViewport, attachViewport],
+    [attachCenterViewport, attachViewport, updateCurrentDocumentPage],
   );
 
   React.useLayoutEffect(() => {
@@ -625,6 +645,21 @@ export function VerbatiResumePreview({
     usesNaturalPageScroll || shouldFitViewportToPage
       ? canvasHeightPx
       : stageLayout.stageHeight;
+  const pageCountText = (
+    <>
+      <span className="dasti-doc-page-count__label">Page</span>
+      {" "}
+      <span className="dasti-doc-page-count__value">
+        {currentDocumentPage}
+      </span>
+      {" "}
+      <span className="dasti-doc-page-count__label">of</span>
+      {" "}
+      <span className="dasti-doc-page-count__value">
+        {effectivePageCount}
+      </span>
+    </>
+  );
 
   const workspaceZoomFooter = showsStageZoom ? (
     <div className="dasti-cv-stage-footer" data-no-pan="true">
@@ -634,7 +669,7 @@ export function VerbatiResumePreview({
             className="dasti-doc-page-count dasti-doc-page-count--resume-footer"
             aria-label="Page count"
           >
-            {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
+            {pageCountText}
           </span>
         ) : null}
       </div>
@@ -902,6 +937,9 @@ export function VerbatiResumePreview({
           width: `${viewportWidthPx}px`,
           height: `${viewportHeightPx}px`,
         }}
+        onScroll={(event) => {
+          updateCurrentDocumentPage(event.currentTarget);
+        }}
         {...viewportPanProps}
       >
         <div
@@ -994,7 +1032,7 @@ export function VerbatiResumePreview({
               className="dasti-doc-page-count dasti-doc-page-count--resume-panel"
               aria-label="Page count"
             >
-              {effectivePageCount} {effectivePageCount === 1 ? "page" : "pages"}
+              {pageCountText}
             </span>
           ) : null}
         </div>

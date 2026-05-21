@@ -276,7 +276,9 @@ describe("VerbatiResumePreview", () => {
     expect(screen.getByTestId("resume-template-renderer")).toBeInTheDocument();
     expect(screen.queryByTestId("resume-page")).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByLabelText("Page count")).toHaveTextContent("3 pages");
+      expect(screen.getByLabelText("Page count")).toHaveTextContent(
+        "Page 1 of 3",
+      );
     });
   });
 
@@ -301,7 +303,9 @@ describe("VerbatiResumePreview", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Page count")).toHaveTextContent("2 pages");
+      expect(screen.getByLabelText("Page count")).toHaveTextContent(
+        "Page 1 of 2",
+      );
     });
     expect(screen.getByText("Page 2")).toBeInTheDocument();
   });
@@ -840,7 +844,9 @@ describe("VerbatiResumePreview", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Page count")).toHaveTextContent("3 pages");
+      expect(screen.getByLabelText("Page count")).toHaveTextContent(
+        "Page 1 of 3",
+      );
     });
 
     const canvas = document.querySelector(

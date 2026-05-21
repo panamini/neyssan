@@ -1739,6 +1739,10 @@ span.dasti-cv-ats {
   gap: var(--space-3);
 }
 
+.dasti-cv-section-sheet-panel {
+  --panel-island-max-inline-size: 420px;
+}
+
 .dasti-cv-review-block {
   display: grid;
   gap: var(--space-3);
@@ -1748,18 +1752,11 @@ span.dasti-cv-ats {
   background: var(--sf0);
 }
 
-.dasti-cv-review-block__head,
-.dasti-cv-section-sheet__summary {
+.dasti-cv-review-block__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-}
-
-.dasti-cv-section-sheet__summary {
-  justify-content: flex-end;
-  color: var(--tm2);
-  font-size: var(--tx);
 }
 
 .dasti-cv-section-grid,
@@ -1828,12 +1825,6 @@ span.dasti-cv-ats {
 .dasti-ai-applied-status__undo:focus-visible {
   background: color-mix(in srgb, currentColor 8%, transparent);
   outline: none;
-}
-
-.dasti-cv-section-sheet-overlay {
-  background: color-mix(in srgb, var(--ink) 12%, transparent);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 .dasti-cv-pill-editor {
@@ -2518,9 +2509,25 @@ span.dasti-cv-ats {
 }
 
 .dasti-doc-page-count--resume-footer {
+  min-width: 0;
   min-height: 24px;
   height: 24px;
+  padding: 0 var(--space-2);
+  gap: 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--tm2);
+  font-size: var(--tx);
+  font-weight: 600;
+  line-height: 1;
   pointer-events: none;
+}
+
+.dasti-doc-page-count--resume-footer .dasti-doc-page-count__value {
+  color: var(--ti);
+  font-variant-numeric: tabular-nums;
 }
 
 .dasti-cv-stage-footer__zoom {

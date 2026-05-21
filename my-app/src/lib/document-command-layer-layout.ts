@@ -56,7 +56,6 @@ const DRAFT_FULL_MIN_PAPER_WIDTH = 640;
 const DRAFT_SHORT_MIN_AVAILABLE_WIDTH = 360;
 const DRAFT_ICON_VIEWPORT_MAX_WIDTH = 520;
 const ASK_EDGE_INSET = 8;
-const ASK_EDGE_VIEWPORT_ANCHOR_MAX_WIDTH = 520;
 
 function right(rect: CommandLayerRect) {
   return rect.left + rect.width;
@@ -202,18 +201,7 @@ export function computeDocumentCommandLayerLayout(
       canvasSafeLeft,
       edgeTabSafeRight - input.askHandle.iconWidth - edgeTabInset,
     );
-    const edgeTabPreferredLeft =
-      input.canvasRect.width < ASK_EDGE_VIEWPORT_ANCHOR_MAX_WIDTH
-        ? edgeTabMaxLeft
-        : Math.min(
-            Math.max(
-              right(input.paperRect) -
-                input.askHandle.iconWidth -
-                ASK_EDGE_INSET,
-              toolbarSideAskLeft,
-            ),
-            edgeTabMaxLeft,
-          );
+    const edgeTabPreferredLeft = Math.max(paperSideAskLeft, toolbarSideAskLeft);
     const edgeTabLeft = clamp(
       edgeTabPreferredLeft,
       canvasSafeLeft,
