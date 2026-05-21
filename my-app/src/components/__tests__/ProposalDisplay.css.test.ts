@@ -43,6 +43,33 @@ describe("ProposalDisplay CSS contracts", () => {
     );
   });
 
+  it("makes the dark Proposal toolbar an opaque app chrome surface", () => {
+    expect(productCss).toMatch(
+      /\.dark\s+\.dasti-proposal-skeleton-stage__toolbar-main\s*\{[\s\S]*border-color:\s*var\(--color-border-contrast\);[\s\S]*background:\s*var\(--color-surface-raised\);[\s\S]*color:\s*var\(--color-text\);[\s\S]*box-shadow:\s*var\(--shadow-sm\);[\s\S]*backdrop-filter:\s*none;[\s\S]*-webkit-backdrop-filter:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dark\s+\.dasti-proposal-skeleton-stage__mode,[\s\S]*\.dark\s+\.dasti-proposal-skeleton-stage\s+\.dasti-proposal-mode-toggle--single\s*\{[\s\S]*border-color:\s*var\(--color-border-contrast\);[\s\S]*background:\s*var\(--color-surface\);[\s\S]*color:\s*var\(--color-text-muted\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dark\s+\.dasti-proposal-skeleton-stage__primary-action--draft\s*\{[\s\S]*border-color:\s*color-mix\(in srgb,\s*var\(--color-accent\) 28%,\s*transparent\);[\s\S]*background:\s*color-mix\([\s\S]*var\(--color-accent\) 10%,[\s\S]*var\(--color-surface-raised\)[\s\S]*\);[\s\S]*color:\s*var\(--color-accent-hover\);[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dark\s+\.dasti-proposal-skeleton-stage__primary-action--draft:hover:not\(:disabled\),[\s\S]*\.dark\s+\.dasti-proposal-skeleton-stage__primary-action--draft:focus-visible,[\s\S]*\.dark\s+\.dasti-proposal-skeleton-stage__primary-action--draft\[aria-expanded="true"\]\s*\{[\s\S]*border-color:\s*color-mix\(in srgb,\s*var\(--color-accent\) 38%,\s*transparent\);[\s\S]*background:\s*color-mix\([\s\S]*var\(--color-accent\) 16%,[\s\S]*var\(--color-surface-raised\)[\s\S]*\);[\s\S]*color:\s*var\(--color-accent-hover\);[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dark\s+\.dasti-proposal-skeleton-stage__primary-action--draft\[aria-expanded="true"\]\s*\{[\s\S]*background:\s*color-mix\([\s\S]*var\(--color-accent-soft\) 72%,[\s\S]*var\(--color-surface-raised\)[\s\S]*\);[\s\S]*color:\s*var\(--color-accent-hover\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dark\s+\.dasti-proposal-skeleton-stage__ask-handle\s*\{[\s\S]*border-color:\s*var\(--color-border-contrast\);[\s\S]*background:\s*var\(--color-surface-raised\);[\s\S]*color:\s*var\(--color-text-muted\);[\s\S]*box-shadow:\s*var\(--shadow-sm\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dark\s+\.dasti-proposal-skeleton-stage__ask-handle:hover:not\(:disabled\),[\s\S]*\.dark\s+\.dasti-proposal-skeleton-stage__ask-handle:focus-visible\s*\{[\s\S]*border-color:\s*var\(--color-border-selected\);[\s\S]*background:\s*var\(--color-surface-2\);[\s\S]*color:\s*var\(--color-text\);[\s\S]*box-shadow:\s*inset 0 0 0 1px var\(--color-border-selected\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dark\s+\.dasti-proposal-skeleton-stage__ask-handle\[aria-expanded="true"\]\s*\{[\s\S]*border-color:\s*var\(--color-border-selected\);[\s\S]*background:\s*var\(--color-surface\);[\s\S]*color:\s*var\(--color-accent\);[\s\S]*box-shadow:\s*inset 0 0 0 1px var\(--color-border-selected\);/,
+    );
+  });
+
   it("keeps Proposal paper stage and preview frame responsive like CV Forge collapse mode", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-paper-stage\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--proposal-paper-visual-inline-size\)\);[\s\S]*margin-inline:\s*auto;[\s\S]*min-width:\s*0;/,
@@ -51,7 +78,7 @@ describe("ProposalDisplay CSS contracts", () => {
       /\.dasti-proposal-skeleton-stage\s*\{[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*--proposal-command-toolbar-min-width:\s*300px;[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*width:\s*var\(--proposal-command-toolbar-width,\s*min\(100%,\s*var\(--proposal-toolbar-paper-width,\s*100%\)\)\);[\s\S]*min-width:\s*var\(--proposal-command-toolbar-min-width\);[\s\S]*margin-inline-start:\s*var\(--proposal-command-toolbar-left,\s*var\(--proposal-toolbar-paper-left,\s*0\)\);/,
+      /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*--proposal-command-toolbar-min-width:\s*300px;[\s\S]*position:\s*fixed;[\s\S]*inset-block-start:\s*var\(--proposal-command-toolbar-block-start,\s*var\(--space-3\)\);[\s\S]*inset-inline-start:\s*var\(--proposal-command-toolbar-inline-start,\s*var\(--proposal-toolbar-paper-left,\s*0\)\);[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*width:\s*var\(--proposal-command-toolbar-width,\s*min\(100%,\s*var\(--proposal-toolbar-paper-width,\s*100%\)\)\);[\s\S]*min-width:\s*var\(--proposal-command-toolbar-min-width\);[\s\S]*margin-inline-start:\s*0;/,
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-output-shell--workspace[\s\S]*\.dasti-doc-viewer-shell__surface\[data-preview-zoom-footer="true"\]\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*minmax\(0,\s*100%\);/,

@@ -21,13 +21,14 @@ export type ComputeDocumentCommandLayerLayoutInput = {
   toolbarNaturalWidth: number;
   toolbarMinWidth: number;
   toolbarHeight: number;
+  stickyTop: number;
   askHandle: {
     iconWidth: number;
     height: number;
   };
   safeMargin: number;
   gap: number;
-  topOffset: number;
+  askOffsetFromPaperTop: number;
   viewportWidth?: number;
 };
 
@@ -36,10 +37,12 @@ export type DocumentCommandLayerLayout = {
   draftLabelMode: CommandLayerDraftLabelMode;
   modeControlMode: CommandLayerModeControlMode;
   askMode: CommandLayerAskMode;
+  commandLayerY: number;
   toolbarRect: CommandLayerRect;
   askRect: CommandLayerRect;
   askOutsidePaper: boolean;
   askConstrained: boolean;
+  toolbarSticky: boolean;
   toolbarClamped: boolean;
 };
 
@@ -136,9 +139,12 @@ export function computeDocumentCommandLayerLayout(
     canvasSafeLeft,
     canvasSafeRight - toolbarWidth,
   );
+  const commandLayerNormalY = input.paperRect.top - input.gap - input.toolbarHeight;
+  const commandLayerSticky = commandLayerNormalY < input.stickyTop;
+  const commandLayerY = Math.max(commandLayerNormalY, input.stickyTop);
   const toolbarRect = {
     left: toolbarLeft,
-    top: Math.max(input.canvasRect.top, input.paperRect.top - input.gap - input.toolbarHeight),
+    top: commandLayerY,
     width: toolbarWidth,
     height: input.toolbarHeight,
   };
@@ -154,7 +160,11 @@ export function computeDocumentCommandLayerLayout(
     toolbarMode === "ultraCompact" ? "toggle" : "split";
 
   const iconAskLeft = right(input.paperRect) + input.gap;
-  const askTop = input.paperRect.top + input.topOffset;
+  const askTop =
+    commandLayerY +
+    input.toolbarHeight +
+    input.gap +
+    input.askOffsetFromPaperTop;
   const iconAskFits =
     iconAskLeft + input.askHandle.iconWidth <= canvasSafeRight;
 
@@ -202,7 +212,7 @@ export function computeDocumentCommandLayerLayout(
     );
     askRect = {
       left: askLeft,
-      top: Math.max(input.paperRect.top + input.topOffset, bottom(toolbarRect) + input.gap),
+      top: bottom(toolbarRect) + input.gap,
       width: askWidth,
       height: input.askHandle.height,
     };
@@ -214,10 +224,12 @@ export function computeDocumentCommandLayerLayout(
     draftLabelMode,
     modeControlMode,
     askMode,
+    commandLayerY,
     toolbarRect,
     askRect,
     askOutsidePaper,
     askConstrained: askMode === "edgeTab",
+    toolbarSticky: commandLayerSticky,
     toolbarClamped,
   };
 }
