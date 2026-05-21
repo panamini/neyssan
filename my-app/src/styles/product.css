@@ -1944,7 +1944,8 @@ body,
 }
 
 @media (min-width: 1180px) {
-  .app-shell[data-forge-panel-docked="true"] .forge-template-panel {
+  .app-shell[data-forge-panel-docked="true"]
+    .forge-template-panel[data-mode="docked"] {
     position: relative;
     inset: auto;
     grid-column: 2;
@@ -3572,6 +3573,22 @@ body,
   border-color: var(--color-border-hover);
   color: var(--ti);
   outline: none;
+}
+
+.app-topbar__icon {
+  width: var(--app-topbar-icon-size);
+  height: var(--app-topbar-icon-size);
+  min-width: var(--app-topbar-icon-size);
+  min-height: var(--app-topbar-icon-size);
+  flex: 0 0 auto;
+}
+
+.app-topbar__icon--compact {
+  width: var(--app-topbar-icon-size-compact);
+  height: var(--app-topbar-icon-size-compact);
+  min-width: var(--app-topbar-icon-size-compact);
+  min-height: var(--app-topbar-icon-size-compact);
+  flex: 0 0 auto;
 }
 
 .app-topbar__cmdk-icon {

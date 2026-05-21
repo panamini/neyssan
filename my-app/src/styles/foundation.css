@@ -457,6 +457,8 @@
   --app-topbar-control-gap: 4px;
   --app-topbar-control-padding-inline: 8px;
   --app-topbar-command-padding-inline: 12px;
+  --app-topbar-icon-size: 15px;
+  --app-topbar-icon-size-compact: 13px;
   --app-topbar-doc-cluster-gap: 8px;
   --app-topbar-doc-identity-inline-size: 224px;
   --app-topbar-doc-identity-inline-size-compact: 160px;
@@ -779,6 +781,20 @@
   --color-warning-ink: var(--wat);
   --color-neutral-soft: var(--color-surface);
   --color-neutral-ink: var(--color-text-muted);
+  --panel-island-surface: color-mix(
+    in srgb,
+    var(--color-surface) 88%,
+    transparent
+  );
+  --panel-island-surface-fallback: var(--color-surface);
+  --panel-island-border: var(--color-border);
+  --panel-island-radius: var(--radius-surface, var(--radius-card));
+  --panel-island-shadow: var(--shc);
+  --panel-island-blur: var(--frost-blur);
+  --panel-island-saturate: var(--frost-saturate);
+  --panel-island-inset: var(--space-3);
+  --panel-island-header-min-block-size: 38px;
+  --panel-island-max-inline-size: 420px;
   --color-info-soft: color-mix(
     in srgb,
     var(--color-accent-pale) 48%,

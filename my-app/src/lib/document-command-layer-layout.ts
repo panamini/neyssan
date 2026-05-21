@@ -56,6 +56,12 @@ const DRAFT_FULL_MIN_PAPER_WIDTH = 640;
 const DRAFT_SHORT_MIN_AVAILABLE_WIDTH = 360;
 const DRAFT_ICON_VIEWPORT_MAX_WIDTH = 520;
 const ASK_EDGE_INSET = 8;
+const ASK_COMPACT_PAPER_WIDTH = 360;
+
+function askPaperGapFor(paperWidth: number, gap: number) {
+  if (paperWidth >= ASK_COMPACT_PAPER_WIDTH) return gap;
+  return Math.min(4, gap);
+}
 
 function right(rect: CommandLayerRect) {
   return rect.left + rect.width;
@@ -179,13 +185,15 @@ export function computeDocumentCommandLayerLayout(
   let toolbarPlacement = makeToolbarPlacement(canvasSafeRight);
   let toolbarRect = toolbarPlacement.rect;
 
-  const askTop = commandLayerY;
+  const askTop = Math.max(
+    input.paperRect.top + input.askOffsetFromPaperTop,
+    input.stickyTop,
+  );
+  const askPaperGap = askPaperGapFor(input.paperRect.width, input.gap);
 
   const placeAsk = () => {
-    const paperSideAskLeft = right(input.paperRect) + input.gap;
-    const toolbarSideAskLeft = right(toolbarRect) + input.gap;
+    const paperSideAskLeft = right(input.paperRect) + askPaperGap;
     const canUsePaperSide =
-      paperSideAskLeft >= right(toolbarRect) + input.gap - 0.5 &&
       paperSideAskLeft + input.askHandle.iconWidth <= canvasSafeRight;
     if (canUsePaperSide) {
       return {
@@ -201,7 +209,7 @@ export function computeDocumentCommandLayerLayout(
       canvasSafeLeft,
       edgeTabSafeRight - input.askHandle.iconWidth - edgeTabInset,
     );
-    const edgeTabPreferredLeft = Math.max(paperSideAskLeft, toolbarSideAskLeft);
+    const edgeTabPreferredLeft = paperSideAskLeft;
     const edgeTabLeft = clamp(
       edgeTabPreferredLeft,
       canvasSafeLeft,
@@ -211,7 +219,7 @@ export function computeDocumentCommandLayerLayout(
       mode: "edgeTab" as const,
       width: input.askHandle.iconWidth,
       left: edgeTabLeft,
-      outsidePaper: edgeTabLeft >= right(input.paperRect) + input.gap - 0.5,
+      outsidePaper: edgeTabLeft >= right(input.paperRect) + askPaperGap - 0.5,
     };
   };
 

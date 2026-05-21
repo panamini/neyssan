@@ -8023,12 +8023,18 @@
   align-items: center;
   justify-content: center;
   flex-wrap: nowrap;
-  gap: var(--space-2);
-  padding: var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px));
+  gap: var(--proposal-command-toolbar-shell-gap, var(--space-2));
+  padding: var(
+    --proposal-command-toolbar-shell-padding,
+    var(--proposal-chrome-shell-padding, calc(var(--space-2) - 2px))
+  );
   border: 1px solid var(--proposal-chrome-toolbar-border);
   border-radius: var(--radius-toolbar-shell, var(--radius-card));
   background: var(--proposal-chrome-toolbar-bg);
-  box-shadow: var(--shadow-frost, var(--shadow-sm));
+  box-shadow: var(
+    --proposal-command-toolbar-shadow,
+    var(--shadow-frost, var(--shadow-sm))
+  );
   backdrop-filter: saturate(var(--frost-saturate, 1))
     blur(var(--frost-blur, 14px));
   -webkit-backdrop-filter: saturate(var(--frost-saturate, 1))
@@ -8154,7 +8160,6 @@
   margin: 0;
   display: block;
   pointer-events: none;
-  transition: inset-inline-start var(--duration-fast) var(--ease-standard);
 }
 
 .dasti-proposal-skeleton-stage__ask-handle {
@@ -8351,14 +8356,29 @@
   .dasti-proposal-skeleton-stage__bar,
 .dasti-proposal-skeleton-stage[data-toolbar-density="ultra"]
   .dasti-proposal-skeleton-stage__bar {
-  gap: var(--space-1);
+  --proposal-command-toolbar-shell-gap: var(--space-1);
+  --proposal-command-toolbar-shell-padding: var(--space-1);
+  gap: var(--proposal-command-toolbar-shell-gap);
+}
+
+.dasti-proposal-skeleton-stage[data-toolbar-density="compact"]
+  .dasti-proposal-skeleton-stage__bar {
+  --editor-toolbar-control-block-size: calc(var(--control-sm) - 2px);
+  --editor-toolbar-icon-control-block-size: calc(var(--control-sm) - 2px);
+}
+
+.dasti-proposal-skeleton-stage[data-toolbar-density="ultra"]
+  .dasti-proposal-skeleton-stage__bar {
+  --editor-toolbar-control-block-size: calc(var(--control-sm) - 4px);
+  --editor-toolbar-icon-control-block-size: calc(var(--control-sm) - 4px);
 }
 
 .dasti-proposal-skeleton-stage[data-toolbar-density="compact"]
   .dasti-proposal-skeleton-stage__toolbar-main,
 .dasti-proposal-skeleton-stage[data-toolbar-density="ultra"]
   .dasti-proposal-skeleton-stage__toolbar-main {
-  padding: var(--space-1);
+  gap: var(--proposal-command-toolbar-shell-gap);
+  padding: var(--proposal-command-toolbar-shell-padding);
 }
 
 .dasti-proposal-skeleton-stage[data-toolbar-density="compact"]
