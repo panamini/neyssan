@@ -611,6 +611,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   onHeaderVisibilityChange,
   showDocumentCaption = true,
   showPreviewParagraphActions = true,
+  showPageCountBadge = true,
 }) => {
   const resolvedRenderState = React.useMemo(
     () =>
@@ -657,6 +658,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   );
   const [isZoomMenuOpen, setIsZoomMenuOpen] = React.useState(false);
   const [documentPageCount, setDocumentPageCount] = React.useState(1);
+  const [currentDocumentPage, setCurrentDocumentPage] = React.useState(1);
   const [fitRequestCount, setFitRequestCount] = React.useState(0);
   const [isApplyingInlineAi, setIsApplyingInlineAi] = React.useState(false);
   const [pendingInlineAiActionId, setPendingInlineAiActionId] =
@@ -1489,6 +1491,26 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     },
     [attachPreviewScrollEdges],
   );
+  const updateCurrentDocumentPage = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node || documentPageCount <= 1 || stageLayout.pageHeight <= 0) {
+        setCurrentDocumentPage(1);
+        return;
+      }
+
+      const pageStride = stageLayout.pageHeight + documentPageGapPx;
+      const visibleMidpoint = node.scrollTop + node.clientHeight / 2;
+      const nextPage = Math.min(
+        documentPageCount,
+        Math.max(1, Math.floor(visibleMidpoint / pageStride) + 1),
+      );
+
+      setCurrentDocumentPage((current) =>
+        current === nextPage ? current : nextPage,
+      );
+    },
+    [documentPageCount, documentPageGapPx, stageLayout.pageHeight],
+  );
   const attachEditableScrollContainer = React.useCallback(
     (node: HTMLDivElement | null) => {
       editableScrollContainerRef.current = node;
@@ -1525,8 +1547,14 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       attachPreviewScrollContainer(node);
       attachPanViewport(node);
       attachAnchorViewport(node);
+      updateCurrentDocumentPage(node);
     },
-    [attachAnchorViewport, attachPanViewport, attachPreviewScrollContainer],
+    [
+      attachAnchorViewport,
+      attachPanViewport,
+      attachPreviewScrollContainer,
+      updateCurrentDocumentPage,
+    ],
   );
 
   const modeToggleControl = showModeToggle ? (
@@ -1850,6 +1878,12 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             ? `min(100%, ${stageLayout.stageWidth}px)`
             : "100%",
           height: `${isEditable ? renderedDocumentHeight : previewStageHeightPx}px`,
+        }}
+        onScroll={(event) => {
+          updatePreviewScrollEdges();
+          if (!isEditable) {
+            updateCurrentDocumentPage(event.currentTarget);
+          }
         }}
         {...(!isEditable ? viewportPanProps : {})}
       >
@@ -2718,6 +2752,30 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     ) : null;
   const previewZoomFooter = shouldRenderZoomFooter ? (
     <div className="dasti-proposal-preview-zoom-footer" data-no-pan="true">
+      <div className="dasti-proposal-preview-zoom-footer__meta">
+        {showPageCountBadge && documentPageCount > 1 ? (
+          <span
+            className="dasti-proposal-preview-zoom-footer__page-count"
+            aria-label="Page count"
+          >
+            <span className="dasti-proposal-preview-zoom-footer__page-count-label">
+              Page
+            </span>
+            {" "}
+            <span className="dasti-proposal-preview-zoom-footer__page-count-value">
+              {currentDocumentPage}
+            </span>
+            {" "}
+            <span className="dasti-proposal-preview-zoom-footer__page-count-label">
+              of
+            </span>
+            {" "}
+            <span className="dasti-proposal-preview-zoom-footer__page-count-value">
+              {documentPageCount}
+            </span>
+          </span>
+        ) : null}
+      </div>
       <div
         className="dasti-proposal-preview-zoom-footer__zoom"
         aria-label="Proposal zoom controls"

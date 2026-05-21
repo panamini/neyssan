@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const viewportCenteringSpy = vi.fn();
@@ -126,6 +126,7 @@ describe("ProposalDisplay stage behavior", () => {
         error={null}
         proposalType="cover_letter"
         showZoomControls
+        documentHeaderMode="hidden"
       />,
     );
 
@@ -145,6 +146,56 @@ describe("ProposalDisplay stage behavior", () => {
       fillAvailableOnZoom: true,
       includeParentMeasurement: false,
     });
+  });
+
+  it("tracks the visible proposal page in the zoom footer for multi-page previews", async () => {
+    const { container } = render(
+      <ProposalDisplay
+        proposalContent={"Dear team,\n\n[PAGES=3]\n\nAlex"}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        showZoomControls
+        documentHeaderMode="hidden"
+      />,
+    );
+
+    expect(await screen.findByLabelText("Page count")).toHaveTextContent(
+      "Page 1 of 3",
+    );
+
+    const stage = container.querySelector(
+      ".dasti-proposal-sheet__preview-stage",
+    ) as HTMLDivElement;
+    stage.scrollTop = 1200;
+    fireEvent.scroll(stage);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Page count")).toHaveTextContent(
+        "Page 2 of 3",
+      );
+    });
+  });
+
+  it("honors the proposal page count footer opt-out", async () => {
+    render(
+      <ProposalDisplay
+        proposalContent={"Dear team,\n\n[PAGES=3]\n\nAlex"}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        showZoomControls
+        documentHeaderMode="hidden"
+        showPageCountBadge={false}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryAllByTestId("proposal-document-renderer"),
+      ).toHaveLength(1);
+    });
+    expect(screen.queryByLabelText("Page count")).toBeNull();
   });
 
   it("uses a natural overflow stage for proposal preview mode when requested", () => {

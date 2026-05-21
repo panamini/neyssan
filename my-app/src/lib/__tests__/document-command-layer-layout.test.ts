@@ -611,4 +611,44 @@ describe("computeDocumentCommandLayerLayout", () => {
 
     expect(Math.max(...askTops) - Math.min(...askTops)).toBeLessThanOrEqual(0);
   });
+
+  it("keeps constrained Ask x anchored to the same visible edge across the old width threshold", () => {
+    const askLefts = [500, 520, 540].map((viewportWidth) => {
+      const layout = computeDocumentCommandLayerLayout({
+        canvasRect: {
+          left: 0,
+          top: 0,
+          width: viewportWidth,
+          height: 900,
+        },
+        paperRect: {
+          left: 180,
+          top: PAPER_TOP,
+          width: 520,
+          height: 735,
+        },
+        zoom: 0.65,
+        toolbarNaturalWidth: 520,
+        toolbarMinWidth: TOOLBAR_MIN_WIDTH,
+        toolbarHeight: TOOLBAR_HEIGHT,
+        stickyTop: STICKY_TOP,
+        askHandle: {
+          iconWidth: ASK_ICON_WIDTH,
+          height: ASK_HEIGHT,
+        },
+        safeMargin: SAFE_MARGIN,
+        gap: GAP,
+        askOffsetFromPaperTop: ASK_OFFSET_FROM_PAPER_TOP,
+        viewportWidth,
+      });
+
+      expect(layout.askMode).toBe("edgeTab");
+      expect(right(layout.askRect)).toBeLessThanOrEqual(
+        viewportWidth - SAFE_MARGIN + 0.5,
+      );
+      return layout.askRect.left;
+    });
+
+    expect(askLefts).toEqual([444, 464, 484]);
+  });
 });

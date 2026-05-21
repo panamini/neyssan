@@ -34,12 +34,12 @@ describe("ProposalDisplay CSS contracts", () => {
     ]);
   });
 
-  it("lets Proposal stage toolbar token tooltips render outside the toolbar", () => {
+  it("renders Proposal stage toolbar token tooltips below the top command layer", () => {
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-stage__bar\s*\{[\s\S]*overflow:\s*visible;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-proposal-skeleton-stage__bar\s+\[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-skeleton-stage__ask-handle\[data-toolbar-tooltip\]\s*\{[\s\S]*--dasti-toolbar-tooltip-inset-block-start:\s*auto;[\s\S]*--dasti-toolbar-tooltip-inset-block-end:\s*calc\([\s\S]*100%\s*\+\s*var\(--toolbar-trigger-tooltip-gap\)[\s\S]*\);/,
+      /\.dasti-proposal-skeleton-stage__bar\s+\[data-toolbar-tooltip\],[\s\S]*\.dasti-proposal-skeleton-stage__ask-handle\[data-toolbar-tooltip\]\s*\{[\s\S]*--dasti-toolbar-tooltip-inset-block-start:\s*calc\([\s\S]*100%\s*\+\s*var\(--toolbar-trigger-tooltip-gap\)[\s\S]*\);[\s\S]*--dasti-toolbar-tooltip-inset-block-end:\s*auto;/,
     );
   });
 
