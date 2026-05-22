@@ -1220,6 +1220,13 @@
   --page-shell-gap: var(--layout-page-stack);
 }
 
+.projects-page {
+  --page-shell-max-width: 100%;
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
 .dasti-templates-page {
   --page-shell-max-width: calc(var(--container-xl) + (var(--layout-page-pad) * 2));
   --page-shell-gap: var(--s4);

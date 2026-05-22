@@ -68,6 +68,9 @@ type ListEntry = {
   item: LibraryItem;
 };
 
+const PROJECT_PREVIEW_BATCH_SIZE = 4;
+const PROJECT_PREVIEW_BATCH_DELAY_MS = 80;
+
 const PROJECTS_PROPOSAL_PREVIEW_STYLE = resolveVerbatiStyle({
   familyId: "workshop",
   typography: "geist-baskervville",
@@ -112,6 +115,84 @@ function itemTypeLabel(item: LibraryItem): "CV" | "Proposal" {
 
 function itemSourceId(item: LibraryItem): string {
   return item.id.slice(item.id.indexOf(":") + 1);
+}
+
+function useBatchedProjectPreviewLoader(items: LibraryItem[]) {
+  const initialPreviewIds = React.useMemo(
+    () => items.slice(0, PROJECT_PREVIEW_BATCH_SIZE).map((item) => item.id),
+    [items],
+  );
+  const [loadedPreviewIds, setLoadedPreviewIds] = React.useState<Set<string>>(
+    () => new Set(initialPreviewIds),
+  );
+  const loadedPreviewIdsRef = React.useRef(loadedPreviewIds);
+  const pendingPreviewIdsRef = React.useRef<string[]>([]);
+  const batchTimerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    loadedPreviewIdsRef.current = loadedPreviewIds;
+  }, [loadedPreviewIds]);
+
+  React.useEffect(() => {
+    const availableIds = new Set(items.map((item) => item.id));
+    pendingPreviewIdsRef.current = [];
+    if (batchTimerRef.current !== null) {
+      window.clearTimeout(batchTimerRef.current);
+      batchTimerRef.current = null;
+    }
+    setLoadedPreviewIds((previous) => {
+      const next = new Set(initialPreviewIds);
+      previous.forEach((id) => {
+        if (availableIds.has(id)) next.add(id);
+      });
+      loadedPreviewIdsRef.current = next;
+      return next;
+    });
+  }, [initialPreviewIds, items]);
+
+  const schedulePreviewBatch = React.useCallback(() => {
+    if (batchTimerRef.current !== null) return;
+    batchTimerRef.current = window.setTimeout(() => {
+      batchTimerRef.current = null;
+      const batch = pendingPreviewIdsRef.current.splice(0, PROJECT_PREVIEW_BATCH_SIZE);
+      if (batch.length > 0) {
+        setLoadedPreviewIds((previous) => {
+          const next = new Set(previous);
+          batch.forEach((id) => next.add(id));
+          loadedPreviewIdsRef.current = next;
+          return next;
+        });
+      }
+      if (pendingPreviewIdsRef.current.length > 0) {
+        schedulePreviewBatch();
+      }
+    }, PROJECT_PREVIEW_BATCH_DELAY_MS);
+  }, []);
+
+  const requestPreview = React.useCallback(
+    (itemId: string) => {
+      if (
+        loadedPreviewIdsRef.current.has(itemId) ||
+        pendingPreviewIdsRef.current.includes(itemId)
+      ) {
+        return;
+      }
+      pendingPreviewIdsRef.current.push(itemId);
+      schedulePreviewBatch();
+    },
+    [schedulePreviewBatch],
+  );
+
+  React.useEffect(
+    () => () => {
+      if (batchTimerRef.current !== null) {
+        window.clearTimeout(batchTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  return { loadedPreviewIds, requestPreview };
 }
 
 function isLibrarySummaryOnlyCv(cv: CvDocument | null | undefined): boolean {
@@ -372,6 +453,8 @@ export function DocumentsPage(): JSX.Element {
       })),
     [filteredItems],
   );
+  const { loadedPreviewIds, requestPreview } =
+    useBatchedProjectPreviewLoader(filteredItems);
 
   const authStatusMessage = !isLoaded || isConvexAuthLoading
     ? "Loading projects."
@@ -461,11 +544,13 @@ export function DocumentsPage(): JSX.Element {
             <ProjectSection
               title="Recent work"
               items={filteredItems}
-              renderItem={(item) => (
+              renderItem={(item, index) => (
                 <LibraryItemCard
                   key={item.id}
                   item={item}
                   selected={selectedIds.has(item.id)}
+                  previewLoaded={loadedPreviewIds.has(item.id)}
+                  onRequestPreview={() => requestPreview(item.id)}
                   onOpen={() => openItem(item)}
                   onDelete={() => deleteItem(item)}
                   onDownload={() => downloadItem(item)}
@@ -517,7 +602,7 @@ function ProjectSection<T>({
 }: {
   title: string;
   items: T[];
-  renderItem: (item: T) => React.ReactNode;
+  renderItem: (item: T, index: number) => React.ReactNode;
 }) {
   return (
     <section className="projects-section" aria-labelledby={`${title.replace(/\s+/g, "-").toLowerCase()}-title`}>
@@ -533,6 +618,8 @@ function ProjectSection<T>({
 function LibraryItemCard({
   item,
   selected,
+  previewLoaded,
+  onRequestPreview,
   onOpen,
   onDelete,
   onDownload,
@@ -540,6 +627,8 @@ function LibraryItemCard({
 }: {
   item: LibraryItem;
   selected: boolean;
+  previewLoaded: boolean;
+  onRequestPreview: () => void;
   onOpen: () => void;
   onDelete: () => void;
   onDownload: () => void;
@@ -547,6 +636,31 @@ function LibraryItemCard({
 }) {
   const typeLabel = itemTypeLabel(item);
   const context = proposalContext(item);
+  const previewShellRef = React.useRef<HTMLDivElement | null>(null);
+  const shouldRenderPreview = previewLoaded || selected;
+
+  React.useEffect(() => {
+    if (previewLoaded) return;
+    const node = previewShellRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      onRequestPreview();
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          onRequestPreview();
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "160px" },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [onRequestPreview, previewLoaded]);
+
   return (
     <Card
       as="article"
@@ -555,7 +669,12 @@ function LibraryItemCard({
       aria-selected={selected}
       data-selected={selected ? "true" : undefined}
     >
-      <div className="projects-card__preview-shell">
+      <div
+        className="projects-card__preview-shell"
+        ref={previewShellRef}
+        onPointerEnter={onRequestPreview}
+        onFocusCapture={onRequestPreview}
+      >
         <label className="projects-card__select">
           <input
             type="checkbox"
@@ -635,7 +754,7 @@ function LibraryItemCard({
           className="projects-card__preview-button"
           onClick={onOpen}
         >
-          <LibraryDocumentPreview item={item} />
+          <LibraryDocumentPreview item={item} renderPreview={shouldRenderPreview} />
         </button>
       </div>
       <button type="button" className="dasti-documents-card__surface" onClick={onOpen}>
@@ -890,8 +1009,24 @@ function ProjectsEmptyState({
   );
 }
 
-function LibraryDocumentPreview({ item }: { item: LibraryItem }) {
+function LibraryDocumentPreview({
+  item,
+  renderPreview,
+}: {
+  item: LibraryItem;
+  renderPreview: boolean;
+}) {
   const context = proposalContext(item);
+  if (!renderPreview) {
+    return (
+      <div
+        className="library-doc-preview library-doc-preview--empty library-doc-preview--deferred"
+        data-kind={item.type}
+        aria-hidden="true"
+      />
+    );
+  }
+
   if (item.type === "proposal") {
     return (
       <div
