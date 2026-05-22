@@ -362,6 +362,10 @@
     blur(var(--frost-blur, 14px));
 }
 
+.forge__stage-bar[data-command-layer-measured="false"] {
+  visibility: hidden;
+}
+
 .dark .dasti-cv-stage-bar {
   border-color: var(--color-border-contrast);
   background: var(--color-surface-raised);

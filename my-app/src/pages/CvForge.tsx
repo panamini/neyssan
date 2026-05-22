@@ -4070,6 +4070,7 @@ export function CvForge(): JSX.Element {
     modeControlMode: cvCommandModeControlMode,
     askMode: cvCommandAskMode,
     commandLayerSticky: cvCommandLayerSticky,
+    commandLayerMeasured: cvCommandLayerMeasured,
   } = useDocumentCommandLayerPosition({
     stageRef: cvDocumentStageRef,
     paperRef: paperStageRef,
@@ -4084,7 +4085,7 @@ export function CvForge(): JSX.Element {
     safeMargin: CV_COMMAND_LAYER_SAFE_MARGIN,
     gap: CV_COMMAND_LAYER_GAP,
     askOffsetFromPaperTop: CV_ASK_OFFSET_FROM_PAPER_TOP,
-    refreshKey: workspaceMode,
+    refreshKey: `${workspaceMode}:${isForgeDrawerDockedDesktop}:${shouldAutoCollapseCvRailForDockedDrawer}`,
   });
 
   const handleClearJobContext = React.useCallback(() => {
@@ -7059,6 +7060,7 @@ export function CvForge(): JSX.Element {
                 toolbarStyle={cvCommandLayerStyle}
                 modeControlMode={cvCommandModeControlMode}
                 commandLayerSticky={cvCommandLayerSticky}
+                commandLayerMeasured={cvCommandLayerMeasured}
                 templatesOpen={cvTemplatesOpen}
                 sectionsOpen={sectionsPanelOpen}
                 designOpen={cvDesignOpen}

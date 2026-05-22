@@ -15,6 +15,7 @@ type CvStageBarProps = {
   toolbarStyle?: React.CSSProperties;
   modeControlMode?: CommandLayerModeControlMode;
   commandLayerSticky?: boolean;
+  commandLayerMeasured?: boolean;
   templatesOpen?: boolean;
   sectionsOpen?: boolean;
   designOpen?: boolean;
@@ -31,6 +32,7 @@ export function CvStageBar({
   toolbarStyle,
   modeControlMode = "split",
   commandLayerSticky = false,
+  commandLayerMeasured = true,
   templatesOpen = false,
   sectionsOpen = false,
   designOpen = false,
@@ -52,6 +54,7 @@ export function CvStageBar({
       <div
         className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-toolbar--surface-tooltips"
         data-sticky={commandLayerSticky ? "true" : undefined}
+        data-command-layer-measured={commandLayerMeasured ? "true" : "false"}
         data-testid="cv-toolbar"
         style={toolbarStyle}
       >
