@@ -4,6 +4,8 @@ import {
   CANONICAL_SECTION_ORDER,
   compareSectionsByRecommendedOrder,
   insertSectionByCanonicalOrder,
+  isSectionReorderLocked,
+  normalizeCvSectionOrder,
 } from "../../lib/cv-section-organization";
 import type { CvSection } from "../../types/cvDocument";
 
@@ -62,6 +64,39 @@ describe("cv-section-organization", () => {
       "Affiliations",
       "Speaking",
     ]);
+  });
+
+  it("normalizes locked top sections while preserving the saved order of remaining sections", () => {
+    const sections = [
+      makeSection("summary", "summary", "Summary"),
+      makeSection("experience", "experience", "Experience"),
+      makeSection("profile", "profile", "Profile"),
+      makeSection("education", "education", "Education"),
+      makeSection("skills", "skills", "Skills"),
+    ];
+
+    const normalized = normalizeCvSectionOrder(sections);
+
+    expect(normalized.map((section) => section.title)).toEqual([
+      "Profile",
+      "Summary",
+      "Experience",
+      "Education",
+      "Skills",
+    ]);
+    expect(normalized.map((section) => section.order)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("keeps reorder locks limited to profile and summary", () => {
+    expect(isSectionReorderLocked(makeSection("profile", "profile", "Profile"))).toBe(
+      true,
+    );
+    expect(isSectionReorderLocked(makeSection("summary", "summary", "Summary"))).toBe(
+      true,
+    );
+    expect(
+      isSectionReorderLocked(makeSection("experience", "experience", "Experience")),
+    ).toBe(false);
   });
 
   it.each([

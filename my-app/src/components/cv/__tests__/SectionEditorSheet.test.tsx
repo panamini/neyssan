@@ -47,7 +47,7 @@ describe("SectionEditorSheet", () => {
     expect(screen.getByLabelText("Target Role")).toHaveValue("Engineering Manager");
   });
 
-  it("keeps X close as save-and-close for edited fields", () => {
+  it("keeps Done as save-and-close for edited fields", () => {
     const onOpenChange = vi.fn();
     const onSave = vi.fn();
 
@@ -63,7 +63,7 @@ describe("SectionEditorSheet", () => {
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: "Ada Byron" },
     });
-    fireEvent.click(screen.getByLabelText("Close panel"));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(onSave).toHaveBeenLastCalledWith(
@@ -94,7 +94,7 @@ describe("SectionEditorSheet", () => {
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: "Ada Byron" },
     });
-    fireEvent.click(screen.getByLabelText("Close panel background"));
+    fireEvent.pointerDown(document.body);
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(onSave).toHaveBeenLastCalledWith(
@@ -140,7 +140,22 @@ describe("SectionEditorSheet", () => {
     );
   });
 
-  it("keeps compact Save as save-and-close for edited fields", () => {
+  it("does not render Save or the visible X close action", () => {
+    render(
+      <SectionEditorSheet
+        open
+        section={buildProfileSection("Ada Lovelace", "Product Designer")}
+        onOpenChange={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Close panel")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
+  });
+
+  it("keeps compact Done as save-and-close for edited fields", () => {
     const onOpenChange = vi.fn();
     const onSave = vi.fn();
 
@@ -156,7 +171,7 @@ describe("SectionEditorSheet", () => {
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: "Ada Byron" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(onSave).toHaveBeenLastCalledWith(
@@ -212,7 +227,7 @@ describe("SectionEditorSheet", () => {
     }
   });
 
-  it("keeps discard/revert behavior as a compact affordance", () => {
+  it("keeps revert behavior as a compact affordance without closing", () => {
     const onOpenChange = vi.fn();
     const onSave = vi.fn();
 
@@ -228,9 +243,13 @@ describe("SectionEditorSheet", () => {
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: "Ada Byron" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Revert this section to when it was opened",
+      }),
+    );
 
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
     expect(onSave).toHaveBeenLastCalledWith(
       expect.objectContaining({
         structuredContent: [
@@ -254,10 +273,36 @@ describe("SectionEditorSheet", () => {
     );
 
     expect(document.body.querySelector(".ds-island-panel")).toBeInTheDocument();
+    const header = document.body.querySelector(".ds-island-panel__header");
+    const body = document.body.querySelector(".ds-island-panel__body");
+    expect(header).toBeInTheDocument();
+    expect(body).toBeInTheDocument();
+    expect(header?.parentElement).toBe(body?.parentElement);
+    expect(header?.compareDocumentPosition(body!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(body?.contains(header)).toBe(false);
     expect(document.body.querySelector(".ds-sheet__footer")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Discard changes" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Discard changes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Revert changes")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Revert this section to when it was opened",
+      }),
+    ).toHaveAttribute("title", "Revert changes");
+    expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
+    expect(
+      document.body.querySelector(
+        ".ds-island-panel__actions .ds-island-panel__action--discard",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      document.body.querySelector(
+        ".ds-island-panel__body > .ds-island-panel__action--discard",
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it.each([

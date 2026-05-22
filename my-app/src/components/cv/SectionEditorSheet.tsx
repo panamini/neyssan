@@ -1,6 +1,6 @@
 import React from "react";
 import { useAction } from "convex/react";
-import { Plus, Wand2 } from "@/lib/icons";
+import { ArrowCounterClockwise, Plus, Wand2 } from "@/lib/icons";
 import { Remirror, useRemirror, EditorComponent } from "@remirror/react";
 import {
   BoldExtension,
@@ -589,7 +589,7 @@ export function SectionEditorSheet({
     }
   }
 
-  function closeAndDiscard() {
+  function revertChanges() {
     clearAutosaveTimer();
     pendingAutosaveSectionRef.current = null;
     const restoredSection = openedSectionRef.current ?? section;
@@ -601,7 +601,6 @@ export function SectionEditorSheet({
     setAcceptedAiEdit(null);
     setIsSummaryAiLoading(false);
     setNewPillValue("");
-    onOpenChange(false);
   }
 
   function saveAndClose() {
@@ -1799,12 +1798,22 @@ export function SectionEditorSheet({
       meta={itemCount > 1 ? `${itemCount} items` : undefined}
       ariaLabel={title}
       className="dasti-cv-section-sheet-panel"
+      showCloseButton={false}
       discardAction={{
-        label: "Discard changes",
-        onClick: closeAndDiscard,
+        label: "Revert changes",
+        ariaLabel: "Revert this section to when it was opened",
+        title: "Revert changes",
+        icon: (
+          <ArrowCounterClockwise
+            size={15}
+            strokeWidth={1.7}
+            aria-hidden="true"
+          />
+        ),
+        onClick: revertChanges,
       }}
       saveAction={{
-        label: "Save",
+        label: "Done",
         onClick: saveAndClose,
       }}
     >

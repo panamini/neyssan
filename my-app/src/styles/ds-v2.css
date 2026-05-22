@@ -1374,6 +1374,7 @@
     inset: 0;
     z-index: var(--z-modal);
     overflow: visible;
+    pointer-events: none;
   }
 
   .ds-island-panel__overlay {
@@ -1385,6 +1386,7 @@
     border: 0;
     background: transparent;
     cursor: default;
+    pointer-events: none;
   }
 
   .ds-island-panel {
@@ -1397,7 +1399,7 @@
       var(--panel-island-max-inline-size),
       calc(100vw - (var(--panel-island-inset) * 2))
     );
-    max-height: calc(
+    max-block-size: calc(
       100dvh - var(--header-height, 0px) - (var(--panel-island-inset) * 2)
     );
     display: flex;
@@ -1412,6 +1414,7 @@
     color: var(--color-text);
     box-shadow: var(--panel-island-shadow);
     overflow: hidden;
+    pointer-events: auto;
     opacity: 1;
     transform: translate3d(0, 0, 0) scale(1);
     transition:
@@ -1438,14 +1441,18 @@
   }
 
   .ds-island-panel__header {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
     min-block-size: var(--panel-island-header-min-block-size);
     display: flex;
     flex-direction: column;
     align-items: stretch;
     gap: var(--space-2);
-    padding: var(--space-3) var(--space-3) var(--space-2);
+    padding: var(--space-3) var(--space-3);
     border-bottom: 0;
-    background: transparent;
+    background: inherit;
+    overflow: visible;
   }
 
   .ds-island-panel__microbar {
@@ -1509,9 +1516,10 @@
   }
 
   .ds-island-panel__action--discard {
-    align-self: flex-end;
     min-height: var(--control-sm);
     padding-inline: var(--space-1);
+    border-color: transparent;
+    background: transparent;
     color: color-mix(in srgb, var(--color-text-muted) 78%, transparent);
     font-size: var(--tx);
     font-weight: var(--font-label-weight);
@@ -1521,6 +1529,15 @@
     border-color: color-mix(in srgb, var(--color-accent) 34%, transparent);
     background: color-mix(in srgb, var(--color-accent) 13%, transparent);
     color: var(--color-text);
+  }
+
+  .ds-island-panel__action--icon {
+    inline-size: var(--control-sm);
+    block-size: var(--control-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
   }
 
   .ds-island-panel__action:hover:not(:disabled),
@@ -1555,9 +1572,15 @@
   }
 
   .ds-island-panel__body {
-    flex: 1;
-    min-height: 0;
+    flex: 1 1 auto;
+    min-block-size: 0;
+    max-block-size: calc(
+      100dvh - var(--header-height, 0px) - (var(--panel-island-inset) * 2) -
+        var(--panel-island-header-min-block-size)
+    );
     overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
@@ -1569,7 +1592,7 @@
       inset-block: auto var(--space-2);
       inset-inline: var(--space-2);
       width: auto;
-      max-height: min(
+      max-block-size: min(
         76dvh,
         calc(100dvh - var(--header-height, 0px) - var(--space-4))
       );
@@ -1595,11 +1618,7 @@
     }
 
     .ds-island-panel__action--discard {
-      align-self: flex-start;
-      max-width: 9.5rem;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      max-width: none;
     }
   }
 

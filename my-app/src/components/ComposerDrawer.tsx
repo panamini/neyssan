@@ -31,6 +31,7 @@ export function ComposerDrawer({
       titleHidden={titleHidden}
       description={description}
       ariaLabel={ariaLabel}
+      modal={false}
       rootClassName="dasti-composer-drawer-root"
       className="dasti-composer-drawer"
       overlayClassName="dasti-composer-drawer__overlay"

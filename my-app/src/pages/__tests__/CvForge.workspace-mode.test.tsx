@@ -473,8 +473,14 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
       requestId: string;
       sectionType:
         | "summary"
+        | "profile"
         | "experience"
         | "education"
+        | "skills"
+        | "languages"
+        | "achievements"
+        | "certifications"
+        | "projects"
         | "additional_information"
         | "custom";
       sectionId: string;
@@ -719,6 +725,20 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
           type="button"
           onClick={() =>
             onLinkIntent?.({
+              requestId: "paper-profile",
+              sectionType: "profile",
+              sectionId: "profile-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: false,
+            })
+          }
+        >
+          Paper Profile
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onLinkIntent?.({
               requestId: "paper-experience",
               sectionType: "experience",
               sectionId: "experience-cv_123",
@@ -742,6 +762,62 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
           }
         >
           Paper Education
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onLinkIntent?.({
+              requestId: "paper-skills",
+              sectionType: "skills",
+              sectionId: "skills-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: true,
+            })
+          }
+        >
+          Paper Skills
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onLinkIntent?.({
+              requestId: "paper-languages",
+              sectionType: "languages",
+              sectionId: "languages-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: true,
+            })
+          }
+        >
+          Paper Languages
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onLinkIntent?.({
+              requestId: "paper-achievements",
+              sectionType: "achievements",
+              sectionId: "achievements-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: true,
+            })
+          }
+        >
+          Paper Achievements
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onLinkIntent?.({
+              requestId: "paper-certifications",
+              sectionType: "certifications",
+              sectionId: "certifications-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: true,
+            })
+          }
+        >
+          Paper Certifications
         </button>
         {inlineEditing?.enabled ? (
           <>
@@ -1781,7 +1857,7 @@ describe("CvForge workspace mode", () => {
       writable: true,
     });
 
-    const { container } = render(
+    render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
         <CvForge />
       </MemoryRouter>,
@@ -1923,7 +1999,7 @@ describe("CvForge workspace mode", () => {
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
 
-    const { container } = render(
+    render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
         <CvForge />
       </MemoryRouter>,
@@ -1944,18 +2020,17 @@ describe("CvForge workspace mode", () => {
     setItemSpy.mockRestore();
   });
 
-  it("renders the PR4 skeleton stage, left Sections and Design panel entries, and Ask rail", async () => {
-    const user = userEvent.setup();
-
-    const { container } = render(
+  it("renders the PR4 skeleton stage without edit-mode Ask", () => {
+    render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
         <CvForge />
       </MemoryRouter>,
     );
 
     expect(
-      screen.getByRole("complementary", { name: "CV forge rail" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("complementary", { name: "CV forge rail" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("cv-ask-handle")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Import CV" }),
     ).not.toBeInTheDocument();
@@ -1975,66 +2050,27 @@ describe("CvForge workspace mode", () => {
       screen.queryByRole("tab", { name: "Sections" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Ask" })).not.toBeInTheDocument();
-    expect(screen.getByText("Ask", { selector: ".dasti-cv-rail-heading" })).toBeInTheDocument();
+    expect(
+      screen.queryByText("Ask", { selector: ".dasti-cv-rail-heading" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Structuring sections/i }),
     ).toBeNull();
 
     expect(
-      screen.getByText("Profile fields use direct field editing."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ask section" })).toBeDisabled();
+      screen.queryByText("Ask is unavailable for this section."),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ask section" })).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Ask Profile" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/whole CV/i)).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Design" }));
-
-    const designPanel = screen.getByRole("complementary", {
-      name: "CV design",
-    });
-    expect(designPanel).toBeInTheDocument();
-    expect(designPanel.querySelector(".dasti-cv-style-note")).toHaveTextContent(
-      /^Default settings Document style\.$/,
-    );
-    expect(
-      within(designPanel).getByRole("link", { name: "Document style" }),
-    ).toHaveAttribute("href", "/settings?tab=docstyle");
-    expect(container.querySelector(".dasti-cv-rail [data-rail-pane='style']")).toBeNull();
-
-    await user.click(screen.getByRole("button", { name: "Sections" }));
-
-    const sectionsPanel = screen.getByRole("complementary", {
-      name: "CV sections",
-    });
-    expect(sectionsPanel).toBeInTheDocument();
-    expect(within(sectionsPanel).queryByRole("tab", { name: "Ask" })).toBeNull();
-    expect(within(sectionsPanel).queryByRole("tab", { name: "Style" })).toBeNull();
-    expect(within(sectionsPanel).getByRole("button", { name: "Summary" })).toBeInTheDocument();
-    expect(sectionsPanel.querySelector(".dasti-cv-rail")).toBeNull();
-    expect(sectionsPanel.querySelector(".dasti-cv-rail-tabs")).toBeNull();
-    expect(sectionsPanel.querySelector(".dasti-cv-rail-pane")).toBeNull();
-    expect(
-      sectionsPanel.querySelector(".dasti-cv-sections-organizer"),
-    ).toBeInTheDocument();
-    expect(within(sectionsPanel).queryByText(/CV library/i)).toBeNull();
-    expect(within(sectionsPanel).queryByText(/proposals/i)).toBeNull();
-
-    await user.click(screen.getByRole("button", { name: "Templates" }));
-    expect(
-      screen.queryByRole("complementary", { name: "CV sections" }),
-    ).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Sections" }));
-    expect(
-      screen.getByRole("complementary", { name: "CV sections" }),
-    ).toBeInTheDocument();
   });
 
-  it("opens a non-empty section editor from the paper in preview mode and highlights the rail row", async () => {
+  it("opens a paper section editor in preview mode without opening Ask", async () => {
     const user = userEvent.setup();
 
-    const { container } = render(
+    render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
         <CvForge />
       </MemoryRouter>,
@@ -2043,22 +2079,17 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByRole("button", { name: "Page preview" }));
     await user.click(screen.getByRole("button", { name: "Paper Experience" }));
 
-    expect(
-      screen.getByRole("dialog", { name: "Experience" }),
-    ).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Lead designer")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Experience" })).toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "experience-cv_123",
     );
-    await openSectionsPanel(user);
     expect(
-      container.querySelector(
-        '.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title',
-      ),
-    ).toHaveTextContent("Experience");
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    expect(document.body.querySelector(".ds-island-panel")).toBeInTheDocument();
   });
 
-  it("keeps edit mode paper body clicks from opening the drawer", async () => {
+  it("opens a paper section editor in edit mode", async () => {
     const user = userEvent.setup();
 
     const { container } = render(
@@ -2069,18 +2100,14 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: "Paper Experience" }));
 
-    expect(
-      screen.queryByRole("dialog", { name: "Experience" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Experience" })).toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "experience-cv_123",
     );
-    await openSectionsPanel(user);
     expect(
-      container.querySelector(
-        '.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title',
-      ),
-    ).toHaveTextContent("Experience");
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    expect(document.body.querySelector(".ds-island-panel")).toBeInTheDocument();
   });
 
   it("edits the rendered Summary paragraph inline in edit mode", async () => {
@@ -2142,7 +2169,7 @@ describe("CvForge workspace mode", () => {
     ).toBe("Inline summary rewrite.\nSecond line.");
   });
 
-  it("keeps Summary paper clicks as drawer focus in preview mode", async () => {
+  it("opens Summary from a paper click in preview mode without opening Ask", async () => {
     const user = userEvent.setup();
 
     render(
@@ -2157,14 +2184,124 @@ describe("CvForge workspace mode", () => {
 
     await user.click(summaryParagraph);
 
-    expect(screen.getByRole("dialog", { name: "Summary" })).toBeInTheDocument();
+    const summaryDialog = screen.getByRole("dialog", { name: "Summary" });
+    expect(summaryDialog).toBeInTheDocument();
+    expect(within(summaryDialog).getByRole("button", { name: "Done" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "summary-cv_123",
     );
     expect(summaryParagraph).not.toHaveAttribute("contenteditable");
   });
 
-  it("routes inline paper clicks away from drawers in edit mode but keeps preview drawer routing", async () => {
+  it("opens Summary editor from a preview section click even when Ask is open", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    await user.click(screen.getByTestId("cv-ask-handle"));
+    await user.click(screen.getByTestId("paper-summary-paragraph"));
+
+    expect(
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    const summaryDialog = screen.getByRole("dialog", { name: "Summary" });
+    expect(summaryDialog).toBeInTheDocument();
+    expect(within(summaryDialog).getByRole("button", { name: "Done" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ask Summary" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["Experience", "Paper Experience"],
+    ["Education", "Paper Education"],
+    ["Skills", "Paper Skills"],
+    ["Languages", "Paper Languages"],
+    ["Achievements", "Paper Achievements"],
+    ["Certifications", "Paper Certifications"],
+  ])(
+    "opens %s editor from a preview section click even when Ask is open",
+    async (sectionLabel, paperButtonName) => {
+      const user = userEvent.setup();
+
+      render(
+        <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+          <CvForge />
+        </MemoryRouter>,
+      );
+
+      await user.click(screen.getByRole("button", { name: "Page preview" }));
+      await user.click(screen.getByTestId("cv-ask-handle"));
+      await user.click(screen.getByRole("button", { name: paperButtonName }));
+
+      expect(
+        screen.queryByRole("dialog", { name: "Ask" }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: sectionLabel })).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: `Open ${sectionLabel} editor` }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it("closes Ask and opens the editor on repeated preview section clicks", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    await user.click(screen.getByTestId("cv-ask-handle"));
+
+    await user.click(screen.getByTestId("paper-summary-paragraph"));
+    expect(screen.queryByRole("dialog", { name: "Ask" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Summary" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    await user.click(screen.getByRole("button", { name: "Paper Experience" }));
+    expect(screen.queryByRole("dialog", { name: "Ask" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Experience" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open Experience editor" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens Profile in preview mode without showing Ask explanation", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    await user.click(screen.getByRole("button", { name: "Paper Profile" }));
+
+    expect(screen.getByRole("dialog", { name: "Profile" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
+      "profile-cv_123",
+    );
+    expect(
+      screen.queryByRole("complementary", { name: "CV composer drawer" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("routes inline paper clicks away from drawers in edit mode and opens preview clicks as editors", async () => {
     const user = userEvent.setup();
 
     render(
@@ -2191,6 +2328,9 @@ describe("CvForge workspace mode", () => {
     await user.click(summaryParagraph);
 
     expect(screen.getByRole("dialog", { name: "Summary" })).toBeInTheDocument();
+    expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
+      "summary-cv_123",
+    );
   });
 
   it("edits the rendered custom text paragraph inline in edit mode", async () => {
@@ -2880,6 +3020,32 @@ describe("CvForge workspace mode", () => {
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "education-cv_123",
     );
+  });
+
+  it("opens Summary from the sections row as an editor island, not Ask", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await clickSectionOrganizerButton(user, /^Summary$/i);
+
+    const summaryDialog = screen.getByRole("dialog", { name: "Summary" });
+    expect(summaryDialog).toBeInTheDocument();
+    expect(
+      within(summaryDialog).getByRole("button", { name: "Done" }),
+    ).toBeInTheDocument();
+    expect(
+      within(summaryDialog).getByRole("button", {
+        name: "Revert this section to when it was opened",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ask Summary" }),
+    ).not.toBeInTheDocument();
   });
 
   it("adds education entries inside the focused section sheet", async () => {

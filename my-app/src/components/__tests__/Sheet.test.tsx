@@ -92,4 +92,27 @@ describe("Sheet", () => {
 
     expect(input).toHaveFocus();
   });
+
+  it("supports non-modal sheets that do not close from background clicks", async () => {
+    const onOpenChange = vi.fn();
+
+    render(
+      <>
+        <button type="button">Page action</button>
+        <Sheet open modal={false} onOpenChange={onOpenChange} title="Ask">
+          <button type="button">Ask Summary</button>
+        </Sheet>
+      </>,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Ask" });
+    expect(dialog).not.toHaveAttribute("aria-modal");
+    expect(screen.queryByRole("button", { name: "Close panel" })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Page action" }));
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });

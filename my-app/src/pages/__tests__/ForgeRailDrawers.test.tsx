@@ -527,6 +527,17 @@ describe("forge rail drawers", () => {
       "minmax(0, 1fr) var(--proposal-workspace-rail-inline-size)",
     );
     expect(cvSource).toContain("data-forge-drawer-docked");
+    expect(cvSource).toContain(
+      "CV_WORKSPACE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH = 1180",
+    );
+    expect(cvSource).toContain("const activeWorkspacePanel = templatePanelOpen");
+    expect(cvSource).toContain(
+      "const isWorkspacePanelDocked =\n    activeWorkspacePanel !== null && isWideEnoughForDockedPanel",
+    );
+    expect(cvSource).toContain("const openCvWorkspacePanel = React.useCallback");
+    expect(cvSource).toContain(
+      'mode: isWideEnoughForDockedPanel ? "docked" : "overlay"',
+    );
     expect(proposalCss).toMatch(
       /\.dasti-proposal-skeleton-forge__stage\s*\{[\s\S]*width:\s*min\(100%,\s*var\(--proposal-workspace-stage-inline-size\)\);[\s\S]*justify-self:\s*center;/,
     );
