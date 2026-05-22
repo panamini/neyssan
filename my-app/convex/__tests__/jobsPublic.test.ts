@@ -141,7 +141,7 @@ describe("jobsPublic.listForUser", () => {
             if (table === "proposals") {
               return {
                 withIndex(indexName: string, buildIndex: any) {
-                  expect(indexName).toBe("by_user");
+                  expect(indexName).toBe("by_job_and_status");
                   const scope = {
                     eq(_field: string, _value: string) {
                       return this;
@@ -327,6 +327,7 @@ describe("jobsPublic.listForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    take: async () => [],
                     collect: async () => [],
                   };
                 },
@@ -2620,6 +2621,7 @@ describe("jobsPublic.listArchivedForUser", () => {
                   };
                   buildIndex(scope);
                   return {
+                    take: async () => [],
                     collect: async () => [],
                   };
                 },
@@ -3318,6 +3320,7 @@ describe("jobsPublic.approveReviewItem", () => {
                   };
                   buildIndex(scope);
                   return {
+                    take: async () => [],
                     collect: async () => [],
                   };
                 },
