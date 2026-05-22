@@ -39,6 +39,7 @@ type DocumentCommandLayerPositionState = {
   modeControlMode: CommandLayerModeControlMode;
   askMode: CommandLayerAskMode;
   commandLayerSticky: boolean;
+  commandLayerMeasured: boolean;
 };
 
 function readCssPixelVariable(styles: CSSStyleDeclaration, name: string) {
@@ -96,9 +97,11 @@ export function useDocumentCommandLayerPosition({
     React.useState<CommandLayerModeControlMode>("split");
   const [askMode, setAskMode] = React.useState<CommandLayerAskMode>("iconOnly");
   const [commandLayerSticky, setCommandLayerSticky] = React.useState(false);
+  const [commandLayerMeasured, setCommandLayerMeasured] = React.useState(true);
 
   React.useLayoutEffect(() => {
     if (typeof window === "undefined") return undefined;
+    setCommandLayerMeasured(false);
 
     let frameId: number | null = null;
     let resizeObserver: ResizeObserver | null = null;
@@ -134,7 +137,10 @@ export function useDocumentCommandLayerPosition({
       frameId = null;
       const stage = stageRef.current;
       const paper = paperRef.current;
-      if (!stage || !paper) return;
+      if (!stage || !paper) {
+        setCommandLayerMeasured(true);
+        return;
+      }
       observePaperRoot(paper);
 
       const stageRect = stage.getBoundingClientRect();
@@ -214,6 +220,7 @@ export function useDocumentCommandLayerPosition({
         setModeControlMode("split");
         setAskMode("iconOnly");
         setCommandLayerSticky(false);
+        setCommandLayerMeasured(true);
         return;
       }
 
@@ -237,6 +244,7 @@ export function useDocumentCommandLayerPosition({
       setModeControlMode(commandLayer.modeControlMode);
       setAskMode(commandLayer.askMode);
       setCommandLayerSticky(commandLayer.toolbarSticky);
+      setCommandLayerMeasured(true);
 
       setStyle((current) => {
         const entries = {
@@ -339,5 +347,6 @@ export function useDocumentCommandLayerPosition({
     modeControlMode,
     askMode,
     commandLayerSticky,
+    commandLayerMeasured,
   };
 }
