@@ -12,10 +12,7 @@ import {
   ProposalCvDrawer,
   ProposalLibraryDrawer,
 } from "../ProposalForge";
-import {
-  CvForgeCvDrawer,
-  CvForgeLibraryDrawer,
-} from "../CvForge";
+import { CvForgeCvDrawer, CvForgeLibraryDrawer } from "../CvForge";
 import type { LibraryItem } from "../../lib/application-library";
 import type { CvDocument } from "../../types/cvDocument";
 
@@ -29,11 +26,21 @@ vi.mock("../../components/library/LibraryDocumentPreview", () => ({
     badge?: string | null;
     actionPill?: React.ReactNode;
   }) => (
-    <span className="forge-rail-document-tile" data-testid={`drawer-tile-${item.id}`}>
-      <span className="forge-rail-document-tile__preview" data-testid={`drawer-preview-${item.id}`}>
-        {badge ? <span className="forge-rail-document-tile__badge">{badge}</span> : null}
+    <span
+      className="forge-rail-document-tile"
+      data-testid={`drawer-tile-${item.id}`}
+    >
+      <span
+        className="forge-rail-document-tile__preview"
+        data-testid={`drawer-preview-${item.id}`}
+      >
+        {badge ? (
+          <span className="forge-rail-document-tile__badge">{badge}</span>
+        ) : null}
         {actionPill ? (
-          <span className="forge-rail-drawer__thumb-affordance">{actionPill}</span>
+          <span className="forge-rail-drawer__thumb-affordance">
+            {actionPill}
+          </span>
         ) : null}
       </span>
       <span className="forge-rail-document-tile__caption">
@@ -47,12 +54,15 @@ vi.mock("../../components/library/LibraryDocumentPreview", () => ({
   ),
 }));
 
-const hydrateCvDocument = vi.fn(async () => ({
-  id: "cv-one",
-  title: "CV one",
-  sections: [],
-  metadata: {},
-}) as unknown as CvDocument);
+const hydrateCvDocument = vi.fn(
+  async () =>
+    ({
+      id: "cv-one",
+      title: "CV one",
+      sections: [],
+      metadata: {},
+    }) as unknown as CvDocument,
+);
 
 const proposalTypeOptions = [
   {
@@ -158,25 +168,45 @@ describe("forge rail drawers", () => {
 
     expect(screen.getAllByText("Draft")).toHaveLength(1);
     expect(
-      screen.queryByText("Choose a job and CV, then generate a first proposal."),
+      screen.queryByText(
+        "Choose a job and CV, then generate a first proposal.",
+      ),
     ).not.toBeInTheDocument();
     expect(screen.getByText("JOB")).toBeInTheDocument();
     expect(screen.getByText("CV")).toBeInTheDocument();
     expect(screen.getByText("SETTINGS")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Choose saved job" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Replace with saved job" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Replace with pasted job" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Pick a CV" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Change CV" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Attached to this draft")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Choose saved job" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Replace with saved job" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Replace with pasted job" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Pick a CV" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Change CV" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Attached to this draft"),
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Change job: Building Security Guard" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Change job: Building Security Guard",
+      }),
+    );
     expect(onOpenJobs).toHaveBeenCalledTimes(1);
     expect(onOpenPasteJob).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Remove job context" }));
     expect(onClearJobContext).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Change attached CV: Robert Cooper" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Change attached CV: Robert Cooper" }),
+    );
     expect(onOpenCvs).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Remove attached CV" }));
     expect(onClearCv).toHaveBeenCalledTimes(1);
@@ -212,16 +242,24 @@ describe("forge rail drawers", () => {
     );
 
     expect(
-      screen.queryByText("Choose a job and CV, then generate a first proposal."),
+      screen.queryByText(
+        "Choose a job and CV, then generate a first proposal.",
+      ),
     ).not.toBeInTheDocument();
     expect(screen.getByText("JOB")).toBeInTheDocument();
     expect(screen.getByText("CV")).toBeInTheDocument();
     expect(screen.getByText("SETTINGS")).toBeInTheDocument();
     expect(screen.queryByText("No job loaded")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose saved job" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Paste job offer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Choose saved job" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Paste job offer" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("No CV attached")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pick a CV" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pick a CV" }),
+    ).toBeInTheDocument();
   });
 
   it("uses a larger adaptive textarea for pasted job context", () => {
@@ -237,7 +275,9 @@ describe("forge rail drawers", () => {
     expect(screen.getByLabelText("Paste a job offer")).toHaveClass(
       "forge-rail-drawer__paste-job-input",
     );
-    expect(screen.getByRole("button", { name: "Use job context" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Use job context" }),
+    ).toBeInTheDocument();
   });
 
   it("wires job drawer primary and external actions", () => {
@@ -264,10 +304,14 @@ describe("forge rail drawers", () => {
     fireEvent.click(screen.getByRole("button", { name: "Paste job offer" }));
     expect(onOpenPasteJob).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getAllByRole("button", { name: /Employment lawyer/i })[0]);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: /Employment lawyer/i })[0],
+    );
     expect(onSelectJob).toHaveBeenCalledWith("job-one");
 
-    const openJob = screen.getAllByRole("button", { name: "Open job details for Employment lawyer" })[0];
+    const openJob = screen.getAllByRole("button", {
+      name: "Open job details for Employment lawyer",
+    })[0];
     expect(openJob).toHaveAttribute("data-toolbar-tooltip", "Open job page");
     fireEvent.click(openJob);
     expect(onOpenJob).toHaveBeenCalledWith("job-one");
@@ -286,19 +330,23 @@ describe("forge rail drawers", () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Attach CV: CV one" })[0]);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Attach CV: CV one" })[0],
+    );
     expect(onSelectCv).toHaveBeenCalledWith("cv-one");
     expect(screen.getAllByText("Attach CV").length).toBeGreaterThan(0);
-    expect(screen.getAllByTestId("drawer-preview-cv:cv-one")[0]).toHaveTextContent(
-      "Attach CV",
-    );
     expect(
-      screen.getAllByTestId("drawer-tile-cv:cv-one")[0].querySelector(
-        ".forge-rail-document-tile__caption strong",
-      ),
+      screen.getAllByTestId("drawer-preview-cv:cv-one")[0],
+    ).toHaveTextContent("Attach CV");
+    expect(
+      screen
+        .getAllByTestId("drawer-tile-cv:cv-one")[0]
+        .querySelector(".forge-rail-document-tile__caption strong"),
     ).toHaveTextContent("CV one");
 
-    const openCv = screen.getAllByRole("button", { name: "Open full CV: CV one" })[0];
+    const openCv = screen.getAllByRole("button", {
+      name: "Open full CV: CV one",
+    })[0];
     expect(openCv).toHaveAttribute("data-toolbar-tooltip", "Open full CV");
     fireEvent.click(openCv);
     expect(onOpenCv).toHaveBeenCalledWith("cv-one");
@@ -317,12 +365,19 @@ describe("forge rail drawers", () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Open proposal Proposal one" })[0]);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Open proposal Proposal one" })[0],
+    );
     expect(onOpenItem).toHaveBeenLastCalledWith(item);
     expect(screen.getAllByText("Open").length).toBeGreaterThan(0);
 
-    const openProposal = screen.getAllByRole("button", { name: "Open full proposal: Proposal one" })[0];
-    expect(openProposal).toHaveAttribute("data-toolbar-tooltip", "Open proposal");
+    const openProposal = screen.getAllByRole("button", {
+      name: "Open full proposal: Proposal one",
+    })[0];
+    expect(openProposal).toHaveAttribute(
+      "data-toolbar-tooltip",
+      "Open proposal",
+    );
     fireEvent.click(openProposal);
     expect(onOpenProposal).toHaveBeenCalledWith(item);
     expect(item.routeTarget).toEqual({
@@ -348,13 +403,20 @@ describe("forge rail drawers", () => {
       />,
     );
 
-    const openCv = screen.getAllByRole("button", { name: "Open CV library for CV one" })[0];
+    const openCv = screen.getAllByRole("button", {
+      name: "Open CV library for CV one",
+    })[0];
     expect(openCv).toHaveAttribute("data-toolbar-tooltip", "Open CV library");
     fireEvent.click(openCv);
     expect(onOpenLibraryType).toHaveBeenLastCalledWith("cvs");
 
-    const openProposal = screen.getAllByRole("button", { name: "Open proposals library for Proposal one" })[0];
-    expect(openProposal).toHaveAttribute("data-toolbar-tooltip", "Open proposals");
+    const openProposal = screen.getAllByRole("button", {
+      name: "Open proposals library for Proposal one",
+    })[0];
+    expect(openProposal).toHaveAttribute(
+      "data-toolbar-tooltip",
+      "Open proposals",
+    );
     fireEvent.click(openProposal);
     expect(onOpenLibraryType).toHaveBeenLastCalledWith("proposals");
   });
@@ -387,13 +449,27 @@ describe("forge rail drawers", () => {
       "utf8",
     );
 
-    expect(css).toMatch(/\.forge-template-panel\s*\{[\s\S]*padding: var\(--space-4\)/);
-    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*column-gap: var\(--forge-drawer-template-grid-gutter\)/);
-    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*row-gap: var\(--forge-drawer-grid-row-gap\)/);
-    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*margin: calc\(var\(--forge-drawer-scroll-inset\) \* -1\)/);
-    expect(css).toMatch(/\.forge-template-panel__grid\s*\{[\s\S]*padding: var\(--forge-drawer-scroll-inset\)/);
-    expect(css).toMatch(/\.forge-rail-drawer__grid\s*\{[\s\S]*column-gap: var\(--forge-drawer-grid-gutter\)/);
-    expect(css).toMatch(/\.forge-rail-drawer__grid\s*\{[\s\S]*row-gap: var\(--forge-drawer-grid-row-gap\)/);
+    expect(css).toMatch(
+      /\.forge-template-panel\s*\{[\s\S]*padding: var\(--space-4\)/,
+    );
+    expect(css).toMatch(
+      /\.forge-template-panel__grid\s*\{[\s\S]*column-gap: var\(--forge-drawer-template-grid-gutter\)/,
+    );
+    expect(css).toMatch(
+      /\.forge-template-panel__grid\s*\{[\s\S]*row-gap: var\(--forge-drawer-grid-row-gap\)/,
+    );
+    expect(css).toMatch(
+      /\.forge-template-panel__grid\s*\{[\s\S]*margin: calc\(var\(--forge-drawer-scroll-inset\) \* -1\)/,
+    );
+    expect(css).toMatch(
+      /\.forge-template-panel__grid\s*\{[\s\S]*padding: var\(--forge-drawer-scroll-inset\)/,
+    );
+    expect(css).toMatch(
+      /\.forge-rail-drawer__grid\s*\{[\s\S]*column-gap: var\(--forge-drawer-grid-gutter\)/,
+    );
+    expect(css).toMatch(
+      /\.forge-rail-drawer__grid\s*\{[\s\S]*row-gap: var\(--forge-drawer-grid-row-gap\)/,
+    );
   });
 
   it("keeps the Draft generate footer from painting a separate tray", () => {
@@ -482,16 +558,28 @@ describe("forge rail drawers", () => {
 
     expect(css).toContain(".forge-rail-drawer__thumb-button:hover");
     expect(css).toContain(".forge-rail-drawer__row:hover");
-    expect(css).toMatch(/\.forge-rail-drawer__thumb-menu\s*\{[\s\S]*z-index:\s*4/);
-    expect(css).toMatch(/\.forge-rail-drawer__thumb-menu\[data-toolbar-tooltip\]\s*\{[\s\S]*position:\s*absolute/);
-    expect(css).toMatch(/\.forge-rail-drawer__row-icon\[data-toolbar-tooltip\],[\s\S]*\.forge-rail-drawer__thumb-menu\[data-toolbar-tooltip\]\s*\{[\s\S]*--dasti-toolbar-tooltip-inset-block-start:\s*auto;[\s\S]*--dasti-toolbar-tooltip-inset-block-end:\s*calc\(100% \+ var\(--space-1\)\);/);
-    expect(css).toMatch(/\.forge-rail-drawer__row-icon\s*\{[\s\S]*box-shadow:\s*var\(--shadow-popover\)/);
+    expect(css).toMatch(
+      /\.forge-rail-drawer__thumb-menu\s*\{[\s\S]*z-index:\s*4/,
+    );
+    expect(css).toMatch(
+      /\.forge-rail-drawer__thumb-menu\[data-toolbar-tooltip\]\s*\{[\s\S]*position:\s*absolute/,
+    );
+    expect(css).toMatch(
+      /\.forge-rail-drawer__row-icon\[data-toolbar-tooltip\],[\s\S]*\.forge-rail-drawer__thumb-menu\[data-toolbar-tooltip\]\s*\{[\s\S]*--dasti-toolbar-tooltip-inset-block-start:\s*auto;[\s\S]*--dasti-toolbar-tooltip-inset-block-end:\s*calc\(100% \+ var\(--space-1\)\);/,
+    );
+    expect(css).toMatch(
+      /\.forge-rail-drawer__row-icon\s*\{[\s\S]*box-shadow:\s*var\(--shadow-popover\)/,
+    );
     expect(css).toContain(".forge-rail-drawer__row-icon[data-toolbar-tooltip]");
-    expect(css).toMatch(/\.forge-rail-drawer__row\s*\{[\s\S]*transition:[\s\S]*transform var\(--duration-fast\) var\(--ease-standard\)/);
+    expect(css).toMatch(
+      /\.forge-rail-drawer__row\s*\{[\s\S]*transition:[\s\S]*transform var\(--duration-fast\) var\(--ease-standard\)/,
+    );
     expect(css).toContain(".forge-rail-drawer__row:focus-within");
     expect(css).toContain("transform: translateY(-1px)");
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(css).toMatch(/\.forge-rail-document-tile__badge\s*\{[\s\S]*z-index: 2/);
+    expect(css).toMatch(
+      /\.forge-rail-document-tile__badge\s*\{[\s\S]*z-index: 2/,
+    );
     expect(css).toMatch(
       /\.forge-rail-drawer__thumb-affordance\s*\{[\s\S]*inset-block-end:\s*var\(--space-2\);[\s\S]*inset-inline-start:\s*50%;[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*font-size:\s*var\(--tx\);/,
     );
@@ -545,10 +633,18 @@ describe("forge rail drawers", () => {
     expect(screen.getByText("Proposal three")).toBeInTheDocument();
     expect(screen.queryByText("CV one")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("checkbox", { name: /Select proposal Proposal one/i })[0]);
+    fireEvent.click(
+      screen.getAllByRole("checkbox", {
+        name: /Select proposal Proposal one/i,
+      })[0],
+    );
     expect(screen.getByRole("status")).toHaveTextContent("1 selected");
-    expect(document.querySelector(".forge-rail-drawer__select-check svg")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Clear selection" })).toBeInTheDocument();
+    expect(
+      document.querySelector(".forge-rail-drawer__select-check svg"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Clear selection" }),
+    ).toBeInTheDocument();
   });
 
   it("reveals all CVs from the CV attach drawer Show all action", () => {
@@ -572,24 +668,34 @@ describe("forge rail drawers", () => {
     expect(screen.getAllByText("CV three").length).toBeGreaterThan(0);
     expect(screen.getByText("All results")).toBeInTheDocument();
     expect(screen.getAllByText("Attached").length).toBeGreaterThan(0);
-    expect(screen.getByText("Attached")).toHaveClass("forge-rail-document-tile__badge");
+    expect(screen.getByText("Attached")).toHaveClass(
+      "forge-rail-document-tile__badge",
+    );
     expect(screen.getAllByTestId("drawer-preview-cv:two")[0]).toHaveTextContent(
       "Attach CV",
     );
     expect(screen.getAllByText("CV two")).toHaveLength(1);
     expect(
-      screen.getByRole("button", { name: "Attach CV: CV two" }).closest("article"),
+      screen
+        .getByRole("button", { name: "Attach CV: CV two" })
+        .closest("article"),
     ).toHaveAttribute("data-state", "attached");
     expect(
-      screen.getByRole("button", { name: "Attach CV: CV two" }).closest("article"),
+      screen
+        .getByRole("button", { name: "Attach CV: CV two" })
+        .closest("article"),
     ).not.toHaveAttribute("data-selected");
     expect(
-      Array.from(container.querySelectorAll(".forge-rail-drawer__section-title")).some(
-        (node) => node.textContent?.trim() === "Current",
-      ),
+      Array.from(
+        container.querySelectorAll(".forge-rail-drawer__section-title"),
+      ).some((node) => node.textContent?.trim() === "Current"),
     ).toBe(false);
-    expect(screen.queryByRole("button", { name: "More actions for CV two" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Open full CV: CV two" })[0]);
+    expect(
+      screen.queryByRole("button", { name: "More actions for CV two" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Open full CV: CV two" })[0],
+    );
     expect(onOpenCv).toHaveBeenCalledWith("two");
 
     fireEvent.click(screen.getByRole("button", { name: "Show all CVs" }));
@@ -616,9 +722,17 @@ describe("forge rail drawers", () => {
     expect(screen.getAllByText("Proposal two").length).toBeGreaterThan(0);
     expect(screen.getByText("Proposal three")).toBeInTheDocument();
     expect(screen.getByText("All results")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "More actions for Proposal one" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Open full proposal: Proposal one" })[0]);
-    expect(onOpenProposal).toHaveBeenCalledWith(expect.objectContaining({ id: "proposal:one" }));
+    expect(
+      screen.queryByRole("button", { name: "More actions for Proposal one" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getAllByRole("button", {
+        name: "Open full proposal: Proposal one",
+      })[0],
+    );
+    expect(onOpenProposal).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "proposal:one" }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Show all proposals" }));
     expect(screen.getByText("Proposal three")).toBeInTheDocument();
@@ -643,15 +757,21 @@ describe("forge rail drawers", () => {
 
     expect(screen.queryByRole("tab", { name: "All" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "CVs" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: "Proposals" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "Proposals" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.getAllByText("Current").length).toBeGreaterThan(0);
     expect(screen.queryByText("Proposal one")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Open CV: CV two" })[0]);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Open CV: CV two" })[0],
+    );
     expect(onSelectCv).toHaveBeenCalledWith("two");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Open full CV: CV two" })[0]);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Open full CV: CV two" })[0],
+    );
     expect(onOpenCv).toHaveBeenCalledWith("two");
   });
 
@@ -682,21 +802,31 @@ describe("forge rail drawers", () => {
     expect(screen.getAllByText("CV three").length).toBeGreaterThan(0);
     expect(screen.queryByText("Proposal one")).not.toBeInTheDocument();
     expect(screen.getAllByText("Current").length).toBeGreaterThan(0);
-    expect(screen.getByText("Current")).toHaveClass("forge-rail-document-tile__badge");
+    expect(screen.getByText("Current")).toHaveClass(
+      "forge-rail-document-tile__badge",
+    );
     expect(screen.getAllByText("CV one")).toHaveLength(1);
     expect(
-      screen.getByRole("button", { name: "Open CV: CV one" }).closest("article"),
+      screen
+        .getByRole("button", { name: "Open CV: CV one" })
+        .closest("article"),
     ).toHaveAttribute("data-state", "current");
     expect(
-      screen.getByRole("button", { name: "Open CV: CV one" }).closest("article"),
+      screen
+        .getByRole("button", { name: "Open CV: CV one" })
+        .closest("article"),
     ).not.toHaveAttribute("data-selected");
     expect(
-      Array.from(container.querySelectorAll(".forge-rail-drawer__section-title")).some(
-        (node) => node.textContent?.trim() === "Current",
-      ),
+      Array.from(
+        container.querySelectorAll(".forge-rail-drawer__section-title"),
+      ).some((node) => node.textContent?.trim() === "Current"),
     ).toBe(false);
-    expect(screen.queryByRole("button", { name: "More actions for CV one" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Open CV library for CV one" }));
+    expect(
+      screen.queryByRole("button", { name: "More actions for CV one" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open CV library for CV one" }),
+    );
     expect(onOpenLibraryType).toHaveBeenCalledWith("cvs");
     expect(screen.getByText("All results")).toBeInTheDocument();
   });
