@@ -1,8 +1,8 @@
 import React from "react";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentsPage } from "../DocumentsPage";
 
 const navigateMock = vi.fn();
@@ -216,6 +216,7 @@ function viewTabs(): HTMLElement {
 
 describe("DocumentsPage", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals();
     window.localStorage.clear();
     navigateMock.mockClear();
     deleteProposalMock.mockClear();
@@ -235,6 +236,10 @@ describe("DocumentsPage", () => {
     currentCvId = "cv_1";
     proposalsMock.mockReturnValue([savedProposal, draftProposal]);
     cvsMock.mockReturnValue([cvRecord]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("renders Projects identity on the /documents route", () => {
@@ -273,6 +278,66 @@ describe("DocumentsPage", () => {
     expect(document.querySelectorAll(".library-doc-preview--resume-rendered").length).toBeGreaterThan(0);
     expect(screen.getAllByTestId("resume-template-renderer").length).toBeGreaterThan(0);
     expect(document.querySelector(".library-doc-preview--cv-crop")).not.toBeInTheDocument();
+  });
+
+  it("keeps offscreen grid cards lightweight instead of mounting every preview", () => {
+    proposalsMock.mockReturnValue([]);
+    cvsMock.mockReturnValue(
+      Array.from({ length: 8 }, (_, index) => ({
+        ...cvRecord,
+        id: `cv_${index + 1}`,
+        title: `Frontend Engineer · Editorial v${index + 1}`,
+      })),
+    );
+
+    renderProjects();
+
+    expect(document.querySelectorAll(".projects-card")).toHaveLength(8);
+    expect(document.querySelectorAll(".library-doc-preview--deferred")).toHaveLength(4);
+    expect(screen.queryAllByTestId("resume-template-renderer")).toHaveLength(4);
+  });
+
+  it("loads visible grid previews in batches of four", () => {
+    vi.useFakeTimers();
+    const observerCallbacks: IntersectionObserverCallback[] = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      vi.fn((callback: IntersectionObserverCallback) => {
+        observerCallbacks.push(callback);
+        return {
+          observe: vi.fn(),
+          disconnect: vi.fn(),
+          unobserve: vi.fn(),
+          takeRecords: vi.fn(() => []),
+        };
+      }),
+    );
+    proposalsMock.mockReturnValue([]);
+    cvsMock.mockReturnValue(
+      Array.from({ length: 12 }, (_, index) => ({
+        ...cvRecord,
+        id: `cv_${index + 1}`,
+        title: `Frontend Engineer · Editorial v${index + 1}`,
+      })),
+    );
+
+    renderProjects();
+
+    expect(screen.queryAllByTestId("resume-template-renderer")).toHaveLength(4);
+    act(() => {
+      observerCallbacks.forEach((callback) => {
+        callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+      });
+    });
+    act(() => {
+      vi.advanceTimersByTime(80);
+    });
+    expect(screen.queryAllByTestId("resume-template-renderer")).toHaveLength(8);
+    act(() => {
+      vi.advanceTimersByTime(80);
+    });
+    expect(screen.queryAllByTestId("resume-template-renderer")).toHaveLength(12);
+    vi.useRealTimers();
   });
 
   it("hydrates summary-only CVs from the full cached CV before rendering previews", () => {
