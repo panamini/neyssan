@@ -1,7 +1,19 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { ForgeTemplatePanel } from "../ForgeTemplatePanel";
 import { Sidebar } from "../Sidebar";
 import {
@@ -12,7 +24,9 @@ import {
 
 function LocationProbe(): JSX.Element {
   const location = useLocation();
-  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
+  return (
+    <div data-testid="location">{`${location.pathname}${location.search}`}</div>
+  );
 }
 
 function RegisterTemplates({
@@ -77,7 +91,10 @@ function RegisterProposalPanels(): null {
         title: "Library",
         subtitle: "Use saved work.",
         renderContent: () => <div>Library drawer content</div>,
-        footer: { label: "Open Library", onSelect: () => navigate("/documents?type=proposals") },
+        footer: {
+          label: "Open Library",
+          onSelect: () => navigate("/documents?type=proposals"),
+        },
       }),
       [],
     ),
@@ -89,7 +106,10 @@ function RegisterProposalPanels(): null {
         title: "Saved proposals",
         subtitle: "Use a saved letter.",
         renderContent: () => <div>Saved proposals drawer content</div>,
-        footer: { label: "Open Library", onSelect: () => navigate("/documents?type=proposals") },
+        footer: {
+          label: "Open Library",
+          onSelect: () => navigate("/documents?type=proposals"),
+        },
       }),
       [],
     ),
@@ -105,7 +125,10 @@ function RegisterCvPanels(): null {
         surface: "cvs",
         title: "CV library",
         renderContent: () => <div>CV library drawer content</div>,
-        footer: { label: "Open Library", onSelect: () => navigate("/documents?type=cvs") },
+        footer: {
+          label: "Open Library",
+          onSelect: () => navigate("/documents?type=cvs"),
+        },
       }),
       [],
     ),
@@ -116,7 +139,10 @@ function RegisterCvPanels(): null {
         surface: "proposals",
         title: "Saved proposals",
         renderContent: () => <div>Saved proposals drawer content</div>,
-        footer: { label: "Open Library", onSelect: () => navigate("/documents?type=proposals") },
+        footer: {
+          label: "Open Library",
+          onSelect: () => navigate("/documents?type=proposals"),
+        },
       }),
       [],
     ),
@@ -127,7 +153,10 @@ function RegisterCvPanels(): null {
         surface: "documents",
         title: "Library",
         renderContent: () => <div>Library drawer content</div>,
-        footer: { label: "Open Library", onSelect: () => navigate("/documents?type=cvs") },
+        footer: {
+          label: "Open Library",
+          onSelect: () => navigate("/documents?type=cvs"),
+        },
       }),
       [],
     ),
@@ -158,18 +187,27 @@ function primaryNavItems(): HTMLElement[] {
 }
 
 function mockFinePointer(matches = true) {
-  const mediaQuery = {
-    matches,
-    media: "(hover: hover) and (pointer: fine)",
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  } as unknown as MediaQueryList;
-  vi.spyOn(window, "matchMedia").mockReturnValue(mediaQuery);
-  return mediaQuery;
+  const mediaQueries: MediaQueryList[] = [];
+  vi.spyOn(window, "matchMedia").mockImplementation((query: string) => {
+    const mediaQuery = {
+      matches:
+        query === "(hover: hover) and (pointer: fine)"
+          ? matches
+          : query === "(max-width: 767px)"
+            ? window.innerWidth <= 767
+            : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    } as unknown as MediaQueryList;
+    mediaQueries.push(mediaQuery);
+    return mediaQuery;
+  });
+  return mediaQueries;
 }
 
 describe("Sidebar permanent rail", () => {
@@ -199,9 +237,9 @@ describe("Sidebar permanent rail", () => {
       "Templates",
       "Settings",
     ]);
-    expect(items.every((item) => !item.hasAttribute("data-toolbar-tooltip"))).toBe(
-      true,
-    );
+    expect(
+      items.every((item) => !item.hasAttribute("data-toolbar-tooltip")),
+    ).toBe(true);
     expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
       "href",
       "/templates",
@@ -237,6 +275,7 @@ describe("Sidebar permanent rail", () => {
 
   it("keeps the compact rail rendered and discoverable at 390px", () => {
     window.innerWidth = 390;
+    mockFinePointer(true);
 
     const { container } = renderSidebar("/proposal");
 
@@ -301,10 +340,7 @@ describe("Sidebar permanent rail", () => {
       path === "/proposal" || path === "/cv" || path === "/settings"
         ? screen.getByRole("button", { name: label })
         : screen.getByRole("link", { name: label });
-    expect(currentItem).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(currentItem).toHaveAttribute("aria-current", "page");
   });
 
   it("opens Settings in the shared rail drawer and switches settings panes", async () => {
@@ -343,7 +379,10 @@ describe("Sidebar permanent rail", () => {
 
   it("opens the CV template panel without navigating", () => {
     const onSelect = vi.fn();
-    renderSidebar("/cv", <RegisterTemplates surface="cv" onSelect={onSelect} />);
+    renderSidebar(
+      "/cv",
+      <RegisterTemplates surface="cv" onSelect={onSelect} />,
+    );
 
     const templates = screen.getByRole("button", { name: "Templates" });
     expect(templates).toHaveAttribute("aria-expanded", "false");
@@ -356,7 +395,9 @@ describe("Sidebar permanent rail", () => {
       "aria-current",
       "page",
     );
-    expect(screen.getByRole("complementary", { name: "CV templates" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "CV templates" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
 
     fireEvent.click(screen.getByRole("listitem", { name: "Schematic" }));
@@ -370,7 +411,9 @@ describe("Sidebar permanent rail", () => {
 
     fireEvent.click(cv);
 
-    expect(screen.getByRole("complementary", { name: "CV library" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "CV library" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("CV library drawer content")).toBeInTheDocument();
     expect(cv).toHaveAttribute("aria-current", "page");
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
@@ -379,7 +422,9 @@ describe("Sidebar permanent rail", () => {
     expect(proposal).toHaveAttribute("href", "/proposal");
     fireEvent.click(proposal);
     expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
-    expect(screen.queryByRole("complementary", { name: "CV library" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "CV library" }),
+    ).not.toBeInTheDocument();
   });
 
   it("pins the active CV peek drawer from the active CV rail item", () => {
@@ -396,20 +441,29 @@ describe("Sidebar permanent rail", () => {
       vi.advanceTimersByTime(150);
     });
 
-    expect(screen.getByRole("complementary", { name: "CV library" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Collapse drawer" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "CV library" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Collapse drawer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
 
     fireEvent.click(cv);
 
     expect(cv).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("complementary", { name: "CV library" })).toHaveAttribute(
-      "data-mode",
-      "docked",
-    );
-    expect(screen.queryByRole("button", { name: "Pin drawer" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "CV library" }),
+    ).toHaveAttribute("data-mode", "docked");
+    expect(
+      screen.queryByRole("button", { name: "Pin drawer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
   });
 
@@ -419,12 +473,15 @@ describe("Sidebar permanent rail", () => {
 
     const cv = screen.getByRole("button", { name: "CV" });
     fireEvent.click(cv);
-    expect(screen.getByRole("complementary", { name: "CV library" })).toHaveAttribute(
-      "data-mode",
-      "overlay",
-    );
-    expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "CV library" }),
+    ).toHaveAttribute("data-mode", "overlay");
+    expect(
+      screen.getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Collapse drawer" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps CV Forge Jobs as direct navigation and Projects as mixed library", () => {
@@ -439,7 +496,9 @@ describe("Sidebar permanent rail", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Projects" }));
 
-    expect(screen.getByRole("complementary", { name: "Library" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Library" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Library drawer content")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "CV" })).toHaveAttribute(
       "aria-current",
@@ -543,8 +602,12 @@ describe("Sidebar permanent rail", () => {
     expect(
       screen.getByRole("complementary", { name: "Saved proposals" }),
     ).toHaveAttribute("data-mode", "overlay");
-    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Collapse drawer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
   });
 
@@ -561,15 +624,21 @@ describe("Sidebar permanent rail", () => {
     expect(
       screen.getByRole("complementary", { name: "Saved proposals" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(proposal);
 
     expect(
       screen.getByRole("complementary", { name: "Saved proposals" }),
     ).toHaveAttribute("data-mode", "docked");
-    expect(screen.queryByRole("button", { name: "Pin drawer" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Pin drawer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
   });
 
   it("opens proposal drawers from rail hover on fine pointer devices", () => {
@@ -581,12 +650,16 @@ describe("Sidebar permanent rail", () => {
       pointerType: "mouse",
     });
 
-    expect(screen.queryByRole("complementary", { name: "Attach job" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "Attach job" }),
+    ).not.toBeInTheDocument();
     act(() => {
       vi.advanceTimersByTime(150);
     });
 
-    expect(screen.getByRole("complementary", { name: "Attach job" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
   });
 
@@ -613,7 +686,9 @@ describe("Sidebar permanent rail", () => {
       vi.advanceTimersByTime(150);
     });
 
-    expect(screen.getByRole("complementary", { name: drawerLabel })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: drawerLabel }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
   });
 
@@ -629,9 +704,15 @@ describe("Sidebar permanent rail", () => {
       vi.advanceTimersByTime(150);
     });
 
-    expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Collapse drawer" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Collapse drawer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
   });
 
   it("switches to pinned drawer chrome without physical reflow when the viewport is narrow", () => {
@@ -647,17 +728,24 @@ describe("Sidebar permanent rail", () => {
       vi.advanceTimersByTime(150);
     });
 
-    expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
 
-    expect(screen.getByRole("complementary", { name: "Attach CV" })).toHaveAttribute(
-      "data-mode",
-      "docked",
-    );
-    expect(screen.queryByRole("button", { name: "Pin drawer" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toHaveAttribute("data-mode", "docked");
+    expect(
+      screen.queryByRole("button", { name: "Pin drawer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
   });
 
   it("docks a peek drawer from the drawer pin action when width supports it", () => {
@@ -671,22 +759,27 @@ describe("Sidebar permanent rail", () => {
     act(() => {
       vi.advanceTimersByTime(150);
     });
-    expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
     expect(cv).toHaveClass("sb-rail-button--panel-open");
 
     fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
-    expect(screen.getByRole("complementary", { name: "Attach CV" })).toHaveAttribute(
-      "data-mode",
-      "docked",
-    );
-    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toHaveAttribute("data-mode", "docked");
+    expect(
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
 
     fireEvent.pointerLeave(cv, { pointerType: "mouse" });
     act(() => {
       vi.advanceTimersByTime(180);
     });
 
-    expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
   });
 
   it("closes an unpinned hover CV drawer when leaving the rail trigger", () => {
@@ -699,14 +792,18 @@ describe("Sidebar permanent rail", () => {
     act(() => {
       vi.advanceTimersByTime(150);
     });
-    expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
 
     fireEvent.pointerLeave(cv, { pointerType: "mouse" });
     act(() => {
       vi.advanceTimersByTime(360);
     });
 
-    expect(screen.queryByRole("complementary", { name: "Attach CV" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "Attach CV" }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not flicker closed immediately after leaving a hover trigger", () => {
@@ -719,14 +816,18 @@ describe("Sidebar permanent rail", () => {
     act(() => {
       vi.advanceTimersByTime(150);
     });
-    expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
 
     fireEvent.pointerLeave(cv, { pointerType: "mouse" });
     act(() => {
       vi.advanceTimersByTime(180);
     });
 
-    expect(screen.getByRole("complementary", { name: "Attach CV" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps a docked drawer stable across other hovers", () => {
@@ -741,7 +842,9 @@ describe("Sidebar permanent rail", () => {
     act(() => {
       vi.advanceTimersByTime(150);
     });
-    expect(screen.getByRole("complementary", { name: "Attach job" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
     expect(jobs).toHaveClass("sb-rail-button--panel-open");
 
@@ -750,21 +853,31 @@ describe("Sidebar permanent rail", () => {
       vi.advanceTimersByTime(200);
     });
 
-    expect(screen.getByRole("complementary", { name: "Attach job" })).toBeInTheDocument();
-    expect(screen.queryByRole("complementary", { name: "Attach CV" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "Attach CV" }),
+    ).not.toBeInTheDocument();
   });
 
   it("closes docked drawers from the collapse handle", () => {
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
     fireEvent.click(screen.getByRole("button", { name: "Jobs" }));
-    expect(screen.getByRole("complementary", { name: "Attach job" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
-    expect(screen.getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Collapse drawer" }));
 
-    expect(screen.queryByRole("complementary", { name: "Attach job" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "Attach job" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps hover-open drawers persistent while moving from rail into panel", () => {
@@ -785,7 +898,9 @@ describe("Sidebar permanent rail", () => {
       vi.advanceTimersByTime(180);
     });
 
-    expect(screen.getByRole("complementary", { name: "Attach job" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
   });
 
   it("does not open contextual drawers from hover on touch pointer devices", () => {
@@ -800,21 +915,29 @@ describe("Sidebar permanent rail", () => {
       vi.advanceTimersByTime(200);
     });
 
-    expect(screen.queryByRole("complementary", { name: "Attach job" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "Attach job" }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Jobs" }));
-    expect(screen.getByRole("complementary", { name: "Attach job" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
   });
 
   it("closes contextual drawers with Escape", () => {
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
     fireEvent.click(screen.getByRole("button", { name: "Jobs" }));
-    expect(screen.getByRole("complementary", { name: "Attach job" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: "Escape" });
 
-    expect(screen.queryByRole("complementary", { name: "Attach job" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "Attach job" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps Jobs as normal navigation from CV Forge", () => {
@@ -841,7 +964,12 @@ describe("Sidebar permanent rail", () => {
   it.each([
     ["Jobs", "Attach job", "Open Jobs page", "/jobs"],
     ["CV", "Attach CV", "Open CV Forge", "/cv"],
-    ["Proposal", "Saved proposals", "Open Library", "/documents?type=proposals"],
+    [
+      "Proposal",
+      "Saved proposals",
+      "Open Library",
+      "/documents?type=proposals",
+    ],
     ["Projects", "Library", "Open Library", "/documents?type=proposals"],
   ])(
     "uses explicit full-page header route from proposal %s drawer",
@@ -849,7 +977,9 @@ describe("Sidebar permanent rail", () => {
       renderSidebar("/proposal", <RegisterProposalPanels />);
 
       fireEvent.click(screen.getByRole("button", { name: railLabel }));
-      expect(screen.getByRole("complementary", { name: drawerLabel })).toBeInTheDocument();
+      expect(
+        screen.getByRole("complementary", { name: drawerLabel }),
+      ).toBeInTheDocument();
 
       const headerAction = screen.getByRole("button", { name: browseLabel });
       expect(headerAction.querySelector("svg")).toBeTruthy();
@@ -865,11 +995,16 @@ describe("Sidebar permanent rail", () => {
     fireEvent.click(screen.getByRole("button", { name: "Projects" }));
     fireEvent.click(screen.getByRole("button", { name: "Open Library" }));
 
-    expect(screen.getByTestId("location")).toHaveTextContent("/documents?type=cvs");
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/documents?type=cvs",
+    );
   });
 
   it("contextual panel browse action navigates to all templates", () => {
-    renderSidebar("/proposal", <RegisterTemplates surface="proposal" onSelect={vi.fn()} />);
+    renderSidebar(
+      "/proposal",
+      <RegisterTemplates surface="proposal" onSelect={vi.fn()} />,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Templates" }));
     const headerAction = screen.getByRole("button", { name: "Open Templates" });

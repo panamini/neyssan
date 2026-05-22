@@ -366,6 +366,11 @@ export const Sidebar: React.FC = () => {
       activeTemplateSurface === surface &&
       templatePanelOpenMode === "docked"
     ) {
+      if (finePointer) {
+        openTemplateSurface(surface, { mode: "peek" });
+      } else {
+        closePanel();
+      }
       return;
     }
 
