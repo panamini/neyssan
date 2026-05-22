@@ -1,6 +1,7 @@
 import React from "react";
 import {
   ArrowsClockwise as PhArrowsClockwise,
+  ArrowCounterClockwise as PhArrowCounterClockwise,
   ArrowsOutSimple as PhArrowsOutSimple,
   ArrowLeft as PhArrowLeft,
   ArrowRight as PhArrowRight,
@@ -152,6 +153,7 @@ export type { CompatIconProps as IconProps };
 
 export const ArrowLeft = withCompat(PhArrowLeft);
 export const ArrowRight = withCompat(PhArrowRight);
+export const ArrowCounterClockwise = withCompat(PhArrowCounterClockwise);
 export const ArrowDown = withCompat(PhArrowDown);
 export const ArrowSquareOut = withCompat(PhArrowSquareOut);
 export const ArrowUDownRight = withCompat(PhArrowUDownRight);

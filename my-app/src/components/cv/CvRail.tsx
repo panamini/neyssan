@@ -107,16 +107,7 @@ function isHobbiesSection(section: CvSection): boolean {
 
 function getRailAiMode(section: CvSection): "none" | "rail" | "editor" {
   if (section.type === "profile" || section.type === "contact") return "none";
-  if (
-    section.type === "summary" ||
-    section.type === "skills" ||
-    section.type === "languages" ||
-    isHobbiesSection(section) ||
-    section.type === "text"
-  ) {
-    return "rail";
-  }
-  return "editor";
+  return "rail";
 }
 
 function usesStructuredSuggestions(section: CvSection): boolean {
@@ -138,7 +129,6 @@ export function CvRail({
   isImporting,
   hideTabs = false,
   onActiveTabChange: _onActiveTabChange,
-  onSelectSection,
   onRunAskAiForSection,
   onRunAskAiForSelection,
   onAcceptAiSuggestion,
@@ -170,6 +160,10 @@ export function CvRail({
     Boolean(askSelectionContext?.selectedText.trim()) &&
     activeSectionId === askSelectionContext?.editTarget.sectionId &&
     Boolean(onRunAskAiForSelection);
+  const activeAskUnavailable =
+    Boolean(activeSection) &&
+    !hasSelectedTextContext &&
+    (activeAiMode === "none" || activeAiMode === "editor");
   const streamState = "active";
   const streamCount = "2 of 3";
   const streamStages = [
@@ -233,9 +227,7 @@ export function CvRail({
 
       <div className="dasti-cv-rail-pane" data-rail-pane="ai">
         <div className="dasti-cv-rail-label">
-          {activeSection && activeAiMode !== "none"
-            ? activeSectionLabel
-            : "Ask"}
+          {activeSection ? activeSectionLabel : "Ask"}
         </div>
         <div className="dasti-cv-rail-hint">
           {activeSection
@@ -243,9 +235,7 @@ export function CvRail({
               ? "Editing the selected paper text."
               : activeAiMode === "rail"
                 ? "Editing the section selected in the paper or rail."
-                : activeAiMode === "editor"
-                  ? "Edit the entry."
-                  : "Profile fields use direct field editing."
+                : "Ask is unavailable for this section."
             : "Select a section or ask for a CV edit."}
         </div>
         {hasSelectedTextContext ? (
@@ -298,23 +288,10 @@ export function CvRail({
               </Button>
             </div>
           </>
-        ) : activeAiMode === "editor" ? (
-          <>
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              disabled={!activeSection}
-              onClick={() => {
-                if (!activeSectionId) return;
-                onSelectSection(activeSectionId, { openEditor: true });
-              }}
-            >
-              {activeSection
-                ? `Open ${activeSectionLabel} editor`
-                : "Open editor"}
-            </Button>
-          </>
+        ) : activeAskUnavailable ? (
+          <div className="dasti-cv-rail-hint" role="status">
+            Select text on the page or use a section wand for AI-assisted edits.
+          </div>
         ) : activeUsesStructuredSuggestions ? (
           <>
             <div className="dasti-cv-rail-hint">
@@ -330,23 +307,23 @@ export function CvRail({
               }
               onClick={() => {
                 if (!activeSectionId || activeAiMode !== "rail") return;
-                onSelectSection(activeSectionId, { openEditor: true });
                 void onRunAskAiForSection({
                   sectionId: activeSectionId,
-                  prompt: "",
+                  prompt:
+                    aiPrompt.trim() ||
+                    `Suggest improvements for the ${activeSectionLabel} section.`,
                   tone: selectedTone,
                 });
               }}
             >
               {isAiRunning ? (
                 <>
-                  Generating suggestions
-                  <span className="ds-btn__period">.</span>
+                  Asking AI<span className="ds-btn__period">.</span>
                 </>
-              ) : scopedAiSuggestion ? (
-                `Refresh in ${activeSectionLabel} editor`
+              ) : activeSection ? (
+                `Ask ${activeSectionLabel}`
               ) : (
-                `Open ${activeSectionLabel} editor`
+                "Ask section"
               )}
             </Button>
           </>
@@ -489,7 +466,7 @@ export function CvRail({
             </button>
           </div>
         ) : null}
-        {activeAiMode !== "editor" ? (
+        {activeAiMode === "rail" ? (
           <div className="dasti-cv-rail-hint">
             CVs are edited section-by-section. To rewrite multiple sections, run
             them one at a time.

@@ -10,6 +10,8 @@ type IslandPanelAction = {
   onClick: () => void;
   disabled?: boolean;
   ariaLabel?: string;
+  icon?: React.ReactNode;
+  title?: string;
 };
 
 export interface IslandPanelProps {
@@ -25,6 +27,7 @@ export interface IslandPanelProps {
   rootClassName?: string;
   overlayClassName?: string;
   bodyClassName?: string;
+  showCloseButton?: boolean;
 }
 
 const ISLAND_PANEL_EXIT_DURATION = 180;
@@ -58,6 +61,7 @@ export function IslandPanel({
   rootClassName,
   overlayClassName,
   bodyClassName,
+  showCloseButton = true,
 }: IslandPanelProps): JSX.Element | null {
   const titleId = React.useId();
   const panelRef = React.useRef<HTMLElement | null>(null);
@@ -111,6 +115,13 @@ export function IslandPanel({
       panelRef.current?.focus?.({ preventScroll: true });
     });
 
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (panelRef.current?.contains(target)) return;
+      onOpenChangeRef.current(false);
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -139,9 +150,11 @@ export function IslandPanel({
       }
     };
 
+    document.addEventListener("pointerdown", handlePointerDown, true);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       cancelAnimationFrame(focusFrame);
+      document.removeEventListener("pointerdown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
@@ -151,12 +164,10 @@ export function IslandPanel({
   return (
     <BodyPortal>
       <div className={clsx("ds-island-panel-root", rootClassName)}>
-        <button
-          type="button"
+        <div
           className={clsx("ds-island-panel__overlay", overlayClassName)}
           data-state={surfaceState}
-          onClick={() => onOpenChange(false)}
-          aria-label="Close panel background"
+          aria-hidden="true"
         />
         <aside
           ref={panelRef}
@@ -176,6 +187,21 @@ export function IslandPanel({
                 {meta ? <span className="ds-island-panel__meta">{meta}</span> : null}
               </div>
               <div className="ds-island-panel__actions">
+              {discardAction ? (
+                <button
+                  type="button"
+                  className={clsx(
+                    "ds-island-panel__action ds-island-panel__action--discard",
+                    discardAction.icon && "ds-island-panel__action--icon",
+                  )}
+                  onClick={discardAction.onClick}
+                  disabled={discardAction.disabled}
+                  aria-label={discardAction.ariaLabel}
+                  title={discardAction.title}
+                >
+                  {discardAction.icon ?? discardAction.label}
+                </button>
+              ) : null}
               {saveAction ? (
                 <button
                   type="button"
@@ -187,27 +213,18 @@ export function IslandPanel({
                   {saveAction.label}
                 </button>
               ) : null}
-              <button
-                type="button"
-                className="ds-island-panel__close"
-                aria-label="Close panel"
-                onClick={() => onOpenChange(false)}
-              >
+              {showCloseButton ? (
+                <button
+                  type="button"
+                  className="ds-island-panel__close"
+                  aria-label="Close panel"
+                  onClick={() => onOpenChange(false)}
+                >
                   <X size={16} strokeWidth={1.8} aria-hidden="true" />
                 </button>
+              ) : null}
               </div>
             </div>
-            {discardAction ? (
-              <button
-                type="button"
-                className="ds-island-panel__action ds-island-panel__action--discard"
-                onClick={discardAction.onClick}
-                disabled={discardAction.disabled}
-                aria-label={discardAction.ariaLabel}
-              >
-                {discardAction.label}
-              </button>
-            ) : null}
           </header>
           <div className={clsx("ds-island-panel__body", bodyClassName)}>
             {children}

@@ -87,6 +87,9 @@ import {
 } from "../lib/document-export-models";
 import {
   applyHiddenSectionsToCvDocument,
+  insertSectionByCanonicalOrder,
+  isSectionReorderLocked,
+  normalizeCvSectionOrder,
   readStoredHiddenSectionIds,
   sanitizeHiddenSectionIds,
   writeStoredHiddenSectionIds,
@@ -174,8 +177,10 @@ const CV_PAPER_ANCHOR_SELECTOR = [
   ".dasti-doc-viewport--resume-panel[data-document-stage='true']",
 ].join(",");
 const CV_COMMAND_LAYER_CANVAS_SELECTOR = ".dasti-cv-skeleton-forge";
+const CV_WORKSPACE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH = 1180;
 
 type CvForgeWorkspaceMode = "edit" | "preview";
+type CvWorkspacePanel = "sections" | "design" | "templates";
 type CvForgeCanonicalJob = {
   id: string;
   title: string;
@@ -1719,6 +1724,15 @@ function readStoredCvForgeWorkspaceMode(): CvForgeWorkspaceMode {
   }
 }
 
+function getCvWorkspacePanel(
+  surface: string | null,
+): CvWorkspacePanel | null {
+  if (surface === "cv-sections") return "sections";
+  if (surface === "cv-design") return "design";
+  if (surface === "cv") return "templates";
+  return null;
+}
+
 function readImportRecoverySession(
   currentCv: CvDocument | null | undefined,
 ): ImportRecoverySession | null {
@@ -1911,17 +1925,7 @@ function isSectionEditorSheetFocusOwner(): boolean {
 
 function getSectionRailAiMode(section: CvSection): "none" | "rail" | "editor" {
   if (section.type === "profile" || section.type === "contact") return "none";
-  if (
-    section.type === "summary" ||
-    section.type === "skills" ||
-    section.type === "languages" ||
-    String(section.type) === "hobbies" ||
-    section.title.trim().toLowerCase() === "hobbies" ||
-    section.type === "text"
-  ) {
-    return "rail";
-  }
-  return "editor";
+  return "rail";
 }
 
 function sectionUsesStructuredSuggestions(section: CvSection): boolean {
@@ -2983,10 +2987,23 @@ export function CvForge(): JSX.Element {
   const [cvPreviewPageCount, setCvPreviewPageCount] = React.useState<
     number | null
   >(null);
-  const currentSections = React.useMemo<CvSection[]>(
+  const rawCurrentSections = React.useMemo<CvSection[]>(
     () => (currentCv?.sections ?? []) as CvSection[],
     [currentCv?.sections],
   );
+  const currentSections = React.useMemo<CvSection[]>(
+    () => normalizeCvSectionOrder(rawCurrentSections),
+    [rawCurrentSections],
+  );
+  React.useEffect(() => {
+    if (!currentCv || currentSections === rawCurrentSections) return;
+    const now = new Date().toISOString();
+    void importCv({
+      ...currentCv,
+      metadata: buildUpdatedCvMetadata(currentCv, now),
+      sections: currentSections,
+    });
+  }, [currentCv, currentSections, importCv, rawCurrentSections]);
   const optimisticSections = React.useMemo<CvSection[]>(() => {
     const pendingSectionId = pendingActiveSection?.id
       ? String(pendingActiveSection.id)
@@ -3034,12 +3051,14 @@ export function CvForge(): JSX.Element {
         ? String(matchedSection.id)
         : null;
       if (
-        workspaceMode === "edit" &&
-        (intent.source === "preview-panel" ||
-          intent.source === "preview-workspace")
+        intent.source === "preview-panel" ||
+        intent.source === "preview-workspace"
       ) {
         if (matchedSectionId) {
           setActiveSectionId(matchedSectionId);
+          setSectionEditorOpen(true);
+          setCvComposerOpen(false);
+          setCvAskSelectionContext(null);
           focusPreviewSection(matchedSectionId);
         }
         setResumeActiveTarget({
@@ -3065,7 +3084,7 @@ export function CvForge(): JSX.Element {
         source: intent.source,
       });
     },
-    [currentSections, workspaceMode],
+    [currentSections],
   );
 
   const handleResumeLinkIntentHandled = React.useCallback(
@@ -4056,12 +4075,32 @@ export function CvForge(): JSX.Element {
     "--cv-paper-visual-inline-size": `min(100%, ${CV_PAPER_VISUAL_INLINE_SIZE})`,
     "--cv-workspace-stage-inline-size": "var(--cv-paper-visual-inline-size)",
   } as React.CSSProperties;
+  const activeWorkspacePanel = templatePanelOpen
+    ? getCvWorkspacePanel(activeTemplateSurface)
+    : null;
+  const isWideEnoughForDockedPanel =
+    viewportWidth >= CV_WORKSPACE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH;
+  const isWorkspacePanelDocked =
+    activeWorkspacePanel !== null && isWideEnoughForDockedPanel;
   const isForgeDrawerDockedDesktop =
     templatePanelOpen &&
     templatePanelOpenMode === "docked" &&
-    viewportWidth >= 1180;
+    isWorkspacePanelDocked;
   const shouldAutoCollapseCvRailForDockedDrawer =
     isForgeDrawerDockedDesktop && viewportWidth < 1760;
+  React.useEffect(() => {
+    if (!activeTemplateSurface || activeWorkspacePanel === null) return;
+    if (templatePanelOpenMode === "peek") return;
+    const nextMode = isWideEnoughForDockedPanel ? "docked" : "overlay";
+    if (templatePanelOpenMode === nextMode) return;
+    openTemplateSurface(activeTemplateSurface, { mode: nextMode });
+  }, [
+    activeTemplateSurface,
+    activeWorkspacePanel,
+    isWideEnoughForDockedPanel,
+    openTemplateSurface,
+    templatePanelOpenMode,
+  ]);
   const showJobBriefContext = Boolean(requestedJobId);
   const isEntryPickerBusy = isCreatingEntryCv || isImportingEntryCv;
   const {
@@ -4107,6 +4146,8 @@ export function CvForge(): JSX.Element {
       focusPreviewSection(sectionId);
       if (options?.openEditor) {
         setSectionEditorOpen(true);
+        setCvComposerOpen(false);
+        setCvAskSelectionContext(null);
       }
     },
     [currentSections],
@@ -4122,6 +4163,7 @@ export function CvForge(): JSX.Element {
       setResumeActiveTarget(getSectionTarget(section));
       focusPreviewSection(sectionId);
       setCvRailTab("ai");
+      setCvComposerOpen(true);
     },
     [currentSections],
   );
@@ -5271,10 +5313,14 @@ export function CvForge(): JSX.Element {
       }
       const nextSection = makeDraftSection(sectionKind);
       const now = new Date().toISOString();
+      const nextSections = insertSectionByCanonicalOrder(
+        currentSections,
+        nextSection,
+      );
       void importCv({
         ...currentCv,
         metadata: buildUpdatedCvMetadata(currentCv, now),
-        sections: [...currentSections, nextSection],
+        sections: normalizeCvSectionOrder(nextSections),
       });
       const nextSectionId = String(nextSection.id);
       const nextEditTarget = getInitialEditTargetForSection(nextSection);
@@ -5390,16 +5436,17 @@ export function CvForge(): JSX.Element {
         (section, index) => getCvSectionId(section, index) === overId,
       );
       if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+      if (
+        isSectionReorderLocked(currentSections[fromIndex]) ||
+        isSectionReorderLocked(currentSections[toIndex])
+      ) {
+        return;
+      }
 
       const nextSections = [...currentSections];
       const [movedSection] = nextSections.splice(fromIndex, 1);
       nextSections.splice(toIndex, 0, movedSection);
-      persistSections(
-        nextSections.map((section, order) => ({
-          ...section,
-          order,
-        })),
-      );
+      persistSections(normalizeCvSectionOrder(nextSections));
       setActiveSectionId(activeId);
       focusPreviewSection(activeId);
     },
@@ -5784,29 +5831,37 @@ export function CvForge(): JSX.Element {
     templatePanelOpen && activeTemplateSurface === "cv-design";
   const sectionsPanelOpen =
     templatePanelOpen && activeTemplateSurface === "cv-sections";
+  const openCvWorkspacePanel = React.useCallback(
+    (surface: "cv" | "cv-design" | "cv-sections") => {
+      openTemplateSurface(surface, {
+        mode: isWideEnoughForDockedPanel ? "docked" : "overlay",
+      });
+    },
+    [isWideEnoughForDockedPanel, openTemplateSurface],
+  );
   const handleOpenCvTemplates = React.useCallback(() => {
     if (cvTemplatesOpen) {
       closeForgePanel();
       return;
     }
-    openTemplateSurface("cv");
-  }, [closeForgePanel, cvTemplatesOpen, openTemplateSurface]);
+    openCvWorkspacePanel("cv");
+  }, [closeForgePanel, cvTemplatesOpen, openCvWorkspacePanel]);
 
   const handleOpenCvSections = React.useCallback(() => {
     if (sectionsPanelOpen) {
       closeForgePanel();
       return;
     }
-    openTemplateSurface("cv-sections");
-  }, [closeForgePanel, openTemplateSurface, sectionsPanelOpen]);
+    openCvWorkspacePanel("cv-sections");
+  }, [closeForgePanel, openCvWorkspacePanel, sectionsPanelOpen]);
 
   const handleOpenCvDesign = React.useCallback(() => {
     if (cvDesignOpen) {
       closeForgePanel();
       return;
     }
-    openTemplateSurface("cv-design");
-  }, [closeForgePanel, cvDesignOpen, openTemplateSurface]);
+    openCvWorkspacePanel("cv-design");
+  }, [closeForgePanel, cvDesignOpen, openCvWorkspacePanel]);
 
   const handleSelectFontPair = React.useCallback(
     (fontPairId: VerbatiFontPairId) => {
@@ -6028,9 +6083,8 @@ export function CvForge(): JSX.Element {
         return;
       }
 
-      if (section.type !== "summary" && section.type !== "text") {
-        setSectionEditorOpen(true);
-        showToast("Use the item editor for this section.", { variant: "info" });
+      if (section.type === "profile" || section.type === "contact") {
+        showToast("Ask is unavailable for this section.", { variant: "info" });
         return;
       }
 
@@ -6255,14 +6309,13 @@ export function CvForge(): JSX.Element {
         return;
       }
 
-      handleSelectSection(sectionId, { openEditor: true });
+      handleAskAiForSection(sectionId);
     },
     [
       currentSections,
       cvTone,
       handleAskAiForSection,
       handleRunAskAiForSection,
-      handleSelectSection,
     ],
   );
 
@@ -7068,8 +7121,10 @@ export function CvForge(): JSX.Element {
                 onOpenSections={handleOpenCvSections}
                 onOpenDesign={handleOpenCvDesign}
                 onOpenTemplates={handleOpenCvTemplates}
-                askOpen={cvComposerOpen}
-                onOpenAsk={handleOpenCvAsk}
+                askOpen={workspaceMode === "preview" && cvComposerOpen}
+                onOpenAsk={
+                  workspaceMode === "preview" ? handleOpenCvAsk : undefined
+                }
               />
               {isImportReviewBannerVisible ? (
                 <CvReviewBanner
@@ -7194,34 +7249,36 @@ export function CvForge(): JSX.Element {
                 </div>
               )}
             </div>
-            <ComposerDrawer
-              open={cvComposerOpen}
-              onOpenChange={setCvComposerOpen}
-              title="Ask"
-              description="Improve the selected CV section."
-              ariaLabel="CV composer drawer"
-            >
-              <CvRail
-                sections={currentSections}
-                activeSectionId={activeSectionId}
-                activeTab={cvRailTab}
-                selectedTone={cvTone}
-                aiSuggestion={cvRailAiSuggestion}
-                appliedAiEdit={cvRailAppliedAiEdit}
-                askSelectionContext={cvAskSelectionContext}
-                isImporting={isImportingEntryCv}
-                onActiveTabChange={setCvRailTab}
-                onSelectSection={handleSelectSection}
-                onRunAskAiForSection={handleRunAskAiForSection}
-                onRunAskAiForSelection={handleRunCvAskForSelection}
-                onAcceptAiSuggestion={handleAcceptAiSuggestion}
-                onDiscardAiSuggestion={handleDiscardAiSuggestion}
-                onUndoAiSuggestion={handleUndoAiSuggestion}
-                onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
-                onDismissListAiSuggestion={handleDismissListAiSuggestion}
-                hideTabs
-              />
-            </ComposerDrawer>
+            {cvComposerOpen && !sectionEditorOpen ? (
+              <ComposerDrawer
+                open
+                onOpenChange={setCvComposerOpen}
+                title="Ask"
+                description="Improve the selected CV section."
+                ariaLabel="Ask"
+              >
+                <CvRail
+                  sections={currentSections}
+                  activeSectionId={activeSectionId}
+                  activeTab={cvRailTab}
+                  selectedTone={cvTone}
+                  aiSuggestion={cvRailAiSuggestion}
+                  appliedAiEdit={cvRailAppliedAiEdit}
+                  askSelectionContext={cvAskSelectionContext}
+                  isImporting={isImportingEntryCv}
+                  onActiveTabChange={setCvRailTab}
+                  onSelectSection={handleSelectSection}
+                  onRunAskAiForSection={handleRunAskAiForSection}
+                  onRunAskAiForSelection={handleRunCvAskForSelection}
+                  onAcceptAiSuggestion={handleAcceptAiSuggestion}
+                  onDiscardAiSuggestion={handleDiscardAiSuggestion}
+                  onUndoAiSuggestion={handleUndoAiSuggestion}
+                  onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
+                  onDismissListAiSuggestion={handleDismissListAiSuggestion}
+                  hideTabs
+                />
+              </ComposerDrawer>
+            ) : null}
           </div>
           <SectionEditorSheet
             open={sectionEditorOpen}

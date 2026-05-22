@@ -48,6 +48,7 @@ export function CvStageBar({
   const nextMode = mode === "edit" ? "preview" : "edit";
   const modeToggleLabel =
     mode === "edit" ? "Switch to Preview" : "Switch to Edit";
+  const showAskHandle = mode === "preview" && Boolean(onOpenAsk);
 
   return (
     <>
@@ -185,7 +186,7 @@ export function CvStageBar({
           </div>
         </div>
       </div>
-      {onOpenAsk ? (
+      {showAskHandle ? (
         <div
           className="dasti-proposal-skeleton-stage__ask-handle-layer dasti-toolbar--surface-tooltips"
           data-sticky={commandLayerSticky ? "true" : undefined}

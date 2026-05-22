@@ -44,7 +44,7 @@ describe("CvStageBar command layer", () => {
     );
   });
 
-  it("wires document toolbar actions to left-drawer modes and Ask to the side handle", () => {
+  it("wires document toolbar actions to left-drawer modes and Ask to the side handle in preview", () => {
     const onOpenSections = vi.fn();
     const onOpenDesign = vi.fn();
     const onOpenTemplates = vi.fn();
@@ -64,11 +64,22 @@ describe("CvStageBar command layer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sections" }));
     fireEvent.click(screen.getByRole("button", { name: "Design" }));
     fireEvent.click(screen.getByRole("button", { name: "Templates" }));
-    fireEvent.click(screen.getByTestId("cv-ask-handle"));
 
     expect(onOpenSections).toHaveBeenCalledTimes(1);
     expect(onOpenDesign).toHaveBeenCalledTimes(1);
     expect(onOpenTemplates).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("cv-ask-handle")).not.toBeInTheDocument();
+    expect(onOpenAsk).not.toHaveBeenCalled();
+
+    render(
+      <CvStageBar
+        mode="preview"
+        onModeChange={vi.fn()}
+        onOpenAsk={onOpenAsk}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("cv-ask-handle"));
     expect(onOpenAsk).toHaveBeenCalledTimes(1);
   });
 });

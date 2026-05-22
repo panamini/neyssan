@@ -191,12 +191,13 @@ export function insertSectionByCanonicalOrder(
   sections: CvSection[],
   newSection: CvSection,
 ): CvSection[] {
+  const normalizedSections = normalizeCvSectionOrder(sections);
   const newSectionRank = getCanonicalOrderIndex(newSection);
   let sameRankIndex = -1;
   let precedingRankIndex = -1;
   let followingRankIndex = -1;
 
-  sections.forEach((section, index) => {
+  normalizedSections.forEach((section, index) => {
     const sectionRank = getCanonicalOrderIndex(section);
 
     if (sectionRank === newSectionRank) {
@@ -224,10 +225,43 @@ export function insertSectionByCanonicalOrder(
           : sections.length;
 
   return [
-    ...sections.slice(0, insertionIndex),
+    ...normalizedSections.slice(0, insertionIndex),
     newSection,
-    ...sections.slice(insertionIndex),
+    ...normalizedSections.slice(insertionIndex),
   ];
+}
+
+export function normalizeCvSectionOrder(sections: CvSection[]): CvSection[] {
+  const lockedTopSections: CvSection[] = [];
+  const remainingSections: CvSection[] = [];
+
+  sections.forEach((section) => {
+    const canonicalType = getCanonicalType(section);
+    if (canonicalType === "profile" || canonicalType === "summary") {
+      lockedTopSections.push(section);
+      return;
+    }
+    remainingSections.push(section);
+  });
+
+  const orderedLockedSections = [...lockedTopSections].sort((left, right) => {
+    const leftRank = getCanonicalOrderIndex(left);
+    const rightRank = getCanonicalOrderIndex(right);
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    return sections.indexOf(left) - sections.indexOf(right);
+  });
+  const orderedSections = [...orderedLockedSections, ...remainingSections];
+
+  const changed =
+    orderedSections.some((section, index) => section !== sections[index]) ||
+    orderedSections.some((section, index) => section.order !== index);
+
+  if (!changed) return sections;
+
+  return orderedSections.map((section, order) => ({
+    ...section,
+    order,
+  }));
 }
 
 export function sanitizeHiddenSectionIds(
