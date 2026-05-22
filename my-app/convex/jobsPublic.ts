@@ -73,6 +73,8 @@ const COHORT_MIN_TOTAL_DECISIONS = 500;
 const FEATURE_COHORT_NEXT_STEPS = false;
 const JOB_DETAIL_LINKED_PROPOSALS_LIMIT = 12;
 const JOB_DETAIL_SHADOW_ROWS_LIMIT = 8;
+const JOB_LIST_LINKED_PROPOSALS_LIMIT = 20;
+const JOB_LIST_SHADOW_ROWS_LIMIT = 1;
 const JOB_LIST_DEFAULT_LIMIT = 80;
 const JOB_LIST_MAX_LIMIT = 120;
 const jobExtractionShadowValidationStatus = v.union(
@@ -804,6 +806,46 @@ async function listRecentJobsForProfileId(
 
   const jobs = await orderedQuery.collect();
   return jobs.slice(0, limit);
+}
+
+async function loadLinkedProposalStatsForJobs(ctx: any, jobs: any[]) {
+  const stats = new Map<
+    string,
+    { count: number; latestUpdatedAt: number }
+  >();
+
+  await Promise.all(
+    jobs.map(async (job: any) => {
+      const jobId = String(job._id);
+      const linkedProposals = await ctx.db
+        .query("proposals")
+        .withIndex("by_job_and_status", (q: any) =>
+          q.eq("jobId", jobId).eq("status", "saved"),
+        );
+      const linkedProposalRows =
+        typeof linkedProposals.take === "function"
+          ? await linkedProposals.take(JOB_LIST_LINKED_PROPOSALS_LIMIT)
+          : (await linkedProposals.collect()).slice(
+              0,
+              JOB_LIST_LINKED_PROPOSALS_LIMIT,
+            );
+
+      if (linkedProposalRows.length === 0) {
+        return;
+      }
+
+      stats.set(jobId, {
+        count: linkedProposalRows.length,
+        latestUpdatedAt: linkedProposalRows.reduce(
+          (latest: number, proposal: any) =>
+            Math.max(latest, proposal.updatedAt ?? proposal.createdAt ?? 0),
+          0,
+        ),
+      });
+    }),
+  );
+
+  return stats;
 }
 
 async function archiveActiveSampleJobsForProfile(ctx: any, profileId: string) {
@@ -1704,51 +1746,14 @@ async function listProjectedJobsForProfiles(
   );
   const jobs = jobGroups.flat();
 
-  const proposalGroups = await Promise.all(
-    normalizedProfiles.map((profile) =>
-      ctx.db
-        .query("proposals")
-        .withIndex("by_user", (q: any) =>
-          q.eq("userId", String(profile._id ?? profile.id ?? "")),
-        )
-        .collect(),
-    ),
-  );
-  const proposals = proposalGroups.flat();
-
-  const linkedProposalStats = new Map<
-    string,
-    { count: number; latestUpdatedAt: number }
-  >();
-
-  for (const proposal of proposals) {
-    if (proposal.status !== "saved") {
-      continue;
-    }
-
-    const jobId = typeof proposal.jobId === "string" ? proposal.jobId : "";
-    if (!jobId) {
-      continue;
-    }
-
-    const current = linkedProposalStats.get(jobId) ?? {
-      count: 0,
-      latestUpdatedAt: 0,
-    };
-
-    linkedProposalStats.set(jobId, {
-      count: current.count + 1,
-      latestUpdatedAt: Math.max(
-        current.latestUpdatedAt,
-        proposal.updatedAt ?? proposal.createdAt ?? 0,
-      ),
-    });
-  }
-
   const visibleJobs = jobs.filter((job: any) =>
     options?.includeArchived
       ? job.archivedAt !== null && job.archivedAt !== undefined
       : job.archivedAt === null || job.archivedAt === undefined,
+  );
+  const linkedProposalStats = await loadLinkedProposalStatsForJobs(
+    ctx,
+    visibleJobs,
   );
 
   const projections = await Promise.all(visibleJobs.map(async (job: any) => {
@@ -1786,7 +1791,7 @@ async function listProjectedJobsForProfiles(
       .query("job_extraction_shadow")
       .withIndex("by_job_id", (q: any) => q.eq("job_id", job._id))
       .order("desc")
-      .take(JOB_DETAIL_SHADOW_ROWS_LIMIT);
+      .take(JOB_LIST_SHADOW_ROWS_LIMIT);
     const structuredDebug = buildStructuredMatchReadDebug({
       old: pendingMatchRead,
       job: {
