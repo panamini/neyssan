@@ -1,15 +1,16 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui";
-import { ArrowRight } from "../lib/icons";
 import { ResumeTemplateRenderer } from "../features/verbati/resume/ResumeTemplateRenderer";
 import { resumeMock, resumeMockOnecol } from "../features/verbati/resume/resume.mock";
 import { resolveVerbatiStyle } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import { ProposalDocumentRenderer } from "../components/proposal-render/ProposalDocumentRenderer";
+import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import type { ProposalTemplateId } from "../../convex/lib/proposals/renderTemplates";
 import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
+import { buildStyledResumePrintSource } from "../lib/document-export-models";
 import {
   resolvePreviewCanonicalAppearance,
   serializeProposalDocumentThemeVars,
@@ -18,6 +19,7 @@ import { getResumeTemplateDefinition } from "../lib/layout/resumeTemplates";
 import { planWorkshopResumePages } from "../lib/resume/resumePagination";
 import { createProposalWorkspaceResetState } from "../lib/proposal-workspace-state";
 import { templatePreviewApplicant, templatePreviewProposal } from "./templatePreviewSamples";
+import type { CvDocument } from "../types/cvDocument";
 
 const TEMPLATE_FILTERS = ["cover letters", "resume"] as const;
 type TemplateFilter = (typeof TEMPLATE_FILTERS)[number];
@@ -46,37 +48,35 @@ const TEMPLATES: TemplateCard[] = [
     name: "Minimal",
     kind: "Resume",
     family: "workshop-onecol",
-    description:
-      "A clean one-column CV that works well with recruiters and application systems. Simple, readable, safe.",
+    description: "Clean, readable, safe.",
   },
   {
     id: "workshop-two-column-resume",
     name: "French",
     kind: "Resume",
     family: "workshop-twocol",
-    description:
-      "A structured two-column CV for a more polished European layout. Clear sections, strong hierarchy, still professional.",
+    description: "Structured European layout.",
   },
   {
     id: "minimal-letter",
     name: "Minimal",
     kind: "Cover letter",
     family: "minimal",
-    description: "A clean letter with quiet spacing and straightforward hierarchy.",
+    description: "Quiet spacing, clear hierarchy.",
   },
   {
     id: "bold-letter",
     name: "French",
     kind: "Cover letter",
     family: "bold",
-    description: "A sharper letter with a stronger opening. Confident, simple, direct.",
+    description: "Sharper opening, direct tone.",
   },
   {
     id: "letterpress-letter",
     name: "Editorial",
     kind: "Cover letter",
     family: "letterpress",
-    description: "A warmer letter with more personality. Good for narrative applications.",
+    description: "Warmer, more personal.",
   },
 ];
 
@@ -145,9 +145,11 @@ function getCoverLetterTemplateIntent(
 export function TemplateDocumentPreview({
   kind,
   family,
+  previewCv,
 }: {
   kind: TemplateCard["kind"];
   family: TemplateFamily;
+  previewCv?: CvDocument | null;
 }): JSX.Element {
   const stylePreset = TEMPLATE_STYLE_PRESETS[family];
 
@@ -156,19 +158,29 @@ export function TemplateDocumentPreview({
       family === "workshop-onecol"
         ? "workshop_resume_onecol_ats"
         : "workshop_resume_twocol_ats";
-    const previewData = family === "workshop-onecol" ? resumeMockOnecol : resumeMock;
-    const previewPages = planWorkshopResumePages({
-      data: previewData,
-      template: getResumeTemplateDefinition(resumeTemplateId),
-      stylePreset,
-    }).committedPages;
-    const firstPreviewPage = previewPages[0];
+    const cvPreviewSource = previewCv
+      ? buildStyledResumePrintSource({ currentCv: previewCv })
+      : null;
+    const previewData =
+      cvPreviewSource?.resumeData ??
+      (family === "workshop-onecol" ? resumeMockOnecol : resumeMock);
+    const resolvedStylePreset = cvPreviewSource?.stylePreset ?? stylePreset;
+    const resolvedResumeTemplateId =
+      cvPreviewSource?.resumeTemplateId ?? resumeTemplateId;
+    const previewPages =
+      cvPreviewSource?.committedPages ??
+      planWorkshopResumePages({
+        data: previewData,
+        template: getResumeTemplateDefinition(resolvedResumeTemplateId),
+        stylePreset: resolvedStylePreset,
+      }).committedPages;
+    const firstPreviewPage = previewPages?.[0];
 
     return (
       <ResumeTemplateRenderer
         data={previewData}
-        stylePreset={stylePreset}
-        resumeTemplateId={resumeTemplateId}
+        stylePreset={resolvedStylePreset}
+        resumeTemplateId={resolvedResumeTemplateId}
         committedPages={firstPreviewPage ? [firstPreviewPage] : undefined}
       />
     );
@@ -200,16 +212,15 @@ export function TemplateDocumentPreview({
 
 export function TemplatesPage(): JSX.Element {
   const navigate = useNavigate();
+  const { currentCv, cvs } = useCvLibrary();
   const [activeFilter, setActiveFilter] = React.useState<TemplateFilter>("cover letters");
-  const [selectedTemplateId, setSelectedTemplateId] = React.useState("minimal-letter");
+  const previewCv = React.useMemo(() => currentCv ?? cvs[0] ?? null, [currentCv, cvs]);
   const visibleTemplates = React.useMemo(
     () => TEMPLATES.filter((template) => filterMatches(template, activeFilter)),
     [activeFilter],
   );
   const handleUseTemplate = React.useCallback(
     (template: TemplateCard) => {
-      setSelectedTemplateId(template.id);
-
       if (template.kind === "Resume") {
         const templateIntent = getResumeTemplateIntent(template.family);
         navigate(
@@ -269,8 +280,6 @@ export function TemplatesPage(): JSX.Element {
 
         <div className="dasti-template-grid" data-template-filter={activeFilter} aria-label="Templates">
           {visibleTemplates.map((template) => {
-            const isSelected = selectedTemplateId === template.id;
-            const tooltipId = `template-use-tooltip-${template.id}`;
             const useTemplateLabel = `Use ${template.name} template`;
 
             return (
@@ -279,58 +288,28 @@ export function TemplatesPage(): JSX.Element {
                 role="button"
                 tabIndex={0}
                 className={`dasti-template-card dasti-template-card--${template.family}`}
-                data-selected={isSelected ? "true" : "false"}
-                onClick={() => setSelectedTemplateId(template.id)}
+                aria-label={useTemplateLabel}
+                onClick={() => handleUseTemplate(template)}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter" && event.key !== " ") return;
                   event.preventDefault();
-                  setSelectedTemplateId(template.id);
+                  handleUseTemplate(template);
                 }}
               >
-                {isSelected ? (
-                  <span className="dasti-template-card__quick-action dasti-toolbar--surface-tooltips">
-                    <button
-                      type="button"
-                      className="dasti-template-card__use-icon dasti-toolbar-tooltip-trigger--above"
-                      aria-label={useTemplateLabel}
-                      aria-describedby={tooltipId}
-                      data-toolbar-tooltip="Use this template"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleUseTemplate(template);
-                      }}
-                    >
-                      <ArrowRight size={13} weight="regular" aria-hidden="true" />
-                    </button>
-                    <span
-                      id={tooltipId}
-                      role="tooltip"
-                      className="dasti-template-card__tooltip"
-                    >
-                      Use this template
-                    </span>
+                <span className="dasti-template-card__head">
+                  <span className="dasti-template-card__title-line">
+                    <span className="dasti-template-card__title">{template.name}</span>
+                    <span className="dasti-template-card__kind">{template.kind}</span>
                   </span>
-                ) : null}
-                <span className="dasti-template-card__title">{template.name}</span>
-                <span className="dasti-template-card__description">{template.description}</span>
-                <span className="dasti-template-card__action">
-                  {isSelected ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleUseTemplate(template);
-                      }}
-                    >
-                      Use this template
-                    </Button>
-                  ) : null}
+                  <span className="dasti-template-card__description">{template.description}</span>
                 </span>
                 <span className="dasti-template-card__preview" aria-hidden="true">
                   <span className="dasti-template-card__document-scale" data-testid="template-document-preview">
-                    <TemplateDocumentPreview kind={template.kind} family={template.family} />
+                    <TemplateDocumentPreview
+                      kind={template.kind}
+                      family={template.family}
+                      previewCv={previewCv}
+                    />
                   </span>
                 </span>
               </article>

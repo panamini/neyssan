@@ -159,7 +159,7 @@ function useBrowserTitle(topbarDocumentTitle: string | null): void {
         ? `${topbarDocumentTitle} · Resume · two weeks`
         : "Resume · two weeks";
     } else if (pathname === "/dashboard" || pathname === "/") {
-      pageTitle = "Dashboard · two weeks";
+      pageTitle = "Today · two weeks";
     } else if (pathname === "/cvs") {
       pageTitle = topbarDocumentTitle
         ? `${topbarDocumentTitle} · two weeks`
@@ -199,7 +199,7 @@ export function TopbarTitleSync(): null {
 }
 
 function resolvePageLabel(pathname: string): string {
-  if (pathname === "/dashboard" || pathname === "/") return "Dashboard";
+  if (pathname === "/dashboard" || pathname === "/") return "Today";
   if (pathname.startsWith("/jobs")) return "Jobs";
   if (pathname.startsWith("/proposal")) return "Proposal forge";
   if (pathname.startsWith("/cv")) return "CV forge";
@@ -209,7 +209,7 @@ function resolvePageLabel(pathname: string): string {
   if (pathname.startsWith("/templates")) return "Templates";
   if (pathname.startsWith("/style")) return "Templates";
   if (pathname.startsWith("/settings")) return "Settings";
-  return "Dashboard";
+  return "Today";
 }
 
 function resolveProposalStateLabel(

@@ -36,8 +36,9 @@ describe("TemplatesPage", () => {
     expect(screen.getByRole("tab", { name: "Resume" })).toBeInTheDocument();
     expect(screen.getByText("Minimal")).toBeInTheDocument();
     expect(screen.getByText("French")).toBeInTheDocument();
-    expect(screen.getByText("Editorial")).toBeInTheDocument();
-    expect(screen.queryByText("Cover letter")).toBeNull();
+    expect(screen.getByText("Editorial", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
+    expect(screen.getAllByText("Cover letter")).toHaveLength(3);
+    expect(document.querySelector(".dasti-template-card__badge")).toBeNull();
     expect(screen.queryByRole("tab", { name: "CVs" })).toBeNull();
     expect(screen.getAllByTestId("template-document-preview")).toHaveLength(3);
   });
@@ -64,7 +65,7 @@ describe("TemplatesPage", () => {
     expect(navigateMock).toHaveBeenCalledWith("/settings?tab=docstyle");
   });
 
-  it("selects template cards without navigating", async () => {
+  it("uses template cards directly", async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/templates"]}>
@@ -79,11 +80,17 @@ describe("TemplatesPage", () => {
 
     await user.click(editorialCard as HTMLElement);
 
-    expect(navigateMock).not.toHaveBeenCalled();
-    expect(editorialCard).toHaveAttribute("data-selected", "true");
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/proposal?templateId=editorial",
+      {
+        state: expect.objectContaining({
+          proposalWorkspaceResetToken: expect.any(String),
+        }),
+      },
+    );
   });
 
-  it("shows a quiet arrow use-template action on the selected card", () => {
+  it("keeps template cards compact without an explicit arrow action", () => {
     render(
       <MemoryRouter initialEntries={["/templates"]}>
         <TemplatesPage />
@@ -94,26 +101,17 @@ describe("TemplatesPage", () => {
       .getByText("Minimal", { selector: ".dasti-template-card__title" })
       .closest(".dasti-template-card");
     expect(selectedCard).toBeTruthy();
-    const useButton = within(selectedCard as HTMLElement).getByRole("button", {
-      name: "Use Minimal template",
-    });
-    expect(useButton).toBeInTheDocument();
-    expect(useButton).toHaveAttribute("data-toolbar-tooltip", "Use this template");
-    expect(useButton).toHaveAttribute("aria-describedby");
-    expect(within(selectedCard as HTMLElement).queryByLabelText("Selected")).toBeNull();
+    expect(selectedCard).toHaveAccessibleName("Use Minimal template");
+    expect(selectedCard?.querySelector(".dasti-template-card__quick-action")).toBeNull();
 
     const frenchCard = screen
       .getByText("French", { selector: ".dasti-template-card__title" })
       .closest(".dasti-template-card");
     expect(frenchCard).toBeTruthy();
-    expect(
-      within(frenchCard as HTMLElement).queryByRole("button", {
-        name: "Use French template",
-      }),
-    ).toBeNull();
+    expect(frenchCard?.querySelector(".dasti-template-card__quick-action")).toBeNull();
   });
 
-  it("uses the selected resume template from the arrow on the first click", async () => {
+  it("uses the selected resume template from the card click", async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/templates"]}>
@@ -127,13 +125,6 @@ describe("TemplatesPage", () => {
       .closest(".dasti-template-card");
     expect(frenchCard).toBeTruthy();
     await user.click(frenchCard as HTMLElement);
-    expect(navigateMock).not.toHaveBeenCalled();
-
-    await user.click(
-      within(frenchCard as HTMLElement).getByRole("button", {
-        name: "Use French template",
-      }),
-    );
 
     expect(navigateMock).toHaveBeenCalledTimes(1);
     expect(navigateMock).toHaveBeenCalledWith(
@@ -154,12 +145,6 @@ describe("TemplatesPage", () => {
       .closest(".dasti-template-card");
     expect(editorialCard).toBeTruthy();
     await user.click(editorialCard as HTMLElement);
-
-    await user.click(
-      within(editorialCard as HTMLElement).getByRole("button", {
-        name: "Use Editorial template",
-      }),
-    );
 
     expect(navigateMock).toHaveBeenCalledWith(
       "/proposal?templateId=editorial",
