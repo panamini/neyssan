@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  findInlinePaperEditableForSelection,
+  getDomRangeSelectionState,
   getDomSelectionState,
   getTextareaSelectionState,
 } from "../editor-ai-selection";
@@ -104,6 +106,108 @@ describe("getDomSelectionState", () => {
     } as Selection);
 
     expect(getDomSelectionState(root)).toBeNull();
+  });
+});
+
+describe("findInlinePaperEditableForSelection", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("keeps the inline AI toolbar target when focus lands on a wrapper outside the editable text", () => {
+    const root = document.createElement("div");
+    const wrapper = document.createElement("section");
+    const editable = document.createElement("span");
+    editable.dataset.inlinePaperEditable = "true";
+    editable.textContent = "Selected target text";
+    wrapper.appendChild(editable);
+    root.appendChild(wrapper);
+    document.body.appendChild(root);
+
+    const textNode = editable.firstChild;
+    expect(textNode).toBeTruthy();
+    const range = document.createRange();
+    range.setStart(textNode as Text, 0);
+    range.setEnd(textNode as Text, "Selected".length);
+
+    const selection = {
+      rangeCount: 1,
+      focusNode: root,
+      anchorNode: root,
+      getRangeAt: () => range,
+    } as unknown as Selection;
+
+    expect(findInlinePaperEditableForSelection(root, selection)).toBe(editable);
+  });
+
+  it("does not choose an arbitrary target when a selection spans multiple editables", () => {
+    const root = document.createElement("div");
+    const first = document.createElement("span");
+    const second = document.createElement("span");
+    first.dataset.inlinePaperEditable = "true";
+    second.dataset.inlinePaperEditable = "true";
+    first.textContent = "First field";
+    second.textContent = "Second field";
+    root.append(first, document.createTextNode(" "), second);
+    document.body.appendChild(root);
+
+    const range = document.createRange();
+    range.setStart(first.firstChild as Text, 0);
+    range.setEnd(second.firstChild as Text, 6);
+
+    const selection = {
+      rangeCount: 1,
+      focusNode: root,
+      anchorNode: root,
+      getRangeAt: () => range,
+    } as unknown as Selection;
+
+    expect(findInlinePaperEditableForSelection(root, selection)).toBeNull();
+  });
+});
+
+describe("getDomRangeSelectionState", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.innerHTML = "";
+  });
+
+  it("remeasures the cloned range anchor after the document scrolls", () => {
+    const root = document.createElement("div");
+    const content = document.createElement("span");
+    content.textContent = "Moving selection";
+    root.appendChild(content);
+    document.body.appendChild(root);
+
+    let rect = new DOMRect(420, 80, 120, 20);
+    vi.spyOn(root, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(100, 0, 700, 500),
+    );
+    const range = {
+      commonAncestorContainer: content,
+      getBoundingClientRect: () => rect,
+      getClientRects: () => [rect],
+    } as unknown as Range;
+
+    expect(getDomRangeSelectionState(root, range, "Moving")).toEqual({
+      text: "Moving",
+      anchor: expect.objectContaining({
+        left: 480,
+        leftEdge: 420,
+        rightEdge: 540,
+      }),
+    });
+
+    rect = new DOMRect(360, 80, 120, 20);
+
+    expect(getDomRangeSelectionState(root, range, "Moving")).toEqual({
+      text: "Moving",
+      anchor: expect.objectContaining({
+        left: 420,
+        leftEdge: 360,
+        rightEdge: 480,
+      }),
+    });
   });
 });
 
