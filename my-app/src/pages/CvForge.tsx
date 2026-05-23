@@ -7843,6 +7843,7 @@ export function CvForge(): JSX.Element {
             onRunListAiSuggestion={handleRunListAiSuggestion}
             onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
             onDismissListAiSuggestion={handleDismissListAiSuggestion}
+            onClearListAiSuggestions={handleClearListAiSuggestions}
           />
           <Sheet
             open={importReviewOpen}
