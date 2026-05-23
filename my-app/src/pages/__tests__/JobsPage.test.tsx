@@ -517,12 +517,16 @@ describe("JobsPage", () => {
     ).toBeGreaterThan(0);
     expect((await screen.findAllByText("Acme")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText("Paris")).length).toBeGreaterThan(0);
-    expect((await screen.findAllByText("Verdict")).length).toBeGreaterThan(0);
-    const matchVerdict = await screen.findByText("Worth a shot — review.");
-    expect(matchVerdict).toBeInTheDocument();
-    expect(matchVerdict.closest(".dasti-job-match-panel__verdict")).toHaveClass(
-      "ds-verdict",
+    const matchVerdict = await screen.findByLabelText(
+      "Current match: Worth a shot",
     );
+    expect(matchVerdict).toBeInTheDocument();
+    expect(
+      matchVerdict.closest(".dasti-job-match-panel__verdict-badge"),
+    ).toHaveClass("ds-verdict");
+    expect(
+      await screen.findByText("Compatibility analysis"),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "See full breakdown" }));
     expect(
       (await screen.findAllByText("Cross-functional communication")).length,
@@ -553,6 +557,9 @@ describe("JobsPage", () => {
     expect(generateProposalAction).not.toHaveClass("ds-btn");
     expect(generateProposalAction.querySelector("svg")).toBeNull();
     expect(generateProposalAction.querySelector(".ds-btn__period")).toBeNull();
+    expect(
+      within(jobActions).getByRole("button", { name: "Skip and archive job" }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Common next steps")).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Next step" })).toBeNull();
     expect(
@@ -651,8 +658,12 @@ describe("JobsPage", () => {
     ).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("llm keyword").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("Check")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Keep" })).not.toBeInTheDocument();
-    expect(screen.getAllByLabelText("Validated").length).toBeGreaterThanOrEqual(3);
+    expect(
+      screen.queryByRole("button", { name: "Keep" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText("Validated").length).toBeGreaterThanOrEqual(
+      3,
+    );
     expect(screen.getAllByText("Summary").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Requirements").length).toBeGreaterThanOrEqual(
       1,
@@ -672,8 +683,8 @@ describe("JobsPage", () => {
     expect(
       screen.queryByText("Run recurring workflows"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Worth a shot — review.")).toBeInTheDocument();
-    expect(screen.getAllByText("Verdict").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Compatibility analysis")).toBeInTheDocument();
+    expect(screen.queryByText("Verdict")).not.toBeInTheDocument();
     expect(screen.queryByText("AI extracted")).not.toBeInTheDocument();
     expect(
       screen.queryByText("visibleExtractionSource"),
@@ -755,8 +766,8 @@ describe("JobsPage", () => {
     expect(
       screen.queryByText("At Texas Roadhouse, we are a people-first company."),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Worth a shot — review.")).toBeInTheDocument();
-    expect(screen.getAllByText("Verdict").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Compatibility analysis")).toBeInTheDocument();
+    expect(screen.queryByText("Verdict")).not.toBeInTheDocument();
   });
 
   it("does not show the structured shadow comparison for normal detail data", async () => {
@@ -774,7 +785,7 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByText("Worth a shot — review."),
+      await screen.findByText("Compatibility analysis"),
     ).toBeInTheDocument();
     expect(screen.queryByText("Structured shadow comparison")).toBeNull();
     expect(screen.queryByTestId("jobs-match-input-debug-panel")).toBeNull();
@@ -800,7 +811,7 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByText("Worth a shot — review."),
+      await screen.findByText("Compatibility analysis"),
     ).toBeInTheDocument();
     expect(
       screen.queryByTestId("jobs-structured-shadow-internal-panel"),
@@ -827,7 +838,7 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByText("Worth a shot — review."),
+      await screen.findByText("Compatibility analysis"),
     ).toBeInTheDocument();
     expect(
       screen.queryByTestId("jobs-structured-shadow-internal-panel"),
@@ -875,7 +886,7 @@ describe("JobsPage", () => {
     expect(within(panel).getByText(/metadata leaks\s+0/)).toBeInTheDocument();
     expect(within(panel).getByText("language preserved")).toBeInTheDocument();
     expect(within(panel).getByText("provenance complete")).toBeInTheDocument();
-    expect(screen.getByText("Worth a shot — review.")).toBeInTheDocument();
+    expect(screen.getByText("Compatibility analysis")).toBeInTheDocument();
     expect(screen.queryByText(/AI score/i)).toBeNull();
     expect(screen.queryByText(/New score/i)).toBeNull();
     expect(screen.queryByText(/Better score/i)).toBeNull();
@@ -920,7 +931,7 @@ describe("JobsPage", () => {
     expect(within(panel).getByText(/tier\s+partial/)).toBeInTheDocument();
     expect(within(panel).getByText(/score\s+78/)).toBeInTheDocument();
     expect(within(panel).getByText(/tier\s+strong/)).toBeInTheDocument();
-    expect(screen.getByText("Worth a shot — review.")).toBeInTheDocument();
+    expect(screen.getByText("Compatibility analysis")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Generate proposal" }),
     ).toBeInTheDocument();
@@ -950,7 +961,7 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByText("Worth a shot — review."),
+      await screen.findByText("Compatibility analysis"),
     ).toBeInTheDocument();
     expect(
       screen.queryByTestId("jobs-structured-preview-advisory-panel"),
@@ -982,7 +993,7 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByText("Worth a shot — review."),
+      await screen.findByText("Compatibility analysis"),
     ).toBeInTheDocument();
     expect(
       screen.queryByTestId("jobs-structured-preview-advisory-panel"),
@@ -1012,7 +1023,7 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByText("Worth a shot — review."),
+      await screen.findByText("Compatibility analysis"),
     ).toBeInTheDocument();
     expect(
       await screen.findByTestId("jobs-structured-preview-advisory-panel"),
@@ -1074,7 +1085,7 @@ describe("JobsPage", () => {
         notes: "Needs another evidence pass.",
       });
     });
-    expect(screen.getByText("Worth a shot — review.")).toBeInTheDocument();
+    expect(screen.getByText("Compatibility analysis")).toBeInTheDocument();
     expect(within(panel).getByText(/tier\s+partial/)).toBeInTheDocument();
   });
 
@@ -1095,7 +1106,7 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByText("Worth a shot — review."),
+      await screen.findByText("Compatibility analysis"),
     ).toBeInTheDocument();
     expect(
       screen.queryByTestId("jobs-structured-shadow-internal-panel"),
@@ -1122,7 +1133,7 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByText("Worth a shot — review."),
+      await screen.findByText("Compatibility analysis"),
     ).toBeInTheDocument();
     expect(
       screen.queryByTestId("jobs-structured-preview-advisory-panel"),
@@ -1232,7 +1243,7 @@ describe("JobsPage", () => {
     expect(
       within(block).getByText("Cross-functional communication"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Worth a shot — review.")).toBeInTheDocument();
+    expect(screen.getByText("Compatibility analysis")).toBeInTheDocument();
     expect(screen.queryByText(/AI score/i)).toBeNull();
     expect(screen.queryByText(/new score/i)).toBeNull();
   });
@@ -1267,19 +1278,20 @@ describe("JobsPage", () => {
     const breakdownButton = within(matchRegion).getByRole("button", {
       name: "See full breakdown",
     });
-    expect(breakdownButton).toHaveClass("ds-btn", "ds-btn--sm", "ds-btn--accent");
+    expect(breakdownButton).toHaveClass("ds-btn", "ds-btn--sm");
+    expect(breakdownButton).not.toHaveClass("ds-btn--accent");
     fireEvent.click(breakdownButton);
     expect(
       within(matchRegion).getByText("Customer-facing experience"),
     ).toBeInTheDocument();
-    expect(within(matchRegion).getByText("Paris · match.")).toBeInTheDocument();
+    expect(within(matchRegion).getByText(/Paris · match/)).toBeInTheDocument();
     expect(within(matchRegion).queryByText("Compensation")).toBeNull();
     expect(within(matchRegion).queryByText("Acme")).toBeNull();
     expect(
       within(matchRegion).queryByText("Equal opportunity employer"),
     ).toBeNull();
-    expect(screen.getByText("Worth a shot — review.")).toBeInTheDocument();
-    expect(screen.getAllByText("Verdict").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Compatibility analysis")).toBeInTheDocument();
+    expect(screen.queryByText("Verdict")).not.toBeInTheDocument();
     expect(screen.queryByText("AI extracted")).not.toBeInTheDocument();
   });
 
@@ -1309,9 +1321,6 @@ describe("JobsPage", () => {
     );
 
     const matchRegion = await screen.findByLabelText("Match");
-    expect(
-      within(matchRegion).getByText("Worth a shot — apply."),
-    ).toBeInTheDocument();
     expect(
       within(matchRegion).getByText("Partial match. A few checks left."),
     ).toBeInTheDocument();
@@ -1379,7 +1388,7 @@ describe("JobsPage", () => {
 
     const matchRegion = await screen.findByLabelText("Match");
     expect(
-      within(matchRegion).getByText("Worth a shot — apply."),
+      within(matchRegion).getByText("Partial match. A few checks left."),
     ).toBeInTheDocument();
     expect(within(matchRegion).queryByText(/Probably skip/)).toBeNull();
   });
@@ -1416,11 +1425,11 @@ describe("JobsPage", () => {
 
     const matchRegion = await screen.findByLabelText("Match");
     expect(
-      within(matchRegion).getByText("Worth a shot — verify first."),
+      within(matchRegion).getByText(/Guard card\/license unclear/),
     ).toBeInTheDocument();
     expect(within(matchRegion).getByText("Skills")).toBeInTheDocument();
     expect(
-      within(matchRegion).getByText("Guard card/license unclear."),
+      within(matchRegion).getByText(/Guard card\/license unclear/),
     ).toBeInTheDocument();
     expect(
       within(matchRegion).queryByText("Weekend availability is a check."),
@@ -1448,10 +1457,12 @@ describe("JobsPage", () => {
 
     const matchRegion = await screen.findByLabelText("Match");
     expect(
-      within(matchRegion).getByText("Worth a shot — review."),
+      within(matchRegion).getByText("Compatibility analysis"),
     ).toBeInTheDocument();
     expect(within(matchRegion).getByText("Skills")).toBeInTheDocument();
-    expect(within(matchRegion).queryByText("Worth a shot — apply.")).toBeNull();
+    expect(
+      within(matchRegion).queryByText("Partial match. A few checks left."),
+    ).toBeNull();
   });
 
   it("falls back to the existing matchRead block when matchReview has not enough signal", async () => {
@@ -1477,7 +1488,7 @@ describe("JobsPage", () => {
 
     const matchRegion = await screen.findByLabelText("Match");
     expect(
-      within(matchRegion).getByText("Worth a shot — review."),
+      within(matchRegion).getByText("Compatibility analysis"),
     ).toBeInTheDocument();
     expect(within(matchRegion).getByText("Skills")).toBeInTheDocument();
     expect(
@@ -1533,7 +1544,9 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findAllByText("Junior Web Developer")).not.toHaveLength(0);
+    expect(await screen.findAllByText("Junior Web Developer")).not.toHaveLength(
+      0,
+    );
     expect(screen.queryByText("Junior Web Developer:")).not.toBeInTheDocument();
   });
 
@@ -1737,7 +1750,9 @@ describe("JobsPage", () => {
       expect(
         screen.getByRole("button", { name: "Attached resume: Primary resume" }),
       ).toBeInTheDocument();
-      expect(screen.getByText("Strong match — review.")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Current match: Strong match"),
+      ).toBeInTheDocument();
       expect(
         (
           screen.getByLabelText(
@@ -1883,7 +1898,7 @@ describe("JobsPage", () => {
     );
 
     expect(
-      await screen.findByText("Worth a shot — review."),
+      await screen.findByText("Compatibility analysis"),
     ).toBeInTheDocument();
     expect(
       await screen.findByRole("button", {
@@ -1906,7 +1921,9 @@ describe("JobsPage", () => {
         resumeId: "cv_beta",
         resumeName: "Secondary resume",
       });
-      expect(screen.getByText("Strong match — review.")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Current match: Strong match"),
+      ).toBeInTheDocument();
       expect(
         screen.getByRole("button", {
           name: "Attached resume: Secondary resume",
@@ -1993,7 +2010,7 @@ describe("JobsPage", () => {
       expect(refreshStructuredMatchMock).toHaveBeenCalledWith({
         jobId: "job_alpha",
       });
-      expect(screen.getByText("Worth a shot — review.")).toBeInTheDocument();
+      expect(screen.getByText("Compatibility analysis")).toBeInTheDocument();
     });
   });
 
@@ -2110,9 +2127,7 @@ describe("JobsPage", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(
-      await screen.findByText("Operations Associate"),
-    );
+    fireEvent.click(await screen.findByText("Operations Associate"));
 
     await waitFor(() => {
       expect(screen.getByTestId("jobs-location")).toHaveTextContent(
@@ -2123,14 +2138,12 @@ describe("JobsPage", () => {
     const detailPane = await screen.findByRole("region", {
       name: "Job detail",
     });
-    expect(
-      within(detailPane).getByLabelText("Match panel"),
-    ).toBeInTheDocument();
+    expect(within(detailPane).getByLabelText("Match")).toBeInTheDocument();
     expect(
       within(detailPane).getByText("LLM visible summary for the selected job."),
     ).toBeInTheDocument();
     expect(
-      within(detailPane).getByText("Worth a shot — review."),
+      within(detailPane).getByText("Compatibility analysis"),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("region", { name: "Selected job detail" }),
@@ -2140,7 +2153,10 @@ describe("JobsPage", () => {
   it("renders favorite state as row meta instead of a row action", async () => {
     listResult = jobsList.map((job) =>
       job.id === "job_beta"
-        ? { ...job, location: "Miami, FL · 1 month ago · 19 people clicked apply" }
+        ? {
+            ...job,
+            location: "Miami, FL · 1 month ago · 19 people clicked apply",
+          }
         : job,
     );
 
@@ -2159,8 +2175,12 @@ describe("JobsPage", () => {
     expect(
       within(supportRow as HTMLElement).getByLabelText("Favorite"),
     ).toBeInTheDocument();
-    expect(within(supportRow as HTMLElement).getByText("Miami, FL")).toBeInTheDocument();
-    expect(within(supportRow as HTMLElement).queryByText(/people clicked apply/i)).toBeNull();
+    expect(
+      within(supportRow as HTMLElement).getByText("Miami, FL"),
+    ).toBeInTheDocument();
+    expect(
+      within(supportRow as HTMLElement).queryByText(/people clicked apply/i),
+    ).toBeNull();
     expect(
       within(supportRow as HTMLElement).queryByRole("button", {
         name: "Remove Support Specialist from favorites",
@@ -2256,10 +2276,16 @@ describe("JobsPage", () => {
     expect(
       screen.queryByRole("button", { name: "Capture with extension" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Worth a shot" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Worth a shot" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Favorites" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "+ Filters" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Favorites" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "+ Filters" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "+ Add job" }));
     expect(
@@ -2435,9 +2461,9 @@ describe("JobsPage", () => {
     expect(
       within(jobsListElement).getByText("Support Specialist"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Worth a shot" })).not.toHaveClass(
-      "dasti-jobs-filter-chip--active",
-    );
+    expect(
+      screen.getByRole("button", { name: "Worth a shot" }),
+    ).not.toHaveClass("dasti-jobs-filter-chip--active");
     expect(screen.getByRole("button", { name: "+ Filters" })).toBeEnabled();
     const supportRow = within(jobsListElement)
       .getByText("Support Specialist")
@@ -2482,7 +2508,6 @@ describe("JobsPage", () => {
     expect(
       await screen.findByText("No jobs match this search"),
     ).toBeInTheDocument();
-
   });
 
   it("filters unviewed jobs and marks opened jobs as viewed", async () => {
@@ -2940,9 +2965,7 @@ describe("JobsPage", () => {
 
     expect(await screen.findByText("Start with one job.")).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /^Add a job\b/i }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /^Add a job\b/i }));
 
     await waitFor(() => {
       expect(onboardingReplayListener).toHaveBeenCalled();
@@ -3030,7 +3053,7 @@ describe("JobsPage", () => {
 
     expect(await screen.findByText("Start with one job.")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Try a sample" }));
+    fireEvent.click(screen.getByRole("button", { name: /Try a sample/ }));
 
     expect(await screen.findAllByText("Sample")).not.toHaveLength(0);
     expect(seedSampleJobMock).toHaveBeenCalledWith({});
@@ -3051,7 +3074,7 @@ describe("JobsPage", () => {
 
     expect(await screen.findByText("Start with one job.")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Try a sample" }));
+    fireEvent.click(screen.getByRole("button", { name: /Try a sample/ }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Sample failed.",

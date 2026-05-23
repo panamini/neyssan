@@ -45,25 +45,6 @@ function formatSuggestedNextStep(nextStep?: string | null): string {
   }
 }
 
-function formatVerdictHeadline(label: string, nextStep?: string | null): string {
-  if (label === "Probably skip") {
-    return "Probably skip.";
-  }
-
-  switch (nextStep) {
-    case "apply":
-      return `${label} — apply.`;
-    case "apply_if_requirement_true":
-      return `${label} — verify first.`;
-    case "improve_profile_first":
-      return `${label} — improve CV.`;
-    case "skip":
-      return `${label} — skip.`;
-    default:
-      return `${label} — review.`;
-  }
-}
-
 function formatSentence(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return "Not enough signal yet.";
@@ -85,13 +66,11 @@ export function JobMatchPanel({
   onToggleExpanded,
   onRefreshMatch,
 }: JobMatchPanelProps): JSX.Element {
-  const { label: verdictLabel, tone } = resolveVisibleJobVerdict(
-    {
-      matchReview,
-      matchRead: { tier },
-      matchTier: tier,
-    },
-  );
+  const { label: verdictLabel, tone } = resolveVisibleJobVerdict({
+    matchReview,
+    matchRead: { tier },
+    matchTier: tier,
+  });
   const skillsCopy =
     matched.length > 0
       ? `${matched.slice(0, 3).join(", ")} — strong overlap.`
@@ -103,8 +82,13 @@ export function JobMatchPanel({
     ? `${jobLocation.trim()} · match.`
     : "Location unavailable.";
   const gapCopy =
-    missing.length > 0 ? formatSentence(`${missing[0]} needs review`) : "No major gap flagged.";
-  const watchOutCopy = watchOutItems[0] ? formatSentence(watchOutItems[0]) : gapCopy;
+    missing.length > 0
+      ? formatSentence(`${missing[0]} needs review`)
+      : "No major gap flagged.";
+  const watchOutCopy = watchOutItems[0]
+    ? formatSentence(watchOutItems[0])
+    : gapCopy;
+  const gapAndLogisticsCopy = `${watchOutCopy} ${locationCopy}`;
   const explanation =
     oneLiner?.trim() ||
     `${formatSuggestedNextStep(suggestedNextStep)} ${gapCopy}`;
@@ -118,30 +102,37 @@ export function JobMatchPanel({
     >
       <div className="dasti-proposal-sheet__header dasti-match-read__header">
         <div className="dasti-job-match-panel__header-line">
-          <div className="ds-card__eyebrow">Verdict</div>
-          {onRefreshMatch ? (
-            <button
-              type="button"
-              className="dasti-job-match-panel__refresh"
-              onClick={onRefreshMatch}
+          <div className="ds-card__eyebrow">Compatibility analysis</div>
+          <div className="dasti-job-match-panel__header-actions">
+            <div
+              className={[
+                "ds-verdict",
+                `ds-verdict--${tone}`,
+                "dasti-job-match-panel__verdict-badge",
+              ].join(" ")}
+              aria-label={`Current match: ${verdictLabel}`}
             >
-              <RotateCcw size={14} strokeWidth={1.8} aria-hidden="true" />
-              Refresh match
-            </button>
-          ) : null}
+              <span className="ds-verdict__dot" aria-hidden="true" />
+              {verdictLabel}
+            </div>
+            {onRefreshMatch ? (
+              <button
+                type="button"
+                className="dasti-job-match-panel__refresh"
+                onClick={onRefreshMatch}
+              >
+                <RotateCcw size={14} strokeWidth={1.8} aria-hidden="true" />
+                Refresh match
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="dasti-stack dasti-match-read__copy">
-          <div
-            className={[
-              "ds-verdict",
-              `ds-verdict--${tone}`,
-              "dasti-job-match-panel__verdict",
-            ].join(" ")}
+          <p
+            className={`dasti-job-match-panel__explanation dasti-job-match-panel__explanation--${tone}`}
           >
-            <span className="ds-verdict__dot" aria-hidden="true" />
-            {formatVerdictHeadline(verdictLabel, suggestedNextStep)}
-          </div>
-          <p className="dasti-job-match-panel__explanation">{explanation}</p>
+            {explanation}
+          </p>
         </div>
       </div>
 
@@ -154,19 +145,15 @@ export function JobMatchPanel({
         <dd>
           <span>{seniorityCopy}</span>
         </dd>
-        <dt>Location</dt>
+        <dt>Gaps</dt>
         <dd>
-          <span>{locationCopy}</span>
-        </dd>
-        <dt>Gap</dt>
-        <dd>
-          <span>{watchOutCopy}</span>
+          <span>{gapAndLogisticsCopy}</span>
         </dd>
       </dl>
 
       <button
         type="button"
-        className="ds-btn ds-btn--sm ds-btn--accent dasti-job-match-panel__breakdown"
+        className="ds-btn ds-btn--sm dasti-job-match-panel__breakdown"
         onClick={onToggleExpanded}
       >
         {isExpanded ? "Hide breakdown" : "See full breakdown"}
@@ -193,16 +180,16 @@ export function JobMatchPanel({
           {missing.length > 0 ? (
             <div className="dasti-brief-card__summary-block">
               <div className="dasti-brief-card__summary-label">Missing</div>
-              <div className="dasti-jobs-detail-section__stack">
+              <ul className="dasti-job-match-panel__missing-list">
                 {missing.map((item) => (
-                  <div
+                  <li
                     key={`missing-${item}`}
                     className="dasti-jobs-detail-section__item"
                   >
                     {item}
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           ) : null}
 
