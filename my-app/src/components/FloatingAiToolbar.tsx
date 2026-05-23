@@ -338,8 +338,14 @@ export function FloatingAiToolbar({
     enabled: open && anchor !== null,
   });
   const shouldRenderToolbar = isToolbarMounted && renderAnchor !== null;
+  const hasMeasuredToolbarMetrics =
+    metrics.panelWidth > 0 && metrics.panelHeight > 0;
   const isPositionReady =
-    open && anchor !== null && position !== null && hasMeasuredInitialMetrics;
+    open &&
+    anchor !== null &&
+    position !== null &&
+    hasMeasuredInitialMetrics &&
+    hasMeasuredToolbarMetrics;
 
   React.useEffect(() => {
     onSurfacePlacementChange?.(isPositionReady ? position : null);
@@ -369,8 +375,8 @@ export function FloatingAiToolbar({
           aria-label="Selected text actions"
           style={{
             position: "absolute",
-            left: position?.left ?? renderAnchor.left,
-            top: position?.top ?? renderAnchor.top,
+            left: isPositionReady && position ? position.left : renderAnchor.left,
+            top: isPositionReady && position ? position.top : renderAnchor.top,
             zIndex: 11000,
             visibility: isPositionReady ? "visible" : "hidden",
             pointerEvents: isPositionReady ? "auto" : "none",
