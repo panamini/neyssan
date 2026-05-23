@@ -243,6 +243,8 @@ vi.mock("../../features/verbati/cvDocumentToResumeData", () => ({
 }));
 
 vi.mock("../../lib/editor-ai-selection", () => ({
+  findInlinePaperEditableForSelection: (root: HTMLElement | null) =>
+    root?.querySelector('[data-inline-paper-editable="true"]') ?? null,
   getDomSelectionState: () => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
@@ -579,7 +581,7 @@ describe("CvForge workspace preview integration", () => {
       await user.click(await screen.findByRole("button", { name: "Rewrite" }));
       expect(await screen.findByText("Built better.")).toBeInTheDocument();
 
-      await user.click(screen.getByRole("button", { name: "Replace" }));
+      await user.click(screen.getByRole("button", { name: "Replace in Summary" }));
       expect(await screen.findByText("Applied.")).toBeInTheDocument();
       expect(screen.getByTestId("mock-rich-summary")).toHaveTextContent(
         "Built better.",

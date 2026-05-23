@@ -346,13 +346,13 @@
 
 .dasti-cv-ai-review__status,
 .dasti-cv-ai-review__accepted {
-  padding: var(--space-2);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-card);
-  background: var(--sf2);
+  margin: 0;
+  padding: 0;
   color: var(--ti);
   font-size: var(--text-body-sm-size);
   line-height: var(--text-body-sm-line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .dasti-cv-ai-review__accepted {

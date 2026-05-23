@@ -1,5 +1,10 @@
 import React from "react";
 import { ArrowLeft } from "@/lib/icons";
+import {
+  useCvAiSurfacePosition,
+  type CvAiSurfacePlacement,
+  type CvAiSurfacePosition,
+} from "@/lib/cv-ai-surface-position";
 import BodyPortal from "../ui/body-portal";
 import type { EditorSelectionAnchor } from "../../lib/editor-ai-selection";
 
@@ -26,6 +31,8 @@ type CvAiReviewOverlayProps = {
   actionId?: string;
   interactionId?: string;
   anchor?: EditorSelectionAnchor | null;
+  preferredPlacement?: CvAiSurfacePlacement | null;
+  preferredSurfacePosition?: CvAiSurfacePosition | null;
   primaryActionLabel?: string;
   onAccept: () => void;
   onDiscard: () => void;
@@ -35,21 +42,14 @@ type CvAiReviewOverlayProps = {
   onUndo?: () => void;
 };
 
-const MOBILE_BREAKPOINT = 760;
-const OVERLAY_MIN_WIDTH = 320;
 const OVERLAY_MAX_WIDTH = 420;
-const OVERLAY_MIN_HEIGHT = 220;
 const ESTIMATED_POPOVER_HEIGHT = 320;
-const STAGE_SELECTOR = [
-  ".dasti-cv-paper-stage",
-  ".dasti-doc-viewport--resume-panel[data-document-stage='true']",
-  ".dasti-document-stage__canvas[data-document-page='true']",
-].join(",");
-const TOP_ISLAND_SELECTOR = [
-  "[data-testid='cv-toolbar']",
-  ".forge__stage-bar",
-  ".dasti-proposal-skeleton-stage__bar",
-].join(",");
+const OVERLAY_MIN_WIDTH = 320;
+const OVERLAY_MIN_HEIGHT = 156;
+const OVERLAY_HEADER_HEIGHT = 48;
+const OVERLAY_ACTIONS_HEIGHT = 54;
+const OVERLAY_BODY_VERTICAL_PADDING = 20;
+const OVERLAY_BODY_LINE_HEIGHT = 18;
 
 function buildTargetLabel(target: CvAiReviewTarget): string {
   return [target.sectionLabel, target.itemLabel].filter(Boolean).join(" · ");
@@ -100,168 +100,50 @@ function buildPrimaryActionAriaLabel(
     : primaryActionLabel;
 }
 
-function resolveMode(): "sheet" | "popover" {
-  if (typeof window === "undefined") return "popover";
-  return window.innerWidth <= MOBILE_BREAKPOINT ? "sheet" : "popover";
+function estimateTextLineCount(text: string): number {
+  const normalized = text.trim();
+  if (!normalized) return 1;
+  const explicitLines = normalized.split(/\r?\n/);
+  return explicitLines.reduce((total, line) => {
+    return total + Math.max(1, Math.ceil(line.length / 68));
+  }, 0);
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), Math.max(min, max));
-}
-
-function readCssLengthPx(name: string, fallback: number): number {
-  if (typeof window === "undefined") return fallback;
-  const source =
-    document.querySelector(".dasti-cv-skeleton-forge") ??
-    document.documentElement;
-  const value = window.getComputedStyle(source).getPropertyValue(name).trim();
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function readDocumentRect(selector: string): DOMRect | null {
-  if (typeof document === "undefined") return null;
-  return (
-    document.querySelector<HTMLElement>(selector)?.getBoundingClientRect() ??
-    null
-  );
-}
-
-type PopoverPosition = {
-  style: React.CSSProperties;
-  placement: "above" | "below" | "right" | "left" | "center";
-  clamped: boolean;
-};
-
-function computePopoverPosition(
-  anchor: EditorSelectionAnchor | null | undefined,
-): PopoverPosition | undefined {
-  if (typeof window === "undefined") return undefined;
-
-  const safeMargin = readCssLengthPx("--space-3", 16);
-  const targetGap = readCssLengthPx("--space-3", 12);
-  const stageRect = readDocumentRect(STAGE_SELECTOR);
-  const topIslandRect = readDocumentRect(TOP_ISLAND_SELECTOR);
-  const viewportLeft = window.scrollX + safeMargin;
-  const viewportRight = window.scrollX + window.innerWidth - safeMargin;
-  const viewportTop = window.scrollY + safeMargin;
-  const viewportBottom = window.scrollY + window.innerHeight - safeMargin;
-  const stageLeft =
-    anchor?.containerLeft ??
-    (stageRect ? stageRect.left + window.scrollX : viewportLeft);
-  const stageRight =
-    anchor?.containerRight ??
-    (stageRect ? stageRect.right + window.scrollX : viewportRight);
-  const stageTop =
-    anchor?.containerTop ??
-    (stageRect ? stageRect.top + window.scrollY : viewportTop);
-  const stageBottom =
-    anchor?.containerBottom ??
-    (stageRect ? stageRect.bottom + window.scrollY : viewportBottom);
-  const topIslandBottom = topIslandRect
-    ? topIslandRect.bottom + window.scrollY + safeMargin
-    : viewportTop;
-  const leftBound = Math.max(viewportLeft, Math.min(stageLeft, viewportRight));
-  const rightBound = Math.min(viewportRight, Math.max(stageRight, viewportLeft));
-  const topBound = Math.max(
-    viewportTop,
-    topIslandBottom,
-    Math.min(stageTop, viewportBottom),
-  );
-  const bottomBound = Math.min(viewportBottom, Math.max(stageBottom, viewportTop));
-  const availableWidth = Math.max(0, rightBound - leftBound);
-  const availableHeight = Math.max(0, bottomBound - topBound);
-  const estimatedHeight = Math.min(
-    ESTIMATED_POPOVER_HEIGHT,
-    Math.max(OVERLAY_MIN_HEIGHT, availableHeight),
-  );
-  const height = Math.min(
-    estimatedHeight,
-    Math.max(OVERLAY_MIN_HEIGHT, availableHeight),
-  );
-  const width = Math.min(
-    OVERLAY_MAX_WIDTH,
-    Math.max(0, availableWidth),
-  );
-  const usableWidth = Math.max(0, width);
-  const minUsableWidth = Math.min(OVERLAY_MIN_WIDTH, availableWidth);
-
-  if (!anchor) {
-    const desiredLeft = leftBound + Math.max(0, availableWidth - usableWidth) / 2;
-    const desiredTop = topBound + Math.max(0, availableHeight - height) / 2;
-    const left = clamp(desiredLeft, leftBound, rightBound - usableWidth);
-    const top = clamp(desiredTop, topBound, bottomBound - height);
-    return {
-      placement: "center",
-      clamped: left !== desiredLeft || top !== desiredTop,
-      style: {
-        width: usableWidth,
-        maxHeight: height,
-        left,
-        top,
-      },
-    };
+function estimateCvAiReviewSurfaceHeight({
+  state,
+  afterText,
+  errorMessage,
+}: {
+  state: CvAiReviewState;
+  afterText: string;
+  errorMessage?: string;
+}): number {
+  if (state === "loading") return 112;
+  if (state === "accepted") return 118;
+  if (state === "error") {
+    const lines = estimateTextLineCount(
+      errorMessage ?? "AI suggestion is unavailable.",
+    );
+    return Math.min(
+      ESTIMATED_POPOVER_HEIGHT,
+      OVERLAY_HEADER_HEIGHT +
+        OVERLAY_BODY_VERTICAL_PADDING +
+        lines * OVERLAY_BODY_LINE_HEIGHT +
+        OVERLAY_ACTIONS_HEIGHT,
+    );
   }
 
-  const targetLeft = anchor.leftEdge ?? anchor.focusLeft ?? anchor.left;
-  const targetRight = anchor.rightEdge ?? anchor.focusRight ?? anchor.left;
-  const anchorTop = anchor.focusTop ?? anchor.top;
-  const anchorBottom = anchor.focusBottom ?? anchor.bottom ?? anchor.top;
-  const targetCenterX = targetLeft + Math.max(1, targetRight - targetLeft) / 2;
-  const targetCenterY = anchorTop + Math.max(1, anchorBottom - anchorTop) / 2;
-  const rightSpace = rightBound - targetRight - targetGap;
-  const belowSpace = bottomBound - anchorBottom - targetGap;
-  const aboveSpace = anchorTop - topBound - targetGap;
-  const leftSpace = targetLeft - leftBound - targetGap;
-  const canPlaceRight = rightSpace >= minUsableWidth;
-  const canPlaceBelow = belowSpace >= OVERLAY_MIN_HEIGHT;
-  const canPlaceAbove = aboveSpace >= OVERLAY_MIN_HEIGHT;
-  const canPlaceLeft = leftSpace >= minUsableWidth;
-  const placement: PopoverPosition["placement"] = canPlaceRight
-    ? "right"
-    : canPlaceBelow
-      ? "below"
-      : canPlaceAbove
-        ? "above"
-        : canPlaceLeft
-          ? "left"
-          : "center";
-  const desiredLeft =
-    placement === "right"
-      ? targetRight + targetGap
-      : placement === "left"
-        ? targetLeft - targetGap - usableWidth
-        : placement === "center"
-          ? targetCenterX < leftBound + availableWidth / 2
-            ? rightBound - usableWidth
-            : leftBound
-          : targetCenterX - usableWidth / 2;
-  const desiredTop =
-    placement === "below"
-      ? anchorBottom + targetGap
-      : placement === "above"
-        ? anchorTop - targetGap - height
-        : placement === "center"
-          ? targetCenterY < topBound + availableHeight / 2
-            ? Math.min(anchorBottom + targetGap, bottomBound - height)
-            : Math.max(anchorTop - targetGap - height, topBound)
-          : targetCenterY - height / 2;
-  const left = clamp(desiredLeft, leftBound, rightBound - usableWidth);
-  const top = clamp(desiredTop, topBound, bottomBound - height);
-
-  return {
-    placement,
-    clamped:
-      Math.round(left) !== Math.round(desiredLeft) ||
-      Math.round(top) !== Math.round(desiredTop) ||
-      usableWidth < OVERLAY_MAX_WIDTH,
-    style: {
-      width: usableWidth,
-      maxHeight: height,
-      left,
-      top,
-    },
-  };
+  const lines = estimateTextLineCount(afterText);
+  return Math.min(
+    ESTIMATED_POPOVER_HEIGHT,
+    Math.max(
+      OVERLAY_MIN_HEIGHT,
+      OVERLAY_HEADER_HEIGHT +
+        OVERLAY_BODY_VERTICAL_PADDING +
+        lines * OVERLAY_BODY_LINE_HEIGHT +
+        OVERLAY_ACTIONS_HEIGHT,
+    ),
+  );
 }
 
 export function CvAiReviewOverlay({
@@ -274,6 +156,8 @@ export function CvAiReviewOverlay({
   actionId,
   interactionId,
   anchor = null,
+  preferredPlacement = null,
+  preferredSurfacePosition = null,
   primaryActionLabel = "Replace",
   onAccept,
   onDiscard,
@@ -282,26 +166,32 @@ export function CvAiReviewOverlay({
 }: CvAiReviewOverlayProps) {
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const previousFocusRef = React.useRef<HTMLElement | null>(null);
-  const [mode, setMode] = React.useState<"popover" | "sheet">(resolveMode);
-  const [, forcePositionUpdate] = React.useReducer(
-    (value: number) => value + 1,
-    0,
-  );
-
-  React.useEffect(() => {
-    if (!open || typeof window === "undefined") return;
-    const handleResize = () => {
-      setMode(resolveMode());
-      forcePositionUpdate();
-    };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    window.addEventListener("scroll", handleResize, true);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      window.removeEventListener("scroll", handleResize, true);
-    };
-  }, [open]);
+  const surfaceState =
+    state === "loading"
+      ? "loading"
+      : state === "accepted"
+        ? "applied"
+        : "result";
+  const estimatedSurfaceHeight = estimateCvAiReviewSurfaceHeight({
+    state,
+    afterText,
+    errorMessage,
+  });
+  const surfacePosition = useCvAiSurfacePosition({
+    anchor,
+    desiredSurfaceSize: {
+      width: OVERLAY_MAX_WIDTH,
+      height: estimatedSurfaceHeight,
+      minWidth: OVERLAY_MIN_WIDTH,
+      minHeight: OVERLAY_MIN_HEIGHT,
+    },
+    mode: surfaceState,
+    preferredPlacement,
+    preferredSurfaceCenterX: preferredSurfacePosition
+      ? preferredSurfacePosition.left + preferredSurfacePosition.maxWidth / 2
+      : null,
+    enabled: open,
+  });
 
   React.useEffect(() => {
     if (!open) return;
@@ -336,27 +226,43 @@ export function CvAiReviewOverlay({
     actionId,
     primaryActionLabel,
   );
-  const headerLabel = `${headerActionLabel} · ${targetLabel}`;
+  const headerLabel = headerActionLabel;
   const primaryActionAriaLabel = buildPrimaryActionAriaLabel(
     primaryActionLabel,
     targetLabel,
   );
-  const popoverPosition =
-    mode === "popover" ? computePopoverPosition(anchor) : undefined;
+  const surfaceMode = surfacePosition?.mode ?? "popover";
   const placement =
-    mode === "sheet" ? "sheet" : popoverPosition?.placement ?? "below";
+    surfaceMode === "sheet" ? "sheet" : surfacePosition?.placement ?? "below";
+  const surfaceStyle: React.CSSProperties | undefined = surfacePosition
+    ? {
+        width: surfacePosition.maxWidth,
+        maxHeight: surfacePosition.maxHeight,
+        left: surfacePosition.left,
+        top: surfacePosition.top,
+      }
+    : undefined;
 
   return (
     <BodyPortal>
       <div
         className="dasti-cv-ai-review-layer"
+        data-cv-ai-surface-group="true"
+        data-cv-ai-surface-state={surfaceState}
+        data-cv-ai-surface-placement={placement}
+        data-cv-ai-surface-clamped={
+          surfacePosition?.clamped ? "true" : "false"
+        }
+        data-cv-ai-surface-mode={surfaceMode}
         data-cv-ai-review-layer="true"
-        data-cv-ai-review-mode={mode}
+        data-cv-ai-review-mode={surfaceMode}
         data-cv-ai-review-placement={placement}
-        data-cv-ai-popup-mode={mode}
+        data-cv-ai-popup-mode={surfaceMode}
         data-cv-ai-popup-placement={placement}
         data-cv-ai-popup-clamped={
-          mode === "popover" && popoverPosition?.clamped ? "true" : "false"
+          surfaceMode === "popover" && surfacePosition?.clamped
+            ? "true"
+            : "false"
         }
         data-cv-ai-review-target-section-id={target.sectionId}
         data-cv-ai-review-section-type={target.sectionType}
@@ -366,7 +272,7 @@ export function CvAiReviewOverlay({
         data-cv-ai-review-interaction-id={interactionId}
         data-cv-ai-review-tokenized="true"
       >
-        {mode === "sheet" ? (
+        {surfaceMode === "sheet" ? (
           <button
             type="button"
             className="dasti-cv-ai-review-layer__scrim"
@@ -382,7 +288,7 @@ export function CvAiReviewOverlay({
           aria-modal="false"
           aria-label={`AI review for ${targetLabel}`}
           tabIndex={-1}
-          style={popoverPosition?.style}
+          style={surfaceStyle}
         >
           <div
             className="dasti-cv-ai-review__toolbar"
@@ -400,14 +306,6 @@ export function CvAiReviewOverlay({
               <span className="dasti-cv-ai-review__action-label">
                 {headerActionLabel}
               </span>
-              {targetLabel ? (
-                <span
-                  className="dasti-cv-ai-review__target-label"
-                  data-cv-ai-review-visible-target="true"
-                >
-                  {targetLabel}
-                </span>
-              ) : null}
             </h2>
           </div>
 

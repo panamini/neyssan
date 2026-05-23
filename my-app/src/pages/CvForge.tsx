@@ -67,6 +67,7 @@ import { useDocumentCommandLayerPosition } from "../hooks/use-document-command-l
 import {
   getCommandLayerToolbarDensity,
 } from "../lib/document-command-layer-layout";
+import type { CvAiSurfacePosition } from "../lib/cv-ai-surface-position";
 import {
   buildAuthoritativeResumeDebugSnapshot,
   buildAuthoritativeResumeExportModel,
@@ -156,6 +157,8 @@ import {
 } from "../lib/ai/aiInteractionTelemetry";
 import { normalizeEditorAiTextResult } from "../lib/ai/applyAiSuggestion";
 import {
+  findInlinePaperEditableForSelection,
+  getDomRangeSelectionState,
   getDomSelectionState,
   isInlineAiToolbarActiveElement,
   isPrimaryPointerPressed,
@@ -3002,6 +3005,8 @@ export function CvForge(): JSX.Element {
   const latestInlineSectionsRef = React.useRef<CvSection[]>([]);
   const [inlinePaperSelectionState, setInlinePaperSelectionState] =
     React.useState<InlinePaperSelectionState | null>(null);
+  const [cvAiSurfacePosition, setCvAiSurfacePosition] =
+    React.useState<CvAiSurfacePosition | null>(null);
   const [cvAskSelectionContext, setCvAskSelectionContext] =
     React.useState<CvAskSelectionContext | null>(null);
   const activeInlinePaperAiRequestIdRef = React.useRef<string | null>(null);
@@ -3020,6 +3025,12 @@ export function CvForge(): JSX.Element {
   React.useEffect(() => {
     cvAiReviewRef.current = cvAiReview;
   }, [cvAiReview]);
+
+  React.useEffect(() => {
+    if (!inlinePaperSelectionState && !cvAiReview) {
+      setCvAiSurfacePosition(null);
+    }
+  }, [cvAiReview, inlinePaperSelectionState]);
 
   const [sectionEditorOpen, setSectionEditorOpen] = React.useState(false);
   const [importReviewOpen, setImportReviewOpen] = React.useState(false);
@@ -4975,12 +4986,9 @@ export function CvForge(): JSX.Element {
     const selectionState = getDomSelectionState(root);
     const selection =
       typeof window !== "undefined" ? window.getSelection() : null;
-    const focusElement =
-      selection?.focusNode instanceof Element
-        ? selection.focusNode
-        : selection?.focusNode?.parentElement;
-    const editableElement = focusElement?.closest(
-      '[data-inline-paper-editable="true"]',
+    const editableElement = findInlinePaperEditableForSelection(
+      root,
+      selection,
     );
     const editTarget = readInlinePaperEditTarget(editableElement);
 
@@ -5024,6 +5032,27 @@ export function CvForge(): JSX.Element {
     [runInlinePaperSelectionCheck],
   );
 
+  const refreshInlinePaperSelectionAnchor = React.useCallback(() => {
+    if (workspaceMode !== "edit") return;
+
+    const root = paperStageRef.current;
+    setInlinePaperSelectionState((current) => {
+      if (!current?.range) return current;
+
+      const refreshedState = getDomRangeSelectionState(
+        root,
+        current.range,
+        current.text,
+      );
+      if (!refreshedState) return current;
+
+      return {
+        ...current,
+        anchor: refreshedState.anchor,
+      };
+    });
+  }, [workspaceMode]);
+
   React.useEffect(() => {
     if (workspaceMode !== "edit") {
       setInlinePaperSelectionState(null);
@@ -5032,14 +5061,33 @@ export function CvForge(): JSX.Element {
 
     const handleSelectionChange = () => scheduleInlinePaperSelectionCheck();
     const handlePointerUp = () => scheduleInlinePaperSelectionCheck();
+    let scrollFrame: number | null = null;
+    const handleScroll = () => {
+      if (scrollFrame !== null) {
+        window.cancelAnimationFrame(scrollFrame);
+      }
+      scrollFrame = window.requestAnimationFrame(() => {
+        scrollFrame = null;
+        refreshInlinePaperSelectionAnchor();
+      });
+    };
 
     document.addEventListener("selectionchange", handleSelectionChange);
     document.addEventListener("pointerup", handlePointerUp);
+    document.addEventListener("scroll", handleScroll, true);
     return () => {
+      if (scrollFrame !== null) {
+        window.cancelAnimationFrame(scrollFrame);
+      }
       document.removeEventListener("selectionchange", handleSelectionChange);
       document.removeEventListener("pointerup", handlePointerUp);
+      document.removeEventListener("scroll", handleScroll, true);
     };
-  }, [scheduleInlinePaperSelectionCheck, workspaceMode]);
+  }, [
+    refreshInlinePaperSelectionAnchor,
+    scheduleInlinePaperSelectionCheck,
+    workspaceMode,
+  ]);
 
   React.useEffect(() => {
     if (workspaceMode !== "edit" || !inlinePaperSelectionState) {
@@ -7673,6 +7721,7 @@ export function CvForge(): JSX.Element {
                       pendingActionId={pendingInlinePaperAiActionId}
                       onClose={() => setInlinePaperSelectionState(null)}
                       onRunAction={handleRunInlinePaperAiAction}
+                      onSurfacePlacementChange={setCvAiSurfacePosition}
                     />
                   ) : null}
                   {cvAiReview ? (
@@ -7686,6 +7735,8 @@ export function CvForge(): JSX.Element {
                       actionId={cvAiReview.actionId}
                       interactionId={cvAiReview.interactionId}
                       anchor={cvAiReview.anchor}
+                      preferredPlacement={cvAiSurfacePosition?.placement}
+                      preferredSurfacePosition={cvAiSurfacePosition}
                       primaryActionLabel={cvAiReview.primaryActionLabel}
                       onAccept={handleAcceptCvAiReview}
                       onDiscard={handleDiscardCvAiReview}
