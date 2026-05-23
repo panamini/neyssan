@@ -383,7 +383,7 @@ function getCurrentCvLanguages(
   cv: CvDocument | null | undefined,
 ): Array<{ name?: string; level?: string }> {
   return (cv?.sections ?? [])
-    .filter((section) => String(section.type) === "languages")
+    .filter((section) => getCanonicalSectionType(section) === "languages")
     .flatMap((section) =>
       getStructuredItems(section as CvSection).map((item) => ({
         name: typeof item.name === "string" ? item.name.trim() : undefined,
@@ -1702,7 +1702,9 @@ function appendListSuggestionToSection(
   );
   if (existing.has(normalizeListName(clean))) return section;
 
-  if (section.type === "languages") {
+  const canonicalType = getCanonicalSectionType(section);
+
+  if (canonicalType === "languages") {
     return {
       ...section,
       structuredContent: [
@@ -1716,7 +1718,7 @@ function appendListSuggestionToSection(
     };
   }
 
-  if (section.type === "skills") {
+  if (canonicalType === "skills") {
     return {
       ...section,
       structuredContent: [
@@ -1730,10 +1732,7 @@ function appendListSuggestionToSection(
     };
   }
 
-  if (
-    String(section.type) === "hobbies" ||
-    section.title.trim().toLowerCase() === "hobbies"
-  ) {
+  if (canonicalType === "hobbies") {
     return {
       ...section,
       structuredContent: [
@@ -1969,11 +1968,11 @@ function getSectionRailAiMode(section: CvSection): "none" | "rail" | "editor" {
 }
 
 function sectionUsesStructuredSuggestions(section: CvSection): boolean {
+  const canonicalType = getCanonicalSectionType(section);
   return (
-    section.type === "skills" ||
-    section.type === "languages" ||
-    String(section.type) === "hobbies" ||
-    section.title.trim().toLowerCase() === "hobbies"
+    canonicalType === "skills" ||
+    canonicalType === "languages" ||
+    canonicalType === "hobbies"
   );
 }
 
@@ -6139,12 +6138,11 @@ export function CvForge(): JSX.Element {
       );
 
       const sectionLabel = section.title || "Section";
-      const isHobbiesSection =
-        String(section.type) === "hobbies" ||
-        section.title.trim().toLowerCase() === "hobbies";
+      const canonicalSectionType = getCanonicalSectionType(section);
+      const isHobbiesSection = canonicalSectionType === "hobbies";
       if (
-        section.type === "skills" ||
-        section.type === "languages" ||
+        canonicalSectionType === "skills" ||
+        canonicalSectionType === "languages" ||
         isHobbiesSection
       ) {
         const existingItems = getListSectionItems(section);
@@ -6172,7 +6170,7 @@ export function CvForge(): JSX.Element {
         try {
           let suggestions: string[] = [];
 
-          if (section.type === "skills") {
+          if (canonicalSectionType === "skills") {
             if (typeof runCvSectionAiAction !== "function") {
               throw new Error("CV AI action is unavailable.");
             }
@@ -6189,7 +6187,7 @@ export function CvForge(): JSX.Element {
               result?.kind === "list" && Array.isArray(result.items)
                 ? result.items.map((item: unknown) => String(item ?? ""))
                 : [];
-          } else if (section.type === "languages") {
+          } else if (canonicalSectionType === "languages") {
             if (typeof runCvSectionAiAction !== "function") {
               throw new Error("CV AI action is unavailable.");
             }
@@ -7307,8 +7305,9 @@ export function CvForge(): JSX.Element {
         ? {
             sectionId: cvRailAiSuggestion.sectionId,
             sectionType:
-              findSectionById(currentSections, cvRailAiSuggestion.sectionId)
-                ?.type ?? "skills",
+              getCanonicalSectionType(
+                findSectionById(currentSections, cvRailAiSuggestion.sectionId),
+              ) ?? "skills",
             items: cvRailAiSuggestion.items,
             state: cvRailAiSuggestion.state,
             errorMessage: cvRailAiSuggestion.errorMessage,

@@ -252,6 +252,10 @@ export function normalizeTextSectionFamily(
     return "achievements";
   }
 
+  if (normalizedTitle === "languages") {
+    return "languages";
+  }
+
   if (normalizedTitle === "hobbies") {
     return "hobbies";
   }
