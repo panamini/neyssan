@@ -38,6 +38,7 @@ import {
 } from "./resumePreviewRegions";
 import {
   InlineEditableText,
+  type ActivePaperEditTarget,
   type InlineEditableTag,
   type ResumeInlineEditing,
 } from "./InlineEditableText";
@@ -69,28 +70,12 @@ export type ResumeSectionActions = {
 };
 
 export type ResumePaperAiState = {
-  textSuggestion?: {
-    key: string;
+  activeTarget?: {
     sectionId: string;
     sectionType: string;
-    itemId: string;
-    beforeText: string;
-    afterText: string;
-    state: "loading" | "ready" | "error" | "accepted";
-    errorMessage?: string;
+    itemId?: string;
+    fieldPath?: string;
   } | null;
-  listSuggestion?: {
-    sectionId: string;
-    sectionType: string;
-    items: string[];
-    state: "loading" | "ready" | "error";
-    errorMessage?: string;
-  } | null;
-  onAcceptTextSuggestion?: (key: string) => void;
-  onDiscardTextSuggestion?: (key: string) => void;
-  onUndoTextSuggestion?: (key: string) => void;
-  onAcceptListSuggestion?: (value: string) => void;
-  onDismissListSuggestion?: (value: string) => void;
 };
 
 const experienceWrapStyle = {
@@ -112,163 +97,6 @@ const workshopVisibleListStyle = {
   listStyleType: "disc" as const,
   listStylePosition: "outside" as const,
 };
-
-const paperAiSuggestionBoxStyle = {
-  display: "grid",
-  gap: "1.4mm",
-  padding: "2mm",
-  border: "0.25mm solid var(--color-border-strong)",
-  borderRadius: "2mm",
-  background: "var(--paper)",
-  fontSize: "var(--text-body-sm-size)",
-  lineHeight: "var(--text-body-sm-line)",
-  color: "var(--color-text)",
-} satisfies React.CSSProperties;
-
-const paperAiButtonRowStyle = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "1.4mm",
-} satisfies React.CSSProperties;
-
-const paperAiButtonStyle = {
-  border: "0.25mm solid var(--color-border-strong)",
-  borderRadius: "999px",
-  background: "var(--paper)",
-  color: "var(--color-text)",
-  font: "inherit",
-  padding: "0.8mm 1.8mm",
-  cursor: "pointer",
-} satisfies React.CSSProperties;
-
-const paperAiPrimaryButtonStyle = {
-  ...paperAiButtonStyle,
-  background: "var(--color-accent)",
-  color: "var(--color-on-accent)",
-  border: "0.25mm solid var(--color-accent)",
-} satisfies React.CSSProperties;
-
-function renderPaperAiTextSuggestion(args: {
-  suggestion: NonNullable<ResumePaperAiState["textSuggestion"]>;
-  onAccept?: (key: string) => void;
-  onDiscard?: (key: string) => void;
-  onUndo?: (key: string) => void;
-}) {
-  const { suggestion } = args;
-
-  if (suggestion.state === "loading") {
-    return (
-      <div style={paperAiSuggestionBoxStyle} role="status" aria-live="polite">
-        Generating suggestion…
-      </div>
-    );
-  }
-
-  if (suggestion.state === "error") {
-    return (
-      <div style={paperAiSuggestionBoxStyle} role="status" aria-live="polite">
-        {suggestion.errorMessage ?? "AI suggestion unavailable."}
-      </div>
-    );
-  }
-
-  if (suggestion.state === "accepted") {
-    return (
-      <div style={paperAiSuggestionBoxStyle} role="status" aria-live="polite">
-        <span>Applied</span>
-        <div style={paperAiButtonRowStyle}>
-          <button
-            type="button"
-            style={paperAiButtonStyle}
-            onClick={() => args.onUndo?.(suggestion.key)}
-          >
-            Undo
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={paperAiSuggestionBoxStyle} data-paper-ai-suggestion="text">
-      <div style={{ display: "grid", gap: "1mm" }}>
-        <del style={{ color: "var(--color-text-muted)", whiteSpace: "pre-wrap" }}>
-          {suggestion.beforeText}
-        </del>
-        <span style={{ whiteSpace: "pre-wrap" }}>{suggestion.afterText}</span>
-      </div>
-      <div style={paperAiButtonRowStyle}>
-        <button
-          type="button"
-          style={paperAiPrimaryButtonStyle}
-          onClick={() => args.onAccept?.(suggestion.key)}
-        >
-          Save
-        </button>
-        <button
-          type="button"
-          style={paperAiButtonStyle}
-          onClick={() => args.onDiscard?.(suggestion.key)}
-        >
-          Discard
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function renderPaperAiListSuggestion(args: {
-  suggestion: NonNullable<ResumePaperAiState["listSuggestion"]>;
-  onAccept?: (value: string) => void;
-  onDismiss?: (value: string) => void;
-}) {
-  const { suggestion } = args;
-
-  if (suggestion.state === "loading") {
-    return (
-      <span style={paperAiSuggestionBoxStyle} role="status" aria-live="polite">
-        Generating suggestions…
-      </span>
-    );
-  }
-
-  if (suggestion.state === "error") {
-    return (
-      <span style={paperAiSuggestionBoxStyle} role="status" aria-live="polite">
-        {suggestion.errorMessage ?? "AI suggestions unavailable."}
-      </span>
-    );
-  }
-
-  return suggestion.items.map((item) => (
-    <span
-      key={`paper-ai-list-suggestion:${item}`}
-      style={{
-        ...paperAiSuggestionBoxStyle,
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "1.4mm",
-      }}
-      data-paper-ai-suggestion="list"
-    >
-      <span>{item}</span>
-      <button
-        type="button"
-        style={paperAiPrimaryButtonStyle}
-        onClick={() => args.onAccept?.(item)}
-      >
-        Save
-      </button>
-      <button
-        type="button"
-        style={paperAiButtonStyle}
-        onClick={() => args.onDismiss?.(item)}
-      >
-        Discard
-      </button>
-    </span>
-  ));
-}
 
 function formatMillimeters(value: number) {
   return `${value}mm`;
@@ -316,15 +144,34 @@ const workshopCompactRowTextStyle = {
   lineHeight: "var(--text-body-sm-line)",
 };
 
+export function shouldRenderPaperSectionAiControl(sectionType: string | undefined) {
+  switch (sectionType) {
+    case "summary":
+    case "text":
+    case "custom":
+    case "additional_information":
+    case "skills":
+    case "languages":
+    case "hobbies":
+      return true;
+    default:
+      return false;
+  }
+}
+
 function renderSectionHeading(args: {
   title: string;
   continued: boolean;
   sectionId?: string;
+  sectionType?: string;
   sectionActions?: ResumeSectionActions | null;
 }) {
   const sectionId = args.sectionId;
   const sectionHidden = Boolean(
     sectionId && args.sectionActions?.hiddenSectionIds.includes(sectionId),
+  );
+  const showSectionAiControl = shouldRenderPaperSectionAiControl(
+    args.sectionType,
   );
   return (
     <div
@@ -373,19 +220,21 @@ function renderSectionHeading(args: {
       />
       {sectionId && args.sectionActions ? (
         <div className="dasti-cv-paper-section-controls" data-paper-section-controls="true">
-          <button
-            type="button"
-            className="dasti-cv-paper-section-control"
-            aria-label={`Ask AI for ${args.title}`}
-            title={`Ask AI for ${args.title}`}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              args.sectionActions?.onAsk(sectionId);
-            }}
-          >
-            <Wand2 size={13} strokeWidth={1.8} aria-hidden="true" />
-          </button>
+          {showSectionAiControl ? (
+            <button
+              type="button"
+              className="dasti-cv-paper-section-control"
+              aria-label={`Ask AI for ${args.title}`}
+              title={`Ask AI for ${args.title}`}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                args.sectionActions?.onAsk(sectionId);
+              }}
+            >
+              <Wand2 size={13} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+          ) : null}
           <button
             type="button"
             className="dasti-cv-paper-section-control"
@@ -648,16 +497,22 @@ function PaperRichInlineEditor(args: {
 
   React.useEffect(() => {
     const nextJson = JSON.stringify(externalDoc);
-    if (nextJson === lastExternalDocJsonRef.current) return;
+    const previousExternalJson = lastExternalDocJsonRef.current;
+    if (nextJson === previousExternalJson) return;
+    const currentEditorJson = JSON.stringify(latestDocRef.current);
+    const hasLocalUncommittedChanges = currentEditorJson !== previousExternalJson;
     lastExternalDocJsonRef.current = nextJson;
-    if (isFocusedRef.current) return;
+    if (isFocusedRef.current && hasLocalUncommittedChanges) return;
     const nextState = (manager as any)?.createState?.({ content: externalDoc as any });
     const view = (manager as any)?.view;
     if (nextState && typeof view?.updateState === "function") {
       view.updateState(nextState);
+      (onChange as unknown as (param: { state: unknown }) => void)({
+        state: nextState,
+      });
       latestDocRef.current = externalDoc;
     }
-  }, [externalDoc, manager]);
+  }, [externalDoc, manager, onChange]);
 
   const handleChange = React.useCallback(
     (param: any) => {
@@ -848,7 +703,7 @@ function renderExperienceContent(args: {
           ariaLabel="Edit experience responsibilities"
           placeholder="Type responsibilities..."
           previewAttrs={buildPreviewRegionAttrs({
-            sectionType: args.sectionType,
+            sectionType: args.sectionType as "experience",
             sectionId: args.sectionId,
             sectionTitle: args.sectionTitle,
             itemId: `${args.item.id ?? "experience"}-responsibilities`,
@@ -1530,13 +1385,10 @@ function renderFragmentContent(args: {
         ...fragment.items.map((item, itemIndex) => {
         const itemFieldPath = (field: string) =>
           `structuredContent.item:${item.id}.${field}`;
-        const textSuggestion =
-          paperAi?.textSuggestion &&
-          paperAi.textSuggestion.sectionId === fragment.sectionId &&
-          paperAi.textSuggestion.sectionType === "experience" &&
-          paperAi.textSuggestion.itemId === item.id
-            ? paperAi.textSuggestion
-            : null;
+        const isAiReviewTarget =
+          paperAi?.activeTarget?.sectionId === fragment.sectionId &&
+          paperAi?.activeTarget?.sectionType === "experience" &&
+          paperAi?.activeTarget?.itemId === item.id;
         return (
           <PreviewItemRegion
             as="article"
@@ -1553,6 +1405,7 @@ function renderFragmentContent(args: {
               gap: formatMillimeters(workshopLayout.experienceBlockGapMm),
             }}
             data-preview-row-id={item.id}
+            data-cv-ai-review-target={isAiReviewTarget ? "true" : undefined}
           >
             {inlineEditing?.enabled && sectionActions?.onAskItem ? (
               <button
@@ -1718,14 +1571,6 @@ function renderFragmentContent(args: {
               listGapMm: workshopLayout.listGapMm,
               inlineEditing,
             })}
-            {textSuggestion
-              ? renderPaperAiTextSuggestion({
-                  suggestion: textSuggestion,
-                  onAccept: paperAi?.onAcceptTextSuggestion,
-                  onDiscard: paperAi?.onDiscardTextSuggestion,
-                  onUndo: paperAi?.onUndoTextSuggestion,
-                })
-              : null}
           </PreviewItemRegion>
         );
         }),
@@ -1876,12 +1721,6 @@ function renderFragmentContent(args: {
       ];
     case "skills":
       {
-        const listSuggestion =
-          paperAi?.listSuggestion &&
-          paperAi.listSuggestion.sectionId === fragment.sectionId &&
-          paperAi.listSuggestion.sectionType === "skills"
-            ? paperAi.listSuggestion
-            : null;
       return [
         ...fragment.items
           .filter((item) => hasVisibleText(item.name) || isActiveItemEditTarget(inlineEditing, item.id))
@@ -1931,15 +1770,6 @@ function renderFragmentContent(args: {
             label: "Add skill",
           })}
         </React.Fragment>,
-        listSuggestion ? (
-          <React.Fragment key={`${fragment.fragmentId}:paper-ai-skills`}>
-            {renderPaperAiListSuggestion({
-              suggestion: listSuggestion,
-              onAccept: paperAi?.onAcceptListSuggestion,
-              onDismiss: paperAi?.onDismissListSuggestion,
-            })}
-          </React.Fragment>
-        ) : null,
       ];
       }
     case "selected_projects":
@@ -2626,6 +2456,7 @@ export function renderSectionFragment(args: {
         title: fragment.title,
         continued: fragment.continued,
         sectionId: fragment.sectionId,
+        sectionType: fragment.sectionType,
         sectionActions: inlineEditing?.enabled ? sectionActions : null,
       })}
       {content}

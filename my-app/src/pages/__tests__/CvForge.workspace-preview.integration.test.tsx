@@ -1,28 +1,60 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { CvForge } from "../CvForge";
 import { DEFAULT_VERBATI_STYLE } from "../../features/verbati/style";
 
-const { mutationMock, transformSelectionMock, importCvMock } = vi.hoisted(() => ({
-  mutationMock: vi.fn(async () => undefined),
-  transformSelectionMock: vi.fn(async () => ({ text: "Built better." })),
-  importCvMock: vi.fn(async () => undefined),
-}));
+const { authMock, mutationMock, transformSelectionMock, importCvMock } = vi.hoisted(
+  () => ({
+    authMock: vi.fn(() => ({
+      isAuthenticated: true,
+      isLoading: false,
+    })),
+    mutationMock: vi.fn(async () => undefined),
+    transformSelectionMock: vi.fn(async () => ({ text: "Built better." })),
+    importCvMock: vi.fn(async () => undefined),
+  }),
+);
+
+function getImportedSummary(call: unknown[]): unknown {
+  const doc = call[0] as any;
+  const readText = (value: any): string => {
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) return value.map(readText).filter(Boolean).join("\n");
+    if (value && typeof value === "object") {
+      return (
+        readText(value.text) ||
+        readText(value.content) ||
+        readText(value.plainText)
+      );
+    }
+    return "";
+  };
+  const value = doc?.sections?.find((section: any) => section?.id === "summary-1")
+    ?.structuredContent?.[0]?.summary;
+  return readText(value);
+}
 
 vi.mock("convex/react", () => ({
-  useConvexAuth: vi.fn(() => ({
-    isAuthenticated: true,
-    isLoading: false,
-  })),
+  useConvexAuth: vi.fn(() => authMock()),
   useMutation: vi.fn(() => mutationMock),
   useQuery: vi.fn((reference: string, args?: unknown) => {
     if (args === "skip") {
       return undefined;
+    }
+
+    if (reference === "proposalsPublic.default") {
+      return [];
     }
 
     return {
@@ -33,6 +65,21 @@ vi.mock("convex/react", () => ({
     };
   }),
   useAction: vi.fn(() => transformSelectionMock),
+}));
+
+vi.mock("../../../convex/_generated/api", () => ({
+  api: {
+    proposalSettings: {
+      getCurrent: "proposalSettings.getCurrent",
+      getPresets: "proposalSettings.getPresets",
+    },
+    proposalsPublic: {
+      default: "proposalsPublic.default",
+    },
+    functions: {
+      transformEditorSelection: "functions.transformEditorSelection",
+    },
+  },
 }));
 
 vi.mock("../../components/ProfileReviewCard", () => ({
@@ -153,21 +200,42 @@ vi.mock("../../features/verbati/resume/ResumePage", () => ({
 }));
 
 vi.mock("../../lib/buildCanonicalResumeRenderModel", () => ({
-  buildCanonicalResumeRenderModelFromCv: () => ({
-    name: "Ada Lovelace",
-    title: "Product Designer",
-    summary: "Builder.",
-    contact: [],
-    metadata: [],
-    experience: [],
-    education: [],
-    skills: [{ label: "TypeScript" }],
-    projects: [],
-    certifications: [],
-    languages: [],
-    affiliations: [],
-    textSections: [],
-  }),
+  buildCanonicalResumeRenderModelFromCv: (cv: any) => {
+    const readPlainText = (value: any): string => {
+      if (typeof value === "string") return value;
+      if (Array.isArray(value)) {
+        return value.map(readPlainText).filter(Boolean).join("\n");
+      }
+      if (value && typeof value === "object") {
+        if (typeof value.content === "string") return value.content;
+        if (Array.isArray(value.content)) return readPlainText(value.content);
+        if (typeof value.plainText === "string") return value.plainText;
+        if (typeof value.text === "string") return value.text;
+      }
+      return "";
+    };
+    const summarySection = cv?.sections?.find(
+      (section: any) => section?.type === "summary",
+    );
+    return {
+      name: "Ada Lovelace",
+      title: "Product Designer",
+      summary:
+        readPlainText(summarySection?.structuredContent?.[0]?.summary) ||
+        readPlainText(summarySection?.blocks?.[0]?.plainText) ||
+        "Builder.",
+      contact: [],
+      metadata: [],
+      experience: [],
+      education: [],
+      skills: [{ label: "TypeScript" }],
+      projects: [],
+      certifications: [],
+      languages: [],
+      affiliations: [],
+      textSections: [],
+    };
+  },
 }));
 
 vi.mock("../../features/verbati/cvDocumentToResumeData", () => ({
@@ -211,6 +279,7 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
     hostMode = "panel",
     onLinkIntent,
     activeTarget,
+    data,
     inlineEditing,
   }: {
     hostMode?: "panel" | "workspace";
@@ -228,6 +297,7 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
       sectionTitle?: string;
     }) => void;
     activeTarget?: { sectionType: string; itemId?: string } | null;
+    data?: { summary?: string } | null;
   }) => (
     <div className="dasti-doc-viewer-shell dasti-doc-viewer-shell--resume-panel">
       <div
@@ -255,7 +325,7 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
                 })
               }
             >
-              Builder.
+              {data?.summary ?? "Builder."}
             </div>
           ) : null}
           <button
@@ -302,22 +372,327 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
 
 describe("CvForge workspace preview integration", () => {
   beforeEach(() => {
+    vi.useRealTimers();
+    window.getSelection()?.removeAllRanges();
     window.localStorage.removeItem("dasti:cv-forge-workspace-mode:v1");
+    authMock.mockReset();
+    authMock.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+    });
     transformSelectionMock.mockClear();
     transformSelectionMock.mockResolvedValue({ text: "Built better." });
     importCvMock.mockClear();
   });
 
-  it("routes floating toolbar summary results through the Ask suggestion flow", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/pages/CvForge.tsx"), "utf8");
+  afterEach(() => {
+    window.getSelection()?.removeAllRanges();
+    vi.useRealTimers();
+  });
 
-    expect(source).toContain("setCvRailTab(\"ai\")");
-    expect(source).toContain("inlineTarget:");
-    expect(source).toContain("beforeText: inlinePaperSelectionState.text");
-    expect(source).toContain("state: \"ready\"");
-    expect(source).toContain("applyMode: \"preview_required\"");
+  it("routes floating toolbar summary results through the contextual AI review overlay", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/pages/CvForge.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("setCvAiReview({");
+    expect(source).toContain("target: {");
+    expect(source).toContain("beforeText: context.selectedText");
+    expect(source).toContain('state: "ready"');
+    expect(source).toContain('applyMode: "preview_required"');
     expect(source).toContain("applyInlineAiTextToSectionField");
-    expect(source).toContain("pendingInlineFieldChangeRef.current = null");
+    expect(source).toContain("flushPendingInlineFieldChange()");
+  });
+
+  it("does not start Shorten generation when the user is signed out", async () => {
+    authMock.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+    });
+    const offsetWidthSpy = vi
+      .spyOn(HTMLElement.prototype, "offsetWidth", "get")
+      .mockImplementation(function offsetWidthMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true"
+          ? 220
+          : 0;
+      });
+    const offsetHeightSpy = vi
+      .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+      .mockImplementation(function offsetHeightMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true"
+          ? 48
+          : 0;
+      });
+
+    try {
+      render(
+        <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+          <CvForge />
+        </MemoryRouter>,
+      );
+
+      await act(async () => {
+        const editableSummary = screen.getByTestId("mock-rich-summary");
+        editableSummary.focus();
+        const textNode = editableSummary.firstChild;
+        expect(textNode).toBeTruthy();
+        const range = document.createRange();
+        range.selectNodeContents(textNode as Node);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        document.dispatchEvent(new Event("selectionchange"));
+      });
+
+      const shortenButton = await screen.findByRole("button", {
+        name: "Shorten",
+      });
+      act(() => {
+        fireEvent.click(shortenButton);
+      });
+
+      expect(transformSelectionMock).not.toHaveBeenCalled();
+      expect(
+        screen.getByRole("dialog", { name: "AI review for Summary" }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Sign in to use AI writing.",
+      );
+    } finally {
+      offsetWidthSpy.mockRestore();
+      offsetHeightSpy.mockRestore();
+    }
+  });
+
+  it("opens contextual overlay for selected paper text AI output", async () => {
+    const user = userEvent.setup();
+    const offsetWidthSpy = vi
+      .spyOn(HTMLElement.prototype, "offsetWidth", "get")
+      .mockImplementation(function offsetWidthMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true"
+          ? 220
+          : 0;
+      });
+    const offsetHeightSpy = vi
+      .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+      .mockImplementation(function offsetHeightMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true"
+          ? 48
+          : 0;
+      });
+
+    try {
+      render(
+        <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+          <CvForge />
+        </MemoryRouter>,
+      );
+
+      await act(async () => {
+        const editableSummary = screen.getByTestId("mock-rich-summary");
+        editableSummary.focus();
+        const textNode = editableSummary.firstChild;
+        expect(textNode).toBeTruthy();
+        const range = document.createRange();
+        range.selectNodeContents(textNode as Node);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        document.dispatchEvent(new Event("selectionchange"));
+      });
+
+      await user.click(await screen.findByRole("button", { name: "Rewrite" }));
+
+      expect(transformSelectionMock).toHaveBeenCalledWith({
+        mode: "rewrite",
+        instruction: expect.any(String),
+        selectedText: "Builder.",
+      });
+      expect(
+        await screen.findByRole("dialog", { name: "AI review for Summary" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Built better.")).toBeInTheDocument();
+      expect(
+        screen.queryByText("Review before applying."),
+      ).not.toBeInTheDocument();
+      expect(
+        document.querySelector("[data-cv-ai-review-surface='true']"),
+      ).toBeTruthy();
+      expect(
+        document.querySelector("[data-cv-ai-review-toolbar='true']"),
+      ).toBeTruthy();
+      expect(
+        document.querySelector("[data-inline-ai-toolbar='true']"),
+      ).toBeNull();
+      expect(
+        screen.getByTestId("mock-rich-summary"),
+      ).toHaveAttribute("data-inline-ai-selection-active", "true");
+      expect(
+        document.querySelector(
+          ".dasti-cv-paper-stage [data-cv-ai-review-surface='true']",
+        ),
+      ).toBeNull();
+    } finally {
+      offsetWidthSpy.mockRestore();
+      offsetHeightSpy.mockRestore();
+    }
+  });
+
+  it("undoes an accepted selected-text AI replacement back to the previous CV text", async () => {
+    const user = userEvent.setup();
+    const offsetWidthSpy = vi
+      .spyOn(HTMLElement.prototype, "offsetWidth", "get")
+      .mockImplementation(function offsetWidthMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true"
+          ? 220
+          : 0;
+      });
+    const offsetHeightSpy = vi
+      .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+      .mockImplementation(function offsetHeightMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true"
+          ? 48
+          : 0;
+      });
+
+    try {
+      render(
+        <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+          <CvForge />
+        </MemoryRouter>,
+      );
+
+      await act(async () => {
+        const editableSummary = screen.getByTestId("mock-rich-summary");
+        editableSummary.focus();
+        const textNode = editableSummary.firstChild;
+        expect(textNode).toBeTruthy();
+        const range = document.createRange();
+        range.selectNodeContents(textNode as Node);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        document.dispatchEvent(new Event("selectionchange"));
+      });
+
+      await user.click(await screen.findByRole("button", { name: "Rewrite" }));
+      expect(await screen.findByText("Built better.")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Replace" }));
+      expect(await screen.findByText("Applied.")).toBeInTheDocument();
+      expect(screen.getByTestId("mock-rich-summary")).toHaveTextContent(
+        "Built better.",
+      );
+      await waitFor(() => {
+        expect(
+          importCvMock.mock.calls.some(
+            (call) => getImportedSummary(call) === "Built better.",
+          ),
+        ).toBe(true);
+      });
+
+      await user.click(screen.getByRole("button", { name: "Undo" }));
+      await waitFor(() => {
+        expect(getImportedSummary(importCvMock.mock.calls.at(-1) ?? [])).toBe(
+          "Builder.",
+        );
+      });
+      expect(screen.getByTestId("mock-rich-summary")).toHaveTextContent(
+        "Builder.",
+      );
+      expect(screen.getByTestId("mock-rich-summary")).not.toHaveTextContent(
+        "Built better.",
+      );
+      expect(
+        screen.queryByRole("dialog", { name: "AI review for Summary" }),
+      ).not.toBeInTheDocument();
+    } finally {
+      offsetWidthSpy.mockRestore();
+      offsetHeightSpy.mockRestore();
+    }
+  });
+
+  it("unblocks a stalled Shorten generation with a readable overlay error", async () => {
+    const offsetWidthSpy = vi
+      .spyOn(HTMLElement.prototype, "offsetWidth", "get")
+      .mockImplementation(function offsetWidthMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true"
+          ? 220
+          : 0;
+      });
+    const offsetHeightSpy = vi
+      .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+      .mockImplementation(function offsetHeightMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true"
+          ? 48
+          : 0;
+      });
+
+    try {
+      render(
+        <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+          <CvForge />
+        </MemoryRouter>,
+      );
+
+      await act(async () => {
+        const editableSummary = screen.getByTestId("mock-rich-summary");
+        editableSummary.focus();
+        const textNode = editableSummary.firstChild;
+        expect(textNode).toBeTruthy();
+        const range = document.createRange();
+        range.selectNodeContents(textNode as Node);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        document.dispatchEvent(new Event("selectionchange"));
+      });
+      await act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 100));
+      });
+
+      const shortenButton = await screen.findByRole("button", {
+        name: "Shorten",
+      });
+
+      transformSelectionMock.mockImplementationOnce(
+        () => new Promise(() => undefined),
+      );
+      vi.useFakeTimers();
+
+      act(() => {
+        fireEvent.click(shortenButton);
+      });
+
+      expect(transformSelectionMock).toHaveBeenCalledWith({
+        mode: "shorten",
+        instruction: expect.any(String),
+        selectedText: "Builder.",
+      });
+      expect(
+        screen.getByRole("dialog", { name: "AI review for Summary" }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Generating suggestion",
+      );
+
+      await act(async () => {
+        vi.advanceTimersByTime(30_000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Generation is taking too long. Try again.",
+      );
+      expect(
+        screen.getByTestId("mock-rich-summary"),
+      ).toHaveAttribute("data-inline-ai-selection-active", "true");
+    } finally {
+      offsetWidthSpy.mockRestore();
+      offsetHeightSpy.mockRestore();
+    }
   });
 
   it("routes page preview through the PR4 forge shell and live resume canvas stage", async () => {
@@ -346,7 +721,9 @@ describe("CvForge workspace preview integration", () => {
       container.querySelector(".dasti-document-rail--resume-workspace"),
     ).toBeNull();
     expect(container.querySelector(".dasti-cv-skeleton-forge")).toBeTruthy();
-    expect(container.querySelector(".dasti-cv-page-preview-stage")).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-cv-page-preview-stage"),
+    ).toBeTruthy();
     expect(container.querySelector(".dasti-cv-preview-workbench")).toBeNull();
     expect(
       screen.getByRole("complementary", { name: "CV forge rail" }),
@@ -375,7 +752,9 @@ describe("CvForge workspace preview integration", () => {
     expect(
       screen.getByRole("button", { name: /Geist Bold Baskervville/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Use Terre accent" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Use Terre accent" }),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("embedded-style-inspector")).toBeNull();
   });
 
@@ -400,9 +779,9 @@ describe("CvForge workspace preview integration", () => {
     expect(
       screen.queryByRole("button", { name: "Back to resume editing" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByTestId("verbati-preview-active-panel")).toHaveTextContent(
-      "experience:exp-1",
-    );
+    expect(
+      screen.getByTestId("verbati-preview-active-panel"),
+    ).toHaveTextContent("experience:exp-1");
   });
 
   it("keeps page preview mode for inline preview intents while updating the active target", async () => {
@@ -423,9 +802,9 @@ describe("CvForge workspace preview integration", () => {
     expect(
       container.querySelector(".dasti-cv-page-preview-stage"),
     ).toBeTruthy();
-    expect(screen.getByTestId("verbati-preview-active-panel")).toHaveTextContent(
-      "custom:section",
-    );
+    expect(
+      screen.getByTestId("verbati-preview-active-panel"),
+    ).toHaveTextContent("custom:section");
   });
 
   it("routes panel preview clicks while staying in edit mode", async () => {
@@ -442,9 +821,9 @@ describe("CvForge workspace preview integration", () => {
     );
 
     expect(screen.getByTestId("verbati-preview-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("verbati-preview-active-panel")).toHaveTextContent(
-      "experience:exp-1",
-    );
+    expect(
+      screen.getByTestId("verbati-preview-active-panel"),
+    ).toHaveTextContent("experience:exp-1");
     expect(
       screen.queryByText("Mock profile editor cv_123"),
     ).not.toBeInTheDocument();
