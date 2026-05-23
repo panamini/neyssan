@@ -341,6 +341,7 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
     onLinkIntent,
     sectionActions,
     stylePreset,
+    paperAi,
   }: {
     data?: {
       summary?: string;
@@ -490,6 +491,16 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
     }) => void;
     sectionActions?: {
       onAsk: (sectionId: string) => void;
+    } | null;
+    paperAi?: {
+      listSuggestion?: {
+        sectionId: string;
+        items: string[];
+        state: "loading" | "ready" | "error";
+        errorMessage?: string;
+      } | null;
+      onAcceptListSuggestion?: (value: string) => void;
+      onDismissListSuggestion?: (value: string) => void;
     } | null;
     stylePreset?: {
       accentHex?: string | null;
@@ -736,12 +747,56 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
           {(data?.skillItems ?? []).map((item) => (
             <span key={item.name}>{item.name}</span>
           ))}
+          {inlineEditing?.enabled && sectionActions ? (
+            <button
+              type="button"
+              aria-label="Ask AI for Skills"
+              onClick={() => sectionActions.onAsk("skills-cv_123")}
+            >
+              Ask AI for Skills
+            </button>
+          ) : null}
           {(data?.languages ?? []).map((item) => (
             <span key={item.name}>{item.name}</span>
           ))}
+          {inlineEditing?.enabled && sectionActions ? (
+            <button
+              type="button"
+              aria-label="Ask AI for Languages"
+              onClick={() => sectionActions.onAsk("languages-cv_123")}
+            >
+              Ask AI for Languages
+            </button>
+          ) : null}
           {(data?.hobbyItems ?? []).map((item) => (
             <span key={item.name}>{item.name}</span>
           ))}
+          {inlineEditing?.enabled && sectionActions ? (
+            <button
+              type="button"
+              aria-label="Ask AI for Hobbies"
+              onClick={() => sectionActions.onAsk("hobbies-cv_123")}
+            >
+              Ask AI for Hobbies
+            </button>
+          ) : null}
+          {paperAi?.listSuggestion &&
+          paperAi.listSuggestion.state === "ready" ? (
+            <div
+              role="region"
+              aria-label={`Paper suggestions for ${paperAi.listSuggestion.sectionId}`}
+            >
+              {paperAi.listSuggestion.items.map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  onClick={() => paperAi.onAcceptListSuggestion?.(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          ) : null}
           {(data?.achievementItems ?? []).map((item) => (
             <p key={item.text}>{item.text}</p>
           ))}
@@ -4078,6 +4133,87 @@ describe("CvForge workspace mode", () => {
       within(hobbiesDialog).queryByText("TypeScript"),
     ).not.toBeInTheDocument();
     expect(within(hobbiesDialog).getByText("Chess")).toBeInTheDocument();
+  });
+
+  it("renders language suggestions inline from the paper wand", async () => {
+    const user = userEvent.setup();
+    runCvSectionAiActionMock.mockResolvedValueOnce({
+      kind: "list",
+      items: ["French", "Spanish"],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Ask AI for Languages" }),
+    );
+
+    await waitFor(() =>
+      expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "generate_language_suggestions",
+          existingItems: ["English"],
+          maxItems: 5,
+        }),
+      ),
+    );
+    expect(
+      screen.queryByRole("dialog", { name: "Languages" }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("region", {
+        name: "Paper suggestions for languages-cv_123",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "French" })).toBeInTheDocument();
+  });
+
+  it("renders hobby suggestions inline from the paper wand", async () => {
+    const user = userEvent.setup();
+    runCvSectionAiActionMock.mockResolvedValueOnce({
+      kind: "list",
+      items: ["TypeScript", "Photography", "Chess"],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Ask AI for Hobbies" }),
+    );
+
+    await waitFor(() =>
+      expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "generate_hobby_suggestions",
+          existingItems: ["Photography"],
+          excludeItems: expect.arrayContaining(["TypeScript"]),
+          maxItems: 6,
+        }),
+      ),
+    );
+    expect(
+      screen.queryByRole("dialog", { name: "Hobbies" }),
+    ).not.toBeInTheDocument();
+    const suggestions = await screen.findByRole("region", {
+      name: "Paper suggestions for hobbies-cv_123",
+    });
+    expect(
+      within(suggestions).queryByRole("button", { name: "TypeScript" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(suggestions).queryByRole("button", { name: "Photography" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(suggestions).getByRole("button", { name: "Chess" }),
+    ).toBeInTheDocument();
   });
 
   it("accepts structured section AI suggestions into the active CV state", async () => {

@@ -1731,7 +1731,6 @@ span.dasti-cv-ats {
 .dasti-cv-paper-list-suggestions__item {
   display: inline-flex;
   align-items: center;
-  width: 100%;
   max-width: 100%;
 }
 
@@ -1790,6 +1789,11 @@ span.dasti-cv-ats {
 .dasti-cv-paper-list-suggestions__dismiss:hover,
 .dasti-cv-paper-list-suggestions__dismiss:focus-visible {
   background: var(--am-soft);
+}
+
+[data-resume-template-layout="workshop-two-column"]
+  .dasti-cv-paper-list-suggestions__item {
+  width: 100%;
 }
 
 .dasti-cv-style-pills button {
