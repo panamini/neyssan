@@ -2062,7 +2062,9 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.queryByRole("button", { name: "Import PDF" }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "New CV" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "New CV" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sections" })).toHaveAttribute(
       "aria-expanded",
       "false",
@@ -2104,7 +2106,9 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByRole("button", { name: "Page preview" }));
     await user.click(screen.getByRole("button", { name: "Paper Experience" }));
 
-    expect(screen.getByRole("dialog", { name: "Experience" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Experience" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "experience-cv_123",
     );
@@ -2125,7 +2129,9 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: "Paper Experience" }));
 
-    expect(screen.getByRole("dialog", { name: "Experience" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Experience" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "experience-cv_123",
     );
@@ -2211,7 +2217,9 @@ describe("CvForge workspace mode", () => {
 
     const summaryDialog = screen.getByRole("dialog", { name: "Summary" });
     expect(summaryDialog).toBeInTheDocument();
-    expect(within(summaryDialog).getByRole("button", { name: "Done" })).toBeInTheDocument();
+    expect(
+      within(summaryDialog).getByRole("button", { name: "Done" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("dialog", { name: "Ask" }),
     ).not.toBeInTheDocument();
@@ -2239,7 +2247,9 @@ describe("CvForge workspace mode", () => {
     ).not.toBeInTheDocument();
     const summaryDialog = screen.getByRole("dialog", { name: "Summary" });
     expect(summaryDialog).toBeInTheDocument();
-    expect(within(summaryDialog).getByRole("button", { name: "Done" })).toBeInTheDocument();
+    expect(
+      within(summaryDialog).getByRole("button", { name: "Done" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Ask Summary" }),
     ).not.toBeInTheDocument();
@@ -2270,7 +2280,9 @@ describe("CvForge workspace mode", () => {
       expect(
         screen.queryByRole("dialog", { name: "Ask" }),
       ).not.toBeInTheDocument();
-      expect(screen.getByRole("dialog", { name: sectionLabel })).toBeInTheDocument();
+      expect(
+        screen.getByRole("dialog", { name: sectionLabel }),
+      ).toBeInTheDocument();
       expect(
         screen.queryByRole("button", { name: `Open ${sectionLabel} editor` }),
       ).not.toBeInTheDocument();
@@ -2290,13 +2302,19 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByTestId("cv-ask-handle"));
 
     await user.click(screen.getByTestId("paper-summary-paragraph"));
-    expect(screen.queryByRole("dialog", { name: "Ask" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Summary" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Done" }));
 
     await user.click(screen.getByRole("button", { name: "Paper Experience" }));
-    expect(screen.queryByRole("dialog", { name: "Ask" })).not.toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Experience" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Experience" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open Experience editor" }),
     ).not.toBeInTheDocument();
@@ -3167,6 +3185,37 @@ describe("CvForge workspace mode", () => {
     expect(styles).toContain("::highlight(cv-inline-ai-selection)");
   });
 
+  it("reveals CV paper controls from section and item hover/focus surfaces", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles/product-cv.css"),
+      "utf8",
+    );
+    const renderer = readFileSync(
+      resolve(
+        process.cwd(),
+        "src/features/verbati/resume/ResumeOneColAtsPage.tsx",
+      ),
+      "utf8",
+    );
+
+    expect(renderer).toContain("dasti-cv-paper-section-region");
+    expect(renderer).toContain("dasti-cv-paper-experience-item");
+    expect(renderer).toContain("dasti-cv-paper-item-wand");
+    expect(styles).toContain(
+      ".dasti-cv-paper-section-region:hover .dasti-cv-paper-section-controls",
+    );
+    expect(styles).toContain(
+      ".dasti-cv-paper-section-region:focus-within .dasti-cv-paper-section-controls",
+    );
+    expect(styles).toContain(
+      ".dasti-cv-paper-experience-item:hover .dasti-cv-paper-item-wand",
+    );
+    expect(styles).toContain(
+      ".dasti-cv-paper-experience-item:focus .dasti-cv-paper-item-wand",
+    );
+    expect(styles).toContain("@media (hover: none)");
+  });
+
   it("clears inline paper Ask AI loading after a completed request closes the toolbar", () => {
     const source = readFileSync(
       resolve(process.cwd(), "src/pages/CvForge.tsx"),
@@ -3224,7 +3273,9 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask AI for Summary" }));
+    await user.click(
+      screen.getByRole("button", { name: "Ask AI for Summary" }),
+    );
 
     expect(
       await screen.findByRole("dialog", { name: "AI review for Summary" }),
@@ -3271,7 +3322,9 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask AI for Summary" }));
+    await user.click(
+      screen.getByRole("button", { name: "Ask AI for Summary" }),
+    );
     expect(
       await screen.findByRole("dialog", { name: "AI review for Summary" }),
     ).toBeInTheDocument();
@@ -3299,6 +3352,29 @@ describe("CvForge workspace mode", () => {
     expect(source).toContain("setCvRailAiSuggestion(null)");
     expect(source).toContain("flushPendingInlineFieldChange();");
     expect(source).toContain("setCvComposerOpen(false)");
+  });
+
+  it("routes structured paper wands through inline paper suggestions", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/pages/CvForge.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("if (sectionUsesStructuredSuggestions(section))");
+    expect(source).toContain(
+      'void handleRunAskAiForSection({ sectionId, prompt: "", tone: cvTone });',
+    );
+    expect(source).not.toContain(
+      "handleSelectSection(sectionId, { openEditor: true });",
+    );
+    expect(source).toContain("listSuggestion:");
+    expect(source).toContain("onAcceptListSuggestion: handleAcceptListAiSuggestion");
+    expect(source).toContain("onDismissListSuggestion: handleDismissListAiSuggestion");
+    expect(source).toContain(
+      "onRunListAiSuggestion={handleRunListAiSuggestion}",
+    );
+    expect(source).not.toContain("runPaperStructuredListAiReview");
+    expect(source).not.toContain("listItems={cvAiReview.listItems}");
   });
 
   it("keeps paper contact order stable without Website and Portfolio duplication", async () => {
@@ -3889,6 +3965,9 @@ describe("CvForge workspace mode", () => {
     const skillsDialog = screen.getByRole("dialog", { name: "Skills" });
     expect(skillsDialog).toBeInTheDocument();
     expect(
+      screen.queryByRole("dialog", { name: "AI review for Skills" }),
+    ).not.toBeInTheDocument();
+    expect(
       screen.queryByRole("button", { name: "Accept" }),
     ).not.toBeInTheDocument();
     expect(
@@ -3903,9 +3982,7 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.queryByRole("button", { name: "Warm" }),
     ).not.toBeInTheDocument();
-    expect(
-      document.body.querySelector(".ds-island-panel"),
-    ).toBeInTheDocument();
+    expect(document.body.querySelector(".ds-island-panel")).toBeInTheDocument();
 
     await waitFor(() =>
       expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
@@ -3924,6 +4001,7 @@ describe("CvForge workspace mode", () => {
     expect(
       within(skillsDialog).getByText("Design systems"),
     ).toBeInTheDocument();
+    expect(screen.getByDisplayValue("TypeScript")).toBeInTheDocument();
   });
 
   it("launches language suggestions directly from the languages wand", async () => {
@@ -4038,6 +4116,11 @@ describe("CvForge workspace mode", () => {
         name: "Add suggested item Design systems",
       }),
     );
+    expect(
+      screen.queryByRole("button", {
+        name: "Add suggested item Design systems",
+      }),
+    ).not.toBeInTheDocument();
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
     const savedSections = importCv.mock.lastCall?.[0].sections;
@@ -4389,7 +4472,9 @@ describe("CvForge workspace mode", () => {
     );
 
     const sectionsPanel = await openSectionsPanel(user);
-    within(sectionsPanel).getByRole("button", { name: /^Skills$/i }).focus();
+    within(sectionsPanel)
+      .getByRole("button", { name: /^Skills$/i })
+      .focus();
     await user.keyboard("{ArrowUp}");
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
@@ -4533,8 +4618,12 @@ describe("CvForge workspace mode", () => {
 
     const rail = screen.getByRole("complementary", { name: "CV forge rail" });
     expect(within(rail).queryByText("Create")).not.toBeInTheDocument();
-    expect(within(rail).queryByRole("button", { name: "New CV" })).not.toBeInTheDocument();
-    expect(within(rail).queryByRole("button", { name: "Import PDF" })).not.toBeInTheDocument();
+    expect(
+      within(rail).queryByRole("button", { name: "New CV" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(rail).queryByRole("button", { name: "Import PDF" }),
+    ).not.toBeInTheDocument();
     expect(clickSpy).not.toHaveBeenCalled();
     clickSpy.mockRestore();
   });
@@ -4656,15 +4745,19 @@ describe("CvForge workspace mode", () => {
 
     await user.click(screen.getByRole("button", { name: "Design" }));
 
-    expect(screen.getByRole("button", { name: /^Style 1/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Style 2/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Style 3/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Style 1/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Style 2/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Style 3/ }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Fraunces Bold/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Minimal" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Minimal" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open saved resume styles" }),
     ).toBeNull();
@@ -4742,7 +4835,11 @@ describe("CvForge workspace mode", () => {
       },
     };
     useCvLibraryMock.mockReturnValue(
-      buildCvLibraryState({ currentCv, cvs: [currentCv], saveCurrentCvStyleOnly }),
+      buildCvLibraryState({
+        currentCv,
+        cvs: [currentCv],
+        saveCurrentCvStyleOnly,
+      }),
     );
 
     render(
@@ -4759,7 +4856,9 @@ describe("CvForge workspace mode", () => {
     );
     expect(screen.getByLabelText("Customized")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Reset Style 2" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Reset Style 2" }),
+    );
 
     await waitFor(() =>
       expect(saveCurrentCvStyleOnly).toHaveBeenCalledWith(
