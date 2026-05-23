@@ -2189,6 +2189,35 @@ describe("CvForge workspace mode", () => {
     expect(document.body.querySelector(".ds-island-panel")).toBeInTheDocument();
   });
 
+  it("opens the currently focused preview section from the Ask handle without the Ask composer", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    await user.click(screen.getByRole("button", { name: "Paper Languages" }));
+    expect(
+      screen.getByRole("dialog", { name: "Languages" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    await user.click(screen.getByTestId("cv-ask-handle"));
+
+    expect(
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Languages" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
+      "languages-cv_123",
+    );
+  });
+
   it("opens a paper section editor in edit mode", async () => {
     const user = userEvent.setup();
 
