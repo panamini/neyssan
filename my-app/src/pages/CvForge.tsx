@@ -6707,6 +6707,162 @@ export function CvForge(): JSX.Element {
       field: "responsibilities" | "achievement" | "education";
     }) => {
       if (
+        request.sectionType === "achievements" &&
+        request.field === "achievement"
+      ) {
+        const baseSections =
+          latestInlineSectionsRef.current.length > 0
+            ? latestInlineSectionsRef.current
+            : currentSections;
+        const section = findSectionById(baseSections, request.sectionId);
+        const item = section
+          ? getStructuredItemById(section, request.itemId)
+          : undefined;
+        if (!section || !item) return;
+
+        const beforeText = String(item.text ?? "").trim();
+        if (!beforeText) {
+          showToast("This achievement has no text for AI to improve.", {
+            variant: "warning",
+          });
+          return;
+        }
+
+        const interactionId = createAiInteractionId();
+        const key = `${interactionId}:${request.sectionId}:${request.itemId}:achievement`;
+        const fieldPath = `structuredContent.item:${request.itemId}.text`;
+        recordAiInteractionEvent({
+          name: "ai_started",
+          interactionId,
+          surface: "section_editor",
+          actionId: "custom",
+        });
+        setCvRailAiSuggestion(null);
+        setCvRailAppliedAiEdit(null);
+        const rowElement =
+          typeof document !== "undefined"
+            ? document.querySelector<HTMLElement>(
+                `[data-paper-section-id="${request.sectionId.replace(/"/g, '\\"')}"][data-paper-field-path="${fieldPath.replace(/"/g, '\\"')}"]`,
+              )
+            : null;
+        const rowRect = rowElement?.getBoundingClientRect();
+        const stageRect = paperStageRef.current?.getBoundingClientRect();
+        const anchor = rowRect
+          ? {
+              left: rowRect.left + window.scrollX + rowRect.width / 2,
+              top: rowRect.top + window.scrollY,
+              bottom: rowRect.bottom + window.scrollY,
+              leftEdge: rowRect.left + window.scrollX,
+              rightEdge: rowRect.right + window.scrollX,
+              width: rowRect.width,
+              height: rowRect.height,
+              containerLeft: stageRect
+                ? stageRect.left + window.scrollX
+                : undefined,
+              containerRight: stageRect
+                ? stageRect.right + window.scrollX
+                : undefined,
+              containerTop: stageRect
+                ? stageRect.top + window.scrollY
+                : undefined,
+              containerBottom: stageRect
+                ? stageRect.bottom + window.scrollY
+                : undefined,
+            }
+          : null;
+        setCvAiReview({
+          key,
+          target: {
+            sectionId: request.sectionId,
+            sectionType: "achievements",
+            sectionLabel: section.title || "Achievements",
+            itemId: request.itemId,
+            itemLabel: "Achievement",
+            fieldPath,
+            fieldKind: "paragraph",
+            selectedText: beforeText,
+          },
+          anchor,
+          beforeText,
+          afterText: "",
+          state: "loading",
+          actionId: "improve_achievement_line",
+          primaryActionLabel: "Replace achievement",
+          previousSection: section,
+          interactionId,
+        });
+
+        try {
+          if (typeof runCvSectionAiAction !== "function") {
+            throw new Error("CV AI action is unavailable.");
+          }
+          const result = await runCvSectionAiAction({
+            action: "improve_achievement_line",
+            existingText: beforeText,
+          });
+          const afterText = readAiResultText(result);
+          if (!afterText.trim()) {
+            recordAiInteractionEvent({
+              name: "ai_failed",
+              interactionId,
+              surface: "section_editor",
+              actionId: "custom",
+              errorKind: "empty_result",
+            });
+            setCvAiReview((current) =>
+              current?.key === key
+                ? {
+                    ...current,
+                    state: "error",
+                    errorMessage: "AI returned no usable achievement text.",
+                  }
+                : current,
+            );
+            return;
+          }
+
+          recordAiInteractionEvent({
+            name: "ai_completed",
+            interactionId,
+            surface: "section_editor",
+            actionId: "custom",
+            applyMode: "preview_required",
+          });
+          setCvAiReview((current) =>
+            current?.key === key
+              ? {
+                  ...current,
+                  afterText,
+                  state: "ready",
+                }
+              : current,
+          );
+        } catch (error) {
+          recordAiInteractionEvent({
+            name: "ai_failed",
+            interactionId,
+            surface: "section_editor",
+            actionId: "custom",
+            errorKind: "request_failed",
+          });
+          setCvAiReview((current) =>
+            current?.key === key
+              ? {
+                  ...current,
+                  state: "error",
+                  errorMessage:
+                    error instanceof Error && error.message
+                      ? error.message
+                      : "AI is unavailable for this item.",
+                }
+              : current,
+          );
+          showToast("AI unavailable.", { variant: "error" });
+        }
+        return;
+      }
+
+      if (
         request.sectionType !== "experience" ||
         request.field !== "responsibilities"
       ) {
