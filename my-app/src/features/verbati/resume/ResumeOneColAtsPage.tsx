@@ -155,7 +155,7 @@ function renderPaperListSuggestions(args: {
             }}
           >
             <span>{item}</span>
-            <Plus size={11} strokeWidth={1.9} aria-hidden="true" />
+            <Plus size={12} strokeWidth={1.9} aria-hidden="true" />
           </button>
           {args.paperAi?.onDismissListSuggestion ? (
             <button
@@ -168,7 +168,7 @@ function renderPaperListSuggestions(args: {
                 args.paperAi?.onDismissListSuggestion?.(item);
               }}
             >
-              <X size={10} strokeWidth={1.9} aria-hidden="true" />
+              <X size={12} strokeWidth={1.9} aria-hidden="true" />
             </button>
           ) : null}
         </span>
