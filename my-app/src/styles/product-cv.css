@@ -2179,12 +2179,67 @@ span.dasti-cv-ats {
   min-height: var(--control-sm);
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: var(--space-2);
   min-width: 0;
 }
 
 .dasti-cv-section-field__topline > .ds-btn {
+  flex: 0 0 auto;
+}
+
+.dasti-cv-section-field__topline > span:not(.sr-only) {
+  min-width: 0;
+}
+
+.dasti-cv-rich-editor-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.dasti-cv-rich-editor-toolbar-row > :first-child {
+  min-width: 0;
+}
+
+.dasti-cv-rich-editor-toolbar-row__trailing {
+  flex: 0 0 auto;
+}
+
+.dasti-cv-ai-helper-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--control-xs);
+  max-width: 100%;
+  padding: var(--space-0) var(--space-1);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--tm2);
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dasti-cv-ai-helper-action:hover,
+.dasti-cv-ai-helper-action:focus-visible {
+  background: var(--am-soft);
+  color: var(--ac);
+  outline: none;
+}
+
+.dasti-cv-ai-helper-action:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.dasti-cv-ai-helper-action svg {
   flex: 0 0 auto;
 }
 
@@ -2202,6 +2257,10 @@ span.dasti-cv-ats {
 
 .dasti-cv-pill-editor__input > .ds-btn {
   flex: 0 0 auto;
+}
+
+.dasti-cv-pill-editor__input > .dasti-cv-ai-helper-action {
+  align-self: center;
 }
 
 .dasti-ai-applied-status__undo {
@@ -2226,7 +2285,7 @@ span.dasti-cv-ats {
 
 .dasti-cv-pill-editor__input {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: end;
   gap: var(--space-2);
   padding: var(--space-2);
@@ -2323,7 +2382,10 @@ span.dasti-cv-ats {
   border-radius: var(--radius-pill);
   background: var(--sf0);
   color: var(--ti);
+  font: inherit;
   font-size: var(--tx);
+  text-align: left;
+  cursor: pointer;
 }
 
 .dasti-cv-pill-suggestions__chip > span {
@@ -2331,19 +2393,19 @@ span.dasti-cv-ats {
   overflow-wrap: anywhere;
 }
 
-.dasti-cv-pill-suggestions__chip button {
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
+.dasti-cv-pill-suggestions__chip svg {
+  flex: 0 0 auto;
   color: var(--ac);
-  font: inherit;
-  font-size: var(--tx);
-  font-weight: 700;
 }
 
-.dasti-cv-pill-suggestions__chip button:hover,
-.dasti-cv-pill-suggestions__chip button:focus-visible {
+.dasti-cv-pill-suggestions__chip:hover,
+.dasti-cv-pill-suggestions__chip:focus-visible {
   background: var(--am-soft);
+  outline: none;
+}
+
+.dasti-cv-pill-suggestions__clear {
+  justify-self: start;
 }
 
 .dasti-document-stage__canvas[data-interactive="true"]

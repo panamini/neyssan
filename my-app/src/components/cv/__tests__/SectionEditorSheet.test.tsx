@@ -479,4 +479,80 @@ describe("SectionEditorSheet", () => {
     expect(document.body.querySelector(".ds-island-panel")).toBeInTheDocument();
     expect(screen.getByLabelText(label)).toBeInTheDocument();
   });
+
+  it("renders education AI fixing as a quiet entry helper", () => {
+    render(
+      <SectionEditorSheet
+        open
+        section={{
+          id: "education",
+          type: "education",
+          title: "Education",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "education-1",
+              degree: "MSc",
+              institution: "London",
+              fieldOfStudy: "Math",
+            },
+          ],
+        } as CvSection}
+        onOpenChange={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    const fix = screen.getByRole("button", { name: "Fix education" });
+    expect(fix).toHaveClass("dasti-cv-ai-helper-action");
+    expect(screen.queryByText("Fix wording")).not.toBeInTheDocument();
+  });
+
+  it("keeps drawer list suggestions compact with one-click chips and clear all", () => {
+    const onAcceptListAiSuggestion = vi.fn();
+    const onDismissListAiSuggestion = vi.fn();
+    const onClearListAiSuggestions = vi.fn();
+
+    render(
+      <SectionEditorSheet
+        open
+        section={{
+          id: "skills",
+          type: "skills",
+          title: "Skills",
+          blocks: [],
+          structuredContent: [{ id: "skill-1", name: "TypeScript" }],
+        } as CvSection}
+        aiSuggestion={{
+          kind: "list",
+          sectionId: "skills",
+          sectionLabel: "Skills",
+          state: "ready",
+          items: ["SIOP training", "Curriculum alignment"],
+        }}
+        onOpenChange={vi.fn()}
+        onSave={vi.fn()}
+        onRunListAiSuggestion={vi.fn()}
+        onAcceptListAiSuggestion={onAcceptListAiSuggestion}
+        onDismissListAiSuggestion={onDismissListAiSuggestion}
+        onClearListAiSuggestions={onClearListAiSuggestions}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Refresh skills" })).toHaveClass(
+      "dasti-cv-ai-helper-action",
+    );
+    expect(screen.queryByRole("button", { name: /Dismiss suggested item/i }))
+      .not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add suggested item SIOP training" }),
+    );
+    expect(onAcceptListAiSuggestion).toHaveBeenCalledWith("SIOP training");
+    expect(screen.getByLabelText("Skills item 2")).toHaveValue("SIOP training");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear suggestions" }));
+    expect(onClearListAiSuggestions).toHaveBeenCalledTimes(1);
+    expect(onDismissListAiSuggestion).not.toHaveBeenCalled();
+  });
 });
