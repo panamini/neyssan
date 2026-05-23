@@ -734,18 +734,18 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-3);
   min-height: 0;
 }
 
 .dasti-jobs-detail__body {
   display: grid;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-5);
+  gap: var(--space-4);
   align-items: start;
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
   padding-block-end: var(--space-6);
 }
 
@@ -807,6 +807,10 @@
 
 .dasti-jobs-detail .dasti-brief-card__section-header {
   grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.dasti-jobs-detail .dasti-brief-card__section-status--validated {
+  display: none;
 }
 
 .dasti-jobs-detail .dasti-brief-card__section-edit {
@@ -1127,13 +1131,13 @@
 
 .dasti-job-match-panel {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
   border: 0;
   border-block: 1px solid var(--border-soft);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  padding: var(--space-4) 0;
+  padding: var(--space-3) 0 var(--space-4);
 }
 
 .dasti-job-match-panel .ds-card__eyebrow {
@@ -1142,7 +1146,7 @@
 
 .dasti-job-match-panel .dasti-match-read__header {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-2);
   align-items: start;
   border-bottom: 0;
 }
@@ -1228,16 +1232,24 @@
 
 .dasti-job-match-panel__rows {
   display: grid;
-  margin-block-start: var(--space-2);
-  padding-block-start: var(--space-2);
-  border-block-start: 1px solid var(--border-soft);
+  margin: 0;
+  padding: 0;
+  border-block-start: 0;
 }
 
 .verdict-grid {
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
-  row-gap: var(--space-3);
-  column-gap: var(--space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.dasti-job-match-panel__metric {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--border-soft);
 }
 
 .verdict-grid dt {
@@ -1260,8 +1272,10 @@
 }
 
 .dasti-job-match-panel__breakdown {
-  width: 100%;
-  justify-self: stretch;
+  width: fit-content;
+  justify-self: start;
+  min-height: var(--control-xs);
+  padding-inline: var(--space-3);
   border-color: var(--border-soft);
   background: var(--sf2);
   color: var(--ti);
