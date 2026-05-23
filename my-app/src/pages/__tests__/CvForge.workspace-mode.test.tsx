@@ -4149,7 +4149,10 @@ describe("CvForge workspace mode", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Ask AI for Languages" }),
+      within(screen.getByTestId("paper-structured-sections")).getByRole(
+        "button",
+        { name: "Ask AI for Languages" },
+      ),
     );
 
     await waitFor(() =>
@@ -4170,6 +4173,64 @@ describe("CvForge workspace mode", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "French" })).toBeInTheDocument();
+  });
+
+  it("renders title-based language sections inline from the paper wand", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    const baseState = buildCvLibraryState({ importCv });
+    const currentCv = {
+      ...baseState.currentCv,
+      sections: baseState.currentCv.sections.map((section) =>
+        section.id === "languages-cv_123"
+          ? {
+              ...section,
+              type: "text",
+              title: "Languages",
+            }
+          : section,
+      ),
+    };
+    useCvLibraryMock.mockReturnValue({
+      ...baseState,
+      currentCv,
+      cvs: [currentCv],
+    });
+    runCvSectionAiActionMock.mockResolvedValueOnce({
+      kind: "list",
+      items: ["French", "Spanish"],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      within(screen.getByTestId("paper-structured-sections")).getByRole(
+        "button",
+        { name: "Ask AI for Languages" },
+      ),
+    );
+
+    await waitFor(() =>
+      expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "generate_language_suggestions",
+          existingItems: ["English"],
+          maxItems: 5,
+        }),
+      ),
+    );
+    expect(
+      screen.queryByRole("dialog", { name: "Languages" }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("region", {
+        name: "Paper suggestions for languages-cv_123",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("renders hobby suggestions inline from the paper wand", async () => {
