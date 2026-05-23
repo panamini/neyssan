@@ -339,6 +339,7 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
     hostMode,
     inlineEditing,
     onLinkIntent,
+    sectionActions,
     stylePreset,
   }: {
     data?: {
@@ -487,6 +488,9 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
       source: "preview-panel";
       shouldOpenModal: boolean;
     }) => void;
+    sectionActions?: {
+      onAsk: (sectionId: string) => void;
+    } | null;
     stylePreset?: {
       accentHex?: string | null;
       layout?: string | null;
@@ -575,6 +579,7 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
         <p
           aria-label="Paper Summary paragraph"
           data-testid="paper-summary-paragraph"
+          data-preview-section-id={summaryEditTarget.sectionId}
           contentEditable={isSummaryEditable ? "plaintext-only" : undefined}
           suppressContentEditableWarning={isSummaryEditable}
           role={isSummaryEditable ? "textbox" : undefined}
@@ -614,6 +619,15 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
             data?.summary ?? ""
           )}
         </p>
+        {inlineEditing?.enabled && sectionActions ? (
+          <button
+            type="button"
+            aria-label="Ask AI for Summary"
+            onClick={() => sectionActions.onAsk(summaryEditTarget.sectionId)}
+          >
+            Ask AI for Summary
+          </button>
+        ) : null}
         {(data?.projects ?? []).map((project) => (
           <div key={project.id} data-testid={`paper-project-${project.id}`}>
             <p>{project.name}</p>
@@ -644,48 +658,59 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
             const isTextSectionEditable = Boolean(inlineEditing?.enabled);
 
             return (
-              <p
-                key={section.id}
-                aria-label={`Paper ${section.sectionTitle} paragraph`}
-                data-testid={`paper-text-section-${section.sectionId}`}
-                contentEditable={
-                  isTextSectionEditable ? "plaintext-only" : undefined
-                }
-                suppressContentEditableWarning={isTextSectionEditable}
-                role={isTextSectionEditable ? "textbox" : undefined}
-                tabIndex={isTextSectionEditable ? 0 : undefined}
-                data-inline-paper-editable={
-                  isTextSectionEditable ? "true" : undefined
-                }
-                data-paper-section-id={textEditTarget.sectionId}
-                data-paper-section-type={textEditTarget.sectionType}
-                data-paper-field-path={textEditTarget.fieldPath}
-                data-paper-field-kind={textEditTarget.fieldKind}
-                onFocus={() => inlineEditing?.onActivate(textEditTarget)}
-                onClick={(event) => {
-                  if (inlineEditing?.enabled) {
-                    event.stopPropagation();
-                    inlineEditing.onActivate(textEditTarget);
-                    return;
+              <React.Fragment key={section.id}>
+                <p
+                  aria-label={`Paper ${section.sectionTitle} paragraph`}
+                  data-testid={`paper-text-section-${section.sectionId}`}
+                  data-preview-section-id={section.sectionId}
+                  contentEditable={
+                    isTextSectionEditable ? "plaintext-only" : undefined
                   }
-                  onLinkIntent?.({
-                    requestId: `paper-${section.sectionId}`,
-                    sectionType: section.sectionType,
-                    sectionId: section.sectionId,
-                    source: "preview-panel",
-                    shouldOpenModal: false,
-                  });
-                }}
-                onInput={(event) => {
-                  inlineEditing?.onActivate(textEditTarget);
-                  inlineEditing?.onTextSectionChange(
-                    section.sectionId,
-                    event.currentTarget.textContent ?? "",
-                  );
-                }}
-              >
-                {section.text}
-              </p>
+                  suppressContentEditableWarning={isTextSectionEditable}
+                  role={isTextSectionEditable ? "textbox" : undefined}
+                  tabIndex={isTextSectionEditable ? 0 : undefined}
+                  data-inline-paper-editable={
+                    isTextSectionEditable ? "true" : undefined
+                  }
+                  data-paper-section-id={textEditTarget.sectionId}
+                  data-paper-section-type={textEditTarget.sectionType}
+                  data-paper-field-path={textEditTarget.fieldPath}
+                  data-paper-field-kind={textEditTarget.fieldKind}
+                  onFocus={() => inlineEditing?.onActivate(textEditTarget)}
+                  onClick={(event) => {
+                    if (inlineEditing?.enabled) {
+                      event.stopPropagation();
+                      inlineEditing.onActivate(textEditTarget);
+                      return;
+                    }
+                    onLinkIntent?.({
+                      requestId: `paper-${section.sectionId}`,
+                      sectionType: section.sectionType,
+                      sectionId: section.sectionId,
+                      source: "preview-panel",
+                      shouldOpenModal: false,
+                    });
+                  }}
+                  onInput={(event) => {
+                    inlineEditing?.onActivate(textEditTarget);
+                    inlineEditing?.onTextSectionChange(
+                      section.sectionId,
+                      event.currentTarget.textContent ?? "",
+                    );
+                  }}
+                >
+                  {section.text}
+                </p>
+                {isTextSectionEditable && sectionActions ? (
+                  <button
+                    type="button"
+                    aria-label={`Ask AI for ${section.sectionTitle}`}
+                    onClick={() => sectionActions.onAsk(section.sectionId)}
+                  >
+                    {`Ask AI for ${section.sectionTitle}`}
+                  </button>
+                ) : null}
+              </React.Fragment>
             );
           })(),
         )}
@@ -3182,6 +3207,98 @@ describe("CvForge workspace mode", () => {
       "outputShape: getResponsibilitySourceShape(source)",
     );
     expect(source).toContain("updateStructuredItemResponsibilities");
+  });
+
+  it("routes the Summary paper wand to the contextual popup instead of the Ask rail", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    runCvSectionAiActionMock.mockResolvedValueOnce({
+      kind: "text",
+      text: "Paper-local summary rewrite.",
+    });
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Ask AI for Summary" }));
+
+    expect(
+      await screen.findByRole("dialog", { name: "AI review for Summary" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "CV forge rail" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Suggested edit for Summary"),
+    ).not.toBeInTheDocument();
+    expect(transformEditorSelectionMock).not.toHaveBeenCalled();
+    expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "improve_summary_text",
+        existingText: "Focused builder.",
+      }),
+    );
+    const callsBeforeReplace = importCv.mock.calls.length;
+
+    await user.click(
+      screen.getByRole("button", { name: "Replace in Summary" }),
+    );
+
+    await waitFor(() =>
+      expect(importCv).toHaveBeenCalledTimes(callsBeforeReplace + 1),
+    );
+    expect(
+      readSavedPlainText(getLastSavedSummaryItem(importCv).summary),
+    ).toContain("Paper-local summary rewrite.");
+  });
+
+  it("dismisses the local Summary paper wand popup without mutating the CV", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    runCvSectionAiActionMock.mockResolvedValueOnce({
+      kind: "text",
+      text: "Discarded paper-local summary.",
+    });
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Ask AI for Summary" }));
+    expect(
+      await screen.findByRole("dialog", { name: "AI review for Summary" }),
+    ).toBeInTheDocument();
+    const callsBeforeDismiss = importCv.mock.calls.length;
+
+    await user.click(
+      screen.getByRole("button", { name: "Back from AI review" }),
+    );
+
+    expect(importCv).toHaveBeenCalledTimes(callsBeforeDismiss);
+    expect(
+      screen.queryByRole("dialog", { name: "AI review for Summary" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps selected text and paper text AI review out of the right rail", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/pages/CvForge.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("runInlinePaperAiForSelectionContext");
+    expect(source).toContain("runPaperTextSectionAiReview");
+    expect(source).toContain("setCvAiReview({");
+    expect(source).toContain("setCvRailAiSuggestion(null)");
+    expect(source).toContain("flushPendingInlineFieldChange();");
+    expect(source).toContain("setCvComposerOpen(false)");
   });
 
   it("keeps paper contact order stable without Website and Portfolio duplication", async () => {

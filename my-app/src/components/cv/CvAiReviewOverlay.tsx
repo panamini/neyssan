@@ -37,10 +37,19 @@ type CvAiReviewOverlayProps = {
 
 const MOBILE_BREAKPOINT = 760;
 const OVERLAY_MIN_WIDTH = 320;
-const OVERLAY_MAX_WIDTH = 416;
-const VIEWPORT_GAP = 16;
-const TARGET_GAP = 12;
-const ESTIMATED_POPOVER_HEIGHT = 300;
+const OVERLAY_MAX_WIDTH = 420;
+const OVERLAY_MIN_HEIGHT = 220;
+const ESTIMATED_POPOVER_HEIGHT = 320;
+const STAGE_SELECTOR = [
+  ".dasti-cv-paper-stage",
+  ".dasti-doc-viewport--resume-panel[data-document-stage='true']",
+  ".dasti-document-stage__canvas[data-document-page='true']",
+].join(",");
+const TOP_ISLAND_SELECTOR = [
+  "[data-testid='cv-toolbar']",
+  ".forge__stage-bar",
+  ".dasti-proposal-skeleton-stage__bar",
+].join(",");
 
 function buildTargetLabel(target: CvAiReviewTarget): string {
   return [target.sectionLabel, target.itemLabel].filter(Boolean).join(" · ");
@@ -100,9 +109,28 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));
 }
 
+function readCssLengthPx(name: string, fallback: number): number {
+  if (typeof window === "undefined") return fallback;
+  const source =
+    document.querySelector(".dasti-cv-skeleton-forge") ??
+    document.documentElement;
+  const value = window.getComputedStyle(source).getPropertyValue(name).trim();
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function readDocumentRect(selector: string): DOMRect | null {
+  if (typeof document === "undefined") return null;
+  return (
+    document.querySelector<HTMLElement>(selector)?.getBoundingClientRect() ??
+    null
+  );
+}
+
 type PopoverPosition = {
   style: React.CSSProperties;
-  placement: "above" | "below" | "right";
+  placement: "above" | "below" | "right" | "left" | "center";
+  clamped: boolean;
 };
 
 function computePopoverPosition(
@@ -110,89 +138,126 @@ function computePopoverPosition(
 ): PopoverPosition | undefined {
   if (typeof window === "undefined") return undefined;
 
-  const viewportLeft = window.scrollX + VIEWPORT_GAP;
-  const viewportRight = window.scrollX + window.innerWidth - VIEWPORT_GAP;
-  const viewportTop = window.scrollY + VIEWPORT_GAP;
-  const viewportBottom = window.scrollY + window.innerHeight - VIEWPORT_GAP;
-  const stageLeft = anchor?.containerLeft ?? viewportLeft;
-  const stageRight = anchor?.containerRight ?? viewportRight;
-  const stageTop = anchor?.containerTop ?? viewportTop;
-  const stageBottom = anchor?.containerBottom ?? viewportBottom;
+  const safeMargin = readCssLengthPx("--space-3", 16);
+  const targetGap = readCssLengthPx("--space-3", 12);
+  const stageRect = readDocumentRect(STAGE_SELECTOR);
+  const topIslandRect = readDocumentRect(TOP_ISLAND_SELECTOR);
+  const viewportLeft = window.scrollX + safeMargin;
+  const viewportRight = window.scrollX + window.innerWidth - safeMargin;
+  const viewportTop = window.scrollY + safeMargin;
+  const viewportBottom = window.scrollY + window.innerHeight - safeMargin;
+  const stageLeft =
+    anchor?.containerLeft ??
+    (stageRect ? stageRect.left + window.scrollX : viewportLeft);
+  const stageRight =
+    anchor?.containerRight ??
+    (stageRect ? stageRect.right + window.scrollX : viewportRight);
+  const stageTop =
+    anchor?.containerTop ??
+    (stageRect ? stageRect.top + window.scrollY : viewportTop);
+  const stageBottom =
+    anchor?.containerBottom ??
+    (stageRect ? stageRect.bottom + window.scrollY : viewportBottom);
+  const topIslandBottom = topIslandRect
+    ? topIslandRect.bottom + window.scrollY + safeMargin
+    : viewportTop;
   const leftBound = Math.max(viewportLeft, Math.min(stageLeft, viewportRight));
-  const rightBound = Math.min(
-    viewportRight,
-    Math.max(stageRight, viewportLeft),
+  const rightBound = Math.min(viewportRight, Math.max(stageRight, viewportLeft));
+  const topBound = Math.max(
+    viewportTop,
+    topIslandBottom,
+    Math.min(stageTop, viewportBottom),
   );
-  const topBound = Math.max(viewportTop, Math.min(stageTop, viewportBottom));
-  const bottomBound = Math.min(
-    viewportBottom,
-    Math.max(stageBottom, viewportTop),
-  );
+  const bottomBound = Math.min(viewportBottom, Math.max(stageBottom, viewportTop));
   const availableWidth = Math.max(0, rightBound - leftBound);
+  const availableHeight = Math.max(0, bottomBound - topBound);
   const estimatedHeight = Math.min(
     ESTIMATED_POPOVER_HEIGHT,
-    Math.max(240, window.innerHeight * 0.48),
+    Math.max(OVERLAY_MIN_HEIGHT, availableHeight),
   );
-  const width = Math.max(
-    Math.min(OVERLAY_MIN_WIDTH, viewportRight - viewportLeft),
-    Math.min(OVERLAY_MAX_WIDTH, availableWidth || viewportRight - viewportLeft),
+  const height = Math.min(
+    estimatedHeight,
+    Math.max(OVERLAY_MIN_HEIGHT, availableHeight),
   );
+  const width = Math.min(
+    OVERLAY_MAX_WIDTH,
+    Math.max(0, availableWidth),
+  );
+  const usableWidth = Math.max(0, width);
+  const minUsableWidth = Math.min(OVERLAY_MIN_WIDTH, availableWidth);
 
   if (!anchor) {
-    const fallbackLeft = window.innerWidth / 2 - width / 2 + window.scrollX;
-    const fallbackTop = VIEWPORT_GAP + window.scrollY;
+    const desiredLeft = leftBound + Math.max(0, availableWidth - usableWidth) / 2;
+    const desiredTop = topBound + Math.max(0, availableHeight - height) / 2;
+    const left = clamp(desiredLeft, leftBound, rightBound - usableWidth);
+    const top = clamp(desiredTop, topBound, bottomBound - height);
     return {
-      placement: "below",
+      placement: "center",
+      clamped: left !== desiredLeft || top !== desiredTop,
       style: {
-        width,
-        left: clamp(fallbackLeft, viewportLeft, viewportRight - width),
-        top: clamp(fallbackTop, topBound, bottomBound - estimatedHeight),
+        width: usableWidth,
+        maxHeight: height,
+        left,
+        top,
       },
     };
   }
 
-  const preferredCenter =
-    anchor.focusCenter ??
-    anchor.belowCenter ??
-    anchor.aboveCenter ??
-    anchor.left;
+  const targetLeft = anchor.leftEdge ?? anchor.focusLeft ?? anchor.left;
+  const targetRight = anchor.rightEdge ?? anchor.focusRight ?? anchor.left;
   const anchorTop = anchor.focusTop ?? anchor.top;
   const anchorBottom = anchor.focusBottom ?? anchor.bottom ?? anchor.top;
-  const anchorCenterY = anchorTop + Math.max(1, anchorBottom - anchorTop) / 2;
-  const anchorRight = anchor.focusRight ?? anchor.rightEdge ?? preferredCenter;
-  const roomBelow = bottomBound - anchorBottom;
-  const roomAbove = anchorTop - topBound;
-  const roomRight = rightBound - anchorRight - TARGET_GAP;
-  const belowFits = roomBelow >= estimatedHeight;
-  const aboveFits = roomAbove >= estimatedHeight;
-  const shouldPlaceRight = !belowFits && !aboveFits && roomRight >= width;
-  const placement: PopoverPosition["placement"] = shouldPlaceRight
+  const targetCenterX = targetLeft + Math.max(1, targetRight - targetLeft) / 2;
+  const targetCenterY = anchorTop + Math.max(1, anchorBottom - anchorTop) / 2;
+  const rightSpace = rightBound - targetRight - targetGap;
+  const belowSpace = bottomBound - anchorBottom - targetGap;
+  const aboveSpace = anchorTop - topBound - targetGap;
+  const leftSpace = targetLeft - leftBound - targetGap;
+  const canPlaceRight = rightSpace >= minUsableWidth;
+  const canPlaceBelow = belowSpace >= OVERLAY_MIN_HEIGHT;
+  const canPlaceAbove = aboveSpace >= OVERLAY_MIN_HEIGHT;
+  const canPlaceLeft = leftSpace >= minUsableWidth;
+  const placement: PopoverPosition["placement"] = canPlaceRight
     ? "right"
-    : belowFits || roomBelow >= roomAbove
+    : canPlaceBelow
       ? "below"
-      : "above";
-  const left =
+      : canPlaceAbove
+        ? "above"
+        : canPlaceLeft
+          ? "left"
+          : "center";
+  const desiredLeft =
     placement === "right"
-      ? clamp(anchorRight + TARGET_GAP, leftBound, rightBound - width)
-      : clamp(preferredCenter - width / 2, leftBound, rightBound - width);
-  const top =
-    placement === "right"
-      ? clamp(
-          anchorCenterY - estimatedHeight / 2,
-          topBound,
-          bottomBound - estimatedHeight,
-        )
+      ? targetRight + targetGap
+      : placement === "left"
+        ? targetLeft - targetGap - usableWidth
+        : placement === "center"
+          ? targetCenterX < leftBound + availableWidth / 2
+            ? rightBound - usableWidth
+            : leftBound
+          : targetCenterX - usableWidth / 2;
+  const desiredTop =
+    placement === "below"
+      ? anchorBottom + targetGap
       : placement === "above"
-        ? clamp(
-            anchorTop - TARGET_GAP - estimatedHeight,
-            topBound,
-            bottomBound - estimatedHeight,
-          )
-        : clamp(anchorBottom + TARGET_GAP, topBound, bottomBound - 180);
+        ? anchorTop - targetGap - height
+        : placement === "center"
+          ? targetCenterY < topBound + availableHeight / 2
+            ? Math.min(anchorBottom + targetGap, bottomBound - height)
+            : Math.max(anchorTop - targetGap - height, topBound)
+          : targetCenterY - height / 2;
+  const left = clamp(desiredLeft, leftBound, rightBound - usableWidth);
+  const top = clamp(desiredTop, topBound, bottomBound - height);
+
   return {
     placement,
+    clamped:
+      Math.round(left) !== Math.round(desiredLeft) ||
+      Math.round(top) !== Math.round(desiredTop) ||
+      usableWidth < OVERLAY_MAX_WIDTH,
     style: {
-      width,
+      width: usableWidth,
+      maxHeight: height,
       left,
       top,
     },
@@ -288,6 +353,11 @@ export function CvAiReviewOverlay({
         data-cv-ai-review-layer="true"
         data-cv-ai-review-mode={mode}
         data-cv-ai-review-placement={placement}
+        data-cv-ai-popup-mode={mode}
+        data-cv-ai-popup-placement={placement}
+        data-cv-ai-popup-clamped={
+          mode === "popover" && popoverPosition?.clamped ? "true" : "false"
+        }
         data-cv-ai-review-target-section-id={target.sectionId}
         data-cv-ai-review-section-type={target.sectionType}
         data-cv-ai-review-target-item-id={target.itemId}
