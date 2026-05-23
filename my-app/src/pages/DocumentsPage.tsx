@@ -369,11 +369,7 @@ export function DocumentsPage(): JSX.Element {
 
   const downloadItem = React.useCallback(async (item: LibraryItem) => {
     try {
-      if (hydrateCvDocument) {
-        await downloadLibraryItems([item], { hydrateCvDocument });
-      } else {
-        await downloadLibraryItems([item]);
-      }
+      await downloadLibraryItems([item], { hydrateCvDocument });
     } catch (error) {
       console.warn("Failed to download library item", error);
     }
@@ -436,11 +432,7 @@ export function DocumentsPage(): JSX.Element {
   const downloadSelected = React.useCallback(async () => {
     if (selectedItems.length === 0) return;
     try {
-      if (hydrateCvDocument) {
-        await downloadLibraryItems(selectedItems, { hydrateCvDocument });
-      } else {
-        await downloadLibraryItems(selectedItems);
-      }
+      await downloadLibraryItems(selectedItems, { hydrateCvDocument });
     } catch (error) {
       console.warn("Failed to download selected library items", error);
     }
@@ -688,9 +680,6 @@ function LibraryItemCard({
             <Check size={13} strokeWidth={2.2} />
           </span>
         </label>
-        <span className="ds-card__eyebrow dasti-library-card__eyebrow projects-card__type">
-          {typeLabel}
-        </span>
         <Menu
           ariaLabel={`More actions for ${item.title}`}
           align="end"
@@ -758,6 +747,9 @@ function LibraryItemCard({
         </button>
       </div>
       <button type="button" className="dasti-documents-card__surface" onClick={onOpen}>
+        {item.type === "proposal" ? (
+          <span className="projects-card__type">{typeLabel}</span>
+        ) : null}
         <CardTitle className="dasti-library-card__title">{item.title}</CardTitle>
       </button>
       <CardFooter className="dasti-library-card__footer">
@@ -987,9 +979,9 @@ function ProjectsEmptyState({
 }) {
   return (
     <div className="empty-state">
-      <div className="empty-state__title">No work yet.</div>
+      <div className="empty-state__title">NO WORK YET.</div>
       <div className="empty-state__desc">
-        Import a CV, add a job, or start a proposal. Real work appears here.
+        Import a CV. Add a job. Draft when ready.
       </div>
       <div className="projects-empty-actions">
         <Button type="button" variant="secondary" size="md" onClick={onImportCv}>

@@ -332,7 +332,7 @@ describe("DashboardPage", () => {
   it("does not render fake recent work when no data exists", () => {
     renderToday();
 
-    expect(screen.getByText("No work yet.")).toBeInTheDocument();
+    expect(screen.getByText("NO WORK YET.")).toBeInTheDocument();
     expect(screen.queryByText(/Staff Designer · Vercel/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Senior Frontend Engineer · Linear/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Elena Marlowe/)).not.toBeInTheDocument();

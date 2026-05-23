@@ -36,7 +36,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "dashboard",
     group: "Go to",
-    label: "Dashboard",
+    label: "Today",
     shortcut: "G D",
     action: { type: "navigate", to: "/dashboard" },
   },

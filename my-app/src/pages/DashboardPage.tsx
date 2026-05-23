@@ -301,8 +301,8 @@ export function DashboardPage(): JSX.Element {
             </div>
           ) : (
             <div className="today-empty-work">
-              <strong>No work yet.</strong>
-              <span>Import a CV or start a proposal.</span>
+              <strong>NO WORK YET.</strong>
+              <span>Import a CV. Add a job. Draft when ready.</span>
               <div>
                 <Button
                   variant="secondary"
@@ -310,6 +310,13 @@ export function DashboardPage(): JSX.Element {
                   iconLeft={<Upload size={16} aria-hidden="true" />}
                 >
                   Import CV
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => navigate("/jobs")}
+                  iconLeft={<Target size={16} aria-hidden="true" />}
+                >
+                  Add job
                 </Button>
                 <Button
                   variant="primary"
@@ -529,11 +536,11 @@ function WorkPreviewCard({
       <button type="button" className="today-preview-card__surface" onClick={onOpen}>
         <span className="today-preview-card__preview-shell">
           <WorkDocumentPreview item={item} scale={variant === "compact" ? "small" : "default"} />
-          <span className="ds-card__eyebrow dasti-library-card__eyebrow today-preview-card__type">
-            {label}
-          </span>
         </span>
         <span className="today-preview-card__meta">
+          {item.type === "proposal" ? (
+            <span className="today-preview-card__type">{label}</span>
+          ) : null}
           <strong>{item.title}</strong>
           <span className="today-preview-card__bottom">
             <span>{itemContextLabel(item)}</span>

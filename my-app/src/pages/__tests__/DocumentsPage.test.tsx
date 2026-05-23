@@ -375,7 +375,7 @@ describe("DocumentsPage", () => {
         type: "proposal",
         title: "Senior Frontend Engineer · Linear",
       }),
-    ]);
+    ], expect.any(Object));
 
     await user.click(screen.getByRole("button", { name: "Clear selection" }));
     expect(screen.queryByRole("status", { name: /item selected/ })).not.toBeInTheDocument();
@@ -392,7 +392,7 @@ describe("DocumentsPage", () => {
     expect(downloadLibraryItemsMock).toHaveBeenCalledWith([
       expect.objectContaining({ id: "proposal:proposal_1", type: "proposal" }),
       expect.objectContaining({ id: "cv:cv_1", type: "cv" }),
-    ]);
+    ], expect.any(Object));
   });
 
   it("card menu Download PDF works for CV and proposal items", async () => {
@@ -407,7 +407,7 @@ describe("DocumentsPage", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Download PDF" }));
     expect(downloadLibraryItemsMock).toHaveBeenCalledWith([
       expect.objectContaining({ id: "proposal:proposal_1", type: "proposal" }),
-    ]);
+    ], expect.any(Object));
 
     downloadLibraryItemsMock.mockClear();
     await user.click(
@@ -418,7 +418,7 @@ describe("DocumentsPage", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Download PDF" }));
     expect(downloadLibraryItemsMock).toHaveBeenCalledWith([
       expect.objectContaining({ id: "cv:cv_1", type: "cv" }),
-    ]);
+    ], expect.any(Object));
   });
 
   it("bulk delete confirms and deletes selected supported items", async () => {
@@ -480,7 +480,7 @@ describe("DocumentsPage", () => {
     await user.click(within(typeTabs()).getByRole("tab", { name: "Proposals" }));
 
     expect(screen.queryByText("Draft product designer")).not.toBeInTheDocument();
-    expect(screen.getByText("No work yet.")).toBeInTheDocument();
+    expect(screen.getByText("NO WORK YET.")).toBeInTheDocument();
   });
 
   it("shows factual proposal job and CV context", async () => {
