@@ -239,7 +239,7 @@ describe("ResumeOneColAtsPage", () => {
       metadata: resumeMock.metadata.slice(0, 1),
       contact: resumeMock.contact.slice(0, 2),
       experience: resumeMock.experience.slice(0, 1),
-      projects: [],
+      projects: resumeMock.projects.slice(0, 1),
       education: [],
       certifications: [],
       affiliations: [],
@@ -644,6 +644,9 @@ describe("ResumeOneColAtsPage", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Ask AI for Education" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ask AI for Projects" }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Improve responsibilities for/i }),

@@ -17,7 +17,7 @@ describe("CvAiReviewOverlay", () => {
     document.body.removeAttribute("data-theme");
   });
 
-  it("renders as an anchored popover on desktop", async () => {
+  it("renders as an anchored right-side popover on desktop when space is available", async () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 1280,
@@ -60,7 +60,10 @@ describe("CvAiReviewOverlay", () => {
       "[data-cv-ai-review-surface='true']",
     );
     expect(layer).toBeTruthy();
-    expect(layer).toHaveAttribute("data-cv-ai-review-placement", "below");
+    expect(layer).toHaveAttribute("data-cv-ai-review-placement", "right");
+    expect(layer).toHaveAttribute("data-cv-ai-popup-mode", "popover");
+    expect(layer).toHaveAttribute("data-cv-ai-popup-placement", "right");
+    expect(layer).toHaveAttribute("data-cv-ai-popup-clamped", "true");
     expect(layer).toHaveAttribute(
       "data-cv-ai-review-target-section-id",
       "summary-1",
@@ -130,11 +133,13 @@ describe("CvAiReviewOverlay", () => {
     const layer = document.querySelector("[data-cv-ai-review-mode='sheet']");
     expect(layer).toBeTruthy();
     expect(layer).toHaveAttribute("data-cv-ai-review-placement", "sheet");
+    expect(layer).toHaveAttribute("data-cv-ai-popup-mode", "sheet");
+    expect(layer).toHaveAttribute("data-cv-ai-popup-placement", "sheet");
     await user.keyboard("{Escape}");
     expect(onDiscard).toHaveBeenCalled();
   });
 
-  it("uses a right-side popover when vertical room is tight and horizontal room is available", async () => {
+  it("clamps a constrained popover inside the visible stage", async () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 1280,
@@ -154,14 +159,14 @@ describe("CvAiReviewOverlay", () => {
         beforeText="Old summary"
         afterText="New summary"
         anchor={{
-          left: 360,
+          left: 820,
           top: 300,
           bottom: 330,
-          leftEdge: 260,
-          rightEdge: 460,
-          focusRight: 460,
-          containerLeft: 120,
-          containerRight: 1120,
+          leftEdge: 760,
+          rightEdge: 880,
+          focusRight: 880,
+          containerLeft: 420,
+          containerRight: 900,
           containerTop: 220,
           containerBottom: 520,
         }}
@@ -170,13 +175,114 @@ describe("CvAiReviewOverlay", () => {
       />,
     );
 
-    const layer = await screen.findByRole("dialog", {
+    const surface = await screen.findByRole("dialog", {
       name: "AI review for Summary",
     });
-    expect(layer.parentElement).toHaveAttribute(
-      "data-cv-ai-review-placement",
-      "right",
+    const layer = surface.parentElement;
+    const surfaceLeft = Number(surface.style.left.replace("px", ""));
+    const surfaceWidth = Number(surface.style.width.replace("px", ""));
+
+    expect(layer).toHaveAttribute("data-cv-ai-popup-placement", "left");
+    expect(layer).toHaveAttribute("data-cv-ai-popup-clamped", "true");
+    expect(surfaceLeft).toBeGreaterThanOrEqual(420);
+    expect(surfaceLeft + surfaceWidth).toBeLessThanOrEqual(900);
+    expect(
+      screen.getByRole("button", { name: "Replace in Summary" }),
+    ).toBeInTheDocument();
+  });
+
+  it("centers fallback placement within the visible stage instead of the full window", async () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1280,
+      writable: true,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 720,
+      writable: true,
+    });
+    const stage = document.createElement("div");
+    stage.className = "dasti-cv-paper-stage";
+    stage.getBoundingClientRect = () =>
+      ({
+        left: 600,
+        right: 900,
+        top: 96,
+        bottom: 680,
+        width: 300,
+        height: 584,
+        x: 600,
+        y: 96,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    document.body.appendChild(stage);
+
+    render(
+      <CvAiReviewOverlay
+        open
+        target={target}
+        state="ready"
+        beforeText="Old summary"
+        afterText="New summary"
+        onAccept={() => {}}
+        onDiscard={() => {}}
+      />,
     );
+
+    const surface = await screen.findByRole("dialog", {
+      name: "AI review for Summary",
+    });
+    const surfaceLeft = Number(surface.style.left.replace("px", ""));
+    const surfaceWidth = Number(surface.style.width.replace("px", ""));
+
+    expect(surface.parentElement).toHaveAttribute(
+      "data-cv-ai-popup-placement",
+      "center",
+    );
+    expect(surfaceLeft).toBeGreaterThanOrEqual(600);
+    expect(surfaceLeft + surfaceWidth).toBeLessThanOrEqual(900);
+    stage.remove();
+  });
+
+  it("renders outside the resume paper and CV library drawer DOM", async () => {
+    const { container } = render(
+      <div>
+        <aside data-testid="cv-library-drawer" />
+        <section data-testid="resume-paper">
+          <CvAiReviewOverlay
+            open
+            target={target}
+            state="ready"
+            beforeText="Old summary"
+            afterText="New summary"
+            anchor={{
+              left: 300,
+              top: 180,
+              bottom: 220,
+              leftEdge: 250,
+              rightEdge: 350,
+              containerLeft: 120,
+              containerRight: 980,
+              containerTop: 100,
+              containerBottom: 800,
+            }}
+            onAccept={() => {}}
+            onDiscard={() => {}}
+          />
+        </section>
+      </div>,
+    );
+
+    const surface = await screen.findByRole("dialog", {
+      name: "AI review for Summary",
+    });
+    const paper = screen.getByTestId("resume-paper");
+    const drawer = screen.getByTestId("cv-library-drawer");
+
+    expect(container).not.toContainElement(surface);
+    expect(paper).not.toContainElement(surface);
+    expect(drawer).not.toContainElement(surface);
   });
 
   it("labels the header with the compact action and target on one line", async () => {

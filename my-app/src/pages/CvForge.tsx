@@ -4368,6 +4368,9 @@ export function CvForge(): JSX.Element {
           : currentSections;
       const section = findSectionById(baseSections, target.sectionId);
       if (!section) return;
+      if (readInlineFieldCanonicalText(section, target) === nextText) {
+        return;
+      }
 
       let nextSection: CvSection | null = null;
       if (target.fieldPath === "structuredContent.0.summary") {
@@ -6435,6 +6438,189 @@ export function CvForge(): JSX.Element {
   );
   useRegisterForgePanel(cvSectionsPanelRegistration);
 
+  const buildPaperSectionAiAnchor = React.useCallback(
+    (sectionId: string): EditorSelectionAnchor | null => {
+      if (typeof document === "undefined") return null;
+      const escape = (value: string) =>
+        typeof CSS !== "undefined" && typeof CSS.escape === "function"
+          ? CSS.escape(value)
+          : value.replace(/"/g, '\\"');
+      const targetElement = document.querySelector<HTMLElement>(
+        `[data-preview-section-id="${escape(sectionId)}"]`,
+      );
+      const targetRect = targetElement?.getBoundingClientRect();
+      const stageRect = paperStageRef.current?.getBoundingClientRect();
+      if (!targetRect) return null;
+
+      return {
+        left: targetRect.left + window.scrollX + targetRect.width / 2,
+        top: targetRect.top + window.scrollY,
+        bottom: targetRect.bottom + window.scrollY,
+        leftEdge: targetRect.left + window.scrollX,
+        rightEdge: targetRect.right + window.scrollX,
+        width: targetRect.width,
+        height: targetRect.height,
+        containerLeft: stageRect ? stageRect.left + window.scrollX : undefined,
+        containerRight: stageRect ? stageRect.right + window.scrollX : undefined,
+        containerTop: stageRect ? stageRect.top + window.scrollY : undefined,
+        containerBottom: stageRect
+          ? stageRect.bottom + window.scrollY
+          : undefined,
+      };
+    },
+    [],
+  );
+
+  const runPaperTextSectionAiReview = React.useCallback(
+    async (section: CvSection, sectionId: string) => {
+      const target = getInitialEditTargetForSection(section);
+      if (!target || target.fieldKind === "chip") return false;
+
+      flushPendingInlineFieldChange();
+      setCvRailAiSuggestion(null);
+      setCvRailAppliedAiEdit(null);
+      setCvAskSelectionContext(null);
+      setCvComposerOpen(false);
+      setActiveSectionId(sectionId);
+      setResumeActiveTarget(getSectionTarget(section));
+      focusPreviewSection(sectionId);
+
+      const beforeText = readCvSectionAiText(section).trim();
+      if (!beforeText && section.type !== "summary") {
+        showToast("Section has no text for AI to rewrite.", {
+          variant: "warning",
+        });
+        return true;
+      }
+
+      const interactionId = createAiInteractionId();
+      const sectionLabel = section.title || "Section";
+      const anchor = buildPaperSectionAiAnchor(sectionId);
+      const primaryActionLabel = "Replace";
+      recordAiInteractionEvent({
+        name: "ai_started",
+        interactionId,
+        surface: "section_editor",
+        actionId: "custom",
+      });
+      setCvAiReview({
+        key: interactionId,
+        target: {
+          sectionId,
+          sectionType: target.sectionType,
+          sectionLabel,
+          fieldPath: target.fieldPath,
+          fieldKind: target.fieldKind,
+          selectedText: beforeText,
+        },
+        anchor,
+        beforeText: beforeText || "No summary yet.",
+        afterText: "",
+        state: "loading",
+        actionId: section.type === "summary" ? "rewrite" : "custom",
+        primaryActionLabel,
+        previousSection: section,
+        interactionId,
+      });
+
+      try {
+        if (typeof runCvSectionAiAction !== "function") {
+          throw new Error("CV AI action is unavailable.");
+        }
+        const result =
+          section.type === "summary"
+            ? await runCvSectionAiAction({
+                action: beforeText
+                  ? "improve_summary_text"
+                  : "rewrite_summary_from_profile",
+                existingText: beforeText,
+                summary: beforeText || getCurrentCvSummaryText(currentCv),
+                skills: getCurrentCvSkills(currentCv),
+                experiences: getCurrentCvExperiences(currentCv),
+                educations: getCurrentCvEducations(currentCv),
+                languages: getCurrentCvLanguages(currentCv),
+                instruction: [
+                  "Rewrite the summary for clarity and impact.",
+                  "Return only the replacement text.",
+                ].join("\n\n"),
+              })
+            : await runCvSectionAiAction({
+                action: "improve_custom_text",
+                instruction: "Improve this CV text. Return only the replacement text.",
+                existingText: beforeText,
+              });
+        const afterText = readAiResultText(result);
+        if (!afterText) {
+          recordAiInteractionEvent({
+            name: "ai_failed",
+            interactionId,
+            surface: "section_editor",
+            actionId: "custom",
+            errorKind: "empty_result",
+          });
+          setCvAiReview((current) =>
+            current?.interactionId === interactionId
+              ? {
+                  ...current,
+                  state: "error",
+                  errorMessage: "AI returned no usable section text.",
+                }
+              : current,
+          );
+          return true;
+        }
+
+        recordAiInteractionEvent({
+          name: "ai_completed",
+          interactionId,
+          surface: "section_editor",
+          actionId: "custom",
+          applyMode: "preview_required",
+          outputMode: "single_text",
+        });
+        setCvAiReview((current) =>
+          current?.interactionId === interactionId
+            ? {
+                ...current,
+                afterText,
+                state: "ready",
+              }
+            : current,
+        );
+      } catch (error) {
+        recordAiInteractionEvent({
+          name: "ai_failed",
+          interactionId,
+          surface: "section_editor",
+          actionId: "custom",
+          errorKind: "request_failed",
+        });
+        setCvAiReview((current) =>
+          current?.interactionId === interactionId
+            ? {
+                ...current,
+                state: "error",
+                errorMessage:
+                  error instanceof Error && error.message
+                    ? error.message
+                    : "AI is unavailable for this section.",
+              }
+            : current,
+        );
+        showToast("AI unavailable.", { variant: "error" });
+      }
+
+      return true;
+    },
+    [
+      buildPaperSectionAiAnchor,
+      currentCv,
+      flushPendingInlineFieldChange,
+      runCvSectionAiAction,
+      showToast,
+    ],
+  );
+
   const handleRunPageWandForSection = React.useCallback(
     (sectionId: string) => {
       const section = findSectionById(currentSections, sectionId);
@@ -6450,8 +6636,7 @@ export function CvForge(): JSX.Element {
       }
 
       if (railAiMode === "rail") {
-        handleAskAiForSection(sectionId);
-        void handleRunAskAiForSection({ sectionId, prompt: "", tone: cvTone });
+        void runPaperTextSectionAiReview(section, sectionId);
         return;
       }
 
@@ -6462,6 +6647,7 @@ export function CvForge(): JSX.Element {
       cvTone,
       handleAskAiForSection,
       handleRunAskAiForSection,
+      runPaperTextSectionAiReview,
     ],
   );
 
@@ -6699,7 +6885,7 @@ export function CvForge(): JSX.Element {
         );
       } else if (
         suggestion.target.fieldPath &&
-        suggestion.target.selectedText
+        typeof suggestion.target.selectedText === "string"
       ) {
         const target: ActivePaperEditTarget = {
           sectionId: suggestion.target.sectionId,
