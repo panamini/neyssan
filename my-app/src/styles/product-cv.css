@@ -1728,19 +1728,26 @@ span.dasti-cv-ats {
   line-height: var(--text-caption-line);
 }
 
+.dasti-cv-paper-list-suggestions__item {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+}
+
 .dasti-cv-paper-list-suggestions__chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-0);
+  gap: var(--space-1);
   max-width: 100%;
   min-height: var(--control-xs);
   padding-block: var(--space-0);
   padding-inline-start: var(--space-1);
-  padding-inline-end: var(--space-0);
+  padding-inline-end: var(--space-1);
   border: 1px dashed var(--color-border-strong);
   border-radius: var(--radius-pill);
   background: var(--paper);
   color: var(--color-text);
+  cursor: pointer;
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
 }
@@ -1750,13 +1757,14 @@ span.dasti-cv-ats {
   overflow-wrap: anywhere;
 }
 
-.dasti-cv-paper-list-suggestions__chip button {
+.dasti-cv-paper-list-suggestions__dismiss {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: var(--control-xs);
   min-height: var(--control-xs);
-  padding: var(--space-0) var(--space-1);
+  margin-inline-start: var(--space-1);
+  padding: var(--space-0);
   border: var(--space-0);
   border-radius: var(--radius-pill);
   background: transparent;
@@ -1767,8 +1775,10 @@ span.dasti-cv-ats {
   font-weight: 700;
 }
 
-.dasti-cv-paper-list-suggestions__chip button:hover,
-.dasti-cv-paper-list-suggestions__chip button:focus-visible {
+.dasti-cv-paper-list-suggestions__chip:hover,
+.dasti-cv-paper-list-suggestions__chip:focus-visible,
+.dasti-cv-paper-list-suggestions__dismiss:hover,
+.dasti-cv-paper-list-suggestions__dismiss:focus-visible {
   background: var(--am-soft);
 }
 

@@ -11,7 +11,7 @@ import {
   ParagraphExtension,
   UnderlineExtension,
 } from "remirror/extensions";
-import { Eye, EyeClosed, TrashSimple, Wand2 } from "@/lib/icons";
+import { Eye, EyeClosed, Plus, TrashSimple, Wand2, X } from "@/lib/icons";
 
 import type { ResumeActiveTarget } from "../resumeLinking";
 import { buildResumeEducationDisplay } from "./resumeEducation";
@@ -143,21 +143,24 @@ function renderPaperListSuggestions(args: {
   return (
     <div className="dasti-cv-paper-list-suggestions" data-cv-paper-list-suggestions="ready">
       {suggestion.items.map((item) => (
-        <span className="dasti-cv-paper-list-suggestions__chip" key={item}>
-          <span>{item}</span>
+        <span className="dasti-cv-paper-list-suggestions__item" key={item}>
           <button
             type="button"
+            className="dasti-cv-paper-list-suggestions__chip"
+            aria-label={`Add ${item}`}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
               args.paperAi?.onAcceptListSuggestion?.(item);
             }}
           >
-            Add
+            <span>{item}</span>
+            <Plus size={11} strokeWidth={1.9} aria-hidden="true" />
           </button>
           {args.paperAi?.onDismissListSuggestion ? (
             <button
               type="button"
+              className="dasti-cv-paper-list-suggestions__dismiss"
               aria-label={`Dismiss ${item}`}
               onClick={(event) => {
                 event.preventDefault();
@@ -165,7 +168,7 @@ function renderPaperListSuggestions(args: {
                 args.paperAi?.onDismissListSuggestion?.(item);
               }}
             >
-              x
+              <X size={10} strokeWidth={1.9} aria-hidden="true" />
             </button>
           ) : null}
         </span>
