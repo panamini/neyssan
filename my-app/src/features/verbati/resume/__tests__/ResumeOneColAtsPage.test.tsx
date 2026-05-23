@@ -820,7 +820,7 @@ describe("ResumeOneColAtsPage", () => {
       "ready",
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Add" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Add Accessibility" }));
     expect(onAcceptListSuggestion).toHaveBeenCalledWith("Accessibility");
 
     fireEvent.click(
