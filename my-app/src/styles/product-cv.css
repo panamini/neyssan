@@ -1737,9 +1737,9 @@ span.dasti-cv-ats {
   padding-block: var(--space-0);
   padding-inline-start: var(--space-1);
   padding-inline-end: var(--space-0);
-  border: 1px dashed var(--border-strong);
+  border: 1px dashed var(--color-border-strong);
   border-radius: var(--radius-pill);
-  background: var(--sf0);
+  background: var(--paper);
   color: var(--color-text);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
