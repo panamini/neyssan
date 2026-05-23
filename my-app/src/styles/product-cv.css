@@ -222,13 +222,210 @@
 }
 
 .dasti-cv-paper-stage [data-inline-ai-selection-active="true"] {
-  background: color-mix(in srgb, var(--am-soft, #f4d6c8) 62%, transparent);
+  background: color-mix(in srgb, var(--am-soft) 62%, transparent);
   border-radius: var(--radius-1);
 }
 
 ::highlight(cv-inline-ai-selection) {
-  background: color-mix(in srgb, var(--am-soft, #f4d6c8) 72%, transparent);
+  background: color-mix(in srgb, var(--am-soft) 72%, transparent);
   color: inherit;
+}
+
+.dasti-cv-ai-review-layer {
+  position: absolute;
+  inset: 0 auto auto 0;
+  z-index: 80;
+  pointer-events: none;
+}
+
+.dasti-cv-ai-review-layer__scrim {
+  position: fixed;
+  inset: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--sfr) 42%, transparent);
+  pointer-events: auto;
+}
+
+.dasti-cv-ai-review {
+  position: absolute;
+  display: grid;
+  gap: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(416px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: min(520px, calc(100vh - var(--space-8)));
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: var(--sfr);
+  box-shadow: var(--shadow-frost);
+  color: var(--ti);
+  pointer-events: auto;
+}
+
+.dasti-cv-ai-review:focus {
+  outline: 2px solid color-mix(in srgb, var(--ac) 72%, transparent);
+  outline-offset: 2px;
+}
+
+.dasti-cv-ai-review__toolbar {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: var(--space-2);
+  min-height: calc(var(--control-sm) + var(--space-3));
+  padding: var(--space-2) var(--space-2) 0;
+  background: var(--sfr);
+}
+
+.dasti-cv-ai-review__body {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-2);
+}
+
+.dasti-cv-ai-review__title {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ti);
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dasti-cv-ai-review__action-label,
+.dasti-cv-ai-review__target-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dasti-cv-ai-review__target-label {
+  color: var(--tm2);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+  font-weight: 500;
+}
+
+.dasti-cv-ai-review__icon-button {
+  width: var(--control-sm);
+  height: var(--control-sm);
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--tm2);
+  cursor: pointer;
+}
+
+.dasti-cv-ai-review__icon-button:hover,
+.dasti-cv-ai-review__icon-button:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--sf2);
+  color: var(--ti);
+  outline: none;
+}
+
+.dasti-cv-ai-review__result {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ti);
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
+}
+
+.dasti-cv-ai-review__status,
+.dasti-cv-ai-review__accepted {
+  padding: var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: var(--sf2);
+  color: var(--ti);
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
+}
+
+.dasti-cv-ai-review__accepted {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: calc(var(--control-sm) + var(--space-2));
+}
+
+.dasti-cv-ai-review__undo {
+  min-height: var(--control-sm);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ti);
+  font: inherit;
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
+  cursor: pointer;
+}
+
+.dasti-cv-ai-review__undo:hover,
+.dasti-cv-ai-review__undo:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--sf3);
+  outline: none;
+}
+
+.dasti-cv-ai-review__actions {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: 0 var(--space-2) var(--space-2);
+  background: var(--sfr);
+}
+
+.dasti-cv-ai-review__action {
+  min-height: 34px;
+  padding-inline: var(--space-3);
+}
+
+.dasti-cv-ai-review__action--primary {
+  min-width: 112px;
+  font-weight: var(--font-label-weight);
+}
+
+@media (max-width: 760px) {
+  .dasti-cv-ai-review-layer {
+    position: fixed;
+    inset: 0;
+  }
+
+  .dasti-cv-ai-review {
+    position: fixed;
+    inset: auto var(--space-2) var(--space-2);
+    width: auto;
+    max-height: min(78vh, 620px);
+    border-radius: var(--radius-card);
+  }
+
+  .dasti-cv-ai-review__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dasti-cv-ai-review__actions .ds-btn--primary {
+    grid-column: span 2;
+  }
 }
 
 .dasti-cv-paper-inline-add {
