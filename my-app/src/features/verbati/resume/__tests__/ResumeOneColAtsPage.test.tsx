@@ -771,7 +771,7 @@ describe("ResumeOneColAtsPage", () => {
     expect(itemRegion?.querySelector(".dasti-cv-paper-item-wand")).toBeTruthy();
   });
 
-  it("renders inline paper list suggestions with add and dismiss actions", () => {
+  it("renders inline paper list suggestions with add and clear actions", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const data = {
       ...resumeMock,
@@ -792,7 +792,7 @@ describe("ResumeOneColAtsPage", () => {
       (fragment) => fragment.kind === "skills",
     );
     const onAcceptListSuggestion = vi.fn();
-    const onDismissListSuggestion = vi.fn();
+    const onClearListSuggestions = vi.fn();
 
     render(
       <ResumeOneColAtsPage
@@ -807,7 +807,7 @@ describe("ResumeOneColAtsPage", () => {
             state: "ready",
           },
           onAcceptListSuggestion,
-          onDismissListSuggestion,
+          onClearListSuggestions,
         }}
       />,
     );
@@ -819,14 +819,17 @@ describe("ResumeOneColAtsPage", () => {
       "data-cv-paper-list-suggestions",
       "ready",
     );
+    expect(screen.getByText("Suggested skills")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add Accessibility" }));
     expect(onAcceptListSuggestion).toHaveBeenCalledWith("Accessibility");
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Dismiss Design systems" }),
-    );
-    expect(onDismissListSuggestion).toHaveBeenCalledWith("Design systems");
+    expect(
+      screen.queryByRole("button", { name: "Dismiss Design systems" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear suggestions" }));
+    expect(onClearListSuggestions).toHaveBeenCalled();
   });
 
   it("marks the active experience AI target without rendering review UI in the paper flow", () => {
@@ -945,7 +948,7 @@ describe("ResumeOneColAtsPage", () => {
       screen.getByRole("button", { name: "Ask AI for Summary" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Ask AI for Skills" }),
+      screen.getByRole("button", { name: "Suggest skills" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Ask AI for Experience" }),

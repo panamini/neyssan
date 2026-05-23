@@ -11,7 +11,7 @@ import {
   ParagraphExtension,
   UnderlineExtension,
 } from "remirror/extensions";
-import { Eye, EyeClosed, Plus, TrashSimple, Wand2, X } from "@/lib/icons";
+import { Eye, EyeClosed, Plus, TrashSimple, Wand2 } from "@/lib/icons";
 
 import type { ResumeActiveTarget } from "../resumeLinking";
 import { buildResumeEducationDisplay } from "./resumeEducation";
@@ -84,7 +84,7 @@ export type ResumePaperAiState = {
     errorMessage?: string;
   } | null;
   onAcceptListSuggestion?: (value: string) => void;
-  onDismissListSuggestion?: (value: string) => void;
+  onClearListSuggestions?: () => void;
 };
 
 const experienceWrapStyle = {
@@ -140,8 +140,16 @@ function renderPaperListSuggestions(args: {
     return null;
   }
 
+  const label =
+    suggestion.sectionType === "languages"
+      ? "Suggested languages"
+      : suggestion.sectionType === "hobbies"
+        ? "Suggested hobbies"
+        : "Suggested skills";
+
   return (
     <div className="dasti-cv-paper-list-suggestions" data-cv-paper-list-suggestions="ready">
+      <span className="dasti-cv-paper-list-suggestions__label">{label}</span>
       {suggestion.items.map((item) => (
         <span className="dasti-cv-paper-list-suggestions__item" key={item}>
           <button
@@ -157,24 +165,40 @@ function renderPaperListSuggestions(args: {
             <span>{item}</span>
             <Plus size={12} strokeWidth={1.9} aria-hidden="true" />
           </button>
-          {args.paperAi?.onDismissListSuggestion ? (
-            <button
-              type="button"
-              className="dasti-cv-paper-list-suggestions__dismiss"
-              aria-label={`Dismiss ${item}`}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                args.paperAi?.onDismissListSuggestion?.(item);
-              }}
-            >
-              <X size={12} strokeWidth={1.9} aria-hidden="true" />
-            </button>
-          ) : null}
         </span>
       ))}
+      {args.paperAi?.onClearListSuggestions ? (
+        <button
+          type="button"
+          className="dasti-cv-paper-list-suggestions__clear"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            args.paperAi?.onClearListSuggestions?.();
+          }}
+        >
+          Clear suggestions
+        </button>
+      ) : null}
     </div>
   );
+}
+
+function getPaperSectionAiLabel(
+  sectionType: string | undefined,
+  title: string,
+) {
+  const normalizedTitle = title.trim().toLocaleLowerCase();
+  if (sectionType === "skills" || normalizedTitle === "skills") {
+    return "Suggest skills";
+  }
+  if (sectionType === "languages" || normalizedTitle === "languages") {
+    return "Suggest languages";
+  }
+  if (sectionType === "hobbies" || normalizedTitle === "hobbies") {
+    return "Suggest hobbies";
+  }
+  return `Ask AI for ${title}`;
 }
 
 function formatMillimeters(value: number) {
@@ -258,6 +282,7 @@ function renderSectionHeading(args: {
   const showSectionAiControl = shouldRenderPaperSectionAiControl(
     args.sectionType,
   );
+  const sectionAiLabel = getPaperSectionAiLabel(args.sectionType, args.title);
   return (
     <div
       className="dasti-cv-paper-section-heading"
@@ -308,8 +333,8 @@ function renderSectionHeading(args: {
             <button
               type="button"
               className="dasti-cv-paper-section-control"
-              aria-label={`Ask AI for ${args.title}`}
-              title={`Ask AI for ${args.title}`}
+              aria-label={sectionAiLabel}
+              title={sectionAiLabel}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
