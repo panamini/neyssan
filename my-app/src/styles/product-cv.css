@@ -1714,11 +1714,11 @@ span.dasti-cv-ats {
   flex-wrap: wrap;
   gap: var(--space-1);
   align-items: center;
-  margin-top: 1mm;
-  max-height: 28mm;
+  margin-top: var(--space-1);
+  max-height: calc(var(--space-8) + var(--space-6));
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-right: 0.6mm;
+  padding-right: var(--space-1);
   scrollbar-gutter: stable;
 }
 
@@ -1731,13 +1731,15 @@ span.dasti-cv-ats {
 .dasti-cv-paper-list-suggestions__chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.75mm;
+  gap: var(--space-0);
   max-width: 100%;
-  min-height: 5.5mm;
-  padding: 0.55mm 1mm;
-  border: 0.2mm dashed color-mix(in srgb, var(--color-accent) 50%, var(--color-border-strong));
+  min-height: var(--control-xs);
+  padding-block: var(--space-0);
+  padding-inline-start: var(--space-1);
+  padding-inline-end: var(--space-0);
+  border: 1px dashed var(--border-strong);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--color-accent) 8%, var(--paper));
+  background: var(--sf0);
   color: var(--color-text);
   font-size: var(--text-caption-size);
   line-height: var(--text-caption-line);
@@ -1749,18 +1751,25 @@ span.dasti-cv-ats {
 }
 
 .dasti-cv-paper-list-suggestions__chip button {
-  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--control-xs);
+  min-height: var(--control-xs);
+  padding: var(--space-0) var(--space-1);
+  border: var(--space-0);
   border-radius: var(--radius-pill);
   background: transparent;
   color: var(--color-accent);
   cursor: pointer;
   font: inherit;
+  font-size: var(--text-caption-size);
   font-weight: 700;
 }
 
 .dasti-cv-paper-list-suggestions__chip button:hover,
 .dasti-cv-paper-list-suggestions__chip button:focus-visible {
-  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  background: var(--am-soft);
 }
 
 .dasti-cv-style-pills button {
