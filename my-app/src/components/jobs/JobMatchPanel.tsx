@@ -137,18 +137,24 @@ export function JobMatchPanel({
       </div>
 
       <dl className="verdict-grid dasti-job-match-panel__rows">
-        <dt>Skills</dt>
-        <dd>
-          <span>{skillsCopy}</span>
-        </dd>
-        <dt>Seniority</dt>
-        <dd>
-          <span>{seniorityCopy}</span>
-        </dd>
-        <dt>Gaps</dt>
-        <dd>
-          <span>{gapAndLogisticsCopy}</span>
-        </dd>
+        <div className="dasti-job-match-panel__metric">
+          <dt>Skills</dt>
+          <dd>
+            <span>{skillsCopy}</span>
+          </dd>
+        </div>
+        <div className="dasti-job-match-panel__metric">
+          <dt>Seniority</dt>
+          <dd>
+            <span>{seniorityCopy}</span>
+          </dd>
+        </div>
+        <div className="dasti-job-match-panel__metric">
+          <dt>Gaps</dt>
+          <dd>
+            <span>{gapAndLogisticsCopy}</span>
+          </dd>
+        </div>
       </dl>
 
       <button

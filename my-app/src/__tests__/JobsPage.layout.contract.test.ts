@@ -118,7 +118,7 @@ describe("JobsPage collapsed layout contract", () => {
       /\.dasti-jobs-detail\s*\{[\s\S]*display:\s*flex;[\s\S]*flex:\s*1 1 auto;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-jobs-detail__body\s*\{[\s\S]*display:\s*grid;[\s\S]*flex:\s*1 1 auto;[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*min-height:\s*0;[\s\S]*overflow-y:\s*auto;/,
+      /\.dasti-jobs-detail__body\s*\{[\s\S]*display:\s*grid;[\s\S]*flex:\s*0 0 auto;[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*min-height:\s*0;[\s\S]*overflow:\s*visible;/,
     );
     expect(productCss).not.toMatch(
       /@media\s*\(max-width:\s*1439px\)[\s\S]*grid-template-columns:\s*minmax\(0,\s*min\(100%,\s*560px\)\);/,
