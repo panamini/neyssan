@@ -329,7 +329,7 @@ describe("FloatingAiToolbar", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("stays visible on the first selection even when the first DOM metrics are zero", async () => {
+  it("stays hidden on the first selection until initial DOM metrics are non-zero", async () => {
     toolbarMeasurable = false;
 
     render(
@@ -342,14 +342,15 @@ describe("FloatingAiToolbar", () => {
     );
 
     const toolbar = screen.getByRole("toolbar", { hidden: true });
-    expect(toolbar).toHaveStyle({ visibility: "visible" });
-    expect(toolbar).toHaveAttribute("data-state", "open");
+    expect(toolbar).toHaveStyle({ visibility: "hidden" });
+    expect(toolbar).toHaveAttribute("data-state", "closing");
 
     toolbarMeasurable = true;
     fireEvent(window, new Event("resize"));
 
     await waitFor(() => {
       expect(toolbar).toHaveStyle({ visibility: "visible" });
+      expect(toolbar).toHaveAttribute("data-state", "open");
     });
   });
 
@@ -616,6 +617,96 @@ describe("FloatingAiToolbar", () => {
       expect(toolbar).toHaveStyle({ left: "516px" });
     });
 
+    expect(onSurfacePlacementChange).not.toHaveBeenCalledWith(
+      expect.objectContaining({ left: 570 }),
+    );
+  });
+
+  it("does not reveal a fallback-width caret-biased position before real toolbar metrics settle", async () => {
+    vi.restoreAllMocks();
+    toolbarMeasurable = false;
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(
+      function offsetWidthMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true" &&
+          toolbarMeasurable
+          ? 328
+          : 0;
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
+      function offsetHeightMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true" &&
+          toolbarMeasurable
+          ? 48
+          : 0;
+      },
+    );
+    const stage = document.createElement("div");
+    stage.className = "dasti-cv-paper-stage";
+    document.body.appendChild(stage);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function getBoundingClientRectMock() {
+        if (this === stage) {
+          return new DOMRect(100, 0, 700, 500);
+        }
+
+        return new DOMRect(0, 0, 0, 0);
+      },
+    );
+    const onSurfacePlacementChange = vi.fn();
+
+    render(
+      <FloatingAiToolbar
+        anchor={{
+          left: 680,
+          top: 200,
+          bottom: 216,
+          leftEdge: 620,
+          rightEdge: 740,
+          width: 120,
+          aboveCenter: 680,
+          aboveLeft: 620,
+          aboveRight: 740,
+          aboveLineHeight: 20,
+          belowCenter: 680,
+          belowLeft: 620,
+          belowRight: 740,
+          belowLineHeight: 20,
+          focusCenter: 740,
+          focusLeft: 740,
+          focusRight: 740,
+          focusTop: 200,
+          focusBottom: 216,
+          focusLineHeight: 20,
+          containerLeft: 100,
+          containerRight: 800,
+          containerTop: 0,
+          containerBottom: 500,
+        }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+        onSurfacePlacementChange={onSurfacePlacementChange}
+      />,
+    );
+
+    const toolbar = screen.getByRole("toolbar", { hidden: true });
+    expect(toolbar).toHaveStyle({ visibility: "hidden" });
+    expect(toolbar).not.toHaveStyle({ left: "570px" });
+    expect(onSurfacePlacementChange).not.toHaveBeenCalledWith(
+      expect.objectContaining({ left: 570 }),
+    );
+
+    toolbarMeasurable = true;
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => {
+      expect(toolbar).toHaveStyle({ visibility: "visible" });
+      expect(toolbar).toHaveStyle({ left: "468px" });
+    });
+    expect(onSurfacePlacementChange).toHaveBeenCalledWith(
+      expect.objectContaining({ left: 468 }),
+    );
     expect(onSurfacePlacementChange).not.toHaveBeenCalledWith(
       expect.objectContaining({ left: 570 }),
     );
