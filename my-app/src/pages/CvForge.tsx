@@ -4225,25 +4225,27 @@ export function CvForge(): JSX.Element {
   );
 
   const handleOpenCvAsk = React.useCallback(() => {
-    const selectionContext = inlinePaperSelectionState
-      ? {
-          selectedText: inlinePaperSelectionState.text,
-          editTarget: inlinePaperSelectionState.editTarget,
-          anchor: inlinePaperSelectionState.anchor,
-        }
-      : null;
-    const target = selectionContext?.editTarget ?? inlineEditTarget;
-    setCvAskSelectionContext(selectionContext);
+    const section =
+      (activeSectionId
+        ? findSectionById(currentSections, activeSectionId)
+        : null) ??
+      activeSection;
+    if (!section) return;
 
-    if (target) {
-      const section = findSectionById(currentSections, target.sectionId);
-      setActiveSectionId(target.sectionId);
-      setResumeActiveTarget(getSectionTarget(section));
-      setCvRailTab("ai");
-    }
+    const sectionIndex = currentSections.indexOf(section);
+    const sectionId =
+      activeSectionId && findSectionById(currentSections, activeSectionId)
+        ? activeSectionId
+        : getCvSectionId(section, sectionIndex >= 0 ? sectionIndex : 0);
 
-    setCvComposerOpen(true);
-  }, [currentSections, inlineEditTarget, inlinePaperSelectionState]);
+    setInlineEditTarget(null);
+    setCvAskSelectionContext(null);
+    setActiveSectionId(sectionId);
+    setResumeActiveTarget(getSectionTarget(section));
+    focusPreviewSection(sectionId);
+    setSectionEditorOpen(true);
+    setCvComposerOpen(false);
+  }, [activeSection, activeSectionId, currentSections]);
 
   const handleSectionChange = React.useCallback(
     (nextSection: CvSection) => {
