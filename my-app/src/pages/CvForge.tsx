@@ -7298,6 +7298,13 @@ export function CvForge(): JSX.Element {
     });
   }, []);
 
+  const handleClearListAiSuggestions = React.useCallback(() => {
+    setCvRailAiSuggestion((current) => {
+      if (!current || current.kind !== "list") return current;
+      return null;
+    });
+  }, []);
+
   const resumePaperAiState = React.useMemo<ResumePaperAiState | null>(() => {
     if (workspaceMode !== "edit") return null;
     const listSuggestion =
@@ -7332,14 +7339,14 @@ export function CvForge(): JSX.Element {
           ? listSuggestion
           : null,
       onAcceptListSuggestion: handleAcceptListAiSuggestion,
-      onDismissListSuggestion: handleDismissListAiSuggestion,
+      onClearListSuggestions: handleClearListAiSuggestions,
     };
   }, [
     currentSections,
     cvAiReview,
     cvRailAiSuggestion,
     handleAcceptListAiSuggestion,
-    handleDismissListAiSuggestion,
+    handleClearListAiSuggestions,
     workspaceMode,
   ]);
 

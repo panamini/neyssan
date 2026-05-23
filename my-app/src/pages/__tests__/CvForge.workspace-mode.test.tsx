@@ -495,12 +495,13 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
     paperAi?: {
       listSuggestion?: {
         sectionId: string;
+        sectionType?: string;
         items: string[];
         state: "loading" | "ready" | "error";
         errorMessage?: string;
       } | null;
       onAcceptListSuggestion?: (value: string) => void;
-      onDismissListSuggestion?: (value: string) => void;
+      onClearListSuggestions?: () => void;
     } | null;
     stylePreset?: {
       accentHex?: string | null;
@@ -750,10 +751,10 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
           {inlineEditing?.enabled && sectionActions ? (
             <button
               type="button"
-              aria-label="Ask AI for Skills"
+              aria-label="Suggest skills"
               onClick={() => sectionActions.onAsk("skills-cv_123")}
             >
-              Ask AI for Skills
+              Suggest skills
             </button>
           ) : null}
           {(data?.languages ?? []).map((item) => (
@@ -762,10 +763,10 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
           {inlineEditing?.enabled && sectionActions ? (
             <button
               type="button"
-              aria-label="Ask AI for Languages"
+              aria-label="Suggest languages"
               onClick={() => sectionActions.onAsk("languages-cv_123")}
             >
-              Ask AI for Languages
+              Suggest languages
             </button>
           ) : null}
           {(data?.hobbyItems ?? []).map((item) => (
@@ -774,10 +775,10 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
           {inlineEditing?.enabled && sectionActions ? (
             <button
               type="button"
-              aria-label="Ask AI for Hobbies"
+              aria-label="Suggest hobbies"
               onClick={() => sectionActions.onAsk("hobbies-cv_123")}
             >
-              Ask AI for Hobbies
+              Suggest hobbies
             </button>
           ) : null}
           {paperAi?.listSuggestion &&
@@ -786,6 +787,13 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
               role="region"
               aria-label={`Paper suggestions for ${paperAi.listSuggestion.sectionId}`}
             >
+              <span>
+                {paperAi.listSuggestion.sectionType === "languages"
+                  ? "Suggested languages"
+                  : paperAi.listSuggestion.sectionType === "hobbies"
+                    ? "Suggested hobbies"
+                    : "Suggested skills"}
+              </span>
               {paperAi.listSuggestion.items.map((item) => (
                 <button
                   type="button"
@@ -795,6 +803,14 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
                   {item}
                 </button>
               ))}
+              {paperAi.onClearListSuggestions ? (
+                <button
+                  type="button"
+                  onClick={() => paperAi.onClearListSuggestions?.()}
+                >
+                  Clear suggestions
+                </button>
+              ) : null}
             </div>
           ) : null}
           {(data?.achievementItems ?? []).map((item) => (
@@ -3424,7 +3440,7 @@ describe("CvForge workspace mode", () => {
     );
     expect(source).toContain("listSuggestion:");
     expect(source).toContain("onAcceptListSuggestion: handleAcceptListAiSuggestion");
-    expect(source).toContain("onDismissListSuggestion: handleDismissListAiSuggestion");
+    expect(source).toContain("onClearListSuggestions: handleClearListAiSuggestions");
     expect(source).toContain(
       "onRunListAiSuggestion={handleRunListAiSuggestion}",
     );
@@ -4151,7 +4167,7 @@ describe("CvForge workspace mode", () => {
     await user.click(
       within(screen.getByTestId("paper-structured-sections")).getByRole(
         "button",
-        { name: "Ask AI for Languages" },
+        { name: "Suggest languages" },
       ),
     );
 
@@ -4172,7 +4188,17 @@ describe("CvForge workspace mode", () => {
         name: "Paper suggestions for languages-cv_123",
       }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Suggested languages")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "French" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear suggestions" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("region", {
+          name: "Paper suggestions for languages-cv_123",
+        }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   it("renders title-based language sections inline from the paper wand", async () => {
@@ -4210,7 +4236,7 @@ describe("CvForge workspace mode", () => {
     await user.click(
       within(screen.getByTestId("paper-structured-sections")).getByRole(
         "button",
-        { name: "Ask AI for Languages" },
+        { name: "Suggest languages" },
       ),
     );
 
@@ -4247,7 +4273,7 @@ describe("CvForge workspace mode", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Ask AI for Hobbies" }),
+      screen.getByRole("button", { name: "Suggest hobbies" }),
     );
 
     await waitFor(() =>
@@ -4275,6 +4301,7 @@ describe("CvForge workspace mode", () => {
     expect(
       within(suggestions).getByRole("button", { name: "Chess" }),
     ).toBeInTheDocument();
+    expect(within(suggestions).getByText("Suggested hobbies")).toBeInTheDocument();
   });
 
   it("accepts structured section AI suggestions into the active CV state", async () => {
