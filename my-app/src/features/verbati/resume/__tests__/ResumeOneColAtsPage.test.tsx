@@ -629,6 +629,57 @@ describe("ResumeOneColAtsPage", () => {
     );
   });
 
+  it("routes the achievement line wand through the item action instead of the section action", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+      achievementItems: resumeMock.achievementItems.slice(0, 2),
+      achievements: resumeMock.achievementItems.slice(0, 2).map((item) => item.text),
+    };
+    const plan = planWorkshopResumePages({ data, template });
+    const onAsk = vi.fn();
+    const onAskItem = vi.fn();
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        sectionActions={{
+          hiddenSectionIds: [],
+          onAsk,
+          onAskItem,
+          onToggleHidden: () => {},
+          onDelete: () => {},
+        }}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Improve achievement" })[1]!,
+    );
+
+    expect(onAsk).not.toHaveBeenCalled();
+    expect(onAskItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionType: "achievements",
+        itemId: data.achievementItems[1]!.id,
+        itemIndex: 1,
+        field: "achievement",
+      }),
+    );
+  });
+
   it("anchors section controls to the whole preview section region in edit mode", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const data = {

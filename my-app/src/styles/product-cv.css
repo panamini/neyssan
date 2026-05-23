@@ -507,6 +507,11 @@
   outline: none;
 }
 
+.dasti-cv-paper-achievement-item {
+  border-radius: 1.4mm;
+  outline: none;
+}
+
 .dasti-cv-paper-experience-item:focus-visible {
   box-shadow: 0 0 0 1.2mm
     color-mix(in srgb, var(--color-accent, #556d60) 18%, transparent);
@@ -541,9 +546,14 @@
 .dasti-cv-paper-experience-item:hover .dasti-cv-paper-item-wand,
 .dasti-cv-paper-experience-item:focus .dasti-cv-paper-item-wand,
 .dasti-cv-paper-experience-item:focus-within .dasti-cv-paper-item-wand,
+.dasti-cv-paper-achievement-item:hover .dasti-cv-paper-item-wand,
+.dasti-cv-paper-achievement-item:focus .dasti-cv-paper-item-wand,
+.dasti-cv-paper-achievement-item:focus-within .dasti-cv-paper-item-wand,
 .dasti-cv-paper-experience-item[data-preview-active="true"]
   .dasti-cv-paper-item-wand,
 .dasti-cv-paper-experience-item[data-cv-ai-review-target="true"]
+  .dasti-cv-paper-item-wand,
+.dasti-cv-paper-achievement-item[data-cv-ai-review-target="true"]
   .dasti-cv-paper-item-wand {
   opacity: 1;
   pointer-events: auto;
@@ -558,9 +568,13 @@
 @media (hover: none) {
   .dasti-cv-paper-experience-item:focus .dasti-cv-paper-item-wand,
   .dasti-cv-paper-experience-item:focus-within .dasti-cv-paper-item-wand,
+  .dasti-cv-paper-achievement-item:focus .dasti-cv-paper-item-wand,
+  .dasti-cv-paper-achievement-item:focus-within .dasti-cv-paper-item-wand,
   .dasti-cv-paper-experience-item[data-preview-active="true"]
     .dasti-cv-paper-item-wand,
   .dasti-cv-paper-experience-item[data-cv-ai-review-target="true"]
+    .dasti-cv-paper-item-wand,
+  .dasti-cv-paper-achievement-item[data-cv-ai-review-target="true"]
     .dasti-cv-paper-item-wand {
     opacity: 1;
     pointer-events: auto;

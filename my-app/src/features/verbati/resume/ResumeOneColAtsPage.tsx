@@ -2231,37 +2231,71 @@ function renderFragmentContent(args: {
               hasVisibleText(item.text) ||
               isActiveItemEditTarget(inlineEditing, item.id),
           )
-          .map((item) => (
-            <li key={item.id}>
-              {renderInlineField({
-                as: "span",
-                value: item.text,
-                editable: Boolean(inlineEditing?.enabled),
-                inlineEditing,
-                editTarget: {
-                  sectionId: fragment.sectionId ?? "",
-                  sectionType: "achievements",
-                  fieldPath: `structuredContent.item:${item.id}.text`,
-                  fieldKind: "paragraph",
-                },
-                ariaLabel: "Edit achievement",
-                placeholder: "Add achievement",
-                previewAttrs: buildPreviewRegionAttrs({
-                  sectionType: "achievements",
-                  sectionId: fragment.sectionId,
-                  sectionTitle: fragment.title ?? "Achievements",
-                  itemId: item.id,
-                  activeTarget,
-                  surface: "item",
-                }),
-                preservePreviewItemId: true,
-                style: {
-                  fontSize: workshopBodyFontSize,
-                  lineHeight: "var(--text-body-line)",
-                },
-              })}
-            </li>
-          )),
+          .map((item, itemIndex) => {
+            const isAiReviewTarget =
+              paperAi?.activeTarget?.sectionId === fragment.sectionId &&
+              paperAi?.activeTarget?.sectionType === "achievements" &&
+              paperAi?.activeTarget?.itemId === item.id;
+            return (
+              <li
+                className="dasti-cv-paper-achievement-item"
+                key={item.id}
+                data-cv-ai-review-target={isAiReviewTarget ? "true" : undefined}
+                style={{ position: "relative" }}
+              >
+                {inlineEditing?.enabled && sectionActions?.onAskItem ? (
+                  <button
+                    type="button"
+                    className="dasti-cv-paper-item-wand"
+                    aria-label="Improve achievement"
+                    title="Improve achievement with AI"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      sectionActions.onAskItem?.({
+                        sectionId: fragment.sectionId ?? "",
+                        sectionType: "achievements",
+                        itemId: item.id,
+                        itemIndex,
+                        field: "achievement",
+                      });
+                    }}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <Wand2 size={12} strokeWidth={1.8} aria-hidden="true" />
+                  </button>
+                ) : null}
+                {renderInlineField({
+                  as: "span",
+                  value: item.text,
+                  editable: Boolean(inlineEditing?.enabled),
+                  inlineEditing,
+                  editTarget: {
+                    sectionId: fragment.sectionId ?? "",
+                    sectionType: "achievements",
+                    fieldPath: `structuredContent.item:${item.id}.text`,
+                    fieldKind: "paragraph",
+                  },
+                  ariaLabel: "Edit achievement",
+                  placeholder: "Add achievement",
+                  previewAttrs: buildPreviewRegionAttrs({
+                    sectionType: "achievements",
+                    sectionId: fragment.sectionId,
+                    sectionTitle: fragment.title ?? "Achievements",
+                    itemId: item.id,
+                    activeTarget,
+                    surface: "item",
+                  }),
+                  preservePreviewItemId: true,
+                  style: {
+                    fontSize: workshopBodyFontSize,
+                    lineHeight: "var(--text-body-line)",
+                  },
+                })}
+              </li>
+            );
+          }),
         <li key={`${fragment.fragmentId}:add-achievement`}>
           {renderInlineAddButton({
             inlineEditing,
