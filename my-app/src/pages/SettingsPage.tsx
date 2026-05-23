@@ -4,6 +4,7 @@ import { useAuth, useUser } from "@clerk/clerk-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
+import { useForgeTemplatePanel } from "../contexts/ForgeTemplatePanelContext";
 import {
   Check,
   Eraser,
@@ -191,6 +192,7 @@ const SETTINGS_ACCENT_OPTIONS: SettingsAccentOption[] = [
 ];
 
 const SETTINGS_CUSTOM_ACCENT_STARTER_HEX = "#8A8176";
+const SETTINGS_DOCKED_DRAWER_MIN_VIEWPORT_WIDTH = 1180;
 
 function normalizeSettingsAccentHex(
   value: string | null | undefined,
@@ -1116,6 +1118,16 @@ export function SettingsPage(): JSX.Element {
   const [searchParams] = useSearchParams();
   const activeTab = normalizeSettingsTab(searchParams.get("tab"));
   const { currentCvId } = useCvLibrary();
+  const {
+    activeSurface: activeForgePanelSurface,
+    dockedSurface: dockedForgePanelSurface,
+    open: forgePanelOpen,
+    openMode: forgePanelOpenMode,
+    openSurface: openForgePanelSurface,
+  } = useForgeTemplatePanel();
+  const [viewportWidth, setViewportWidth] = React.useState(() =>
+    typeof window === "undefined" ? 1280 : window.innerWidth,
+  );
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
   const { preference: motionPreference, setPreference: setMotionPreference } =
     useMotionPreference();
@@ -1167,6 +1179,17 @@ export function SettingsPage(): JSX.Element {
   const voiceHydrated = React.useRef(false);
   const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] =
     React.useState(false);
+
+  React.useEffect(() => {
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   // Sync from server once
   React.useEffect(() => {
@@ -1441,11 +1464,47 @@ export function SettingsPage(): JSX.Element {
     "Your account";
   const accountEmail =
     user?.primaryEmailAddress?.emailAddress ?? "Not connected";
+  const isWideEnoughForSettingsDrawerDock =
+    viewportWidth >= SETTINGS_DOCKED_DRAWER_MIN_VIEWPORT_WIDTH;
+  const isSettingsDrawerDocked =
+    forgePanelOpen &&
+    forgePanelOpenMode === "docked" &&
+    isWideEnoughForSettingsDrawerDock &&
+    (activeForgePanelSurface === "settings" ||
+      dockedForgePanelSurface === "settings");
+
+  React.useEffect(() => {
+    const isSettingsPanelActive =
+      forgePanelOpen &&
+      (activeForgePanelSurface === "settings" ||
+        dockedForgePanelSurface === "settings");
+
+    if (!isSettingsPanelActive || forgePanelOpenMode === "peek") {
+      return;
+    }
+
+    const nextMode = isWideEnoughForSettingsDrawerDock ? "docked" : "overlay";
+    if (forgePanelOpenMode === nextMode) {
+      return;
+    }
+
+    openForgePanelSurface("settings", { mode: nextMode });
+  }, [
+    activeForgePanelSurface,
+    dockedForgePanelSurface,
+    forgePanelOpen,
+    forgePanelOpenMode,
+    isWideEnoughForSettingsDrawerDock,
+    openForgePanelSurface,
+  ]);
 
   return (
     <div className="dasti-page-scroll" style={{ minWidth: 0 }}>
       <div
-        className="dasti-page-shell"
+        className="dasti-page-shell dasti-page-shell--settings"
+        data-forge-drawer-docked={
+          isSettingsDrawerDocked ? "true" : undefined
+        }
         style={
           {
             "--page-shell-max-width": "1320px",
@@ -1454,7 +1513,12 @@ export function SettingsPage(): JSX.Element {
           } as React.CSSProperties
         }
       >
-        <div className="dasti-settings-layout settings">
+        <div
+          className="dasti-settings-layout settings"
+          data-forge-drawer-docked={
+            isSettingsDrawerDocked ? "true" : undefined
+          }
+        >
           <div className="settings__content">
             {activeTab === "docstyle" ? (
               <div

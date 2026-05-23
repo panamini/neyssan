@@ -155,6 +155,12 @@
   padding: var(--s6) 0;
 }
 
+.dasti-page-shell--settings[data-forge-drawer-docked="true"] {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+
 .dasti-settings-page__header {
   display: flex;
   flex-direction: column;
@@ -1678,6 +1684,11 @@
   padding: var(--s6) var(--s5) var(--s8);
   margin: 0 auto;
   align-items: start;
+}
+
+.settings[data-forge-drawer-docked="true"] {
+  max-width: none;
+  margin-inline: 0;
 }
 
 /* Document style pane: slots + editor toolbar live in the main column;
