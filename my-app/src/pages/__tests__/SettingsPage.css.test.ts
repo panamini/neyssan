@@ -19,4 +19,19 @@ describe("SettingsPage document style CSS contracts", () => {
       "position: relative;",
     );
   });
+
+  it("lets the Settings shell occupy the remaining app column when the drawer is docked", () => {
+    const shellRule = exactRuleBlock(
+      '.dasti-page-shell--settings[data-forge-drawer-docked="true"]',
+    );
+    expect(shellRule).toContain("width: 100%;");
+    expect(shellRule).toContain("max-width: none;");
+    expect(shellRule).toContain("margin-inline: 0;");
+
+    const layoutRule = exactRuleBlock(
+      '.settings[data-forge-drawer-docked="true"]',
+    );
+    expect(layoutRule).toContain("max-width: none;");
+    expect(layoutRule).toContain("margin-inline: 0;");
+  });
 });
