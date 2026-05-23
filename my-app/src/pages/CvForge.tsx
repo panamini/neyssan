@@ -6678,7 +6678,6 @@ export function CvForge(): JSX.Element {
       if (railAiMode === "none") return;
 
       if (sectionUsesStructuredSuggestions(section)) {
-        handleAskAiForSection(sectionId);
         void handleRunAskAiForSection({ sectionId, prompt: "", tone: cvTone });
         return;
       }
@@ -7303,6 +7302,21 @@ export function CvForge(): JSX.Element {
 
   const resumePaperAiState = React.useMemo<ResumePaperAiState | null>(() => {
     if (workspaceMode !== "edit") return null;
+    const listSuggestion =
+      cvRailAiSuggestion?.kind === "list"
+        ? {
+            sectionId: cvRailAiSuggestion.sectionId,
+            sectionType:
+              findSectionById(currentSections, cvRailAiSuggestion.sectionId)
+                ?.type ?? "skills",
+            items: cvRailAiSuggestion.items,
+            state: cvRailAiSuggestion.state,
+            errorMessage: cvRailAiSuggestion.errorMessage,
+          }
+        : null;
+    const listSuggestionSection = listSuggestion
+      ? findSectionById(currentSections, listSuggestion.sectionId)
+      : null;
 
     return {
       activeTarget: cvAiReview?.target
@@ -7313,8 +7327,22 @@ export function CvForge(): JSX.Element {
             fieldPath: cvAiReview.target.fieldPath,
           }
         : null,
+      listSuggestion:
+        listSuggestionSection &&
+        sectionUsesStructuredSuggestions(listSuggestionSection)
+          ? listSuggestion
+          : null,
+      onAcceptListSuggestion: handleAcceptListAiSuggestion,
+      onDismissListSuggestion: handleDismissListAiSuggestion,
     };
-  }, [cvAiReview, workspaceMode]);
+  }, [
+    currentSections,
+    cvAiReview,
+    cvRailAiSuggestion,
+    handleAcceptListAiSuggestion,
+    handleDismissListAiSuggestion,
+    workspaceMode,
+  ]);
 
   const handleRunListAiSuggestion = React.useCallback(
     (sectionId: string) => {

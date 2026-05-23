@@ -76,6 +76,15 @@ export type ResumePaperAiState = {
     itemId?: string;
     fieldPath?: string;
   } | null;
+  listSuggestion?: {
+    sectionId: string;
+    sectionType: string;
+    items: string[];
+    state: "loading" | "ready" | "error";
+    errorMessage?: string;
+  } | null;
+  onAcceptListSuggestion?: (value: string) => void;
+  onDismissListSuggestion?: (value: string) => void;
 };
 
 const experienceWrapStyle = {
@@ -98,12 +107,83 @@ const workshopVisibleListStyle = {
   listStylePosition: "outside" as const,
 };
 
+function renderPaperListSuggestions(args: {
+  fragment: WorkshopResumeCommittedFragment;
+  paperAi?: ResumePaperAiState | null;
+}) {
+  const suggestion = args.paperAi?.listSuggestion;
+  if (!suggestion || suggestion.sectionId !== args.fragment.sectionId) {
+    return null;
+  }
+
+  if (suggestion.state === "loading") {
+    return (
+      <div className="dasti-cv-paper-list-suggestions" data-cv-paper-list-suggestions="loading">
+        <span className="dasti-cv-paper-list-suggestions__status">
+          Finding suggestions...
+        </span>
+      </div>
+    );
+  }
+
+  if (suggestion.state === "error") {
+    return (
+      <div className="dasti-cv-paper-list-suggestions" data-cv-paper-list-suggestions="error">
+        <span className="dasti-cv-paper-list-suggestions__status">
+          {suggestion.errorMessage || "Suggestions are unavailable."}
+        </span>
+      </div>
+    );
+  }
+
+  if (suggestion.items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="dasti-cv-paper-list-suggestions" data-cv-paper-list-suggestions="ready">
+      {suggestion.items.map((item) => (
+        <span className="dasti-cv-paper-list-suggestions__chip" key={item}>
+          <span>{item}</span>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              args.paperAi?.onAcceptListSuggestion?.(item);
+            }}
+          >
+            Add
+          </button>
+          {args.paperAi?.onDismissListSuggestion ? (
+            <button
+              type="button"
+              aria-label={`Dismiss ${item}`}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                args.paperAi?.onDismissListSuggestion?.(item);
+              }}
+            >
+              x
+            </button>
+          ) : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function formatMillimeters(value: number) {
   return `${value}mm`;
 }
 
 function buildAdjustedFontSize(args: {
-  baseVar: "--text-display-size" | "--text-title-size" | "--text-body-size" | "--text-body-sm-size";
+  baseVar:
+    | "--text-display-size"
+    | "--text-title-size"
+    | "--text-body-size"
+    | "--text-body-sm-size";
   adjustVar:
     | "--display-size-adjust"
     | "--title-size-adjust"
@@ -144,7 +224,9 @@ const workshopCompactRowTextStyle = {
   lineHeight: "var(--text-body-sm-line)",
 };
 
-export function shouldRenderPaperSectionAiControl(sectionType: string | undefined) {
+export function shouldRenderPaperSectionAiControl(
+  sectionType: string | undefined,
+) {
   switch (sectionType) {
     case "summary":
     case "text":
@@ -204,11 +286,7 @@ function renderSectionHeading(args: {
         {args.title}
       </h2>
       {args.continued ? (
-        <span
-          style={workshopLabelTextStyle}
-        >
-          Continued
-        </span>
+        <span style={workshopLabelTextStyle}>Continued</span>
       ) : null}
       <div
         style={{
@@ -219,7 +297,10 @@ function renderSectionHeading(args: {
         }}
       />
       {sectionId && args.sectionActions ? (
-        <div className="dasti-cv-paper-section-controls" data-paper-section-controls="true">
+        <div
+          className="dasti-cv-paper-section-controls"
+          data-paper-section-controls="true"
+        >
           {showSectionAiControl ? (
             <button
               type="button"
@@ -385,7 +466,9 @@ function remirrorInlineFromRuns(runs: WorkshopResponsibilityTextRun[]) {
         nodes.push({
           type: "text",
           text: part,
-          ...(remirrorMarksFromRun(run) ? { marks: remirrorMarksFromRun(run) } : {}),
+          ...(remirrorMarksFromRun(run)
+            ? { marks: remirrorMarksFromRun(run) }
+            : {}),
         } as RemirrorJSON);
       }
       return nodes;
@@ -500,10 +583,13 @@ function PaperRichInlineEditor(args: {
     const previousExternalJson = lastExternalDocJsonRef.current;
     if (nextJson === previousExternalJson) return;
     const currentEditorJson = JSON.stringify(latestDocRef.current);
-    const hasLocalUncommittedChanges = currentEditorJson !== previousExternalJson;
+    const hasLocalUncommittedChanges =
+      currentEditorJson !== previousExternalJson;
     lastExternalDocJsonRef.current = nextJson;
     if (isFocusedRef.current && hasLocalUncommittedChanges) return;
-    const nextState = (manager as any)?.createState?.({ content: externalDoc as any });
+    const nextState = (manager as any)?.createState?.({
+      content: externalDoc as any,
+    });
     const view = (manager as any)?.view;
     if (nextState && typeof view?.updateState === "function") {
       view.updateState(nextState);
@@ -574,7 +660,12 @@ function PaperRichInlineEditor(args: {
         }
       }}
     >
-      <Remirror manager={manager} initialContent={state} onChange={handleChange} editable={args.editable}>
+      <Remirror
+        manager={manager}
+        initialContent={state}
+        onChange={handleChange}
+        editable={args.editable}
+      >
         <EditorComponent />
       </Remirror>
     </div>
@@ -600,7 +691,10 @@ function renderResponsibilitiesRich(args: {
           }}
         >
           {block.runs.map((run, runIndex) =>
-            renderResponsibilityRun(run, `paragraph-${blockIndex}-run-${runIndex}`),
+            renderResponsibilityRun(
+              run,
+              `paragraph-${blockIndex}-run-${runIndex}`,
+            ),
           )}
         </p>
       );
@@ -649,7 +743,9 @@ function responsibilitiesRichHasPartialContent(
       return "partial" in block && block.partial === true;
     }
 
-    return block.items.some((item) => "partial" in item && item.partial === true);
+    return block.items.some(
+      (item) => "partial" in item && item.partial === true,
+    );
   });
 }
 
@@ -688,7 +784,9 @@ function renderExperienceContent(args: {
         .filter((text) => text.length > 0)
         .join("\n");
 
-      const hasRichParagraph = rich.blocks.some((block) => block.kind === "paragraph");
+      const hasRichParagraph = rich.blocks.some(
+        (block) => block.kind === "paragraph",
+      );
 
       return [
         <PaperRichInlineEditor
@@ -971,7 +1069,9 @@ function isActiveItemEditTarget(
 ) {
   return Boolean(
     inlineEditing?.enabled &&
-      inlineEditing.activeTarget?.fieldPath.includes(`structuredContent.item:${itemId}.`),
+      inlineEditing.activeTarget?.fieldPath.includes(
+        `structuredContent.item:${itemId}.`,
+      ),
   );
 }
 
@@ -1036,8 +1136,12 @@ function renderProfileFragment(args: {
   const profileSectionId = data.profileSectionId ?? "profile";
   const editable = Boolean(inlineEditing?.enabled);
   const populatedProfileFieldKeys = new Set([
-    ...data.contact.map((item) => String(item.itemId ?? item.label.toLowerCase())),
-    ...data.metadata.map((item) => String(item.itemId ?? item.label.toLowerCase())),
+    ...data.contact.map((item) =>
+      String(item.itemId ?? item.label.toLowerCase()),
+    ),
+    ...data.metadata.map((item) =>
+      String(item.itemId ?? item.label.toLowerCase()),
+    ),
   ]);
   const optionalContactFields = [
     { key: "email", label: "Email", addLabel: "email" },
@@ -1090,38 +1194,38 @@ function renderProfileFragment(args: {
             letterSpacing: "-0.02em",
           },
         })}
-        {data.title || editable ? (
-          renderInlineField({
-            value: data.title,
-            editable,
-            inlineEditing,
-            editTarget: {
-              sectionId: profileSectionId,
-              sectionType: "profile",
-              fieldPath: "structuredContent.0.desiredPosition",
-              fieldKind: "meta",
-            },
-            ariaLabel: "Edit title",
-            placeholder: "Target title",
-            previewAttrs: buildPreviewRegionAttrs({
-              sectionType: "profile",
-              sectionId: profileSectionId,
-              sectionTitle: "Profile",
-              activeTarget,
-              surface: "item",
-            }),
-            style: {
-              margin: 0,
-              fontSize: buildAdjustedFontSize({
-                baseVar: "--text-body-size",
-                adjustVar: "--body-size-adjust",
-                offsetMm: 0.1,
+        {data.title || editable
+          ? renderInlineField({
+              value: data.title,
+              editable,
+              inlineEditing,
+              editTarget: {
+                sectionId: profileSectionId,
+                sectionType: "profile",
+                fieldPath: "structuredContent.0.desiredPosition",
+                fieldKind: "meta",
+              },
+              ariaLabel: "Edit title",
+              placeholder: "Target title",
+              previewAttrs: buildPreviewRegionAttrs({
+                sectionType: "profile",
+                sectionId: profileSectionId,
+                sectionTitle: "Profile",
+                activeTarget,
+                surface: "item",
               }),
-              lineHeight: "var(--text-body-line)",
-              color: "var(--color-text-muted)",
-            },
-          })
-        ) : null}
+              style: {
+                margin: 0,
+                fontSize: buildAdjustedFontSize({
+                  baseVar: "--text-body-size",
+                  adjustVar: "--body-size-adjust",
+                  offsetMm: 0.1,
+                }),
+                lineHeight: "var(--text-body-line)",
+                color: "var(--color-text-muted)",
+              },
+            })
+          : null}
       </div>
       {data.contact.length > 0 ? (
         <dl
@@ -1136,7 +1240,9 @@ function renderProfileFragment(args: {
           {data.contact.map((item) => (
             <div
               key={item.itemId ?? item.label}
-              data-paper-profile-contact-item={item.itemId ?? item.label.toLowerCase()}
+              data-paper-profile-contact-item={
+                item.itemId ?? item.label.toLowerCase()
+              }
               style={{ display: "grid", gap: "0.5mm" }}
             >
               <dt
@@ -1155,33 +1261,33 @@ function renderProfileFragment(args: {
                   color: "var(--color-text-muted)",
                 }}
               >
-              {renderInlineField({
-              as: "span",
-              value: item.value,
-              editable,
-              inlineEditing,
-              editTarget: {
-                sectionId: item.sectionId ?? profileSectionId,
-                sectionType: "profile",
-                fieldPath: `structuredContent.0.${item.draftFieldKey ?? item.itemId ?? item.label.toLowerCase()}`,
-                fieldKind: "meta",
-              },
-              ariaLabel: `Edit ${item.label}`,
-              placeholder: item.label,
-              previewAttrs: buildPreviewRegionAttrs({
-                sectionType: "contact",
-                sectionId: item.sectionId ?? profileSectionId,
-                sectionTitle: "Contact",
-                itemId: item.itemId,
-                activeTarget,
-                surface: "item",
-              }),
-              style: {
-                fontSize: "var(--text-meta-size)",
-                lineHeight: "var(--text-meta-line)",
-                color: "var(--color-text-muted)",
-              },
-            })}
+                {renderInlineField({
+                  as: "span",
+                  value: item.value,
+                  editable,
+                  inlineEditing,
+                  editTarget: {
+                    sectionId: item.sectionId ?? profileSectionId,
+                    sectionType: "profile",
+                    fieldPath: `structuredContent.0.${item.draftFieldKey ?? item.itemId ?? item.label.toLowerCase()}`,
+                    fieldKind: "meta",
+                  },
+                  ariaLabel: `Edit ${item.label}`,
+                  placeholder: item.label,
+                  previewAttrs: buildPreviewRegionAttrs({
+                    sectionType: "contact",
+                    sectionId: item.sectionId ?? profileSectionId,
+                    sectionTitle: "Contact",
+                    itemId: item.itemId,
+                    activeTarget,
+                    surface: "item",
+                  }),
+                  style: {
+                    fontSize: "var(--text-meta-size)",
+                    lineHeight: "var(--text-meta-line)",
+                    color: "var(--color-text-muted)",
+                  },
+                })}
               </dd>
             </div>
           ))}
@@ -1306,20 +1412,26 @@ function renderFragmentContent(args: {
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
 }) {
-  const { fragment, data, activeTarget, inlineEditing, sectionActions, paperAi } = args;
+  const {
+    fragment,
+    data,
+    activeTarget,
+    inlineEditing,
+    sectionActions,
+    paperAi,
+  } = args;
   const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
 
   switch (fragment.kind) {
     case "profile":
       return renderProfileFragment({ data, activeTarget, inlineEditing });
-    case "summary":
-      {
-        const editTarget = {
-          sectionId: fragment.sectionId ?? data.summarySectionId ?? "summary",
-          sectionType: "summary",
-          fieldPath: "structuredContent.0.summary",
-          fieldKind: "paragraph" as const,
-        };
+    case "summary": {
+      const editTarget = {
+        sectionId: fragment.sectionId ?? data.summarySectionId ?? "summary",
+        sectionType: "summary",
+        fieldPath: "structuredContent.0.summary",
+        fieldKind: "paragraph" as const,
+      };
       return fragment.summaryRich ? (
         <PaperRichInlineEditor
           key={fragment.fragmentId}
@@ -1379,200 +1491,195 @@ function renderFragmentContent(args: {
           }}
         />
       );
-      }
+    }
     case "experience":
       return [
         ...fragment.items.map((item, itemIndex) => {
-        const itemFieldPath = (field: string) =>
-          `structuredContent.item:${item.id}.${field}`;
-        const isAiReviewTarget =
-          paperAi?.activeTarget?.sectionId === fragment.sectionId &&
-          paperAi?.activeTarget?.sectionType === "experience" &&
-          paperAi?.activeTarget?.itemId === item.id;
-        return (
-          <PreviewItemRegion
-            as="article"
-            key={`${fragment.fragmentId}:${item.id}:${item.continued ? "continued" : "initial"}`}
-            sectionType="experience"
-            sectionId={fragment.sectionId}
-            sectionTitle={fragment.title ?? "Experience"}
-            itemId={item.id}
-            activeTarget={activeTarget}
-            surface="item"
-            style={{
-              position: "relative",
-              display: "grid",
-              gap: formatMillimeters(workshopLayout.experienceBlockGapMm),
-            }}
-            data-preview-row-id={item.id}
-            data-cv-ai-review-target={isAiReviewTarget ? "true" : undefined}
-          >
-            {inlineEditing?.enabled && sectionActions?.onAskItem ? (
-              <button
-                type="button"
-                aria-label={`Improve responsibilities for ${item.role || "experience entry"}`}
-                title="Improve responsibilities with AI"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  sectionActions.onAskItem?.({
-                    sectionId: fragment.sectionId ?? "",
-                    sectionType: "experience",
-                    itemId: item.id,
-                    itemIndex,
-                    field: "responsibilities",
-                  });
-                }}
-                onMouseDown={(event) => event.stopPropagation()}
-                onPointerDown={(event) => event.stopPropagation()}
-                style={{
-                  position: "absolute",
-                  top: "-1mm",
-                  right: "-7mm",
-                  width: "5mm",
-                  height: "5mm",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: "999px",
-                  border: "0.25mm solid var(--color-border-strong)",
-                  background: "var(--paper)",
-                  color: "var(--color-accent)",
-                  cursor: "pointer",
-                }}
-              >
-                <Wand2 size={12} strokeWidth={1.8} aria-hidden="true" />
-              </button>
-            ) : null}
-            <div
+          const itemFieldPath = (field: string) =>
+            `structuredContent.item:${item.id}.${field}`;
+          const isAiReviewTarget =
+            paperAi?.activeTarget?.sectionId === fragment.sectionId &&
+            paperAi?.activeTarget?.sectionType === "experience" &&
+            paperAi?.activeTarget?.itemId === item.id;
+          return (
+            <PreviewItemRegion
+              as="article"
+              key={`${fragment.fragmentId}:${item.id}:${item.continued ? "continued" : "initial"}`}
+              className="dasti-cv-paper-experience-item"
+              sectionType="experience"
+              sectionId={fragment.sectionId}
+              sectionTitle={fragment.title ?? "Experience"}
+              itemId={item.id}
+              activeTarget={activeTarget}
+              surface="item"
               style={{
+                position: "relative",
                 display: "grid",
-                gap: formatMillimeters(workshopLayout.experienceMetaGapMm),
+                gap: formatMillimeters(workshopLayout.experienceBlockGapMm),
               }}
+              data-preview-row-id={item.id}
+              data-cv-ai-review-target={isAiReviewTarget ? "true" : undefined}
+              tabIndex={
+                inlineEditing?.enabled && sectionActions?.onAskItem
+                  ? 0
+                  : undefined
+              }
+              aria-label={
+                inlineEditing?.enabled && sectionActions?.onAskItem
+                  ? `${item.role || "Experience entry"} actions`
+                  : undefined
+              }
             >
+              {inlineEditing?.enabled && sectionActions?.onAskItem ? (
+                <button
+                  type="button"
+                  className="dasti-cv-paper-item-wand"
+                  aria-label={`Improve responsibilities for ${item.role || "experience entry"}`}
+                  title="Improve responsibilities with AI"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    sectionActions.onAskItem?.({
+                      sectionId: fragment.sectionId ?? "",
+                      sectionType: "experience",
+                      itemId: item.id,
+                      itemIndex,
+                      field: "responsibilities",
+                    });
+                  }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <Wand2 size={12} strokeWidth={1.8} aria-hidden="true" />
+                </button>
+              ) : null}
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: "1.2mm",
-                  flexWrap: "wrap",
+                  display: "grid",
+                  gap: formatMillimeters(workshopLayout.experienceMetaGapMm),
                 }}
               >
-                {renderInlineField({
-                  as: "h3",
-                  value: item.role,
-                  editable: Boolean(inlineEditing?.enabled),
-                  inlineEditing,
-                  editTarget: {
-                    sectionId: fragment.sectionId ?? "",
-                    sectionType: "experience",
-                    fieldPath: itemFieldPath("position"),
-                    fieldKind: "heading",
-                    itemIndex,
-                  },
-                  ariaLabel: "Edit experience title",
-                  placeholder: "Job title",
-                  previewAttrs: buildPreviewRegionAttrs({
-                    sectionType: "experience",
-                    sectionId: fragment.sectionId,
-                    sectionTitle: fragment.title ?? "Experience",
-                    itemId: item.id,
-                    activeTarget,
-                    surface: "item",
-                  }),
-                  style: {
-                    margin: 0,
-                    fontFamily: "var(--heading-font, var(--font-heading-family))",
-                    fontSize: buildAdjustedFontSize({
-                      baseVar: "--text-body-size",
-                      adjustVar: "--body-size-adjust",
-                      offsetVar: "--workshop-experience-heading-size-adjust",
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: "1.2mm",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {renderInlineField({
+                    as: "h3",
+                    value: item.role,
+                    editable: Boolean(inlineEditing?.enabled),
+                    inlineEditing,
+                    editTarget: {
+                      sectionId: fragment.sectionId ?? "",
+                      sectionType: "experience",
+                      fieldPath: itemFieldPath("position"),
+                      fieldKind: "heading",
+                      itemIndex,
+                    },
+                    ariaLabel: "Edit experience title",
+                    placeholder: "Job title",
+                    previewAttrs: buildPreviewRegionAttrs({
+                      sectionType: "experience",
+                      sectionId: fragment.sectionId,
+                      sectionTitle: fragment.title ?? "Experience",
+                      itemId: item.id,
+                      activeTarget,
+                      surface: "item",
                     }),
-                    lineHeight: "var(--workshop-experience-heading-line-height)",
-                    fontWeight: 700,
-                  },
-                })}
-                {item.continued ? (
-                  <span
-                    style={workshopLabelTextStyle}
-                  >
-                    Continued
-                  </span>
-                ) : null}
-              </div>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "var(--text-meta-size)",
-                  lineHeight: "var(--text-meta-line)",
-                  color: "var(--color-text-muted)",
-                  ...experienceWrapStyle,
-                }}
-              >
-                {renderInlineField({
-                  as: "span",
-                  value: item.company,
-                  editable: Boolean(inlineEditing?.enabled),
-                  inlineEditing,
-                  editTarget: {
-                    sectionId: fragment.sectionId ?? "",
-                    sectionType: "experience",
-                    fieldPath: itemFieldPath("company"),
-                    fieldKind: "meta",
-                    itemIndex,
-                  },
-                  ariaLabel: "Edit company",
-                  placeholder: "Company",
-                  previewAttrs: buildPreviewRegionAttrs({
-                    sectionType: "experience",
-                    sectionId: fragment.sectionId,
-                    sectionTitle: fragment.title ?? "Experience",
-                    itemId: item.id,
-                    activeTarget,
-                    surface: "item",
-                  }),
-                })}
-                {item.location || inlineEditing?.enabled ? " · " : null}
-                {item.location || inlineEditing?.enabled
-                  ? renderInlineField({
-                      as: "span",
-                      value: item.location,
-                      editable: Boolean(inlineEditing?.enabled),
-                      inlineEditing,
-                      editTarget: {
-                        sectionId: fragment.sectionId ?? "",
-                        sectionType: "experience",
-                        fieldPath: itemFieldPath("location"),
-                        fieldKind: "meta",
-                        itemIndex,
-                      },
-                      ariaLabel: "Edit location",
-                      placeholder: "Location",
-                      previewAttrs: buildPreviewRegionAttrs({
-                        sectionType: "experience",
-                        sectionId: fragment.sectionId,
-                        sectionTitle: fragment.title ?? "Experience",
-                        itemId: item.id,
-                        activeTarget,
-                        surface: "item",
+                    style: {
+                      margin: 0,
+                      fontFamily:
+                        "var(--heading-font, var(--font-heading-family))",
+                      fontSize: buildAdjustedFontSize({
+                        baseVar: "--text-body-size",
+                        adjustVar: "--body-size-adjust",
+                        offsetVar: "--workshop-experience-heading-size-adjust",
                       }),
-                    })
-                  : null}
-                {item.period ? " · " : null}
-                {item.period}
-              </p>
-            </div>
-            {renderExperienceContent({
-              item,
-              sectionId: fragment.sectionId,
-              sectionType: "experience",
-              sectionTitle: fragment.title ?? "Experience",
-              itemIndex,
-              listGapMm: workshopLayout.listGapMm,
-              inlineEditing,
-            })}
-          </PreviewItemRegion>
-        );
+                      lineHeight:
+                        "var(--workshop-experience-heading-line-height)",
+                      fontWeight: 700,
+                    },
+                  })}
+                  {item.continued ? (
+                    <span style={workshopLabelTextStyle}>Continued</span>
+                  ) : null}
+                </div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "var(--text-meta-size)",
+                    lineHeight: "var(--text-meta-line)",
+                    color: "var(--color-text-muted)",
+                    ...experienceWrapStyle,
+                  }}
+                >
+                  {renderInlineField({
+                    as: "span",
+                    value: item.company,
+                    editable: Boolean(inlineEditing?.enabled),
+                    inlineEditing,
+                    editTarget: {
+                      sectionId: fragment.sectionId ?? "",
+                      sectionType: "experience",
+                      fieldPath: itemFieldPath("company"),
+                      fieldKind: "meta",
+                      itemIndex,
+                    },
+                    ariaLabel: "Edit company",
+                    placeholder: "Company",
+                    previewAttrs: buildPreviewRegionAttrs({
+                      sectionType: "experience",
+                      sectionId: fragment.sectionId,
+                      sectionTitle: fragment.title ?? "Experience",
+                      itemId: item.id,
+                      activeTarget,
+                      surface: "item",
+                    }),
+                  })}
+                  {item.location || inlineEditing?.enabled ? " · " : null}
+                  {item.location || inlineEditing?.enabled
+                    ? renderInlineField({
+                        as: "span",
+                        value: item.location,
+                        editable: Boolean(inlineEditing?.enabled),
+                        inlineEditing,
+                        editTarget: {
+                          sectionId: fragment.sectionId ?? "",
+                          sectionType: "experience",
+                          fieldPath: itemFieldPath("location"),
+                          fieldKind: "meta",
+                          itemIndex,
+                        },
+                        ariaLabel: "Edit location",
+                        placeholder: "Location",
+                        previewAttrs: buildPreviewRegionAttrs({
+                          sectionType: "experience",
+                          sectionId: fragment.sectionId,
+                          sectionTitle: fragment.title ?? "Experience",
+                          itemId: item.id,
+                          activeTarget,
+                          surface: "item",
+                        }),
+                      })
+                    : null}
+                  {item.period ? " · " : null}
+                  {item.period}
+                </p>
+              </div>
+              {renderExperienceContent({
+                item,
+                sectionId: fragment.sectionId,
+                sectionType: "experience",
+                sectionTitle: fragment.title ?? "Experience",
+                itemIndex,
+                listGapMm: workshopLayout.listGapMm,
+                inlineEditing,
+              })}
+            </PreviewItemRegion>
+          );
         }),
         <div key={`${fragment.fragmentId}:add-experience`}>
           {renderInlineAddButton({
@@ -1587,127 +1694,127 @@ function renderFragmentContent(args: {
     case "education":
       return [
         ...fragment.items.map((item) => {
-        const educationDisplay = buildResumeEducationDisplay(item);
-        const itemFieldPath = (field: string) =>
-          `structuredContent.item:${item.id}.${field}`;
-        const editable = Boolean(inlineEditing?.enabled);
-        return (
-          <PreviewItemRegion
-            as="article"
-            key={item.id}
-            sectionType="education"
-            sectionId={fragment.sectionId}
-            sectionTitle={fragment.title ?? "Education"}
-            itemId={item.id}
-            activeTarget={activeTarget}
-            surface="item"
-            style={{
-              display: "grid",
-              gap: "var(--education-gap)",
-            }}
-            data-preview-row-id={item.id}
-          >
-            <h3
+          const educationDisplay = buildResumeEducationDisplay(item);
+          const itemFieldPath = (field: string) =>
+            `structuredContent.item:${item.id}.${field}`;
+          const editable = Boolean(inlineEditing?.enabled);
+          return (
+            <PreviewItemRegion
+              as="article"
+              key={item.id}
+              sectionType="education"
+              sectionId={fragment.sectionId}
+              sectionTitle={fragment.title ?? "Education"}
+              itemId={item.id}
+              activeTarget={activeTarget}
+              surface="item"
               style={{
-                margin: 0,
-                fontFamily: "var(--heading-font, var(--font-heading-family))",
-                fontSize: workshopBodyFontSize,
-                fontWeight: 700,
+                display: "grid",
+                gap: "var(--education-gap)",
               }}
+              data-preview-row-id={item.id}
             >
-              {editable ? (
-                <>
-                  {renderInlineField({
-                    as: "span",
-                    value: item.degree,
-                    editable,
-                    inlineEditing,
-                    editTarget: {
-                      sectionId: fragment.sectionId ?? "",
-                      sectionType: "education",
-                      fieldPath: itemFieldPath("degree"),
-                      fieldKind: "heading",
-                    },
-                    ariaLabel: "Edit education degree",
-                    placeholder: "Degree",
-                    previewAttrs: buildPreviewRegionAttrs({
-                      sectionType: "education",
-                      sectionId: fragment.sectionId,
-                      sectionTitle: fragment.title ?? "Education",
-                      itemId: item.id,
-                      activeTarget,
-                      surface: "item",
-                    }),
-                  })}
-                  {", "}
-                  {renderInlineField({
-                    as: "span",
-                    value: item.fieldOfStudy ?? "",
-                    editable,
-                    inlineEditing,
-                    editTarget: {
-                      sectionId: fragment.sectionId ?? "",
-                      sectionType: "education",
-                      fieldPath: itemFieldPath("fieldOfStudy"),
-                      fieldKind: "heading",
-                    },
-                    ariaLabel: "Edit field of study",
-                    placeholder: "Field",
-                    previewAttrs: buildPreviewRegionAttrs({
-                      sectionType: "education",
-                      sectionId: fragment.sectionId,
-                      sectionTitle: fragment.title ?? "Education",
-                      itemId: item.id,
-                      activeTarget,
-                      surface: "item",
-                    }),
-                  })}
-                </>
-              ) : (
-                educationDisplay.title
-              )}
-            </h3>
-            <p
-              style={{
-                margin: 0,
-                fontSize: "var(--text-body-sm-size)",
-                lineHeight: "var(--text-body-sm-line)",
-                color: "var(--color-text-muted)",
-              }}
-            >
-              {editable ? (
-                <>
-                  {renderInlineField({
-                    as: "span",
-                    value: item.school,
-                    editable,
-                    inlineEditing,
-                    editTarget: {
-                      sectionId: fragment.sectionId ?? "",
-                      sectionType: "education",
-                      fieldPath: itemFieldPath("institution"),
-                      fieldKind: "meta",
-                    },
-                    ariaLabel: "Edit school",
-                    placeholder: "School",
-                    previewAttrs: buildPreviewRegionAttrs({
-                      sectionType: "education",
-                      sectionId: fragment.sectionId,
-                      sectionTitle: fragment.title ?? "Education",
-                      itemId: item.id,
-                      activeTarget,
-                      surface: "item",
-                    }),
-                  })}
-                  {item.period ? " · " : null}
-                  {item.period}
-                </>
-              ) : (
-                educationDisplay.previewMeta
-              )}
-            </p>
-          </PreviewItemRegion>
-        );
+              <h3
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--heading-font, var(--font-heading-family))",
+                  fontSize: workshopBodyFontSize,
+                  fontWeight: 700,
+                }}
+              >
+                {editable ? (
+                  <>
+                    {renderInlineField({
+                      as: "span",
+                      value: item.degree,
+                      editable,
+                      inlineEditing,
+                      editTarget: {
+                        sectionId: fragment.sectionId ?? "",
+                        sectionType: "education",
+                        fieldPath: itemFieldPath("degree"),
+                        fieldKind: "heading",
+                      },
+                      ariaLabel: "Edit education degree",
+                      placeholder: "Degree",
+                      previewAttrs: buildPreviewRegionAttrs({
+                        sectionType: "education",
+                        sectionId: fragment.sectionId,
+                        sectionTitle: fragment.title ?? "Education",
+                        itemId: item.id,
+                        activeTarget,
+                        surface: "item",
+                      }),
+                    })}
+                    {", "}
+                    {renderInlineField({
+                      as: "span",
+                      value: item.fieldOfStudy ?? "",
+                      editable,
+                      inlineEditing,
+                      editTarget: {
+                        sectionId: fragment.sectionId ?? "",
+                        sectionType: "education",
+                        fieldPath: itemFieldPath("fieldOfStudy"),
+                        fieldKind: "heading",
+                      },
+                      ariaLabel: "Edit field of study",
+                      placeholder: "Field",
+                      previewAttrs: buildPreviewRegionAttrs({
+                        sectionType: "education",
+                        sectionId: fragment.sectionId,
+                        sectionTitle: fragment.title ?? "Education",
+                        itemId: item.id,
+                        activeTarget,
+                        surface: "item",
+                      }),
+                    })}
+                  </>
+                ) : (
+                  educationDisplay.title
+                )}
+              </h3>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "var(--text-body-sm-size)",
+                  lineHeight: "var(--text-body-sm-line)",
+                  color: "var(--color-text-muted)",
+                }}
+              >
+                {editable ? (
+                  <>
+                    {renderInlineField({
+                      as: "span",
+                      value: item.school,
+                      editable,
+                      inlineEditing,
+                      editTarget: {
+                        sectionId: fragment.sectionId ?? "",
+                        sectionType: "education",
+                        fieldPath: itemFieldPath("institution"),
+                        fieldKind: "meta",
+                      },
+                      ariaLabel: "Edit school",
+                      placeholder: "School",
+                      previewAttrs: buildPreviewRegionAttrs({
+                        sectionType: "education",
+                        sectionId: fragment.sectionId,
+                        sectionTitle: fragment.title ?? "Education",
+                        itemId: item.id,
+                        activeTarget,
+                        surface: "item",
+                      }),
+                    })}
+                    {item.period ? " · " : null}
+                    {item.period}
+                  </>
+                ) : (
+                  educationDisplay.previewMeta
+                )}
+              </p>
+            </PreviewItemRegion>
+          );
         }),
         <div key={`${fragment.fragmentId}:add-education`}>
           {renderInlineAddButton({
@@ -1719,48 +1826,51 @@ function renderFragmentContent(args: {
           })}
         </div>,
       ];
-    case "skills":
-      {
+    case "skills": {
       return [
         ...fragment.items
-          .filter((item) => hasVisibleText(item.name) || isActiveItemEditTarget(inlineEditing, item.id))
+          .filter(
+            (item) =>
+              hasVisibleText(item.name) ||
+              isActiveItemEditTarget(inlineEditing, item.id),
+          )
           .map((item, itemIndex) => (
-        <React.Fragment key={item.id}>
-          {renderInlineField({
-            as: "span",
-            value: item.name,
-            editable: Boolean(inlineEditing?.enabled),
-            inlineEditing,
-            editTarget: {
-              sectionId: fragment.sectionId ?? "",
-              sectionType: "skills",
-              fieldPath: `structuredContent.item:${item.id}.name`,
-              fieldKind: "chip",
-              chipIndex: itemIndex,
-            },
-            ariaLabel: "Edit skill",
-            placeholder: "Add skill",
-            previewAttrs: buildPreviewRegionAttrs({
-              sectionType: "skills",
-              sectionId: fragment.sectionId,
-              sectionTitle: fragment.title ?? "Skills",
-              itemId: item.id,
-              activeTarget,
-              surface: "item",
-            }),
-            preservePreviewItemId: true,
-            style: {
-            display: "inline-flex",
-            alignItems: "center",
-            padding: "var(--skill-pad-block) var(--skill-pad-inline)",
-            borderRadius: "999px",
-            background: "var(--color-accent-soft)",
-            fontSize: workshopBodySmFontSize,
-            lineHeight: "var(--text-body-sm-line)",
-            },
-          })}
-        </React.Fragment>
-        )),
+            <React.Fragment key={item.id}>
+              {renderInlineField({
+                as: "span",
+                value: item.name,
+                editable: Boolean(inlineEditing?.enabled),
+                inlineEditing,
+                editTarget: {
+                  sectionId: fragment.sectionId ?? "",
+                  sectionType: "skills",
+                  fieldPath: `structuredContent.item:${item.id}.name`,
+                  fieldKind: "chip",
+                  chipIndex: itemIndex,
+                },
+                ariaLabel: "Edit skill",
+                placeholder: "Add skill",
+                previewAttrs: buildPreviewRegionAttrs({
+                  sectionType: "skills",
+                  sectionId: fragment.sectionId,
+                  sectionTitle: fragment.title ?? "Skills",
+                  itemId: item.id,
+                  activeTarget,
+                  surface: "item",
+                }),
+                preservePreviewItemId: true,
+                style: {
+                  display: "inline-flex",
+                  alignItems: "center",
+                  padding: "var(--skill-pad-block) var(--skill-pad-inline)",
+                  borderRadius: "999px",
+                  background: "var(--color-accent-soft)",
+                  fontSize: workshopBodySmFontSize,
+                  lineHeight: "var(--text-body-sm-line)",
+                },
+              })}
+            </React.Fragment>
+          )),
         <React.Fragment key={`${fragment.fragmentId}:add-skill`}>
           {renderInlineAddButton({
             inlineEditing,
@@ -1771,7 +1881,7 @@ function renderFragmentContent(args: {
           })}
         </React.Fragment>,
       ];
-      }
+    }
     case "selected_projects":
       return [
         ...fragment.items
@@ -1781,147 +1891,149 @@ function renderFragmentContent(args: {
               isActiveItemEditTarget(inlineEditing, item.id),
           )
           .map((item) => (
-        <article
-          key={item.id}
-          style={{
-            display: "grid",
-            gap: "var(--project-gap)",
-            padding: "var(--project-padding)",
-            borderRadius: "4mm",
-            background: "color-mix(in srgb, var(--color-accent-soft) 72%, white 28%)",
-          }}
-        >
-          <PreviewItemRegion
-            as="div"
-            sectionType="selected_projects"
-            sectionId={fragment.sectionId}
-            sectionTitle={fragment.title ?? "Selected projects"}
-            itemId={item.id}
-            activeTarget={activeTarget}
-            surface="item"
-            style={{
-              display: "grid",
-              gap: formatMillimeters(workshopLayout.compactMetaGapMm),
-            }}
-          >
-            {renderInlineField({
-              as: "h3",
-              value: item.name,
-              editable: Boolean(inlineEditing?.enabled),
-              inlineEditing,
-              editTarget: {
-                sectionId: fragment.sectionId ?? "",
-                sectionType: "projects",
-                fieldPath: `structuredContent.item:${item.id}.name`,
-                fieldKind: "heading",
-              },
-              ariaLabel: "Edit project name",
-              placeholder: "Project name",
-              previewAttrs: buildPreviewRegionAttrs({
-                sectionType: "selected_projects",
-                sectionId: fragment.sectionId,
-                sectionTitle: fragment.title ?? "Selected projects",
-                itemId: item.id,
-                activeTarget,
-                surface: "item",
-              }),
-              style: {
-                margin: 0,
-                fontFamily: "var(--heading-font, var(--font-heading-family))",
-                fontSize: workshopBodyFontSize,
-                fontWeight: 700,
-              },
-            })}
-            {item.meta || inlineEditing?.enabled ? (
-              renderInlineField({
-                value: item.meta,
-                editable: Boolean(inlineEditing?.enabled),
-                inlineEditing,
-                editTarget: {
-                  sectionId: fragment.sectionId ?? "",
-                  sectionType: "projects",
-                  fieldPath: `structuredContent.item:${item.id}.meta`,
-                  fieldKind: "meta",
-                },
-                ariaLabel: "Edit project meta",
-                placeholder: "Role / scope",
-                previewAttrs: buildPreviewRegionAttrs({
-                  sectionType: "selected_projects",
-                  sectionId: fragment.sectionId,
-                  sectionTitle: fragment.title ?? "Selected projects",
-                  itemId: item.id,
-                  activeTarget,
-                  surface: "item",
-                }),
-                style: {
-                  margin: 0,
-                  fontSize: "var(--text-meta-size)",
-                  lineHeight: "var(--text-meta-line)",
-                  color: "var(--color-text-muted)",
-                },
-              })
-            ) : null}
-          </PreviewItemRegion>
-          {item.descriptionRich ? (
-            <PaperRichInlineEditor
-              value={item.description}
-              rich={item.descriptionRich}
-              editable={Boolean(inlineEditing?.enabled)}
-              editTarget={{
-                sectionId: fragment.sectionId ?? "",
-                sectionType: "projects",
-                fieldPath: `structuredContent.item:${item.id}.description`,
-                fieldKind: "paragraph",
-              }}
-              onActivate={(target) => inlineEditing?.onActivate(target)}
-              onDeactivate={inlineEditing?.onDeactivate}
-              onDocChange={inlineEditing?.onFieldDocChange}
-              ariaLabel="Edit project description"
-              previewAttrs={buildPreviewRegionAttrs({
-                sectionType: "selected_projects",
-                sectionId: fragment.sectionId,
-                sectionTitle: fragment.title ?? "Selected projects",
-                itemId: buildProjectPreviewFieldId(item.id, "description"),
-                activeTarget,
-                surface: "item",
-              })}
+            <article
+              key={item.id}
               style={{
-                margin: 0,
-                fontSize: workshopBodyFontSize,
-                lineHeight: "var(--text-body-line)",
+                display: "grid",
+                gap: "var(--project-gap)",
+                padding: "var(--project-padding)",
+                borderRadius: "4mm",
+                background:
+                  "color-mix(in srgb, var(--color-accent-soft) 72%, white 28%)",
               }}
-            />
-          ) : (
-            renderInlineField({
-              value: item.description,
-              editable: Boolean(inlineEditing?.enabled),
-              inlineEditing,
-              editTarget: {
-                sectionId: fragment.sectionId ?? "",
-                sectionType: "projects",
-                fieldPath: `structuredContent.item:${item.id}.description`,
-                fieldKind: "paragraph",
-              },
-              ariaLabel: "Edit project description",
-              placeholder: "Type an impact note...",
-              previewAttrs: buildPreviewRegionAttrs({
-                sectionType: "selected_projects",
-                sectionId: fragment.sectionId,
-                sectionTitle: fragment.title ?? "Selected projects",
-                itemId: buildProjectPreviewFieldId(item.id, "description"),
-                activeTarget,
-                surface: "item",
-              }),
-              preservePreviewItemId: true,
-              style: {
-                margin: 0,
-                fontSize: workshopBodyFontSize,
-                lineHeight: "var(--text-body-line)",
-              },
-            })
-          )}
-        </article>
-        )),
+            >
+              <PreviewItemRegion
+                as="div"
+                sectionType="selected_projects"
+                sectionId={fragment.sectionId}
+                sectionTitle={fragment.title ?? "Selected projects"}
+                itemId={item.id}
+                activeTarget={activeTarget}
+                surface="item"
+                style={{
+                  display: "grid",
+                  gap: formatMillimeters(workshopLayout.compactMetaGapMm),
+                }}
+              >
+                {renderInlineField({
+                  as: "h3",
+                  value: item.name,
+                  editable: Boolean(inlineEditing?.enabled),
+                  inlineEditing,
+                  editTarget: {
+                    sectionId: fragment.sectionId ?? "",
+                    sectionType: "projects",
+                    fieldPath: `structuredContent.item:${item.id}.name`,
+                    fieldKind: "heading",
+                  },
+                  ariaLabel: "Edit project name",
+                  placeholder: "Project name",
+                  previewAttrs: buildPreviewRegionAttrs({
+                    sectionType: "selected_projects",
+                    sectionId: fragment.sectionId,
+                    sectionTitle: fragment.title ?? "Selected projects",
+                    itemId: item.id,
+                    activeTarget,
+                    surface: "item",
+                  }),
+                  style: {
+                    margin: 0,
+                    fontFamily:
+                      "var(--heading-font, var(--font-heading-family))",
+                    fontSize: workshopBodyFontSize,
+                    fontWeight: 700,
+                  },
+                })}
+                {item.meta || inlineEditing?.enabled
+                  ? renderInlineField({
+                      value: item.meta,
+                      editable: Boolean(inlineEditing?.enabled),
+                      inlineEditing,
+                      editTarget: {
+                        sectionId: fragment.sectionId ?? "",
+                        sectionType: "projects",
+                        fieldPath: `structuredContent.item:${item.id}.meta`,
+                        fieldKind: "meta",
+                      },
+                      ariaLabel: "Edit project meta",
+                      placeholder: "Role / scope",
+                      previewAttrs: buildPreviewRegionAttrs({
+                        sectionType: "selected_projects",
+                        sectionId: fragment.sectionId,
+                        sectionTitle: fragment.title ?? "Selected projects",
+                        itemId: item.id,
+                        activeTarget,
+                        surface: "item",
+                      }),
+                      style: {
+                        margin: 0,
+                        fontSize: "var(--text-meta-size)",
+                        lineHeight: "var(--text-meta-line)",
+                        color: "var(--color-text-muted)",
+                      },
+                    })
+                  : null}
+              </PreviewItemRegion>
+              {item.descriptionRich ? (
+                <PaperRichInlineEditor
+                  value={item.description}
+                  rich={item.descriptionRich}
+                  editable={Boolean(inlineEditing?.enabled)}
+                  editTarget={{
+                    sectionId: fragment.sectionId ?? "",
+                    sectionType: "projects",
+                    fieldPath: `structuredContent.item:${item.id}.description`,
+                    fieldKind: "paragraph",
+                  }}
+                  onActivate={(target) => inlineEditing?.onActivate(target)}
+                  onDeactivate={inlineEditing?.onDeactivate}
+                  onDocChange={inlineEditing?.onFieldDocChange}
+                  ariaLabel="Edit project description"
+                  previewAttrs={buildPreviewRegionAttrs({
+                    sectionType: "selected_projects",
+                    sectionId: fragment.sectionId,
+                    sectionTitle: fragment.title ?? "Selected projects",
+                    itemId: buildProjectPreviewFieldId(item.id, "description"),
+                    activeTarget,
+                    surface: "item",
+                  })}
+                  style={{
+                    margin: 0,
+                    fontSize: workshopBodyFontSize,
+                    lineHeight: "var(--text-body-line)",
+                  }}
+                />
+              ) : (
+                renderInlineField({
+                  value: item.description,
+                  editable: Boolean(inlineEditing?.enabled),
+                  inlineEditing,
+                  editTarget: {
+                    sectionId: fragment.sectionId ?? "",
+                    sectionType: "projects",
+                    fieldPath: `structuredContent.item:${item.id}.description`,
+                    fieldKind: "paragraph",
+                  },
+                  ariaLabel: "Edit project description",
+                  placeholder: "Type an impact note...",
+                  previewAttrs: buildPreviewRegionAttrs({
+                    sectionType: "selected_projects",
+                    sectionId: fragment.sectionId,
+                    sectionTitle: fragment.title ?? "Selected projects",
+                    itemId: buildProjectPreviewFieldId(item.id, "description"),
+                    activeTarget,
+                    surface: "item",
+                  }),
+                  preservePreviewItemId: true,
+                  style: {
+                    margin: 0,
+                    fontSize: workshopBodyFontSize,
+                    lineHeight: "var(--text-body-line)",
+                  },
+                })
+              )}
+            </article>
+          )),
         <div key={`${fragment.fragmentId}:add-project`}>
           {renderInlineAddButton({
             inlineEditing,
@@ -1941,46 +2053,20 @@ function renderFragmentContent(args: {
               isActiveItemEditTarget(inlineEditing, item.id),
           )
           .map((item) => (
-        <li key={item.id}>
-          {renderInlineField({
-            as: "span",
-            value: item.name,
-            editable: Boolean(inlineEditing?.enabled),
-            inlineEditing,
-            editTarget: {
-              sectionId: fragment.sectionId ?? "",
-              sectionType: "languages",
-              fieldPath: `structuredContent.item:${item.id}.name`,
-              fieldKind: "chip",
-            },
-            ariaLabel: "Edit language",
-            placeholder: "Add language",
-            previewAttrs: buildPreviewRegionAttrs({
-              sectionType: "languages",
-              sectionId: fragment.sectionId,
-              sectionTitle: fragment.title ?? "Languages",
-              itemId: item.id,
-              activeTarget,
-              surface: "item",
-            }),
-            preservePreviewItemId: true,
-            style: workshopCompactRowTextStyle,
-          })}
-          {item.level || inlineEditing?.enabled ? " · " : null}
-          {item.level || inlineEditing?.enabled
-            ? renderInlineField({
+            <li key={item.id}>
+              {renderInlineField({
                 as: "span",
-                value: item.level,
+                value: item.name,
                 editable: Boolean(inlineEditing?.enabled),
                 inlineEditing,
                 editTarget: {
                   sectionId: fragment.sectionId ?? "",
                   sectionType: "languages",
-                  fieldPath: `structuredContent.item:${item.id}.level`,
-                  fieldKind: "meta",
+                  fieldPath: `structuredContent.item:${item.id}.name`,
+                  fieldKind: "chip",
                 },
-                ariaLabel: "Edit language level",
-                placeholder: "Level",
+                ariaLabel: "Edit language",
+                placeholder: "Add language",
                 previewAttrs: buildPreviewRegionAttrs({
                   sectionType: "languages",
                   sectionId: fragment.sectionId,
@@ -1989,11 +2075,37 @@ function renderFragmentContent(args: {
                   activeTarget,
                   surface: "item",
                 }),
+                preservePreviewItemId: true,
                 style: workshopCompactRowTextStyle,
-              })
-            : null}
-        </li>
-        )),
+              })}
+              {item.level || inlineEditing?.enabled ? " · " : null}
+              {item.level || inlineEditing?.enabled
+                ? renderInlineField({
+                    as: "span",
+                    value: item.level,
+                    editable: Boolean(inlineEditing?.enabled),
+                    inlineEditing,
+                    editTarget: {
+                      sectionId: fragment.sectionId ?? "",
+                      sectionType: "languages",
+                      fieldPath: `structuredContent.item:${item.id}.level`,
+                      fieldKind: "meta",
+                    },
+                    ariaLabel: "Edit language level",
+                    placeholder: "Level",
+                    previewAttrs: buildPreviewRegionAttrs({
+                      sectionType: "languages",
+                      sectionId: fragment.sectionId,
+                      sectionTitle: fragment.title ?? "Languages",
+                      itemId: item.id,
+                      activeTarget,
+                      surface: "item",
+                    }),
+                    style: workshopCompactRowTextStyle,
+                  })
+                : null}
+            </li>
+          )),
         <li key={`${fragment.fragmentId}:add-language`}>
           {renderInlineAddButton({
             inlineEditing,
@@ -2013,49 +2125,20 @@ function renderFragmentContent(args: {
               isActiveItemEditTarget(inlineEditing, item.id),
           )
           .map((item) => (
-        <li key={item.id}>
-          {renderInlineField({
-            as: "span",
-            value: item.name,
-            editable: Boolean(inlineEditing?.enabled),
-            inlineEditing,
-            editTarget: {
-              sectionId: fragment.sectionId ?? "",
-              sectionType: "certifications",
-              fieldPath: `structuredContent.item:${item.id}.certificationName`,
-              fieldKind: "paragraph",
-            },
-            ariaLabel: "Edit certification",
-            placeholder: "Certification",
-            previewAttrs: buildPreviewRegionAttrs({
-              sectionType: "certifications",
-              sectionId: fragment.sectionId,
-              sectionTitle: fragment.title ?? "Certifications",
-              itemId: item.id,
-              activeTarget,
-              surface: "item",
-            }),
-            preservePreviewItemId: true,
-            style: {
-              fontSize: workshopBodyFontSize,
-              lineHeight: "var(--text-body-line)",
-            },
-          })}
-          {item.issuer || inlineEditing?.enabled ? " · " : null}
-          {item.issuer || inlineEditing?.enabled
-            ? renderInlineField({
+            <li key={item.id}>
+              {renderInlineField({
                 as: "span",
-                value: item.issuer ?? "",
+                value: item.name,
                 editable: Boolean(inlineEditing?.enabled),
                 inlineEditing,
                 editTarget: {
                   sectionId: fragment.sectionId ?? "",
                   sectionType: "certifications",
-                  fieldPath: `structuredContent.item:${item.id}.issuingOrganization`,
-                  fieldKind: "meta",
+                  fieldPath: `structuredContent.item:${item.id}.certificationName`,
+                  fieldKind: "paragraph",
                 },
-                ariaLabel: "Edit certification issuer",
-                placeholder: "Issuer",
+                ariaLabel: "Edit certification",
+                placeholder: "Certification",
                 previewAttrs: buildPreviewRegionAttrs({
                   sectionType: "certifications",
                   sectionId: fragment.sectionId,
@@ -2064,15 +2147,44 @@ function renderFragmentContent(args: {
                   activeTarget,
                   surface: "item",
                 }),
+                preservePreviewItemId: true,
                 style: {
                   fontSize: workshopBodyFontSize,
                   lineHeight: "var(--text-body-line)",
                 },
-              })
-            : null}
-          {item.meta ? ` · ${item.meta}` : null}
-        </li>
-        )),
+              })}
+              {item.issuer || inlineEditing?.enabled ? " · " : null}
+              {item.issuer || inlineEditing?.enabled
+                ? renderInlineField({
+                    as: "span",
+                    value: item.issuer ?? "",
+                    editable: Boolean(inlineEditing?.enabled),
+                    inlineEditing,
+                    editTarget: {
+                      sectionId: fragment.sectionId ?? "",
+                      sectionType: "certifications",
+                      fieldPath: `structuredContent.item:${item.id}.issuingOrganization`,
+                      fieldKind: "meta",
+                    },
+                    ariaLabel: "Edit certification issuer",
+                    placeholder: "Issuer",
+                    previewAttrs: buildPreviewRegionAttrs({
+                      sectionType: "certifications",
+                      sectionId: fragment.sectionId,
+                      sectionTitle: fragment.title ?? "Certifications",
+                      itemId: item.id,
+                      activeTarget,
+                      surface: "item",
+                    }),
+                    style: {
+                      fontSize: workshopBodyFontSize,
+                      lineHeight: "var(--text-body-line)",
+                    },
+                  })
+                : null}
+              {item.meta ? ` · ${item.meta}` : null}
+            </li>
+          )),
         <li key={`${fragment.fragmentId}:add-certification`}>
           {renderInlineAddButton({
             inlineEditing,
@@ -2086,38 +2198,42 @@ function renderFragmentContent(args: {
     case "achievements":
       return [
         ...fragment.items
-          .filter((item) => hasVisibleText(item.text) || isActiveItemEditTarget(inlineEditing, item.id))
+          .filter(
+            (item) =>
+              hasVisibleText(item.text) ||
+              isActiveItemEditTarget(inlineEditing, item.id),
+          )
           .map((item) => (
-        <li key={item.id}>
-          {renderInlineField({
-            as: "span",
-            value: item.text,
-            editable: Boolean(inlineEditing?.enabled),
-            inlineEditing,
-            editTarget: {
-              sectionId: fragment.sectionId ?? "",
-              sectionType: "achievements",
-              fieldPath: `structuredContent.item:${item.id}.text`,
-              fieldKind: "paragraph",
-            },
-            ariaLabel: "Edit achievement",
-            placeholder: "Add achievement",
-            previewAttrs: buildPreviewRegionAttrs({
-              sectionType: "achievements",
-              sectionId: fragment.sectionId,
-              sectionTitle: fragment.title ?? "Achievements",
-              itemId: item.id,
-              activeTarget,
-              surface: "item",
-            }),
-            preservePreviewItemId: true,
-            style: {
-              fontSize: workshopBodyFontSize,
-              lineHeight: "var(--text-body-line)",
-            },
-          })}
-        </li>
-        )),
+            <li key={item.id}>
+              {renderInlineField({
+                as: "span",
+                value: item.text,
+                editable: Boolean(inlineEditing?.enabled),
+                inlineEditing,
+                editTarget: {
+                  sectionId: fragment.sectionId ?? "",
+                  sectionType: "achievements",
+                  fieldPath: `structuredContent.item:${item.id}.text`,
+                  fieldKind: "paragraph",
+                },
+                ariaLabel: "Edit achievement",
+                placeholder: "Add achievement",
+                previewAttrs: buildPreviewRegionAttrs({
+                  sectionType: "achievements",
+                  sectionId: fragment.sectionId,
+                  sectionTitle: fragment.title ?? "Achievements",
+                  itemId: item.id,
+                  activeTarget,
+                  surface: "item",
+                }),
+                preservePreviewItemId: true,
+                style: {
+                  fontSize: workshopBodyFontSize,
+                  lineHeight: "var(--text-body-line)",
+                },
+              })}
+            </li>
+          )),
         <li key={`${fragment.fragmentId}:add-achievement`}>
           {renderInlineAddButton({
             inlineEditing,
@@ -2141,79 +2257,20 @@ function renderFragmentContent(args: {
               ) || isActiveItemEditTarget(inlineEditing, item.id),
           )
           .map((item) => (
-        <li key={item.id}>
-          {renderInlineField({
-            as: "span",
-            value: item.organizationName,
-            editable: Boolean(inlineEditing?.enabled),
-            inlineEditing,
-            editTarget: {
-              sectionId: fragment.sectionId ?? "",
-              sectionType: "affiliations",
-              fieldPath: `structuredContent.item:${item.id}.organizationName`,
-              fieldKind: "paragraph",
-            },
-            ariaLabel: "Edit affiliation organization",
-            placeholder: "Organization",
-            previewAttrs: buildPreviewRegionAttrs({
-              sectionType: "affiliations",
-              sectionId: fragment.sectionId,
-              sectionTitle: fragment.title ?? "Affiliations",
-              itemId: item.id,
-              activeTarget,
-              surface: "item",
-            }),
-            preservePreviewItemId: true,
-            style: {
-              fontSize: workshopBodyFontSize,
-              lineHeight: "var(--text-body-line)",
-            },
-          })}
-          {item.roleOrMembershipType || inlineEditing?.enabled ? " · " : null}
-          {item.roleOrMembershipType || inlineEditing?.enabled
-            ? renderInlineField({
+            <li key={item.id}>
+              {renderInlineField({
                 as: "span",
-                value: item.roleOrMembershipType ?? "",
+                value: item.organizationName,
                 editable: Boolean(inlineEditing?.enabled),
                 inlineEditing,
                 editTarget: {
                   sectionId: fragment.sectionId ?? "",
                   sectionType: "affiliations",
-                  fieldPath: `structuredContent.item:${item.id}.roleOrMembershipType`,
-                  fieldKind: "meta",
-                },
-                ariaLabel: "Edit affiliation role",
-                placeholder: "Role",
-                previewAttrs: buildPreviewRegionAttrs({
-                  sectionType: "affiliations",
-                  sectionId: fragment.sectionId,
-                  sectionTitle: fragment.title ?? "Affiliations",
-                  itemId: item.id,
-                  activeTarget,
-                  surface: "item",
-                }),
-                style: {
-                  fontSize: workshopBodyFontSize,
-                  lineHeight: "var(--text-body-line)",
-                },
-              })
-            : null}
-          {item.dateRange ? ` · ${item.dateRange}` : null}
-          {item.notes || inlineEditing?.enabled ? " · " : null}
-          {item.notes || inlineEditing?.enabled
-            ? renderInlineField({
-                as: "span",
-                value: item.notes ?? "",
-                editable: Boolean(inlineEditing?.enabled),
-                inlineEditing,
-                editTarget: {
-                  sectionId: fragment.sectionId ?? "",
-                  sectionType: "affiliations",
-                  fieldPath: `structuredContent.item:${item.id}.notes`,
+                  fieldPath: `structuredContent.item:${item.id}.organizationName`,
                   fieldKind: "paragraph",
                 },
-                ariaLabel: "Edit affiliation notes",
-                placeholder: "Notes",
+                ariaLabel: "Edit affiliation organization",
+                placeholder: "Organization",
                 previewAttrs: buildPreviewRegionAttrs({
                   sectionType: "affiliations",
                   sectionId: fragment.sectionId,
@@ -2222,14 +2279,75 @@ function renderFragmentContent(args: {
                   activeTarget,
                   surface: "item",
                 }),
+                preservePreviewItemId: true,
                 style: {
                   fontSize: workshopBodyFontSize,
                   lineHeight: "var(--text-body-line)",
                 },
-              })
-            : null}
-        </li>
-        )),
+              })}
+              {item.roleOrMembershipType || inlineEditing?.enabled
+                ? " · "
+                : null}
+              {item.roleOrMembershipType || inlineEditing?.enabled
+                ? renderInlineField({
+                    as: "span",
+                    value: item.roleOrMembershipType ?? "",
+                    editable: Boolean(inlineEditing?.enabled),
+                    inlineEditing,
+                    editTarget: {
+                      sectionId: fragment.sectionId ?? "",
+                      sectionType: "affiliations",
+                      fieldPath: `structuredContent.item:${item.id}.roleOrMembershipType`,
+                      fieldKind: "meta",
+                    },
+                    ariaLabel: "Edit affiliation role",
+                    placeholder: "Role",
+                    previewAttrs: buildPreviewRegionAttrs({
+                      sectionType: "affiliations",
+                      sectionId: fragment.sectionId,
+                      sectionTitle: fragment.title ?? "Affiliations",
+                      itemId: item.id,
+                      activeTarget,
+                      surface: "item",
+                    }),
+                    style: {
+                      fontSize: workshopBodyFontSize,
+                      lineHeight: "var(--text-body-line)",
+                    },
+                  })
+                : null}
+              {item.dateRange ? ` · ${item.dateRange}` : null}
+              {item.notes || inlineEditing?.enabled ? " · " : null}
+              {item.notes || inlineEditing?.enabled
+                ? renderInlineField({
+                    as: "span",
+                    value: item.notes ?? "",
+                    editable: Boolean(inlineEditing?.enabled),
+                    inlineEditing,
+                    editTarget: {
+                      sectionId: fragment.sectionId ?? "",
+                      sectionType: "affiliations",
+                      fieldPath: `structuredContent.item:${item.id}.notes`,
+                      fieldKind: "paragraph",
+                    },
+                    ariaLabel: "Edit affiliation notes",
+                    placeholder: "Notes",
+                    previewAttrs: buildPreviewRegionAttrs({
+                      sectionType: "affiliations",
+                      sectionId: fragment.sectionId,
+                      sectionTitle: fragment.title ?? "Affiliations",
+                      itemId: item.id,
+                      activeTarget,
+                      surface: "item",
+                    }),
+                    style: {
+                      fontSize: workshopBodyFontSize,
+                      lineHeight: "var(--text-body-line)",
+                    },
+                  })
+                : null}
+            </li>
+          )),
         <li key={`${fragment.fragmentId}:add-affiliation`}>
           {renderInlineAddButton({
             inlineEditing,
@@ -2243,36 +2361,40 @@ function renderFragmentContent(args: {
     case "hobbies":
       return [
         ...fragment.items
-          .filter((item) => hasVisibleText(item.name) || isActiveItemEditTarget(inlineEditing, item.id))
+          .filter(
+            (item) =>
+              hasVisibleText(item.name) ||
+              isActiveItemEditTarget(inlineEditing, item.id),
+          )
           .map((item, itemIndex) => (
-        <li key={item.id}>
-          {renderInlineField({
-            as: "span",
-            value: item.name,
-            editable: Boolean(inlineEditing?.enabled),
-            inlineEditing,
-            editTarget: {
-              sectionId: fragment.sectionId ?? "",
-              sectionType: "hobbies",
-              fieldPath: `structuredContent.item:${item.id}.name`,
-              fieldKind: "chip",
-              chipIndex: itemIndex,
-            },
-            ariaLabel: "Edit hobby",
-            placeholder: "Add hobby",
-            previewAttrs: buildPreviewRegionAttrs({
-              sectionType: "hobbies",
-              sectionId: fragment.sectionId,
-              sectionTitle: fragment.title ?? "Hobbies",
-              itemId: item.id,
-              activeTarget,
-              surface: "item",
-            }),
-            preservePreviewItemId: true,
-            style: workshopCompactRowTextStyle,
-          })}
-        </li>
-        )),
+            <li key={item.id}>
+              {renderInlineField({
+                as: "span",
+                value: item.name,
+                editable: Boolean(inlineEditing?.enabled),
+                inlineEditing,
+                editTarget: {
+                  sectionId: fragment.sectionId ?? "",
+                  sectionType: "hobbies",
+                  fieldPath: `structuredContent.item:${item.id}.name`,
+                  fieldKind: "chip",
+                  chipIndex: itemIndex,
+                },
+                ariaLabel: "Edit hobby",
+                placeholder: "Add hobby",
+                previewAttrs: buildPreviewRegionAttrs({
+                  sectionType: "hobbies",
+                  sectionId: fragment.sectionId,
+                  sectionTitle: fragment.title ?? "Hobbies",
+                  itemId: item.id,
+                  activeTarget,
+                  surface: "item",
+                }),
+                preservePreviewItemId: true,
+                style: workshopCompactRowTextStyle,
+              })}
+            </li>
+          )),
         <li key={`${fragment.fragmentId}:add-hobby`}>
           {renderInlineAddButton({
             inlineEditing,
@@ -2284,7 +2406,7 @@ function renderFragmentContent(args: {
         </li>,
       ];
     case "additional_information":
-      return fragment.items.map((item) => (
+      return fragment.items.map((item) =>
         (() => {
           const resolvedSectionId = item.sectionId ?? fragment.sectionId ?? "";
           const resolvedSectionType = item.sectionType ?? fragment.sectionType;
@@ -2313,7 +2435,8 @@ function renderFragmentContent(args: {
                 <h3
                   style={{
                     margin: 0,
-                    fontFamily: "var(--heading-font, var(--font-heading-family))",
+                    fontFamily:
+                      "var(--heading-font, var(--font-heading-family))",
                     fontSize: workshopBodyFontSize,
                     fontWeight: 700,
                   }}
@@ -2331,7 +2454,10 @@ function renderFragmentContent(args: {
                 onPlainTextChange={(text) =>
                   inlineEditing?.onFieldChange
                     ? inlineEditing.onFieldChange(editTarget, text)
-                    : inlineEditing?.onTextSectionChange(resolvedSectionId, text)
+                    : inlineEditing?.onTextSectionChange(
+                        resolvedSectionId,
+                        text,
+                      )
                 }
                 {...buildPreviewRegionAttrs({
                   sectionType: resolvedSectionType,
@@ -2349,8 +2475,8 @@ function renderFragmentContent(args: {
               />
             </PreviewItemRegion>
           );
-        })()
-      ));
+        })(),
+      );
   }
 }
 
@@ -2363,7 +2489,14 @@ export function renderSectionFragment(args: {
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
 }) {
-  const { fragment, data, activeTarget, inlineEditing, sectionActions, paperAi } = args;
+  const {
+    fragment,
+    data,
+    activeTarget,
+    inlineEditing,
+    sectionActions,
+    paperAi,
+  } = args;
   const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
   if (!fragment.title) {
     return renderFragmentContent({
@@ -2442,6 +2575,7 @@ export function renderSectionFragment(args: {
   return (
     <PreviewSectionRegion
       as="section"
+      className="dasti-cv-paper-section-region"
       sectionType={fragment.sectionType}
       sectionId={fragment.sectionId}
       sectionTitle={fragment.title}
@@ -2460,6 +2594,7 @@ export function renderSectionFragment(args: {
         sectionActions: inlineEditing?.enabled ? sectionActions : null,
       })}
       {content}
+      {renderPaperListSuggestions({ fragment, paperAi })}
     </PreviewSectionRegion>
   );
 }
