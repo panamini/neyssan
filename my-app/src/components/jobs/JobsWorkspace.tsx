@@ -974,7 +974,9 @@ function JobsBackendUnavailable(): JSX.Element {
               }}
             >
               <span>Copy: npm run dev:backend</span>
-              <span className="ds-btn__period" aria-hidden="true">.</span>
+              <span className="ds-btn__period" aria-hidden="true">
+                .
+              </span>
             </button>
             <button
               type="button"
@@ -1034,7 +1036,8 @@ function matchesListFilters(
   const verdict = job.matchReview?.verdict;
   const resolvedTier = job.matchRead?.tier ?? job.matchTier;
   const isStrongMatch = verdict === "strong_lead" || resolvedTier === "strong";
-  const isWorthMatch = verdict === "possible_lead" || resolvedTier === "partial";
+  const isWorthMatch =
+    verdict === "possible_lead" || resolvedTier === "partial";
   if (matchFilter === "worth_plus" && !isStrongMatch && !isWorthMatch) {
     return false;
   }
@@ -1997,6 +2000,14 @@ function JobsPageContent(): JSX.Element {
     [archiveJob, navigate, selectedJobId, showToast],
   );
 
+  const handleDismissJob = React.useCallback(
+    async (jobId: string) => {
+      recordJobDecision("bounce", jobId);
+      await handleArchiveJob(jobId);
+    },
+    [handleArchiveJob, recordJobDecision],
+  );
+
   const handleRestoreArchivedJob = React.useCallback(
     async (jobId: string) => {
       try {
@@ -2051,12 +2062,11 @@ function JobsPageContent(): JSX.Element {
   );
 
   const isAuthLoading = !isLoaded || isConvexAuthLoading;
-  const authStatusMessage =
-    isAuthLoading
-      ? "Loading jobs"
-      : !isSignedIn || !isConvexAuthenticated
-        ? "Sign in to see jobs."
-        : null;
+  const authStatusMessage = isAuthLoading
+    ? "Loading jobs"
+    : !isSignedIn || !isConvexAuthenticated
+      ? "Sign in to see jobs."
+      : null;
   const isJobsListLoading =
     !authStatusMessage &&
     isLoaded &&
@@ -2073,8 +2083,7 @@ function JobsPageContent(): JSX.Element {
   const shouldShowListPane =
     jobsView === "archived" || !isMobileJobsLayout || !selectedJobId;
   const shouldShowDetailPane =
-    jobsView === "active" &&
-    (!isMobileJobsLayout || Boolean(selectedJobId));
+    jobsView === "active" && (!isMobileJobsLayout || Boolean(selectedJobId));
 
   const renderSelectedJobDetail = (): JSX.Element | null => (
     <JobDetail
@@ -2102,6 +2111,9 @@ function JobsPageContent(): JSX.Element {
         void handleDetachResumeFromJob();
       }}
       onCreateProposal={handleCreateProposal}
+      onDismissJob={(jobId) => {
+        void handleDismissJob(jobId);
+      }}
       onRefreshSelectedJobMatch={() => {
         void handleRefreshSelectedJobMatch();
       }}
@@ -2138,7 +2150,6 @@ function JobsPageContent(): JSX.Element {
   return (
     <div className="dasti-page-scroll">
       <div className="dasti-page-shell dasti-jobs-page">
-
         {isAuthLoading ? (
           <div className="dasti-empty-state" role="status" aria-live="polite">
             <div className="dasti-empty-state__title">Loading jobs</div>
@@ -2151,11 +2162,7 @@ function JobsPageContent(): JSX.Element {
         ) : null}
 
         {isJobsListLoading ? (
-          <div
-            className="dasti-empty-state"
-            role="status"
-            aria-live="polite"
-          >
+          <div className="dasti-empty-state" role="status" aria-live="polite">
             <div className="dasti-empty-state__title">Loading jobs</div>
           </div>
         ) : null}
@@ -2237,7 +2244,9 @@ function JobsPageContent(): JSX.Element {
                 onDeleteArchivedJob={(jobId) => {
                   void handleDeleteArchivedJob(jobId);
                 }}
-                onConfirmPermanentDeleteJobIdChange={setConfirmingPermanentDeleteJobId}
+                onConfirmPermanentDeleteJobIdChange={
+                  setConfirmingPermanentDeleteJobId
+                }
                 onImportFirstJob={handleImportFirstJob}
               />
             ) : null}

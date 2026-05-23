@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowSquareOut, ChevronDown } from "@/lib/icons";
+import { ArrowSquareOut, ChevronDown, Pencil } from "@/lib/icons";
 import { getProposalSourceLabel } from "../lib/proposal-source-platforms";
 
 type ProposalBriefReviewItem = {
@@ -188,9 +188,10 @@ function SectionHeader({
           type="button"
           className="dasti-brief-card__section-edit"
           aria-label={isEditing ? `Close ${label} editor` : `Edit ${label}`}
+          title={isEditing ? `Close ${label} editor` : `Edit ${label}`}
           onClick={onToggleEdit}
         >
-          {isEditing ? "Close" : "Edit"}
+          <Pencil size={14} strokeWidth={1.8} aria-hidden="true" />
         </button>
       ) : null}
     </div>
@@ -460,7 +461,10 @@ export function ProposalBriefCard({
                 </div>
               ) : null}
               {shouldRenderExtractedSummary ? (
-                <div className="ds-card dasti-brief-card__review-item" id="job-summary">
+                <div
+                  className="ds-card dasti-brief-card__review-item"
+                  id="job-summary"
+                >
                   <SectionHeader
                     label="Summary"
                     status={resolveSectionStatus("approved", false)}
@@ -468,7 +472,9 @@ export function ProposalBriefCard({
                     canEdit={Boolean(onSaveField)}
                     onToggleEdit={() => {
                       setEditingItemId((current) =>
-                        current === SUMMARY_EDITOR_ID ? null : SUMMARY_EDITOR_ID,
+                        current === SUMMARY_EDITOR_ID
+                          ? null
+                          : SUMMARY_EDITOR_ID,
                       );
                       setDraftValues((current) => ({
                         ...current,
@@ -520,7 +526,8 @@ export function ProposalBriefCard({
                       item.approvedValue ?? item.suggestedValue,
                     );
                     const draftValue = draftValues[item.id] ?? currentValue;
-                    const isEdited = resolvedItems[item.id]?.reviewStatus === "approved";
+                    const isEdited =
+                      resolvedItems[item.id]?.reviewStatus === "approved";
                     const sectionStatus = resolveSectionStatus(
                       item.reviewStatus,
                       isEdited,
