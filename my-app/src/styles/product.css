@@ -527,16 +527,14 @@ body,
   border-radius: var(--radius-inline);
 }
 
-.sb--collapsed .sb-rail-button__label,
-.sb--forced-collapsed .sb-rail-button__label {
-  display: none;
-}
-
-.sb--collapsed .sb-rail-button[data-toolbar-tooltip],
-.sb--forced-collapsed .sb-rail-button[data-toolbar-tooltip] {
-  --dasti-toolbar-attached-surface-gap: 0px;
-  --dasti-toolbar-tooltip-max-inline-size: 136px;
-  --dasti-toolbar-tooltip-inset-block-start: calc(100% + 2px);
+.sb[data-rail-compact="true"] .sb-rail-button[data-toolbar-tooltip] {
+  --dasti-toolbar-tooltip-inset-block-start: calc(
+    (
+        100% - var(--control-sm) - var(--app-nav-icon-label-gap) -
+          var(--app-nav-label-line)
+      ) /
+      2 + var(--control-sm) + 2px
+  );
   --dasti-toolbar-tooltip-transform-hidden: translate(-50%, -1px);
   --dasti-toolbar-tooltip-transform-visible: translate(-50%, 0);
 }
@@ -628,7 +626,9 @@ body,
   }
 
   .sb-rail-button__label {
-    display: none;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
   }
 }
 
