@@ -10377,7 +10377,7 @@ export function ProposalForge(): JSX.Element {
       {
         id: null,
         label: getVoicePresetDisplayLabel(null),
-        description: "Chooses from the job and selected CV at generation time.",
+        description: "Auto from job + CV.",
         tone: "auto" as const,
         selected:
           proposalRailTonePreset === null ||
@@ -11330,6 +11330,7 @@ export function ProposalForge(): JSX.Element {
                       title="Ask"
                       titleHidden
                       ariaLabel="Ask"
+                      className="dasti-composer-drawer--stage dasti-composer-drawer--proposal"
                     >
                       <ProposalRail
                         jobTitle={briefJobTitle}

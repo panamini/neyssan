@@ -301,7 +301,7 @@ describe("Sidebar permanent rail", () => {
       );
       expect(item).toHaveAttribute(
         "data-toolbar-tooltip-placement",
-        "inline-end",
+        "below",
       );
     }
 

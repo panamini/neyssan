@@ -65,6 +65,7 @@ type SectionEditorSheetProps = {
   onAcceptListAiSuggestion?: (value: string) => void;
   onDismissListAiSuggestion?: (value: string) => void;
   onClearListAiSuggestions?: () => void;
+  stageAligned?: boolean;
 };
 
 type FieldAiSuggestion = {
@@ -492,6 +493,7 @@ export function SectionEditorSheet({
   onAcceptListAiSuggestion,
   onDismissListAiSuggestion,
   onClearListAiSuggestions,
+  stageAligned = false,
 }: SectionEditorSheetProps): JSX.Element {
   const runCvSectionAiAction = useAction(
     ((api.functions as any)?.runCvSectionAiAction ??
@@ -1828,7 +1830,12 @@ export function SectionEditorSheet({
       title={title}
       meta={itemCount > 1 ? `${itemCount} items` : undefined}
       ariaLabel={title}
-      className="dasti-cv-section-sheet-panel"
+      className={[
+        "dasti-cv-section-sheet-panel",
+        stageAligned ? "dasti-cv-section-sheet-panel--stage" : null,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       showCloseButton={false}
       discardAction={{
         label: "Revert changes",

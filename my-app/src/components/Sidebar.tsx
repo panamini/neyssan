@@ -130,7 +130,7 @@ function SidebarRailLink({
       aria-current={active ? "page" : undefined}
       aria-expanded={expanded}
       data-toolbar-tooltip={compact ? label : undefined}
-      data-toolbar-tooltip-placement={compact ? "inline-end" : undefined}
+      data-toolbar-tooltip-placement={compact ? "below" : undefined}
       onClick={onClick}
       onFocus={onFocusOpen}
       onPointerEnter={(event) => {
@@ -179,7 +179,7 @@ function SidebarRailButton({
       aria-current={active ? "page" : undefined}
       aria-expanded={expanded}
       data-toolbar-tooltip={compact ? label : undefined}
-      data-toolbar-tooltip-placement={compact ? "inline-end" : undefined}
+      data-toolbar-tooltip-placement={compact ? "below" : undefined}
       onClick={onClick}
       onFocus={onFocusOpen}
       onPointerEnter={(event) => {
