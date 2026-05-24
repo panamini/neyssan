@@ -278,6 +278,46 @@ describe("ProposalRail style tab", () => {
     expect(screen.queryByLabelText("Ask suggestions")).not.toBeInTheDocument();
   });
 
+  it("autosizes the Ask textarea so long instructions grow the drawer content", async () => {
+    const scrollHeightDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "scrollHeight",
+    );
+    Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", {
+      configurable: true,
+      get: () => 188,
+    });
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        activeTab="ask"
+        hideTabs
+        askAiValue={"Add concrete evidence.\n".repeat(8)}
+        askAiPlaceholder="Rewrite instruction"
+      />,
+    );
+
+    const textarea = screen.getByPlaceholderText(
+      "Rewrite instruction",
+    ) as HTMLTextAreaElement;
+
+    await waitFor(() => {
+      expect(textarea.style.height).toBe("188px");
+    });
+
+    if (scrollHeightDescriptor) {
+      Object.defineProperty(
+        HTMLTextAreaElement.prototype,
+        "scrollHeight",
+        scrollHeightDescriptor,
+      );
+    } else {
+      delete (HTMLTextAreaElement.prototype as { scrollHeight?: number })
+        .scrollHeight;
+    }
+  });
+
   it("keeps the Draft panel available outside the Ask drawer", () => {
     render(<ProposalRail {...baseProps} />);
 
@@ -336,9 +376,11 @@ describe("ProposalRail style tab", () => {
     fireEvent(window, new Event("resize"));
 
     await waitFor(() => expect(lengthMenu).toHaveAttribute("data-side", "top"));
+    await waitFor(() => expect(lengthMenu.style.left).toBe("640px"));
     expect(lengthMenu).toHaveClass(
       "dasti-proposal-skeleton-rail__composer-menu",
     );
+    expect(lengthMenu).toHaveClass("dasti-composer-drawer-menu");
 
     const toneTrigger = screen.getByRole("button", { name: "Auto" });
     vi.spyOn(toneTrigger, "getBoundingClientRect").mockReturnValue({
@@ -369,9 +411,11 @@ describe("ProposalRail style tab", () => {
     fireEvent(window, new Event("resize"));
 
     await waitFor(() => expect(toneMenu).toHaveAttribute("data-side", "top"));
+    await waitFor(() => expect(toneMenu.style.left).toBe("748px"));
     expect(toneMenu).toHaveClass(
       "dasti-proposal-skeleton-rail__composer-menu",
     );
+    expect(toneMenu).toHaveClass("dasti-composer-drawer-menu");
 
     const productCss = fs.readFileSync(
       path.join(process.cwd(), "src/styles/product.css"),
@@ -379,6 +423,12 @@ describe("ProposalRail style tab", () => {
     );
     expect(productCss).toMatch(
       /\.dasti-proposal-skeleton-rail__composer-menu\s*\{[\s\S]*z-index:\s*calc\(var\(--z-modal\) \+ 2\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-composer-drawer-menu\s*\{[\s\S]*min-width:\s*144px;[\s\S]*max-width:\s*min\(168px,\s*calc\(100vw - \(var\(--space-2\) \* 2\)\)\);[\s\S]*padding:\s*var\(--space-1\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-composer-drawer-menu\s+\.ds-menu__item\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*padding:\s*0 var\(--space-2\);[\s\S]*gap:\s*var\(--space-2\);/,
     );
   });
 

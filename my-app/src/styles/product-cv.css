@@ -2128,6 +2128,38 @@ span.dasti-cv-ats {
   --panel-island-max-inline-size: 420px;
 }
 
+.dasti-cv-section-sheet-panel--stage {
+  --dasti-stage-island-command-top: calc(
+    var(--header-height, 0px) + var(--space-2)
+  );
+  --dasti-stage-island-command-block-size: calc(
+    var(--control-sm) + var(--space-3)
+  );
+  --dasti-stage-island-command-gap: var(--space-2);
+  --dasti-stage-island-bottom-clearance: var(--space-6);
+  inset-block-start: calc(
+    var(--dasti-stage-island-command-top) +
+      var(--dasti-stage-island-command-block-size) +
+      var(--dasti-stage-island-command-gap)
+  );
+  max-block-size: calc(
+    100dvh - var(--dasti-stage-island-command-top) -
+      var(--dasti-stage-island-command-block-size) -
+      var(--dasti-stage-island-command-gap) -
+      var(--dasti-stage-island-bottom-clearance)
+  );
+}
+
+.dasti-cv-section-sheet-panel--stage .ds-island-panel__body {
+  max-block-size: calc(
+    100dvh - var(--dasti-stage-island-command-top) -
+      var(--dasti-stage-island-command-block-size) -
+      var(--dasti-stage-island-command-gap) -
+      var(--dasti-stage-island-bottom-clearance) -
+      var(--panel-island-header-min-block-size)
+  );
+}
+
 .dasti-cv-review-block {
   display: grid;
   gap: var(--space-3);

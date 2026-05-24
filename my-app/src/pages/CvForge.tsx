@@ -7956,8 +7956,10 @@ export function CvForge(): JSX.Element {
                 open
                 onOpenChange={setCvComposerOpen}
                 title="Ask"
+                titleHidden
                 description="Improve the selected CV section."
                 ariaLabel="Ask"
+                className="dasti-composer-drawer--stage dasti-composer-drawer--cv"
               >
                 <CvRail
                   sections={currentSections}
@@ -7987,6 +7989,7 @@ export function CvForge(): JSX.Element {
             section={activeSection}
             aiSuggestion={cvRailAiSuggestion}
             isAiRunning={cvRailAiSuggestion?.state === "loading"}
+            stageAligned={workspaceMode === "preview"}
             onOpenChange={setSectionEditorOpen}
             onSave={handleSectionEditorSave}
             summaryAiEvidence={{

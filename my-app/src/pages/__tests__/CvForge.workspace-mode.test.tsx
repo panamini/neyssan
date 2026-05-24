@@ -2432,7 +2432,9 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByRole("button", { name: "Page preview" }));
     await user.click(screen.getByRole("button", { name: "Paper Profile" }));
 
-    expect(screen.getByRole("dialog", { name: "Profile" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Profile" })).toHaveClass(
+      "dasti-cv-section-sheet-panel--stage",
+    );
     expect(
       screen.queryByRole("dialog", { name: "Ask" }),
     ).not.toBeInTheDocument();
@@ -3283,6 +3285,23 @@ describe("CvForge workspace mode", () => {
     expect(source).toContain("isInlineAiToolbarActiveElement");
     expect(styles).toContain("data-inline-ai-selection-active");
     expect(styles).toContain("::highlight(cv-inline-ai-selection)");
+  });
+
+  it("keeps the CV Ask drawer aligned to the shared stage island position", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/pages/CvForge.tsx"),
+      "utf8",
+    );
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles/product.css"),
+      "utf8",
+    );
+
+    expect(source).toContain(
+      'className="dasti-composer-drawer--stage dasti-composer-drawer--cv"',
+    );
+    expect(source).toContain("titleHidden");
+    expect(styles).toContain(".dasti-composer-drawer--stage,");
   });
 
   it("reveals CV paper controls from section and item hover/focus surfaces", () => {

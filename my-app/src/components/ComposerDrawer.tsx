@@ -10,6 +10,8 @@ type ComposerDrawerProps = {
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  className?: string;
+  rootClassName?: string;
 };
 
 export function ComposerDrawer({
@@ -21,6 +23,8 @@ export function ComposerDrawer({
   onOpenChange,
   children,
   footer,
+  className,
+  rootClassName,
 }: ComposerDrawerProps): JSX.Element {
   return (
     <Sheet
@@ -32,8 +36,15 @@ export function ComposerDrawer({
       description={description}
       ariaLabel={ariaLabel}
       modal={false}
-      rootClassName="dasti-composer-drawer-root"
-      className="dasti-composer-drawer"
+      rootClassName={[
+        "dasti-composer-drawer-root",
+        rootClassName,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      className={["dasti-composer-drawer", className]
+        .filter(Boolean)
+        .join(" ")}
       overlayClassName="dasti-composer-drawer__overlay"
       bodyClassName="dasti-composer-drawer__body"
       footer={footer}

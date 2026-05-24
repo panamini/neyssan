@@ -206,6 +206,37 @@ describe("ProposalDisplay CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-composer-drawer-root\s+\.dasti-composer-drawer\s*\{[\s\S]*pointer-events:\s*auto;/,
     );
+    expectCssInOrder([
+      ".dasti-composer-drawer--stage,",
+      ".dasti-composer-drawer--proposal {",
+      "--dasti-composer-drawer-command-block-size: calc(",
+      "var(--control-sm) + var(--space-3)",
+      "--dasti-composer-drawer-bottom-clearance: var(--space-6);",
+      "inset-block-start: calc(",
+      "var(--dasti-composer-drawer-command-top)",
+      "var(--dasti-composer-drawer-command-block-size)",
+      "var(--dasti-composer-drawer-command-gap)",
+      "max-height: calc(",
+      "100dvh - var(--dasti-composer-drawer-command-top)",
+    ]);
+    expectCssInOrder([
+      ".dasti-composer-drawer--stage[data-title-hidden=\"true\"] .ds-sheet__header,",
+      ".dasti-composer-drawer--proposal[data-title-hidden=\"true\"] .ds-sheet__header {",
+      "min-block-size: var(--control-sm);",
+      "padding: var(--space-2) var(--space-2) 0;",
+      ".dasti-composer-drawer--stage .dasti-composer-drawer__body,",
+      ".dasti-composer-drawer--proposal .dasti-composer-drawer__body {",
+      "padding: 0 var(--space-3) var(--space-2);",
+    ]);
+    expectCssInOrder([
+      "@media (max-width: 640px)",
+      ".dasti-composer-drawer--stage,",
+      ".dasti-composer-drawer--proposal {",
+      "inset-block-start: calc(",
+      "var(--dasti-composer-drawer-command-top)",
+      "var(--dasti-composer-drawer-command-block-size)",
+      "var(--dasti-composer-drawer-command-gap)",
+    ]);
   });
 
   it("keeps the composer Ask prompt flat inside the drawer surface", () => {

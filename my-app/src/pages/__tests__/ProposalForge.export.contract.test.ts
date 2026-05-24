@@ -30,4 +30,17 @@ describe("ProposalForge export contract", () => {
   it("enables document zoom on the preview ProposalDisplay branch", () => {
     expect(proposalForgeSource).toContain("showZoomControls={true}");
   });
+
+  it("keeps the Proposal Ask drawer on the shared stage island position", () => {
+    expect(proposalForgeSource).toContain(
+      'className="dasti-composer-drawer--stage dasti-composer-drawer--proposal"',
+    );
+  });
+
+  it("keeps the automatic tone helper compact", () => {
+    expect(proposalForgeSource).toContain('description: "Auto from job + CV."');
+    expect(proposalForgeSource).not.toContain(
+      "Chooses from the job and selected CV at generation time.",
+    );
+  });
 });

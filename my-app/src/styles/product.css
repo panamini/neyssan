@@ -527,6 +527,20 @@ body,
   border-radius: var(--radius-inline);
 }
 
+.sb--collapsed .sb-rail-button__label,
+.sb--forced-collapsed .sb-rail-button__label {
+  display: none;
+}
+
+.sb--collapsed .sb-rail-button[data-toolbar-tooltip],
+.sb--forced-collapsed .sb-rail-button[data-toolbar-tooltip] {
+  --dasti-toolbar-attached-surface-gap: 0px;
+  --dasti-toolbar-tooltip-max-inline-size: 136px;
+  --dasti-toolbar-tooltip-inset-block-start: calc(100% + 2px);
+  --dasti-toolbar-tooltip-transform-hidden: translate(-50%, -1px);
+  --dasti-toolbar-tooltip-transform-visible: translate(-50%, 0);
+}
+
 .sb-rail-button:hover {
   background: transparent;
   color: var(--tm2);
@@ -614,9 +628,7 @@ body,
   }
 
   .sb-rail-button__label {
-    visibility: hidden;
-    opacity: 0;
-    pointer-events: none;
+    display: none;
   }
 }
 
@@ -5525,6 +5537,32 @@ body,
   z-index: calc(var(--z-modal) + 2);
 }
 
+.dasti-composer-drawer-menu {
+  min-width: 144px;
+  max-width: min(168px, calc(100vw - (var(--space-2) * 2)));
+  padding: var(--space-1);
+  gap: 0;
+}
+
+.dasti-composer-drawer-menu .ds-menu__label {
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  font-size: var(--tx);
+  letter-spacing: 0.06em;
+}
+
+.dasti-composer-drawer-menu .ds-menu__item {
+  min-height: var(--control-sm);
+  padding: 0 var(--space-2);
+  gap: var(--space-2);
+  border-radius: calc(var(--radius-control) - var(--space-1));
+  font-size: var(--tx);
+}
+
+.dasti-composer-drawer-menu .ds-menu__icon {
+  width: 14px;
+  height: 14px;
+}
+
 .dasti-composer-drawer__overlay {
   background: transparent;
   backdrop-filter: none;
@@ -5591,10 +5629,12 @@ body,
 }
 
 .dasti-composer-drawer .dasti-proposal-skeleton-rail__ask-field .ds-field--textarea {
+  height: auto;
   min-height: 118px;
   border: 0;
   background: transparent;
   box-shadow: none;
+  overflow: hidden;
   resize: none;
 }
 
@@ -5640,5 +5680,68 @@ body,
 
   .dasti-composer-drawer .dasti-proposal-skeleton-rail__ask-field .ds-field--textarea {
     min-height: 96px;
+  }
+}
+
+.dasti-composer-drawer--stage,
+.dasti-composer-drawer--proposal {
+  --dasti-composer-drawer-command-top: calc(
+    var(--header-height, 0px) + var(--space-2)
+  );
+  --dasti-composer-drawer-command-block-size: calc(
+    var(--control-sm) + var(--space-3)
+  );
+  --dasti-composer-drawer-command-gap: var(--space-2);
+  --dasti-composer-drawer-bottom-clearance: var(--space-6);
+  inset-block-start: calc(
+    var(--dasti-composer-drawer-command-top) +
+      var(--dasti-composer-drawer-command-block-size) +
+      var(--dasti-composer-drawer-command-gap)
+  );
+  max-height: calc(
+    100dvh - var(--dasti-composer-drawer-command-top) -
+      var(--dasti-composer-drawer-command-block-size) -
+      var(--dasti-composer-drawer-command-gap) -
+      var(--dasti-composer-drawer-bottom-clearance)
+  );
+}
+
+.dasti-composer-drawer--stage[data-title-hidden="true"] .ds-sheet__header,
+.dasti-composer-drawer--proposal[data-title-hidden="true"] .ds-sheet__header {
+  min-block-size: var(--control-sm);
+  padding: var(--space-2) var(--space-2) 0;
+}
+
+.dasti-composer-drawer--stage .dasti-composer-drawer__body,
+.dasti-composer-drawer--proposal .dasti-composer-drawer__body {
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+@media (max-width: 900px) {
+  .dasti-composer-drawer--stage,
+  .dasti-composer-drawer--proposal {
+    max-height: calc(
+      100dvh - var(--dasti-composer-drawer-command-top) -
+        var(--dasti-composer-drawer-command-block-size) -
+        var(--dasti-composer-drawer-command-gap) -
+        var(--dasti-composer-drawer-bottom-clearance)
+    );
+  }
+}
+
+@media (max-width: 640px) {
+  .dasti-composer-drawer--stage,
+  .dasti-composer-drawer--proposal {
+    inset-block-start: calc(
+      var(--dasti-composer-drawer-command-top) +
+        var(--dasti-composer-drawer-command-block-size) +
+        var(--dasti-composer-drawer-command-gap)
+    );
+    max-height: calc(
+      100dvh - var(--dasti-composer-drawer-command-top) -
+        var(--dasti-composer-drawer-command-block-size) -
+        var(--dasti-composer-drawer-command-gap) -
+        var(--dasti-composer-drawer-bottom-clearance)
+    );
   }
 }

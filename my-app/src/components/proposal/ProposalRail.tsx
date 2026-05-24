@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  ArrowUp,
   ArrowSquareOut,
   Briefcase,
   ChevronDown,
@@ -180,6 +181,7 @@ export function ProposalRail({
   const [jobContextOpen, setJobContextOpen] = React.useState(false);
   const [jobTextEditing, setJobTextEditing] = React.useState(false);
   const jobOfferTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const askTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const jobMeta = [company, location].filter(Boolean).join(" · ");
   const compactJobSummary = jobSummary?.trim() || jobMeta || null;
   const trimmedJobOfferText = jobOfferText.trim();
@@ -215,6 +217,20 @@ export function ProposalRail({
       jobOfferTextareaRef.current?.focus();
     }
   }, [jobTextEditing]);
+
+  const resizeAskTextarea = React.useCallback(
+    (textarea: HTMLTextAreaElement | null) => {
+      if (!textarea) return;
+      textarea.style.height = "auto";
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    },
+    [],
+  );
+
+  React.useLayoutEffect(() => {
+    if (activeTab !== "ask") return;
+    resizeAskTextarea(askTextareaRef.current);
+  }, [activeTab, askAiValue, resizeAskTextarea]);
 
   const cvMenuSections = React.useMemo<MenuSection[]>(() => {
     const cvItems = cvOptions.map((option) => ({
@@ -329,12 +345,12 @@ export function ProposalRail({
   const renderLengthSelect = (size: "sm" | "md") => (
     <Menu
       ariaLabel="Length"
-      align="start"
+      align={size === "sm" ? "end" : "start"}
       side={size === "sm" ? "top" : "bottom"}
       matchTriggerWidth={size === "md"}
       menuClassName={
         hideTabs && size === "sm"
-          ? "dasti-proposal-skeleton-rail__composer-menu"
+          ? "dasti-proposal-skeleton-rail__composer-menu dasti-composer-drawer-menu"
           : undefined
       }
       sections={lengthMenuSections}
@@ -360,7 +376,7 @@ export function ProposalRail({
       matchTriggerWidth={size === "md"}
       menuClassName={
         hideTabs && size === "sm"
-          ? "dasti-proposal-skeleton-rail__composer-menu"
+          ? "dasti-proposal-skeleton-rail__composer-menu dasti-composer-drawer-menu"
           : undefined
       }
       sections={toneMenuSections}
@@ -692,11 +708,15 @@ export function ProposalRail({
           >
             <span className="sr-only">Ask</span>
             <textarea
+              ref={askTextareaRef}
               className="ds-field ds-field--textarea"
               value={askAiValue}
               placeholder={askAiPlaceholder}
               disabled={askAiDisabled || askAiBusy}
-              onChange={(event) => onAskAiChange(event.target.value)}
+              onChange={(event) => {
+                onAskAiChange(event.target.value);
+                resizeAskTextarea(event.currentTarget);
+              }}
             />
           </label>
           {showAskSuggestions ? (
@@ -727,7 +747,7 @@ export function ProposalRail({
               disabled={askAiDisabled || askAiBusy || !askAiValue.trim()}
               onClick={onAskAiSubmit}
             >
-              <PaperPlaneRight size={15} strokeWidth={1.8} aria-hidden="true" />
+              <ArrowUp size={15} strokeWidth={1.8} aria-hidden="true" />
               <span className="sr-only">{askAiBusy ? "Applying..." : "Send"}</span>
             </button>
           </div>

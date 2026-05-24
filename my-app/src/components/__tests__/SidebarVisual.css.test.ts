@@ -42,6 +42,9 @@ describe("sidebar visual CSS contracts", () => {
       /\.sb-rail-button__label\s*\{[\s\S]*font-size:\s*var\(--app-nav-label-size\);[\s\S]*line-height:\s*var\(--app-nav-label-line\);/,
     );
     expect(productCss).toMatch(
+      /\.sb--collapsed \.sb-rail-button\[data-toolbar-tooltip\],[\s\S]*\.sb--forced-collapsed \.sb-rail-button\[data-toolbar-tooltip\]\s*\{[\s\S]*--dasti-toolbar-attached-surface-gap:\s*0px;[\s\S]*--dasti-toolbar-tooltip-inset-block-start:\s*calc\(100%\s*\+\s*2px\);/,
+    );
+    expect(productCss).toMatch(
       /@media \(max-width:\s*767px\)\s*\{[\s\S]*--app-nav-rail-width:\s*var\(--app-nav-rail-width-compact\);[\s\S]*\.sb-rail-button\s*\{[\s\S]*position:\s*relative;[\s\S]*\.sb-rail-button__label\s*\{[\s\S]*visibility:\s*hidden;[\s\S]*opacity:\s*0;[\s\S]*pointer-events:\s*none;/,
     );
     const baseRailLabelRule =
