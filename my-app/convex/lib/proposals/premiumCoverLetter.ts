@@ -5,6 +5,7 @@ import type { ProposalOutputLanguage } from "./proposalOutput";
 import { normalizeProposalConstraintText } from "./proposalPlanner";
 import { ENGLISH_SALUTATION, FRENCH_SALUTATION } from "./proposalRenderer";
 import type { ProposalVoicePreset } from "./voicePresets";
+import type { CompanyValuesPack } from "./companyValues";
 
 export type PremiumCoverLetterContextClass =
   | "cv_direct"
@@ -67,6 +68,7 @@ export type CoverLetterBrief = {
   preferredQualifications?: string[];
   lowValueChecklist?: string[];
   workContext?: string[];
+  companyValuesPack?: CompanyValuesPack;
   requiredMoves: string[];
   forbiddenMoves: string[];
 };
@@ -1180,6 +1182,7 @@ export function buildPremiumCoverLetterBrief(args: {
   contextClass: PremiumCoverLetterContextClass;
   allowedFactsPack: AllowedFactsPack;
   rankedEvidencePack: RankedEvidencePack;
+  companyValuesPack?: CompanyValuesPack;
 }): CoverLetterBrief {
   const jobOfferPriorityPack = buildJobOfferPriorityPack(args.jobDescription);
   const jobPostFacts = args.allowedFactsPack.facts
@@ -1248,6 +1251,9 @@ export function buildPremiumCoverLetterBrief(args: {
         }
       : {}),
     ...(fallbackWorkContext.length > 0 ? { workContext: fallbackWorkContext } : {}),
+    ...(args.companyValuesPack && args.companyValuesPack.confidence !== "none"
+      ? { companyValuesPack: args.companyValuesPack }
+      : {}),
     requiredMoves: [...PREMIUM_COVER_LETTER_REQUIRED_MOVES],
     forbiddenMoves: [...PREMIUM_COVER_LETTER_FORBIDDEN_MOVES],
   };
@@ -1260,7 +1266,25 @@ export function buildPremiumCoverLetterPrompt(args: {
   const presetGuidance = resolvePremiumCoverLetterPresetGuidance(
     args.brief.preset,
   );
-  const { requiredMoves, forbiddenMoves, ...structuredBrief } = args.brief;
+  const { requiredMoves, forbiddenMoves, companyValuesPack, ...briefRest } =
+    args.brief;
+  const structuredBrief = {
+    ...briefRest,
+    ...(companyValuesPack
+      ? {
+          companyValuesPack: {
+            confidence: companyValuesPack.confidence,
+            explicitValues: companyValuesPack.explicitValues,
+            implicitValues: companyValuesPack.implicitValues,
+            valueEvidenceSnippets: companyValuesPack.valueEvidenceSnippets,
+            workSurfaceLinks: companyValuesPack.workSurfaceLinks,
+            bannedValueClaimCount: companyValuesPack.bannedValueClaims.length,
+            usageRule:
+              "Values may be used only when they sharpen a concrete hiring case tied to a work surface or source-backed candidate evidence. Values must not replace source-backed candidate evidence or outrank stronger candidate proof. Do not infer personal alignment, admiration, culture fit, or mission resonance. If no strong mapping exists, leave company values unused.",
+          },
+        }
+      : {}),
+  };
   const contextGuidance =
     args.brief.contextClass === "cv_adjacent"
       ? [
@@ -1282,6 +1306,11 @@ export function buildPremiumCoverLetterPrompt(args: {
     "Do not lead with secondary qualifications when stronger evidence exists.",
     "Do not spend body space on admiration, benefits attraction, checklist summaries, generic enthusiasm, or tool repetition.",
     "Treat topResponsibilities as the employer-side priority order. Use keyRequirements only when they sharpen those responsibilities, and keep preferredQualifications or lowValueChecklist out of the lead.",
+    ...(companyValuesPack
+      ? [
+          "Company values are bounded context only. Values may be used only when they sharpen a concrete hiring case tied to a work surface or source-backed candidate evidence. Values must not replace source-backed candidate evidence or outrank stronger candidate proof; leave them unused when no strong mapping exists.",
+        ]
+      : []),
     "Preset affects rhetorical texture only. It must not change truthfulness, claim strength, or evidence priority.",
     "Across cv_direct and cv_adjacent modes, sound like a person making a case in a letter, not a memo explaining why the evidence is relevant.",
     presetGuidance,
@@ -1674,6 +1703,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   jobDescription: string;
   candidateName?: string;
   generationControlsBlock?: string;
+  companyValuesPack?: CompanyValuesPack;
   signal?: AbortSignal;
   systemInferenceHints?: string[];
   writer: PremiumCoverLetterWriter;
@@ -1734,6 +1764,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     contextClass,
     allowedFactsPack,
     rankedEvidencePack,
+    companyValuesPack: args.companyValuesPack,
   });
   const prompt = buildPremiumCoverLetterPrompt({
     brief,
