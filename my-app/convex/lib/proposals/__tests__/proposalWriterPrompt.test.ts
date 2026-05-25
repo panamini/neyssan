@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   applyFinalSavedOutputBridgeGuard,
@@ -11,9 +11,12 @@ import {
   inspectProposalFinalization,
   isStructuredMistralCoverLetterEnabled,
   neutralizeFinalSavedOutputBridgeSentence,
+  repairProposalDraftWithConstrainedPass,
   resolveStructuredMistralCoverLetterRolloutMode,
+  shouldRunProposalDraftRepair,
 } from "../../../generateProposalMutation";
 import { buildProposalWriterPlanBlock, type ProposalPlannerResult } from "../proposalPlanner";
+import { analyzeProposalDraft } from "../proposalEnforcement";
 
 const BASE_ARGS = {
   jobTitle: "Example Role",
@@ -241,6 +244,15 @@ describe("proposal writer prompt contract", () => {
     expect(prompt).toContain(
       "One proof cluster plus a weak relevance or fit-summary sentence is incomplete.",
     );
+    expect(prompt).toContain(
+      "Evidence chain requirement: each main paragraph should map job priority -> source-backed candidate fact -> recruiter case for why that fact matters in the role.",
+    );
+    expect(prompt).toContain(
+      "Missing requirements must become gaps, omissions, or cautious non-claims; never turn job keywords into candidate proof.",
+    );
+    expect(prompt).toContain(
+      "Do not praise company mission, culture, values, or the employer as a substitute for candidate evidence.",
+    );
   });
 
   it("asks strong cv-backed direct-match cover-letter prompts to make an employer-facing hiring case before the close", () => {
@@ -432,6 +444,9 @@ describe("proposal writer prompt contract", () => {
     );
     expect(prompt).toContain(
       "Keep challenge language, opportunity language, mission admiration, growth language, and personal-interest rhetoric secondary only; they must not carry the body or come before the concrete work/process sentences when those are available.",
+    );
+    expect(prompt).toContain(
+      "No-context mode must be motivation and work-surface only. Do not claim traits, habits, abilities, skills, background, experience, past work, group-project history, customer-facing history, or personal work habits.",
     );
   });
 
@@ -3873,5 +3888,273 @@ describe("proposal writer prompt contract", () => {
       "Attempted path: structured fail-closed to legacy fallback.",
     );
     expect(error.message).toContain("Final result: fail-closed final result.");
+  });
+
+  it("runs constrained repair for unsafe no-context drafts before deterministic fallback", async () => {
+    const plan: ProposalPlannerResult = {
+      context_mode: "none",
+      domain_gap: "distant",
+      credential_status: "unsupported",
+      transfer_mode: "no_operational_analogy",
+      output_language: "en",
+      allowed_concrete_facts: [],
+      allowed_transfer_themes: [],
+      disallowed_claims: [],
+      identity_hard_stops: [],
+      proof_strategy: "none",
+      opening_strategy: "direct_fast",
+    };
+    const unsafe = "I’ve worked in roles where my ability to stay organized helped me coordinate follow-ups.";
+    const analysis = analyzeProposalDraft({
+      content: unsafe,
+      plan,
+      format: "application_message",
+      outputLanguage: "English",
+      jobTitle: "Sales Assistant",
+      jobDescription:
+        "Coordinate follow-up, keep records organized, and communicate professionally with prospects and customers.",
+    });
+    const repairDraftText = vi.fn(async (prompt: string) => {
+      expect(prompt).toContain("FULL DRAFT SAFETY REPAIR");
+      expect(prompt).toContain("no candidate background is available");
+      return "The Sales Assistant role centers on coordinating follow-up, keeping records organized, and communicating professionally with prospects and customers. No candidate background details are available here, so the message should stay focused on interest in the role and willingness to learn more.";
+    });
+
+    const repaired = await repairProposalDraftWithConstrainedPass({
+      mistralKey: "test",
+      modelType: "mistral-medium-latest",
+      content: unsafe,
+      plan,
+      format: "application_message",
+      outputLanguage: "English",
+      jobTitle: "Sales Assistant",
+      jobDescription:
+        "Coordinate follow-up, keep records organized, and communicate professionally with prospects and customers.",
+      flaggedSentences: analysis.flaggedSentences,
+      repairDraftText,
+    });
+
+    expect(repairDraftText).toHaveBeenCalledTimes(1);
+    expect(repaired).toContain("Sales Assistant");
+    expect(repaired).toContain("coordinating follow-up");
+    expect(repaired).not.toMatch(/\b(?:I’ve worked|my ability|my experience|my background)\b/i);
+  });
+
+  it("uses last-resort fallback when no-context constrained repair remains unsafe", async () => {
+    const plan: ProposalPlannerResult = {
+      context_mode: "none",
+      domain_gap: "distant",
+      credential_status: "unsupported",
+      transfer_mode: "no_operational_analogy",
+      output_language: "en",
+      allowed_concrete_facts: [],
+      allowed_transfer_themes: [],
+      disallowed_claims: [],
+      identity_hard_stops: [],
+      proof_strategy: "none",
+      opening_strategy: "direct_fast",
+    };
+    const unsafe = "In past experiences, I’ve developed skills that would help me manage records.";
+    const analysis = analyzeProposalDraft({
+      content: unsafe,
+      plan,
+      format: "cover_letter",
+      outputLanguage: "English",
+      jobTitle: "Operations Associate",
+      jobDescription:
+        "Support recurring processes, update internal records, and assist with communication across teams.",
+    });
+
+    const repaired = await repairProposalDraftWithConstrainedPass({
+      mistralKey: "test",
+      modelType: "mistral-large-latest",
+      content: unsafe,
+      plan,
+      format: "cover_letter",
+      outputLanguage: "English",
+      jobTitle: "Operations Associate",
+      jobDescription:
+        "Support recurring processes, update internal records, and assist with communication across teams.",
+      flaggedSentences: analysis.flaggedSentences,
+      repairDraftText: vi.fn(async () => unsafe),
+    });
+
+    expect(repaired).toContain("Operations Associate");
+    expect(repaired).toContain(
+      "No candidate background details are available here",
+    );
+    expect(repaired).toContain("focused on the role itself");
+    expect(repaired).not.toMatch(/\b(?:past experiences|developed skills|my ability|managed)\b/i);
+  });
+
+  it("production repair gate does not depend on benchmark-only post-processing", () => {
+    const plan: ProposalPlannerResult = {
+      context_mode: "none",
+      domain_gap: "distant",
+      credential_status: "unsupported",
+      transfer_mode: "no_operational_analogy",
+      output_language: "en",
+      allowed_concrete_facts: [],
+      allowed_transfer_themes: ["role interest", "records", "communication"],
+      disallowed_claims: [],
+      identity_hard_stops: [],
+      proof_strategy: "none",
+      opening_strategy: "direct_fast",
+    };
+    const content =
+      "Attention to detail matters in this Sales Assistant role because organized follow-up and clear records shape customer communication.";
+
+    expect(
+      shouldRunProposalDraftRepair({
+        content,
+        plan,
+        format: "cover_letter",
+        outputLanguage: "English",
+        jobTitle: "Sales Assistant",
+        jobDescription:
+          "Coordinate organized follow-up, keep records clear, and communicate professionally with customers.",
+        verificationResult: { issues: [], flaggedSentences: [] },
+      }),
+    ).toBe(true);
+  });
+
+  it("runs constrained repair for unsupported-core weak SEO drafts", async () => {
+    const plan: ProposalPlannerResult = {
+      context_mode: "minimal",
+      domain_gap: "adjacent",
+      credential_status: "unsupported",
+      transfer_mode: "abstract_only",
+      output_language: "en",
+      allowed_concrete_facts: ["Frontend", "Landing Pages", "Conversion Optimization"],
+      allowed_transfer_themes: [],
+      disallowed_claims: ["unsupported indexing, schema, or crawl diagnostics experience"],
+      identity_hard_stops: [],
+      proof_strategy: "abstract_only",
+      opening_strategy: "direct_fast",
+    };
+    const unsafe =
+      "If your technical SEO specialist provides recommendations for schema markup and internal linking, I can implement those changes with precision.";
+    const analysis = analyzeProposalDraft({
+      content: unsafe,
+      plan,
+      format: "freelance_proposal",
+      outputLanguage: "English",
+      jobTitle: "Technical SEO Overhaul for Marketplace",
+      jobDescription:
+        "Audit and improve technical SEO including indexing, schema, crawl diagnostics, and internal linking recommendations.",
+    });
+    const repairDraftText = vi.fn(async (prompt: string) => {
+      expect(prompt).toContain("adjacent-only support");
+      return [
+        "My background is frontend and conversion-focused, not technical SEO.",
+        "Indexing, schema strategy, crawl diagnostics, and internal-linking recommendations should be led by a technical SEO specialist.",
+        "I can help with landing-page structure, frontend implementation, and conversion-aware page improvements once that specialist defines the recommendations.",
+      ].join("\n\n");
+    });
+
+    const repaired = await repairProposalDraftWithConstrainedPass({
+      mistralKey: "test",
+      modelType: "mistral-medium-latest",
+      content: unsafe,
+      plan,
+      format: "freelance_proposal",
+      outputLanguage: "English",
+      jobTitle: "Technical SEO Overhaul for Marketplace",
+      jobDescription:
+        "Audit and improve technical SEO including indexing, schema, crawl diagnostics, and internal linking recommendations.",
+      flaggedSentences: analysis.flaggedSentences,
+      repairDraftText,
+    });
+
+    expect(repairDraftText).toHaveBeenCalledTimes(1);
+    expect(repaired).toContain("not technical SEO");
+    expect(repaired).toContain("technical SEO specialist");
+    expect(repaired).not.toMatch(/\b(?:implement(?:ing)? schema|internal-linking execution|crawlability optimization)\b/i);
+  });
+
+  it("does not force strong rich-context frontend drafts into constrained repair", async () => {
+    const plan: ProposalPlannerResult = {
+      context_mode: "rich",
+      domain_gap: "direct",
+      credential_status: "exact_required",
+      transfer_mode: "literal",
+      output_language: "en",
+      allowed_concrete_facts: [
+        "React",
+        "TypeScript",
+        "Led a design system migration used across 4 product squads.",
+        "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+      ],
+      allowed_transfer_themes: [],
+      disallowed_claims: [],
+      identity_hard_stops: [],
+      proof_strategy: "concrete_supported",
+      opening_strategy: "direct_fast",
+    };
+    const content =
+      "I use React and TypeScript for customer-facing frontend work. Led a design system migration used across 4 product squads. Reduced page load time by 28 percent through bundle and rendering optimizations.";
+    const repairDraftText = vi.fn(async () => "should not be used");
+
+    const repaired = await repairProposalDraftWithConstrainedPass({
+      mistralKey: "test",
+      modelType: "mistral-medium-latest",
+      content,
+      plan,
+      format: "cover_letter",
+      outputLanguage: "English",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Lead React and TypeScript development, improve performance, and collaborate with product and design.",
+      flaggedSentences: [],
+      repairDraftText,
+    });
+
+    expect(repairDraftText).not.toHaveBeenCalled();
+    expect(repaired).toBe(content);
+  });
+
+  it("flags unsupported past mentoring but allows future mentoring support", () => {
+    const plan: ProposalPlannerResult = {
+      context_mode: "rich",
+      domain_gap: "direct",
+      credential_status: "exact_required",
+      transfer_mode: "literal",
+      output_language: "en",
+      allowed_concrete_facts: [
+        "React",
+        "TypeScript",
+        "Led a design system migration used across 4 product squads.",
+        "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+      ],
+      allowed_transfer_themes: [],
+      disallowed_claims: [],
+      identity_hard_stops: [],
+      proof_strategy: "concrete_supported",
+      opening_strategy: "direct_fast",
+    };
+
+    const bad = analyzeProposalDraft({
+      content:
+        "I led a design system migration used across 4 product squads. I’d welcome the chance to mentor junior engineers, as I’ve done in past roles.",
+      plan,
+      format: "cover_letter",
+      outputLanguage: "English",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Lead React and TypeScript development, improve performance, and mentor junior engineers.",
+    });
+    const good = analyzeProposalDraft({
+      content:
+        "I led a design system migration used across 4 product squads. I’d welcome the chance to support junior engineers through the same design-system and performance practices.",
+      plan,
+      format: "cover_letter",
+      outputLanguage: "English",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Lead React and TypeScript development, improve performance, and mentor junior engineers.",
+    });
+
+    expect(bad.issues.some((issue) => issue.message.includes("past mentoring"))).toBe(true);
+    expect(good.issues.some((issue) => issue.message.includes("past mentoring"))).toBe(false);
   });
 });

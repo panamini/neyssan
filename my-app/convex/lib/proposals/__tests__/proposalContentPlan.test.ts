@@ -6,6 +6,7 @@ import {
   validateStructuredCoverLetterContentPlan,
   type StructuredCoverLetterContentPlan,
 } from "../proposalContentPlan";
+import { analyzeCompanyValues } from "../companyValues";
 import type { ProposalPlannerResult } from "../proposalPlanner";
 
 const basePlan: ProposalPlannerResult = {
@@ -336,6 +337,55 @@ describe("structured cover letter content plan", () => {
     expect(prompt).toContain(
       "Do not default every preset to the same lead fact and same rhetorical job.",
     );
+  });
+
+  it("adds adjacent-only technical SEO planning boundaries for weak marketplace SEO matches", () => {
+    const prompt = buildStructuredCoverLetterContentPlanPrompt({
+      plannerResult: {
+        ...distantRolePlan,
+        allowed_concrete_facts: [
+          "Frontend-focused freelance designer-developer focused on landing pages and conversion flows.",
+          "Frontend",
+          "Landing Pages",
+          "Conversion Optimization",
+        ],
+        allowed_transfer_themes: [
+          "frontend execution",
+          "conversion-aware page improvements",
+        ],
+      },
+      voicePreset: "direct",
+      jobTitle: "Technical SEO Overhaul for Marketplace",
+      jobDescription:
+        "We need indexing, schema, crawl diagnostics, and internal linking recommendations for a marketplace.",
+    });
+
+    expect(prompt).toContain(
+      "adjacent_only_seo_rule: plan this as frontend/conversion support only, not technical SEO evidence.",
+    );
+    expect(prompt).toContain(
+      "technical SEO specialist",
+    );
+  });
+
+  it("includes company values only as bounded planning context", () => {
+    const prompt = buildStructuredCoverLetterContentPlanPrompt({
+      plannerResult: basePlan,
+      voicePreset: "expert",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Our mission is accessible product quality. Lead reusable UI systems and customer-facing workflow improvements.",
+      companyValuesPack: analyzeCompanyValues(
+        "Our mission is accessible product quality. Lead reusable UI systems and customer-facing workflow improvements.",
+      ),
+    });
+
+    expect(prompt).toContain("Company values audit context");
+    expect(prompt).toContain("accessible product quality");
+    expect(prompt).toContain(
+      "Values must not replace source-backed candidate evidence",
+    );
+    expect(prompt).not.toContain("I share your values");
   });
 
   it("rejects malformed sentence fragments in generated body text", () => {

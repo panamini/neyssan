@@ -12,7 +12,11 @@ export type GenerationSettings = {
 };
 
 export function getProviderForModel(model: BenchmarkModel): "mistral" | "openai" {
-  if (model === "mistral-small-latest" || model === "mistral-large-latest") {
+  if (
+    model === "mistral-small-latest" ||
+    model === "mistral-medium-latest" ||
+    model === "mistral-large-latest"
+  ) {
     return "mistral";
   }
   return "openai";

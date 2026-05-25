@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const benchmarkModelSchema = z.enum([
   "mistral-small-latest",
+  "mistral-medium-latest",
   "mistral-large-latest",
   "gpt-5-nano",
   "gpt-4o-mini",

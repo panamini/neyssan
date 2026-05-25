@@ -96,7 +96,7 @@ type RepairProposalSentenceLocallyArgs = {
 
 const STRICT_INTEREST_ONLY_REPAIR_SENTENCE = {
   English:
-    "The role centers on concrete day-to-day work, coordination, and operating context.",
+    "The role appears to depend on steady follow-through, clear communication, and organized day-to-day coordination.",
   French:
     "Le poste repose sur un travail concret au quotidien, de la coordination et un cadre d'execution clair.",
 } as const;
@@ -291,7 +291,54 @@ const NO_CONTEXT_BANNED_PATTERNS: Array<[RegExp, string]> = [
   [/\bi am confident in my ability to\b/i, "Do not imply demonstrated capability in no-context mode."],
   [/\bi understand the importance of\b/i, "Do not use soft readiness phrasing in no-context mode."],
   [/\bin previous roles?\b/i, "Do not describe prior roles in no-context mode."],
+  [/\bin past experiences?\b/i, "Do not describe prior experience in no-context mode."],
+  [/\bin my work\b/i, "Do not describe prior work in no-context mode."],
+  [/\bmy professional background\b/i, "Do not describe prior background in no-context mode."],
   [/\bmy experience includes\b/i, "Do not describe prior experience in no-context mode."],
+  [/\bmy experience has required\b/i, "Do not describe prior experience in no-context mode."],
+  [/\bi['’]ve worked\b/i, "Do not imply prior work history in no-context mode."],
+  [/\bi have worked\b/i, "Do not imply prior work history in no-context mode."],
+  [/\bskills?\s+i['’]ve developed\b/i, "Do not claim developed skills in no-context mode."],
+  [/\bi['’]ve taken initiative\b/i, "Do not claim prior initiative in no-context mode."],
+  [/\bi['’]ve always prioritized\b/i, "Do not claim personal work habits in no-context mode."],
+  [/\bi (?:do not|don['’]t) have direct experience\b/i, "Do not discuss experience status in no-context mode."],
+  [/\bmy ability to\b/i, "Do not claim personal ability in no-context mode."],
+  [/\bmy habit\b/i, "Do not claim personal habits in no-context mode."],
+  [/\bmy attention to detail\b/i, "Do not claim personal traits in no-context mode."],
+  [/\bmy methodical approach\b/i, "Do not claim personal traits in no-context mode."],
+  [/\bhow i approach work\b/i, "Do not claim personal work habits in no-context mode."],
+  [/\bhow i approach tasks?\b/i, "Do not claim personal work habits in no-context mode."],
+  [/\bhow i approach new responsibilities\b/i, "Do not claim personal approach in no-context mode."],
+  [/\bhow i handle\b/i, "Do not claim personal handling style in no-context mode."],
+  [/\b(?:something )?i value\b/i, "Do not claim personal values or habits in no-context mode."],
+  [/\bi value\b/i, "Do not claim personal values or habits in no-context mode."],
+  [/\bi prioritize\b/i, "Do not claim personal work habits in no-context mode."],
+  [/\bi tend to\b/i, "Do not claim personal habits in no-context mode."],
+  [/\bi make sure\b/i, "Do not claim personal work habits in no-context mode."],
+  [/\bi take direction\b/i, "Do not claim personal work habits in no-context mode."],
+  [/\bi(?:['’]m| am) comfortable\b/i, "Do not claim personal capability in no-context mode."],
+  [/\bi(?:['’]m| am) confident\b/i, "Do not claim personal capability in no-context mode."],
+  [/\bmy approach\b/i, "Do not claim personal approach in no-context mode."],
+  [/\bmy work style\b/i, "Do not claim personal work style in no-context mode."],
+  [/\bmy strengths?\b/i, "Do not claim personal strengths in no-context mode."],
+  [/\battention to detail\b/i, "Do not claim personal traits in no-context mode."],
+  [/\bcontribute effectively\b/i, "Do not claim contribution ability in no-context mode."],
+  [/\bhow (?:best )?to contribute\b/i, "Do not claim contribution ability in no-context mode."],
+  [/\bhow i can contribute\b/i, "Do not claim contribution ability in no-context mode."],
+  [/\bcontribute to your team\b/i, "Do not claim contribution ability in no-context mode."],
+  [/\bcontributing effectively\b/i, "Do not claim contribution ability in no-context mode."],
+  [/\bsupport your team\b/i, "Do not claim contribution ability in no-context mode."],
+  [/\bhelp streamline\b/i, "Do not claim process-improvement ability in no-context mode."],
+  [/\beager to support\b/i, "Do not claim operational support ability in no-context mode."],
+  [/\btasks i(?:['’]m| am) eager to support\b/i, "Do not claim operational support ability in no-context mode."],
+  [/\bdeveloping the skills\b/i, "Do not claim skills or skill development in no-context mode."],
+  [/\bapproach these duties\b/i, "Do not claim personal approach in no-context mode."],
+  [/\btake seriously\b/i, "Do not claim personal traits in no-context mode."],
+  [/\bnothing slips through the cracks\b/i, "Do not claim personal work habits in no-context mode."],
+  [/\bcritical for supporting\b/i, "Do not claim operational support ability in no-context mode."],
+  [/\bsupporting both the team and customers\b/i, "Do not claim operational support ability in no-context mode."],
+  [/\bwould guide (?:my|the) approach\b/i, "Do not claim personal approach in no-context mode."],
+  [/\bapproach to these tasks\b/i, "Do not claim personal approach in no-context mode."],
   [/\bi have worked with\b/i, "Do not imply prior tool or system use in no-context mode."],
   [/\bi have managed\b/i, "Do not imply prior operational ownership in no-context mode."],
   [/\bbien que je n['’]aie pas d['’]expérience directe\b/i, "Remove negative-history disclaimers in no-context mode."],
@@ -313,6 +360,120 @@ const COMPLETED_QUALIFICATION_PATTERNS: Array<[RegExp, string]> = [
   [/\bearned a bachelor'?s\b/i, "Do not present in-progress education as completed."],
   [/\bcompleted (?:a|the)?\s*(?:degree|bachelor'?s|master'?s)\b/i, "Do not present in-progress education as completed."],
 ];
+
+const UNSUPPORTED_TECHNICAL_SEO_PATTERNS: Array<[RegExp, string]> = [
+  [/\bworked closely with SEO teams?\b/i, "Do not claim SEO-team work unless source-backed."],
+  [/\boptim(?:ized|izing|ize)\s+crawlability\b/i, "Do not claim crawlability optimization unless source-backed."],
+  [/\bschema\s+(?:placement|implementation|changes?)\b/i, "Do not claim schema implementation or placement unless source-backed."],
+  [/\bcrawl\s+budget\b/i, "Do not claim crawl-budget expertise unless source-backed."],
+  [/\bcanonicali[sz]ation\b/i, "Do not claim canonicalization expertise unless source-backed."],
+  [/\binternal[-\s]linking\s+(?:patterns?|structures?)\b/i, "Do not claim internal-linking diagnosis or optimization unless source-backed."],
+  [/\binternal[-\s]linking\s+adjustments?\b/i, "Do not offer internal-linking implementation unless source-backed."],
+  [/\btechnical\s+SEO\s+diagnos(?:is|tic)\b/i, "Do not claim technical SEO diagnosis unless source-backed."],
+  [/\bsearch\s+visibility\s+familiarity\b/i, "Do not claim search visibility familiarity unless source-backed."],
+  [/\bmarketplace[-\s]style\s+SEO\s+implementation\b/i, "Do not claim marketplace-style SEO implementation unless source-backed."],
+  [/\bfrontend\s+SEO\s+diagnos(?:is|tic)\b/i, "Do not claim frontend SEO diagnosis unless source-backed."],
+  [/\b(?:implement|implementing|appl(?:y|ying)|adjust(?:ing)?)\s+(?:schema|schema markup|schema changes)\b/i, "Do not offer schema implementation unless source-backed."],
+  [/\bschema\s+implementation\b/i, "Do not offer schema implementation unless source-backed."],
+  [/\badjust(?:ing)?\s+markup\b/i, "Do not offer technical markup execution unless source-backed."],
+  [/\bmarkup\s+alignment\b/i, "Do not offer technical markup execution unless source-backed."],
+  [/\btechnical\s+SEO\s+directives?\b/i, "Do not offer technical SEO directive execution unless source-backed."],
+  [/\btechnical\s+SEO[-\s]driven\s+changes?\b/i, "Do not offer technical SEO execution unless source-backed."],
+  [/\baudit\s+insights?\b/i, "Do not claim technical SEO audit execution unless source-backed."],
+  [/\bschema\s+strateg(?:y|ies)\b[^.]{0,80}\b(?:code|markup|reflect)/i, "Do not offer schema implementation unless source-backed."],
+  [/\bcanonical\s+tags?\b/i, "Do not offer canonical-tag implementation unless source-backed."],
+  [/\bindexing\s+fix(?:es)?\b/i, "Do not offer indexing fixes unless source-backed."],
+  [/\bcrawlability\s+fix(?:es)?\b/i, "Do not offer crawlability fixes unless source-backed."],
+  [/\bcrawlable\s+markup\b/i, "Do not claim crawlable-markup execution unless source-backed."],
+];
+const TECHNICAL_SEO_SAFETY_CONTEXT_PATTERN =
+  /\b(?:not technical seo|outside my core skill|outside my background|technical seo specialist|seo specialist|should be led by|defer(?:ring)? to|once .* specialist defines|frontend execution|conversion-aware page improvements)\b/i;
+const TECHNICAL_SEO_EXECUTION_OWNERSHIP_PATTERN =
+  /\b(?:implement|implementing|appl(?:y|ying)|adjust(?:ing)?|execute|executing|handle|handling)\b[^.]{0,80}\b(?:schema|schema markup|schema changes|schema implementation|internal[-\s]linking|canonical tags?|indexing fixes?|crawlability fixes?|crawlable markup|markup|technical seo directives?|technical seo[-\s]driven changes?)\b|\b(?:schema|schema markup|schema changes|schema implementation|schema strateg(?:y|ies)|internal[-\s]linking|canonical tags?|indexing fixes?|crawlability fixes?|crawlable markup|markup|technical seo directives?|technical seo[-\s]driven changes?|audit insights?)\b[^.]{0,80}\b(?:implement|implementing|appl(?:y|ying)|adjust(?:ing)?|execute|executing|handle|handling|frontend reality|code|markup|reflect)/i;
+const PAST_MENTORING_CLAIM_PATTERN =
+  /\b(?:as i(?:['’]ve| have) done in past roles|i(?:['’]ve| have) mentored|mentored junior|mentoring junior[^.]{0,80}\b(?:as i(?:['’]ve| have) done|in past roles|throughout my career)|my mentoring experience)\b/i;
+const MENTORING_SOURCE_PATTERN =
+  /\b(?:mentor(?:ed|ing|ship)?|coached|coaching|junior engineers?|team development|people leadership)\b/i;
+
+function isUnsupportedTechnicalSeoContext(args: {
+  plan: ProposalPlannerResult;
+  jobTitle: string;
+  jobDescription: string;
+}): boolean {
+  const jobText = `${args.jobTitle} ${args.jobDescription}`;
+  const factText = args.plan.allowed_concrete_facts.join(" ");
+  return (
+    /\b(?:technical\s+seo|indexing|schema|crawl|internal[-\s]linking)\b/i.test(
+      jobText,
+    ) &&
+    /\b(?:front[-\s]?end|landing pages?|conversion(?: optimization)?)\b/i.test(
+      factText,
+    ) &&
+    !/\b(?:technical\s+seo|seo specialist|crawl diagnostics?|schema strategy|canonicalization|crawl budget)\b/i.test(
+      factText,
+    )
+  );
+}
+
+export function detectNoContextCandidateClaimLeak(args: {
+  content: string;
+  plan: ProposalPlannerResult;
+  format: ProposalOutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string | null;
+  jobTitle: string;
+  jobDescription: string;
+}): boolean {
+  if (args.plan.context_mode !== "none") return false;
+  return analyzeProposalDraft({
+    content: args.content,
+    plan: args.plan,
+    format: args.format,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+    jobTitle: args.jobTitle,
+    jobDescription: args.jobDescription,
+  }).issues.some((issue) =>
+    issue.code === "no_context_phrase" ||
+    issue.code === "no_context_readiness" ||
+    issue.code === "credential_inflation" ||
+    issue.code === "unsupported_operational_history"
+  );
+}
+
+export function detectUnsupportedCoreClaimLeak(args: {
+  content: string;
+  plan: ProposalPlannerResult;
+  format: ProposalOutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string | null;
+  jobTitle: string;
+  jobDescription: string;
+}): boolean {
+  if (
+    !isUnsupportedTechnicalSeoContext({
+      plan: args.plan,
+      jobTitle: args.jobTitle,
+      jobDescription: args.jobDescription,
+    })
+  ) {
+    return false;
+  }
+  const body = extractProposalBodyForRepair({
+    content: args.content,
+    format: args.format,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  });
+  return splitSentences(body).some(
+    (sentence) =>
+      TECHNICAL_SEO_EXECUTION_OWNERSHIP_PATTERN.test(sentence) ||
+      (!TECHNICAL_SEO_SAFETY_CONTEXT_PATTERN.test(sentence) &&
+        UNSUPPORTED_TECHNICAL_SEO_PATTERNS.some(([pattern]) =>
+          pattern.test(sentence),
+        )),
+  );
+}
 
 const ENGLISH_GREETING_OR_CLOSING_PATTERN =
   /\bDear Hiring Manager,|\bSincerely,/i;
@@ -549,7 +710,7 @@ function getNoContextRepairSentence(args: {
     roleInterestTheme ||
     /\b(?:role|position|work|mission|company)\b/i.test(normalizedSentence)
   ) {
-    return "The day-to-day work itself is the part of the role that stands out to me most.";
+    return "The role appears to depend on steady follow-through, clear communication, and organized day-to-day coordination.";
   }
   if (
     /\b(?:communication|reliability|learn|curiosity)\b/i.test(
@@ -1533,9 +1694,34 @@ export function analyzeProposalDraft(
     candidateName: args.candidateName,
   });
   const sentences = splitSentences(bodyContent);
+  if (args.plan.context_mode === "none") {
+    const seenNoContextSentences = new Set<string>();
+    for (const sentence of sentences) {
+      const normalizedSentence = normalizeProposalConstraintText(sentence);
+      if (
+        normalizedSentence.length >= 24 &&
+        seenNoContextSentences.has(normalizedSentence)
+      ) {
+        appendIssue(issues, {
+          code: "no_context_phrase",
+          message:
+            "No-context mode must not repeat the same full sentence as fallback or repair filler.",
+        });
+        break;
+      }
+      if (normalizedSentence.length >= 24) {
+        seenNoContextSentences.add(normalizedSentence);
+      }
+    }
+  }
   const allowedFacts = args.plan.allowed_concrete_facts;
   const allowedEmployers = extractAllowedEmployers(allowedFacts);
   const jobKeywords = buildJobKeywordSet(args.jobTitle, args.jobDescription);
+  const unsupportedTechnicalSeoContext = isUnsupportedTechnicalSeoContext({
+    plan: args.plan,
+    jobTitle: args.jobTitle,
+    jobDescription: args.jobDescription,
+  });
   const candidateNamePattern =
     args.candidateName && args.candidateName.trim().length > 0
       ? new RegExp(
@@ -1634,6 +1820,39 @@ export function analyzeProposalDraft(
           });
         }
       }
+    }
+
+    if (
+      unsupportedTechnicalSeoContext &&
+      (!TECHNICAL_SEO_SAFETY_CONTEXT_PATTERN.test(sentence) ||
+        TECHNICAL_SEO_EXECUTION_OWNERSHIP_PATTERN.test(sentence))
+    ) {
+      if (TECHNICAL_SEO_EXECUTION_OWNERSHIP_PATTERN.test(sentence)) {
+        pushSentenceIssue({
+          code: "unsupported_operational_history",
+          message:
+            "Do not offer schema, indexing, crawlability, canonical, or internal-linking execution ownership unless source-backed.",
+        });
+      }
+      for (const [pattern, message] of UNSUPPORTED_TECHNICAL_SEO_PATTERNS) {
+        if (pattern.test(sentence) && !allowedFactsContainPattern(pattern, allowedFacts)) {
+          pushSentenceIssue({
+            code: "unsupported_operational_history",
+            message,
+          });
+        }
+      }
+    }
+
+    if (
+      PAST_MENTORING_CLAIM_PATTERN.test(sentence) &&
+      !allowedFacts.some((fact) => MENTORING_SOURCE_PATTERN.test(fact))
+    ) {
+      pushSentenceIssue({
+        code: "unsupported_operational_history",
+        message:
+          "Do not claim past mentoring unless candidate facts explicitly support mentoring or people-development experience.",
+      });
     }
 
     if (args.plan.credential_status !== "exact_required") {
