@@ -3,7 +3,12 @@ import {
   buildProposalCriteriaAudit,
   type ProposalCriteriaAudit,
 } from "./proposalCriteriaAudit";
-import type { ProposalPlannerResult } from "./proposalPlanner";
+import {
+  buildProposalTruthPlanV1,
+  type ProposalPlannerResult,
+  type ProposalTruthPlanV1,
+  type ProposalTruthPlanCandidateFactInput,
+} from "./proposalPlanner";
 
 export type ProposalQualityHarnessKind =
   | "static_safety"
@@ -140,6 +145,7 @@ export type ProposalEvalResult = {
   harnessHardness: ProposalQualityHarnessHardness;
   comparisonKind: "shadow_parity_safety_check" | "baseline_only";
   criteriaAudit: ProposalCriteriaAudit | null;
+  truthPlan: ProposalTruthPlanV1 | null;
   safetyReason?: string;
 };
 
@@ -281,6 +287,33 @@ function buildPlannerResult(fixture: ProposalQualityFixture): ProposalPlannerRes
       fixture.candidateFacts.length > 0 ? "concrete_supported" : "none",
     opening_strategy: "direct_fast",
   };
+}
+
+function truthPlanSourceForFixtureFact(
+  fact: ProposalQualityCandidateFact,
+): ProposalTruthPlanCandidateFactInput["source"] {
+  if (fact.priority === "achievement") return "candidate_achievement";
+  if (fact.priority === "tool" || fact.priority === "trait") return "candidate_skill";
+  if (fact.source === "proposal_context") return "candidate_summary";
+  return "candidate_experience";
+}
+
+function buildTruthPlanForFixture(
+  fixture: ProposalQualityFixture,
+): ProposalTruthPlanV1 {
+  return buildProposalTruthPlanV1({
+    jobTitle: fixture.jobTitle,
+    jobDescription: fixture.jobDescription,
+    contextMode: fixture.contextMode,
+    candidateFacts: fixture.candidateFacts.map((fact) => ({
+      id: fact.id,
+      fact: fact.text,
+      source: truthPlanSourceForFixtureFact(fact),
+      sourceText: fact.text,
+    })),
+    expectedCriticalRequirements: fixture.topJobPriorities,
+    expectedBlockedClaims: fixture.blockedClaims,
+  });
 }
 
 function selectFactsUsed(
@@ -457,6 +490,10 @@ function evaluateFixtureVariant(args: {
           jobDescription: fixture.jobDescription,
           generatedText: letter,
         });
+  const truthPlan =
+    args.variant === "semantic_planner_shadow"
+      ? buildTruthPlanForFixture(fixture)
+      : null;
   const usedFacts = selectFactsUsed(fixture, letter);
   const missingCriticalRequirements = findMissingRequirements(fixture, letter, usedFacts);
   const unsupportedClaims = countUnsupportedClaims(fixture, letter);
@@ -526,6 +563,7 @@ function evaluateFixtureVariant(args: {
         ? "baseline_only"
         : "shadow_parity_safety_check",
     criteriaAudit,
+    truthPlan,
     safetyReason:
       coverage < (args.baseline?.supportedKeywordCoverage ?? 0)
         ? "lower keyword coverage only allowed when avoiding unsupported claims"

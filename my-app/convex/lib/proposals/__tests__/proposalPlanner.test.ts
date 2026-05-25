@@ -4,12 +4,15 @@ import {
   buildProposalEvidenceSummary,
   buildProposalPlannerPrompt,
   buildProposalSourceFactBank,
+  buildProposalTruthPlanV1,
   buildProposalWriterPlanBlock,
   containsForbiddenProposalBridge,
   computeProposalPlannerContextMode,
   getProposalPlannerOpeningStrategy,
   normalizeProposalPlannerResult,
+  validateProposalTruthPlanV1,
   type ProposalPlannerResult,
+  type ProposalTruthPlanV1,
 } from "../proposalPlanner";
 
 describe("proposal planner helpers", () => {
@@ -27,6 +30,209 @@ describe("proposal planner helpers", () => {
     expect(getProposalPlannerOpeningStrategy("storyteller")).toBe(
       "storyteller_thread",
     );
+  });
+
+  it("builds the compact ProposalTruthPlanV1 schema shape", () => {
+    const plan = buildProposalTruthPlanV1({
+      jobTitle: "Sales Assistant",
+      jobDescription:
+        "Coordinate follow-ups, keep records organized, and communicate professionally with customers.",
+      contextMode: "none",
+    });
+
+    expect(plan.planVersion).toBe("proposal_truth_plan_v1");
+    expect(["normal", "adjacent_only", "no_context_safe"]).toContain(
+      plan.writingMode,
+    );
+    expect(["high", "medium", "low"]).toContain(plan.modeConfidence);
+    expect([
+      "normal_writer",
+      "constrained_writer",
+      "bypass_writer_use_fallback",
+    ]).toContain(plan.writerPolicy);
+    expect(Array.isArray(plan.jobPriorities)).toBe(true);
+    expect(Array.isArray(plan.candidateFacts)).toBe(true);
+    expect(Array.isArray(plan.allowedClaims)).toBe(true);
+    expect(Array.isArray(plan.blockedClaims)).toBe(true);
+    expect(Array.isArray(plan.missingCriticalRequirements)).toBe(true);
+    expect(validateProposalTruthPlanV1(plan)).toEqual([]);
+  });
+
+  it("flags empty factIds on direct candidate truth-plan claims", () => {
+    const invalidPlan: ProposalTruthPlanV1 = {
+      planVersion: "proposal_truth_plan_v1",
+      writingMode: "normal",
+      modeConfidence: "high",
+      writerPolicy: "normal_writer",
+      jobPriorities: [],
+      candidateFacts: [],
+      allowedClaims: [
+        {
+          claim: "React development",
+          factIds: [],
+          strength: "direct",
+          claimType: "candidate_fact",
+        },
+      ],
+      blockedClaims: [],
+      missingCriticalRequirements: [],
+    };
+
+    expect(validateProposalTruthPlanV1(invalidPlan).map((issue) => issue.code)).toEqual(
+      expect.arrayContaining([
+        "direct_claim_missing_fact_ids",
+        "candidate_claim_missing_fact_ids",
+      ]),
+    );
+  });
+
+  it("classifies no-context Sales Assistant plans as safe fallback plans", () => {
+    const plan = buildProposalTruthPlanV1({
+      jobTitle: "Sales Assistant",
+      jobDescription:
+        "We are looking for a Sales Assistant who can coordinate follow-up, keep records organized, and communicate professionally with prospects and customers.",
+      contextMode: "none",
+    });
+
+    expect(plan.writingMode).toBe("no_context_safe");
+    expect(plan.writerPolicy).toBe("bypass_writer_use_fallback");
+    expect(plan.candidateFacts).toEqual([]);
+    expect(plan.allowedClaims.every((claim) => claim.strength === "soft")).toBe(true);
+    expect(
+      plan.allowedClaims.every((claim) =>
+        ["role_interest", "job_surface", "discussion_forward"].includes(
+          claim.claimType,
+        ),
+      ),
+    ).toBe(true);
+    expect(plan.allowedClaims.some((claim) => claim.factIds.length === 0)).toBe(true);
+    expect(plan.allowedClaims.map((claim) => claim.claim).join(" ")).toContain(
+      "Sales Assistant",
+    );
+    const blocked = plan.blockedClaims.map((claim) => claim.claim).join(" ");
+    expect(blocked).toContain("prior sales experience");
+    expect(blocked).toContain("CRM expertise");
+    expect(blocked).toContain("quota ownership");
+    expect(blocked).toContain("how I approach new responsibilities");
+    expect(blocked).toContain("attention to detail");
+    expect(blocked).toContain("confidence or comfort");
+    expect(blocked).toContain("personal work-style claims");
+    expect(validateProposalTruthPlanV1(plan)).toEqual([]);
+  });
+
+  it("classifies weak technical SEO as adjacent-only with SEO gaps blocked", () => {
+    const plan = buildProposalTruthPlanV1({
+      jobTitle: "Technical SEO Overhaul for Marketplace",
+      jobDescription:
+        "Looking for a freelancer to audit and improve technical SEO for a large marketplace site, including indexing, schema, crawl diagnostics, and internal linking recommendations.",
+      contextMode: "minimal",
+      personalizationContext: {
+        summary:
+          "Frontend-focused freelance designer-developer with conversion and landing page experience.",
+        desiredPosition: "Freelance Product Designer",
+        topSkills: ["Frontend", "Landing Pages", "Conversion Optimization"],
+      },
+    });
+
+    expect(plan.writingMode).toBe("adjacent_only");
+    expect(plan.candidateFacts.map((fact) => fact.fact)).toEqual(
+      expect.arrayContaining([
+        "Frontend",
+        "Landing Pages",
+        "Conversion Optimization",
+      ]),
+    );
+    const blocked = plan.blockedClaims.map((claim) => claim.claim).join(" | ");
+    expect(blocked).toContain("technical SEO specialist");
+    expect(blocked).toContain("indexing fixes");
+    expect(blocked).toContain("schema strategy / schema implementation");
+    expect(blocked).toContain("crawl diagnostics");
+    expect(blocked).toContain("internal-linking recommendations");
+    expect(plan.missingCriticalRequirements.map((entry) => entry.requirement)).toEqual(
+      expect.arrayContaining([
+        "indexing fixes",
+        "schema strategy / schema implementation",
+        "crawl diagnostics",
+        "internal-linking recommendations",
+      ]),
+    );
+    expect(
+      plan.allowedClaims
+        .filter((claim) => /frontend|landing|conversion/i.test(claim.claim))
+        .every((claim) => claim.strength !== "direct" || claim.factIds.length > 0),
+    ).toBe(true);
+    expect(
+      plan.allowedClaims.some(
+        (claim) =>
+          claim.strength === "adjacent" &&
+          /indexing|schema|crawl|internal/i.test(claim.claim),
+      ),
+    ).toBe(true);
+  });
+
+  it("classifies strong frontend as normal and keeps unsupported leadership blocked", () => {
+    const plan = buildProposalTruthPlanV1({
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "We are hiring a Senior Frontend Engineer to lead React and TypeScript development for a customer-facing SaaS platform. The role includes building reusable UI systems, improving performance, collaborating with product and design, and mentoring junior engineers. Experience with analytics instrumentation and experimentation is a plus.",
+      contextMode: "rich",
+      personalizationContext: {
+        summary:
+          "Frontend engineer focused on React, TypeScript, design systems, and product-facing web apps.",
+        desiredPosition: "Senior Frontend Engineer",
+        topSkills: [
+          "React",
+          "TypeScript",
+          "Design Systems",
+          "Performance Optimization",
+          "A/B Testing",
+        ],
+        recentExperience: [
+          {
+            company: "BrightLayer",
+            position: "Frontend Engineer",
+            highlights: [
+              "Led a design system migration used across 4 product squads.",
+              "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+            ],
+          },
+          {
+            company: "Northline Labs",
+            position: "Product Engineer",
+            highlights: [
+              "Built experimentation dashboards used by product and growth teams.",
+              "Partnered directly with design on customer-facing workflow improvements.",
+            ],
+          },
+        ],
+        standoutAchievements: [
+          "Improved signup conversion by 11 percent after iterative UI experiments.",
+        ],
+      },
+    });
+
+    expect(plan.writingMode).toBe("normal");
+    expect(
+      plan.allowedClaims
+        .filter((claim) => claim.strength === "direct")
+        .every((claim) => claim.factIds.length > 0),
+    ).toBe(true);
+    expect(plan.allowedClaims.map((claim) => claim.claim)).toEqual(
+      expect.arrayContaining([
+        "React development",
+        "TypeScript development",
+        "reusable UI systems",
+        "performance optimization",
+        "experimentation workflows",
+      ]),
+    );
+    expect(plan.blockedClaims.map((claim) => claim.claim)).toEqual(
+      expect.arrayContaining([
+        "mentoring or people-management experience",
+        "analytics instrumentation as direct experience",
+      ]),
+    );
+    expect(validateProposalTruthPlanV1(plan)).toEqual([]);
   });
 
   it("builds a compact source fact bank from candidate context", () => {

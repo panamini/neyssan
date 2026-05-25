@@ -103,6 +103,94 @@ export type ProposalEvidenceSummary = {
   noContextMode: boolean;
 };
 
+export type ProposalTruthPlanV1 = {
+  planVersion: "proposal_truth_plan_v1";
+  writingMode: "normal" | "adjacent_only" | "no_context_safe";
+  modeConfidence: "high" | "medium" | "low";
+  writerPolicy:
+    | "normal_writer"
+    | "constrained_writer"
+    | "bypass_writer_use_fallback";
+  jobPriorities: Array<{
+    id: string;
+    requirement: string;
+    importance: "critical" | "important" | "nice_to_have";
+    sourceText: string;
+  }>;
+  candidateFacts: Array<{
+    id: string;
+    fact: string;
+    source:
+      | "candidate_summary"
+      | "candidate_skill"
+      | "candidate_experience"
+      | "candidate_achievement"
+      | "candidate_project";
+    sourceText: string;
+  }>;
+  allowedClaims: Array<{
+    claim: string;
+    factIds: string[];
+    strength: "direct" | "soft" | "adjacent";
+    claimType:
+      | "candidate_fact"
+      | "role_interest"
+      | "job_surface"
+      | "discussion_forward"
+      | "collaboration_area";
+  }>;
+  blockedClaims: Array<{
+    claim: string;
+    reason:
+      | "no_candidate_evidence"
+      | "job_description_only"
+      | "missing_requirement"
+      | "overstated_seniority"
+      | "unsupported_tool"
+      | "unsupported_metric"
+      | "unsupported_leadership"
+      | "company_praise"
+      | "no_context_personal_claim";
+  }>;
+  missingCriticalRequirements: Array<{
+    requirement: string;
+    sourceText: string;
+    safeTreatment:
+      | "omit"
+      | "frame_as_gap"
+      | "collaboration_area"
+      | "refer_to_specialist";
+  }>;
+};
+
+export type ProposalTruthPlanCandidateFactInput = {
+  id?: string;
+  fact: string;
+  source?: ProposalTruthPlanV1["candidateFacts"][number]["source"];
+  sourceText?: string;
+};
+
+export type BuildProposalTruthPlanV1Input = {
+  jobTitle: string;
+  jobDescription: string;
+  personalizationContext?: ProposalPlannerPersonalizationContext | null;
+  candidateFacts?: ProposalTruthPlanCandidateFactInput[];
+  contextMode?: ProposalPlannerContextMode;
+  expectedCriticalRequirements?: string[];
+  expectedBlockedClaims?: string[];
+};
+
+export type ProposalTruthPlanValidationIssue = {
+  code:
+    | "direct_claim_missing_fact_ids"
+    | "candidate_claim_missing_fact_ids"
+    | "no_context_candidate_facts"
+    | "no_context_unsafe_allowed_claim"
+    | "no_context_direct_claim";
+  claim?: string;
+  message: string;
+};
+
 type NormalizeProposalPlannerArgs = {
   rawPlan: ProposalPlannerResult;
   voicePreset: ProposalVoicePreset;
@@ -740,6 +828,553 @@ function classifyEvidenceFact(
     return "background";
   }
   return "scope";
+}
+
+function truthPlanFactSourceForText(
+  text: string,
+): ProposalTruthPlanV1["candidateFacts"][number]["source"] {
+  if (ACHIEVEMENT_RESULT_PATTERN.test(text) || ACHIEVEMENT_METRIC_PATTERN.test(text)) {
+    return "candidate_achievement";
+  }
+  if (/\b(?:react|typescript|seo|crm|salesforce|excel|python|figma|webflow|sql|node\.?js|design systems?|frontend|landing pages?|conversion optimization|coordination|documentation|stakeholder communication)\b/i.test(text)) {
+    return "candidate_skill";
+  }
+  return "candidate_experience";
+}
+
+function buildTruthPlanCandidateFacts(
+  args: Pick<BuildProposalTruthPlanV1Input, "personalizationContext" | "candidateFacts">,
+): ProposalTruthPlanV1["candidateFacts"] {
+  const explicitFacts = args.candidateFacts ?? [];
+  const facts: ProposalTruthPlanV1["candidateFacts"] = [];
+  const addFact = (
+    fact: string | null | undefined,
+    source: ProposalTruthPlanV1["candidateFacts"][number]["source"],
+    sourceText?: string,
+    id?: string,
+  ) => {
+    const cleaned = compactWhitespace(fact);
+    if (!cleaned) return;
+    const key = normalizeComparisonToken(cleaned);
+    if (facts.some((entry) => normalizeComparisonToken(entry.fact) === key)) {
+      return;
+    }
+    facts.push({
+      id: compactWhitespace(id) || `fact_${facts.length + 1}`,
+      fact: cleaned,
+      source,
+      sourceText: compactWhitespace(sourceText) || cleaned,
+    });
+  };
+
+  for (const fact of explicitFacts) {
+    addFact(
+      fact.fact,
+      fact.source ?? truthPlanFactSourceForText(fact.fact),
+      fact.sourceText,
+      fact.id,
+    );
+  }
+
+  const context = args.personalizationContext;
+  if (context) {
+    for (const snippet of splitIntoFactSnippets(context.summary)) {
+      addFact(snippet, "candidate_summary");
+    }
+    for (const skill of context.topSkills ?? []) {
+      addFact(skill, "candidate_skill");
+    }
+    for (const experience of context.recentExperience ?? []) {
+      const role = compactWhitespace(
+        [experience.position, experience.company ? `at ${experience.company}` : ""]
+          .filter(Boolean)
+          .join(" "),
+      );
+      addFact(role, "candidate_experience");
+      for (const highlight of experience.highlights ?? []) {
+        for (const snippet of splitIntoFactSnippets(highlight)) {
+          addFact(snippet, "candidate_experience");
+        }
+      }
+    }
+    for (const achievement of context.standoutAchievements ?? []) {
+      for (const snippet of splitIntoFactSnippets(achievement)) {
+        addFact(snippet, "candidate_achievement");
+      }
+    }
+  }
+
+  return facts.slice(0, 18);
+}
+
+function addTruthPlanPriority(
+  priorities: ProposalTruthPlanV1["jobPriorities"],
+  requirement: string,
+  sourceText: string,
+  importance: ProposalTruthPlanV1["jobPriorities"][number]["importance"],
+): void {
+  const cleaned = compactWhitespace(requirement);
+  if (!cleaned) return;
+  const key = normalizeComparisonToken(cleaned);
+  if (priorities.some((priority) => normalizeComparisonToken(priority.requirement) === key)) {
+    return;
+  }
+  priorities.push({
+    id: `job_${priorities.length + 1}`,
+    requirement: cleaned,
+    importance,
+    sourceText: compactWhitespace(sourceText) || cleaned,
+  });
+}
+
+function buildTruthPlanJobPriorities(args: {
+  jobTitle: string;
+  jobDescription: string;
+  expectedCriticalRequirements?: string[];
+}): ProposalTruthPlanV1["jobPriorities"] {
+  const jobText = `${args.jobTitle}. ${args.jobDescription}`;
+  const priorities: ProposalTruthPlanV1["jobPriorities"] = [];
+  for (const requirement of args.expectedCriticalRequirements ?? []) {
+    addTruthPlanPriority(priorities, requirement, requirement, "critical");
+  }
+
+  const keywordPriorities: Array<{
+    pattern: RegExp;
+    requirement: string;
+    importance: ProposalTruthPlanV1["jobPriorities"][number]["importance"];
+  }> = [
+    { pattern: /\breact\b/i, requirement: "React development", importance: "critical" },
+    { pattern: /\btypescript\b/i, requirement: "TypeScript development", importance: "critical" },
+    { pattern: /\b(?:reusable ui systems?|design systems?)\b/i, requirement: "reusable UI systems", importance: "important" },
+    { pattern: /\bperformance\b/i, requirement: "performance optimization", importance: "important" },
+    { pattern: /\b(?:product and design|design and product|product\/design)\b/i, requirement: "collaboration with product and design", importance: "important" },
+    { pattern: /\bmentor(?:ing)?\b/i, requirement: "mentoring junior engineers", importance: "important" },
+    { pattern: /\banalytics instrumentation\b/i, requirement: "analytics instrumentation", importance: "nice_to_have" },
+    { pattern: /\bexperimentation\b/i, requirement: "experimentation workflows", importance: "nice_to_have" },
+    { pattern: /\bindexing\b/i, requirement: "indexing fixes", importance: "critical" },
+    { pattern: /\bschema\b/i, requirement: "schema strategy / schema implementation", importance: "critical" },
+    { pattern: /\bcrawl diagnostics?\b/i, requirement: "crawl diagnostics", importance: "critical" },
+    { pattern: /\binternal[-\s]linking\b/i, requirement: "internal-linking recommendations", importance: "critical" },
+    { pattern: /\bfollow[-\s]?up\b/i, requirement: "follow-up coordination", importance: "critical" },
+    { pattern: /\brecords?\b/i, requirement: "organized records", importance: "critical" },
+    { pattern: /\bprofessional(?:ly)? communication|communicate professionally\b/i, requirement: "professional communication", importance: "important" },
+    { pattern: /\bcrm\b/i, requirement: "CRM expertise", importance: "important" },
+    { pattern: /\bquota\b/i, requirement: "quota ownership", importance: "important" },
+    { pattern: /\bschedules?\b/i, requirement: "schedule management", importance: "critical" },
+    { pattern: /\bdocumentation\b/i, requirement: "documentation", importance: "critical" },
+    { pattern: /\bvendor\b/i, requirement: "vendor communication", importance: "critical" },
+    { pattern: /\bprocurement\b/i, requirement: "vendor procurement ownership", importance: "critical" },
+    { pattern: /\boffice support\b/i, requirement: "general office support", importance: "important" },
+    { pattern: /\bprocess follow[-\s]?through\b/i, requirement: "process follow-through", importance: "important" },
+  ];
+
+  for (const entry of keywordPriorities) {
+    if (entry.pattern.test(jobText)) {
+      addTruthPlanPriority(priorities, entry.requirement, jobText, entry.importance);
+    }
+  }
+
+  if (priorities.length === 0) {
+    addTruthPlanPriority(priorities, args.jobTitle, jobText, "critical");
+  }
+
+  return priorities.slice(0, 12);
+}
+
+function factSupportsRequirement(
+  fact: ProposalTruthPlanV1["candidateFacts"][number],
+  requirement: string,
+): "direct" | "adjacent" | null {
+  const factText = normalizeComparisonToken(fact.fact);
+  const requirementText = normalizeComparisonToken(requirement);
+  if (!factText || !requirementText) return null;
+  const directGroups = [
+    ["react", "typescript", "frontend"],
+    ["design system", "ui systems"],
+    ["performance", "load time", "optimization", "optimizations"],
+    ["experiment", "ab testing", "conversion"],
+    ["product", "design", "collaborat", "partnered"],
+    ["coordination", "coordinate", "schedules", "process follow"],
+    ["documentation", "records"],
+    ["stakeholder communication", "communication"],
+    ["landing pages", "frontend", "conversion"],
+  ];
+  for (const group of directGroups) {
+    const requirementMatch = group.some((token) => requirementText.includes(token));
+    const factMatch = group.some((token) => factText.includes(token));
+    if (requirementMatch && factMatch) return "direct";
+  }
+  const requirementTokens = new Set(extractDomainGapTokens(requirement));
+  const factTokens = new Set(extractDomainGapTokens(fact.fact));
+  const overlap = Array.from(requirementTokens).filter((token) => factTokens.has(token));
+  if (overlap.length >= 2) return "direct";
+  if (overlap.length === 1) return "adjacent";
+  if (
+    /\b(?:vendor|office|schedule|procurement)\b/i.test(requirement) &&
+    /\b(?:coordination|documentation|stakeholder communication|process)\b/i.test(fact.fact)
+  ) {
+    return "adjacent";
+  }
+  if (
+    /\b(?:indexing|schema|crawl|internal[-\s]linking|technical seo)\b/i.test(requirement) &&
+    /\b(?:frontend|landing pages?|conversion)\b/i.test(fact.fact)
+  ) {
+    return "adjacent";
+  }
+  return null;
+}
+
+function hasDirectSupport(
+  facts: ProposalTruthPlanV1["candidateFacts"],
+  requirement: string,
+): boolean {
+  return facts.some((fact) => factSupportsRequirement(fact, requirement) === "direct");
+}
+
+function blockedClaim(
+  claim: string,
+  reason: ProposalTruthPlanV1["blockedClaims"][number]["reason"],
+): ProposalTruthPlanV1["blockedClaims"][number] {
+  return { claim, reason };
+}
+
+function missingRequirement(
+  requirement: string,
+  sourceText: string,
+  safeTreatment: ProposalTruthPlanV1["missingCriticalRequirements"][number]["safeTreatment"],
+): ProposalTruthPlanV1["missingCriticalRequirements"][number] {
+  return { requirement, sourceText, safeTreatment };
+}
+
+function uniqueBlockedClaims(
+  claims: ProposalTruthPlanV1["blockedClaims"],
+): ProposalTruthPlanV1["blockedClaims"] {
+  const seen = new Set<string>();
+  return claims.filter((claim) => {
+    const key = `${normalizeComparisonToken(claim.claim)}:${claim.reason}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildNoContextTruthPlan(args: {
+  jobTitle: string;
+  jobDescription: string;
+  jobPriorities: ProposalTruthPlanV1["jobPriorities"];
+}): ProposalTruthPlanV1 {
+  const jobText = `${args.jobTitle}. ${args.jobDescription}`;
+  return {
+    planVersion: "proposal_truth_plan_v1",
+    writingMode: "no_context_safe",
+    modeConfidence: "high",
+    writerPolicy: "bypass_writer_use_fallback",
+    jobPriorities: args.jobPriorities,
+    candidateFacts: [],
+    allowedClaims: [
+      {
+        claim: `interest in the ${args.jobTitle} role`,
+        factIds: [],
+        strength: "soft",
+        claimType: "role_interest",
+      },
+      {
+        claim: `the role centers on ${args.jobPriorities
+          .slice(0, 3)
+          .map((priority) => priority.requirement)
+          .join(", ")}`,
+        factIds: [],
+        strength: "soft",
+        claimType: "job_surface",
+      },
+      {
+        claim: "willingness to discuss the team process and role expectations",
+        factIds: [],
+        strength: "soft",
+        claimType: "discussion_forward",
+      },
+    ],
+    blockedClaims: uniqueBlockedClaims([
+      blockedClaim("prior sales experience", "no_candidate_evidence"),
+      blockedClaim("CRM expertise", "no_candidate_evidence"),
+      blockedClaim("quota ownership", "no_candidate_evidence"),
+      blockedClaim("how I approach new responsibilities", "no_context_personal_claim"),
+      blockedClaim("attention to detail", "no_context_personal_claim"),
+      blockedClaim("confidence or comfort with the work", "no_context_personal_claim"),
+      blockedClaim("personal work-style claims", "no_context_personal_claim"),
+      blockedClaim("candidate strengths, traits, habits, or abilities", "no_context_personal_claim"),
+      blockedClaim("prior tools, projects, metrics, or credentials", "no_candidate_evidence"),
+      ...args.jobPriorities.map((priority) =>
+        blockedClaim(`${priority.requirement} as candidate experience`, "job_description_only"),
+      ),
+    ]),
+    missingCriticalRequirements: args.jobPriorities
+      .filter((priority) => priority.importance === "critical")
+      .map((priority) => missingRequirement(priority.requirement, priority.sourceText || jobText, "omit")),
+  };
+}
+
+export function buildProposalTruthPlanV1(
+  input: BuildProposalTruthPlanV1Input,
+): ProposalTruthPlanV1 {
+  const contextMode =
+    input.contextMode ??
+    computeProposalPlannerContextMode(
+      input.personalizationContext ? "rich" : "none",
+      Boolean(input.personalizationContext || input.candidateFacts?.length),
+    );
+  const candidateFacts =
+    contextMode === "none"
+      ? []
+      : buildTruthPlanCandidateFacts({
+          personalizationContext: input.personalizationContext,
+          candidateFacts: input.candidateFacts,
+        });
+  const jobPriorities = buildTruthPlanJobPriorities({
+    jobTitle: input.jobTitle,
+    jobDescription: input.jobDescription,
+    expectedCriticalRequirements: input.expectedCriticalRequirements,
+  });
+  const jobText = `${input.jobTitle}. ${input.jobDescription}`;
+
+  if (contextMode === "none" || candidateFacts.length === 0) {
+    return buildNoContextTruthPlan({
+      jobTitle: input.jobTitle,
+      jobDescription: input.jobDescription,
+      jobPriorities,
+    });
+  }
+
+  const allowedClaims: ProposalTruthPlanV1["allowedClaims"] = [];
+  const blockedClaims: ProposalTruthPlanV1["blockedClaims"] = [];
+  const missingCriticalRequirements: ProposalTruthPlanV1["missingCriticalRequirements"] = [];
+  let directSupportCount = 0;
+  let adjacentSupportCount = 0;
+
+  for (const priority of jobPriorities) {
+    const supportingFacts = candidateFacts.filter((fact) =>
+      factSupportsRequirement(fact, priority.requirement),
+    );
+    const directFacts = supportingFacts.filter(
+      (fact) => factSupportsRequirement(fact, priority.requirement) === "direct",
+    );
+    if (directFacts.length > 0) {
+      directSupportCount += 1;
+      allowedClaims.push({
+        claim: priority.requirement,
+        factIds: directFacts.slice(0, 3).map((fact) => fact.id),
+        strength: "direct",
+        claimType: "candidate_fact",
+      });
+      continue;
+    }
+    if (supportingFacts.length > 0) {
+      adjacentSupportCount += 1;
+      allowedClaims.push({
+        claim: `${priority.requirement} can be discussed only as adjacent support`,
+        factIds: supportingFacts.slice(0, 3).map((fact) => fact.id),
+        strength: "adjacent",
+        claimType: "collaboration_area",
+      });
+    }
+    if (priority.importance === "critical" || priority.importance === "important") {
+      const specialist =
+        /\b(?:indexing|schema|crawl|internal[-\s]linking|technical seo)\b/i.test(
+          priority.requirement,
+        );
+      missingCriticalRequirements.push(
+        missingRequirement(
+          priority.requirement,
+          priority.sourceText,
+          specialist ? "refer_to_specialist" : "collaboration_area",
+        ),
+      );
+      blockedClaims.push(
+        blockedClaim(`${priority.requirement} as direct candidate experience`, "missing_requirement"),
+      );
+    }
+  }
+
+  for (const fact of candidateFacts) {
+    if (
+      !allowedClaims.some((claim) => claim.factIds.includes(fact.id)) &&
+      allowedClaims.length < 10
+    ) {
+      allowedClaims.push({
+        claim: fact.fact,
+        factIds: [fact.id],
+        strength: "soft",
+        claimType: "candidate_fact",
+      });
+    }
+  }
+
+  if (/\b(?:technical\s+seo|indexing|schema|crawl|internal[-\s]linking)\b/i.test(jobText)) {
+    const seoClaims = [
+      "technical SEO specialist",
+      "indexing fixes",
+      "schema strategy / schema implementation",
+      "crawl diagnostics",
+      "internal-linking recommendations",
+    ];
+    for (const claim of seoClaims) {
+      if (!hasDirectSupport(candidateFacts, claim)) {
+        blockedClaims.push(
+          blockedClaim(
+            claim,
+            /\b(?:schema|indexing|crawl|internal)/i.test(claim)
+              ? "unsupported_tool"
+              : "missing_requirement",
+          ),
+        );
+      }
+    }
+  }
+
+  if (/\bmentor(?:ing)?|people management|manage junior/i.test(jobText)) {
+    const mentoringSupported = candidateFacts.some((fact) =>
+      /\b(?:mentor|managed people|people management|coached junior|managed junior)\b/i.test(
+        fact.fact,
+      ),
+    );
+    if (!mentoringSupported) {
+      blockedClaims.push(
+        blockedClaim("mentoring or people-management experience", "unsupported_leadership"),
+      );
+    }
+  }
+
+  if (/\banalytics instrumentation\b/i.test(jobText) && !hasDirectSupport(candidateFacts, "analytics instrumentation")) {
+    blockedClaims.push(blockedClaim("analytics instrumentation as direct experience", "unsupported_tool"));
+  }
+
+  if (/\bvendor|procurement\b/i.test(jobText)) {
+    for (const claim of ["vendor communication", "vendor procurement ownership"]) {
+      const hasLiteralVendorSupport = candidateFacts.some((fact) =>
+        /\bvendor|procurement\b/i.test(fact.fact),
+      );
+      if (!hasLiteralVendorSupport) {
+        blockedClaims.push(blockedClaim(claim, "missing_requirement"));
+        if (
+          !missingCriticalRequirements.some(
+            (entry) =>
+              normalizeComparisonToken(entry.requirement) ===
+              normalizeComparisonToken(claim),
+          )
+        ) {
+          missingCriticalRequirements.push(
+            missingRequirement(claim, jobText, "collaboration_area"),
+          );
+        }
+      }
+    }
+  }
+
+  for (const claim of input.expectedBlockedClaims ?? []) {
+    blockedClaims.push(blockedClaim(claim, "missing_requirement"));
+  }
+
+  const unsupportedTechnicalSeoMove =
+    /\b(?:technical\s+seo|indexing|schema|crawl|internal[-\s]linking)\b/i.test(jobText) &&
+    candidateFacts.some((fact) =>
+      /\b(?:front[-\s]?end|landing pages?|conversion(?: optimization)?)\b/i.test(
+        fact.fact,
+      ),
+    ) &&
+    !candidateFacts.some((fact) =>
+      /\b(?:technical\s+seo|seo specialist|crawl diagnostics?|schema strategy|indexing|canonicalization|crawl budget|internal[-\s]linking)\b/i.test(
+        fact.fact,
+      ),
+    );
+  const unsupportedVendorCentral =
+    /\bvendor|procurement\b/i.test(jobText) &&
+    !candidateFacts.some((fact) => /\bvendor|procurement\b/i.test(fact.fact));
+
+  const writingMode: ProposalTruthPlanV1["writingMode"] =
+    unsupportedTechnicalSeoMove || unsupportedVendorCentral || directSupportCount === 0
+      ? "adjacent_only"
+      : "normal";
+  const modeConfidence: ProposalTruthPlanV1["modeConfidence"] =
+    writingMode === "normal" && directSupportCount >= 2
+      ? "high"
+      : writingMode === "adjacent_only" && (adjacentSupportCount > 0 || missingCriticalRequirements.length > 0)
+        ? "high"
+        : "medium";
+
+  return {
+    planVersion: "proposal_truth_plan_v1",
+    writingMode,
+    modeConfidence,
+    writerPolicy: writingMode === "normal" ? "normal_writer" : "constrained_writer",
+    jobPriorities,
+    candidateFacts,
+    allowedClaims:
+      writingMode === "adjacent_only"
+        ? allowedClaims.map((claim) =>
+            claim.strength === "direct" && /\b(?:technical seo|indexing|schema|crawl|internal|vendor|procurement)\b/i.test(claim.claim)
+              ? { ...claim, strength: "adjacent", claimType: "collaboration_area" }
+              : claim,
+          )
+        : allowedClaims,
+    blockedClaims: uniqueBlockedClaims(blockedClaims),
+    missingCriticalRequirements: missingCriticalRequirements.filter(
+      (entry, index, entries) =>
+        entries.findIndex(
+          (candidate) =>
+            normalizeComparisonToken(candidate.requirement) ===
+            normalizeComparisonToken(entry.requirement),
+        ) === index,
+    ),
+  };
+}
+
+export function validateProposalTruthPlanV1(
+  plan: ProposalTruthPlanV1,
+): ProposalTruthPlanValidationIssue[] {
+  const issues: ProposalTruthPlanValidationIssue[] = [];
+  if (plan.writingMode === "no_context_safe" && plan.candidateFacts.length > 0) {
+    issues.push({
+      code: "no_context_candidate_facts",
+      message: "no_context_safe plans must not expose candidate facts.",
+    });
+  }
+
+  for (const claim of plan.allowedClaims) {
+    if (claim.strength === "direct" && claim.factIds.length === 0) {
+      issues.push({
+        code: "direct_claim_missing_fact_ids",
+        claim: claim.claim,
+        message: "Direct allowed claims require non-empty factIds.",
+      });
+    }
+    if (claim.claimType === "candidate_fact" && claim.factIds.length === 0) {
+      issues.push({
+        code: "candidate_claim_missing_fact_ids",
+        claim: claim.claim,
+        message: "Candidate fact claims require non-empty factIds.",
+      });
+    }
+    if (plan.writingMode === "no_context_safe") {
+      const safeNoContextClaim =
+        claim.strength === "soft" &&
+        (claim.claimType === "role_interest" ||
+          claim.claimType === "job_surface" ||
+          claim.claimType === "discussion_forward");
+      if (!safeNoContextClaim) {
+        issues.push({
+          code:
+            claim.strength === "direct"
+              ? "no_context_direct_claim"
+              : "no_context_unsafe_allowed_claim",
+          claim: claim.claim,
+          message:
+            "No-context plans may only allow soft role-interest, job-surface, or discussion-forward claims.",
+        });
+      }
+    }
+  }
+
+  return issues;
 }
 
 export function buildProposalEvidenceSummary(

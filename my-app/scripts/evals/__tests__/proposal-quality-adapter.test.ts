@@ -163,6 +163,11 @@ describe("proposal quality benchmark adapter", () => {
         inventedClaimFree: false,
       }),
     );
+    expect(
+      report.scores.every(
+        (score) => score.status !== "ok" || score.truthPlan?.planVersion === "proposal_truth_plan_v1",
+      ),
+    ).toBe(true);
     expect(report.manualReviewShortlist).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -217,6 +222,10 @@ describe("proposal quality benchmark adapter", () => {
       expect.objectContaining({
         missingCriticalRequirements: [],
         supportedKeywordCoverage: 1,
+        truthPlan: expect.objectContaining({
+          writingMode: "normal",
+          writerPolicy: "normal_writer",
+        }),
       }),
     );
   });
@@ -282,7 +291,90 @@ describe("proposal quality benchmark adapter", () => {
       expect.objectContaining({
         noContextViolation: true,
         inventedClaimFree: false,
+        truthPlan: expect.objectContaining({
+          writingMode: "no_context_safe",
+          writerPolicy: "bypass_writer_use_fallback",
+        }),
       }),
+    );
+  });
+
+  it("surfaces adjacent truth plans in benchmark dry-scoring reports", () => {
+    const adjacentAdminCase = {
+      ...benchmarkCase,
+      id: "application-adjacent-admin",
+      label: "Adjacent admin application",
+      jobTitle: "Administrative Coordinator",
+      jobDescription:
+        "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
+      proposalType: "application_message",
+      personalizationRichness: "minimal",
+      candidateContext: {
+        name: "Camille Bernard",
+        summary:
+          "Operations lead experienced in coordination, process documentation, and cross-team communication.",
+        desiredPosition: "Operations Coordinator",
+        topSkills: ["Coordination", "Documentation", "Stakeholder Communication"],
+      },
+      expectedGrounding: [
+        "Coordination and documentation strength",
+        "Process follow-through",
+      ],
+      forbiddenClaims: [
+        "Do not invent office management or vendor procurement ownership.",
+      ],
+    } as const;
+
+    const { report } = scoreBenchmarkManifest({
+      manifest: {
+        ...makeManifest(),
+        models: ["mistral-small-latest"],
+        records: [
+          {
+            benchmarkCase: adjacentAdminCase,
+            prompt: "prompt",
+            results: {
+              "mistral-small-latest": {
+                status: "ok",
+                model: "mistral-small-latest",
+                provider: "mistral",
+                outputText:
+                  "I can point to coordination, documentation, and cross-team communication. Vendor communication and procurement ownership should stay as areas to discuss rather than claims.",
+                latencyMs: 1200,
+                usage: {
+                  inputTokens: 100,
+                  outputTokens: 100,
+                  totalTokens: 200,
+                },
+                cost: {
+                  inputCostUsd: 0.1,
+                  outputCostUsd: 0.2,
+                  totalCostUsd: 0.3,
+                },
+                rawResponsePath: "/tmp/raw.json",
+              },
+            },
+          },
+        ],
+      } as any,
+      sourceResultsPath: "/tmp/results.json",
+      blind: false,
+    });
+
+    const score = report.scores.find(
+      (entry) => entry.status === "ok" && entry.fixtureId === "application-adjacent-admin",
+    );
+    expect(score).toEqual(
+      expect.objectContaining({
+        truthPlan: expect.objectContaining({
+          writingMode: "adjacent_only",
+        }),
+      }),
+    );
+    expect(score?.status === "ok" ? score.truthPlan?.missingCriticalRequirements : []).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ requirement: "vendor communication" }),
+      ]),
     );
   });
 });
