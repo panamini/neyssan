@@ -5,6 +5,9 @@ export type ProposalWorkspaceSourceRecord = {
   rawDescription?: string | null;
   sourceUrl?: string | null;
   sourceDomain?: string | null;
+  sourceType?: string | null;
+  summary?: string | null;
+  visibleSummary?: string | null;
 };
 
 export type ProposalWorkspaceHandoffPrefill = {
@@ -41,6 +44,15 @@ export type ResolvedProposalWorkspaceSourceDraft = {
   platform: string | null;
 };
 
+export type BuildProposalSourceDraftFromJobInput = {
+  job: ProposalWorkspaceSourceRecord;
+  existingDraft?: StoredProposalComposeDraft | null;
+  proposalType?: string | null;
+  voicePreset?: string | null;
+  characterLimitMode?: string | null;
+  characterLimitValue?: number | null;
+};
+
 function normalizeDraftText(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -67,6 +79,32 @@ function normalizeCandidate(
     normalized.platform
     ? { mode, ...normalized }
     : null;
+}
+
+export function buildProposalSourceDraftFromJob(
+  input: BuildProposalSourceDraftFromJobInput,
+): StoredProposalComposeDraft {
+  const existingDraft = input.existingDraft ?? {};
+
+  return {
+    ...existingDraft,
+    jobTitle: normalizeDraftText(input.job.title),
+    jobDescription:
+      normalizeDraftText(input.job.rawDescription) ||
+      normalizeDraftText(input.job.summary) ||
+      normalizeDraftText(input.job.visibleSummary),
+    sourceUrl: normalizeDraftUrl(input.job.sourceUrl),
+    platform:
+      normalizeDraftUrl(input.job.sourceDomain) ??
+      normalizeDraftUrl(input.job.sourceType),
+    proposalType:
+      input.proposalType ?? existingDraft.proposalType ?? "cover_letter",
+    voicePreset: input.voicePreset ?? existingDraft.voicePreset ?? null,
+    characterLimitMode:
+      input.characterLimitMode ?? existingDraft.characterLimitMode,
+    characterLimitValue:
+      input.characterLimitValue ?? existingDraft.characterLimitValue,
+  };
 }
 
 export function resolveProposalWorkspaceSourceDraft(
