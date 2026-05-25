@@ -52,6 +52,7 @@ import {
   applyMotionPreference,
   readStoredMotionPreference,
 } from "./lib/motion-preference";
+import { applyStoredUiLanguage } from "./lib/ui-preferences";
 import {
   OPEN_ONBOARDING_REPLAY_EVENT,
   type OnboardingReplayTargetStep,
@@ -99,6 +100,7 @@ function AppShellFrame(): JSX.Element {
 
   React.useEffect(() => {
     applyMotionPreference(readStoredMotionPreference());
+    applyStoredUiLanguage();
   }, []);
 
   React.useEffect(() => {
