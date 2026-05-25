@@ -9554,6 +9554,31 @@
   gap: var(--space-2);
 }
 
+.dasti-proposal-skeleton-rail__source-trigger {
+  height: calc(var(--control-sm) - 2px);
+  min-height: calc(var(--control-sm) - 2px);
+  padding-inline: var(--space-2);
+  border-color: var(--border-soft);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--sf1) 78%, transparent);
+  color: var(--tm2);
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.dasti-proposal-skeleton-rail__source-trigger:hover:not(:disabled),
+.dasti-proposal-skeleton-rail__source-trigger:focus-visible {
+  transform: none;
+  border-color: var(--border-mid);
+  background: var(--sf2);
+  color: var(--ti);
+  box-shadow: none;
+}
+
+.dasti-proposal-skeleton-rail__source-trigger:active:not(:disabled) {
+  transform: scale(var(--motion-press-scale));
+}
+
 .dasti-proposal-skeleton-rail__ask-field {
   display: grid;
   min-height: 0;
@@ -10447,6 +10472,90 @@
   cursor: not-allowed;
   opacity: 0.48;
   box-shadow: none;
+}
+
+.dasti-proposal-skeleton-rail__ask-review {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--proposal-rail-control-border);
+  border-radius: var(--proposal-rail-control-radius);
+  background: var(--proposal-rail-control-bg);
+}
+
+.dasti-proposal-skeleton-rail__ask-review-head,
+.dasti-proposal-skeleton-rail__ask-review-status {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.dasti-proposal-skeleton-rail__ask-review-head strong,
+.dasti-proposal-skeleton-rail__ask-review-status strong {
+  color: var(--ti);
+  font-size: var(--text-label-size);
+  font-weight: var(--font-label-weight);
+  line-height: var(--text-label-line);
+}
+
+.dasti-proposal-skeleton-rail__ask-review-head span,
+.dasti-proposal-skeleton-rail__ask-review-status span {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+}
+
+.dasti-proposal-skeleton-rail__ask-review-preview {
+  max-block-size: min(28vh, 280px);
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--proposal-rail-control-border);
+  border-radius: var(--radius-control);
+  background: var(--sf0);
+  color: var(--ti);
+  padding: var(--space-3);
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
+  scrollbar-width: thin;
+}
+
+.dasti-proposal-skeleton-rail__ask-review-preview::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.dasti-proposal-skeleton-rail__ask-review-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.dasti-proposal-skeleton-rail__ask-review-applied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-caption-size);
+  line-height: var(--text-caption-line);
+}
+
+.dasti-proposal-skeleton-rail__ask-review-undo {
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-weight: var(--font-label-weight);
+  padding: 0;
+  cursor: pointer;
+}
+
+.dasti-proposal-skeleton-rail__ask-review-undo:hover,
+.dasti-proposal-skeleton-rail__ask-review-undo:focus-visible {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+  outline: none;
 }
 
 /* Composer Ask is already inside the drawer surface: keep the prompt area flat. */
