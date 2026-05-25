@@ -5,9 +5,11 @@ import {
 } from "./proposalCriteriaAudit";
 import {
   buildProposalTruthPlanV1,
+  validateProposalTruthPlanV1,
   type ProposalPlannerResult,
   type ProposalTruthPlanV1,
   type ProposalTruthPlanCandidateFactInput,
+  type ProposalTruthPlanValidationIssue,
 } from "./proposalPlanner";
 
 export type ProposalQualityHarnessKind =
@@ -146,6 +148,10 @@ export type ProposalEvalResult = {
   comparisonKind: "shadow_parity_safety_check" | "baseline_only";
   criteriaAudit: ProposalCriteriaAudit | null;
   truthPlan: ProposalTruthPlanV1 | null;
+  plannedWritingMode: ProposalTruthPlanV1["writingMode"] | null;
+  plannedBlockedClaimsCount: number | null;
+  plannedMissingCriticalRequirementsCount: number | null;
+  truthPlanValidationWarnings: ProposalTruthPlanValidationIssue[];
   safetyReason?: string;
 };
 
@@ -494,6 +500,9 @@ function evaluateFixtureVariant(args: {
     args.variant === "semantic_planner_shadow"
       ? buildTruthPlanForFixture(fixture)
       : null;
+  const truthPlanValidationWarnings = truthPlan
+    ? validateProposalTruthPlanV1(truthPlan)
+    : [];
   const usedFacts = selectFactsUsed(fixture, letter);
   const missingCriticalRequirements = findMissingRequirements(fixture, letter, usedFacts);
   const unsupportedClaims = countUnsupportedClaims(fixture, letter);
@@ -564,6 +573,11 @@ function evaluateFixtureVariant(args: {
         : "shadow_parity_safety_check",
     criteriaAudit,
     truthPlan,
+    plannedWritingMode: truthPlan?.writingMode ?? null,
+    plannedBlockedClaimsCount: truthPlan?.blockedClaims.length ?? null,
+    plannedMissingCriticalRequirementsCount:
+      truthPlan?.missingCriticalRequirements.length ?? null,
+    truthPlanValidationWarnings,
     safetyReason:
       coverage < (args.baseline?.supportedKeywordCoverage ?? 0)
         ? "lower keyword coverage only allowed when avoiding unsupported claims"

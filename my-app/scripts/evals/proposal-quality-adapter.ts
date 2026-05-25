@@ -660,8 +660,8 @@ function renderMarkdownReport(report: ProposalBenchmarkQualityReport): string {
   lines.push("");
   lines.push("## Fixture Scores");
   lines.push("");
-  lines.push("| Fixture | Blind label | Readiness | Recruiter | Unsupported claims | Praise | Credential inflation | No-context violation | Keyword coverage |");
-  lines.push("| --- | --- | --- | ---: | ---: | ---: | --- | --- | ---: |");
+  lines.push("| Fixture | Blind label | Readiness | Recruiter | Unsupported claims | Praise | Credential inflation | No-context violation | Keyword coverage | Planned mode | Planned blocked | Planned missing | Plan warnings |");
+  lines.push("| --- | --- | --- | ---: | ---: | ---: | --- | --- | ---: | --- | ---: | ---: | ---: |");
   for (const score of report.scores) {
     if (score.status !== "ok") continue;
     lines.push(
@@ -675,6 +675,10 @@ function renderMarkdownReport(report: ProposalBenchmarkQualityReport): string {
         score.credentialInflation ? "yes" : "no",
         score.noContextViolation ? "yes" : "no",
         score.supportedKeywordCoverage,
+        score.plannedWritingMode ?? "none",
+        score.plannedBlockedClaimsCount ?? 0,
+        score.plannedMissingCriticalRequirementsCount ?? 0,
+        score.truthPlanValidationWarnings.length,
       ].join(" | "),
     );
   }
