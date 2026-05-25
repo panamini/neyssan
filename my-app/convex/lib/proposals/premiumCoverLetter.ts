@@ -3,7 +3,6 @@ import { z } from "zod";
 import { llmConfig } from "../../../config/llmConfig";
 import type { ProposalOutputLanguage } from "./proposalOutput";
 import {
-  COVER_LETTER_ROLE_THESIS_CANON_SENTENCE,
   COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER,
   normalizeProposalConstraintText,
 } from "./proposalPlanner";
@@ -1305,34 +1304,25 @@ export function buildPremiumCoverLetterPrompt(args: {
       : args.brief.contextClass === "no_cv"
         ? [
             "For no_cv, there is no supported candidate history. Use job-offer work surfaces not prior history.",
-            "For no_cv, stay in first person and sound like a candidate, not a role summary or memo; vary the opening and avoid repeated stems like 'I am drawn to work...', 'I am applying... with a clear focus on...', 'This role centers on...', or 'The highest-value work...'.",
-            "For no_cv, do not claim prior roles, achievements, credentials, tool usage, readiness, or impact; keep employerValueBlock on operational consequence and closeLine on modest first-person ownership.",
-            "For no_cv, ground opening and proof in concrete role priorities.",
+            "For no_cv, stay in first person and sound like a candidate, not a role summary or memo; vary the opening and avoid repeated stems like 'I am drawn to work...', 'I am applying... with a clear focus on...', 'This role centers on...', or 'The highest-value work...'; do not claim prior roles, achievements, credentials, tool usage, readiness, or impact; keep employerValueBlock on operational consequence and closeLine on modest first-person ownership.",
           ]
         : [];
   return [
     "You write premium employment cover-letter body parts.",
     `Planner priority order: ${COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER.map((item, index) => `${index + 1}. ${item}`).join(" | ")}.`,
-    COVER_LETTER_ROLE_THESIS_CANON_SENTENCE,
-    "Before writing, build an internal RoleThesis with role_type, hard_job_requirements, core_role_responsibilities, candidate_evidence, claim_boundaries, company_product_context, company_value_signals, ats_terms, and format_mode.",
-    "The RoleThesis must be dynamic and role-agnostic. Derive it from this JD, the CV-backed facts in the brief, and bounded detector output. Do not import wording, structure, or role pillars from any fixture.",
-    "Use only the brief facts. Do not invent experience, responsibilities, achievements, credentials, or compensating evidence.",
-    "Prioritize strongest evidence first: direct match to a hard requirement, proof of a core responsibility, metric or scope, similar context, similar collaboration model, transferable skill, then only grounded motivation.",
-    "Do not lead with secondary qualifications when stronger evidence exists.",
-    "Do not spend body space on admiration, benefits attraction, checklist summaries, generic enthusiasm, or tool repetition.",
-    "Treat topResponsibilities as the employer-side priority order. Use keyRequirements only when they sharpen those responsibilities, and keep preferredQualifications or lowValueChecklist out of the lead.",
-    "Opening strategy is dynamic: use job-thesis only when the JD has grounded pillars; use proof-first when candidate proof is stronger or the JD is thin; use company/problem only when product context is explicit; use direct-match only when JD/CV alignment is clean; use short human mode for fast-apply or recruiter-message contexts.",
-    "Never force an intersection hook. Never reuse 'Your frontend role sits where...' outside that one gold fixture. Do not turn product UI, design systems, performance, or experimentation into universal pillars.",
-    "Criteria signals guide selection, ordering, tone, claim boundaries, and natural ATS vocabulary. They are not prose requirements. Mention only high-relevance, grounded criteria with matching CV evidence.",
-    "Unsupported requirements should become claim boundaries or omissions, not apologies. Do not write 'I lack', 'Although I do not have', 'While I am not an expert', or 'I have not owned'.",
-    "Use 2-3 proof points for full letters and 1-2 proof points for fast-apply or recruiter replies. Do not summarize the whole CV.",
+    "Build a dynamic RoleThesis from JD, CV facts, and bounded detector output; never import fixture wording, fixed frontend pillars, or one paragraph structure.",
+    "Use only brief facts. Do not invent experience, credentials, ownership, metrics, technologies, timelines, or compensating evidence.",
+    "Prioritize strongest evidence first. If evidence is modest, let the best available concrete proof carry the case. Order: hard requirement, responsibility proof, metric/scope, similar context, collaboration, transferable skill, grounded motivation.",
+    "Do not lead with secondary qualifications when stronger evidence exists. Do not spend body space on admiration, benefits attraction, checklist summaries, generic enthusiasm, tool repetition, keyword lists, or visible criteria reporting.",
+    "topResponsibilities lead; keyRequirements sharpen; preferredQualifications and lowValueChecklist stay out of the lead.",
+    "Dynamic opening only: grounded job-thesis, proof-first, company/problem, direct-match, or human-short. Never reuse 'Your frontend role sits where...' outside that fixture.",
+    "Criteria signals guide selection, tone, boundaries, and ATS vocabulary; mention only grounded criteria with matching CV evidence. Unsupported requirements become boundaries or omissions.",
     ...(companyValuesPack
       ? [
-          "Company values are bounded context only. Values may be used only when they sharpen a concrete hiring case tied to a work surface or source-backed candidate evidence. Values must not replace source-backed candidate evidence or outrank stronger candidate proof; leave them unused when no strong mapping exists. Use at most one explicit company-value bridge sentence in most letters.",
+          "Company values are bounded secondary context only: use at most one explicit bridge, only when grounded and tied to source-backed candidate evidence; never replace stronger proof or infer personal alignment.",
         ]
       : []),
-    "Preset affects rhetorical texture only. It must not change truthfulness, claim strength, ownership level, metrics, technologies, responsibilities, or evidence priority.",
-    "Variant behavior: Sharp is direct and proof-heavy; Warm is conversational but specific; Senior uses calm systems/collaboration framing; Product-minded is allowed only when the JD supports users, product loops, iteration, or metrics; Conservative minimizes risky claims; LinkedIn-fast stays short, direct, and message-like.",
+    "Preset affects rhetorical texture only. It must not change truthfulness, claim strength, or evidence priority. It also must not change ownership, metrics, technologies, responsibilities, or boundaries.",
     "Across cv_direct and cv_adjacent modes, sound like a person making a case in a letter, not a memo explaining why the evidence is relevant.",
     presetGuidance,
     args.generationControlsBlock,
@@ -1344,13 +1334,8 @@ export function buildPremiumCoverLetterPrompt(args: {
       employerValueBlock: "string",
       closeLine: "string",
     }),
-    "Body-part rules: complete natural sentences only; no greeting, signoff, signature, markdown, or bullets.",
-    "Opening: position through the strongest relevant evidence, not generic fit language.",
-    "ProofBlock: develop the top evidence first, then add one supporting concrete detail when available.",
-    "EmployerValueBlock: move directly to an employer-facing implication — what cleaner, faster, or more reliable looks like when this evidence is applied in this specific role. Write it as a natural continuation of the proof, not as a step back to explain why the proof matters. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise.",
-    "CloseLine: one short forward-looking sentence that is role-specific and situational — it can reference a concrete next step, a specific contribution, or a detail from the operating context of this role. Vary the shape each time.",
-    "Banned openers for any block: 'That combination', 'Applied to', 'Applied in', 'Applied here', 'That kind of', 'That background'. Banned close stems: 'I would welcome the chance to', \"I'd welcome the chance to\", 'I would bring that same', 'I would bring that level'.",
-    "Banned/flagged phrases: 'For a recruiter', 'The evidence is', 'This letter', 'not a list of tools', 'I would not overstate', 'I have not owned', 'I lack experience', 'Although I do not have', 'While I am not an expert', 'I am thrilled', 'I am passionate', 'proven track record', 'leveraging my skills', 'Your mission resonates with me', 'I deeply admire your mission', 'I share your values', 'I match all the criteria'.",
+    "Body-part rules: complete natural sentences only; no greeting, signoff, signature, markdown, bullets, generic excitement, mission praise, defensive gap language, or keyword lists.",
+    "Opening: position through the strongest relevant evidence, not generic fit language. ProofBlock: develop top evidence first. EmployerValueBlock: move directly to an employer-facing implication. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise. CloseLine: one short role-specific sentence; vary shape.",
     `Structured brief: ${JSON.stringify(structuredBrief)}`,
   ].filter((line): line is string => typeof line === "string").join("\n");
 }

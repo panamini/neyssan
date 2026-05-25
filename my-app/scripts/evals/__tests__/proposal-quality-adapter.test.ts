@@ -32,6 +32,13 @@ const benchmarkCase = {
           "Reduced page load time by 28 percent through bundle and rendering optimizations.",
         ],
       },
+      {
+        company: "Northline Labs",
+        position: "Product Engineer",
+        highlights: [
+          "Partnered directly with design and product on customer-facing workflow improvements.",
+        ],
+      },
     ],
     standoutAchievements: [
       "Improved signup conversion by 11 percent after iterative UI experiments.",
@@ -260,11 +267,12 @@ describe("proposal quality benchmark adapter", () => {
         plannedWritingMode: "normal",
         truthPlanValidationWarnings: [],
         truthPlanOutputCheck: expect.objectContaining({
-          violations: expect.any(Array),
+          status: "pass",
+          violations: [],
         }),
         truthPlanRepairAnalysis: expect.objectContaining({
-          status: "warn",
-          recommendedAction: "repair_with_truth_plan",
+          status: "pass",
+          recommendedAction: "keep_output",
         }),
       }),
     );

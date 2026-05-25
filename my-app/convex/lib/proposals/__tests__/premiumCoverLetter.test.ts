@@ -676,6 +676,87 @@ describe("premium cover letter prompt contract", () => {
 });
 
 describe("premium cover letter generation and rendering", () => {
+  it("runs a mocked employment-strong-frontend premium smoke without fixture-opening reuse", async () => {
+    let capturedPrompt = "";
+    let capturedSchema: Record<string, unknown> | null = null;
+    const bodyParts = {
+      opening:
+        "At BrightLayer, I led a design-system migration used across four product squads and reduced page-load time by 28 percent through bundle and rendering improvements.",
+      proofBlock:
+        "At Northline Labs, I built experimentation dashboards for product and growth teams, partnered directly with design on customer-facing workflow improvements, and helped targeted UI experiments improve signup conversion by 11 percent.",
+      employerValueBlock:
+        "That is the React and TypeScript evidence I would bring to a frontend role centered on reusable UI systems, performance, product-design collaboration, and careful experimentation.",
+      closeLine:
+        "I would keep the focus on shipped interface work, reliable performance, and clean partnership with product and design.",
+    };
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: {
+        name: "Alex Martin",
+        summary:
+          "Frontend engineer focused on React, TypeScript, design systems, and product-facing web apps.",
+        desiredPosition: "Senior Frontend Engineer",
+        topSkills: [
+          "React",
+          "TypeScript",
+          "Design Systems",
+          "Performance Optimization",
+          "A/B Testing",
+        ],
+        recentExperience: [
+          {
+            company: "BrightLayer",
+            position: "Frontend Engineer",
+            highlights: [
+              "Led a design system migration used across 4 product squads.",
+              "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+            ],
+          },
+          {
+            company: "Northline Labs",
+            position: "Product Engineer",
+            highlights: [
+              "Built experimentation dashboards used by product and growth teams.",
+              "Partnered directly with design on customer-facing workflow improvements.",
+            ],
+          },
+        ],
+        standoutAchievements: [
+          "Improved signup conversion by 11 percent after iterative UI experiments.",
+        ],
+      },
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Lead React and TypeScript development for a customer-facing SaaS platform, build reusable UI systems, improve performance, collaborate with product and design, and use experimentation carefully.",
+      candidateName: "Alex Martin",
+      writer: async ({ prompt, schema }) => {
+        capturedPrompt = prompt;
+        capturedSchema = schema;
+        return bodyParts;
+      },
+    });
+
+    expect(result).not.toBeNull();
+    expect(capturedSchema).toEqual(PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA);
+    expect(capturedPrompt).toContain("Planner priority order:");
+    expect(capturedPrompt).toContain("Structured brief:");
+    expect(result?.bodyParts).toEqual(bodyParts);
+    expect(result?.content).toContain("Dear Hiring Manager,");
+    expect(result?.content).toContain("design-system migration used across four product squads");
+    expect(result?.content).toContain("page-load time by 28 percent");
+    expect(result?.content).toContain("React and TypeScript");
+    expect(result?.content).toContain("partnered directly with design");
+    expect(result?.content).toContain("experimentation dashboards");
+    expect(result?.content).toContain("signup conversion by 11 percent");
+    expect(result?.content).not.toContain("Your frontend role sits where");
+    expect(result?.content).not.toMatch(/mentoring|people management|backend|mobile/i);
+    expect(result?.content).not.toMatch(
+      /I am excited to apply|I am writing to express my interest|My background aligns/i,
+    );
+  });
+
   it("generates a direct signature cover letter with strongest evidence in context and no weak-qualification dominance", async () => {
     let capturedPrompt = "";
 
