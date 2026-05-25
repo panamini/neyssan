@@ -55,6 +55,10 @@ import {
   type UiAccentId,
 } from "../lib/ui-preferences";
 import {
+  DOCUMENT_LANGUAGE_OPTIONS,
+  useDocumentLanguagePreference,
+} from "../lib/document-language";
+import {
   DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
   PROPOSAL_SIGNATURE_FONT_OPTIONS,
   resolveProposalSignatureRender,
@@ -1143,6 +1147,8 @@ export function SettingsPage(): JSX.Element {
     useMotionPreference();
   const { language: uiLanguage, setLanguage: setUiLanguage } =
     useUiLanguagePreference();
+  const { language: documentLanguage, setLanguage: setDocumentLanguage } =
+    useDocumentLanguagePreference();
   const { accent: uiAccent, setAccent: setUiAccent } = useUiAccentPreference();
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
@@ -2241,6 +2247,51 @@ export function SettingsPage(): JSX.Element {
                     Interface language and generated document language stay
                     separate. Document generation can target a different
                     language from the app interface.
+                  </div>
+                </div>
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">
+                      Document generation
+                    </div>
+                    <div className="settings__group-desc">
+                      Choose the default language for generated CVs and
+                      proposals.
+                    </div>
+                  </div>
+                  <div
+                    className="settings-language-grid settings-language-grid--documents"
+                    role="group"
+                    aria-label="Default document language"
+                  >
+                    {DOCUMENT_LANGUAGE_OPTIONS.map((option) => {
+                      const active = documentLanguage === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          className="settings-language-card"
+                          data-selected={active ? "true" : undefined}
+                          aria-pressed={active}
+                          onClick={() => setDocumentLanguage(option.id)}
+                        >
+                          <span className="settings-language-card__name">
+                            {option.label}
+                          </span>
+                          <span className="settings-language-card__native">
+                            {option.nativeLabel}
+                          </span>
+                          {active ? (
+                            <Check
+                              className="settings-language-card__check"
+                              size={14}
+                              strokeWidth={2.4}
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

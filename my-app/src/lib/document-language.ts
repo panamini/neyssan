@@ -1,6 +1,8 @@
+import React from "react";
 import {
   DEFAULT_UI_LOCALE,
   ENABLED_DOCUMENT_LANGUAGES,
+  LOCALE_REGISTRY,
   type DocumentLanguage,
   type UiLocale,
   normalizeLocaleId,
@@ -18,6 +20,36 @@ export type DocumentLanguageContext = {
 export const DEFAULT_DOCUMENT_LANGUAGE: DocumentLanguagePreference = "auto";
 
 const DOCUMENT_LANGUAGE_STORAGE_KEY = "twoweeks:document-language";
+
+const DOCUMENT_LANGUAGE_LABELS: Record<DocumentLanguage, string> = {
+  en: "English",
+  fr: "French",
+  es: "Spanish",
+  de: "German",
+  it: "Italian",
+  pt: "Portuguese",
+  pl: "Polish",
+  nl: "Dutch",
+  el: "Greek",
+  hu: "Hungarian",
+  lt: "Lithuanian",
+  et: "Estonian",
+  ru: "Russian",
+  ar: "Arabic",
+};
+
+export const DOCUMENT_LANGUAGE_OPTIONS: Array<{
+  id: DocumentLanguagePreference;
+  label: string;
+  nativeLabel: string;
+}> = [
+  { id: "auto", label: "Auto", nativeLabel: "Match job" },
+  ...ENABLED_DOCUMENT_LANGUAGES.map((id) => ({
+    id,
+    label: DOCUMENT_LANGUAGE_LABELS[id] ?? id,
+    nativeLabel: LOCALE_REGISTRY[id].nativeName,
+  })),
+];
 
 function isDocumentLanguage(value: string | null | undefined): value is DocumentLanguage {
   const normalized = normalizeLocaleId(value);
@@ -54,6 +86,26 @@ export function writeStoredDocumentLanguage(
 ): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(DOCUMENT_LANGUAGE_STORAGE_KEY, language);
+}
+
+export function useDocumentLanguagePreference(): {
+  language: DocumentLanguagePreference;
+  setLanguage: (language: DocumentLanguagePreference) => void;
+} {
+  const [language, setLanguageState] = React.useState<DocumentLanguagePreference>(
+    readStoredDocumentLanguage,
+  );
+
+  const setLanguage = React.useCallback(
+    (nextLanguage: DocumentLanguagePreference) => {
+      const normalized = normalizeDocumentLanguage(nextLanguage);
+      setLanguageState(normalized);
+      writeStoredDocumentLanguage(normalized);
+    },
+    [],
+  );
+
+  return { language, setLanguage };
 }
 
 export function resolveGeneratedLanguage(args: {

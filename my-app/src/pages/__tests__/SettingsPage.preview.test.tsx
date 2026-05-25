@@ -197,7 +197,14 @@ describe("SettingsPage preview controls", () => {
     themeRender.unmount();
 
     const languageRender = renderSettings("/settings?tab=language");
-    await user.click(screen.getByRole("button", { name: /Spanish Espanol/ }));
+    const interfaceLanguageGroup = screen.getByRole("group", {
+      name: "Interface language",
+    });
+    await user.click(
+      within(interfaceLanguageGroup).getByRole("button", {
+        name: /Spanish Espanol/,
+      }),
+    );
     expect(document.documentElement.dataset.uiLanguage).toBe("es");
     expect(document.documentElement.lang).toBe("es");
     expect(document.documentElement.dir).toBe("ltr");
@@ -208,13 +215,64 @@ describe("SettingsPage preview controls", () => {
     renderSettings("/settings?tab=language");
 
     const group = screen.getByRole("group", { name: "Interface language" });
-    expect(within(group).getByRole("button", { name: "Auto Auto" })).toBeInTheDocument();
-    expect(within(group).getByRole("button", { name: /English English/ })).toBeInTheDocument();
-    expect(within(group).getByRole("button", { name: /French Francais/ })).toBeInTheDocument();
-    expect(within(group).getByRole("button", { name: /Spanish Espanol/ })).toBeInTheDocument();
-    expect(within(group).queryByRole("button", { name: /German/ })).not.toBeInTheDocument();
-    expect(within(group).queryByRole("button", { name: /Arabic/ })).not.toBeInTheDocument();
-    expect(within(group).queryByRole("button", { name: /Irish/ })).not.toBeInTheDocument();
+    expect(
+      within(group).getByRole("button", { name: "Auto Auto" }),
+    ).toBeInTheDocument();
+    expect(
+      within(group).getByRole("button", { name: /English English/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(group).getByRole("button", { name: /French Francais/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(group).getByRole("button", { name: /Spanish Espanol/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(group).queryByRole("button", { name: /German/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(group).queryByRole("button", { name: /Arabic/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(group).queryByRole("button", { name: /Irish/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("persists document generation language separately from UI language", async () => {
+    const user = userEvent.setup();
+    renderSettings("/settings?tab=language");
+
+    const uiGroup = screen.getByRole("group", { name: "Interface language" });
+    const documentGroup = screen.getByRole("group", {
+      name: "Default document language",
+    });
+
+    expect(
+      within(documentGroup).getByRole("button", { name: /German Deutsch/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(documentGroup).getByRole("button", {
+        name: /Arabic Al-Arabiyyah/,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(documentGroup).queryByRole("button", { name: /Irish/ }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(documentGroup).getByRole("button", {
+        name: /Arabic Al-Arabiyyah/,
+      }),
+    );
+
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+      "ar",
+    );
+    expect(document.documentElement.dataset.uiLanguage).toBe("en");
+    expect(document.documentElement.dir).toBe("ltr");
+    expect(
+      within(uiGroup).queryByRole("button", { name: /Arabic/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("hydrates default style slots from the onboarding document style set", () => {
