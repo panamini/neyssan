@@ -87,6 +87,15 @@ describe("SettingsPage preview controls", () => {
     window.localStorage.clear();
     document.documentElement.dataset.theme = "light";
     document.documentElement.dataset.reduceMotion = "false";
+    document.documentElement.removeAttribute("data-ui-accent");
+    document.documentElement.removeAttribute("data-ui-language");
+    document.documentElement.classList.remove(
+      "pal-cobalt",
+      "pal-sauge",
+      "pal-plum",
+      "pal-ochre",
+      "pal-ink",
+    );
     presetsQueryMock.mockReturnValue({
       activeSlot: 1,
       preset1: {
@@ -149,32 +158,63 @@ describe("SettingsPage preview controls", () => {
     expect(savePresetMock).not.toHaveBeenCalled();
   });
 
-  it("activates theme and reduce-motion preferences from preferences", async () => {
+  it("activates theme, UI accent, language, and motion preferences", async () => {
     const user = userEvent.setup();
-    renderSettings("/settings?tab=preferences");
+    const themeRender = renderSettings("/settings?tab=theme");
 
-    const themeToggle = screen.getByRole("button", {
-      name: "Toggle dark theme",
-    });
-    await user.click(themeToggle);
-    expect(themeToggle).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    const darkThemeButton = screen.getByRole("button", { name: "Dark" });
+    await user.click(darkThemeButton);
+    expect(darkThemeButton).toHaveAttribute("aria-pressed", "true");
     expect(document.documentElement.dataset.theme).toBe("dark");
 
-    await user.click(themeToggle);
-    expect(themeToggle).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+    await user.click(screen.getByRole("button", { name: "Light" }));
+    expect(darkThemeButton).toHaveAttribute("aria-pressed", "false");
     expect(document.documentElement.dataset.theme).toBe("light");
 
+    await user.click(screen.getByRole("button", { name: "Cobalt" }));
+    expect(document.documentElement.dataset.uiAccent).toBe("cobalt");
+    expect(document.documentElement.classList.contains("pal-cobalt")).toBe(
+      true,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Open custom interface accent color picker",
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Pick custom #A1B2C3" }),
+    );
+    expect(document.documentElement.dataset.uiAccent).toBe("custom");
+    expect(document.documentElement.style.getPropertyValue("--ac")).toBe(
+      "#a1b2c3",
+    );
     await user.click(screen.getByRole("button", { name: "Reduce motion" }));
     expect(
       screen.getByRole("button", { name: "Reduce motion" }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(document.documentElement.dataset.reduceMotion).toBe("true");
+    themeRender.unmount();
+
+    const languageRender = renderSettings("/settings?tab=language");
+    await user.click(screen.getByRole("button", { name: /Spanish Espanol/ }));
+    expect(document.documentElement.dataset.uiLanguage).toBe("es");
+    expect(document.documentElement.lang).toBe("es");
+    expect(document.documentElement.dir).toBe("ltr");
+    languageRender.unmount();
+  });
+
+  it("shows only production UI languages in Settings", () => {
+    renderSettings("/settings?tab=language");
+
+    const group = screen.getByRole("group", { name: "Interface language" });
+    expect(within(group).getByRole("button", { name: "Auto Auto" })).toBeInTheDocument();
+    expect(within(group).getByRole("button", { name: /English English/ })).toBeInTheDocument();
+    expect(within(group).getByRole("button", { name: /French Francais/ })).toBeInTheDocument();
+    expect(within(group).getByRole("button", { name: /Spanish Espanol/ })).toBeInTheDocument();
+    expect(within(group).queryByRole("button", { name: /German/ })).not.toBeInTheDocument();
+    expect(within(group).queryByRole("button", { name: /Arabic/ })).not.toBeInTheDocument();
+    expect(within(group).queryByRole("button", { name: /Irish/ })).not.toBeInTheDocument();
   });
 
   it("hydrates default style slots from the onboarding document style set", () => {
@@ -872,11 +912,7 @@ describe("SettingsPage preview controls", () => {
     const uniqueStyleCardLabels = Array.from(new Set(styleCardLabels));
 
     expect(previewBadge()).toHaveTextContent("Minimal");
-    expect(uniqueStyleCardLabels).toEqual([
-      "Auto",
-      "Minimal",
-      "French",
-    ]);
+    expect(uniqueStyleCardLabels).toEqual(["Auto", "Minimal", "French"]);
   });
 
   it("saves the Minimal template as canonical verbatiStyle on the preset slot", async () => {

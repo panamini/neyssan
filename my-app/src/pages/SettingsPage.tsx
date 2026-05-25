@@ -47,6 +47,14 @@ import type {
 import { useMotionPreference } from "../lib/motion-preference";
 import { useThemeMode } from "../lib/theme-mode";
 import {
+  UI_ACCENT_OPTIONS,
+  UI_CUSTOM_ACCENT_STARTER_HEX,
+  UI_LANGUAGE_OPTIONS,
+  useUiAccentPreference,
+  useUiLanguagePreference,
+  type UiAccentId,
+} from "../lib/ui-preferences";
+import {
   DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
   PROPOSAL_SIGNATURE_FONT_OPTIONS,
   resolveProposalSignatureRender,
@@ -60,9 +68,7 @@ import {
 import { getFactoryDocumentStyleSlot } from "../lib/document-style-slots";
 import { ProposalColorPickerPopover } from "../components/ProposalColorPickerPopover";
 import type { ToneBadgeTone } from "../components/ui/tone-badge";
-import {
-  normalizeSettingsTab,
-} from "../lib/settings-tabs";
+import { normalizeSettingsTab } from "../lib/settings-tabs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -263,7 +269,8 @@ const STYLE_OPTIONS = [
   {
     id: "workshop-twocol",
     label: "French",
-    description: "A structured two-column CV with clear sections and hierarchy.",
+    description:
+      "A structured two-column CV with clear sections and hierarchy.",
     resumeTemplateId: WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
   },
 ] satisfies StyleOption[];
@@ -809,8 +816,9 @@ function SignatureDrawingPad({
     context.lineJoin = "round";
     context.lineWidth = STROKE_WIDTH;
     context.strokeStyle =
-      getComputedStyle(canvas).getPropertyValue("--signature-draw-ink").trim() ||
-      "#20160f";
+      getComputedStyle(canvas)
+        .getPropertyValue("--signature-draw-ink")
+        .trim() || "#20160f";
   }, []);
 
   React.useEffect(() => {
@@ -1057,9 +1065,7 @@ function SignatureSelector({
           <Pen size={14} strokeWidth={1.8} aria-hidden="true" />
           Draw
           <SignatureDrawingPad
-            initialImageDataUrl={
-              settings.imageDataUrl
-            }
+            initialImageDataUrl={settings.imageDataUrl}
             onImageReady={(imageDataUrl) =>
               onChange({
                 mode: settings.mode === "font" ? "font" : "image",
@@ -1128,9 +1134,16 @@ export function SettingsPage(): JSX.Element {
   const [viewportWidth, setViewportWidth] = React.useState(() =>
     typeof window === "undefined" ? 1280 : window.innerWidth,
   );
-  const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
+  const {
+    mode: themeMode,
+    preference: themePreference,
+    setPreference: setThemePreference,
+  } = useThemeMode();
   const { preference: motionPreference, setPreference: setMotionPreference } =
     useMotionPreference();
+  const { language: uiLanguage, setLanguage: setUiLanguage } =
+    useUiLanguagePreference();
+  const { accent: uiAccent, setAccent: setUiAccent } = useUiAccentPreference();
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const isAuthReady = isAuthLoaded !== false;
@@ -1173,11 +1186,15 @@ export function SettingsPage(): JSX.Element {
   );
   const customColorAnchorRef = React.useRef<HTMLButtonElement | null>(null);
   const customColorSurfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const uiCustomColorAnchorRef = React.useRef<HTMLButtonElement | null>(null);
+  const uiCustomColorSurfaceRef = React.useRef<HTMLDivElement | null>(null);
   const hydrated = React.useRef(false);
   const localPresetInteractionRef = React.useRef(false);
   const contactHydrated = React.useRef(false);
   const voiceHydrated = React.useRef(false);
   const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] =
+    React.useState(false);
+  const [isUiCustomColorPickerOpen, setIsUiCustomColorPickerOpen] =
     React.useState(false);
 
   React.useEffect(() => {
@@ -1407,6 +1424,10 @@ export function SettingsPage(): JSX.Element {
   );
   const customAccentColor =
     currentCustomAccentHex ?? SETTINGS_CUSTOM_ACCENT_STARTER_HEX;
+  const uiCustomAccentColor =
+    uiAccent.id === "custom"
+      ? uiAccent.customHex
+      : UI_CUSTOM_ACCENT_STARTER_HEX;
   const currentFontPair =
     VERBATI_FONT_PAIR_OPTIONS.find(
       (fontPair) => fontPair.id === currentPreset.fontPairId,
@@ -1502,9 +1523,7 @@ export function SettingsPage(): JSX.Element {
     <div className="dasti-page-scroll" style={{ minWidth: 0 }}>
       <div
         className="dasti-page-shell dasti-page-shell--settings"
-        data-forge-drawer-docked={
-          isSettingsDrawerDocked ? "true" : undefined
-        }
+        data-forge-drawer-docked={isSettingsDrawerDocked ? "true" : undefined}
         style={
           {
             "--page-shell-max-width": "1320px",
@@ -1515,9 +1534,7 @@ export function SettingsPage(): JSX.Element {
       >
         <div
           className="dasti-settings-layout settings"
-          data-forge-drawer-docked={
-            isSettingsDrawerDocked ? "true" : undefined
-          }
+          data-forge-drawer-docked={isSettingsDrawerDocked ? "true" : undefined}
         >
           <div className="settings__content">
             {activeTab === "docstyle" ? (
@@ -1539,8 +1556,8 @@ export function SettingsPage(): JSX.Element {
                           Style profiles
                         </h1>
                         <p className="dasti-settings-page__subtitle">
-                          Assemble up to 3 style presets. The active one
-                          applies to new cover letters.
+                          Assemble up to 3 style presets. The active one applies
+                          to new cover letters.
                         </p>
                       </div>
                       {savedTick && (
@@ -1952,81 +1969,156 @@ export function SettingsPage(): JSX.Element {
                   </div>
                 </div>
               </div>
-            ) : activeTab === "preferences" ? (
+            ) : activeTab === "theme" ? (
               <div
                 className="settings__pane"
-                data-pane="preferences"
+                data-pane="theme"
                 data-active="true"
               >
                 <div className="settings__group">
                   <div className="settings__group-head">
-                    <div className="settings__group-title">Appearance</div>
+                    <div className="settings__group-title">Theme</div>
+                    <div className="settings__group-desc">
+                      Keep the interface simple by choosing a mode and one
+                      accent.
+                    </div>
                   </div>
                   <div className="settings__row">
                     <div>
-                      <div className="settings__row-label">Theme</div>
+                      <div className="settings__row-label">Appearance</div>
+                      <div className="settings__row-desc">
+                        Use light, dark, or your system setting.
+                      </div>
                     </div>
-                    <span
-                      className="settings-token-switch-shell"
-                      data-toolbar-tooltip={
-                        themeMode === "dark"
-                          ? "Switch to light theme"
-                          : "Switch to dark theme"
-                      }
-                      data-toolbar-tooltip-placement="below"
-                      >
+                    <div
+                      className="settings-segmented"
+                      role="group"
+                      aria-label="Theme mode"
+                    >
                       <button
                         type="button"
-                        className={[
-                          "settings-theme-toggle",
-                          themeMode === "dark"
-                            ? "settings-theme-toggle--dark"
-                            : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        aria-pressed={themeMode === "dark"}
-                        aria-label={
-                          themeMode === "dark"
-                            ? "Toggle light theme"
-                            : "Toggle dark theme"
+                        className="settings-segmented__button"
+                        data-active={
+                          themePreference === "light" ? "true" : undefined
                         }
-                        onClick={() =>
-                          setThemeMode(
-                            themeMode === "dark" ? "light" : "dark",
-                          )
-                        }
+                        aria-pressed={themePreference === "light"}
+                        onClick={() => setThemePreference("light")}
                       >
-                        <span
-                          className="settings-theme-toggle__indicator"
-                          aria-hidden="true"
-                        />
-                        <span
-                          className={[
-                            "settings-theme-toggle__option",
-                            themeMode === "light"
-                              ? "settings-theme-toggle__option--active"
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                        >
-                          <Sun aria-hidden />
-                        </span>
-                        <span
-                          className={[
-                            "settings-theme-toggle__option",
-                            themeMode === "dark"
-                              ? "settings-theme-toggle__option--active"
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                        >
-                          <Moon aria-hidden />
-                        </span>
+                        <Sun size={14} aria-hidden="true" />
+                        Light
                       </button>
-                    </span>
+                      <button
+                        type="button"
+                        className="settings-segmented__button"
+                        data-active={
+                          themePreference === "dark" ? "true" : undefined
+                        }
+                        aria-pressed={themePreference === "dark"}
+                        onClick={() => setThemePreference("dark")}
+                      >
+                        <Moon size={14} aria-hidden="true" />
+                        Dark
+                      </button>
+                      <button
+                        type="button"
+                        className="settings-segmented__button"
+                        data-active={
+                          themePreference === "system" ? "true" : undefined
+                        }
+                        aria-pressed={themePreference === "system"}
+                        onClick={() => setThemePreference("system")}
+                      >
+                        <span className="settings-segmented__system-dot" />
+                        System
+                      </button>
+                    </div>
+                  </div>
+                  <div className="settings__row">
+                    <div>
+                      <div className="settings__row-label">Accent color</div>
+                      <div className="settings__row-desc">
+                        Changes interface highlights. Document colors stay in
+                        Document style.
+                      </div>
+                    </div>
+                    <div
+                      ref={uiCustomColorSurfaceRef}
+                      className="settings-ui-accent-row"
+                      role="group"
+                      aria-label="Interface accent color"
+                    >
+                      {UI_ACCENT_OPTIONS.map((option) => {
+                        const active = uiAccent.id === option.id;
+                        const isCustom = option.id === "custom";
+                        const swatchColor = isCustom
+                          ? uiCustomAccentColor
+                          : option.swatch;
+                        return (
+                          <button
+                            key={option.id}
+                            ref={isCustom ? uiCustomColorAnchorRef : undefined}
+                            type="button"
+                            className={[
+                              "settings-ui-accent",
+                              isCustom ? "settings-ui-accent--custom" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
+                            data-selected={active ? "true" : undefined}
+                            aria-label={
+                              isCustom
+                                ? "Open custom interface accent color picker"
+                                : option.label
+                            }
+                            aria-pressed={active}
+                            title={option.label}
+                            style={
+                              {
+                                "--settings-ui-accent-swatch": swatchColor,
+                              } as React.CSSProperties
+                            }
+                            onClick={() => {
+                              if (isCustom) {
+                                setIsUiCustomColorPickerOpen(true);
+                                return;
+                              }
+
+                              setIsUiCustomColorPickerOpen(false);
+                              setUiAccent({
+                                id: option.id as Exclude<UiAccentId, "custom">,
+                              });
+                            }}
+                          >
+                            <span
+                              className="settings-ui-accent__swatch"
+                              aria-hidden="true"
+                            >
+                              {active ? (
+                                <Check
+                                  size={13}
+                                  strokeWidth={2.4}
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                            </span>
+                            <span className="settings-ui-accent__label">
+                              {option.label}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      <ProposalColorPickerPopover
+                        currentHex={uiCustomAccentColor}
+                        anchorRef={uiCustomColorAnchorRef}
+                        surfaceAnchorRef={uiCustomColorSurfaceRef}
+                        horizontalAlign="center"
+                        isOpen={isUiCustomColorPickerOpen}
+                        onClose={() => setIsUiCustomColorPickerOpen(false)}
+                        onHexChange={(hex) => {
+                          setUiAccent({ id: "custom", customHex: hex });
+                        }}
+                      />
+                    </div>
                   </div>
                   <div className="settings__row">
                     <div>
@@ -2059,18 +2151,96 @@ export function SettingsPage(): JSX.Element {
                         aria-label="Reduce motion"
                         onClick={() =>
                           setMotionPreference(
-                            motionPreference === "reduced" ? "system" : "reduced",
+                            motionPreference === "reduced"
+                              ? "system"
+                              : "reduced",
                           )
                         }
                       >
-                        <span className="dasti-theme-switch__rail" aria-hidden="true">
+                        <span
+                          className="dasti-theme-switch__rail"
+                          aria-hidden="true"
+                        >
                           <span className="dasti-theme-switch__thumb" />
                         </span>
                         <span className="dasti-theme-switch__label">
-                          {motionPreference === "reduced" ? "Reduced" : "Motion"}
+                          {motionPreference === "reduced"
+                            ? "Reduced"
+                            : "Motion"}
                         </span>
                       </button>
                     </span>
+                  </div>
+                  <div className="settings-theme-preview" aria-hidden="true">
+                    <span className="settings-theme-preview__dot" />
+                    <span className="settings-theme-preview__line settings-theme-preview__line--strong" />
+                    <span className="settings-theme-preview__line" />
+                    <span className="settings-theme-preview__pill">
+                      {themeMode}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : activeTab === "language" ? (
+              <div
+                className="settings__pane"
+                data-pane="language"
+                data-active="true"
+              >
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Language</div>
+                    <div className="settings__group-desc">
+                      Choose the default language for the app interface.
+                    </div>
+                  </div>
+                  <div
+                    className="settings-language-grid"
+                    role="group"
+                    aria-label="Interface language"
+                  >
+                    {UI_LANGUAGE_OPTIONS.map((option) => {
+                      const active = uiLanguage === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          className="settings-language-card"
+                          data-selected={active ? "true" : undefined}
+                          aria-pressed={active}
+                          onClick={() => setUiLanguage(option.id)}
+                        >
+                          <span className="settings-language-card__name">
+                            {option.label}
+                          </span>
+                          <span className="settings-language-card__native">
+                            {option.nativeLabel}
+                          </span>
+                          {active ? (
+                            <Check
+                              className="settings-language-card__check"
+                              size={14}
+                              strokeWidth={2.4}
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">Coverage</div>
+                    <div className="settings__group-desc">
+                      English, French, and Spanish are live for the interface.
+                      Additional document languages are prepared separately.
+                    </div>
+                  </div>
+                  <div className="settings-language-note">
+                    Interface language and generated document language stay
+                    separate. Document generation can target a different
+                    language from the app interface.
                   </div>
                 </div>
               </div>
