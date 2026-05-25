@@ -8,6 +8,10 @@ import {
   SOURCE_BACKED_SPECIFICITY_RULES,
 } from "./voicePresets";
 import type { ProposalOutputFormat } from "./proposalOutput";
+import {
+  formatCompanyValuesPromptBlock,
+  type CompanyValuesPack,
+} from "./companyValues";
 
 export type ProposalPlannerPersonalizationContext = {
   summary?: string;
@@ -117,6 +121,7 @@ type BuildProposalPlannerPromptArgs = {
   outputLanguage: ProposalPlannerOutputLanguage;
   personalizationContext: ProposalPlannerPersonalizationContext | null;
   generationControlsBlock?: string;
+  companyValuesPack?: CompanyValuesPack;
 };
 
 const MAX_FACT_BANK_ITEMS = 18;
@@ -168,6 +173,25 @@ const SAFE_NO_CONTEXT_TRANSFER_THEMES = [
   "professional curiosity",
   "role understanding",
   "polite closing",
+] as const;
+const UNSUPPORTED_TECHNICAL_SEO_CLAIMS = [
+  "worked closely with SEO teams",
+  "optimized crawlability",
+  "schema placement",
+  "crawl budget",
+  "canonicalization",
+  "internal linking patterns",
+  "technical SEO diagnosis",
+  "search visibility familiarity",
+  "marketplace-style SEO implementation",
+  "implementing schema changes",
+  "optimizing internal linking structures",
+  "implementing schema markup",
+  "internal-linking adjustments",
+  "canonical tags",
+  "indexing fixes",
+  "crawlability fixes",
+  "crawlable markup",
 ] as const;
 export const PROPOSAL_ALLOWED_CAUTIOUS_BRIDGES = [
   "relevant to",
@@ -251,6 +275,40 @@ const BACKGROUND_FACT_PATTERN =
 function compactWhitespace(value: string | null | undefined): string {
   if (typeof value !== "string") return "";
   return value.replace(/\s+/g, " ").trim();
+}
+
+function isUnsupportedTechnicalSeoMove(args: {
+  jobTitle: string;
+  jobDescription: string;
+  sourceFacts: readonly string[];
+}): boolean {
+  const jobText = `${args.jobTitle} ${args.jobDescription}`;
+  if (!/\b(?:technical\s+seo|indexing|schema|crawl|internal[-\s]linking)\b/i.test(jobText)) {
+    return false;
+  }
+
+  const sourceText = args.sourceFacts.join(" ");
+  return (
+    /\b(?:front[-\s]?end|landing pages?|conversion(?: optimization)?)\b/i.test(
+      sourceText,
+    ) &&
+    !/\b(?:technical\s+seo|seo specialist|crawl diagnostics?|schema strategy|indexing|canonicalization|crawl budget)\b/i.test(
+      sourceText,
+    )
+  );
+}
+
+function buildAdjacentOnlySeoGuidance(): string[] {
+  return [
+    "adjacent_only_seo_rule: the candidate evidence supports frontend/conversion only, not technical SEO.",
+    "For technical SEO marketplace work, switch to adjacent-only framing.",
+    "Allowed framing: 'My background is frontend and conversion-focused, not technical SEO.'",
+    "Allowed framing: 'I could support frontend execution once a technical SEO specialist defines the audit and recommendations.'",
+    "Allowed framing: 'Indexing, schema strategy, crawl diagnostics, and internal-linking recommendations should be led by a technical SEO specialist.'",
+    "Allowed framing: 'I can help with landing-page structure, frontend implementation, and conversion-aware page improvements if that adjacent support is useful.'",
+    "Do not offer to implement schema markup, schema changes, internal-linking adjustments, canonical tags, indexing fixes, crawlability fixes, or crawlable markup unless source-backed.",
+    `Do not claim SEO-team work, crawlability optimization, schema placement, crawl budget, canonicalization, internal-linking patterns, technical SEO diagnosis, search visibility familiarity, or marketplace-style SEO implementation.`,
+  ];
 }
 
 export function normalizeProposalConstraintText(
@@ -564,6 +622,10 @@ function buildNoContextWriterPlanGuidance(
   format: ProposalOutputFormat,
 ): string[] {
   const shared = [
+    "No-context mode must be motivation and work-surface only. Do not claim traits, habits, abilities, skills, background, experience, past work, group-project history, customer-facing history, or personal work habits.",
+    "If context_mode is none, do not mention 'my background', 'my experience', 'my professional background', 'in past experiences', 'I’ve worked', 'skills I’ve developed', 'I’ve taken initiative', 'I’ve always prioritized', 'my ability', 'my habit', or any implied prior work history.",
+    "If context_mode is none, do not claim traits, habits, or abilities such as 'my attention to detail', 'my methodical approach', 'how I approach work', 'what I value', 'what I prioritize', comfort with procedures, or confidence in adapting.",
+    "If context_mode is none, do not say 'I do not have direct experience'; simply avoid experience claims.",
     "If context_mode is none, do not describe the candidate's past, capability, familiarity, experience, readiness, fit, or contribution potential.",
     "If context_mode is none, do not use phrases such as 'while I may not have direct experience', 'while I am new to the field', 'I understand the importance of', 'my ability to ... would allow me to ...', 'I am ready to', 'I am able to', 'I am capable of', 'I could support your team', or 'I would bring my skills to ...'.",
     "If context_mode is none, do not mention contribution to safety, mission, operations, team value, or how the candidate would perform tasks.",
@@ -833,6 +895,9 @@ export function buildProposalPlannerPrompt(
     `Target role: ${args.jobTitle}`,
     `Job description: ${compactWhitespace(args.jobDescription)}`,
     args.generationControlsBlock,
+    args.companyValuesPack
+      ? formatCompanyValuesPromptBlock(args.companyValuesPack)
+      : undefined,
     factBankBlock,
     "Planner rules:",
     ...SOURCE_BACKED_SPECIFICITY_RULES.map((rule) => `- ${rule}`),
@@ -895,6 +960,11 @@ export function normalizeProposalPlannerResult(
     args.rawPlan.allowed_concrete_facts,
     sourceFactBank,
   ).slice(0, MAX_ALLOWED_FACTS);
+  const unsupportedTechnicalSeoMove = isUnsupportedTechnicalSeoMove({
+    jobTitle: args.jobTitle,
+    jobDescription: args.jobDescription,
+    sourceFacts: sourceFactBank,
+  });
 
   if (normalizedContextMode === "none") {
     domainGap = "distant";
@@ -908,6 +978,15 @@ export function normalizeProposalPlannerResult(
     transferMode = "no_operational_analogy";
   } else if (domainGap === "adjacent" && transferMode === "literal") {
     transferMode = "abstract_only";
+  }
+
+  if (unsupportedTechnicalSeoMove) {
+    domainGap = "adjacent";
+    transferMode = "abstract_only";
+    credentialStatus = "unsupported";
+    if (proofStrategy === "concrete_supported") {
+      proofStrategy = "abstract_only";
+    }
   }
 
   if (proofStrategy === "concrete_supported" && allowedConcreteFacts.length === 0) {
@@ -932,6 +1011,7 @@ export function normalizeProposalPlannerResult(
       outputLanguage,
     }),
     ...args.rawPlan.disallowed_claims,
+    ...(unsupportedTechnicalSeoMove ? UNSUPPORTED_TECHNICAL_SEO_CLAIMS : []),
   ]).slice(0, MAX_DISALLOWED_CLAIMS);
 
   return {
@@ -1018,13 +1098,23 @@ export function buildProposalWriterPlanBlock(
       : ["  - transferable_trait: none"]),
     ...(format === "cover_letter" && !evidenceSummary.noContextMode
       ? [
+          "Evidence chain requirement: each main paragraph should map job priority -> source-backed candidate fact -> recruiter case for why that fact matters in the role.",
           "Use evidence_summary as the body priority order: top_evidence_point, then top_achievement, then top_scope_point, then relevant_background_fact, and only then transferable_trait if it still helps.",
           "If any top_evidence_point, top_scope_point, or relevant_background_fact exists, the first substantive movement should come from one of those supported facts rather than from generic transfer framing, mission admiration, or role-interest language.",
           "After the opening evidence movement, use the next substantive movement to explain why that supported proof matters for the role's work, workflow, users, team context, or operating environment rather than reducing it to generic 'aligns with' or future-value language.",
           "If more supported scope, background, or operating detail exists after the opening proof, spend one additional grounded supporting sentence on it before the close rather than ending on proof plus a generic close.",
           "If top_achievement items are absent, use top_scope_point or relevant_background_fact instead of generic fit language.",
           "Use transferable_trait only as brief secondary support after concrete supported facts; do not let transferable traits become the main body substance when stronger evidence exists.",
+          "Missing requirements must become gaps, omissions, or cautious non-claims; never turn job keywords into candidate proof.",
+          "Do not praise company mission, culture, values, or the employer as a substitute for candidate evidence.",
         ]
+      : []),
+    ...(plan.disallowed_claims.some((claim) =>
+      /crawl budget|schema placement|technical seo diagnosis|seo teams/i.test(
+        claim,
+      ),
+    )
+      ? buildAdjacentOnlySeoGuidance()
       : []),
     ...(format === "cover_letter"
       ? [

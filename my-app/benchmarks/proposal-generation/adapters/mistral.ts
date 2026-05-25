@@ -1,5 +1,5 @@
 import { estimateCost } from "../core/pricing";
-import type { BenchmarkCaseResult } from "../core/types";
+import type { BenchmarkCaseResult, BenchmarkModel } from "../core/types";
 import type { GenerationSettings } from "./shared";
 import { emptyCost, emptyUsage, getProviderForModel, persistRawResponse } from "./shared";
 
@@ -19,7 +19,7 @@ type MistralChatResponse = {
 };
 
 export async function runMistralBenchmarkCase(params: {
-  model: "mistral-small-latest" | "mistral-large-latest";
+  model: Extract<BenchmarkModel, `mistral-${string}`>;
   prompt: string;
   caseId: string;
   outputDir: string;

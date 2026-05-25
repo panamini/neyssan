@@ -14,6 +14,14 @@ import {
   type EffectiveProposalTone,
 } from "./lib/proposals/effectiveTone";
 import {
+  analyzeCompanyValues,
+  type CompanyValuesPack,
+} from "./lib/proposals/companyValues";
+import {
+  isProposalGenerationQualityLiveMode,
+  resolveProposalGenerationQualityMode,
+} from "./lib/proposals/proposalQualityMode";
+import {
   buildProposalGenerationControlsBlock,
   resolveProposalToneTuning,
   type ProposalCharacterLimitMode,
@@ -91,6 +99,8 @@ import {
   analyzeProposalDraft,
   applyProposalSentencePatches,
   buildProposalRepairPrompt,
+  detectNoContextCandidateClaimLeak,
+  detectUnsupportedCoreClaimLeak,
   extractProposalBodyForRepair,
   extractFinalProposalContent,
   getDeterministicInterestOnlyRepairSentence,
@@ -3467,6 +3477,343 @@ async function repairProposalDraftWithMistral(args: {
   return outputText;
 }
 
+function extractConcreteJobResponsibilities(jobDescription: string): string[] {
+  return splitSentences(jobDescription)
+    .flatMap((sentence) =>
+      sentence
+        .split(/,|\band\b/i)
+        .map((part) => compactWhitespace(part))
+        .filter(Boolean),
+    )
+    .map((part) =>
+      part
+        .replace(/^(?:the\s+role\s+includes?|we\s+are\s+looking\s+for\s+(?:a|an)?|the\s+[^,.]{2,60}\s+will|who\s+can|will)\s+/i, "")
+        .replace(/^(?:[^,.]{2,80}\s+who\s+can)\s+/i, "")
+        .replace(/\.$/, ""),
+    )
+    .filter((part) =>
+      /\b(?:support|update|assist|communicat|coordinate|keep|maintain|records?|follow[-\s]?up|indexing|schema|crawl|internal[-\s]linking|landing|frontend|conversion|audit|recommendations?)\b/i.test(
+        part,
+      ),
+    )
+    .slice(0, 3);
+}
+
+function formatHumanList(items: string[]): string {
+  const cleaned = items.map((item) => compactWhitespace(item)).filter(Boolean);
+  if (cleaned.length <= 1) return cleaned[0] ?? "";
+  if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}`;
+  return `${cleaned.slice(0, -1).join(", ")}, and ${cleaned[cleaned.length - 1]}`;
+}
+
+function sanitizeConstrainedRepairOutput(args: {
+  content: string;
+  format: OutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+}): string {
+  return extractFinalProposalContent({
+    content: args.content,
+    format: args.format,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  })
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        Boolean(line) &&
+        !isMetaOutputLine(line) &&
+        !isSalutationLine(line) &&
+        !isClosingLine(line) &&
+        !isPlaceholderSignatureLine(line) &&
+        !isCandidateNameLine(line, args.candidateName),
+    )
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function buildNoContextConstrainedRepairPrompt(args: {
+  content: string;
+  format: OutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  jobTitle: string;
+  jobDescription: string;
+}): string {
+  const responsibilities = extractConcreteJobResponsibilities(args.jobDescription);
+  return [
+    "CRITICAL OVERRIDE — FULL DRAFT SAFETY REPAIR:",
+    "Rewrite the whole generated output, not just one sentence.",
+    "Reason: no candidate background is available, but the draft contains candidate claims.",
+    "Return only the repaired proposal body. No labels, headings, bullets, salutation, sign-off, signature, or commentary.",
+    args.outputLanguage === "French"
+      ? "Write fully in French."
+      : "Write fully in English.",
+    "",
+    "Required behavior:",
+    "- Be safe, concise, and role-specific.",
+    `- Use the job title: ${args.jobTitle}.`,
+    "- Use 1 to 3 concrete responsibilities from the job description.",
+    "- You may express interest in the role, understanding of the work surface, willingness to learn, willingness to discuss, and explicit honesty that no candidate background details are available.",
+    "- Do not invent candidate history.",
+    "",
+    "Forbidden in the repaired output:",
+    "- my background; my experience; my professional background; in my work; in past experiences",
+    "- I’ve worked; I’ve developed; skills I developed; my ability; my habit",
+    "- I’ve taken initiative; I’ve always prioritized",
+    "- I have handled, managed, coordinated, or supported",
+    "- direct experience disclaimers that imply unspecified prior work",
+    "- personal traits framed as proven facts",
+    "",
+    "- concrete responsibilities to use:",
+    ...(responsibilities.length > 0
+      ? responsibilities.map((item) => `  - ${item}`)
+      : [`  - ${args.jobDescription}`]),
+    "",
+    "Original unsafe output:",
+    args.content,
+  ].join("\n");
+}
+
+function buildUnsupportedCoreConstrainedRepairPrompt(args: {
+  content: string;
+  format: OutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  jobTitle: string;
+  jobDescription: string;
+  plan: ProposalPlannerResult;
+}): string {
+  return [
+    "CRITICAL OVERRIDE — FULL DRAFT SAFETY REPAIR:",
+    "Rewrite the whole generated output as adjacent-only support.",
+    "Reason: the draft implies unsupported technical SEO capability.",
+    "Return only the repaired proposal body. No labels, headings, bullets, salutation, sign-off, signature, or commentary.",
+    args.outputLanguage === "French"
+      ? "Write fully in French."
+      : "Write fully in English.",
+    "",
+    "Role and evidence:",
+    `- job_title: ${args.jobTitle}`,
+    `- job_description: ${args.jobDescription}`,
+    "- source-backed candidate facts:",
+    ...(args.plan.allowed_concrete_facts.length > 0
+      ? args.plan.allowed_concrete_facts.map((fact) => `  - ${fact}`)
+      : ["  - none"]),
+    "",
+    "Allowed claims:",
+    "- frontend/conversion-focused background",
+    "- landing-page structure",
+    "- frontend implementation support",
+    "- conversion-aware page improvements",
+    "- support after a technical SEO specialist defines recommendations",
+    "",
+    "Required honesty:",
+    "- Say the candidate is not the person to lead the technical SEO audit.",
+    "- Say indexing, schema strategy, crawl diagnostics, and internal-linking recommendations should be led by a technical SEO specialist.",
+    "",
+    "Forbidden unless source-backed:",
+    "- worked closely with SEO teams",
+    "- crawlability optimization",
+    "- schema placement",
+    "- crawl budget",
+    "- canonicalization",
+    "- internal-linking structures",
+    "- technical SEO diagnosis",
+    "- search visibility familiarity",
+    "- implementing schema changes",
+    "- marketplace-style SEO implementation",
+    "- schema/internal-linking execution ownership",
+    "",
+    "Original unsafe output:",
+    args.content,
+  ].join("\n");
+}
+
+function buildLastResortNoContextFallback(args: {
+  format: OutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  jobTitle: string;
+  jobDescription: string;
+}): string {
+  const responsibilities = extractConcreteJobResponsibilities(args.jobDescription).map(
+    (item) =>
+      item
+        .replace(/^(?:support|update|assist with|coordinate|keep|communicate|manage|maintain|handle)\s+/i, "")
+        .replace(/^follow[-\s]?ups?\b/i, "follow-up coordination")
+        .replace(/^records\s+organized\b/i, "organized records")
+        .replace(/^records\s+clear\b/i, "clear records")
+        .replace(/^professionally\s+with\b/i, "professional communication with")
+        .trim(),
+  );
+  const workSurface =
+    responsibilities.length > 0
+      ? formatHumanList(responsibilities)
+      : "the responsibilities described in the posting";
+  if (args.outputLanguage === "French") {
+    return [
+      `Le poste de ${args.jobTitle} m'interesse parce que le travail porte sur ${workSurface}.`,
+      "Je n'ai pas de details de parcours candidat permettant d'affirmer une experience anterieure ici, donc je garde cette candidature centree sur le role lui-meme.",
+      "Je serais heureux d'echanger sur le soutien dont votre equipe a le plus besoin.",
+    ].join(" ");
+  }
+  if (args.format === "application_message") {
+    return [
+      `I’m interested in the ${args.jobTitle} role.`,
+      `The work appears centered on ${workSurface}.`,
+      "I’d welcome the chance to learn more about the team’s process and discuss the role.",
+    ].join(" ");
+  }
+  return [
+    `I’m interested in the ${args.jobTitle} role.`,
+    `The work centers on ${workSurface}.`,
+    "No candidate background details are available here, so this application should stay focused on the role itself.",
+    "I’d welcome the chance to discuss the role and what the team needs most.",
+  ].join(" ");
+}
+
+function buildLastResortAdjacentOnlyFallback(args: {
+  outputLanguage: ProposalOutputLanguage;
+}): string {
+  if (args.outputLanguage === "French") {
+    return [
+      "Mon profil est centre sur le frontend, les landing pages et l'optimisation de conversion, pas sur le SEO technique.",
+      "L'indexation, la strategie schema, les diagnostics de crawl et les recommandations de maillage interne devraient etre pilotes par un specialiste SEO technique.",
+      "Je peux aider sur la structure de landing pages, l'implementation frontend et les ameliorations orientees conversion une fois les recommandations techniques definies.",
+    ].join("\n\n");
+  }
+  return [
+    "My background is frontend and conversion-focused, not technical SEO.",
+    "Indexing, schema strategy, crawl diagnostics, and internal-linking recommendations should be led by a technical SEO specialist.",
+    "I can help with landing-page structure, frontend implementation, and conversion-aware page improvements once that specialist defines the recommendations.",
+  ].join("\n\n");
+}
+
+function verifyConstrainedRepair(args: {
+  content: string;
+  plan: ProposalPlannerResult;
+  format: OutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+  jobTitle: string;
+  jobDescription: string;
+}): boolean {
+  if (!compactWhitespace(args.content)) return false;
+  return (
+    !detectNoContextCandidateClaimLeak(args) &&
+    !detectUnsupportedCoreClaimLeak(args) &&
+    analyzeProposalDraft(args).issues.length === 0
+  );
+}
+
+function needsTargetedConstrainedRepair(args: {
+  content: string;
+  plan: ProposalPlannerResult;
+  format: OutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+  jobTitle: string;
+  jobDescription: string;
+}): boolean {
+  return (
+    detectNoContextCandidateClaimLeak(args) ||
+    detectUnsupportedCoreClaimLeak(args)
+  );
+}
+
+export function shouldRunProposalDraftRepair(args: {
+  content: string;
+  plan: ProposalPlannerResult;
+  format: OutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+  jobTitle: string;
+  jobDescription: string;
+  verificationResult: ReturnType<typeof analyzeProposalDraft>;
+}): boolean {
+  return (
+    needsTargetedConstrainedRepair(args) ||
+    (args.verificationResult.issues.length > 0 &&
+      args.verificationResult.flaggedSentences.length > 0)
+  );
+}
+
+export async function repairProposalDraftWithConstrainedPass(args: {
+  mistralKey: string;
+  modelType: MistralProposalModelType;
+  content: string;
+  plan: ProposalPlannerResult;
+  format: OutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+  jobTitle: string;
+  jobDescription: string;
+  flaggedSentences: ReturnType<typeof analyzeProposalDraft>["flaggedSentences"];
+  repairDraftText?: (prompt: string) => Promise<string>;
+  diagnostics?: MistralDiagnosticsAccumulator;
+  signal?: AbortSignal;
+}): Promise<string> {
+  const noContextLeak = detectNoContextCandidateClaimLeak(args);
+  const unsupportedCoreLeak = detectUnsupportedCoreClaimLeak(args);
+
+  if (noContextLeak || unsupportedCoreLeak) {
+    const prompt = noContextLeak
+      ? buildNoContextConstrainedRepairPrompt(args)
+      : buildUnsupportedCoreConstrainedRepairPrompt(args);
+    const repaired = sanitizeConstrainedRepairOutput({
+      content: args.repairDraftText
+        ? await args.repairDraftText(prompt)
+        : await repairProposalDraftWithMistral({
+            mistralKey: args.mistralKey,
+            modelType: args.modelType,
+            prompt,
+            diagnostics: args.diagnostics,
+            signal: args.signal,
+          }),
+      format: args.format,
+      outputLanguage: args.outputLanguage,
+      candidateName: args.candidateName,
+    });
+
+    if (
+      verifyConstrainedRepair({
+        ...args,
+        content: repaired,
+      })
+    ) {
+      return repaired;
+    }
+
+    const fallback = noContextLeak
+      ? buildLastResortNoContextFallback(args)
+      : buildLastResortAdjacentOnlyFallback({
+          outputLanguage: args.outputLanguage,
+        });
+    if (
+      verifyConstrainedRepair({
+        ...args,
+        content: fallback,
+      })
+    ) {
+      return fallback;
+    }
+  }
+
+  return repairProposalDraftBySentence({
+    mistralKey: args.mistralKey,
+    modelType: args.modelType,
+    content: args.content,
+    plan: args.plan,
+    format: args.format,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+    flaggedSentences: args.flaggedSentences,
+    diagnostics: args.diagnostics,
+    signal: args.signal,
+  });
+}
+
 function sanitizeRepairSentenceOutput(args: {
   content: string;
   candidateName?: string;
@@ -3690,6 +4037,7 @@ type AttemptStructuredCoverLetterArgs = {
   jobTitle: string;
   jobDescription: string;
   generationControlsBlock?: string;
+  companyValuesPack?: CompanyValuesPack;
   diagnostics?: MistralDiagnosticsAccumulator;
 };
 
@@ -3716,7 +4064,7 @@ type AttemptStructuredCoverLetterDeps = {
     signal?: AbortSignal;
   }) => Promise<string>;
   analyzeDraft?: typeof analyzeProposalDraft;
-  repairDraft?: typeof repairProposalDraftBySentence;
+  repairDraft?: typeof repairProposalDraftWithConstrainedPass;
   onFallbackReason?: (reason: StructuredCoverLetterFallbackReason) => void;
 };
 
@@ -3751,7 +4099,7 @@ export async function attemptStructuredCoverLetterGeneration(
     deps.generateParagraph ??
     generateStructuredCoverLetterBodyWithMistral;
   const analyzeDraft = deps.analyzeDraft ?? analyzeProposalDraft;
-  const repairDraft = deps.repairDraft ?? repairProposalDraftBySentence;
+  const repairDraft = deps.repairDraft ?? repairProposalDraftWithConstrainedPass;
   const recordFallback = (
     reason: StructuredCoverLetterFallbackReason,
     error: unknown,
@@ -3772,6 +4120,7 @@ export async function attemptStructuredCoverLetterGeneration(
         jobTitle: args.jobTitle,
         jobDescription: args.jobDescription,
         generationControlsBlock: args.generationControlsBlock,
+        companyValuesPack: args.companyValuesPack,
       }),
       diagnostics: args.diagnostics,
       signal: args.signal,
@@ -3817,6 +4166,7 @@ export async function attemptStructuredCoverLetterGeneration(
                 jobTitle: args.jobTitle,
                 jobDescription: args.jobDescription,
                 generationControlsBlock: args.generationControlsBlock,
+                companyValuesPack: args.companyValuesPack,
               })
             : buildStructuredCoverLetterComposerRetryPrompt({
                 plannerResult,
@@ -3827,6 +4177,7 @@ export async function attemptStructuredCoverLetterGeneration(
                   lastBodyValidationError,
                 ),
                 generationControlsBlock: args.generationControlsBlock,
+                companyValuesPack: args.companyValuesPack,
               }),
         diagnostics: args.diagnostics,
         signal: args.signal,
@@ -3900,11 +4251,18 @@ export async function attemptStructuredCoverLetterGeneration(
       jobDescription: args.jobDescription,
     });
     let verificationIssues = verificationResult.issues;
+    const shouldRepairDraft = shouldRunProposalDraftRepair({
+      content: renderedContent,
+      plan: plannerResult,
+      format: "cover_letter",
+      outputLanguage: args.outputLanguage,
+      candidateName: args.candidateName,
+      jobTitle: args.jobTitle,
+      jobDescription: args.jobDescription,
+      verificationResult,
+    });
 
-    if (
-      verificationIssues.length > 0 &&
-      verificationResult.flaggedSentences.length > 0
-    ) {
+    if (shouldRepairDraft) {
       let repairedBody: string;
       try {
         repairedBody = await repairDraft({
@@ -3915,6 +4273,8 @@ export async function attemptStructuredCoverLetterGeneration(
           format: "cover_letter",
           outputLanguage: args.outputLanguage,
           candidateName: args.candidateName,
+          jobTitle: args.jobTitle,
+          jobDescription: args.jobDescription,
           flaggedSentences: verificationResult.flaggedSentences,
           diagnostics: args.diagnostics,
           signal: args.signal,
@@ -3957,6 +4317,7 @@ export async function attemptStructuredCoverLetterGeneration(
                   jobTitle: args.jobTitle,
                   jobDescription: args.jobDescription,
                   failureReason: summarizeStructuredValidationError(error),
+                  companyValuesPack: args.companyValuesPack,
                 }),
                 diagnostics: args.diagnostics,
               }),
@@ -8959,6 +9320,12 @@ export async function handleGenerateProposal(
         })
       : buildPersonalizationPromptBlock(effectivePersonalization);
   const sourceFactBank = buildProposalSourceFactBank(effectivePersonalization);
+  const proposalGenerationQualityMode = resolveProposalGenerationQualityMode();
+  const companyValuesPack = isProposalGenerationQualityLiveMode(
+    proposalGenerationQualityMode,
+  )
+    ? analyzeCompanyValues(args.jobDescription)
+    : undefined;
   const noContextPromptBlock = hasCandidateContext
     ? ""
     : buildNoContextPromptBlock(outputFormat);
@@ -8977,6 +9344,7 @@ export async function handleGenerateProposal(
     outputLanguage: plannerOutputLanguage,
     personalizationContext: effectivePersonalization,
     generationControlsBlock,
+    companyValuesPack,
   });
   let plannerResult: ProposalPlannerResult | null = null;
   let prompt = buildInlineMistralPrompt(
@@ -9261,6 +9629,7 @@ export async function handleGenerateProposal(
                 jobDescription: args.jobDescription,
                 candidateName,
                 generationControlsBlock,
+                companyValuesPack,
                 writer: ({ prompt }) =>
                   generatePremiumCoverLetterBodyPartsWithOpenAI({
                     apiKey,
@@ -9444,6 +9813,7 @@ export async function handleGenerateProposal(
                   jobTitle: effectiveJobTitle,
                   jobDescription: args.jobDescription,
                   generationControlsBlock,
+                  companyValuesPack,
                   diagnostics: mistralDiagnostics,
                 },
                 {
@@ -9577,12 +9947,19 @@ export async function handleGenerateProposal(
               jobDescription: args.jobDescription,
             });
             let verificationIssues = verificationResult.issues;
+            const shouldRepairDraft = shouldRunProposalDraftRepair({
+              content: verifiedContent,
+              plan: plannerResult,
+              format: outputFormat,
+              outputLanguage,
+              candidateName,
+              jobTitle: effectiveJobTitle,
+              jobDescription: args.jobDescription,
+              verificationResult,
+            });
 
-            if (
-              verificationIssues.length > 0 &&
-              verificationResult.flaggedSentences.length > 0
-            ) {
-              const repairedDraft = await repairProposalDraftBySentence({
+            if (shouldRepairDraft) {
+              const repairedDraft = await repairProposalDraftWithConstrainedPass({
                 mistralKey,
                 modelType: actualModelType,
                 content: verifiedContent,
@@ -9590,6 +9967,8 @@ export async function handleGenerateProposal(
                 format: outputFormat,
                 outputLanguage,
                 candidateName,
+                jobTitle: effectiveJobTitle,
+                jobDescription: args.jobDescription,
                 flaggedSentences: verificationResult.flaggedSentences,
                 diagnostics: mistralDiagnostics,
                 signal: cancellationContext?.signal,

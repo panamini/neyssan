@@ -12,6 +12,11 @@ const PRICING_BY_MODEL: Record<BenchmarkModel, ModelPricing> = {
     outputPerMillionUsd: 0.3,
     pricingLabel: "Mistral Small family pricing checked on 2026-03-12",
   },
+  "mistral-medium-latest": {
+    inputPerMillionUsd: 1.5,
+    outputPerMillionUsd: 7.5,
+    pricingLabel: "Mistral Medium 3.5 pricing checked against Mistral docs on 2026-05-25",
+  },
   "mistral-large-latest": {
     inputPerMillionUsd: 0.5,
     outputPerMillionUsd: 1.5,

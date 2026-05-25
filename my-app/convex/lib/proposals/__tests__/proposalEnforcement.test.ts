@@ -581,6 +581,264 @@ describe("proposal enforcement helpers", () => {
     );
   });
 
+  it("flags no-context invented customer communication experience", () => {
+    const issues = verifyProposalDraft({
+      content:
+        "Dear Hiring Manager,\n\nMy experience has required clear, professional communication with customers, and I am comfortable adapting to new sales processes.\n\nSincerely,",
+      plan: {
+        ...basePlan,
+        context_mode: "none",
+        domain_gap: "distant",
+        credential_status: "unsupported",
+        transfer_mode: "no_operational_analogy",
+        allowed_concrete_facts: [],
+        allowed_transfer_themes: ["role understanding"],
+        proof_strategy: "none",
+      },
+      format: "application_message",
+      outputLanguage: "English",
+      candidateName: null,
+      jobTitle: "Sales Assistant",
+      jobDescription:
+        "Coordinate follow-ups, keep records organized, and communicate clearly with customers.",
+    });
+
+    expect(issues.some((issue) => issue.code === "no_context_phrase")).toBe(
+      true,
+    );
+  });
+
+  it("flags no-context generic invented-history phrases", () => {
+    const forbiddenSentences = [
+      "In past experiences, I’ve taken initiative to document workflows.",
+      "These are skills I’ve developed through administrative and customer-facing tasks.",
+      "I’ve worked in roles where tracking details and maintaining professional interactions were key.",
+      "My ability to stay organized would help the team.",
+      "The role’s focus on structure and clarity aligns with how I approach new responsibilities.",
+      "My approach is to keep records accurate and follow up clearly.",
+      "My strengths are organization and customer communication.",
+      "I am confident I can handle the follow-up process.",
+      "I am comfortable learning new sales tools.",
+      "I prioritize clear customer communication.",
+      "I value organized records.",
+    ];
+
+    for (const sentence of forbiddenSentences) {
+      const issues = verifyProposalDraft({
+        content: `Dear Hiring Manager,\n\n${sentence}\n\nSincerely,`,
+        plan: {
+          ...basePlan,
+          context_mode: "none",
+          domain_gap: "distant",
+          credential_status: "unsupported",
+          transfer_mode: "no_operational_analogy",
+          allowed_concrete_facts: [],
+          allowed_transfer_themes: ["role understanding"],
+          proof_strategy: "none",
+        },
+        format: "application_message",
+        outputLanguage: "English",
+        candidateName: null,
+        jobTitle: "Sales Assistant",
+        jobDescription:
+          "Coordinate follow-ups, keep records organized, and communicate clearly with customers.",
+      });
+
+      expect(
+        issues.some(
+          (issue) =>
+            issue.code === "no_context_phrase" ||
+            issue.code === "no_context_readiness",
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("flags repeated no-context fallback filler sentences", () => {
+    const repeated =
+      "The day-to-day work itself is the part of the role that stands out to me most.";
+    const issues = verifyProposalDraft({
+      content: `${repeated}\n\n${repeated}`,
+      plan: {
+        ...basePlan,
+        context_mode: "none",
+        domain_gap: "distant",
+        credential_status: "unsupported",
+        transfer_mode: "no_operational_analogy",
+        allowed_concrete_facts: [],
+        allowed_transfer_themes: ["role understanding"],
+        proof_strategy: "none",
+      },
+      format: "application_message",
+      outputLanguage: "English",
+      candidateName: null,
+      jobTitle: "Sales Assistant",
+      jobDescription:
+        "Coordinate follow-ups, keep records organized, and communicate clearly with customers.",
+    });
+
+    expect(issues.some((issue) => issue.code === "no_context_phrase")).toBe(
+      true,
+    );
+  });
+
+  it("allows a no-context message that stays on motivation and work surfaces", () => {
+    const issues = verifyProposalDraft({
+      content:
+        "I’m interested in the Sales Assistant role because the work centers on organized follow-up, clear records, and careful communication with customers. I would welcome the chance to learn your process and discuss the role further.",
+      plan: {
+        ...basePlan,
+        context_mode: "none",
+        domain_gap: "distant",
+        credential_status: "unsupported",
+        transfer_mode: "no_operational_analogy",
+        allowed_concrete_facts: [],
+        allowed_transfer_themes: ["role understanding", "willingness to learn"],
+        proof_strategy: "none",
+      },
+      format: "application_message",
+      outputLanguage: "English",
+      candidateName: null,
+      jobTitle: "Sales Assistant",
+      jobDescription:
+        "Coordinate follow-ups, keep records organized, and communicate clearly with customers.",
+    });
+
+    expect(
+      issues.some(
+        (issue) =>
+          issue.code === "no_context_phrase" ||
+          issue.code === "no_context_readiness",
+      ),
+    ).toBe(false);
+  });
+
+  it("does not overblock sourced rich-context approach or strength language", () => {
+    const issues = verifyProposalDraft({
+      content:
+        "My approach to customer communication is grounded in documented sales operations work. My strength in record organization comes from maintaining CRM updates for the sales team.",
+      plan: {
+        ...basePlan,
+        context_mode: "rich",
+        domain_gap: "direct",
+        credential_status: "exact_required",
+        transfer_mode: "literal",
+        allowed_concrete_facts: [
+          "My approach to customer communication is grounded in documented sales operations work.",
+          "My strength in record organization comes from maintaining CRM updates for the sales team.",
+        ],
+        allowed_transfer_themes: [],
+        proof_strategy: "concrete_supported",
+      },
+      format: "application_message",
+      outputLanguage: "English",
+      candidateName: null,
+      jobTitle: "Sales Assistant",
+      jobDescription:
+        "Coordinate follow-ups, keep records organized, and communicate clearly with customers.",
+    });
+
+    expect(issues).toEqual([]);
+  });
+
+  it("flags unsupported technical SEO claims in adjacent-only weak matches", () => {
+    const seoPlan: ProposalPlannerResult = {
+      ...basePlan,
+      context_mode: "minimal",
+      domain_gap: "adjacent",
+      credential_status: "unsupported",
+      transfer_mode: "abstract_only",
+      allowed_concrete_facts: [
+        "Frontend-focused freelance designer-developer focused on landing pages and conversion flows.",
+        "Frontend",
+        "Landing Pages",
+        "Conversion Optimization",
+      ],
+      allowed_transfer_themes: ["frontend execution", "conversion-aware page improvements"],
+      disallowed_claims: [
+        "worked closely with SEO teams",
+        "optimized crawlability",
+        "schema placement",
+        "crawl budget",
+        "canonicalization",
+        "internal linking patterns",
+        "technical SEO diagnosis",
+        "search visibility familiarity",
+        "marketplace-style SEO implementation",
+      ],
+      proof_strategy: "abstract_only",
+    };
+    const badSentences = [
+      "I’ve worked closely with SEO teams to implement structural improvements.",
+      "I can review schema placement and internal linking patterns.",
+      "My frontend SEO diagnosis can improve crawl budget and search visibility.",
+      "I have optimized crawlability and canonicalization for marketplace-style SEO implementation.",
+    ];
+
+    for (const sentence of badSentences) {
+      const issues = verifyProposalDraft({
+        content: sentence,
+        plan: seoPlan,
+        format: "freelance_proposal",
+        outputLanguage: "English",
+        candidateName: "Jordan Lee",
+        jobTitle: "Technical SEO Overhaul for Marketplace",
+        jobDescription:
+          "We need indexing, schema, crawl diagnostics, and internal linking recommendations for a marketplace.",
+      });
+
+      expect(
+        issues.some((issue) => issue.code === "unsupported_operational_history"),
+      ).toBe(true);
+    }
+  });
+
+  it("allows adjacent-only SEO support that avoids unsupported technical SEO claims", () => {
+    const issues = verifyProposalDraft({
+      content:
+        "My background is frontend and conversion-focused, not technical SEO. Indexing, schema strategy, crawl diagnostics, and internal-linking recommendations should be led by a technical SEO specialist. I could support frontend execution once that specialist defines the audit and recommendations.",
+      plan: {
+        ...basePlan,
+        context_mode: "minimal",
+        domain_gap: "adjacent",
+        credential_status: "unsupported",
+        transfer_mode: "abstract_only",
+        allowed_concrete_facts: [
+          "Frontend-focused freelance designer-developer focused on landing pages and conversion flows.",
+          "Frontend",
+          "Landing Pages",
+          "Conversion Optimization",
+        ],
+        allowed_transfer_themes: [
+          "frontend execution",
+          "conversion-aware page improvements",
+        ],
+        disallowed_claims: [
+          "worked closely with SEO teams",
+          "optimized crawlability",
+          "schema placement",
+          "crawl budget",
+          "canonicalization",
+          "internal linking patterns",
+          "technical SEO diagnosis",
+          "search visibility familiarity",
+          "marketplace-style SEO implementation",
+        ],
+        proof_strategy: "abstract_only",
+      },
+      format: "freelance_proposal",
+      outputLanguage: "English",
+      candidateName: "Jordan Lee",
+      jobTitle: "Technical SEO Overhaul for Marketplace",
+      jobDescription:
+        "We need indexing, schema, crawl diagnostics, and internal linking recommendations for a marketplace.",
+    });
+
+    expect(
+      issues.some((issue) => issue.code === "unsupported_operational_history"),
+    ).toBe(false);
+  });
+
   it("does not flag a no-context application intro that names only the target employer", () => {
     const issues = verifyProposalDraft({
       content:
@@ -1104,8 +1362,8 @@ describe("proposal enforcement helpers", () => {
       outputLanguage: "English",
     });
 
-    expect(replacement).toMatch(
-      /\b(?:reliability|communication|day-to-day work|consistency|organization)\b/i,
+    expect(replacement).toBe(
+      "The role appears to depend on steady follow-through, clear communication, and organized day-to-day coordination.",
     );
     expect(replacement).not.toMatch(
       /\b(?:background|experience with|skills in|my background includes|my experience includes|rust|python)\b/i,
@@ -1372,7 +1630,7 @@ describe("proposal enforcement helpers", () => {
     });
 
     expect(replacement).toBe(
-      "The role centers on concrete day-to-day work, coordination, and operating context.",
+      "The role appears to depend on steady follow-through, clear communication, and organized day-to-day coordination.",
     );
     expect(replacement).not.toMatch(
       /\b(?:aligns with|may offer relevant perspective|eager to apply)\b/i,

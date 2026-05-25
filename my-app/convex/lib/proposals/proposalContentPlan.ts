@@ -5,6 +5,10 @@ import {
   buildProposalEvidenceSummary,
   type ProposalPlannerResult,
 } from "./proposalPlanner";
+import {
+  formatCompanyValuesPromptBlock,
+  type CompanyValuesPack,
+} from "./companyValues";
 import { PROPOSAL_VOICE_PRESET_IDS, type ProposalVoicePreset } from "./voicePresets";
 
 export const STRUCTURED_COVER_LETTER_CONTENT_PLAN_SCHEMA_VERSION = 1 as const;
@@ -642,6 +646,39 @@ function openingAndEvidenceReuseSameFacts(
   return openingFactIds.every((factId) => evidenceSet.has(factId));
 }
 
+function isUnsupportedTechnicalSeoMove(args: {
+  plannerResult: ProposalPlannerResult;
+  jobTitle: string;
+  jobDescription: string;
+}): boolean {
+  const jobText = `${args.jobTitle} ${args.jobDescription}`;
+  const sourceText = [
+    ...args.plannerResult.allowed_concrete_facts,
+    ...args.plannerResult.allowed_transfer_themes,
+  ].join(" ");
+  return (
+    /\b(?:technical\s+seo|indexing|schema|crawl|internal[-\s]linking)\b/i.test(
+      jobText,
+    ) &&
+    /\b(?:front[-\s]?end|landing pages?|conversion(?: optimization)?)\b/i.test(
+      sourceText,
+    ) &&
+    !/\b(?:technical\s+seo|seo specialist|crawl diagnostics?|schema strategy|canonicalization|crawl budget)\b/i.test(
+      sourceText,
+    )
+  );
+}
+
+function buildAdjacentOnlySeoPlanLines(): string[] {
+  return [
+    "- adjacent_only_seo_rule: plan this as frontend/conversion support only, not technical SEO evidence.",
+    "- adjacent_only_seo_rule: plan a clear gap sentence that says indexing, schema strategy, crawl diagnostics, and internal-linking recommendations should be led by a technical SEO specialist.",
+    "- adjacent_only_seo_rule: allowed support is landing-page structure, frontend implementation, and conversion-aware page improvements after a specialist defines the audit.",
+    "- adjacent_only_seo_rule: do not plan implementation of schema markup, schema changes, internal-linking adjustments, canonical tags, indexing fixes, crawlability fixes, or crawlable markup unless source-backed.",
+    "- adjacent_only_seo_rule: do not plan claims about SEO-team work, crawlability optimization, schema placement, crawl budget, canonicalization, internal-linking patterns, technical SEO diagnosis, search visibility familiarity, or marketplace-style SEO implementation.",
+  ];
+}
+
 export function validateStructuredCoverLetterContentPlan(args: {
   plan: StructuredCoverLetterContentPlan;
   plannerResult: ProposalPlannerResult;
@@ -754,6 +791,7 @@ export function buildStructuredCoverLetterContentPlanPrompt(args: {
   jobTitle: string;
   jobDescription: string;
   generationControlsBlock?: string;
+  companyValuesPack?: CompanyValuesPack;
 }): string {
   const evidenceSummary = buildProposalEvidenceSummary(args.plannerResult);
   return [
@@ -770,6 +808,9 @@ export function buildStructuredCoverLetterContentPlanPrompt(args: {
     `- no_context_mode: ${args.plannerResult.context_mode === "none" ? "true" : "false"}`,
     `- proof_strategy: ${args.plannerResult.proof_strategy}`,
     args.generationControlsBlock,
+    args.companyValuesPack
+      ? formatCompanyValuesPromptBlock(args.companyValuesPack)
+      : undefined,
     "",
     "Paragraph contract:",
     "- Exactly 2 or 3 body paragraphs.",
@@ -784,6 +825,10 @@ export function buildStructuredCoverLetterContentPlanPrompt(args: {
     "- fact_ids must reference only the indexed allowed_concrete_facts list below.",
     "- theme_ids must reference only the indexed allowed_transfer_themes list below.",
     "- Do not use ids that are not present in the indexed lists below.",
+    "- Plan each paragraph around job priority -> source-backed candidate fact or allowed theme -> recruiter reason for why that evidence matters.",
+    "- Unsupported or missing requirements should be planned as gaps, omissions, or cautious non-claims, never as candidate proof.",
+    "- Company mission, culture, values, market, or project praise must not be the main paragraph intent.",
+    ...(isUnsupportedTechnicalSeoMove(args) ? buildAdjacentOnlySeoPlanLines() : []),
     ...(args.plannerResult.allowed_concrete_facts.length >= 2 &&
     args.plannerResult.context_mode !== "none"
       ? [

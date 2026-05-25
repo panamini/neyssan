@@ -2,6 +2,10 @@ import {
   buildProposalEvidenceSummary,
   type ProposalPlannerResult,
 } from "./proposalPlanner";
+import {
+  formatCompanyValuesPromptBlock,
+  type CompanyValuesPack,
+} from "./companyValues";
 import type { StructuredCoverLetterContentPlan } from "./proposalContentPlan";
 
 type ComposerStylePack = {
@@ -154,6 +158,40 @@ function buildUnsupportedJobKeywords(args: {
   );
   const jobTokens = extractPromptTokens(`${args.jobTitle} ${args.jobDescription}`);
   return jobTokens.filter((token) => !supportedTokens.has(token)).slice(0, 12);
+}
+
+function isUnsupportedTechnicalSeoMove(args: {
+  plannerResult: ProposalPlannerResult;
+  jobTitle: string;
+  jobDescription: string;
+}): boolean {
+  const jobText = `${args.jobTitle} ${args.jobDescription}`;
+  const sourceText = [
+    ...args.plannerResult.allowed_concrete_facts,
+    ...args.plannerResult.allowed_transfer_themes,
+  ].join(" ");
+  return (
+    /\b(?:technical\s+seo|indexing|schema|crawl|internal[-\s]linking)\b/i.test(
+      jobText,
+    ) &&
+    /\b(?:front[-\s]?end|landing pages?|conversion(?: optimization)?)\b/i.test(
+      sourceText,
+    ) &&
+    !/\b(?:technical\s+seo|seo specialist|crawl diagnostics?|schema strategy|canonicalization|crawl budget)\b/i.test(
+      sourceText,
+    )
+  );
+}
+
+function buildAdjacentOnlySeoComposerLines(): string[] {
+  return [
+    "- adjacent_only_seo_rule: the supported candidate evidence is frontend/conversion only, not technical SEO.",
+    "- adjacent_only_seo_rule: say plainly that the candidate background is frontend and conversion-focused, not technical SEO.",
+    "- adjacent_only_seo_rule: Indexing, schema strategy, crawl diagnostics, and internal-linking recommendations should be led by a technical SEO specialist.",
+    "- adjacent_only_seo_rule: offer only landing-page structure, frontend implementation, and conversion-aware page improvements once a specialist defines the audit and recommendations.",
+    "- adjacent_only_seo_rule: do not offer to implement schema markup, schema changes, internal-linking adjustments, canonical tags, indexing fixes, crawlability fixes, or crawlable markup unless source-backed.",
+    "- adjacent_only_seo_rule: Do not claim SEO-team work, crawlability optimization, schema placement, crawl budget, canonicalization, internal-linking patterns, technical SEO diagnosis, search visibility familiarity, or marketplace-style SEO implementation.",
+  ];
 }
 
 function buildRoleGuidance(args: {
@@ -338,6 +376,7 @@ export function buildStructuredCoverLetterComposerPrompt(args: {
   jobTitle: string;
   jobDescription: string;
   generationControlsBlock?: string;
+  companyValuesPack?: CompanyValuesPack;
 }): string {
   const stylePack = COMPOSER_STYLE_PACKS[args.contentPlan.voice_preset];
   const examples = COMPOSER_EXAMPLES[args.contentPlan.language];
@@ -364,11 +403,17 @@ export function buildStructuredCoverLetterComposerPrompt(args: {
     "Keep the body natural, concrete, and recruiter-credible.",
     "Prefer simple transitions and grounded detail over stock application formulas or slogan-like filler.",
     "Keep paragraphs compact at 1 to 3 sentences each.",
+    "Evidence chain for each paragraph: name the job priority, use only the paragraph's source-backed candidate fact or allowed theme, then state why that evidence matters for the role.",
+    "If a required job keyword is not supported by the allowed facts or themes, frame it as a gap, omission, client need, or collaboration boundary; never claim it as candidate experience.",
+    "Do not praise the company mission, culture, values, market, or project as the main argument.",
     "",
     `Tone direction: ${stylePack.tone}`,
     `Style traits: ${stylePack.guidance.join(" | ")}`,
     `Avoid cliche bridge language such as: ${stylePack.negative.join(" | ")}`,
     args.generationControlsBlock,
+    args.companyValuesPack
+      ? formatCompanyValuesPromptBlock(args.companyValuesPack)
+      : undefined,
     "Acceptable phrasing examples:",
     ...examples.acceptable.map((example) => `- ${example}`),
     "Unacceptable phrasing examples:",
@@ -381,9 +426,16 @@ export function buildStructuredCoverLetterComposerPrompt(args: {
     ...buildGlobalProgressionBrief(args),
     ...(args.contentPlan.no_context_mode
       ? [
+          "- no_context_rule: No-context mode must be motivation and work-surface only. Do not claim traits, habits, abilities, skills, background, experience, past work, group-project history, customer-facing history, or personal work habits.",
+          "- no_context_rule: do not mention my background, my experience, my professional background, in past experiences, I’ve worked, skills I’ve developed, I’ve taken initiative, I’ve always prioritized, my ability, my habit, or any implied prior work history.",
+          "- no_context_rule: do not claim traits, habits, work style, strengths, or abilities such as my attention to detail, my methodical approach, how I approach work, how I approach new responsibilities, my approach, my work style, my strengths, what I value, what I prioritize, comfort with procedures, or confidence in adapting.",
+          "- no_context_rule: do not say I do not have direct experience; simply avoid experience claims.",
           "- no_context_rule: you do not have supported candidate evidence. Use only grounded role understanding and concrete work surfaces from the job description such as recurring work, workflow, operating context, coordination, communication, or accuracy where the role calls for it.",
           "- no_context_rule: do not invent prior roles, projects, metrics, achievements, or employer history.",
         ]
+      : []),
+    ...(isUnsupportedTechnicalSeoMove(args)
+      ? buildAdjacentOnlySeoComposerLines()
       : []),
     ...(unsupportedJobKeywords.length > 0
       ? [
@@ -432,6 +484,7 @@ export function buildStructuredCoverLetterComposerRetryPrompt(args: {
   jobDescription: string;
   failureReason: string;
   generationControlsBlock?: string;
+  companyValuesPack?: CompanyValuesPack;
 }): string {
   return [
     buildStructuredCoverLetterComposerPrompt({
@@ -440,6 +493,7 @@ export function buildStructuredCoverLetterComposerRetryPrompt(args: {
       jobTitle: args.jobTitle,
       jobDescription: args.jobDescription,
       generationControlsBlock: args.generationControlsBlock,
+      companyValuesPack: args.companyValuesPack,
     }),
     "",
     "Revision required:",

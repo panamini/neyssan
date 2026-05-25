@@ -4,6 +4,7 @@ import {
   buildStructuredCoverLetterComposerPrompt,
   buildStructuredCoverLetterComposerRetryPrompt,
 } from "../proposalBodyComposer";
+import { analyzeCompanyValues } from "../companyValues";
 import type { StructuredCoverLetterContentPlan } from "../proposalContentPlan";
 import type { ProposalPlannerResult } from "../proposalPlanner";
 
@@ -120,6 +121,26 @@ describe("structured body composer prompt", () => {
     );
   });
 
+  it("passes company values to the composer without making them lead evidence", () => {
+    const prompt = buildStructuredCoverLetterComposerPrompt({
+      plannerResult: directPlannerResult,
+      contentPlan: directContentPlan,
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Our values are craft and customer care. Lead React and TypeScript development.",
+      companyValuesPack: analyzeCompanyValues(
+        "Our values are craft and customer care. Lead React and TypeScript development.",
+      ),
+    });
+
+    expect(prompt).toContain("Company values audit context");
+    expect(prompt).toContain("craft");
+    expect(prompt).toContain(
+      "Values must not outrank stronger candidate proof",
+    );
+    expect(prompt).not.toContain("I share your values");
+  });
+
   it("adds anti-convergence guidance when multiple supported facts exist", () => {
     const prompt = buildStructuredCoverLetterComposerPrompt({
       plannerResult: directPlannerResult,
@@ -149,6 +170,9 @@ describe("structured body composer prompt", () => {
     expect(prompt).toContain(
       "The opening may begin from role context, supported scope, or concrete work context.",
     );
+    expect(prompt).toContain(
+      "No-context mode must be motivation and work-surface only. Do not claim traits, habits, abilities, skills, background, experience, past work, group-project history, customer-facing history, or personal work habits.",
+    );
   });
 
   it("uses factual distant-role guidance instead of abstract transfer-policy wording", () => {
@@ -168,6 +192,58 @@ describe("structured body composer prompt", () => {
     );
     expect(prompt).not.toContain(
       "Prefer honest partial relevance over abstract transfer claims.",
+    );
+    expect(prompt).toContain(
+      "Evidence chain for each paragraph: name the job priority, use only the paragraph's source-backed candidate fact or allowed theme, then state why that evidence matters for the role.",
+    );
+    expect(prompt).toContain(
+      "If a required job keyword is not supported by the allowed facts or themes, frame it as a gap, omission, client need, or collaboration boundary; never claim it as candidate experience.",
+    );
+    expect(prompt).toContain(
+      "Do not praise the company mission, culture, values, market, or project as the main argument.",
+    );
+  });
+
+  it("adds adjacent-only technical SEO boundaries for weak marketplace SEO matches", () => {
+    const prompt = buildStructuredCoverLetterComposerPrompt({
+      plannerResult: {
+        ...distantPlannerResult,
+        allowed_concrete_facts: [
+          "Frontend-focused freelance designer-developer focused on landing pages and conversion flows.",
+          "Frontend",
+          "Landing Pages",
+          "Conversion Optimization",
+        ],
+        allowed_transfer_themes: [
+          "frontend execution",
+          "conversion-aware page improvements",
+        ],
+        disallowed_claims: [
+          "worked closely with SEO teams",
+          "optimized crawlability",
+          "schema placement",
+          "crawl budget",
+          "canonicalization",
+          "internal linking patterns",
+          "technical SEO diagnosis",
+          "search visibility familiarity",
+          "marketplace-style SEO implementation",
+        ],
+      },
+      contentPlan: directContentPlan,
+      jobTitle: "Technical SEO Overhaul for Marketplace",
+      jobDescription:
+        "We need indexing, schema, crawl diagnostics, and internal linking recommendations for a marketplace.",
+    });
+
+    expect(prompt).toContain(
+      "adjacent_only_seo_rule: the supported candidate evidence is frontend/conversion only, not technical SEO.",
+    );
+    expect(prompt).toContain(
+      "Indexing, schema strategy, crawl diagnostics, and internal-linking recommendations should be led by a technical SEO specialist.",
+    );
+    expect(prompt).toContain(
+      "Do not claim SEO-team work, crawlability optimization, schema placement, crawl budget, canonicalization, internal-linking patterns, technical SEO diagnosis, search visibility familiarity, or marketplace-style SEO implementation.",
     );
   });
 
