@@ -125,15 +125,23 @@ export const LOCALE_REGISTRY = {
 } as const satisfies Record<string, LocaleMeta>;
 
 export type LocaleId = keyof typeof LOCALE_REGISTRY;
-export type UiLocale = Extract<LocaleId, "en" | "fr" | "es">;
+export type UiLocale = Extract<
+  {
+    [Locale in LocaleId]: (typeof LOCALE_REGISTRY)[Locale]["ui"] extends true
+      ? Locale
+      : never;
+  }[LocaleId],
+  LocaleId
+>;
+export type ProductionUiLocale = Extract<UiLocale, "en" | "fr" | "es">;
 export type UiLocalePreference = "auto" | UiLocale;
 export type DocumentLanguage = LocaleId;
 export type MarketingLocale = Extract<LocaleId, "en" | "fr" | "es" | "de">;
 
-export const DEFAULT_UI_LOCALE: UiLocale = "en";
+export const DEFAULT_UI_LOCALE: ProductionUiLocale = "en";
 
 export const ENABLED_UI_LOCALES = Object.keys(LOCALE_REGISTRY).filter(
-  (locale): locale is UiLocale =>
+  (locale): locale is ProductionUiLocale =>
     LOCALE_REGISTRY[locale as LocaleId].ui &&
     LOCALE_REGISTRY[locale as LocaleId].qaStatus === "production",
 );
@@ -159,23 +167,21 @@ export function normalizeLocaleId(value: string | null | undefined): LocaleId | 
 
 export function normalizeUiLocale(
   value?: string | readonly string[] | null,
-): UiLocale {
-  const candidates =
+): ProductionUiLocale {
+  const candidate =
     Array.isArray(value) || (value && typeof value !== "string")
-      ? Array.from(value)
-      : [value ?? ""];
+      ? Array.from(value).find((entry) => String(entry ?? "").trim())
+      : value;
+  const normalized = normalizeLocaleId(candidate);
 
-  for (const candidate of candidates) {
-    const normalized = normalizeLocaleId(candidate);
-    if (normalized && ENABLED_UI_LOCALES.includes(normalized as UiLocale)) {
-      return normalized as UiLocale;
-    }
+  if (normalized && ENABLED_UI_LOCALES.includes(normalized as ProductionUiLocale)) {
+    return normalized as ProductionUiLocale;
   }
 
   return DEFAULT_UI_LOCALE;
 }
 
-export function detectBrowserUiLocale(): UiLocale {
+export function detectBrowserUiLocale(): ProductionUiLocale {
   if (typeof navigator === "undefined") {
     return DEFAULT_UI_LOCALE;
   }
@@ -193,8 +199,10 @@ export function getLocaleDirection(locale: string | null | undefined): "ltr" | "
   return normalized ? LOCALE_REGISTRY[normalized].dir : "ltr";
 }
 
-export function resolveUiLocale(preference: UiLocalePreference): UiLocale {
-  return preference === "auto" ? detectBrowserUiLocale() : preference;
+export function resolveUiLocale(
+  preference: UiLocalePreference,
+): ProductionUiLocale {
+  return preference === "auto" ? detectBrowserUiLocale() : normalizeUiLocale(preference);
 }
 
 export function syncDocumentLocale(locale: string | null | undefined): void {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_DOCUMENT_LANGUAGE,
+  DOCUMENT_LANGUAGE_OPTIONS,
   buildDocumentLanguageContext,
   normalizeDocumentLanguage,
   resolveGeneratedLanguage,
@@ -44,5 +45,14 @@ describe("document language scaffold", () => {
     expect(normalizeDocumentLanguage("pt-BR")).toBe("pt");
     expect(normalizeDocumentLanguage("ar")).toBe("ar");
     expect(normalizeDocumentLanguage("ga")).toBe(DEFAULT_DOCUMENT_LANGUAGE);
+  });
+
+  it("exposes prepared document language options separately from UI languages", () => {
+    const optionIds = DOCUMENT_LANGUAGE_OPTIONS.map((option) => option.id);
+
+    expect(optionIds).toEqual(
+      expect.arrayContaining(["auto", "en", "fr", "es", "de", "ar"]),
+    );
+    expect(optionIds).not.toContain("ga");
   });
 });
