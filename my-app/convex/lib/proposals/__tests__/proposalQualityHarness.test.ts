@@ -194,13 +194,56 @@ describe("proposal quality harness", () => {
     });
 
     expect(baseline.truthPlan).toBeNull();
+    expect(baseline.plannedWritingMode).toBeNull();
+    expect(baseline.plannedBlockedClaimsCount).toBeNull();
+    expect(baseline.plannedMissingCriticalRequirementsCount).toBeNull();
+    expect(baseline.truthPlanValidationWarnings).toEqual([]);
     expect(semanticShadow.truthPlan?.planVersion).toBe("proposal_truth_plan_v1");
     expect(semanticShadow.truthPlan?.writingMode).toBe("normal");
-    expect(semanticShadow.criteriaAudit).not.toBeNull();
-    expect(semanticShadow.recruiterCaseScore).toBe(baseline.recruiterCaseScore);
-    expect(semanticShadow.topCandidateFactsUsed).toEqual(
-      baseline.topCandidateFactsUsed,
+    expect(semanticShadow.plannedWritingMode).toBe("normal");
+    expect(semanticShadow.plannedBlockedClaimsCount).toBe(
+      semanticShadow.truthPlan?.blockedClaims.length,
     );
+    expect(semanticShadow.plannedMissingCriticalRequirementsCount).toBe(
+      semanticShadow.truthPlan?.missingCriticalRequirements.length,
+    );
+    expect(semanticShadow.truthPlanValidationWarnings).toEqual([]);
+    expect(semanticShadow.criteriaAudit).not.toBeNull();
+    expect({
+      unsupportedClaims: semanticShadow.unsupportedClaims,
+      bannedCompanyPraise: semanticShadow.bannedCompanyPraise,
+      missingCriticalRequirements: semanticShadow.missingCriticalRequirements,
+      supportedKeywordCoverage: semanticShadow.supportedKeywordCoverage,
+      advisoryKeywordLeakage: semanticShadow.advisoryKeywordLeakage,
+      credentialInflation: semanticShadow.credentialInflation,
+      noContextViolation: semanticShadow.noContextViolation,
+      recruiterCaseScore: semanticShadow.recruiterCaseScore,
+      selectorReadiness: semanticShadow.selectorReadiness,
+      worseThanBaseline: semanticShadow.worseThanBaseline,
+      topCandidateFactsUsed: semanticShadow.topCandidateFactsUsed,
+      unsupportedOrWeaklySupportedCriteria:
+        semanticShadow.unsupportedOrWeaklySupportedCriteria,
+      companyValuesLanguageUsed: semanticShadow.companyValuesLanguageUsed,
+      inventedClaimFree: semanticShadow.inventedClaimFree,
+      paragraphGrounding: semanticShadow.paragraphGrounding,
+    }).toEqual({
+      unsupportedClaims: baseline.unsupportedClaims,
+      bannedCompanyPraise: baseline.bannedCompanyPraise,
+      missingCriticalRequirements: baseline.missingCriticalRequirements,
+      supportedKeywordCoverage: baseline.supportedKeywordCoverage,
+      advisoryKeywordLeakage: baseline.advisoryKeywordLeakage,
+      credentialInflation: baseline.credentialInflation,
+      noContextViolation: baseline.noContextViolation,
+      recruiterCaseScore: baseline.recruiterCaseScore,
+      selectorReadiness: baseline.selectorReadiness,
+      worseThanBaseline: baseline.worseThanBaseline,
+      topCandidateFactsUsed: baseline.topCandidateFactsUsed,
+      unsupportedOrWeaklySupportedCriteria:
+        baseline.unsupportedOrWeaklySupportedCriteria,
+      companyValuesLanguageUsed: baseline.companyValuesLanguageUsed,
+      inventedClaimFree: baseline.inventedClaimFree,
+      paragraphGrounding: baseline.paragraphGrounding,
+    });
     expect(fixture!.letters.criteria_audit_shadow).toBe(fixture!.letters.baseline);
   });
 

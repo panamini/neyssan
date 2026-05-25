@@ -168,6 +168,19 @@ describe("proposal quality benchmark adapter", () => {
         (score) => score.status !== "ok" || score.truthPlan?.planVersion === "proposal_truth_plan_v1",
       ),
     ).toBe(true);
+    expect(
+      report.scores.every((score) => {
+        if (score.status !== "ok") return true;
+        if (!score.truthPlan) return false;
+        return (
+          score.plannedWritingMode === score.truthPlan.writingMode &&
+          score.plannedBlockedClaimsCount === score.truthPlan.blockedClaims.length &&
+          score.plannedMissingCriticalRequirementsCount ===
+            score.truthPlan.missingCriticalRequirements.length &&
+          Array.isArray(score.truthPlanValidationWarnings)
+        );
+      }),
+    ).toBe(true);
     expect(report.manualReviewShortlist).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -226,6 +239,8 @@ describe("proposal quality benchmark adapter", () => {
           writingMode: "normal",
           writerPolicy: "normal_writer",
         }),
+        plannedWritingMode: "normal",
+        truthPlanValidationWarnings: [],
       }),
     );
   });
@@ -295,6 +310,8 @@ describe("proposal quality benchmark adapter", () => {
           writingMode: "no_context_safe",
           writerPolicy: "bypass_writer_use_fallback",
         }),
+        plannedWritingMode: "no_context_safe",
+        truthPlanValidationWarnings: [],
       }),
     );
   });
@@ -369,6 +386,8 @@ describe("proposal quality benchmark adapter", () => {
         truthPlan: expect.objectContaining({
           writingMode: "adjacent_only",
         }),
+        plannedWritingMode: "adjacent_only",
+        truthPlanValidationWarnings: [],
       }),
     );
     expect(score?.status === "ok" ? score.truthPlan?.missingCriticalRequirements : []).toEqual(
