@@ -117,6 +117,24 @@ type ProposalQualityFixtureInput = Omit<
     >
   >;
 
+export type ProposalTruthPlanOutputViolation = {
+  type:
+    | "blocked_claim_used"
+    | "missing_requirement_claimed"
+    | "no_context_personal_claim"
+    | "adjacent_mode_overclaim"
+    | "direct_claim_without_fact"
+    | "unsupported_leadership_claim";
+  claim: string;
+  evidence?: string;
+  severity: "low" | "medium" | "high";
+};
+
+export type ProposalTruthPlanOutputCheck = {
+  status: "not_run" | "pass" | "warn" | "fail";
+  violations: ProposalTruthPlanOutputViolation[];
+};
+
 export type ProposalEvalResult = {
   fixtureId: string;
   variant: ProposalQualityHarnessVariant;
@@ -152,6 +170,7 @@ export type ProposalEvalResult = {
   plannedBlockedClaimsCount: number | null;
   plannedMissingCriticalRequirementsCount: number | null;
   truthPlanValidationWarnings: ProposalTruthPlanValidationIssue[];
+  truthPlanOutputCheck: ProposalTruthPlanOutputCheck;
   safetyReason?: string;
 };
 
@@ -164,7 +183,7 @@ const NO_CONTEXT_CLAIM_PATTERN =
 const VALUE_LANGUAGE_PATTERN =
   /\b(?:mission|values?|principles?|culture|resonates|admire|alignment|share)\b/i;
 const GAP_OR_SAFETY_PATTERN =
-  /\b(?:gap|not source-backed|not backed|rather than claim|rather than inflate|flag rather than claim|should remain a gap|should be led by|technical seo specialist|not technical seo|outside my expertise|outside my core skill|not the person to lead|(?:have not|haven['’]t) directly handled)\b/i;
+  /\b(?:gap|not source-backed|not backed|rather than claim|rather than claims|rather than inflate|flag rather than claim|should remain a gap|should stay (?:as )?(?:a topic|an area|areas)|topic to discuss|areas to discuss|should be led by|technical seo specialist|not technical seo|outside my expertise|outside my core skill|not the person to lead|(?:have not|haven['’]t) directly handled)\b/i;
 const MATCH_STOPWORDS = new Set([
   "about",
   "after",
@@ -320,6 +339,198 @@ function buildTruthPlanForFixture(
     expectedCriticalRequirements: fixture.topJobPriorities,
     expectedBlockedClaims: fixture.blockedClaims,
   });
+}
+
+function truthPlanOutputCheckNotRun(): ProposalTruthPlanOutputCheck {
+  return { status: "not_run", violations: [] };
+}
+
+function truthPlanOutputCheckStatus(
+  violations: ProposalTruthPlanOutputViolation[],
+): ProposalTruthPlanOutputCheck["status"] {
+  if (violations.length === 0) return "pass";
+  return violations.some((violation) => violation.severity === "high")
+    ? "fail"
+    : "warn";
+}
+
+function sentenceClaimedAsCandidateCapability(sentence: string): boolean {
+  if (
+    /\b(?:i(?:'m| am|’m)\s+interested|i(?:'d| would)\s+(?:welcome|value)\s+the\s+opportunity|willing(?:ness)?\s+to\s+discuss|role\s+(?:centers|focuses|involves)|posting\s+(?:centers|focuses|involves))\b/i.test(
+      sentence,
+    )
+  ) {
+    return false;
+  }
+  return CLAIM_CUE_PATTERN.test(sentence) && !GAP_OR_SAFETY_PATTERN.test(sentence);
+}
+
+function sentenceMatchesPlanFact(
+  sentence: string,
+  truthPlan: ProposalTruthPlanV1,
+): boolean {
+  return truthPlan.candidateFacts.some((fact) =>
+    includesMeaningfulEvidence(sentence, fact.fact),
+  );
+}
+
+function addTruthPlanOutputViolation(
+  violations: ProposalTruthPlanOutputViolation[],
+  violation: ProposalTruthPlanOutputViolation,
+): void {
+  const key = `${violation.type}:${normalize(violation.claim)}:${normalize(
+    violation.evidence ?? "",
+  )}`;
+  if (
+    violations.some(
+      (entry) =>
+        `${entry.type}:${normalize(entry.claim)}:${normalize(
+          entry.evidence ?? "",
+        )}` === key,
+    )
+  ) {
+    return;
+  }
+  violations.push(violation);
+}
+
+function analyzeTruthPlanOutput(args: {
+  truthPlan: ProposalTruthPlanV1 | null;
+  letter: string;
+}): ProposalTruthPlanOutputCheck {
+  const truthPlan = args.truthPlan;
+  if (!truthPlan) return truthPlanOutputCheckNotRun();
+
+  const violations: ProposalTruthPlanOutputViolation[] = [];
+  const sentences = splitSentences(args.letter);
+
+  for (const blockedClaim of truthPlan.blockedClaims) {
+    for (const sentence of sentences) {
+      if (
+        includesMeaningfulEvidence(sentence, blockedClaim.claim) &&
+        !GAP_OR_SAFETY_PATTERN.test(sentence)
+      ) {
+        addTruthPlanOutputViolation(violations, {
+          type:
+            blockedClaim.reason === "unsupported_leadership"
+              ? "unsupported_leadership_claim"
+              : "blocked_claim_used",
+          claim: blockedClaim.claim,
+          evidence: sentence,
+          severity:
+            blockedClaim.reason === "unsupported_leadership" ||
+            blockedClaim.reason === "no_context_personal_claim"
+              ? "high"
+              : "medium",
+        });
+      }
+    }
+  }
+
+  for (const missingRequirement of truthPlan.missingCriticalRequirements) {
+    for (const sentence of sentences) {
+      if (
+        includesMeaningfulEvidence(sentence, missingRequirement.requirement) &&
+        sentenceClaimedAsCandidateCapability(sentence)
+      ) {
+        addTruthPlanOutputViolation(violations, {
+          type: "missing_requirement_claimed",
+          claim: missingRequirement.requirement,
+          evidence: sentence,
+          severity: "high",
+        });
+      }
+    }
+  }
+
+  if (truthPlan.writingMode === "no_context_safe") {
+    for (const sentence of sentences) {
+      if (NO_CONTEXT_CLAIM_PATTERN.test(sentence)) {
+        addTruthPlanOutputViolation(violations, {
+          type: "no_context_personal_claim",
+          claim: "no-context personal claim",
+          evidence: sentence,
+          severity: "high",
+        });
+      }
+    }
+  }
+
+  if (truthPlan.writingMode === "adjacent_only") {
+    for (const sentence of sentences) {
+      if (!sentenceClaimedAsCandidateCapability(sentence)) continue;
+      const usesMissingRequirement = truthPlan.missingCriticalRequirements.some(
+        (requirement) =>
+          includesMeaningfulEvidence(sentence, requirement.requirement),
+      );
+      const usesBlockedClaim = truthPlan.blockedClaims.some((claim) =>
+        includesMeaningfulEvidence(sentence, claim.claim),
+      );
+      if (usesMissingRequirement || usesBlockedClaim) {
+        addTruthPlanOutputViolation(violations, {
+          type: "adjacent_mode_overclaim",
+          claim: usesMissingRequirement
+            ? "adjacent missing requirement claimed as capability"
+            : "adjacent blocked claim used as capability",
+          evidence: sentence,
+          severity: "high",
+        });
+      }
+    }
+  }
+
+  const leadershipUnsupported =
+    truthPlan.blockedClaims.some(
+      (claim) => claim.reason === "unsupported_leadership",
+    ) ||
+    truthPlan.missingCriticalRequirements.some((requirement) =>
+      /\b(?:mentor|people[-\s]?management|manage junior|manage people)\b/i.test(
+        requirement.requirement,
+      ),
+    );
+  if (leadershipUnsupported) {
+    for (const sentence of sentences) {
+      if (
+        /\b(?:mentor(?:ing)?|people[-\s]?management|manage(?:d|s)?\s+(?:people|junior)|managing\s+(?:people|junior))\b/i.test(
+          sentence,
+        ) &&
+        sentenceClaimedAsCandidateCapability(sentence)
+      ) {
+        addTruthPlanOutputViolation(violations, {
+          type: "unsupported_leadership_claim",
+          claim: "mentoring or people-management experience",
+          evidence: sentence,
+          severity: "high",
+        });
+      }
+    }
+  }
+
+  for (const sentence of sentences) {
+    if (!sentenceClaimedAsCandidateCapability(sentence)) continue;
+    if (sentenceMatchesPlanFact(sentence, truthPlan)) continue;
+    if (
+      truthPlan.allowedClaims.some(
+        (claim) =>
+          claim.claimType === "candidate_fact" &&
+          claim.factIds.length > 0 &&
+          includesMeaningfulEvidence(sentence, claim.claim),
+      )
+    ) {
+      continue;
+    }
+    addTruthPlanOutputViolation(violations, {
+      type: "direct_claim_without_fact",
+      claim: "candidate capability not matched to truth-plan fact",
+      evidence: sentence,
+      severity: truthPlan.writingMode === "normal" ? "medium" : "high",
+    });
+  }
+
+  return {
+    status: truthPlanOutputCheckStatus(violations),
+    violations,
+  };
 }
 
 function selectFactsUsed(
@@ -503,6 +714,10 @@ function evaluateFixtureVariant(args: {
   const truthPlanValidationWarnings = truthPlan
     ? validateProposalTruthPlanV1(truthPlan)
     : [];
+  const truthPlanOutputCheck = analyzeTruthPlanOutput({
+    truthPlan,
+    letter,
+  });
   const usedFacts = selectFactsUsed(fixture, letter);
   const missingCriticalRequirements = findMissingRequirements(fixture, letter, usedFacts);
   const unsupportedClaims = countUnsupportedClaims(fixture, letter);
@@ -578,6 +793,7 @@ function evaluateFixtureVariant(args: {
     plannedMissingCriticalRequirementsCount:
       truthPlan?.missingCriticalRequirements.length ?? null,
     truthPlanValidationWarnings,
+    truthPlanOutputCheck,
     safetyReason:
       coverage < (args.baseline?.supportedKeywordCoverage ?? 0)
         ? "lower keyword coverage only allowed when avoiding unsupported claims"

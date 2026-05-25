@@ -198,6 +198,10 @@ describe("proposal quality harness", () => {
     expect(baseline.plannedBlockedClaimsCount).toBeNull();
     expect(baseline.plannedMissingCriticalRequirementsCount).toBeNull();
     expect(baseline.truthPlanValidationWarnings).toEqual([]);
+    expect(baseline.truthPlanOutputCheck).toEqual({
+      status: "not_run",
+      violations: [],
+    });
     expect(semanticShadow.truthPlan?.planVersion).toBe("proposal_truth_plan_v1");
     expect(semanticShadow.truthPlan?.writingMode).toBe("normal");
     expect(semanticShadow.plannedWritingMode).toBe("normal");
@@ -208,6 +212,8 @@ describe("proposal quality harness", () => {
       semanticShadow.truthPlan?.missingCriticalRequirements.length,
     );
     expect(semanticShadow.truthPlanValidationWarnings).toEqual([]);
+    expect(semanticShadow.truthPlanOutputCheck.status).toBe("pass");
+    expect(semanticShadow.truthPlanOutputCheck.violations).toEqual([]);
     expect(semanticShadow.criteriaAudit).not.toBeNull();
     expect({
       unsupportedClaims: semanticShadow.unsupportedClaims,
@@ -320,6 +326,275 @@ describe("proposal quality harness", () => {
       ]),
     );
     expect(assertProposalQualityHardGates([result])).toEqual([]);
+  });
+
+  it("flags weak SEO ownership claims while allowing adjacent frontend support", () => {
+    const fixture = {
+      id: "freelance-weak-seo-output-check",
+      label: "Weak SEO output check",
+      jobTitle: "Technical SEO Overhaul for Marketplace",
+      jobDescription:
+        "Audit and improve technical SEO for a marketplace site, including indexing, schema, crawl diagnostics, and internal linking recommendations.",
+      contextMode: "minimal" as const,
+      candidateFacts: [
+        {
+          id: "f1",
+          text: "Frontend",
+          source: "profile" as const,
+          mapsTo: ["frontend execution"],
+          priority: "tool" as const,
+        },
+        {
+          id: "f2",
+          text: "Landing Pages",
+          source: "profile" as const,
+          mapsTo: ["landing-page structure"],
+          priority: "workflow" as const,
+        },
+        {
+          id: "f3",
+          text: "Conversion Optimization",
+          source: "profile" as const,
+          mapsTo: ["conversion-aware page improvements"],
+          priority: "workflow" as const,
+        },
+      ],
+      expectedCriticalRequirements: ["indexing fixes", "schema strategy", "crawl diagnostics"],
+      expectedSupportedKeywords: ["Frontend", "Landing Pages"],
+      expectedBlockedKeywords: ["indexing fixes", "schema strategy", "crawl diagnostics"],
+      expectedForbiddenPhrases: [],
+      safeRoleTransitions: ["frontend execution once a specialist defines the audit"],
+      letters: {
+        baseline:
+          "I can handle indexing fixes, schema implementation, and crawl diagnostics. I can also support frontend execution once a specialist defines the audit.",
+        criteria_audit_shadow:
+          "I can handle indexing fixes, schema implementation, and crawl diagnostics. I can also support frontend execution once a specialist defines the audit.",
+      },
+    };
+
+    const [result] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [fixture],
+    });
+
+    expect(result.truthPlanOutputCheck.status).toBe("fail");
+    expect(result.truthPlanOutputCheck.violations.map((violation) => violation.type)).toEqual(
+      expect.arrayContaining([
+        "blocked_claim_used",
+        "missing_requirement_claimed",
+        "adjacent_mode_overclaim",
+      ]),
+    );
+    expect(
+      result.truthPlanOutputCheck.violations.some((violation) =>
+        /frontend execution/i.test(violation.claim),
+      ),
+    ).toBe(false);
+  });
+
+  it("flags no-context personal claims while allowing safe role interest", () => {
+    const safeFixture = {
+      id: "application-no-context-support-safe-output-check",
+      label: "No-context safe output check",
+      jobTitle: "Sales Assistant",
+      jobDescription:
+        "Coordinate follow-ups, keep records organized, and communicate professionally with prospects and customers.",
+      contextMode: "none" as const,
+      candidateFacts: [],
+      expectedCriticalRequirements: ["follow-up coordination", "organized records"],
+      expectedSupportedKeywords: [],
+      expectedBlockedKeywords: [],
+      expectedForbiddenPhrases: [],
+      safeRoleTransitions: ["follow-ups", "records", "professional communication"],
+      letters: {
+        baseline:
+          "I'm interested in the Sales Assistant role. The role centers on follow-up, records, and professional communication. I would welcome the opportunity to discuss the team process.",
+        criteria_audit_shadow:
+          "I'm interested in the Sales Assistant role. The role centers on follow-up, records, and professional communication. I would welcome the opportunity to discuss the team process.",
+      },
+    };
+    const unsafeFixture = {
+      ...safeFixture,
+      id: "application-no-context-support-unsafe-output-check",
+      letters: {
+        baseline:
+          "I'm interested in the Sales Assistant role because it matches how I approach new responsibilities and my attention to detail.",
+        criteria_audit_shadow:
+          "I'm interested in the Sales Assistant role because it matches how I approach new responsibilities and my attention to detail.",
+      },
+    };
+
+    const [safeResult, unsafeResult] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [safeFixture, unsafeFixture],
+    });
+
+    expect(safeResult.truthPlanOutputCheck).toEqual({
+      status: "pass",
+      violations: [],
+    });
+    expect(unsafeResult.truthPlanOutputCheck.status).toBe("fail");
+    expect(unsafeResult.truthPlanOutputCheck.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "no_context_personal_claim",
+        }),
+      ]),
+    );
+  });
+
+  it("allows backed frontend claims and flags unsupported mentoring claims", () => {
+    const backedFixture = {
+      id: "employment-strong-frontend-backed-output-check",
+      label: "Strong frontend backed output check",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Lead React and TypeScript development, build reusable UI systems, improve performance, and mentor junior engineers.",
+      contextMode: "rich" as const,
+      candidateFacts: [
+        {
+          id: "f1",
+          text: "React",
+          source: "profile" as const,
+          mapsTo: ["React development"],
+          priority: "tool" as const,
+        },
+        {
+          id: "f2",
+          text: "TypeScript",
+          source: "profile" as const,
+          mapsTo: ["TypeScript development"],
+          priority: "tool" as const,
+        },
+        {
+          id: "f3",
+          text: "Led a design system migration used across 4 product squads.",
+          source: "profile" as const,
+          mapsTo: ["reusable UI systems"],
+          priority: "responsibility" as const,
+        },
+        {
+          id: "f4",
+          text: "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+          source: "profile" as const,
+          mapsTo: ["performance optimization"],
+          priority: "achievement" as const,
+        },
+      ],
+      expectedCriticalRequirements: ["React development", "TypeScript development", "reusable UI systems", "performance optimization"],
+      expectedSupportedKeywords: ["React", "TypeScript", "design system", "28 percent"],
+      expectedBlockedKeywords: [],
+      expectedForbiddenPhrases: [],
+      safeRoleTransitions: ["customer-facing performance"],
+      letters: {
+        baseline:
+          "My React and TypeScript work maps to reusable UI systems. I led a design system migration used across 4 product squads and reduced page load time by 28 percent through bundle and rendering optimizations.",
+        criteria_audit_shadow:
+          "My React and TypeScript work maps to reusable UI systems. I led a design system migration used across 4 product squads and reduced page load time by 28 percent through bundle and rendering optimizations.",
+      },
+    };
+    const mentoringFixture = {
+      ...backedFixture,
+      id: "employment-strong-frontend-mentoring-output-check",
+      letters: {
+        baseline:
+          "My React and TypeScript work maps to reusable UI systems. I also mentor junior engineers and manage people development.",
+        criteria_audit_shadow:
+          "My React and TypeScript work maps to reusable UI systems. I also mentor junior engineers and manage people development.",
+      },
+    };
+
+    const [backedResult, mentoringResult] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [backedFixture, mentoringFixture],
+    });
+
+    expect(backedResult.truthPlanOutputCheck).toEqual({
+      status: "pass",
+      violations: [],
+    });
+    expect(mentoringResult.truthPlanOutputCheck.status).toBe("fail");
+    expect(mentoringResult.truthPlanOutputCheck.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "unsupported_leadership_claim",
+          claim: "mentoring or people-management experience",
+        }),
+      ]),
+    );
+  });
+
+  it("flags adjacent admin vendor ownership while allowing coordination and documentation", () => {
+    const allowedFixture = {
+      id: "application-adjacent-admin-allowed-output-check",
+      label: "Adjacent admin allowed output check",
+      jobTitle: "Administrative Coordinator",
+      jobDescription:
+        "Manage schedules, documentation, vendor communication, procurement, and general office support.",
+      contextMode: "minimal" as const,
+      candidateFacts: [
+        {
+          id: "f1",
+          text: "Coordination",
+          source: "profile" as const,
+          mapsTo: ["schedule management"],
+          priority: "workflow" as const,
+        },
+        {
+          id: "f2",
+          text: "Documentation",
+          source: "profile" as const,
+          mapsTo: ["documentation"],
+          priority: "workflow" as const,
+        },
+        {
+          id: "f3",
+          text: "Stakeholder Communication",
+          source: "profile" as const,
+          mapsTo: ["communication"],
+          priority: "workflow" as const,
+        },
+      ],
+      expectedCriticalRequirements: ["schedule management", "documentation", "vendor procurement ownership"],
+      expectedSupportedKeywords: ["Coordination", "Documentation"],
+      expectedBlockedKeywords: ["vendor procurement ownership"],
+      expectedForbiddenPhrases: [],
+      safeRoleTransitions: ["coordination", "documentation"],
+      letters: {
+        baseline:
+          "My coordination, documentation, and stakeholder communication experience are the relevant areas here. Vendor procurement ownership should stay as a topic to discuss.",
+        criteria_audit_shadow:
+          "My coordination, documentation, and stakeholder communication experience are the relevant areas here. Vendor procurement ownership should stay as a topic to discuss.",
+      },
+    };
+    const vendorFixture = {
+      ...allowedFixture,
+      id: "application-adjacent-admin-vendor-output-check",
+      letters: {
+        baseline:
+          "My coordination and documentation experience are relevant. I can own vendor procurement and office management.",
+        criteria_audit_shadow:
+          "My coordination and documentation experience are relevant. I can own vendor procurement and office management.",
+      },
+    };
+
+    const [allowedResult, vendorResult] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [allowedFixture, vendorFixture],
+    });
+
+    expect(allowedResult.truthPlanOutputCheck).toEqual({
+      status: "pass",
+      violations: [],
+    });
+    expect(vendorResult.truthPlanOutputCheck.status).toBe("fail");
+    expect(vendorResult.truthPlanOutputCheck.violations.map((violation) => violation.type)).toEqual(
+      expect.arrayContaining([
+        "blocked_claim_used",
+        "missing_requirement_claimed",
+        "adjacent_mode_overclaim",
+      ]),
+    );
   });
 
   it("catches negative-control bad letters with hard gates", () => {
