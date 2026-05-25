@@ -133,6 +133,7 @@ import {
   sanitizeProposalCompanyName,
 } from "../lib/proposal-source-summary";
 import {
+  buildProposalSourceDraftFromJob,
   resolveProposalWorkspaceSourceDraft,
   type ResolvedProposalWorkspaceSourceDraft,
 } from "../lib/proposal-job-context";
@@ -369,6 +370,10 @@ type ProposalDraftDrawerProps = {
   jobMeta: string | null;
   jobSummary: string | null;
   jobContextKind: "empty" | "saved" | "pasted";
+  stagedJobTitle?: string | null;
+  stagedJobMeta?: string | null;
+  stagedJobSummary?: string | null;
+  stagedCvTitle?: string | null;
   sourceCvTitle: string | null;
   proposalTypeLabel: string;
   proposalTypeOptions: Array<{
@@ -389,7 +394,10 @@ type ProposalDraftDrawerProps = {
   generateLabel: string;
   generateDisabled: boolean;
   generateState: string;
+  hasExistingDraft?: boolean;
+  askReviewReady?: boolean;
   onGenerateDraft: () => void;
+  onCancelStagedSource?: () => void;
   onOpenJobs: () => void;
   onOpenPasteJob?: () => void;
   onClearJobContext?: () => void;
@@ -950,6 +958,10 @@ export function ProposalDraftDrawer({
   jobMeta,
   jobSummary,
   jobContextKind,
+  stagedJobTitle,
+  stagedJobMeta,
+  stagedJobSummary,
+  stagedCvTitle,
   sourceCvTitle,
   proposalTypeLabel,
   proposalTypeOptions,
@@ -960,7 +972,10 @@ export function ProposalDraftDrawer({
   generateLabel,
   generateDisabled,
   generateState,
+  hasExistingDraft = false,
+  askReviewReady = false,
   onGenerateDraft,
+  onCancelStagedSource,
   onOpenJobs,
   onOpenPasteJob,
   onClearJobContext,
@@ -968,11 +983,28 @@ export function ProposalDraftDrawer({
   onClearCv,
 }: ProposalDraftDrawerProps): JSX.Element {
   const hasActiveJobContext = jobContextKind !== "empty";
-  const hasAttachedCv = Boolean(sourceCvTitle);
+  const stagedJobTitleValue = stagedJobTitle?.trim() || null;
+  const stagedJobMetaValue = stagedJobMeta || stagedJobSummary || null;
+  const stagedCvTitleValue = stagedCvTitle?.trim() || null;
+  const hasStagedSource = Boolean(stagedJobTitleValue || stagedCvTitleValue);
+  const shouldShowGenerateFooter =
+    !askReviewReady && (!hasExistingDraft || hasStagedSource);
+  const footerGenerateLabel =
+    hasExistingDraft && hasStagedSource ? "Regenerate" : generateLabel;
   const resolvedJobTitle =
     jobContextKind === "pasted"
       ? "Pasted job offer"
       : jobTitle || "Job loaded";
+  const displayedJobTitle = stagedJobTitleValue || resolvedJobTitle;
+  const displayedJobMeta =
+    stagedJobTitleValue
+      ? stagedJobMetaValue || "Staged. Letter unchanged."
+      : jobMeta || jobSummary;
+  const hasDisplayedJobContext = hasActiveJobContext || Boolean(stagedJobTitleValue);
+  const displayedCvTitle = stagedCvTitleValue || sourceCvTitle;
+  const hasDisplayedCv = Boolean(displayedCvTitle);
+  const stagedSourceMeta = "Staged. Letter unchanged.";
+  const canCancelStagedCv = Boolean(stagedCvTitleValue && onCancelStagedSource);
   const proposalTypeMenuSections = React.useMemo<MenuSection[]>(
     () => [
       {
@@ -1013,20 +1045,29 @@ export function ProposalDraftDrawer({
           <div className="forge-rail-drawer__section-title">
             <span>JOB</span>
           </div>
-          {hasActiveJobContext ? (
+          {hasDisplayedJobContext ? (
             <article className="forge-rail-drawer__draft-card">
               <button
                 type="button"
                 className="forge-rail-drawer__draft-card-main"
-                aria-label={`Change job: ${resolvedJobTitle}`}
+                aria-label={`Change job: ${displayedJobTitle}`}
                 onClick={onOpenJobs}
               >
                 <span className="forge-rail-drawer__draft-card-copy">
-                  <strong>{resolvedJobTitle}</strong>
-                  {jobMeta || jobSummary ? <span>{jobMeta || jobSummary}</span> : null}
+                  <strong>{displayedJobTitle}</strong>
+                  {displayedJobMeta ? <span>{displayedJobMeta}</span> : null}
                 </span>
               </button>
-              {onClearJobContext ? (
+              {stagedJobTitleValue && onCancelStagedSource ? (
+                <button
+                  type="button"
+                  className="forge-rail-drawer__draft-remove"
+                  aria-label="Cancel staged source change"
+                  onClick={onCancelStagedSource}
+                >
+                  <X size={13} aria-hidden="true" />
+                </button>
+              ) : onClearJobContext ? (
                 <button
                   type="button"
                   className="forge-rail-drawer__draft-remove"
@@ -1065,23 +1106,32 @@ export function ProposalDraftDrawer({
           <div className="forge-rail-drawer__section-title">
             <span>CV</span>
           </div>
-          {hasAttachedCv ? (
+          {hasDisplayedCv ? (
             <article className="forge-rail-drawer__draft-card">
               <button
                 type="button"
                 className="forge-rail-drawer__draft-card-main"
-                aria-label={`Change attached CV: ${sourceCvTitle}`}
+                aria-label={`Change attached CV: ${displayedCvTitle}`}
                 onClick={onOpenCvs}
               >
                 <span className="forge-rail-drawer__draft-card-copy">
-                  <strong>{sourceCvTitle}</strong>
+                  <strong>{displayedCvTitle}</strong>
+                  {stagedCvTitleValue ? <span>{stagedSourceMeta}</span> : null}
                 </span>
               </button>
               <button
                 type="button"
                 className="forge-rail-drawer__draft-remove"
-                aria-label="Remove attached CV"
-                onClick={onClearCv}
+                aria-label={
+                  canCancelStagedCv
+                    ? "Cancel staged source change"
+                    : "Remove attached CV"
+                }
+                onClick={
+                  canCancelStagedCv && onCancelStagedSource
+                    ? onCancelStagedSource
+                    : onClearCv
+                }
               >
                 <X size={13} aria-hidden="true" />
               </button>
@@ -1144,18 +1194,20 @@ export function ProposalDraftDrawer({
           />
         </section>
       </div>
-      <div className="forge-rail-drawer__draft-footer">
-        <button
-          type="button"
-          className="ds-btn ds-btn--md ds-btn--primary forge-rail-drawer__draft-generate"
-          disabled={generateDisabled}
-          data-state={generateState}
-          onClick={onGenerateDraft}
-        >
-          <PaperPlaneRight size={15} strokeWidth={1.8} aria-hidden="true" />
-          <span>{generateLabel}</span>
-        </button>
-      </div>
+      {shouldShowGenerateFooter ? (
+        <div className="forge-rail-drawer__draft-footer">
+          <button
+            type="button"
+            className="ds-btn ds-btn--md ds-btn--primary forge-rail-drawer__draft-generate"
+            disabled={generateDisabled}
+            data-state={generateState}
+            onClick={onGenerateDraft}
+          >
+            <PaperPlaneRight size={15} strokeWidth={1.8} aria-hidden="true" />
+            <span>{footerGenerateLabel}</span>
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2427,6 +2479,16 @@ export function ProposalForge(): JSX.Element {
     () => new URLSearchParams(search).get("jobId"),
     [search],
   );
+  const [stagedSourceJobId, setStagedSourceJobId] = React.useState<
+    string | null
+  >(null);
+  const [stagedProposalSourceDraft, setStagedProposalSourceDraft] =
+    React.useState<StoredProposalComposeDraft | null>(null);
+  const [stagedProposalCvSelection, setStagedProposalCvSelection] =
+    React.useState<{
+      id: string | null;
+      title: string | null;
+    } | null>(null);
   const writeStoredOutputDraft = React.useCallback(
     (nextDraft: StoredProposalOutputDraft | null) => {
       const storageSnapshots = readProposalStyleTraceStorageSnapshots();
@@ -2571,6 +2633,17 @@ export function ProposalForge(): JSX.Element {
         currentProposalSettings,
       ),
     [activePersonalizationSource, currentProposalSettings],
+  );
+  const stagedGenerationCvId = stagedProposalCvSelection
+    ? stagedProposalCvSelection.id
+    : attachedCvId;
+  const generationPersonalizationSource = React.useMemo(
+    () =>
+      applyProposalContactOverrides(
+        getLocalPersonalizationSourceByCvId(stagedGenerationCvId),
+        currentProposalSettings,
+      ),
+    [currentProposalSettings, stagedGenerationCvId],
   );
   const initialApplicantIdentity = React.useMemo(
     () => getProposalApplicantIdentity(effectivePersonalizationSource),
@@ -3473,10 +3546,20 @@ export function ProposalForge(): JSX.Element {
       ? { handoffId }
       : "skip",
   ) as ProposalForgeHandoffRecord | undefined;
+  const jobByIdQueryReference = React.useMemo(
+    () => ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
+    [],
+  );
   const canonicalJobRecord = useQuery(
-    ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
+    jobByIdQueryReference,
     canonicalJobId && isConvexAuthenticated
       ? { jobId: canonicalJobId }
+      : "skip",
+  ) as ProposalForgeCanonicalJob | undefined;
+  const stagedSourceJobRecord = useQuery(
+    jobByIdQueryReference,
+    stagedSourceJobId && isConvexAuthenticated
+      ? { jobId: stagedSourceJobId }
       : "skip",
   ) as ProposalForgeCanonicalJob | undefined;
   const canonicalRecordCvSelection = React.useMemo(
@@ -3702,15 +3785,23 @@ export function ProposalForge(): JSX.Element {
             : null,
           storedOutputSourceDraft:
             shouldStartFromEmptyProposalWorkspace || jobContextCleared
+              ? null
+              : storedOutputDraft?.sourceComposeDraft ?? null,
+          composePreviewValues: stagedProposalSourceDraft
             ? null
-            : storedOutputDraft?.sourceComposeDraft ?? null,
-          composePreviewValues,
-          outputSourceComposeDraft,
-          composeDraftInitialSeed,
+            : composePreviewValues,
+          outputSourceComposeDraft: stagedProposalSourceDraft
+            ? null
+            : outputSourceComposeDraft,
+          composeDraftInitialSeed: stagedProposalSourceDraft
+            ? null
+            : composeDraftInitialSeed,
           storedComposeDraft:
-            shouldStartFromEmptyProposalWorkspace || jobContextCleared
-            ? null
-            : storedComposeDraft,
+            shouldStartFromEmptyProposalWorkspace ||
+            jobContextCleared ||
+            stagedProposalSourceDraft
+              ? null
+              : storedComposeDraft,
           prefill: !jobContextCleared && prefill
             ? {
                 jobTitle: prefill.jobTitle,
@@ -3719,12 +3810,15 @@ export function ProposalForge(): JSX.Element {
                 platform: prefill.platform ?? null,
               }
             : null,
-          stickyImportedSource: !jobContextCleared && stickyImportedSource
-            ? {
-                sourceUrl: stickyImportedSource.sourceUrl,
-                platform: stickyImportedSource.platform,
-              }
-            : null,
+          stickyImportedSource:
+            !jobContextCleared &&
+            !stagedProposalSourceDraft &&
+            stickyImportedSource
+              ? {
+                  sourceUrl: stickyImportedSource.sourceUrl,
+                  platform: stickyImportedSource.platform,
+                }
+              : null,
         }),
       [
         canonicalJobRecord?.rawDescription,
@@ -3741,6 +3835,7 @@ export function ProposalForge(): JSX.Element {
         prefill?.sourceUrl,
         stickyImportedSource.platform,
         stickyImportedSource.sourceUrl,
+        stagedProposalSourceDraft,
         storedComposeDraft,
         storedOutputDraft?.sourceComposeDraft,
         shouldStartFromEmptyProposalWorkspace,
@@ -4006,6 +4101,57 @@ export function ProposalForge(): JSX.Element {
     requestedView,
     shouldStartFromEmptyProposalWorkspace,
     storedOutputDraft?.sourceComposeDraft,
+  ]);
+
+  React.useEffect(() => {
+    if (!stagedSourceJobId || !stagedSourceJobRecord) {
+      return;
+    }
+
+    const existingComposeDraft =
+      composePreviewValues ??
+      outputSourceComposeDraft ??
+      storedOutputDraft?.sourceComposeDraft ??
+      readStoredProposalComposeDraft() ??
+      {};
+    const nextDraft = buildProposalSourceDraftFromJob({
+      job: stagedSourceJobRecord,
+      existingDraft: existingComposeDraft,
+      proposalType:
+        proposalType ?? existingComposeDraft.proposalType ?? "cover_letter",
+      voicePreset:
+        proposalVoicePreset ?? existingComposeDraft.voicePreset ?? null,
+      characterLimitMode:
+        draftCharacterLimitMode ?? existingComposeDraft.characterLimitMode,
+      characterLimitValue:
+        draftCharacterLimitValue ?? existingComposeDraft.characterLimitValue,
+    });
+
+    setStagedProposalSourceDraft(nextDraft);
+    setStagedSourceJobId(null);
+    if (canonicalJobId) {
+      void navigate("/proposal", { replace: true });
+    }
+    openTemplateSurface("proposal-draft");
+    showToast("Job source changed.", {
+      variant: "success",
+      description:
+        "Your letter was not changed. Pick a CV or regenerate when ready.",
+    });
+  }, [
+    canonicalJobId,
+    composePreviewValues,
+    draftCharacterLimitMode,
+    draftCharacterLimitValue,
+    navigate,
+    openTemplateSurface,
+    outputSourceComposeDraft,
+    proposalType,
+    proposalVoicePreset,
+    showToast,
+    stagedSourceJobId,
+    stagedSourceJobRecord,
+    storedOutputDraft,
   ]);
 
   React.useEffect(() => {
@@ -6222,6 +6368,9 @@ export function ProposalForge(): JSX.Element {
 
   const handleClearJobContext = React.useCallback(() => {
     cancelPendingComposeDraftSync();
+    setStagedProposalSourceDraft(null);
+    setStagedSourceJobId(null);
+    setStagedProposalCvSelection(null);
     setJobContextCleared(true);
     setDuplicateSourceJobId(null);
     setComposePreviewValues({});
@@ -6255,6 +6404,13 @@ export function ProposalForge(): JSX.Element {
       });
     }
   }, [cancelPendingComposeDraftSync, navigate, search, writeStoredOutputDraft]);
+
+  const handleCancelStagedProposalSource = React.useCallback(() => {
+    cancelPendingComposeDraftSync();
+    setStagedProposalSourceDraft(null);
+    setStagedSourceJobId(null);
+    setStagedProposalCvSelection(null);
+  }, [cancelPendingComposeDraftSync]);
 
   React.useEffect(() => {
     if (!proposalWorkspaceResetToken) {
@@ -7541,7 +7697,7 @@ export function ProposalForge(): JSX.Element {
     (values: FormValues) => {
       cancelPendingComposeDraftSync();
       setComposePreviewValues(buildStoredProposalComposeDraftSnapshot(values));
-      const personalizationSource = effectivePersonalizationSource;
+      const personalizationSource = generationPersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
         personalizationSource,
       );
@@ -7623,7 +7779,7 @@ export function ProposalForge(): JSX.Element {
       lastAutoDocumentTitleRef.current = nextDocumentTitle;
     },
     [
-      effectivePersonalizationSource,
+      generationPersonalizationSource,
       buildStoredProposalComposeDraftSnapshot,
       cancelPendingComposeDraftSync,
       formatProposalTypeLabel,
@@ -7641,7 +7797,7 @@ export function ProposalForge(): JSX.Element {
       nextProposalId?: Id<"proposals">,
     ) => {
       cancelPendingComposeDraftSync();
-      const personalizationSource = effectivePersonalizationSource;
+      const personalizationSource = generationPersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
         personalizationSource,
       );
@@ -7651,6 +7807,13 @@ export function ProposalForge(): JSX.Element {
       const resolvedVoicePreset = resolveProposalVoicePreset(values);
       const submittedComposeDraft =
         buildStoredProposalComposeDraftSnapshot(values);
+      const stagedCvToCommit = stagedProposalCvSelection;
+      setStagedProposalSourceDraft(null);
+      setStagedSourceJobId(null);
+      setStagedProposalCvSelection(null);
+      if (stagedCvToCommit) {
+        handleAttachedCvChange(stagedCvToCommit.id);
+      }
       const nextDocumentTitle = buildProfessionalApplicationSubject({
         jobTitle: values.jobTitle,
         jobDescription: values.jobDescription,
@@ -7852,7 +8015,9 @@ export function ProposalForge(): JSX.Element {
       setLoading(false);
     },
     [
-      effectivePersonalizationSource,
+      generationPersonalizationSource,
+      stagedProposalCvSelection,
+      handleAttachedCvChange,
       canPersistProposalState,
       cancelPendingComposeDraftSync,
       closeForgePanel,
@@ -7886,7 +8051,7 @@ export function ProposalForge(): JSX.Element {
     (message: string, values: FormValues, rawReason?: string | null) => {
       cancelPendingComposeDraftSync();
       setComposePreviewValues(buildStoredProposalComposeDraftSnapshot(values));
-      const personalizationSource = effectivePersonalizationSource;
+      const personalizationSource = generationPersonalizationSource;
       const applicantHeader = getProposalApplicantHeaderData(
         personalizationSource,
       );
@@ -7962,7 +8127,7 @@ export function ProposalForge(): JSX.Element {
       lastAutoDocumentTitleRef.current = nextDocumentTitle;
     },
     [
-      effectivePersonalizationSource,
+      generationPersonalizationSource,
       buildStoredProposalComposeDraftSnapshot,
       cancelPendingComposeDraftSync,
       formatProposalTypeLabel,
@@ -9195,6 +9360,10 @@ export function ProposalForge(): JSX.Element {
   const handleSelectJobFromRailDrawer = React.useCallback(
     async (jobId: string) => {
       setJobContextCleared(false);
+      if (proposalContent?.trim()) {
+        setStagedSourceJobId(jobId);
+        return;
+      }
       try {
         await handleProposalDocumentCommit();
       } catch {
@@ -9203,7 +9372,12 @@ export function ProposalForge(): JSX.Element {
       void navigate(`/proposal?jobId=${encodeURIComponent(jobId)}`);
       openTemplateSurface("proposal-draft");
     },
-    [handleProposalDocumentCommit, navigate, openTemplateSurface],
+    [
+      handleProposalDocumentCommit,
+      navigate,
+      openTemplateSurface,
+      proposalContent,
+    ],
   );
   const handleOpenJobDetailsFromRailDrawer = React.useCallback(
     (jobId: string) => {
@@ -9225,10 +9399,29 @@ export function ProposalForge(): JSX.Element {
         });
         return;
       }
+      if (proposalContent?.trim()) {
+        const nextSelection = resolveAttachedCvSelectionById(cvId);
+        setStagedProposalCvSelection({
+          id: nextSelection.id ?? cvId,
+          title: nextSelection.title ?? hydratedCv.title ?? "Selected CV",
+        });
+        openTemplateSurface("proposal-draft");
+        showToast("CV source staged.", {
+          variant: "success",
+          description: "Your letter was not changed. Regenerate when ready.",
+        });
+        return;
+      }
       handleAttachedCvChange(cvId);
       openTemplateSurface("proposal-draft");
     },
-    [handleAttachedCvChange, hydrateCvDocument, openTemplateSurface, showToast],
+    [
+      handleAttachedCvChange,
+      hydrateCvDocument,
+      openTemplateSurface,
+      proposalContent,
+      showToast,
+    ],
   );
   const handleOpenCvFromRailDrawer = React.useCallback(
     (cvId: string) => {
@@ -11083,8 +11276,10 @@ export function ProposalForge(): JSX.Element {
   }, []);
 
   const handleOpenJobsFromRail = React.useCallback(() => {
-    openTemplateSurface("jobs");
-  }, [openTemplateSurface]);
+    openTemplateSurface("jobs", {
+      mode: isWideEnoughForDockedForgePanel ? "docked" : "overlay",
+    });
+  }, [isWideEnoughForDockedForgePanel, openTemplateSurface]);
   const handleOpenDraftFromStage = React.useCallback(() => {
     setProposalComposerMode(null);
     openTemplateSurface("proposal-draft", {
@@ -11092,8 +11287,23 @@ export function ProposalForge(): JSX.Element {
     });
   }, [isWideEnoughForDockedForgePanel, openTemplateSurface]);
   const handleOpenCvsFromDraft = React.useCallback(() => {
-    openTemplateSurface("cvs");
-  }, [openTemplateSurface]);
+    openTemplateSurface("cvs", {
+      mode: isWideEnoughForDockedForgePanel ? "docked" : "overlay",
+    });
+  }, [isWideEnoughForDockedForgePanel, openTemplateSurface]);
+  const handleClearCvFromDraft = React.useCallback(() => {
+    if (proposalContent?.trim()) {
+      setStagedProposalCvSelection({ id: null, title: "No CV" });
+      openTemplateSurface("proposal-draft");
+      showToast("CV removal staged.", {
+        variant: "success",
+        description: "Your letter was not changed. Regenerate when ready.",
+      });
+      return;
+    }
+
+    handleAttachedCvChange(null);
+  }, [handleAttachedCvChange, openTemplateSurface, proposalContent, showToast]);
   const handleReturnToDraftFromPasteJob = React.useCallback(() => {
     openTemplateSurface("proposal-draft");
   }, [openTemplateSurface]);
@@ -11133,6 +11343,35 @@ export function ProposalForge(): JSX.Element {
       proposalHeaderSourceSummary.location,
     ],
   );
+  const stagedProposalSourceSummary = React.useMemo(
+    () =>
+      stagedProposalSourceDraft
+        ? buildProposalSourceSummary({
+            jobTitle: stagedProposalSourceDraft.jobTitle ?? "",
+            jobDescription: stagedProposalSourceDraft.jobDescription ?? "",
+          })
+        : null,
+    [stagedProposalSourceDraft],
+  );
+  const stagedProposalSourceTitle =
+    stagedProposalSourceDraft?.jobTitle?.trim() ||
+    stagedProposalSourceSummary?.role ||
+    null;
+  const stagedProposalSourceMeta =
+    stagedProposalSourceDraft
+      ? [
+          stagedProposalSourceSummary?.company,
+          stagedProposalSourceDraft.platform,
+          stagedProposalSourceSummary?.location,
+        ]
+          .filter(Boolean)
+          .join(" · ") || null
+      : null;
+  const stagedProposalSourcePreview =
+    stagedProposalSourceDraft?.jobDescription?.trim() || null;
+  const stagedProposalCvTitle =
+    stagedProposalCvSelection?.title?.trim() ||
+    (stagedProposalCvSelection ? "No CV" : null);
   const proposalDraftPanelRegistration = React.useMemo(
     () => ({
       surface: "proposal-draft" as const,
@@ -11144,6 +11383,10 @@ export function ProposalForge(): JSX.Element {
           jobMeta={proposalDraftJobMeta}
           jobSummary={proposalRailJobSummary}
           jobContextKind={proposalDraftJobContextKind}
+          stagedJobTitle={stagedProposalSourceTitle}
+          stagedJobMeta={stagedProposalSourceMeta}
+          stagedJobSummary={stagedProposalSourcePreview}
+          stagedCvTitle={stagedProposalCvTitle}
           sourceCvTitle={attachedCvDisplayTitle}
           proposalTypeLabel={
             proposalType ? formatProposalTypeLabel(proposalType) : "Letter"
@@ -11164,14 +11407,17 @@ export function ProposalForge(): JSX.Element {
             composeGenerateControl.disabled || loading || isLoadingHandoff
           }
           generateState={composeGenerateControl.state}
+          hasExistingDraft={hasMeaningfulProposalContent}
+          askReviewReady={railAskAiReview.status === "ready"}
           onGenerateDraft={handleGenerateFromCollapsedToolbar}
+          onCancelStagedSource={handleCancelStagedProposalSource}
           onOpenJobs={handleOpenJobsFromRail}
           onOpenPasteJob={handleOpenPasteJobFromDraft}
           onClearJobContext={
             hasActiveProposalJobContext ? handleClearJobContext : undefined
           }
           onOpenCvs={handleOpenCvsFromDraft}
-          onClearCv={() => handleAttachedCvChange(null)}
+          onClearCv={handleClearCvFromDraft}
         />
       ),
     }),
@@ -11184,14 +11430,16 @@ export function ProposalForge(): JSX.Element {
       composeGenerateControl.state,
       formatProposalTypeLabel,
       handleGenerateFromCollapsedToolbar,
+      handleCancelStagedProposalSource,
       handleOpenCvsFromDraft,
+      handleClearCvFromDraft,
       handleOpenJobsFromRail,
       handleOpenPasteJobFromDraft,
-      handleAttachedCvChange,
       handleClearJobContext,
       handleProposalTypeSelect,
       handleToolbarVoicePresetChange,
       hasActiveProposalJobContext,
+      hasMeaningfulProposalContent,
       isLoadingHandoff,
       loading,
       proposalDraftJobMeta,
@@ -11201,6 +11449,11 @@ export function ProposalForge(): JSX.Element {
       proposalRailToneOptions,
       proposalType,
       proposalTypeOptions,
+      stagedProposalSourceMeta,
+      stagedProposalSourcePreview,
+      stagedProposalSourceTitle,
+      stagedProposalCvTitle,
+      railAskAiReview.status,
     ],
   );
   useRegisterForgePanel(proposalDraftPanelRegistration);
@@ -11573,6 +11826,7 @@ export function ProposalForge(): JSX.Element {
                         onJobOfferTextChange={handleRailJobOfferTextChange}
                         onJobOfferTextCommit={handleRailJobOfferTextCommit}
                         onOpenJobs={handleOpenJobsFromRail}
+                        onOpenCvs={handleOpenCvsFromDraft}
                         onClearJobContext={
                           hasActiveProposalJobContext
                             ? handleClearJobContext
@@ -11586,6 +11840,7 @@ export function ProposalForge(): JSX.Element {
                         }
                         generateState={composeGenerateControl.state}
                         onGenerateDraft={handleGenerateFromCollapsedToolbar}
+                        hasExistingDraft={hasMeaningfulProposalContent}
                         askAiValue={railAskAiValue}
                         askAiBusy={railAskAiBusy}
                         askAiDisabled={!hasMeaningfulProposalContent}
@@ -11625,7 +11880,11 @@ export function ProposalForge(): JSX.Element {
                           onError={handleProposalError}
                           onValuesChange={handleProposalFormValuesChange}
                           onActiveCvChange={handleAttachedCvChange}
-                          activeCvId={attachedCvId}
+                          activeCvId={
+                            stagedProposalCvSelection
+                              ? stagedProposalCvSelection.id
+                              : attachedCvId
+                          }
                           prefill={prefill}
                           cvPickerOpen={isCvPickerOpen}
                           onCvPickerOpenChange={setIsCvPickerOpen}
@@ -11637,9 +11896,16 @@ export function ProposalForge(): JSX.Element {
                           externalCharacterLimitValue={draftCharacterLimitValue}
                           headerLabel={null}
                           initialComposeDraft={composeDraftInitialSeed}
-                          externalComposeDraft={composePreviewValues}
-                          sourceUrl={briefSourceUrl}
-                          sourcePlatform={briefSourcePlatform}
+                          externalComposeDraft={
+                            stagedProposalSourceDraft ?? composePreviewValues
+                          }
+                          sourceUrl={
+                            stagedProposalSourceDraft?.sourceUrl ?? briefSourceUrl
+                          }
+                          sourcePlatform={
+                            stagedProposalSourceDraft?.platform ??
+                            briefSourcePlatform
+                          }
                           canonicalJobId={canonicalJobId}
                           onGenerateControlChange={
                             handleComposeGenerateControlChange

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveProposalWorkspaceSourceDraft } from "../proposal-job-context";
+import {
+  buildProposalSourceDraftFromJob,
+  resolveProposalWorkspaceSourceDraft,
+} from "../proposal-job-context";
 
 describe("resolveProposalWorkspaceSourceDraft", () => {
   it("does not promote stored compose or output drafts when stored candidates are disabled", () => {
@@ -129,6 +132,40 @@ describe("resolveProposalWorkspaceSourceDraft", () => {
       mode: "explicit-live-job",
       jobTitle: "Live Operations Lead",
       jobDescription: "Current job from Job Forge.",
+    });
+  });
+});
+
+describe("buildProposalSourceDraftFromJob", () => {
+  it("stages a changed source job as compose context without carrying proposal body", () => {
+    expect(
+      buildProposalSourceDraftFromJob({
+        job: {
+          title: "Updated Operations Lead",
+          rawDescription:
+            "Lead updated operations workflows and coordinate a new job context.",
+          sourceUrl: "https://example.test/jobs/updated",
+          sourceDomain: "Example Jobs",
+        },
+        existingDraft: {
+          jobTitle: "Previous role",
+          jobDescription: "Previous source context.",
+          proposalType: "cover_letter",
+          voicePreset: "signature",
+        },
+        proposalType: "cover_letter",
+        voicePreset: "signature",
+      }),
+    ).toEqual({
+      jobTitle: "Updated Operations Lead",
+      jobDescription:
+        "Lead updated operations workflows and coordinate a new job context.",
+      sourceUrl: "https://example.test/jobs/updated",
+      platform: "Example Jobs",
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+      characterLimitMode: undefined,
+      characterLimitValue: undefined,
     });
   });
 });

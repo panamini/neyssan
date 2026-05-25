@@ -1,7 +1,12 @@
 import React from "react";
 import fs from "node:fs";
 import path from "node:path";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -156,6 +161,7 @@ describe("forge rail drawers", () => {
           generateLabel="Generate"
           generateDisabled={false}
           generateState="idle"
+          hasExistingDraft
           onGenerateDraft={vi.fn()}
           onOpenJobs={onOpenJobs}
           onOpenPasteJob={onOpenPasteJob}
@@ -192,6 +198,9 @@ describe("forge rail drawers", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText("Attached to this draft"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Generate" }),
     ).not.toBeInTheDocument();
 
     fireEvent.click(
@@ -260,6 +269,167 @@ describe("forge rail drawers", () => {
     expect(
       screen.getByRole("button", { name: "Pick a CV" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Generate" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows staged job changes in the existing job field", () => {
+    const onGenerateDraft = vi.fn();
+    const onCancelStagedSource = vi.fn();
+
+    function StagedDraftDrawer(): JSX.Element {
+      const [staged, setStaged] = React.useState(true);
+
+      return (
+        <ProposalDraftDrawer
+          jobTitle="Current Security Guard"
+          jobMeta="Current Company · LinkedIn"
+          jobSummary="Current letter source"
+          jobContextKind="saved"
+          stagedJobTitle={staged ? "Updated Operations Lead" : null}
+          stagedJobMeta={staged ? "Studio Vale · Example Jobs" : null}
+          stagedJobSummary={
+            staged
+              ? "Lead updated operations workflows and coordinate a new job context."
+              : null
+          }
+          sourceCvTitle="Robert Cooper"
+          proposalTypeLabel="Letter"
+          proposalTypeOptions={proposalTypeOptions}
+          onSelectProposalType={vi.fn()}
+          toneLabel="Formal"
+          toneOptions={toneOptions}
+          onSelectTone={vi.fn()}
+          generateLabel="Generate"
+          generateDisabled={false}
+          generateState="idle"
+          hasExistingDraft
+          onGenerateDraft={onGenerateDraft}
+          onCancelStagedSource={() => {
+            onCancelStagedSource();
+            setStaged(false);
+          }}
+          onOpenJobs={vi.fn()}
+          onOpenPasteJob={vi.fn()}
+          onOpenCvs={vi.fn()}
+          onClearCv={vi.fn()}
+        />
+      );
+    }
+
+    render(<StagedDraftDrawer />);
+
+    expect(screen.queryByLabelText("Staged source")).not.toBeInTheDocument();
+    expect(screen.getByText("Updated Operations Lead")).toBeInTheDocument();
+    expect(screen.getByText("Studio Vale · Example Jobs")).toBeInTheDocument();
+    expect(screen.queryByText("Current Security Guard")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Change job: Updated Operations Lead",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    expect(onGenerateDraft).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Cancel staged source change" }),
+    );
+    expect(onCancelStagedSource).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText("Staged source")).not.toBeInTheDocument();
+    expect(screen.getByText("Current Security Guard")).toBeInTheDocument();
+  });
+
+  it("shows multiple staged sources in their existing source fields", () => {
+    const onGenerateDraft = vi.fn();
+    const onCancelStagedSource = vi.fn();
+
+    render(
+      <ProposalDraftDrawer
+        jobTitle="Current Security Guard"
+        jobMeta="Current Company · LinkedIn"
+        jobSummary="Current letter source"
+        jobContextKind="saved"
+        stagedJobTitle="Updated Operations Lead"
+        stagedJobMeta="Studio Vale · Example Jobs"
+        stagedCvTitle="Operations CV"
+        sourceCvTitle="Robert Cooper"
+        proposalTypeLabel="Letter"
+        proposalTypeOptions={proposalTypeOptions}
+        onSelectProposalType={vi.fn()}
+        toneLabel="Formal"
+        toneOptions={toneOptions}
+        onSelectTone={vi.fn()}
+        generateLabel="Generate"
+        generateDisabled={false}
+        generateState="idle"
+        hasExistingDraft
+        onGenerateDraft={onGenerateDraft}
+        onCancelStagedSource={onCancelStagedSource}
+        onOpenJobs={vi.fn()}
+        onOpenPasteJob={vi.fn()}
+        onOpenCvs={vi.fn()}
+        onClearCv={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Staged source")).not.toBeInTheDocument();
+    expect(screen.getByText("Updated Operations Lead")).toBeInTheDocument();
+    expect(screen.getByText("Operations CV")).toBeInTheDocument();
+    expect(screen.getAllByText("Staged. Letter unchanged.")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", {
+        name: "Change job: Updated Operations Lead",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Change attached CV: Operations CV" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Cancel staged source change" }),
+    ).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /generate/i })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    expect(onGenerateDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not show a competing generate footer while Rail Ask review is ready", () => {
+    render(
+      <ProposalDraftDrawer
+        jobTitle="Current Security Guard"
+        jobMeta="Current Company · LinkedIn"
+        jobSummary="Current letter source"
+        jobContextKind="saved"
+        stagedJobTitle="Updated Operations Lead"
+        stagedJobMeta="Studio Vale · Example Jobs"
+        sourceCvTitle="Robert Cooper"
+        proposalTypeLabel="Letter"
+        proposalTypeOptions={proposalTypeOptions}
+        onSelectProposalType={vi.fn()}
+        toneLabel="Formal"
+        toneOptions={toneOptions}
+        onSelectTone={vi.fn()}
+        generateLabel="Generate"
+        generateDisabled={false}
+        generateState="idle"
+        hasExistingDraft
+        askReviewReady
+        onGenerateDraft={vi.fn()}
+        onCancelStagedSource={vi.fn()}
+        onOpenJobs={vi.fn()}
+        onOpenPasteJob={vi.fn()}
+        onOpenCvs={vi.fn()}
+        onClearCv={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Staged source")).not.toBeInTheDocument();
+    expect(screen.getByText("Updated Operations Lead")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /generate/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("uses a larger adaptive textarea for pasted job context", () => {
@@ -522,6 +692,11 @@ describe("forge rail drawers", () => {
     expect(proposalSource).toContain("proposalLayoutViewportWidth");
     expect(proposalSource).toContain(
       "proposalLayoutViewportWidth < proposalTwoPaneMinViewportWidth",
+    );
+    expect(proposalSource).toContain('openTemplateSurface("jobs", {');
+    expect(proposalSource).toContain('openTemplateSurface("cvs", {');
+    expect(proposalSource).toContain(
+      'mode: isWideEnoughForDockedForgePanel ? "docked" : "overlay"',
     );
     expect(proposalSource).toContain(
       "minmax(0, 1fr) var(--proposal-workspace-rail-inline-size)",
