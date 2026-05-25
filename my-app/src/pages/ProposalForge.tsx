@@ -87,7 +87,10 @@ import {
   writeStoredProposalOutputDraft,
 } from "../lib/proposal-output-draft";
 import {
+  PROPOSAL_DRAWER_QUERY_PARAM,
+  PROPOSAL_DRAFT_DRAWER_QUERY_VALUE,
   readProposalEntryIntent,
+  readProposalDrawerRouteIntent,
   readProposalJobImportFocus,
   readProposalWorkspaceResetToken,
   readStoredProposalComposeDraft,
@@ -302,6 +305,10 @@ const PROPOSAL_MODEL_SELECTOR_OPTIONS = [
 // matches the renderer A4 width at the current design scale (~793.7px), while
 // --forge-page-inline-size includes legacy frame/gutter space.
 const PROPOSAL_PAPER_VISUAL_INLINE_SIZE = `${Math.round(A4_PAGE_WIDTH_PX * 100) / 100}px`;
+// Mirrors --app-nav-panel-width-wide from foundation.css so docked drawer
+// decisions use the remaining page column, not the full window width.
+const FORGE_DOCKED_PANEL_INLINE_SIZE_PX = 320;
+const FORGE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH = 1180;
 
 type ProposalForgeReviewItem = {
   id: string;
@@ -2285,6 +2292,7 @@ function isPlainProposalWorkspaceRoute(
     params.has("jobId") ||
     params.has("handoffId") ||
     params.has("handoffToken") ||
+    params.has(PROPOSAL_DRAWER_QUERY_PARAM) ||
     params.has("id") ||
     params.has("draftId") ||
     params.get("view") === "saved";
@@ -2579,6 +2587,12 @@ export function ProposalForge(): JSX.Element {
     () => new URLSearchParams(search).get("handoffToken"),
     [search],
   );
+  const proposalDrawerRouteIntent = React.useMemo(
+    () => readProposalDrawerRouteIntent(search),
+    [search],
+  );
+  const isWideEnoughForDockedForgePanel =
+    viewportWidth >= FORGE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH;
   const selectedProposalId = React.useMemo(
     () => new URLSearchParams(search).get("id"),
     [search],
@@ -3997,6 +4011,55 @@ export function ProposalForge(): JSX.Element {
       replace: true,
     });
   }, [navigate, prefill?.handoffId, requestedView, search]);
+
+  React.useEffect(() => {
+    if (
+      requestedView !== "compose" ||
+      proposalDrawerRouteIntent !== PROPOSAL_DRAFT_DRAWER_QUERY_VALUE
+    ) {
+      return;
+    }
+
+    openTemplateSurface("proposal-draft", {
+      mode: isWideEnoughForDockedForgePanel ? "docked" : "overlay",
+    });
+
+    if (handoffId || handoffToken) {
+      return;
+    }
+
+    const params = new URLSearchParams(search);
+    if (
+      params.get(PROPOSAL_DRAWER_QUERY_PARAM) !==
+      PROPOSAL_DRAFT_DRAWER_QUERY_VALUE
+    ) {
+      return;
+    }
+
+    params.delete(PROPOSAL_DRAWER_QUERY_PARAM);
+    const nextSearch = params.toString();
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
+      {
+        replace: true,
+        state: location.state,
+      },
+    );
+  }, [
+    handoffId,
+    handoffToken,
+    location.pathname,
+    location.state,
+    navigate,
+    openTemplateSurface,
+    isWideEnoughForDockedForgePanel,
+    proposalDrawerRouteIntent,
+    requestedView,
+    search,
+  ]);
 
   React.useEffect(() => {
     if (!currentProposalSettings?.templateId) {
@@ -9293,14 +9356,10 @@ export function ProposalForge(): JSX.Element {
       null
     );
   }, [attachedCvId, attachedCvTitle]);
-  // Mirrors --app-nav-panel-width-wide from foundation.css so docked drawer
-  // decisions use the remaining page column, not the full window width.
-  const FORGE_DOCKED_PANEL_INLINE_SIZE_PX = 320;
-  const FORGE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH = 1180;
   const isForgeDrawerDockedDesktop =
     templatePanelOpen &&
     templatePanelOpenMode === "docked" &&
-    viewportWidth >= FORGE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH;
+    isWideEnoughForDockedForgePanel;
   const proposalLayoutViewportWidth = Math.max(
     0,
     viewportWidth -

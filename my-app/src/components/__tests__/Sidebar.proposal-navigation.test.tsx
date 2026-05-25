@@ -480,8 +480,8 @@ describe("Sidebar permanent rail", () => {
       screen.getByRole("button", { name: "Pin drawer" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Collapse drawer" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps CV Forge Jobs as direct navigation and Projects as mixed library", () => {
@@ -603,8 +603,8 @@ describe("Sidebar permanent rail", () => {
       screen.getByRole("complementary", { name: "Saved proposals" }),
     ).toHaveAttribute("data-mode", "overlay");
     expect(
-      screen.queryByRole("button", { name: "Collapse drawer" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Pin drawer" }),
     ).toBeInTheDocument();
