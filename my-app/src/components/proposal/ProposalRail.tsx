@@ -4,9 +4,11 @@ import {
   ArrowSquareOut,
   Briefcase,
   ChevronDown,
+  DotsThree,
   FilePdf,
   FileUser,
   PaperPlaneRight,
+  RotateCcw,
   X,
 } from "../../lib/icons";
 import type { FormValues } from "../ProposalInputForm.schemas";
@@ -56,6 +58,26 @@ export type ProposalRailJobMatchSummary = {
   detail: string | null;
 };
 
+export type ProposalRailAskReview =
+  | {
+      status: "idle";
+    }
+  | {
+      status: "loading";
+    }
+  | {
+      status: "ready";
+      resultText: string;
+    }
+  | {
+      status: "error";
+      errorMessage: string;
+    }
+  | {
+      status: "applied";
+      canUndo: boolean;
+    };
+
 type ProposalRailProps = {
   jobTitle: string;
   company: string | null;
@@ -98,6 +120,7 @@ type ProposalRailProps = {
   generateDisabled: boolean;
   generateState: string;
   onGenerateDraft: () => void;
+  hasExistingDraft?: boolean;
   cvOptions: ProposalRailCvOption[];
   onSelectCv: (cvId: string) => void;
   onClearCv: () => void;
@@ -107,14 +130,19 @@ type ProposalRailProps = {
   onJobOfferTextChange?: (value: string) => void;
   onJobOfferTextCommit?: () => void;
   onOpenJobs?: () => void;
+  onOpenCvs?: () => void;
   onClearJobContext?: () => void;
   askAiValue: string;
   askAiBusy: boolean;
   askAiDisabled: boolean;
   askAiPlaceholder: string;
   askAiHint: string;
+  askAiReview?: ProposalRailAskReview;
   onAskAiChange: (value: string) => void;
   onAskAiSubmit: () => void;
+  onAskAiApply?: () => void;
+  onAskAiDiscard?: () => void;
+  onAskAiUndo?: () => void;
   activeTab?: ProposalRailTab;
   onActiveTabChange?: (tab: ProposalRailTab) => void;
   hideTabs?: boolean;
@@ -151,6 +179,7 @@ export function ProposalRail({
   generateDisabled,
   generateState,
   onGenerateDraft,
+  hasExistingDraft = false,
   cvOptions,
   onSelectCv,
   onClearCv,
@@ -160,14 +189,19 @@ export function ProposalRail({
   onJobOfferTextChange,
   onJobOfferTextCommit,
   onOpenJobs,
+  onOpenCvs,
   onClearJobContext,
   askAiValue,
   askAiBusy,
   askAiDisabled,
   askAiPlaceholder,
   askAiHint,
+  askAiReview = { status: "idle" },
   onAskAiChange,
   onAskAiSubmit,
+  onAskAiApply,
+  onAskAiDiscard,
+  onAskAiUndo,
   activeTab: controlledActiveTab,
   onActiveTabChange,
   hideTabs = false,
@@ -199,6 +233,9 @@ export function ProposalRail({
     : "No job loaded";
   const loadedJobMeta = [company, sourceLabel, location].filter(Boolean).join(" · ");
   const jobSiteLinks = React.useMemo(() => getProposalExtensionSourceLinks(), []);
+  const showAskComposer = askAiReview.status !== "ready";
+  const [regenerateConfirmationOpen, setRegenerateConfirmationOpen] =
+    React.useState(false);
 
   React.useEffect(() => {
     if (!hasActiveJobContext) {
@@ -341,6 +378,45 @@ export function ProposalRail({
     ],
     [lengthOptions, onSelectLength],
   );
+
+  const sourceMenuSections = React.useMemo<MenuSection[]>(() => {
+    return [
+      {
+        label: "Source",
+        items: [
+          {
+            id: "change-job",
+            label: "Change job",
+            description: hasActiveJobContext
+              ? "Choose another job. Your current draft stays unchanged."
+              : "Choose a job to use as source context.",
+            icon: <Briefcase size={15} strokeWidth={1.8} />,
+            onSelect: onOpenJobs,
+          },
+          {
+            id: "change-cv",
+            label: "Change CV",
+            description: "Open the CV picker. Your current draft stays unchanged.",
+            icon: <FileUser size={15} strokeWidth={1.8} />,
+            onSelect: onOpenCvs,
+          },
+          {
+            id: "regenerate",
+            label: "Regenerate draft",
+            description: "Confirm before replacing the current draft.",
+            icon: <RotateCcw size={15} strokeWidth={1.8} />,
+            disabled: generateDisabled,
+            onSelect: () => setRegenerateConfirmationOpen(true),
+          },
+        ],
+      },
+    ];
+  }, [
+    generateDisabled,
+    hasActiveJobContext,
+    onOpenCvs,
+    onOpenJobs,
+  ]);
 
   const renderLengthSelect = (size: "sm" | "md") => (
     <Menu
@@ -701,57 +777,180 @@ export function ProposalRail({
           <div className="dasti-proposal-skeleton-rail__ask-header">
             <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Ask</div>
           </div>
-        ) : null}
-        <div className="dasti-proposal-skeleton-rail__ask-hub">
-          <label
-            className="dasti-proposal-skeleton-rail__ask-field"
-          >
-            <span className="sr-only">Ask</span>
-            <textarea
-              ref={askTextareaRef}
-              className="ds-field ds-field--textarea"
-              value={askAiValue}
-              placeholder={askAiPlaceholder}
-              disabled={askAiDisabled || askAiBusy}
-              onChange={(event) => {
-                onAskAiChange(event.target.value);
-                resizeAskTextarea(event.currentTarget);
-              }}
-            />
-          </label>
-          {showAskSuggestions ? (
-            <div className="dasti-proposal-skeleton-rail__ask-suggestions" aria-label="Ask suggestions">
-              {PROPOSAL_ASK_AI_SUGGESTIONS.map((suggestion) => (
+        ) : hasExistingDraft ? (
+          <div className="dasti-proposal-skeleton-rail__ask-header">
+            <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Ask</div>
+            <Menu
+              ariaLabel="Change source"
+              align="end"
+              side="bottom"
+              mobileMode="sheet"
+              menuClassName="dasti-proposal-skeleton-rail__composer-menu dasti-proposal-skeleton-rail__source-menu"
+              sections={sourceMenuSections}
+              trigger={
                 <button
-                  key={suggestion}
                   type="button"
-                  className="dasti-proposal-skeleton-rail__ask-suggestion"
-                  disabled={askAiDisabled || askAiBusy}
-                  onClick={() => onAskAiChange(suggestion)}
+                  className="ds-btn ds-btn--sm ds-btn--secondary dasti-proposal-skeleton-rail__source-trigger"
+                  aria-label="Change source"
                 >
-                  {suggestion}
+                  <DotsThree size={15} strokeWidth={1.8} aria-hidden="true" />
+                  <span>Change source</span>
                 </button>
-              ))}
-            </div>
-          ) : null}
-          <div className="dasti-proposal-skeleton-rail__ask-controls">
-            {renderLengthSelect("sm")}
-            {renderToneSelect("sm")}
-            <button
-              type="button"
-              className="dasti-proposal-skeleton-rail__ask-send dasti-toolbar-tooltip-trigger--above"
-              aria-label="Send"
-              title={askAiBusy ? "Applying" : "Send"}
-              data-toolbar-tooltip={askAiHint}
-              data-toolbar-tooltip-placement="below"
-              disabled={askAiDisabled || askAiBusy || !askAiValue.trim()}
-              onClick={onAskAiSubmit}
-            >
-              <ArrowUp size={15} strokeWidth={1.8} aria-hidden="true" />
-              <span className="sr-only">{askAiBusy ? "Applying..." : "Send"}</span>
-            </button>
+              }
+            />
           </div>
-        </div>
+        ) : null}
+        {hasExistingDraft && regenerateConfirmationOpen ? (
+          <div
+            className="dasti-proposal-skeleton-rail__ask-review"
+            data-proposal-rail-regenerate-confirmation="true"
+          >
+            <div className="dasti-proposal-skeleton-rail__ask-review-head">
+              <strong>Replace current draft?</strong>
+              <span>
+                Regenerating uses the selected job, CV, tone, and length and
+                replaces the current draft text.
+              </span>
+            </div>
+            <div className="dasti-proposal-skeleton-rail__ask-review-actions">
+              <button
+                type="button"
+                className="ds-btn ds-btn--sm ds-btn--secondary"
+                onClick={() => setRegenerateConfirmationOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="ds-btn ds-btn--sm ds-btn--primary"
+                disabled={generateDisabled}
+                onClick={() => {
+                  setRegenerateConfirmationOpen(false);
+                  onGenerateDraft();
+                }}
+              >
+                Replace current draft
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {showAskComposer ? (
+          <div className="dasti-proposal-skeleton-rail__ask-hub">
+            <label
+              className="dasti-proposal-skeleton-rail__ask-field"
+            >
+              <span className="sr-only">Ask</span>
+              <textarea
+                ref={askTextareaRef}
+                className="ds-field ds-field--textarea"
+                value={askAiValue}
+                placeholder={askAiPlaceholder}
+                disabled={askAiDisabled || askAiBusy}
+                onChange={(event) => {
+                  onAskAiChange(event.target.value);
+                  resizeAskTextarea(event.currentTarget);
+                }}
+              />
+            </label>
+            {showAskSuggestions ? (
+              <div className="dasti-proposal-skeleton-rail__ask-suggestions" aria-label="Ask suggestions">
+                {PROPOSAL_ASK_AI_SUGGESTIONS.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    className="dasti-proposal-skeleton-rail__ask-suggestion"
+                    disabled={askAiDisabled || askAiBusy}
+                    onClick={() => onAskAiChange(suggestion)}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="dasti-proposal-skeleton-rail__ask-controls">
+              {renderLengthSelect("sm")}
+              {renderToneSelect("sm")}
+              <button
+                type="button"
+                className="dasti-proposal-skeleton-rail__ask-send dasti-toolbar-tooltip-trigger--above"
+                aria-label="Send"
+                title={askAiBusy ? "Applying" : "Send"}
+                data-toolbar-tooltip={askAiHint}
+                data-toolbar-tooltip-placement="below"
+                disabled={askAiDisabled || askAiBusy || !askAiValue.trim()}
+                onClick={onAskAiSubmit}
+              >
+                <ArrowUp size={15} strokeWidth={1.8} aria-hidden="true" />
+                <span className="sr-only">{askAiBusy ? "Applying..." : "Send"}</span>
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {askAiReview.status !== "idle" ? (
+          <div
+            className="dasti-proposal-skeleton-rail__ask-review"
+            data-proposal-rail-ask-review="true"
+            data-state={askAiReview.status}
+          >
+            {askAiReview.status === "loading" ? (
+              <div className="dasti-proposal-skeleton-rail__ask-review-status">
+                <strong>Result</strong>
+                <span>Working...</span>
+              </div>
+            ) : null}
+            {askAiReview.status === "error" ? (
+              <div className="dasti-proposal-skeleton-rail__ask-review-status" role="alert">
+                <strong>Result</strong>
+                <span>{askAiReview.errorMessage}</span>
+              </div>
+            ) : null}
+            {askAiReview.status === "ready" ? (
+              <>
+                <div className="dasti-proposal-skeleton-rail__ask-review-head">
+                  <strong>Suggested draft</strong>
+                  <span>This will replace the current draft.</span>
+                </div>
+                <div
+                  className="dasti-proposal-skeleton-rail__ask-review-preview"
+                  aria-label="Rail Ask suggested draft"
+                >
+                  {askAiReview.resultText}
+                </div>
+                <div className="dasti-proposal-skeleton-rail__ask-review-actions">
+                  <button
+                    type="button"
+                    className="ds-btn ds-btn--sm ds-btn--secondary"
+                    onClick={onAskAiDiscard}
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="button"
+                    className="ds-btn ds-btn--sm ds-btn--primary"
+                    disabled={askAiBusy}
+                    onClick={onAskAiApply}
+                  >
+                    Apply to draft
+                  </button>
+                </div>
+              </>
+            ) : null}
+            {askAiReview.status === "applied" ? (
+              <div className="dasti-proposal-skeleton-rail__ask-review-applied">
+                <span>Applied.</span>
+                {askAiReview.canUndo ? (
+                  <button
+                    type="button"
+                    className="dasti-proposal-skeleton-rail__ask-review-undo"
+                    onClick={onAskAiUndo}
+                  >
+                    Undo
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </section>
       ) : null}
 

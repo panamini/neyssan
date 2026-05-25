@@ -318,6 +318,200 @@ describe("ProposalRail style tab", () => {
     }
   });
 
+  it("renders Rail Ask review results with explicit apply and discard actions", () => {
+    const onAskAiApply = vi.fn();
+    const onAskAiDiscard = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        activeTab="ask"
+        hideTabs
+        askAiValue="Make it tighter"
+        askAiReview={{
+          status: "ready",
+          resultText: "A tighter proposal draft.",
+        }}
+        onAskAiApply={onAskAiApply}
+        onAskAiDiscard={onAskAiDiscard}
+      />,
+    );
+
+    expect(screen.getByText("Suggested draft")).toBeInTheDocument();
+    expect(
+      screen.getByText("This will replace the current draft."),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Rail Ask suggested draft")).toHaveTextContent(
+      "A tighter proposal draft.",
+    );
+    expect(screen.queryByDisplayValue("Make it tighter")).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText(baseProps.askAiPlaceholder),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Send" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(onAskAiDiscard).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply to draft" }));
+    expect(onAskAiApply).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps source controls available while Rail Ask review hides the composer", async () => {
+    render(
+      <ProposalRail
+        {...baseProps}
+        activeTab="ask"
+        hideTabs
+        hasExistingDraft
+        askAiValue="Shorten it"
+        askAiReview={{
+          status: "ready",
+          resultText: "A tighter proposal draft.",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Suggested draft")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Shorten it")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Send" }),
+    ).not.toBeInTheDocument();
+    const sourceTrigger = screen.getByRole("button", {
+      name: "Change source",
+    });
+    expect(sourceTrigger).toBeInTheDocument();
+
+    fireEvent.click(sourceTrigger);
+    const sourceMenu = await screen.findByRole("menu", {
+      name: "Change source",
+    });
+    expect(sourceMenu).toHaveClass(
+      "dasti-proposal-skeleton-rail__composer-menu",
+    );
+    expect(
+      within(sourceMenu).getByRole("menuitem", { name: "Change job" }),
+    ).toBeInTheDocument();
+    expect(
+      within(sourceMenu).getByRole("menuitem", { name: "Regenerate draft" }),
+    ).toBeInTheDocument();
+    expect(
+      within(sourceMenu).getByRole("menuitem", { name: "Change CV" }),
+    ).toBeInTheDocument();
+  });
+
+  it("requires confirmation before regenerating an existing draft", async () => {
+    const onGenerateDraft = vi.fn();
+    const onOpenCvs = vi.fn();
+
+    render(
+      <ProposalRail
+        {...baseProps}
+        activeTab="ask"
+        hideTabs
+        hasExistingDraft
+        sourceCvTitle="Current CV"
+        sourceCvMeta="Attached"
+        cvOptions={[
+          {
+            id: "cv-next",
+            title: "Updated CV",
+            description: "Imported today",
+            selected: false,
+          },
+        ]}
+        onGenerateDraft={onGenerateDraft}
+        onOpenCvs={onOpenCvs}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Change source" }));
+    let sourceMenu = await screen.findByRole("menu", {
+      name: "Change source",
+    });
+    fireEvent.click(
+      within(sourceMenu).getByRole("menuitem", { name: "Change CV" }),
+    );
+    expect(onOpenCvs).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("menuitemradio", { name: "Updated CV" }),
+    ).not.toBeInTheDocument();
+    expect(onGenerateDraft).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change source" }));
+    sourceMenu = await screen.findByRole("menu", { name: "Change source" });
+    fireEvent.click(
+      within(sourceMenu).getByRole("menuitem", { name: "Regenerate draft" }),
+    );
+
+    expect(onGenerateDraft).not.toHaveBeenCalled();
+    expect(screen.getByText("Replace current draft?")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onGenerateDraft).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change source" }));
+    sourceMenu = await screen.findByRole("menu", { name: "Change source" });
+    fireEvent.click(
+      within(sourceMenu).getByRole("menuitem", { name: "Regenerate draft" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Replace current draft" }),
+    );
+    expect(onGenerateDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders Rail Ask loading, error, and applied undo states compactly", () => {
+    const onAskAiUndo = vi.fn();
+    const { rerender } = render(
+      <ProposalRail
+        {...baseProps}
+        activeTab="ask"
+        hideTabs
+        askAiBusy
+        askAiValue="Make it tighter"
+        askAiReview={{ status: "loading" }}
+      />,
+    );
+
+    expect(screen.getByText("Working...")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+
+    rerender(
+      <ProposalRail
+        {...baseProps}
+        activeTab="ask"
+        hideTabs
+        askAiValue="Make it tighter"
+        askAiReview={{
+          status: "error",
+          errorMessage: "Ask AI returned no text.",
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Ask AI returned no text.",
+    );
+
+    rerender(
+      <ProposalRail
+        {...baseProps}
+        activeTab="ask"
+        hideTabs
+        askAiValue=""
+        askAiReview={{ status: "applied", canUndo: true }}
+        onAskAiUndo={onAskAiUndo}
+      />,
+    );
+
+    expect(screen.getByText("Applied.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(onAskAiUndo).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the Draft panel available outside the Ask drawer", () => {
     render(<ProposalRail {...baseProps} />);
 

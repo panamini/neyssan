@@ -17,6 +17,9 @@ import {
 import { PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY } from "../../lib/proposal-workspace-state";
 import { PROPOSAL_ATTACHED_CV_STORAGE_KEY } from "../../lib/proposal-personalization";
 
+const transformEditorSelectionMock = vi.hoisted(() => vi.fn());
+const genericActionMock = vi.hoisted(() => vi.fn().mockResolvedValue(null));
+
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
     isLoading: false,
@@ -24,13 +27,17 @@ vi.mock("convex/react", () => ({
   }),
   useQuery: () => null,
   useMutation: () => vi.fn().mockResolvedValue(undefined),
-  useAction: () => vi.fn().mockResolvedValue(null),
+  useAction: (action: unknown) =>
+    action === "functions.transformEditorSelection"
+      ? transformEditorSelectionMock
+      : genericActionMock,
 }));
 
 vi.mock("../../../convex/_generated/api", () => ({
   api: {
     functions: {
       generateProposal: "functions.generateProposal",
+      transformEditorSelection: "functions.transformEditorSelection",
     },
     proposalHandoffs: { get: "proposalHandoffs.get" },
     proposalSettings: { getCurrent: "proposalSettings.getCurrent" },
@@ -168,10 +175,44 @@ function MockResumePage(): JSX.Element {
   );
 }
 
+function seedStoredProposalDraft(content: string): void {
+  writeStoredProposalOutputDraft({
+    proposalContent: content,
+    proposalType: "cover_letter",
+    proposalVoicePreset: "signature",
+    proposalTemplateId: "swiss_margin",
+    proposalVerbatiStyle: {
+      familyId: "swiss",
+      layout: "swiss",
+      typography: "signature",
+      palette: "sauge",
+    },
+    proposalStyleLinkMode: "proposal_local",
+    proposalStyleChoice: "balanced",
+    proposalApplicantName: "Alex Martin",
+    proposalApplicantRole: "Operations Associate",
+    proposalDocumentTitle: "Operations Associate",
+    proposalDocumentMeta: "Cover letter",
+    generatedProposalId: null,
+    proposalOutputMode: "preview",
+    paletteOverride: null,
+    customAccentHex: null,
+    templateBundleId: "swiss_serif",
+    typographyOverride: null,
+    layoutOverride: null,
+    proposalDocumentTitleManual: true,
+    characterLimitMode: null,
+    characterLimitValue: null,
+  });
+}
+
 describe("ProposalForge draft persistence", () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    transformEditorSelectionMock.mockReset();
+    transformEditorSelectionMock.mockResolvedValue(null);
+    genericActionMock.mockClear();
   });
 
   it("syncs pasted rail job offer text into the compose draft before blur", async () => {
@@ -188,8 +229,13 @@ describe("ProposalForge draft persistence", () => {
       "Paste your job offer here",
     );
     expect(railJobOfferInput).toBeInTheDocument();
-    expect(screen.getByText("No job loaded")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
+    expect(screen.queryByText("No job loaded")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Generate" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Draft proposal" }),
+    ).not.toBeInTheDocument();
 
     const jobSites = screen.getByLabelText("Job sites");
     expect(
@@ -244,8 +290,13 @@ describe("ProposalForge draft persistence", () => {
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
       "empty-description",
     );
-    expect(screen.getByText("No job loaded")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
+    expect(screen.queryByText("No job loaded")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Generate" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Draft proposal" }),
+    ).not.toBeInTheDocument();
     expect(
       JSON.parse(
         window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
@@ -308,8 +359,13 @@ describe("ProposalForge draft persistence", () => {
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "|edit",
     );
-    expect(screen.getByText("No job loaded")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
+    expect(screen.queryByText("No job loaded")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Generate" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Draft proposal" }),
+    ).not.toBeInTheDocument();
     expect(readStoredProposalOutputDraft()).toMatchObject({
       generatedProposalId: null,
       proposalContent: "",
@@ -379,12 +435,168 @@ describe("ProposalForge draft persistence", () => {
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
       "empty-description",
     );
-    expect(screen.getByText("No job loaded")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
+    expect(screen.queryByText("No job loaded")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Generate" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Draft proposal" }),
+    ).not.toBeInTheDocument();
     expect(window.localStorage.getItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY)).toBe(
       "cv_alpha",
     );
     expect(window.localStorage.getItem("cvActiveId")).toBe("cv_beta");
+  });
+
+  it("reviews Rail Ask output before mutating the proposal draft", async () => {
+    seedStoredProposalDraft("Original proposal body.");
+    transformEditorSelectionMock.mockResolvedValue({
+      kind: "text",
+      text: "Reviewed proposal body.",
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "Original proposal body.|preview",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(
+      screen.queryByRole("button", { name: "Draft proposal" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Generate" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Change source" }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("Ask for a change"), {
+      target: { value: "Make it more direct" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      expect(transformEditorSelectionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mode: "custom",
+          instruction: "Make it more direct",
+          selectedText: expect.stringContaining("Original proposal body."),
+        }),
+      );
+    });
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "Original proposal body.|preview",
+    );
+    expect(await screen.findByText("Suggested draft")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Change source" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Rail Ask suggested draft")).toHaveTextContent(
+      "Reviewed proposal body.",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply to draft" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Reviewed proposal body.|preview",
+      );
+    });
+    expect(screen.getByText("Applied.")).toBeInTheDocument();
+  });
+
+  it("discards Rail Ask output without mutating the proposal draft", async () => {
+    seedStoredProposalDraft("Original proposal body.");
+    transformEditorSelectionMock.mockResolvedValue({
+      kind: "text",
+      text: "Reviewed proposal body.",
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.change(screen.getByPlaceholderText("Ask for a change"), {
+      target: { value: "Make it more direct" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Suggested draft")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+    expect(
+      screen.queryByLabelText("Rail Ask suggested draft"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "Original proposal body.|preview",
+    );
+  });
+
+  it("undoes an explicitly applied Rail Ask draft replacement", async () => {
+    seedStoredProposalDraft("Original proposal body.");
+    transformEditorSelectionMock.mockResolvedValue({
+      kind: "text",
+      text: "Reviewed proposal body.",
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.change(screen.getByPlaceholderText("Ask for a change"), {
+      target: { value: "Make it more direct" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply to draft" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Reviewed proposal body.|preview",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Original proposal body.|preview",
+      );
+    });
+  });
+
+  it("renders Rail Ask empty-result errors without mutating the proposal draft", async () => {
+    seedStoredProposalDraft("Original proposal body.");
+    transformEditorSelectionMock.mockResolvedValue(null);
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    fireEvent.change(screen.getByPlaceholderText("Ask for a change"), {
+      target: { value: "Make it more direct" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Ask AI returned no text.",
+    );
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "Original proposal body.|preview",
+    );
   });
 
   it("ignores stale stored compose and output drafts on plain proposal re-entry", () => {
@@ -557,7 +769,12 @@ describe("ProposalForge draft persistence", () => {
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "Generated proposal body.|preview",
     );
-    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "Generate" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Draft proposal" }),
+    ).not.toBeInTheDocument();
   });
 
   it("ignores stale session output source brief on plain proposal re-entry", () => {
@@ -617,6 +834,11 @@ describe("ProposalForge draft persistence", () => {
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "Generated proposal body.|preview",
     );
-    expect(screen.getByRole("button", { name: "Generate" })).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "Generate" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Draft proposal" }),
+    ).not.toBeInTheDocument();
   });
 });
