@@ -524,16 +524,34 @@ function truthPlanSourceForFixtureFact(
 function buildTruthPlanForFixture(
   fixture: ProposalQualityFixture,
 ): ProposalTruthPlanV1 {
+  const candidateFacts = fixture.candidateFacts.map((fact) => ({
+    id: fact.id,
+    fact: fact.text,
+    source: truthPlanSourceForFixtureFact(fact),
+    sourceText: fact.text,
+  }));
+  const existingFactSurface = new Set(
+    candidateFacts.map((fact) => normalize(fact.fact)),
+  );
+  for (const [index, fact] of (
+    fixture.sourceBackedCandidateFacts ?? []
+  ).entries()) {
+    if (!fact.trim()) continue;
+    const normalized = normalize(fact);
+    if (existingFactSurface.has(normalized)) continue;
+    candidateFacts.push({
+      id: `source_backed_${index + 1}`,
+      fact,
+      source: "candidate_experience",
+      sourceText: fact,
+    });
+    existingFactSurface.add(normalized);
+  }
   return buildProposalTruthPlanV1({
     jobTitle: fixture.jobTitle,
     jobDescription: fixture.jobDescription,
     contextMode: fixture.contextMode,
-    candidateFacts: fixture.candidateFacts.map((fact) => ({
-      id: fact.id,
-      fact: fact.text,
-      source: truthPlanSourceForFixtureFact(fact),
-      sourceText: fact.text,
-    })),
+    candidateFacts,
     expectedCriticalRequirements: fixture.topJobPriorities,
     expectedBlockedClaims: fixture.blockedClaims,
   });
@@ -559,6 +577,13 @@ function truthPlanOutputCheckStatus(
 function sentenceClaimedAsCandidateCapability(sentence: string): boolean {
   if (
     /\b(?:i(?:'m| am|’m)\s+interested|i(?:'d| would)\s+(?:welcome|value)\s+the\s+opportunity|willing(?:ness)?\s+to\s+discuss|role\s+(?:centers|focuses|involves)|posting\s+(?:centers|focuses|involves))\b/i.test(
+      sentence,
+    )
+  ) {
+    return false;
+  }
+  if (
+    /\b(?:that is where my work has been strongest|i have worked from the [^.!?\n]{1,80} side|i can partner(?:\s+cleanly|\s+closely)? with)\b/i.test(
       sentence,
     )
   ) {
@@ -619,11 +644,7 @@ function analyzeTruthPlanOutput(args: {
               : "blocked_claim_used",
           claim: blockedClaim.claim,
           evidence: sentence,
-          severity:
-            blockedClaim.reason === "unsupported_leadership" ||
-            blockedClaim.reason === "no_context_personal_claim"
-              ? "high"
-              : "medium",
+          severity: "high",
         });
       }
     }
@@ -725,7 +746,7 @@ function analyzeTruthPlanOutput(args: {
       type: "direct_claim_without_fact",
       claim: "candidate capability not matched to truth-plan fact",
       evidence: sentence,
-      severity: truthPlan.writingMode === "normal" ? "medium" : "high",
+      severity: "high",
     });
   }
 

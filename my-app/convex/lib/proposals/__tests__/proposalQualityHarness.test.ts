@@ -341,6 +341,169 @@ describe("proposal quality harness", () => {
     expect(result.internalScoringRubric.claimBoundaryDiscipline).toBe(5);
   });
 
+  it("hard-fails normal-mode candidate claims without matching CV evidence", () => {
+    const fixture = PROPOSAL_QUALITY_FIXTURES.find(
+      (candidate) => candidate.id === "strong-fit",
+    )!;
+    const letter =
+      "Improved signup conversion by 11 percent after iterative UI experiments. I built payroll systems and owned finance automation.";
+
+    const [result] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [
+        {
+          ...fixture,
+          letters: { baseline: letter, criteria_audit_shadow: letter },
+        },
+      ],
+    });
+
+    expect(result.truthPlan?.writingMode).toBe("normal");
+    expect(result.truthPlanOutputCheck.status).toBe("fail");
+    expect(result.truthPlanOutputCheck.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "direct_claim_without_fact",
+          severity: "high",
+        }),
+      ]),
+    );
+    expect(assertProposalQualityHardGates([result])).toContain(
+      "strong-fit:semantic_planner_shadow:direct_claim_without_fact",
+    );
+  });
+
+  it("hard-fails blocked claims used as candidate capability while allowing safe boundary wording", () => {
+    const fixture = PROPOSAL_QUALITY_FIXTURES.find(
+      (candidate) => candidate.id === "unsupported-tool",
+    )!;
+    const unsafeLetter =
+      "Maintained incident trackers and escalation handoffs for operations teams. I have Kubernetes reliability work and AWS incident response experience.";
+    const safeLetter =
+      "Maintained incident trackers and escalation handoffs for operations teams. Kubernetes reliability work is not source-backed here, and AWS incident response should stay as a topic to discuss.";
+
+    const [unsafeResult, safeResult] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [
+        {
+          ...fixture,
+          letters: { baseline: unsafeLetter, criteria_audit_shadow: unsafeLetter },
+        },
+        {
+          ...fixture,
+          id: "unsupported-tool-safe-boundary",
+          letters: { baseline: safeLetter, criteria_audit_shadow: safeLetter },
+        },
+      ],
+    });
+
+    expect(unsafeResult.truthPlanOutputCheck.status).toBe("fail");
+    expect(unsafeResult.truthPlanOutputCheck.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "blocked_claim_used",
+          severity: "high",
+        }),
+      ]),
+    );
+    expect(assertProposalQualityHardGates([unsafeResult])).toContain(
+      "unsupported-tool:semantic_planner_shadow:blocked_claim_used",
+    );
+    expect(safeResult.truthPlanOutputCheck.violations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "blocked_claim_used",
+        }),
+      ]),
+    );
+  });
+
+  it("matches company-value signals only to genuinely supporting candidate evidence", () => {
+    const matchingFixture = {
+      id: "company-value-matched-evidence",
+      label: "company value matched evidence",
+      jobTitle: "Client Operations Coordinator",
+      jobDescription:
+        "Our principles are customer trust and accountability. Coordinate client updates and issue follow-up.",
+      contextMode: "rich" as const,
+      candidateFacts: [
+        {
+          id: "f1",
+          text: "Managed weekly stakeholder updates and issue tracking for client operations.",
+          source: "cv" as const,
+          mapsTo: ["client updates", "issue follow-up"],
+          priority: "responsibility" as const,
+        },
+      ],
+      expectedCriticalRequirements: ["client updates"],
+      expectedSupportedKeywords: ["client updates", "issue tracking"],
+      expectedBlockedKeywords: [],
+      expectedForbiddenPhrases: [],
+      safeRoleTransitions: ["issue follow-up"],
+      letters: {
+        baseline:
+          "Managed weekly stakeholder updates and issue tracking for client operations.",
+        criteria_audit_shadow:
+          "Managed weekly stakeholder updates and issue tracking for client operations.",
+      },
+    };
+    const unmatchedFixture = {
+      ...matchingFixture,
+      id: "company-value-unmatched-evidence",
+      jobDescription:
+        "Our principles are security and trust. Maintain secure audit workflows and privacy controls.",
+      candidateFacts: [
+        {
+          id: "f1",
+          text: "Created brand campaign copy for seasonal launches.",
+          source: "cv" as const,
+          mapsTo: ["campaign copy"],
+          priority: "responsibility" as const,
+        },
+      ],
+      expectedCriticalRequirements: ["secure audit workflows"],
+      expectedSupportedKeywords: ["campaign copy"],
+      safeRoleTransitions: ["secure audit workflows"],
+      letters: {
+        baseline: "Created brand campaign copy for seasonal launches.",
+        criteria_audit_shadow:
+          "Created brand campaign copy for seasonal launches.",
+      },
+    };
+
+    const [matchedResult, unmatchedResult] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [matchingFixture, unmatchedFixture],
+    });
+    const matchedValueSignals = matchedResult.criteriaSignals.filter(
+      (signal) => signal.category === "company_value",
+    );
+    const unmatchedValueSignals = unmatchedResult.criteriaSignals.filter(
+      (signal) => signal.category === "company_value",
+    );
+
+    expect(matchedValueSignals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          allowed_use: "company_bridge",
+          matched_candidate_evidence_ids: ["f1"],
+        }),
+      ]),
+    );
+    expect(
+      unmatchedValueSignals.every(
+        (signal) =>
+          signal.allowed_use !== "company_bridge" &&
+          signal.matched_candidate_evidence_ids.length === 0,
+      ),
+    ).toBe(true);
+    expect(
+      [...matchedValueSignals, ...unmatchedValueSignals]
+        .filter((signal) => signal.confidence === "low")
+        .every((signal) => signal.allowed_use !== "company_bridge"),
+    ).toBe(true);
+  });
+
   it("treats the frontend fixture opening as fixture-only", () => {
     const salesFixture = {
       ...PROPOSAL_QUALITY_FIXTURES.find((fixture) => fixture.id === "strong-fit")!,

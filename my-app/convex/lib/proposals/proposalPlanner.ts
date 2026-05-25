@@ -1289,6 +1289,107 @@ function addCriteriaSignal(
   signals.push({ ...signal, priority_rank: criteriaSignalPriority(signal.category) });
 }
 
+function companyValueMatchesCandidateEvidence(
+  valueLabel: string,
+  evidenceText: string,
+): boolean {
+  const value = normalizeComparisonToken(valueLabel);
+  const evidence = normalizeComparisonToken(evidenceText);
+  if (!value || !evidence) return false;
+
+  const hasAny = (terms: readonly string[]) =>
+    terms.some((term) => evidence.includes(term));
+
+  if (value.includes("customer") || value.includes("client") || value.includes("trust")) {
+    return hasAny([
+      "customer",
+      "client",
+      "patient",
+      "user",
+      "support",
+      "service",
+      "issue tracking",
+      "compliance",
+      "reliability",
+      "reliable",
+      "workflow",
+      "facing",
+    ]);
+  }
+  if (value.includes("operational") || value.includes("excellence") || value.includes("accountability")) {
+    return hasAny([
+      "process",
+      "documentation",
+      "reporting",
+      "coordination",
+      "handoff",
+      "accuracy",
+      "reliability",
+      "operations",
+      "tracked",
+      "maintained",
+    ]);
+  }
+  if (value.includes("craft") || value.includes("quality") || value.includes("precision")) {
+    return hasAny([
+      "design system",
+      "product quality",
+      "ui",
+      "writing",
+      "code quality",
+      "shipped",
+      "detail",
+      "quality",
+      "polish",
+    ]);
+  }
+  if (value.includes("speed") || value.includes("iteration") || value.includes("fast")) {
+    return hasAny([
+      "experiment",
+      "conversion",
+      "iteration",
+      "iterative",
+      "release",
+      "rapid",
+      "delivery",
+      "turnaround",
+      "reduced",
+      "improved",
+    ]);
+  }
+  if (value.includes("security") || value.includes("safety") || value.includes("compliance") || value.includes("reliability")) {
+    return hasAny([
+      "security",
+      "compliance",
+      "risk",
+      "audit",
+      "regulated",
+      "privacy",
+      "reliability",
+      "incident",
+      "safety",
+      "policy",
+    ]);
+  }
+  if (value.includes("collaboration") || value.includes("ownership")) {
+    return hasAny([
+      "partnered",
+      "collaborated",
+      "cross functional",
+      "handoff",
+      "stakeholder",
+      "owned",
+      "led",
+      "coordinated",
+    ]);
+  }
+
+  return value
+    .split(/\s+/)
+    .filter((token) => token.length >= 5)
+    .some((token) => evidence.includes(token));
+}
+
 function buildCriteriaSignals(args: {
   roleThesis: CoverLetterRoleThesisV1;
   jobPriorities: ProposalTruthPlanV1["jobPriorities"];
@@ -1336,6 +1437,11 @@ function buildCriteriaSignals(args: {
     });
   }
   for (const value of args.roleThesis.company_value_signals) {
+    const matchedEvidenceIds = args.roleThesis.candidate_evidence
+      .filter((item) =>
+        companyValueMatchesCandidateEvidence(value.label, item.action),
+      )
+      .map((item) => item.id);
     addCriteriaSignal(signals, {
       label: value.label,
       category: "company_value",
@@ -1343,8 +1449,13 @@ function buildCriteriaSignals(args: {
       source_text: value.source_text,
       confidence: value.confidence,
       relevance_to_role: value.confidence === "low" ? "low" : "medium",
-      matched_candidate_evidence_ids: args.roleThesis.candidate_evidence.map((item) => item.id),
-      allowed_use: value.confidence === "low" ? "do_not_use_in_output" : "company_bridge",
+      matched_candidate_evidence_ids: matchedEvidenceIds,
+      allowed_use:
+        value.confidence === "low"
+          ? "do_not_use_in_output"
+          : matchedEvidenceIds.length > 0
+            ? "company_bridge"
+            : "tone_only",
     });
   }
   for (const term of args.roleThesis.ats_terms) {
