@@ -80,11 +80,23 @@ describe("proposal quality harness", () => {
       "CoverLetterWritingCanonV1",
     );
     expect(Object.keys(COVER_LETTER_WRITING_CANON_V1.openingModes)).toEqual([
-      "proof_led",
-      "through_line",
-      "candidate_work_context",
+      "job_thesis",
+      "proof_first",
+      "company_problem",
+      "direct_match",
+      "human_short",
       "adjacent_boundary",
       "no_context_work_surface",
+    ]);
+    expect(COVER_LETTER_WRITING_CANON_V1.priorityOrder).toEqual([
+      "Hard job requirements",
+      "Core role responsibilities",
+      "Candidate CV evidence",
+      "Claim boundaries",
+      "Company/product context",
+      "Grounded company values / working principles",
+      "Natural ATS terms",
+      "Tone / format mode",
     ]);
     expect(COVER_LETTER_WRITING_CANON_V1.bannedOpeningStarts).toEqual(
       expect.arrayContaining([
@@ -97,11 +109,12 @@ describe("proposal quality harness", () => {
         "What interests me about this role",
       ]),
     );
-    expect(gold.openingMode).toBe("proof_led");
-    expect(wordCount).toBeGreaterThanOrEqual(180);
-    expect(wordCount).toBeLessThanOrEqual(240);
-    expect(gold.letter).toContain("design system migration used across 4 product squads");
-    expect(gold.letter).toContain("reduced page load time by 28 percent");
+    expect(gold.openingMode).toBe("job_thesis");
+    expect(wordCount).toBeGreaterThanOrEqual(120);
+    expect(wordCount).toBeLessThanOrEqual(230);
+    expect(gold.letter).toBe(
+      "Dear Hiring Manager,\n\nYour frontend role sits where product UI, design systems, performance, and experimentation meet. That is where my work has been strongest. At BrightLayer, I led a design-system migration used across four product squads, then reduced page-load time by 28 percent through bundle and rendering improvements.\n\nAt Northline Labs, I built experimentation dashboards for product and growth teams and partnered directly with design on customer-facing workflow improvements. The same product loop carried into signup, where targeted UI experiments improved conversion by 11 percent.\n\nI would bring React and TypeScript depth, design-system discipline, and a rigorous performance habit to your team. I have worked from the frontend side of experimentation, and I can partner cleanly with product and data teams on the analytics layer behind it.\n\nSincerely,  \nAlex Martin",
+    );
     expect(gold.letter).toContain("improved conversion by 11 percent");
   });
 
@@ -136,7 +149,7 @@ describe("proposal quality harness", () => {
     expect(result.coverLetterWritingCanon).toEqual(
       expect.objectContaining({
         version: "CoverLetterWritingCanonV1",
-        openingMode: "proof_led",
+        openingMode: "job_thesis",
         hardFailures: [],
         warnings: [],
       }),
@@ -285,6 +298,153 @@ describe("proposal quality harness", () => {
     );
     expect(shadow?.criteriaAudit?.keywordReusePolicy.blocked).toEqual(
       expect.arrayContaining(["SQL analysis", "Salesforce reporting"]),
+    );
+  });
+
+  it("exposes RoleThesis and generalized criteria signals on semantic planner output", () => {
+    const result = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: PROPOSAL_QUALITY_FIXTURES.filter(
+        (fixture) => fixture.id === "employment-strong-frontend",
+      ),
+    })[0];
+
+    expect(result.truthPlan?.roleThesis).toEqual(
+      expect.objectContaining({
+        role_type: "frontend engineer",
+        hard_job_requirements: expect.arrayContaining([
+          "React and TypeScript development",
+        ]),
+        format_mode: "full_cover_letter",
+      }),
+    );
+    expect(result.criteriaSignals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: "hard_requirement",
+          priority_rank: 1,
+          allowed_use: "role_thesis",
+        }),
+        expect.objectContaining({
+          category: "candidate_evidence",
+          priority_rank: 3,
+          allowed_use: "evidence_selection",
+        }),
+        expect.objectContaining({
+          category: "claim_boundary",
+          priority_rank: 4,
+          allowed_use: "claim_boundary",
+        }),
+      ]),
+    );
+    expect(result.internalScoringRubric.groundingAccuracy).toBe(5);
+    expect(result.internalScoringRubric.claimBoundaryDiscipline).toBe(5);
+  });
+
+  it("treats the frontend fixture opening as fixture-only", () => {
+    const salesFixture = {
+      ...PROPOSAL_QUALITY_FIXTURES.find((fixture) => fixture.id === "strong-fit")!,
+      id: "sales-fixture-template-reuse",
+      jobTitle: "Sales Executive",
+      jobDescription:
+        "Sell annual software contracts, manage prospect follow-up, and update CRM records.",
+      candidateFacts: [
+        {
+          id: "f1",
+          text: "Managed prospect follow-up and CRM records.",
+          source: "cv" as const,
+          mapsTo: ["prospect follow-up", "CRM records"],
+          priority: "responsibility" as const,
+        },
+      ],
+      expectedCriticalRequirements: ["prospect follow-up"],
+      expectedSupportedKeywords: ["prospect follow-up", "CRM records"],
+      expectedBlockedKeywords: [],
+      safeRoleTransitions: ["prospect follow-up"],
+      letters: {
+        baseline:
+          "Your frontend role sits where product UI, design systems, performance, and experimentation meet. Managed prospect follow-up and CRM records.",
+        criteria_audit_shadow:
+          "Your frontend role sits where product UI, design systems, performance, and experimentation meet. Managed prospect follow-up and CRM records.",
+      },
+    };
+
+    const [result] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [salesFixture],
+    });
+
+    expect(result.coverLetterWritingCanon.hardFailures).toEqual(
+      expect.arrayContaining([
+        "fixture_sentence_reused_outside_fixture",
+        "intersection_hook_reused_outside_fixture",
+        "tech_language_on_non_tech_role",
+      ]),
+    );
+  });
+
+  it("fails defensive gaps, recruiter meta commentary, ATS lists, and unsupported mission praise", () => {
+    const fixture = PROPOSAL_QUALITY_FIXTURES.find(
+      (candidate) => candidate.id === "strong-fit",
+    )!;
+    const letter =
+      "Although I do not have every requirement, this letter shows the evidence is strong. Skills: React, TypeScript, dashboards, A/B testing, analytics, performance. Your mission resonates with me.";
+
+    const [result] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [
+        {
+          ...fixture,
+          letters: { baseline: letter, criteria_audit_shadow: letter },
+        },
+      ],
+    });
+
+    expect(result.coverLetterWritingCanon.hardFailures).toEqual(
+      expect.arrayContaining([
+        "defensive_gap_language",
+        "recruiter_meta_commentary",
+        "ats_keyword_list",
+        "fabricated_company_value_or_mission_claim",
+      ]),
+    );
+  });
+
+  it("keeps non-tech and thin-JD checks role-agnostic", () => {
+    const healthcareFixture = {
+      ...PROPOSAL_QUALITY_FIXTURES.find((fixture) => fixture.id === "strong-fit")!,
+      id: "healthcare-tech-language",
+      jobTitle: "Nurse",
+      jobDescription:
+        "Provide patient intake support, maintain clinical records, and communicate with care teams.",
+      candidateFacts: [
+        {
+          id: "f1",
+          text: "Maintained patient intake records.",
+          source: "cv" as const,
+          mapsTo: ["patient intake support", "clinical records"],
+          priority: "responsibility" as const,
+        },
+      ],
+      expectedCriticalRequirements: ["patient intake support", "clinical records"],
+      expectedSupportedKeywords: ["patient intake", "records"],
+      expectedBlockedKeywords: [],
+      safeRoleTransitions: ["clinical records"],
+      letters: {
+        baseline:
+          "Maintained patient intake records. I would bring React and product UI discipline to this startup-style healthcare role.",
+        criteria_audit_shadow:
+          "Maintained patient intake records. I would bring React and product UI discipline to this startup-style healthcare role.",
+      },
+    };
+
+    const [result] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [healthcareFixture],
+    });
+
+    expect(result.coverLetterWritingCanon.hardFailures).toContain(
+      "tech_language_on_non_tech_role",
     );
   });
 

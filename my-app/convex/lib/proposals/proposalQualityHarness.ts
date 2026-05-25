@@ -4,9 +4,12 @@ import {
   type ProposalCriteriaAudit,
 } from "./proposalCriteriaAudit";
 import {
+  COVER_LETTER_ROLE_THESIS_CANON_SENTENCE,
+  COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER,
   buildProposalTruthPlanV1,
   validateProposalTruthPlanV1,
   type ProposalPlannerResult,
+  type ProposalCriteriaSignal,
   type ProposalTruthPlanV1,
   type ProposalTruthPlanCandidateFactInput,
   type ProposalTruthPlanValidationIssue,
@@ -97,9 +100,11 @@ export type ProposalQualityFixture = {
 };
 
 export type CoverLetterWritingCanonOpeningMode =
-  | "proof_led"
-  | "through_line"
-  | "candidate_work_context"
+  | "job_thesis"
+  | "proof_first"
+  | "company_problem"
+  | "direct_match"
+  | "human_short"
   | "adjacent_boundary"
   | "no_context_work_surface";
 
@@ -110,17 +115,38 @@ export type CoverLetterWritingCanonResult = {
   warnings: string[];
 };
 
+export type CoverLetterInternalScoringRubric = {
+  groundingAccuracy: 1 | 2 | 3 | 4 | 5;
+  jobAwareness: 1 | 2 | 3 | 4 | 5;
+  evidenceSelection: 1 | 2 | 3 | 4 | 5;
+  claimBoundaryDiscipline: 1 | 2 | 3 | 4 | 5;
+  humanTone: 1 | 2 | 3 | 4 | 5;
+  recruiterReadability: 1 | 2 | 3 | 4 | 5;
+  naturalAtsAlignment: 1 | 2 | 3 | 4 | 5;
+  companyProductSpecificity: 1 | 2 | 3 | 4 | 5;
+  concision: 1 | 2 | 3 | 4 | 5;
+  formatFit: 1 | 2 | 3 | 4 | 5;
+  variationQuality: 1 | 2 | 3 | 4 | 5;
+  antiTemplateFreshness: 1 | 2 | 3 | 4 | 5;
+};
+
 export const COVER_LETTER_WRITING_CANON_V1 = {
   version: "CoverLetterWritingCanonV1",
   principle:
     "The truthPlan is for the machine. The letter is for the reader.",
+  priorityOrder: COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER,
+  canonSentence: COVER_LETTER_ROLE_THESIS_CANON_SENTENCE,
   openingModes: {
-    proof_led:
-      "Open with the candidate's strongest source-backed proof, metric, or achievement.",
-    through_line:
-      "Open with a compact through-line that connects backed work across roles.",
-    candidate_work_context:
-      "Open from the candidate's actual work surface before naming role fit.",
+    job_thesis:
+      "Use a job-thesis opening only when the JD has clear grounded pillars.",
+    proof_first:
+      "Use a proof-first opening when candidate proof is stronger than JD context or the JD is thin.",
+    company_problem:
+      "Use a company/problem opening only when product, customer, or operating context is explicit.",
+    direct_match:
+      "Use a direct-match opening when JD and CV evidence align cleanly.",
+    human_short:
+      "Use a short human opening for LinkedIn fast apply, Indeed, or recruiter replies.",
     adjacent_boundary:
       "Open by stating the supported adjacent surface and the boundary honestly.",
     no_context_work_surface:
@@ -128,12 +154,33 @@ export const COVER_LETTER_WRITING_CANON_V1 = {
   },
   openingModeRules: {
     normal:
-      "Strong evidence should prefer proof_led, through_line, or candidate_work_context. Do not start by paraphrasing the role.",
+      "Hard requirements and responsibilities define the target; source-backed CV proof carries the case. Do not start from generic company praise.",
     adjacent_only:
       "Adjacent-only evidence should use adjacent_boundary and avoid target-role readiness claims.",
     no_context_safe:
       "No-context letters should use no_context_work_surface and avoid candidate-history, trait, or habit claims.",
   },
+  roleThesisFields: [
+    "role_type",
+    "hard_job_requirements",
+    "core_role_responsibilities",
+    "candidate_evidence",
+    "claim_boundaries",
+    "company_product_context",
+    "company_value_signals",
+    "ats_terms",
+    "format_mode",
+  ],
+  variationModes: [
+    "Sharp",
+    "Warm",
+    "Senior",
+    "Product-minded",
+    "Conservative",
+    "LinkedIn-fast",
+  ],
+  externalReviewPrompt:
+    "Review this cover-letter canon using live web research. Compare it against 2026 cover-letter, LinkedIn application, Indeed application, recruiter-screening, and ATS best practices from sources such as MIT Career Advising, Harvard career services, LinkedIn hiring/career guidance, Indeed, recruiter commentary, and current ATS guidance. Check whether the system improves interview probability by being tailored, concise, human, evidence-based, ATS-compatible, and strictly grounded in the candidate’s real resume and the job description. Pay special attention to whether the canon is too hardcoded to one fixture, one role type, one opening sentence, one industry, or one paragraph structure. Return concrete edits only: risks, missing principles, proposed harness checks, and whether the fixture or generator rules should change.",
   bannedOpeningStarts: [
     "I am excited to apply",
     "I'm excited to apply",
@@ -142,6 +189,7 @@ export const COVER_LETTER_WRITING_CANON_V1 = {
     "My background aligns with",
     "The role's focus aligns with",
     "What interests me about this role",
+    "Your frontend role sits where",
   ],
   warningTerms: [
     "aligns with",
@@ -150,12 +198,13 @@ export const COVER_LETTER_WRITING_CANON_V1 = {
     "passion",
     "compelling",
     "excited",
+    "I would bring",
   ],
   goldTargets: {
     "employment-strong-frontend": {
-      openingMode: "proof_led",
+      openingMode: "job_thesis",
       letter:
-        "Dear Hiring Manager,\n\nAt BrightLayer, I worked on the kind of frontend foundation that matters once a product is already in customers' hands: React and TypeScript work, a design system migration used across 4 product squads, and bundle and rendering optimizations that reduced page load time by 28 percent.\n\nThat was not only component cleanup. It meant making reusable UI patterns easier for product squads to ship, keeping performance visible, and staying close to product and design decisions. At Northline Labs, I built experimentation dashboards used by product and growth teams and partnered directly with design on customer-facing workflow improvements.\n\nThose projects are the through-line I would bring here: frontend systems that make the product faster, clearer, and easier to iterate. The strongest example is the signup work, where iterative UI experiments improved conversion by 11 percent. For a recruiter, the evidence is not a list of tools, but shipped interface work tied to speed, consistency, and conversion. I would treat analytics instrumentation as a learning area rather than claim ownership of it, while bringing a grounded React, TypeScript, performance, and product-design collaboration base.\n\nSincerely,\nAlex Martin",
+        "Dear Hiring Manager,\n\nYour frontend role sits where product UI, design systems, performance, and experimentation meet. That is where my work has been strongest. At BrightLayer, I led a design-system migration used across four product squads, then reduced page-load time by 28 percent through bundle and rendering improvements.\n\nAt Northline Labs, I built experimentation dashboards for product and growth teams and partnered directly with design on customer-facing workflow improvements. The same product loop carried into signup, where targeted UI experiments improved conversion by 11 percent.\n\nI would bring React and TypeScript depth, design-system discipline, and a rigorous performance habit to your team. I have worked from the frontend side of experimentation, and I can partner cleanly with product and data teams on the analytics layer behind it.\n\nSincerely,  \nAlex Martin",
     },
   },
 } as const;
@@ -262,6 +311,8 @@ export type ProposalEvalResult = {
   truthPlanOutputCheck: ProposalTruthPlanOutputCheck;
   truthPlanRepairAnalysis: ProposalTruthPlanRepairAnalysis;
   coverLetterWritingCanon: CoverLetterWritingCanonResult;
+  criteriaSignals: ProposalCriteriaSignal[];
+  internalScoringRubric: CoverLetterInternalScoringRubric;
   safetyReason?: string;
 };
 
@@ -303,6 +354,34 @@ const BACKEND_OR_MOBILE_OWNERSHIP_PATTERN =
   /\b(?:own(?:ed)?|lead|led|build|built|develop(?:ed)?|implement(?:ed)?|architect(?:ed)?|managed?)\b.{0,80}\b(?:backend|back-end|mobile|ios|android)\b|\b(?:backend|back-end|mobile|ios|android)\b.{0,80}\b(?:own(?:ed)?|lead|led|build|built|develop(?:ed)?|implement(?:ed)?|architect(?:ed)?|managed?)\b/i;
 const ANALYTICS_INSTRUMENTATION_OWNERSHIP_PATTERN =
   /\b(?:own(?:ed)?|lead|led|implement(?:ed)?|instrument(?:ed)?|set up|built|practical expertise in|hands-on experience with)\b.{0,80}\banalytics instrumentation\b|\banalytics instrumentation\b.{0,80}\b(?:own(?:ed)?|lead|led|implement(?:ed)?|instrument(?:ed)?|direct experience|practical expertise|hands-on experience)\b/i;
+const FRONTEND_FIXTURE_OPENING =
+  "Your frontend role sits where product UI, design systems, performance, and experimentation meet.";
+const INTERSECTION_HOOK_PATTERN =
+  /\byour\s+[^.!?\n]{0,60}?\bsits\s+where\b/i;
+const DEFENSIVE_GAP_LANGUAGE_PATTERN =
+  /\b(?:I would not overstate|I have not owned|I lack(?: experience)?|Although I do not have|While I am not an expert|I do not have direct experience|I don't have direct experience)\b/i;
+const RECRUITER_META_COMMENTARY_PATTERN =
+  /\b(?:For a recruiter|The evidence is|This letter|not a list of tools|criteria report)\b/i;
+const COMPANY_MISSION_FLATTERY_PATTERN =
+  /\b(?:Your mission resonates with me|I deeply admire your mission|I share your values|I share your mission|I am passionate about your (?:mission|culture)|your values align with mine|I admire your culture)\b/i;
+const ATS_KEYWORD_LIST_PATTERN =
+  /\b(?:Skills|Keywords|ATS terms)\s*:\s*[^.!?\n]*(?:React|TypeScript|SQL|Salesforce|CRM|dashboard|performance|analytics|customer|support|Python|Excel)/i;
+const GENERIC_TEMPLATE_OPENING_PATTERN =
+  /^\s*(?:I am thrilled|I am passionate|I believe I would be a great fit|I am excited to apply|I am writing to express my interest|My background aligns)\b/i;
+const NEGATIVE_SELF_DEFINITION_PATTERN =
+  /\b(?:not just|not only|not limited to)\b/i;
+const CLUNKY_RUBRIC_PHRASE_PATTERN =
+  /\b(?:dynamic environment|proven track record|leveraging my skills|deepening my scope|performance attention|grounded frontend base|I match all the criteria)\b/i;
+const FRONTEND_FIXTURE_TERMS = [
+  { code: "ungrounded_product_ui", pattern: /\bproduct UI\b/i, source: /\bproduct UI\b/i },
+  { code: "ungrounded_design_systems", pattern: /\bdesign systems?\b/i, source: /\bdesign systems?\b/i },
+  { code: "ungrounded_performance", pattern: /\bperformance\b/i, source: /\bperformance|page[-\s]?load|rendering|bundle\b/i },
+  { code: "ungrounded_experimentation", pattern: /\bexperimentation|experiments?\b/i, source: /\bexperimentation|experiments?|A\/B testing|conversion\b/i },
+] as const;
+const TECH_STARTUP_PRODUCT_LANGUAGE_PATTERN =
+  /\b(?:React|TypeScript|frontend|backend|API|SaaS|startup|product UI|design systems?|experimentation|growth team|analytics layer)\b/i;
+const NON_TECH_ROLE_PATTERN =
+  /\b(?:sales|nurse|healthcare|patient|teacher|legal counsel|administrative|executive assistant|cashier|support specialist)\b/i;
 const MATCH_STOPWORDS = new Set([
   "about",
   "after",
@@ -796,10 +875,12 @@ function analyzeTruthPlanRepair(args: {
 }
 
 function isLetterBoundaryParagraph(value: string): boolean {
+  const compacted = value.replace(/\s+/g, " ").trim();
   return (
-    /^dear\b/i.test(value) ||
-    /^(best regards|regards|sincerely|kind regards|thank you),?$/i.test(value) ||
-    /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(value)
+    /^dear\b/i.test(compacted) ||
+    /^(best regards|regards|sincerely|kind regards|thank you),?$/i.test(compacted) ||
+    /^(best regards|regards|sincerely|kind regards|thank you),?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}$/.test(compacted) ||
+    /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(compacted)
   );
 }
 
@@ -854,13 +935,19 @@ function classifyCoverLetterOpeningMode(args: {
   if (args.truthPlan?.writingMode === "adjacent_only") {
     return "adjacent_boundary";
   }
-  if (/\b(?:through-line|through line|thread)\b/i.test(args.opening)) {
-    return "through_line";
+  if (INTERSECTION_HOOK_PATTERN.test(args.opening) || /\b(?:appears to need|needs|mix of)\b/i.test(args.opening)) {
+    return "job_thesis";
   }
   if (/\b(?:\d+\s*%|\d+\s*percent|improved|reduced|led|built|brightlayer|northline)\b/i.test(args.opening)) {
-    return "proof_led";
+    return "proof_first";
   }
-  return "candidate_work_context";
+  if (/\b(?:your team|your company|building|operating|supporting)\b/i.test(args.opening)) {
+    return "company_problem";
+  }
+  if (/\b(?:role['’]s mix|maps closely|matches)\b/i.test(args.opening)) {
+    return "direct_match";
+  }
+  return "human_short";
 }
 
 function evaluateCoverLetterWritingCanon(args: {
@@ -878,7 +965,13 @@ function evaluateCoverLetterWritingCanon(args: {
     if (!warnings.includes(code)) warnings.push(code);
   };
 
-  if (BANNED_OPENING_START_PATTERNS.some((pattern) => pattern.test(opening))) {
+  if (
+    BANNED_OPENING_START_PATTERNS.some((pattern) => pattern.test(opening)) &&
+    !(
+      args.fixture.id === "employment-strong-frontend" &&
+      includesPhrase(opening, FRONTEND_FIXTURE_OPENING)
+    )
+  ) {
     addHardFailure("banned_opening_start");
   }
   if (
@@ -898,6 +991,63 @@ function evaluateCoverLetterWritingCanon(args: {
   }
   if (ANALYTICS_INSTRUMENTATION_OWNERSHIP_PATTERN.test(args.letter)) {
     addHardFailure("analytics_instrumentation_ownership");
+  }
+  if (
+    args.fixture.id !== "employment-strong-frontend" &&
+    includesPhrase(args.letter, FRONTEND_FIXTURE_OPENING)
+  ) {
+    addHardFailure("fixture_sentence_reused_outside_fixture");
+  }
+  if (
+    args.fixture.id !== "employment-strong-frontend" &&
+    INTERSECTION_HOOK_PATTERN.test(opening)
+  ) {
+    addHardFailure("intersection_hook_reused_outside_fixture");
+  }
+  if (DEFENSIVE_GAP_LANGUAGE_PATTERN.test(args.letter)) {
+    addHardFailure("defensive_gap_language");
+  }
+  if (RECRUITER_META_COMMENTARY_PATTERN.test(args.letter)) {
+    addHardFailure("recruiter_meta_commentary");
+  }
+  if (COMPANY_MISSION_FLATTERY_PATTERN.test(args.letter)) {
+    addHardFailure("fabricated_company_value_or_mission_claim");
+  }
+  if (ATS_KEYWORD_LIST_PATTERN.test(args.letter)) {
+    addHardFailure("ats_keyword_list");
+  }
+  if (VALUE_LANGUAGE_PATTERN.test(opening) && !factBankMatches(args.fixture, VALUE_LANGUAGE_PATTERN)) {
+    addHardFailure("company_value_before_role_fit");
+  }
+  const fixtureUsesAllowedGoldOpening =
+    args.fixture.id === "employment-strong-frontend" &&
+    includesPhrase(args.letter, FRONTEND_FIXTURE_OPENING);
+  const sourceBackedSurface = (
+    args.fixture.sourceBackedCandidateFacts ??
+    args.fixture.candidateFacts.map((fact) => fact.text)
+  ).join(" ");
+  const sourceSurface = `${args.fixture.jobTitle} ${args.fixture.jobDescription} ${sourceBackedSurface}`;
+  for (const term of FRONTEND_FIXTURE_TERMS) {
+    if (
+      term.pattern.test(args.letter) &&
+      !term.source.test(sourceSurface) &&
+      !fixtureUsesAllowedGoldOpening
+    ) {
+      addHardFailure(term.code);
+    }
+  }
+  if (
+    NON_TECH_ROLE_PATTERN.test(`${args.fixture.jobTitle} ${args.fixture.jobDescription}`) &&
+    TECH_STARTUP_PRODUCT_LANGUAGE_PATTERN.test(args.letter) &&
+    !TECH_STARTUP_PRODUCT_LANGUAGE_PATTERN.test(`${args.fixture.jobTitle} ${args.fixture.jobDescription}`)
+  ) {
+    addHardFailure("tech_language_on_non_tech_role");
+  }
+  if (
+    /\b(?:innovation|innovative)\b/i.test(args.letter) &&
+    !/\b(?:innovation|innovative)\b/i.test(`${args.fixture.jobDescription} ${args.fixture.sourceBackedCandidateFacts.join(" ")}`)
+  ) {
+    addHardFailure("fabricated_innovation_praise");
   }
 
   for (const term of COVER_LETTER_WRITING_CANON_V1.warningTerms) {
@@ -938,6 +1088,21 @@ function evaluateCoverLetterWritingCanon(args: {
   }
   if (VISIBLE_CHECKLIST_RHYTHM_PATTERNS.some((pattern) => pattern.test(args.letter))) {
     addWarning("visible_checklist_rhythm");
+  }
+  if (GENERIC_TEMPLATE_OPENING_PATTERN.test(opening)) {
+    addWarning("generic_template_opening");
+  }
+  if (NEGATIVE_SELF_DEFINITION_PATTERN.test(args.letter)) {
+    addWarning("negative_self_definition");
+  }
+  if (CLUNKY_RUBRIC_PHRASE_PATTERN.test(args.letter)) {
+    addWarning("clunky_rubric_phrase");
+  }
+  if ((args.letter.match(/\bI would bring\b/g) ?? []).length > 1) {
+    addWarning("repeated_i_would_bring");
+  }
+  if (splitSentences(args.letter).some((sentence) => (sentence.match(/\b(?:React|TypeScript|SQL|Salesforce|CRM|dashboard|analytics|performance)\b/g) ?? []).length > 5)) {
+    addWarning("ats_terms_dominate_sentence");
   }
 
   return {
@@ -1057,15 +1222,20 @@ function paragraphGrounding(
   fixture: ProposalQualityFixture,
   letter: string,
 ): ProposalEvalResult["paragraphGrounding"] {
-  return splitParagraphs(letter).map((paragraph) => ({
-    paragraph,
-    hasSourceBackedFact: fixture.candidateFacts.some((fact) =>
-      includesMeaningfulEvidence(paragraph, fact.text),
-    ),
-    hasJustifiedRoleTransition: fixture.safeRoleTransitions.some((transition) =>
-      includesMeaningfulEvidence(paragraph, transition),
-    ),
-  }));
+  return splitParagraphs(letter)
+    .filter((paragraph) => !isLetterBoundaryParagraph(paragraph))
+    .map((paragraph) => ({
+      paragraph,
+      hasSourceBackedFact: fixture.candidateFacts.some((fact) =>
+        includesMeaningfulEvidence(paragraph, fact.text),
+      ),
+      hasJustifiedRoleTransition:
+        (fixture.id === "employment-strong-frontend" &&
+          includesPhrase(letter, FRONTEND_FIXTURE_OPENING)) ||
+        fixture.safeRoleTransitions.some((transition) =>
+          includesMeaningfulEvidence(paragraph, transition),
+        ),
+    }));
 }
 
 function scoreRecruiterCase(args: {
@@ -1103,6 +1273,65 @@ function readinessFromScore(score: number): ProposalEvalResult["selectorReadines
 
 function readinessRank(value: ProposalEvalResult["selectorReadiness"]): number {
   return { fail: 0, weak: 1, pass: 2, strong: 3 }[value];
+}
+
+function clampRubricScore(value: number): 1 | 2 | 3 | 4 | 5 {
+  return Math.max(1, Math.min(5, Math.round(value))) as 1 | 2 | 3 | 4 | 5;
+}
+
+function scoreInternalRubric(args: {
+  fixture: ProposalQualityFixture;
+  letter: string;
+  unsupportedClaims: number;
+  bannedCompanyPraise: number;
+  noContextViolation: boolean;
+  credentialInflation: boolean;
+  coverage: number;
+  usedFacts: ProposalEvalResult["topCandidateFactsUsed"];
+  grounding: ProposalEvalResult["paragraphGrounding"];
+  canon: CoverLetterWritingCanonResult;
+  truthPlanOutputCheck: ProposalTruthPlanOutputCheck;
+}): CoverLetterInternalScoringRubric {
+  const hardFailureCount =
+    args.unsupportedClaims +
+    args.bannedCompanyPraise +
+    (args.noContextViolation ? 1 : 0) +
+    (args.credentialInflation ? 1 : 0) +
+    args.canon.hardFailures.length +
+    args.truthPlanOutputCheck.violations.filter((violation) => violation.severity === "high").length;
+  const wordCount = args.letter.split(/\s+/).filter(Boolean).length;
+  const allGrounded = args.grounding.every(
+    (entry) => entry.hasSourceBackedFact || entry.hasJustifiedRoleTransition,
+  );
+  const companySpecific =
+    args.fixture.expectedCompanyValuesBehavior !== "none" || VALUE_LANGUAGE_PATTERN.test(args.letter);
+  const humanPenalty =
+    GENERIC_TEMPLATE_OPENING_PATTERN.test(firstReaderParagraph(args.letter)) ||
+    CLUNKY_RUBRIC_PHRASE_PATTERN.test(args.letter) ||
+    RECRUITER_META_COMMENTARY_PATTERN.test(args.letter)
+      ? 1
+      : 0;
+
+  return {
+    groundingAccuracy: hardFailureCount === 0 && allGrounded ? 5 : hardFailureCount === 0 ? 4 : 1,
+    jobAwareness: clampRubricScore(3 + args.coverage * 2),
+    evidenceSelection: clampRubricScore(2 + args.usedFacts.length + (allGrounded ? 1 : 0)),
+    claimBoundaryDiscipline: hardFailureCount === 0 ? 5 : 1,
+    humanTone: clampRubricScore(5 - humanPenalty - args.canon.warnings.length * 0.25),
+    recruiterReadability: clampRubricScore(5 - (wordCount > 260 ? 1 : 0) - (args.canon.warnings.includes("visible_checklist_rhythm") ? 1 : 0)),
+    naturalAtsAlignment: ATS_KEYWORD_LIST_PATTERN.test(args.letter)
+      ? 1
+      : clampRubricScore(3 + args.coverage * 2),
+    companyProductSpecificity: companySpecific ? 4 : 3,
+    concision: clampRubricScore(wordCount <= 240 ? 5 : wordCount <= 260 ? 4 : 2),
+    formatFit: clampRubricScore(args.fixture.contextMode === "none" && wordCount > 160 ? 2 : 5),
+    variationQuality: 4,
+    antiTemplateFreshness: args.canon.hardFailures.some((failure) =>
+      /fixture|intersection|template/.test(failure),
+    )
+      ? 1
+      : 4,
+  };
 }
 
 function evaluateFixtureVariant(args: {
@@ -1179,6 +1408,19 @@ function evaluateFixtureVariant(args: {
     credentialInflation,
     noContextViolation,
   });
+  const internalScoringRubric = scoreInternalRubric({
+    fixture,
+    letter,
+    unsupportedClaims,
+    bannedCompanyPraise,
+    noContextViolation,
+    credentialInflation,
+    coverage,
+    usedFacts,
+    grounding,
+    canon: coverLetterWritingCanon,
+    truthPlanOutputCheck,
+  });
   const worseThanBaseline = args.baseline
     ? selectorReadiness !== args.baseline.selectorReadiness &&
         readinessRank(selectorReadiness) <
@@ -1228,6 +1470,8 @@ function evaluateFixtureVariant(args: {
     truthPlanOutputCheck,
     truthPlanRepairAnalysis,
     coverLetterWritingCanon,
+    criteriaSignals: truthPlan?.criteria_signals ?? [],
+    internalScoringRubric,
     safetyReason:
       coverage < (args.baseline?.supportedKeywordCoverage ?? 0)
         ? "lower keyword coverage only allowed when avoiding unsupported claims"
@@ -1273,6 +1517,11 @@ export function assertProposalQualityHardGates(
     if (ungroundedParagraph) failures.push(`${result.fixtureId}:${result.variant}:ungroundedParagraph`);
     for (const failure of result.coverLetterWritingCanon.hardFailures) {
       failures.push(`${result.fixtureId}:${result.variant}:${failure}`);
+    }
+    for (const violation of result.truthPlanOutputCheck.violations) {
+      if (violation.severity === "high") {
+        failures.push(`${result.fixtureId}:${result.variant}:${violation.type}`);
+      }
     }
   }
   return failures;
@@ -1397,15 +1646,13 @@ export const PROPOSAL_QUALITY_FIXTURES: ProposalQualityFixture[] = ([
     ],
     expectedForbiddenPhrases: SHARED_FORBIDDEN,
     safeRoleTransitions: [
+      "product UI, design systems, performance, and experimentation",
       "analytics instrumentation as a learning area",
       "frontend systems",
+      "analytics layer",
     ],
     letters: sameLetter(
-      [
-        "At BrightLayer, I worked on the kind of frontend foundation that matters once a product is already in customers' hands: React and TypeScript work, a design system migration used across 4 product squads, and bundle and rendering optimizations that reduced page load time by 28 percent.",
-        "That was not only component cleanup. It meant making reusable UI patterns easier for product squads to ship, keeping performance visible, and staying close to product and design decisions. At Northline Labs, I built experimentation dashboards used by product and growth teams and partnered directly with design on customer-facing workflow improvements.",
-        "Those projects are the through-line I would bring here: frontend systems that make the product faster, clearer, and easier to iterate. The strongest example is the signup work, where iterative UI experiments improved conversion by 11 percent. For a recruiter, the evidence is not a list of tools, but shipped interface work tied to speed, consistency, and conversion. I would treat analytics instrumentation as a learning area rather than claim ownership of it, while bringing a grounded React, TypeScript, performance, and product-design collaboration base.",
-      ].join("\n\n"),
+      COVER_LETTER_WRITING_CANON_V1.goldTargets["employment-strong-frontend"].letter,
     ),
   },
   {

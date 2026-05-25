@@ -9,6 +9,7 @@ import {
 } from "./voicePresets";
 import type { ProposalOutputFormat } from "./proposalOutput";
 import {
+  analyzeCompanyValues,
   formatCompanyValuesPromptBlock,
   type CompanyValuesPack,
 } from "./companyValues";
@@ -61,6 +62,20 @@ export const PROPOSAL_PLANNER_OPENING_STRATEGIES = [
 ] as const;
 export const PROPOSAL_PLANNER_OUTPUT_LANGUAGES = ["en", "fr"] as const;
 
+export const COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER = [
+  "Hard job requirements",
+  "Core role responsibilities",
+  "Candidate CV evidence",
+  "Claim boundaries",
+  "Company/product context",
+  "Grounded company values / working principles",
+  "Natural ATS terms",
+  "Tone / format mode",
+] as const;
+
+export const COVER_LETTER_ROLE_THESIS_CANON_SENTENCE =
+  "Hard requirements and role responsibilities define the target. CV evidence proves relevance. Claim boundaries keep it honest. Company/product context and values sharpen specificity. ATS terms support discoverability. Tone and format shape delivery.";
+
 export type ProposalPlannerContextMode =
   (typeof PROPOSAL_PLANNER_CONTEXT_MODES)[number];
 export type ProposalPlannerDomainGap =
@@ -103,8 +118,94 @@ export type ProposalEvidenceSummary = {
   noContextMode: boolean;
 };
 
+export type CoverLetterRoleThesisV1 = {
+  role_type:
+    | "frontend engineer"
+    | "backend engineer"
+    | "product manager"
+    | "designer"
+    | "data analyst"
+    | "sales executive"
+    | "customer success manager"
+    | "operations manager"
+    | "marketing manager"
+    | "finance analyst"
+    | "executive assistant"
+    | "nurse"
+    | "teacher"
+    | "legal counsel"
+    | "general / unknown";
+  hard_job_requirements: string[];
+  core_role_responsibilities: string[];
+  candidate_evidence: Array<{
+    id: string;
+    source: string;
+    action: string;
+    matched_to: string[];
+    ownership_level:
+      | "owned"
+      | "led"
+      | "built"
+      | "supported"
+      | "partnered"
+      | "contributed"
+      | "exposed to";
+  }>;
+  claim_boundaries: string[];
+  company_product_context: string[];
+  company_value_signals: Array<{
+    label: string;
+    confidence: "high" | "medium" | "low";
+    source_text?: string;
+  }>;
+  ats_terms: string[];
+  format_mode:
+    | "full_cover_letter"
+    | "linkedin_fast_apply"
+    | "recruiter_reply"
+    | "email_cover_note"
+    | "conservative_enterprise";
+};
+
+export type ProposalCriteriaSignal = {
+  label: string;
+  category:
+    | "hard_requirement"
+    | "core_responsibility"
+    | "candidate_evidence"
+    | "claim_boundary"
+    | "company_product_context"
+    | "company_value"
+    | "working_principle"
+    | "ats_keyword"
+    | "tone_format";
+  source:
+    | "job_description"
+    | "resume"
+    | "company_values_pack"
+    | "company_profile"
+    | "user_provided_context"
+    | "detector";
+  source_text?: string;
+  confidence: "high" | "medium" | "low";
+  relevance_to_role: "high" | "medium" | "low";
+  matched_candidate_evidence_ids: string[];
+  priority_rank: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  allowed_use:
+    | "role_thesis"
+    | "evidence_selection"
+    | "claim_boundary"
+    | "company_bridge"
+    | "ats_language"
+    | "tone_only"
+    | "format_choice"
+    | "do_not_use_in_output";
+};
+
 export type ProposalTruthPlanV1 = {
   planVersion: "proposal_truth_plan_v1";
+  roleThesis: CoverLetterRoleThesisV1;
+  criteria_signals: ProposalCriteriaSignal[];
   writingMode: "normal" | "adjacent_only" | "no_context_safe";
   modeConfidence: "high" | "medium" | "low";
   writerPolicy:
@@ -1058,19 +1159,267 @@ function uniqueBlockedClaims(
   });
 }
 
+function inferCoverLetterRoleType(
+  jobTitle: string,
+  jobDescription: string,
+): CoverLetterRoleThesisV1["role_type"] {
+  const text = `${jobTitle} ${jobDescription}`;
+  if (/\bfront[-\s]?end|react|typescript|ui engineer\b/i.test(text)) return "frontend engineer";
+  if (/\bback[-\s]?end|node\.?js|api|database|services?\b/i.test(text)) return "backend engineer";
+  if (/\bproduct manager|roadmap|product strategy\b/i.test(text)) return "product manager";
+  if (/\bdesigner|ux|ui design|figma\b/i.test(text)) return "designer";
+  if (/\bdata analyst|analytics|dashboard|sql|reporting\b/i.test(text)) return "data analyst";
+  if (/\bsales|account executive|business development\b/i.test(text)) return "sales executive";
+  if (/\bcustomer success|account management|customer support|support specialist\b/i.test(text)) return "customer success manager";
+  if (/\boperations|program manager|coordinator|process|handoff\b/i.test(text)) return "operations manager";
+  if (/\bmarketing|campaign|content|seo|growth\b/i.test(text)) return "marketing manager";
+  if (/\bfinance|financial|accounting|revenue operations\b/i.test(text)) return "finance analyst";
+  if (/\bexecutive assistant|administrative assistant|admin\b/i.test(text)) return "executive assistant";
+  if (/\bnurse|patient|clinical|healthcare|medical\b/i.test(text)) return "nurse";
+  if (/\bteacher|teaching|classroom|students?\b/i.test(text)) return "teacher";
+  if (/\blegal counsel|lawyer|contract|compliance counsel\b/i.test(text)) return "legal counsel";
+  return "general / unknown";
+}
+
+function coverLetterOwnershipLevel(
+  fact: string,
+): CoverLetterRoleThesisV1["candidate_evidence"][number]["ownership_level"] {
+  if (/\bowned|ownership\b/i.test(fact)) return "owned";
+  if (/\bled|lead\b/i.test(fact)) return "led";
+  if (/\bbuilt|developed|implemented|created\b/i.test(fact)) return "built";
+  if (/\bpartnered|collaborated\b/i.test(fact)) return "partnered";
+  if (/\bsupported|assisted|helped\b/i.test(fact)) return "supported";
+  if (/\bexposure|exposed|familiar\b/i.test(fact)) return "exposed to";
+  return "contributed";
+}
+
+function roleThesisAtsTerms(jobPriorities: ProposalTruthPlanV1["jobPriorities"]): string[] {
+  return uniqueStrings(
+    jobPriorities
+      .map((priority) => priority.requirement.replace(/[.!?]$/u, ""))
+      .filter((requirement) => requirement.split(/\s+/).length <= 5),
+  ).slice(0, 8);
+}
+
+function buildCoverLetterRoleThesis(args: {
+  jobTitle: string;
+  jobDescription: string;
+  jobPriorities: ProposalTruthPlanV1["jobPriorities"];
+  candidateFacts: ProposalTruthPlanV1["candidateFacts"];
+  blockedClaims: ProposalTruthPlanV1["blockedClaims"];
+  missingCriticalRequirements: ProposalTruthPlanV1["missingCriticalRequirements"];
+  contextMode: ProposalPlannerContextMode;
+}): CoverLetterRoleThesisV1 {
+  const hardRequirements = args.jobPriorities
+    .filter((priority) => priority.importance === "critical" || priority.importance === "important")
+    .map((priority) => priority.requirement);
+  const coreResponsibilities = args.jobPriorities
+    .filter((priority) => /\b(?:lead|own|coordinate|track|manage|maintain|support|build|improve|handle|prepare|document|design|analy[sz]e|report|deliver|develop|review|operate|collaborate|implement|schedule)\b/i.test(priority.requirement))
+    .map((priority) => priority.requirement);
+  const selectedEvidence = args.candidateFacts.slice(0, 3).map((fact) => ({
+    id: fact.id,
+    source: fact.sourceText,
+    action: fact.fact,
+    matched_to: args.jobPriorities
+      .filter((priority) => Boolean(factSupportsRequirement(fact, priority.requirement)))
+      .map((priority) => priority.requirement)
+      .slice(0, 3),
+    ownership_level: coverLetterOwnershipLevel(fact.fact),
+  }));
+  const companyValues = analyzeCompanyValues(args.jobDescription);
+  const companyValueSignals = [
+    ...companyValues.explicitValues.map((label) => ({
+      label,
+      confidence: "high" as const,
+      source_text: companyValues.valueEvidenceSnippets.find((snippet) =>
+        new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(snippet),
+      ),
+    })),
+    ...companyValues.implicitValues.map((label) => ({
+      label,
+      confidence: "medium" as const,
+      source_text: companyValues.valueEvidenceSnippets.find((snippet) =>
+        new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(snippet),
+      ),
+    })),
+  ].slice(0, 6);
+
+  return {
+    role_type: inferCoverLetterRoleType(args.jobTitle, args.jobDescription),
+    hard_job_requirements: uniqueStrings(hardRequirements).slice(0, 8),
+    core_role_responsibilities: uniqueStrings(coreResponsibilities).slice(0, 8),
+    candidate_evidence: selectedEvidence,
+    claim_boundaries: uniqueStrings([
+      ...args.blockedClaims.map((claim) => claim.claim),
+      ...args.missingCriticalRequirements.map(
+        (requirement) => `${requirement.requirement} must not be claimed as candidate experience`,
+      ),
+    ]).slice(0, 10),
+    company_product_context: uniqueStrings([
+      ...companyValues.workSurfaceLinks,
+      ...args.jobPriorities.slice(0, 2).map((priority) => priority.sourceText),
+    ]).slice(0, 5),
+    company_value_signals: companyValueSignals,
+    ats_terms: roleThesisAtsTerms(args.jobPriorities),
+    format_mode: args.contextMode === "none" ? "linkedin_fast_apply" : "full_cover_letter",
+  };
+}
+
+function criteriaSignalPriority(
+  category: ProposalCriteriaSignal["category"],
+): ProposalCriteriaSignal["priority_rank"] {
+  if (category === "hard_requirement") return 1;
+  if (category === "core_responsibility") return 2;
+  if (category === "candidate_evidence") return 3;
+  if (category === "claim_boundary") return 4;
+  if (category === "company_product_context") return 5;
+  if (category === "company_value" || category === "working_principle") return 6;
+  if (category === "ats_keyword") return 7;
+  return 8;
+}
+
+function addCriteriaSignal(
+  signals: ProposalCriteriaSignal[],
+  signal: Omit<ProposalCriteriaSignal, "priority_rank">,
+): void {
+  const key = `${signal.category}:${normalizeComparisonToken(signal.label)}`;
+  if (signals.some((entry) => `${entry.category}:${normalizeComparisonToken(entry.label)}` === key)) {
+    return;
+  }
+  signals.push({ ...signal, priority_rank: criteriaSignalPriority(signal.category) });
+}
+
+function buildCriteriaSignals(args: {
+  roleThesis: CoverLetterRoleThesisV1;
+  jobPriorities: ProposalTruthPlanV1["jobPriorities"];
+  candidateFacts: ProposalTruthPlanV1["candidateFacts"];
+  blockedClaims: ProposalTruthPlanV1["blockedClaims"];
+  missingCriticalRequirements: ProposalTruthPlanV1["missingCriticalRequirements"];
+}): ProposalCriteriaSignal[] {
+  const signals: ProposalCriteriaSignal[] = [];
+  for (const priority of args.jobPriorities) {
+    const matched = args.candidateFacts
+      .filter((fact) => Boolean(factSupportsRequirement(fact, priority.requirement)))
+      .map((fact) => fact.id);
+    addCriteriaSignal(signals, {
+      label: priority.requirement,
+      category: priority.importance === "nice_to_have" ? "ats_keyword" : "hard_requirement",
+      source: "job_description",
+      source_text: priority.sourceText,
+      confidence: priority.importance === "critical" ? "high" : "medium",
+      relevance_to_role: priority.importance === "nice_to_have" ? "medium" : "high",
+      matched_candidate_evidence_ids: matched,
+      allowed_use: matched.length > 0 ? "role_thesis" : "claim_boundary",
+    });
+  }
+  for (const evidence of args.roleThesis.candidate_evidence) {
+    addCriteriaSignal(signals, {
+      label: evidence.action,
+      category: "candidate_evidence",
+      source: "resume",
+      source_text: evidence.source,
+      confidence: "high",
+      relevance_to_role: evidence.matched_to.length > 0 ? "high" : "medium",
+      matched_candidate_evidence_ids: [evidence.id],
+      allowed_use: "evidence_selection",
+    });
+  }
+  for (const boundary of [...args.blockedClaims.map((claim) => claim.claim), ...args.missingCriticalRequirements.map((entry) => entry.requirement)]) {
+    addCriteriaSignal(signals, {
+      label: boundary,
+      category: "claim_boundary",
+      source: "detector",
+      confidence: "high",
+      relevance_to_role: "high",
+      matched_candidate_evidence_ids: [],
+      allowed_use: "claim_boundary",
+    });
+  }
+  for (const value of args.roleThesis.company_value_signals) {
+    addCriteriaSignal(signals, {
+      label: value.label,
+      category: "company_value",
+      source: "company_values_pack",
+      source_text: value.source_text,
+      confidence: value.confidence,
+      relevance_to_role: value.confidence === "low" ? "low" : "medium",
+      matched_candidate_evidence_ids: args.roleThesis.candidate_evidence.map((item) => item.id),
+      allowed_use: value.confidence === "low" ? "do_not_use_in_output" : "company_bridge",
+    });
+  }
+  for (const term of args.roleThesis.ats_terms) {
+    addCriteriaSignal(signals, {
+      label: term,
+      category: "ats_keyword",
+      source: "detector",
+      confidence: "medium",
+      relevance_to_role: "medium",
+      matched_candidate_evidence_ids: args.candidateFacts
+        .filter((fact) => factSupportsRequirement(fact, term))
+        .map((fact) => fact.id),
+      allowed_use: "ats_language",
+    });
+  }
+  addCriteriaSignal(signals, {
+    label: args.roleThesis.format_mode,
+    category: "tone_format",
+    source: "detector",
+    confidence: "medium",
+    relevance_to_role: "medium",
+    matched_candidate_evidence_ids: [],
+    allowed_use: "format_choice",
+  });
+  return signals.sort((left, right) => left.priority_rank - right.priority_rank);
+}
+
 function buildNoContextTruthPlan(args: {
   jobTitle: string;
   jobDescription: string;
   jobPriorities: ProposalTruthPlanV1["jobPriorities"];
 }): ProposalTruthPlanV1 {
   const jobText = `${args.jobTitle}. ${args.jobDescription}`;
+  const candidateFacts: ProposalTruthPlanV1["candidateFacts"] = [];
+  const blockedClaims = uniqueBlockedClaims([
+    blockedClaim("prior sales experience", "no_candidate_evidence"),
+    blockedClaim("CRM expertise", "no_candidate_evidence"),
+    blockedClaim("quota ownership", "no_candidate_evidence"),
+    blockedClaim("how I approach new responsibilities", "no_context_personal_claim"),
+    blockedClaim("attention to detail", "no_context_personal_claim"),
+    blockedClaim("confidence or comfort with the work", "no_context_personal_claim"),
+    blockedClaim("personal work-style claims", "no_context_personal_claim"),
+    blockedClaim("candidate strengths, traits, habits, or abilities", "no_context_personal_claim"),
+    blockedClaim("prior tools, projects, metrics, or credentials", "no_candidate_evidence"),
+    ...args.jobPriorities.map((priority) =>
+      blockedClaim(`${priority.requirement} as candidate experience`, "job_description_only"),
+    ),
+  ]);
+  const missingCriticalRequirements = args.jobPriorities
+    .filter((priority) => priority.importance === "critical")
+    .map((priority) => missingRequirement(priority.requirement, priority.sourceText || jobText, "omit"));
+  const roleThesis = buildCoverLetterRoleThesis({
+    jobTitle: args.jobTitle,
+    jobDescription: args.jobDescription,
+    jobPriorities: args.jobPriorities,
+    candidateFacts,
+    blockedClaims,
+    missingCriticalRequirements,
+    contextMode: "none",
+  });
   return {
     planVersion: "proposal_truth_plan_v1",
+    roleThesis,
+    criteria_signals: buildCriteriaSignals({
+      roleThesis,
+      jobPriorities: args.jobPriorities,
+      candidateFacts,
+      blockedClaims,
+      missingCriticalRequirements,
+    }),
     writingMode: "no_context_safe",
     modeConfidence: "high",
     writerPolicy: "bypass_writer_use_fallback",
     jobPriorities: args.jobPriorities,
-    candidateFacts: [],
+    candidateFacts,
     allowedClaims: [
       {
         claim: `interest in the ${args.jobTitle} role`,
@@ -1094,23 +1443,8 @@ function buildNoContextTruthPlan(args: {
         claimType: "discussion_forward",
       },
     ],
-    blockedClaims: uniqueBlockedClaims([
-      blockedClaim("prior sales experience", "no_candidate_evidence"),
-      blockedClaim("CRM expertise", "no_candidate_evidence"),
-      blockedClaim("quota ownership", "no_candidate_evidence"),
-      blockedClaim("how I approach new responsibilities", "no_context_personal_claim"),
-      blockedClaim("attention to detail", "no_context_personal_claim"),
-      blockedClaim("confidence or comfort with the work", "no_context_personal_claim"),
-      blockedClaim("personal work-style claims", "no_context_personal_claim"),
-      blockedClaim("candidate strengths, traits, habits, or abilities", "no_context_personal_claim"),
-      blockedClaim("prior tools, projects, metrics, or credentials", "no_candidate_evidence"),
-      ...args.jobPriorities.map((priority) =>
-        blockedClaim(`${priority.requirement} as candidate experience`, "job_description_only"),
-      ),
-    ]),
-    missingCriticalRequirements: args.jobPriorities
-      .filter((priority) => priority.importance === "critical")
-      .map((priority) => missingRequirement(priority.requirement, priority.sourceText || jobText, "omit")),
+    blockedClaims,
+    missingCriticalRequirements,
   };
 }
 
@@ -1300,9 +1634,35 @@ export function buildProposalTruthPlanV1(
       : writingMode === "adjacent_only" && (adjacentSupportCount > 0 || missingCriticalRequirements.length > 0)
         ? "high"
         : "medium";
+  const normalizedBlockedClaims = uniqueBlockedClaims(blockedClaims);
+  const normalizedMissingCriticalRequirements = missingCriticalRequirements.filter(
+    (entry, index, entries) =>
+      entries.findIndex(
+        (candidate) =>
+          normalizeComparisonToken(candidate.requirement) ===
+          normalizeComparisonToken(entry.requirement),
+      ) === index,
+  );
+  const roleThesis = buildCoverLetterRoleThesis({
+    jobTitle: input.jobTitle,
+    jobDescription: input.jobDescription,
+    jobPriorities,
+    candidateFacts,
+    blockedClaims: normalizedBlockedClaims,
+    missingCriticalRequirements: normalizedMissingCriticalRequirements,
+    contextMode,
+  });
 
   return {
     planVersion: "proposal_truth_plan_v1",
+    roleThesis,
+    criteria_signals: buildCriteriaSignals({
+      roleThesis,
+      jobPriorities,
+      candidateFacts,
+      blockedClaims: normalizedBlockedClaims,
+      missingCriticalRequirements: normalizedMissingCriticalRequirements,
+    }),
     writingMode,
     modeConfidence,
     writerPolicy: writingMode === "normal" ? "normal_writer" : "constrained_writer",
@@ -1316,15 +1676,8 @@ export function buildProposalTruthPlanV1(
               : claim,
           )
         : allowedClaims,
-    blockedClaims: uniqueBlockedClaims(blockedClaims),
-    missingCriticalRequirements: missingCriticalRequirements.filter(
-      (entry, index, entries) =>
-        entries.findIndex(
-          (candidate) =>
-            normalizeComparisonToken(candidate.requirement) ===
-            normalizeComparisonToken(entry.requirement),
-        ) === index,
-    ),
+    blockedClaims: normalizedBlockedClaims,
+    missingCriticalRequirements: normalizedMissingCriticalRequirements,
   };
 }
 
