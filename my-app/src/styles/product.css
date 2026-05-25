@@ -3696,14 +3696,14 @@ body,
   transform: translateY(1px);
 }
 
-.app-topbar__doc-action--proposal-new[data-has-content="true"] {
+.app-topbar__doc-action--proposal-new {
   border-color: color-mix(in srgb, var(--color-border) 52%, transparent);
   background: transparent;
   color: var(--color-text-muted);
 }
 
-.app-topbar__doc-action--proposal-new[data-has-content="true"]:hover,
-.app-topbar__doc-action--proposal-new[data-has-content="true"]:focus-visible {
+.app-topbar__doc-action--proposal-new:hover,
+.app-topbar__doc-action--proposal-new:focus-visible {
   border-color: var(--color-border-hover);
   background: var(--proposal-chrome-control-hover-bg);
   color: var(--color-text);

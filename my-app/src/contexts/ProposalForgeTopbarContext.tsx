@@ -15,6 +15,7 @@ export type ProposalForgeTopbarRegistration = {
   documentState: ProposalForgeTopbarDocumentState;
   lengthLabel: "Concise" | "Standard" | "Detailed" | null;
   hasProposalContent: boolean;
+  hasJobContext?: boolean;
   exporting: boolean;
   savedShareAvailable?: boolean;
   onNewProposal: () => void;

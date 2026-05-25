@@ -10333,6 +10333,7 @@ export function ProposalForge(): JSX.Element {
       hasProposalContent: isSavedView
         ? Boolean(openedSavedProposal && savedProposalContent?.trim())
         : Boolean(proposalContent?.trim()),
+      hasJobContext: hasActiveProposalJobContext,
       exporting: proposalExportingFormat !== null,
       savedShareAvailable: Boolean(isSavedView && openedSavedProposal),
       onNewProposal: handleNewProposalDocument,
@@ -10377,6 +10378,7 @@ export function ProposalForge(): JSX.Element {
       handleNewProposalDocument,
       handleShareSavedProposal,
       handleProposalTopbarTitleCommit,
+      hasActiveProposalJobContext,
       isSavedView,
       openedSavedProposal,
       proposalGeneratedDocumentTitle,
