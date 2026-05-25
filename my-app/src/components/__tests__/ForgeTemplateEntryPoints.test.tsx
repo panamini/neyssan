@@ -449,6 +449,12 @@ describe("forge template entry points", () => {
       "Proposal templates",
       <ProposalTemplateEntryPoint key="proposal" onSelect={vi.fn()} />,
     ],
+    [
+      "/proposal",
+      "Draft proposal",
+      "Proposal draft",
+      <ProposalTemplateEntryPoint key="proposal" onSelect={vi.fn()} />,
+    ],
   ])(
     "pins %s toolbar %s panel into docked mode",
     (path, buttonName, panelName, entryPoint) => {

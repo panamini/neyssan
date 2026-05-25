@@ -30,6 +30,7 @@ import ProposalHeadingFields, {
 import ProposalDesignFields from "../components/proposal/ProposalDesignFields";
 import ProposalRail, {
   PROPOSAL_STYLE_OPTIONS,
+  type ProposalRailAskReview,
   type ProposalRailJobMatchSummary,
   type ProposalRailTab,
 } from "../components/proposal/ProposalRail";
@@ -593,6 +594,22 @@ type ProposalInlineImportPhase =
   | "importing"
   | "retrying"
   | "finalizing";
+type RailAskAiReviewState =
+  | {
+      status: "idle";
+    }
+  | {
+      status: "ready";
+      resultText: string;
+    }
+  | {
+      status: "error";
+      errorMessage: string;
+    }
+  | {
+      status: "applied";
+      previousProposalContent: string;
+    };
 
 const PROPOSAL_SAVE_DEBOUNCE_MS =
   Number(
@@ -3333,6 +3350,8 @@ export function ProposalForge(): JSX.Element {
   >("idle");
   const [railAskAiValue, setRailAskAiValue] = React.useState("");
   const [railAskAiBusy, setRailAskAiBusy] = React.useState(false);
+  const [railAskAiReview, setRailAskAiReview] =
+    React.useState<RailAskAiReviewState>({ status: "idle" });
   const copyFeedbackTimeoutRef = React.useRef<number | null>(null);
   const savedCopyFeedbackTimeoutRef = React.useRef<number | null>(null);
   const lastSavedProposalContentRef = React.useRef<string | null>(
@@ -7801,7 +7820,9 @@ export function ProposalForge(): JSX.Element {
         });
       }
       setProposalOutputMode("preview");
-      setIsComposePanelVisible(true);
+      closeForgePanel();
+      setProposalComposerMode(null);
+      setIsComposePanelVisible(false);
       setIsBriefExpanded(false);
       lastSavedProposalContentRef.current = proposalContentWithManualHeading;
       lastSavedProposalTitleRef.current = nextResolvedDocumentTitle;
@@ -7834,6 +7855,7 @@ export function ProposalForge(): JSX.Element {
       effectivePersonalizationSource,
       canPersistProposalState,
       cancelPendingComposeDraftSync,
+      closeForgePanel,
       effectiveProposalStylePresetWithPalette,
       effectiveProposalTemplateId,
       fallbackProposalTemplateId,
@@ -7956,6 +7978,40 @@ export function ProposalForge(): JSX.Element {
     },
     [],
   );
+  const handleRailAskAiChange = React.useCallback((value: string) => {
+    setRailAskAiValue(value);
+    setRailAskAiReview((current) =>
+      current.status === "ready" || current.status === "error"
+        ? { status: "idle" }
+        : current,
+    );
+  }, []);
+
+  const handleRailAskAiDiscard = React.useCallback(() => {
+    setRailAskAiReview({ status: "idle" });
+  }, []);
+
+  const handleRailAskAiApply = React.useCallback(() => {
+    if (railAskAiReview.status !== "ready") {
+      return;
+    }
+    const previousProposalContent = proposalContent ?? "";
+    setProposalContent(railAskAiReview.resultText);
+    setRailAskAiValue("");
+    setRailAskAiReview({
+      status: "applied",
+      previousProposalContent,
+    });
+  }, [proposalContent, railAskAiReview]);
+
+  const handleRailAskAiUndo = React.useCallback(() => {
+    setRailAskAiReview((current) => {
+      if (current.status !== "applied") return current;
+      setProposalContent(current.previousProposalContent);
+      return { status: "idle" };
+    });
+  }, []);
+
   const handleRailAskAiSubmit = React.useCallback(async () => {
     const instruction = railAskAiValue.trim();
     const currentContent = proposalContent?.trim();
@@ -7964,6 +8020,7 @@ export function ProposalForge(): JSX.Element {
     }
 
     setRailAskAiBusy(true);
+    setRailAskAiReview({ status: "idle" });
     try {
       const jobContext = canonicalJobId
         ? {
@@ -7991,20 +8048,23 @@ export function ProposalForge(): JSX.Element {
         selectedText: proposalContent,
         ...(jobContext ? { jobContext } : {}),
       });
-      const normalizedResult = normalizeEditorAiTextResult(result, "custom");
+      const normalizedResult =
+        result == null ? null : normalizeEditorAiTextResult(result, "custom");
       if (!normalizedResult) {
-        showToast("Ask AI returned no text", {
-          variant: "warning",
-          description: "Try a more specific instruction.",
+        setRailAskAiReview({
+          status: "error",
+          errorMessage: "Ask AI returned no text. Try a more specific instruction.",
         });
         return;
       }
-      setProposalContent(normalizedResult.text);
-      setRailAskAiValue("");
+      setRailAskAiReview({
+        status: "ready",
+        resultText: normalizedResult.text,
+      });
     } catch {
-      showToast("Ask AI could not update the draft", {
-        variant: "danger",
-        description: "Please try again in a moment.",
+      setRailAskAiReview({
+        status: "error",
+        errorMessage: "Ask AI could not update the draft. Please try again in a moment.",
       });
     } finally {
       setRailAskAiBusy(false);
@@ -8022,9 +8082,31 @@ export function ProposalForge(): JSX.Element {
     proposalContent,
     railAskAiBusy,
     railAskAiValue,
-    showToast,
     transformEditorSelectionAction,
   ]);
+  const railAskAiReviewModel = React.useMemo<ProposalRailAskReview>(() => {
+    if (railAskAiBusy) return { status: "loading" };
+    if (railAskAiReview.status === "ready") {
+      return {
+        status: "ready",
+        resultText: railAskAiReview.resultText,
+      };
+    }
+    if (railAskAiReview.status === "error") {
+      return {
+        status: "error",
+        errorMessage: railAskAiReview.errorMessage,
+      };
+    }
+    if (railAskAiReview.status === "applied") {
+      return {
+        status: "applied",
+        canUndo: true,
+      };
+    }
+    return { status: "idle" };
+  }, [railAskAiBusy, railAskAiReview]);
+
   const handleProposalSalutationChange = React.useCallback(
     (value: string) => {
       markHeadingFieldDirty("salutation");
@@ -11005,8 +11087,10 @@ export function ProposalForge(): JSX.Element {
   }, [openTemplateSurface]);
   const handleOpenDraftFromStage = React.useCallback(() => {
     setProposalComposerMode(null);
-    openTemplateSurface("proposal-draft");
-  }, [openTemplateSurface]);
+    openTemplateSurface("proposal-draft", {
+      mode: isWideEnoughForDockedForgePanel ? "docked" : "overlay",
+    });
+  }, [isWideEnoughForDockedForgePanel, openTemplateSurface]);
   const handleOpenCvsFromDraft = React.useCallback(() => {
     openTemplateSurface("cvs");
   }, [openTemplateSurface]);
@@ -11511,10 +11595,14 @@ export function ProposalForge(): JSX.Element {
                             ? "Apply change"
                             : "Draft first"
                         }
-                        onAskAiChange={setRailAskAiValue}
+                        askAiReview={railAskAiReviewModel}
+                        onAskAiChange={handleRailAskAiChange}
                         onAskAiSubmit={() => {
                           void handleRailAskAiSubmit();
                         }}
+                        onAskAiApply={handleRailAskAiApply}
+                        onAskAiDiscard={handleRailAskAiDiscard}
+                        onAskAiUndo={handleRailAskAiUndo}
                         activeTab="ask"
                         onActiveTabChange={(tab) => {
                           if (tab === "ask") setProposalComposerMode("ask");
@@ -11580,7 +11668,11 @@ export function ProposalForge(): JSX.Element {
                         onOpenDesign={handleOpenProposalDesign}
                         templatesOpen={proposalTemplatesOpen}
                         onOpenTemplates={handleOpenProposalTemplates}
-                        onOpenDraft={handleOpenDraftFromStage}
+                        onOpenDraft={
+                          hasMeaningfulProposalContent
+                            ? undefined
+                            : handleOpenDraftFromStage
+                        }
                         onOpenAsk={
                           hasMeaningfulProposalContent
                             ? () => {
