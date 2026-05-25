@@ -785,6 +785,94 @@ describe("ProposalDisplay", () => {
     );
   });
 
+  it("renders preview zoom in a footer when the document header is hidden", () => {
+    render(
+      <ProposalDisplay
+        proposalContent={
+          "Dear Hiring Manager,\n\nI built reliable editorial tooling across product and content workflows.\n\nSincerely,\nAlex Martin"
+        }
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        showZoomControls
+        documentHeaderMode="hidden"
+      />,
+    );
+
+    expect(
+      document.querySelector(".dasti-proposal-preview-zoom-footer"),
+    ).toBeTruthy();
+    expect(
+      document.querySelector(
+        '.dasti-doc-viewer-shell__surface[data-preview-zoom-footer="true"]',
+      ),
+    ).toBeTruthy();
+    expect(
+      document.querySelector(
+        '.dasti-proposal-sheet__preview-stage[data-document-stage="true"][data-zoom-footer="true"]',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole("slider", { name: "Proposal zoom" })).toHaveValue(
+      "1",
+    );
+    expect(
+      screen.getByRole("button", { name: "Zoom level 100%" }),
+    ).toHaveClass("dasti-proposal-preview-zoom-footer__status");
+    expect(screen.getByText("100%")).toHaveClass(
+      "dasti-proposal-preview-zoom-footer__status",
+    );
+    expect(
+      screen.getByRole("button", { name: "Zoom level 100%" }),
+    ).toHaveTextContent("100%");
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom level 100%" }));
+
+    expect(
+      screen.getByRole("menuitemradio", { name: "30 %" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitemradio", { name: "50 %" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitemradio", { name: "Fit page" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "30 %" }));
+
+    expect(screen.getByRole("slider", { name: "Proposal zoom" })).toHaveValue(
+      "0.3",
+    );
+    expect(
+      screen.getByRole("button", { name: "Zoom level 30%" }),
+    ).toHaveTextContent("30%");
+  });
+
+  it("updates proposal zoom continuously from the footer slider", () => {
+    render(
+      <ProposalDisplay
+        proposalContent={
+          "Dear Hiring Manager,\n\nI built reliable editorial tooling across product and content workflows.\n\nSincerely,\nAlex Martin"
+        }
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        showZoomControls
+        documentHeaderMode="hidden"
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("slider", { name: "Proposal zoom" }), {
+      target: { value: "1.17" },
+    });
+
+    expect(screen.getByRole("slider", { name: "Proposal zoom" })).toHaveValue(
+      "1.17",
+    );
+    expect(
+      screen.getByRole("button", { name: "Zoom level 117%" }),
+    ).toHaveTextContent("117%");
+  });
+
   it("keeps the uncontrolled zoom state after zooming in", async () => {
     render(
       <ProposalDisplay

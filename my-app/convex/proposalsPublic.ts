@@ -255,11 +255,15 @@ export default query({
 
     const proposals = proposalGroups.flat();
 
+    const publicProposalStatuses = new Set([
+      "draft",
+      "saved",
+      "sent",
+      "exported",
+      "submitted",
+    ]);
     const libraryProposals = proposals
-      .filter(
-        (proposal) =>
-          proposal.status === "draft" || proposal.status === "saved",
-      )
+      .filter((proposal) => publicProposalStatuses.has(proposal.status))
       .sort((left, right) => right._creationTime - left._creationTime)
       .slice(0, 30);
 

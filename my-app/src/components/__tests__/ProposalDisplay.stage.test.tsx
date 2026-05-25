@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const viewportCenteringSpy = vi.fn();
@@ -40,9 +40,15 @@ vi.mock("../../hooks/use-document-viewport-centering", () => ({
 vi.mock("../proposal-render/ProposalDocumentRenderer", () => ({
   ProposalDocumentRenderer: ({
     content,
+    railTitle,
+    contactLine,
+    emptyBodyPlaceholder,
     onPageCountChange,
   }: {
     content: string;
+    railTitle?: string | null;
+    contactLine?: string | null;
+    emptyBodyPlaceholder?: string | null;
     onPageCountChange?: (count: number) => void;
   }) => {
     const explicitPageCount = content.match(/\[PAGES=(\d+)\]/)?.[1];
@@ -57,6 +63,18 @@ vi.mock("../proposal-render/ProposalDocumentRenderer", () => ({
 
     return (
       <div data-testid="proposal-document-renderer">
+        <div data-testid="proposal-document-content">{content}</div>
+        {railTitle ? (
+          <div data-testid="proposal-document-title">{railTitle}</div>
+        ) : null}
+        {contactLine ? (
+          <div data-testid="proposal-document-contact">{contactLine}</div>
+        ) : null}
+        {emptyBodyPlaceholder ? (
+          <div data-testid="proposal-document-empty-body">
+            {emptyBodyPlaceholder}
+          </div>
+        ) : null}
         {Array.from({ length: pageCount }, (_, index) => (
           <div
             key={index}
@@ -108,6 +126,7 @@ describe("ProposalDisplay stage behavior", () => {
         error={null}
         proposalType="cover_letter"
         showZoomControls
+        documentHeaderMode="hidden"
       />,
     );
 
@@ -127,6 +146,56 @@ describe("ProposalDisplay stage behavior", () => {
       fillAvailableOnZoom: true,
       includeParentMeasurement: false,
     });
+  });
+
+  it("tracks the visible proposal page in the zoom footer for multi-page previews", async () => {
+    const { container } = render(
+      <ProposalDisplay
+        proposalContent={"Dear team,\n\n[PAGES=3]\n\nAlex"}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        showZoomControls
+        documentHeaderMode="hidden"
+      />,
+    );
+
+    expect(await screen.findByLabelText("Page count")).toHaveTextContent(
+      "Page 1 of 3",
+    );
+
+    const stage = container.querySelector(
+      ".dasti-proposal-sheet__preview-stage",
+    ) as HTMLDivElement;
+    stage.scrollTop = 1200;
+    fireEvent.scroll(stage);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Page count")).toHaveTextContent(
+        "Page 2 of 3",
+      );
+    });
+  });
+
+  it("honors the proposal page count footer opt-out", async () => {
+    render(
+      <ProposalDisplay
+        proposalContent={"Dear team,\n\n[PAGES=3]\n\nAlex"}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        showZoomControls
+        documentHeaderMode="hidden"
+        showPageCountBadge={false}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryAllByTestId("proposal-document-renderer"),
+      ).toHaveLength(1);
+    });
+    expect(screen.queryByLabelText("Page count")).toBeNull();
   });
 
   it("uses a natural overflow stage for proposal preview mode when requested", () => {
@@ -161,6 +230,8 @@ describe("ProposalDisplay stage behavior", () => {
     expect(lastCall).toMatchObject({
       fitMode: "contain",
       includeParentMeasurement: false,
+      initialAvailableWidthPx: expect.any(Number),
+      initialAvailableHeightPx: expect.any(Number),
     });
   });
 
@@ -182,6 +253,38 @@ describe("ProposalDisplay stage behavior", () => {
       fitMode: "width",
       fillAvailableOnZoom: false,
       includeParentMeasurement: false,
+    });
+  });
+
+  it("renders the document heading shell even when the proposal body is empty", () => {
+    render(
+      <ProposalDisplay
+        proposalContent={null}
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        mode="preview"
+        railTitle="Alex Martin"
+        railMeta="Operations Associate"
+        contactLine="alex@example.com · Paris"
+        onRailTitleChange={vi.fn()}
+        onRailMetaChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("proposal-document-renderer")).toBeInTheDocument();
+    expect(screen.getByTestId("proposal-document-content")).toHaveTextContent("");
+    expect(screen.getByTestId("proposal-document-title")).toHaveTextContent(
+      "Alex Martin",
+    );
+    expect(screen.getByTestId("proposal-document-contact")).toHaveTextContent(
+      "alex@example.com · Paris",
+    );
+    expect(screen.getByTestId("proposal-document-empty-body")).toHaveTextContent(
+      "No draft yet.",
+    );
+    expect(stageLayoutSpy.mock.calls.at(-1)?.[0]).toMatchObject({
+      enabled: true,
     });
   });
 

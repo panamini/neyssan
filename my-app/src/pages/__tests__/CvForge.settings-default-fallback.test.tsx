@@ -1,10 +1,12 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { CvForge } from "../CvForge";
+import { ForgeTemplatePanel } from "../../components/ForgeTemplatePanel";
+import { ForgeTemplatePanelProvider } from "../../contexts/ForgeTemplatePanelContext";
 
 const { useCvLibraryMock, mockDocumentStylePresets } = vi.hoisted(() => ({
   useCvLibraryMock: vi.fn(),
@@ -189,6 +191,17 @@ function getStyleSlotButton(slot: 1 | 2 | 3): HTMLButtonElement {
   return button;
 }
 
+function renderCvForge(initialEntry: string) {
+  return render(
+    <ForgeTemplatePanelProvider>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <CvForge />
+        <ForgeTemplatePanel />
+      </MemoryRouter>
+    </ForgeTemplatePanelProvider>,
+  );
+}
+
 describe("CvForge settings style fallback", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -227,11 +240,7 @@ describe("CvForge settings style fallback", () => {
       buildCvLibraryState({ currentCv, cvs: [currentCv] }),
     );
 
-    render(
-      <MemoryRouter initialEntries={["/cv?id=cv_styleless"]}>
-        <CvForge />
-      </MemoryRouter>,
-    );
+    renderCvForge("/cv?id=cv_styleless");
 
     await user.click(screen.getByRole("button", { name: "Page preview" }));
 
@@ -260,14 +269,10 @@ describe("CvForge settings style fallback", () => {
       buildCvLibraryState({ currentCv, cvs: [currentCv] }),
     );
 
-    render(
-      <MemoryRouter initialEntries={["/cv?id=cv_sage"]}>
-        <CvForge />
-      </MemoryRouter>,
-    );
+    renderCvForge("/cv?id=cv_sage");
 
     await user.click(screen.getByRole("button", { name: "Page preview" }));
-    await user.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
     await user.click(getStyleSlotButton(2));
 
     expect(screen.getByText(/Preview style: .*quiet-editorial.*cobalt/i)).toBeInTheDocument();
@@ -308,18 +313,13 @@ describe("CvForge settings style fallback", () => {
       }),
     );
 
-    render(
-      <MemoryRouter initialEntries={["/cv?id=cv_old_style_2"]}>
-        <CvForge />
-      </MemoryRouter>,
-    );
+    renderCvForge("/cv?id=cv_old_style_2");
 
     await user.click(screen.getByRole("button", { name: "Page preview" }));
-    await user.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
 
-    expect(getStyleSlotButton(2)).toHaveTextContent(
-      "Style 2 · Custom",
-    );
+    expect(getStyleSlotButton(2)).toHaveTextContent("Style 2");
+    expect(screen.getByLabelText("Customized")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Reset Style 2" }));
 
@@ -371,16 +371,13 @@ describe("CvForge settings style fallback", () => {
       }),
     );
 
-    render(
-      <MemoryRouter initialEntries={["/cv?id=cv_reselect_old_style_2"]}>
-        <CvForge />
-      </MemoryRouter>,
-    );
+    renderCvForge("/cv?id=cv_reselect_old_style_2");
 
     await user.click(screen.getByRole("button", { name: "Page preview" }));
-    await user.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
 
-    expect(getStyleSlotButton(2)).toHaveTextContent("Style 2 · Custom");
+    expect(getStyleSlotButton(2)).toHaveTextContent("Style 2");
+    expect(screen.getByLabelText("Customized")).toBeInTheDocument();
 
     await user.click(getStyleSlotButton(2));
 
@@ -414,21 +411,18 @@ describe("CvForge settings style fallback", () => {
       }),
     );
 
-    render(
-      <MemoryRouter initialEntries={["/cv?id=cv_custom_color"]}>
-        <CvForge />
-      </MemoryRouter>,
-    );
+    renderCvForge("/cv?id=cv_custom_color");
 
     await user.click(screen.getByRole("button", { name: "Page preview" }));
-    await user.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
     await user.click(getStyleSlotButton(2));
     await user.click(
       screen.getByRole("button", { name: "Open custom color picker" }),
     );
     await user.click(screen.getByRole("button", { name: "Pick custom #A1B2C3" }));
 
-    expect(getStyleSlotButton(2)).toHaveTextContent("Style 2 · Custom");
+    expect(getStyleSlotButton(2)).toHaveTextContent("Style 2");
+    expect(screen.getByLabelText("Customized")).toBeInTheDocument();
     expect(screen.getByText(/Preview style: .*custom.*#A1B2C3/i)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Open custom color picker" }),

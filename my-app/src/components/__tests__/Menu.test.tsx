@@ -17,6 +17,19 @@ function stubRect(element: HTMLElement, rect: Partial<DOMRect>) {
   } as DOMRect);
 }
 
+function stubViewport(width: number, height: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    writable: true,
+    value: height,
+  });
+}
+
 describe("Menu", () => {
   it("portals an anchored menu and selects an item", async () => {
     const onSelect = vi.fn();
@@ -85,5 +98,114 @@ describe("Menu", () => {
     });
     fireEvent.keyDown(reopened, { key: "Escape" });
     await waitFor(() => expect(trigger).toHaveAttribute("aria-expanded", "false"));
+  });
+
+  it("can position a menu as a left sidecar when there is enough room", async () => {
+    stubViewport(1000, 720);
+    render(
+      <Menu
+        ariaLabel="Sidecar actions"
+        side="left"
+        align="start"
+        sections={[
+          {
+            items: [{ id: "create", label: "Create new CV" }],
+          },
+        ]}
+        trigger={<button type="button">Open sidecar</button>}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Open sidecar" });
+    stubRect(trigger, {
+      top: 120,
+      left: 640,
+      right: 760,
+      bottom: 152,
+      width: 120,
+      height: 32,
+    });
+    fireEvent.click(trigger);
+
+    const menu = await screen.findByRole("menu", { name: "Sidecar actions" });
+    stubRect(menu, { width: 320, height: 180 });
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => expect(menu).toHaveAttribute("data-side", "left"));
+    expect(menu).toHaveStyle({ left: "312px", top: "120px" });
+  });
+
+  it("falls back to a bounded popover when a left sidecar would be cropped", async () => {
+    stubViewport(360, 720);
+    render(
+      <Menu
+        ariaLabel="Constrained actions"
+        side="left"
+        align="start"
+        sections={[
+          {
+            items: [{ id: "create", label: "Create new CV" }],
+          },
+        ]}
+        trigger={<button type="button">Open constrained menu</button>}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "Open constrained menu",
+    });
+    stubRect(trigger, {
+      top: 120,
+      left: 260,
+      right: 340,
+      bottom: 152,
+      width: 80,
+      height: 32,
+    });
+    fireEvent.click(trigger);
+
+    const menu = await screen.findByRole("menu", {
+      name: "Constrained actions",
+    });
+    stubRect(menu, { width: 320, height: 180 });
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => expect(menu).toHaveAttribute("data-side", "bottom"));
+    expect(menu).toHaveStyle({ left: "32px", top: "160px" });
+  });
+
+  it("uses a sheet-style placement on narrow viewports when requested", async () => {
+    stubViewport(390, 720);
+    render(
+      <Menu
+        ariaLabel="Mobile actions"
+        side="left"
+        mobileMode="sheet"
+        sections={[
+          {
+            items: [{ id: "create", label: "Create new CV" }],
+          },
+        ]}
+        trigger={<button type="button">Open mobile menu</button>}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Open mobile menu" });
+    stubRect(trigger, {
+      top: 120,
+      left: 260,
+      right: 340,
+      bottom: 152,
+      width: 80,
+      height: 32,
+    });
+    fireEvent.click(trigger);
+
+    const menu = await screen.findByRole("menu", { name: "Mobile actions" });
+    stubRect(menu, { width: 320, height: 180 });
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => expect(menu).toHaveAttribute("data-side", "sheet"));
+    expect(menu).toHaveStyle({ left: "8px", width: "374px" });
   });
 });

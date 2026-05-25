@@ -17,6 +17,7 @@ import {
   createProposalWorkspaceResetState,
   startFreshProposalWorkspace,
 } from "../../lib/proposal-workspace-state";
+import { openOnboardingReplay } from "../../lib/onboarding-replay-event";
 import type { CvDocument } from "../../types/cvDocument";
 import { formatUiDate } from "../../lib/ui-date";
 
@@ -973,7 +974,9 @@ function JobsBackendUnavailable(): JSX.Element {
               }}
             >
               <span>Copy: npm run dev:backend</span>
-              <span className="ds-btn__period" aria-hidden="true">.</span>
+              <span className="ds-btn__period" aria-hidden="true">
+                .
+              </span>
             </button>
             <button
               type="button"
@@ -1030,18 +1033,24 @@ function matchesListFilters(
 ): boolean {
   const openedAt = optimisticOpenedAt ?? job.lastOpenedAt;
   const isFavorite = optimisticFavorite ?? job.isFavorite;
-  if (
-    matchFilter === "worth_plus" &&
-    job.matchTier !== "strong" &&
-    job.matchTier !== "partial"
-  ) {
+  const verdict = job.matchReview?.verdict;
+  const resolvedTier = job.matchRead?.tier ?? job.matchTier;
+  const isStrongMatch = verdict === "strong_lead" || resolvedTier === "strong";
+  const isWorthMatch =
+    verdict === "possible_lead" || resolvedTier === "partial";
+  if (matchFilter === "worth_plus" && !isStrongMatch && !isWorthMatch) {
     return false;
   }
-  if (
-    matchFilter !== "all" &&
-    matchFilter !== "worth_plus" &&
-    job.matchTier !== matchFilter
-  ) {
+  if (matchFilter === "strong" && !isStrongMatch) {
+    return false;
+  }
+  if (matchFilter === "partial" && !isWorthMatch) {
+    return false;
+  }
+  if (matchFilter === "weak" && resolvedTier !== "weak") {
+    return false;
+  }
+  if (matchFilter === "unknown" && resolvedTier !== "unknown") {
     return false;
   }
   if (hasDocsOnly && job.linkedDocumentCount === 0) {
@@ -1083,7 +1092,7 @@ function applyApprovedValueToJob(
 }
 
 function buildProposalRoute(jobId: string): string {
-  return `/proposal?jobId=${encodeURIComponent(jobId)}`;
+  return `/proposal?jobId=${encodeURIComponent(jobId)}&drawer=proposal-draft`;
 }
 
 function buildJobsRoute(jobId: string): string {
@@ -1212,6 +1221,10 @@ function JobsPageContent(): JSX.Element {
     () => new URLSearchParams(location.search).get("view") === "list",
     [location.search],
   );
+  const isProposalSelectionMode = React.useMemo(
+    () => new URLSearchParams(location.search).get("selectFor") === "proposal",
+    [location.search],
+  );
   const jobsView = React.useMemo<JobsViewMode>(
     () =>
       new URLSearchParams(location.search).get("view") === "archived"
@@ -1223,10 +1236,21 @@ function JobsPageContent(): JSX.Element {
     typeof window === "undefined" ? 1440 : window.innerWidth,
   );
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [matchFilter, setMatchFilter] = React.useState<JobsMatchFilter>("all");
+  const [matchFilter, setMatchFilter] = React.useState<JobsMatchFilter>(() => {
+    const value = new URLSearchParams(location.search).get("match");
+    return value === "worth_plus" ||
+      value === "strong" ||
+      value === "partial" ||
+      value === "weak" ||
+      value === "unknown"
+      ? value
+      : "all";
+  });
   const [hasDocsOnly, setHasDocsOnly] = React.useState(false);
   const [noDocsOnly, setNoDocsOnly] = React.useState(false);
-  const [needsReviewOnly, setNeedsReviewOnly] = React.useState(false);
+  const [needsReviewOnly, setNeedsReviewOnly] = React.useState(
+    () => new URLSearchParams(location.search).get("needsReview") === "1",
+  );
   const [favoritesOnly, setFavoritesOnly] = React.useState(false);
   const [remoteOnly, setRemoteOnly] = React.useState(false);
   const [seniorOnly, setSeniorOnly] = React.useState(false);
@@ -1507,13 +1531,15 @@ function JobsPageContent(): JSX.Element {
       jobsView === "active" &&
       filteredJobs.length > 0 &&
       !isMobileJobsLayout &&
-      !holdListViewOpen
+      !holdListViewOpen &&
+      !isProposalSelectionMode
     ) {
       void navigate(buildJobsRoute(filteredJobs[0].id), { replace: true });
     }
   }, [
     filteredJobs,
     holdListViewOpen,
+    isProposalSelectionMode,
     isMobileJobsLayout,
     jobsView,
     navigate,
@@ -1667,15 +1693,8 @@ function JobsPageContent(): JSX.Element {
   }, [refreshStructuredMatch, selectedJob?.id, showToast]);
 
   const handleImportFirstJob = React.useCallback(() => {
-    clearActiveLocalCvId();
-    startFreshProposalWorkspace();
-    void navigate("/proposal", {
-      state: createProposalWorkspaceResetState({
-        entryIntent: "cover-letter-start",
-        jobImportFocus: "supported-sites",
-      }),
-    });
-  }, [navigate]);
+    openOnboardingReplay({ stepId: "jobs" });
+  }, []);
 
   const handleTrySampleJob = React.useCallback(async () => {
     setIsSeedingSample(true);
@@ -1981,6 +2000,14 @@ function JobsPageContent(): JSX.Element {
     [archiveJob, navigate, selectedJobId, showToast],
   );
 
+  const handleDismissJob = React.useCallback(
+    async (jobId: string) => {
+      recordJobDecision("bounce", jobId);
+      await handleArchiveJob(jobId);
+    },
+    [handleArchiveJob, recordJobDecision],
+  );
+
   const handleRestoreArchivedJob = React.useCallback(
     async (jobId: string) => {
       try {
@@ -2034,12 +2061,12 @@ function JobsPageContent(): JSX.Element {
     [duplicateJob, jobs, navigate, showToast],
   );
 
-  const authStatusMessage =
-    !isLoaded || isConvexAuthLoading
-      ? "Loading"
-      : !isSignedIn || !isConvexAuthenticated
-        ? "Sign in to see jobs."
-        : null;
+  const isAuthLoading = !isLoaded || isConvexAuthLoading;
+  const authStatusMessage = isAuthLoading
+    ? "Loading jobs"
+    : !isSignedIn || !isConvexAuthenticated
+      ? "Sign in to see jobs."
+      : null;
   const isJobsListLoading =
     !authStatusMessage &&
     isLoaded &&
@@ -2056,8 +2083,7 @@ function JobsPageContent(): JSX.Element {
   const shouldShowListPane =
     jobsView === "archived" || !isMobileJobsLayout || !selectedJobId;
   const shouldShowDetailPane =
-    jobsView === "active" &&
-    (!isMobileJobsLayout || Boolean(selectedJobId));
+    jobsView === "active" && (!isMobileJobsLayout || Boolean(selectedJobId));
 
   const renderSelectedJobDetail = (): JSX.Element | null => (
     <JobDetail
@@ -2085,6 +2111,9 @@ function JobsPageContent(): JSX.Element {
         void handleDetachResumeFromJob();
       }}
       onCreateProposal={handleCreateProposal}
+      onDismissJob={(jobId) => {
+        void handleDismissJob(jobId);
+      }}
       onRefreshSelectedJobMatch={() => {
         void handleRefreshSelectedJobMatch();
       }}
@@ -2121,16 +2150,20 @@ function JobsPageContent(): JSX.Element {
   return (
     <div className="dasti-page-scroll">
       <div className="dasti-page-shell dasti-jobs-page">
-
-        {authStatusMessage ? (
+        {isAuthLoading ? (
+          <div className="dasti-empty-state" role="status" aria-live="polite">
+            <div className="dasti-empty-state__title">Loading jobs</div>
+          </div>
+        ) : null}
+        {authStatusMessage && !isAuthLoading ? (
           <div className="dasti-hint" style={{ padding: "var(--space-5) 0" }}>
             {authStatusMessage}
           </div>
         ) : null}
 
         {isJobsListLoading ? (
-          <div className="dasti-hint" style={{ padding: "var(--space-5) 0" }}>
-            Loading jobs
+          <div className="dasti-empty-state" role="status" aria-live="polite">
+            <div className="dasti-empty-state__title">Loading jobs</div>
           </div>
         ) : null}
 
@@ -2189,7 +2222,15 @@ function JobsPageContent(): JSX.Element {
                 onRemoteOnlyChange={setRemoteOnly}
                 onSeniorOnlyChange={setSeniorOnly}
                 onViewChange={(view) => void navigate(buildJobsListRoute(view))}
-                onSelectJob={(jobId) => void navigate(buildJobsRoute(jobId))}
+                onSelectJob={(jobId) =>
+                  void navigate(
+                    isProposalSelectionMode
+                      ? buildProposalRoute(jobId)
+                      : buildJobsRoute(jobId),
+                  )
+                }
+                isProposalSelectionMode={isProposalSelectionMode}
+                onCancelProposalSelection={() => void navigate("/proposal")}
                 onOpenJobSource={handleOpenJobSource}
                 onArchiveJob={(jobId) => {
                   void handleArchiveJob(jobId);
@@ -2203,7 +2244,9 @@ function JobsPageContent(): JSX.Element {
                 onDeleteArchivedJob={(jobId) => {
                   void handleDeleteArchivedJob(jobId);
                 }}
-                onConfirmPermanentDeleteJobIdChange={setConfirmingPermanentDeleteJobId}
+                onConfirmPermanentDeleteJobIdChange={
+                  setConfirmingPermanentDeleteJobId
+                }
                 onImportFirstJob={handleImportFirstJob}
               />
             ) : null}

@@ -28,6 +28,8 @@ export type EditorSelectionAnchor = {
 };
 
 export const INLINE_AI_TOOLBAR_SELECTOR = "[data-inline-ai-toolbar='true']";
+export const INLINE_PAPER_EDITABLE_SELECTOR =
+  '[data-inline-paper-editable="true"]';
 
 let pointerTrackingInitialized = false;
 let primaryPointerPressed = false;
@@ -74,6 +76,69 @@ export function isInlineAiToolbarActiveElement(
   return Boolean(activeElement.closest(INLINE_AI_TOOLBAR_SELECTOR));
 }
 
+function closestInlinePaperEditable(
+  node: Node | null | undefined,
+  root: HTMLElement,
+): HTMLElement | null {
+  const element =
+    node instanceof Element
+      ? node
+      : node?.parentElement instanceof HTMLElement
+        ? node.parentElement
+        : null;
+  const editable =
+    element?.closest<HTMLElement>(INLINE_PAPER_EDITABLE_SELECTOR) ?? null;
+
+  return editable && root.contains(editable) ? editable : null;
+}
+
+export function findInlinePaperEditableForSelection(
+  root: HTMLElement | null | undefined,
+  selection: Selection | null | undefined =
+    typeof window !== "undefined" ? window.getSelection() : null,
+): HTMLElement | null {
+  if (!root || !selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  const candidateNodes = [
+    selection.focusNode,
+    selection.anchorNode,
+    range.startContainer,
+    range.endContainer,
+    range.commonAncestorContainer,
+  ];
+  const candidates = Array.from(
+    new Set(
+      candidateNodes
+        .map((node) => closestInlinePaperEditable(node, root))
+        .filter((element): element is HTMLElement => Boolean(element)),
+    ),
+  );
+
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+
+  const intersecting = Array.from(
+    root.querySelectorAll<HTMLElement>(INLINE_PAPER_EDITABLE_SELECTOR),
+  ).filter((element) => {
+    try {
+      return range.intersectsNode(element);
+    } catch {
+      return false;
+    }
+  });
+
+  const uniqueIntersecting = Array.from(new Set(intersecting));
+  if (uniqueIntersecting.length === 1) {
+    return uniqueIntersecting[0];
+  }
+
+  return null;
+}
+
 export function getDomSelectionState(
   root: HTMLElement | null | undefined,
 ): { text: string; anchor: EditorSelectionAnchor } | null {
@@ -88,6 +153,28 @@ export function getDomSelectionState(
   if (!text) return null;
 
   const range = selection.getRangeAt(0);
+  return getDomRangeSelectionState(root, range, text, {
+    focusNode: selection.focusNode,
+    focusOffset: selection.focusOffset,
+    isBackward: isSelectionBackward(selection),
+  });
+}
+
+export function getDomRangeSelectionState(
+  root: HTMLElement | null | undefined,
+  range: Range | null | undefined,
+  text: string,
+  focus?: {
+    focusNode?: Node | null;
+    focusOffset?: number;
+    isBackward?: boolean;
+  },
+): { text: string; anchor: EditorSelectionAnchor } | null {
+  if (!root || !range || typeof window === "undefined") return null;
+
+  const trimmedText = text.trim();
+  if (!trimmedText) return null;
+
   const commonNode = range.commonAncestorContainer;
   const commonElement =
     commonNode.nodeType === Node.ELEMENT_NODE
@@ -122,11 +209,11 @@ export function getDomSelectionState(
   const lastLineRect = sortedRects[sortedRects.length - 1] ?? rect;
   const containerRect = root.getBoundingClientRect();
   const focusRect =
-    measureCollapsedSelectionRect(selection.focusNode, selection.focusOffset) ??
-    (isSelectionBackward(selection) ? firstLineRect : lastLineRect);
+    measureCollapsedSelectionRect(focus?.focusNode, focus?.focusOffset ?? 0) ??
+    (focus?.isBackward ? firstLineRect : lastLineRect);
 
   return {
-    text,
+    text: trimmedText,
     anchor: {
       left: rect.left + window.scrollX + rect.width / 2,
       top: rect.top + window.scrollY,

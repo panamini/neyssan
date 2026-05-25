@@ -1,49 +1,43 @@
 import React from "react";
-import { Button, Menu, Pill, Sheet, ToneBadge } from "../ui";
+import { Button } from "../ui";
 import {
   ArrowUDownRight,
   ArrowUUpLeft,
+  ChatCircleText,
   ClipboardText,
   Eye,
-  FilePdf,
-  FileText,
-  Link,
+  Palette,
+  NewspaperClipping,
+  Layout,
   PaperPlaneRight,
   PenLine,
-  ShareFat,
   TrashSimple,
 } from "@/lib/icons";
+import { useDocumentCommandLayerPosition } from "@/hooks/use-document-command-layer-position";
+import {
+  getCommandLayerLabelDensity,
+  getCommandLayerToolbarDensity,
+} from "@/lib/document-command-layer-layout";
 
 type SafeSendState = "clear" | "warn" | "danger";
 
-type SafeSendRow = {
-  id: string;
-  title: string;
-  meta: string;
-  state: SafeSendState;
-  label: string;
-  actionLabel?: string;
-  actionDisabled?: boolean;
-  onAction?: () => void;
-};
-
 type ProposalDocumentStageProps = {
-  statusLabel: string;
-  statusMeta?: string | null;
-  statusTitle?: string | null;
-  toneLabel: string;
-  toneValue: "auto" | "warm" | "formal" | "natural";
   mode: "preview" | "edit";
-  exporting: boolean;
   hasProposalContent: boolean;
   styleControl?: React.ReactNode;
+  templatesOpen?: boolean;
+  designOpen?: boolean;
+  headingOpen?: boolean;
   children: React.ReactNode;
   onModeChange: (mode: "preview" | "edit") => void;
-  onCopyText: () => void;
+  onOpenHeading?: () => void;
+  onOpenDesign?: () => void;
+  onOpenTemplates?: () => void;
+  onOpenDraft?: () => void;
+  onOpenAsk?: () => void;
+  composerMode?: "draft" | "ask" | null;
   onDeleteDraft?: () => void;
   onSaveToLibrary?: () => void;
-  onExportPdf: (mode: "ats" | "styled") => void;
-  onExportDocx: () => void;
   sourceJobLinked?: boolean;
   sourceCvSelected?: boolean;
   proposalLinked?: boolean;
@@ -58,369 +52,273 @@ type ProposalDocumentStageProps = {
   onResolveImportIssues?: () => void;
 };
 
+const COMMAND_LAYER_TOOLBAR_MIN_WIDTH = 300;
+const COMMAND_LAYER_TOOLBAR_NATURAL_WIDTH = 680;
+const COMMAND_LAYER_TOOLBAR_HEIGHT = 44;
+const COMMAND_LAYER_SAFE_MARGIN = 12;
+const COMMAND_LAYER_GAP = 12;
+const ASK_OFFSET_FROM_PAPER_TOP = 16;
+const ASK_HANDLE_ICON_SIZE = 32;
+const COMMAND_LAYER_ASK_HANDLE = {
+  iconWidth: ASK_HANDLE_ICON_SIZE,
+  height: ASK_HANDLE_ICON_SIZE,
+};
+
+const PAPER_ANCHOR_SELECTOR = [
+  ".dasti-proposal-sheet__preview-page:not(.dasti-proposal-sheet__preview-page--stacked)",
+  ".dasti-proposal-document__page",
+  ".dasti-document-stage__canvas[data-document-page='true']",
+  ".dasti-proposal-sheet__preview-page",
+].join(",");
+const COMMAND_LAYER_CANVAS_SELECTOR = ".dasti-proposal-skeleton-forge";
+
 function runBrowserCommand(command: "undo" | "redo") {
   if (typeof document === "undefined" || !document.execCommand) return;
   document.execCommand(command);
 }
 
-function statusRow({
-  id,
-  title,
-  clear,
-  clearMeta,
-  blockedMeta,
-  clearLabel = "Clear",
-  blockedLabel = "Missing",
-}: {
-  id: string;
-  title: string;
-  clear: boolean;
-  clearMeta: string;
-  blockedMeta: string;
-  clearLabel?: string;
-  blockedLabel?: string;
-}): SafeSendRow {
-  return {
-    id,
-    title,
-    meta: clear ? clearMeta : blockedMeta,
-    state: clear ? "clear" : "warn",
-    label: clear ? clearLabel : blockedLabel,
-  };
-}
-
-function detectionPendingRow(
-  id: string,
-  title: string,
-  meta: string,
-): SafeSendRow {
-  return {
-    id,
-    title,
-    meta,
-    state: "warn",
-    label: "Detection pending",
-  };
-}
-
-function buildSafeSendRows({
-  sourceJobLinked,
-  sourceCvSelected,
-  proposalLinked,
-  matchReviewAccepted,
-  hasUnresolvedImportIssues,
-  hasPendingAiSuggestion,
-  unsupportedClaimState,
-  hasPlaceholderText,
-  recipientOrExportTargetSelected,
-  finalExportReviewed,
-  onResolveImportIssues,
-}: {
-  sourceJobLinked: boolean;
-  sourceCvSelected: boolean;
-  proposalLinked: boolean;
-  matchReviewAccepted: boolean | null;
-  hasUnresolvedImportIssues: boolean | null;
-  hasPendingAiSuggestion: boolean | null;
-  unsupportedClaimState: SafeSendState | null;
-  hasPlaceholderText: boolean;
-  recipientOrExportTargetSelected: boolean;
-  finalExportReviewed: boolean;
-  onResolveImportIssues?: () => void;
-}): SafeSendRow[] {
-  const importIssueRow: SafeSendRow =
-    hasUnresolvedImportIssues === null
-      ? detectionPendingRow(
-          "import-issues",
-          "Unresolved import issues",
-          "Import review detection is not connected on this proposal surface yet.",
-        )
-      : {
-          id: "import-issues",
-          title: "Unresolved import issues",
-          meta: hasUnresolvedImportIssues
-            ? "Resolve CV import uncertainty before export."
-            : "No import-review blockers detected for the selected CV.",
-          state: hasUnresolvedImportIssues ? "warn" : "clear",
-          label: hasUnresolvedImportIssues ? "Resolve" : "Clear",
-          actionLabel: hasUnresolvedImportIssues ? "Resolve" : undefined,
-          actionDisabled: !onResolveImportIssues,
-          onAction: onResolveImportIssues,
-        };
-
-  const aiSuggestionRow: SafeSendRow =
-    hasPendingAiSuggestion === null
-      ? detectionPendingRow(
-          "ai-suggestion",
-          "Unresolved AI suggestion",
-          "Pending AI suggestion telemetry is not connected on this proposal surface yet.",
-        )
-      : {
-          id: "ai-suggestion",
-          title: "Unresolved AI suggestion",
-          meta: hasPendingAiSuggestion
-            ? "Accept or dismiss pending AI rewrites before handoff."
-            : "No pending AI rewrite suggestions detected.",
-          state: hasPendingAiSuggestion ? "warn" : "clear",
-          label: hasPendingAiSuggestion ? "Pending" : "Clear",
-        };
-
-  const matchReviewRow: SafeSendRow =
-    matchReviewAccepted === null
-      ? detectionPendingRow(
-          "match-review",
-          "Match review accepted",
-          "Match-review acceptance is not connected on this proposal surface yet.",
-        )
-      : {
-          id: "match-review",
-          title: "Match review accepted",
-          meta: matchReviewAccepted
-            ? "Source job has been viewed for this draft."
-            : "Open the source job before sending.",
-          state: matchReviewAccepted ? "clear" : "warn",
-          label: matchReviewAccepted ? "Viewed" : "Unviewed",
-        };
-
-  const unsupportedClaimRow: SafeSendRow =
-    unsupportedClaimState === null
-      ? detectionPendingRow(
-          "unsupported-claim",
-          "Unsupported claim",
-          "Claim-source detection is not connected on this proposal surface yet.",
-        )
-      : {
-          id: "unsupported-claim",
-          title: "Unsupported claim",
-          meta:
-            unsupportedClaimState === "clear"
-              ? "No unsupported claims detected."
-              : "Claims need source support before handoff.",
-          state: unsupportedClaimState,
-          label:
-            unsupportedClaimState === "clear"
-              ? "Clear"
-              : unsupportedClaimState === "danger"
-                ? "Blocked"
-                : "Review",
-        };
-
-  return [
-    statusRow({
-      id: "source-job",
-      title: "Source job linked",
-      clear: sourceJobLinked,
-      clearMeta: "Proposal has a source role.",
-      blockedMeta: "Link a source role before sending.",
-      clearLabel: "Linked",
-    }),
-    matchReviewRow,
-    statusRow({
-      id: "source-cv",
-      title: "CV variant selected",
-      clear: sourceCvSelected,
-      clearMeta: "A source CV is attached to this draft.",
-      blockedMeta: "Select a source CV before sending.",
-      clearLabel: "Selected",
-    }),
-    statusRow({
-      id: "proposal-linked",
-      title: "Proposal linked",
-      clear: proposalLinked,
-      clearMeta: "Draft is available in the proposal forge.",
-      blockedMeta: "Generate or open a proposal draft before sending.",
-    }),
-    importIssueRow,
-    aiSuggestionRow,
-    unsupportedClaimRow,
-    statusRow({
-      id: "placeholder-text",
-      title: "No placeholder text",
-      clear: !hasPlaceholderText,
-      clearMeta: "No [company], lorem, or empty variables detected.",
-      blockedMeta: "Replace placeholder text before exporting or sending.",
-      blockedLabel: "Needs review",
-    }),
-    statusRow({
-      id: "recipient-target",
-      title: "Recipient or export target",
-      clear: recipientOrExportTargetSelected,
-      clearMeta: "A send or export target has been selected.",
-      blockedMeta: "Pick PDF, copy, public preview, or email handoff.",
-      clearLabel: "Selected",
-      blockedLabel: "Not selected",
-    }),
-    statusRow({
-      id: "final-export-reviewed",
-      title: "Final export reviewed",
-      clear: finalExportReviewed,
-      clearMeta: "Page preview has been opened for this draft.",
-      blockedMeta: "Open Page preview before generating the sendable PDF.",
-      clearLabel: "Reviewed",
-      blockedLabel: "Pending",
-    }),
-  ];
-}
-
-function getPillTone(state: SafeSendState) {
-  if (state === "clear") return "success" as const;
-  if (state === "danger") return "danger" as const;
-  return "warning" as const;
-}
-
 export function ProposalDocumentStage({
-  statusLabel,
-  statusMeta,
-  statusTitle,
-  toneLabel,
-  toneValue,
   mode,
-  exporting,
   hasProposalContent,
   styleControl = null,
+  templatesOpen = false,
+  designOpen = false,
+  headingOpen = false,
   children,
   onModeChange,
-  onCopyText,
+  onOpenHeading,
+  onOpenDesign,
+  onOpenTemplates,
+  onOpenDraft,
+  onOpenAsk,
+  composerMode = null,
   onDeleteDraft,
   onSaveToLibrary,
-  onExportPdf,
-  onExportDocx,
-  sourceJobLinked = false,
-  sourceCvSelected = false,
-  proposalLinked = true,
-  matchReviewAccepted = null,
-  hasUnresolvedImportIssues = null,
-  hasPendingAiSuggestion = null,
-  unsupportedClaimState = null,
-  hasPlaceholderText = false,
-  recipientOrExportTargetSelected = false,
-  finalExportReviewed = false,
-  onReviewMatch,
-  onResolveImportIssues,
 }: ProposalDocumentStageProps): JSX.Element {
-  const [safeSendOpen, setSafeSendOpen] = React.useState(false);
-  const [selectedExportTarget, setSelectedExportTarget] = React.useState<
-    "pdf" | "docx" | "copy-text" | null
-  >(null);
-  const hasRecipientOrExportTarget =
-    recipientOrExportTargetSelected || selectedExportTarget !== null;
-  const safeSendRows = React.useMemo(
-    () =>
-      buildSafeSendRows({
-        sourceJobLinked,
-        sourceCvSelected,
-        proposalLinked,
-        matchReviewAccepted,
-        hasUnresolvedImportIssues,
-        hasPendingAiSuggestion,
-        unsupportedClaimState,
-        hasPlaceholderText,
-        recipientOrExportTargetSelected: hasRecipientOrExportTarget,
-        finalExportReviewed,
-        onResolveImportIssues,
-      }),
-    [
-      finalExportReviewed,
-      hasPendingAiSuggestion,
-      hasPlaceholderText,
-      hasRecipientOrExportTarget,
-      hasUnresolvedImportIssues,
-      matchReviewAccepted,
-      onResolveImportIssues,
-      proposalLinked,
-      unsupportedClaimState,
-      sourceCvSelected,
-      sourceJobLinked,
-    ],
-  );
-  const blockerCount = safeSendRows.filter((row) => row.state !== "clear").length;
-  const canContinueToSend = blockerCount === 0;
+  const stageIconSize = 18;
+  const stageRef = React.useRef<HTMLElement | null>(null);
+  const paperRef = React.useRef<HTMLDivElement | null>(null);
+  const {
+    style: toolbarAnchorStyle,
+    toolbarMode,
+    draftLabelMode,
+    modeControlMode,
+    askMode,
+    commandLayerSticky,
+  } = useDocumentCommandLayerPosition({
+    stageRef,
+    paperRef,
+    paperAnchorSelector: PAPER_ANCHOR_SELECTOR,
+    commandCanvasSelector: COMMAND_LAYER_CANVAS_SELECTOR,
+    cssVarPrefix: "proposal",
+    toolbarSelector: "[data-testid='proposal-toolbar']",
+    toolbarNaturalWidth: COMMAND_LAYER_TOOLBAR_NATURAL_WIDTH,
+    toolbarMinWidth: COMMAND_LAYER_TOOLBAR_MIN_WIDTH,
+    toolbarHeight: COMMAND_LAYER_TOOLBAR_HEIGHT,
+    askHandle: COMMAND_LAYER_ASK_HANDLE,
+    safeMargin: COMMAND_LAYER_SAFE_MARGIN,
+    gap: COMMAND_LAYER_GAP,
+    askOffsetFromPaperTop: ASK_OFFSET_FROM_PAPER_TOP,
+    refreshKey: mode,
+  });
+  const isUltraCompactToolbar = modeControlMode === "toggle";
+  const nextMode = mode === "edit" ? "preview" : "edit";
+  const modeToggleLabel =
+    mode === "edit" ? "Switch to Preview" : "Switch to Edit";
+  const askTooltip = "Ask";
 
   return (
     <section
+      ref={stageRef}
       className="dasti-proposal-skeleton-stage"
+      data-testid="proposal-canvas"
+      data-toolbar-mode={toolbarMode}
+      data-draft-label-mode={draftLabelMode}
+      data-mode-control-mode={modeControlMode}
+      data-ask-mode={askMode}
+      data-command-layer-sticky={commandLayerSticky ? "true" : undefined}
+      data-toolbar-density={getCommandLayerToolbarDensity(toolbarMode)}
+      data-ask-placement={askMode === "edgeTab" ? "edge-tab" : "outside"}
+      data-ask-density="icon"
+      data-draft-density={getCommandLayerLabelDensity(draftLabelMode)}
       aria-label="Proposal document stage"
     >
-      <div className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-toolbar--surface-tooltips">
-        <span
-          className={`ds-status ds-status--${statusLabel === "Drafting" ? "warning" : "neutral"} dasti-proposal-skeleton-stage__status${statusTitle ? " dasti-toolbar-tooltip-trigger--below" : ""}`}
-          data-toolbar-tooltip={statusTitle ?? undefined}
-        >
-          <span className="ds-status__dot" aria-hidden="true" />
-          <span className="dasti-proposal-skeleton-stage__status-label">
-            {statusLabel}
-          </span>
-          {statusMeta ? (
-            <span className="dasti-proposal-skeleton-stage__status-meta">
-              {statusMeta}
-            </span>
-          ) : null}
-        </span>
-        <ToneBadge tone={toneValue}>{toneLabel}</ToneBadge>
+      <div
+        className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-toolbar--surface-tooltips"
+        data-sticky={commandLayerSticky ? "true" : undefined}
+        data-testid="proposal-toolbar"
+        style={toolbarAnchorStyle}
+      >
         <div
-          className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__actions"
+          className="dasti-proposal-skeleton-stage__toolbar-main"
           role="group"
-          aria-label="Proposal document actions"
+          aria-label="Proposal toolbar"
         >
           <div
-            className="style-segmented dasti-proposal-skeleton-stage__mode"
+            className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__actions dasti-proposal-skeleton-stage__actions--document"
             role="group"
-            aria-label="Proposal view mode"
+            aria-label="Document controls"
           >
-            <button
-              type="button"
-              className="dasti-proposal-mode-toggle"
-              data-selected={mode === "edit" ? "true" : undefined}
-              onClick={() => onModeChange("edit")}
-              aria-label="Edit proposal"
-              data-toolbar-tooltip="Edit"
-            >
-              <PenLine size={14} strokeWidth={1.8} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="dasti-proposal-mode-toggle"
-              data-selected={mode === "preview" ? "true" : undefined}
-              onClick={() => onModeChange("preview")}
-              aria-label="Preview proposal"
-              data-toolbar-tooltip="Preview"
-            >
-              <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
-            </button>
+            {isUltraCompactToolbar ? (
+              <button
+                type="button"
+                className="dasti-icon-button dasti-proposal-mode-toggle dasti-proposal-mode-toggle--single"
+                onClick={() => onModeChange(nextMode)}
+                aria-label={modeToggleLabel}
+                data-toolbar-tooltip={modeToggleLabel}
+              >
+                {mode === "edit" ? (
+                  <PenLine
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Eye
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                )}
+              </button>
+            ) : (
+              <div
+                className="style-segmented dasti-proposal-skeleton-stage__mode"
+                role="group"
+                aria-label="Proposal view mode"
+              >
+                <button
+                  type="button"
+                  className="dasti-proposal-mode-toggle"
+                  data-selected={mode === "edit" ? "true" : undefined}
+                  onClick={() => onModeChange("edit")}
+                  aria-label="Edit proposal"
+                  data-toolbar-tooltip="Edit"
+                >
+                  <PenLine
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                </button>
+                <button
+                  type="button"
+                  className="dasti-proposal-mode-toggle"
+                  data-selected={mode === "preview" ? "true" : undefined}
+                  onClick={() => onModeChange("preview")}
+                  aria-label="Preview proposal"
+                  data-toolbar-tooltip="Preview"
+                >
+                  <Eye
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
+            )}
+            {styleControl ? (
+              <div className="dasti-proposal-skeleton-stage__style-control">
+                {styleControl}
+              </div>
+            ) : null}
+            {onOpenHeading ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="dasti-proposal-skeleton-stage__primary-action"
+                iconLeft={
+                  <NewspaperClipping size={stageIconSize} strokeWidth={1.8} />
+                }
+                aria-expanded={headingOpen}
+                aria-label="Heading"
+                data-toolbar-tooltip="Heading"
+                data-stage-tooltip-mode="compact"
+                onClick={onOpenHeading}
+              >
+                <span className="dasti-proposal-skeleton-stage__action-label">
+                  Heading
+                </span>
+              </Button>
+            ) : null}
+            {onOpenDesign ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="dasti-proposal-skeleton-stage__primary-action"
+                iconLeft={<Palette size={stageIconSize} strokeWidth={1.8} />}
+                aria-expanded={designOpen}
+                aria-label="Design"
+                data-toolbar-tooltip="Design"
+                data-stage-tooltip-mode="compact"
+                onClick={onOpenDesign}
+              >
+                <span className="dasti-proposal-skeleton-stage__action-label">
+                  Design
+                </span>
+              </Button>
+            ) : null}
+            {onOpenTemplates ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="dasti-proposal-skeleton-stage__primary-action"
+                iconLeft={<Layout size={stageIconSize} strokeWidth={1.8} />}
+                aria-expanded={templatesOpen}
+                aria-label="Templates"
+                data-toolbar-tooltip="Templates"
+                data-stage-tooltip-mode="compact"
+                onClick={onOpenTemplates}
+              >
+                <span className="dasti-proposal-skeleton-stage__action-label">
+                  Templates
+                </span>
+              </Button>
+            ) : null}
           </div>
-          {styleControl ? (
-            <div className="dasti-proposal-skeleton-stage__style-control">
-              {styleControl}
-            </div>
-          ) : null}
           {mode === "edit" ? (
-            <>
-              <span className="dasti-icon-cluster__divider" aria-hidden="true" />
+            <div
+              className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__right-actions dasti-proposal-skeleton-stage__right-actions--history"
+              role="group"
+              aria-label="Proposal undo redo actions"
+            >
               <button
                 type="button"
                 className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
                 onClick={() => runBrowserCommand("undo")}
                 aria-label="Undo"
-                title="Undo"
                 data-toolbar-tooltip="Undo"
               >
-                <ArrowUUpLeft size={14} strokeWidth={1.8} aria-hidden="true" />
+                <ArrowUUpLeft
+                  size={stageIconSize}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
               </button>
               <button
                 type="button"
                 className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
                 onClick={() => runBrowserCommand("redo")}
                 aria-label="Redo"
-                title="Redo"
                 data-toolbar-tooltip="Redo"
               >
-                <ArrowUDownRight size={14} strokeWidth={1.8} aria-hidden="true" />
+                <ArrowUDownRight
+                  size={stageIconSize}
+                  strokeWidth={1.8}
+                  aria-hidden="true"
+                />
               </button>
-            </>
+            </div>
           ) : null}
           {onDeleteDraft || onSaveToLibrary ? (
-            <>
-              <span className="dasti-icon-cluster__divider" aria-hidden="true" />
+            <div
+              className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__right-actions dasti-proposal-skeleton-stage__right-actions--library"
+              role="group"
+              aria-label="Proposal library actions"
+            >
               {onSaveToLibrary ? (
                 <button
                   type="button"
@@ -428,10 +326,13 @@ export function ProposalDocumentStage({
                   onClick={onSaveToLibrary}
                   disabled={!hasProposalContent}
                   aria-label="Save proposal to library"
-                  title="Save proposal to library"
                   data-toolbar-tooltip="Save to library"
                 >
-                  <ClipboardText size={14} strokeWidth={1.8} aria-hidden="true" />
+                  <ClipboardText
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
                 </button>
               ) : null}
               {onDeleteDraft ? (
@@ -441,204 +342,78 @@ export function ProposalDocumentStage({
                   onClick={onDeleteDraft}
                   disabled={!hasProposalContent}
                   aria-label="Delete draft"
-                  title="Delete draft"
                   data-toolbar-tooltip="Delete draft"
                 >
-                  <TrashSimple size={14} strokeWidth={1.8} aria-hidden="true" />
+                  <TrashSimple
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
                 </button>
               ) : null}
-            </>
+            </div>
+          ) : null}
+          {onOpenDraft ? (
+            <div
+              className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__actions dasti-proposal-skeleton-stage__actions--writing"
+              role="group"
+              aria-label="Primary writing action"
+            >
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                className="dasti-proposal-skeleton-stage__primary-action dasti-proposal-skeleton-stage__primary-action--draft"
+                iconLeft={
+                  <PaperPlaneRight size={stageIconSize} strokeWidth={1.8} />
+                }
+                aria-expanded={composerMode === "draft"}
+                aria-label="Draft proposal"
+                data-testid="proposal-draft-button"
+                data-toolbar-tooltip="Draft proposal"
+                data-stage-tooltip-mode="compact"
+                onClick={onOpenDraft}
+              >
+                <span className="dasti-proposal-skeleton-stage__action-label dasti-proposal-skeleton-stage__action-label--full">
+                  Draft proposal
+                </span>
+                <span className="dasti-proposal-skeleton-stage__action-label dasti-proposal-skeleton-stage__action-label--short">
+                  Draft
+                </span>
+              </Button>
+            </div>
           ) : null}
         </div>
-        <span className="dasti-proposal-skeleton-stage__spacer" />
-        <Menu
-          ariaLabel="Share proposal"
-          align="end"
-          sections={[
-            {
-              items: [
-                {
-                  id: "safe-send",
-                  label: "Safe-send checklist…",
-                  icon: <ClipboardText size={15} strokeWidth={1.8} />,
-                  description:
-                    blockerCount > 0
-                      ? `${blockerCount} checks need attention`
-                      : "Ready to continue",
-                  onSelect: () => setSafeSendOpen(true),
-                },
-              ],
-            },
-            {
-              label: "Send",
-              items: [
-                {
-                  id: "send-email",
-                  label: "Send by email",
-                  icon: <PaperPlaneRight size={15} strokeWidth={1.8} />,
-                  description: "Unavailable in this checkpoint",
-                  disabled: true,
-                },
-                {
-                  id: "copy-link",
-                  label: "Copy link",
-                  icon: <Link size={15} strokeWidth={1.8} />,
-                  description: "Unavailable in this checkpoint",
-                  disabled: true,
-                },
-                {
-                  id: "public-preview",
-                  label: "Public preview link",
-                  icon: <ShareFat size={15} strokeWidth={1.8} />,
-                  description: "Unavailable in this checkpoint",
-                  disabled: true,
-                },
-              ],
-            },
-            {
-              label: "Export",
-              items: [
-                {
-                  id: "export-pdf",
-                  label: "Export PDF",
-                  icon: <FilePdf size={15} strokeWidth={1.8} />,
-                  disabled: !hasProposalContent || exporting,
-                  onSelect: () => {
-                    setSelectedExportTarget("pdf");
-                    onExportPdf("styled");
-                  },
-                },
-                {
-                  id: "export-docx",
-                  label: "Export DOCX",
-                  icon: <FileText size={15} strokeWidth={1.8} />,
-                  disabled: !hasProposalContent || exporting,
-                  onSelect: () => {
-                    setSelectedExportTarget("docx");
-                    onExportDocx();
-                  },
-                },
-                {
-                  id: "copy-text",
-                  label: "Copy as text",
-                  icon: <ClipboardText size={15} strokeWidth={1.8} />,
-                  disabled: !hasProposalContent,
-                  onSelect: () => {
-                    setSelectedExportTarget("copy-text");
-                    onCopyText();
-                  },
-                },
-              ],
-            },
-          ]}
-          trigger={
-            <button
-              type="button"
-              className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
-              aria-label="Share proposal"
-              data-toolbar-tooltip="Share"
-            >
-              <ShareFat size={15} strokeWidth={1.8} aria-hidden="true" />
-            </button>
-          }
-        />
       </div>
-
-      <div className="dasti-proposal-skeleton-stage__paper">{children}</div>
-
-      <Sheet
-        open={safeSendOpen}
-        onOpenChange={setSafeSendOpen}
-        title="Safe-send checklist"
-        description="Trust gate for export, share, and send. Each row must be cleared before the package can leave your hands."
-        footer={
-          <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="md"
-              onClick={() => setSafeSendOpen(false)}
-            >
-              Cancel
-            </Button>
-            <span className="dasti-proposal-safe-send__footer-spacer" />
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              onClick={() => {
-                setSafeSendOpen(false);
-                onReviewMatch?.();
-              }}
-            >
-              Review match
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              disabled={!canContinueToSend}
-            >
-              Continue to send
-            </Button>
-          </>
-        }
-      >
-        <div className="dasti-proposal-safe-send">
-          <div
-            className="dasti-proposal-safe-send__status"
-            aria-live="polite"
+      {onOpenAsk ? (
+        <div
+          className="dasti-proposal-skeleton-stage__ask-handle-layer dasti-toolbar--surface-tooltips"
+          data-sticky={commandLayerSticky ? "true" : undefined}
+          style={toolbarAnchorStyle}
+        >
+          <button
+            type="button"
+            className="dasti-icon-button dasti-proposal-skeleton-stage__ask-handle"
+            aria-expanded={composerMode === "ask"}
+            aria-label="Ask"
+            title="Ask"
+            data-testid="proposal-ask-handle"
+            data-toolbar-tooltip={askTooltip}
+            data-stage-tooltip-mode="compact"
+            onClick={onOpenAsk}
           >
-            <Pill tone={canContinueToSend ? "success" : "danger"}>
-              {canContinueToSend ? "Ready" : "Blocked"}
-            </Pill>
-            <strong>
-              {canContinueToSend
-                ? "Package is ready to continue."
-                : "Package cannot be sent yet."}
-            </strong>
-            <small>
-              {canContinueToSend
-                ? "All safe-send rows are clear."
-                : `${blockerCount} checks still need attention before handoff.`}
-            </small>
-          </div>
-          <div className="dasti-proposal-safe-send__list">
-            {safeSendRows.map((row) => (
-              <div
-                key={row.id}
-                className="dasti-proposal-safe-send__row"
-                data-state={row.state}
-              >
-                <span className="dasti-proposal-safe-send__mark">
-                  {row.state === "clear"
-                    ? "✓"
-                    : row.state === "danger"
-                      ? "×"
-                      : "!"}
-                </span>
-                <span className="dasti-proposal-safe-send__copy">
-                  <strong>{row.title}</strong>
-                  <small>{row.meta}</small>
-                </span>
-                {row.actionLabel ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={row.actionDisabled}
-                    onClick={row.onAction}
-                  >
-                    {row.actionLabel}
-                  </Button>
-                ) : (
-                  <Pill tone={getPillTone(row.state)}>{row.label}</Pill>
-                )}
-              </div>
-            ))}
-          </div>
+            <ChatCircleText size={16} strokeWidth={1.8} aria-hidden="true" />
+          </button>
         </div>
-      </Sheet>
+      ) : null}
+
+      <div
+        ref={paperRef}
+        className="dasti-proposal-skeleton-stage__paper"
+        data-testid="proposal-paper"
+      >
+        {children}
+      </div>
     </section>
   );
 }

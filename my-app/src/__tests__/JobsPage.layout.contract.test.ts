@@ -54,7 +54,7 @@ describe("JobsPage collapsed layout contract", () => {
     expect(jobsListSource).toContain("openExternalJobCaptureLink");
     expect(jobsListSource).not.toContain("onClick={onImportFirstJob}");
     expect(jobsListSource).toContain("+ Filters");
-    expect(jobsListSource).toContain("Worth it");
+    expect(jobsListSource).toContain("Worth a shot");
     expect(jobsListSource).toContain("New");
     expect(jobsListSource).toContain("Favorites");
     expect(jobsListSource).toContain("Remote");
@@ -87,7 +87,9 @@ describe("JobsPage collapsed layout contract", () => {
       /className=\{\[[\s\S]*"dasti-jobs-layout",[\s\S]*"jobs",/,
     );
     expect(jobsListSource).toContain("dasti-jobs-list-pane jobs__list");
-    expect(jobsWorkspaceSource).toContain("dasti-jobs-detail-pane jobs__detail");
+    expect(jobsWorkspaceSource).toContain(
+      "dasti-jobs-detail-pane jobs__detail",
+    );
     expect(jobMatchPanelSource).toContain(
       "dasti-proposal-sheet dasti-match-read dasti-job-match-panel jobs__match",
     );
@@ -116,13 +118,19 @@ describe("JobsPage collapsed layout contract", () => {
       /\.dasti-jobs-detail\s*\{[\s\S]*display:\s*flex;[\s\S]*flex:\s*1 1 auto;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;/,
     );
     expect(productCss).toMatch(
-      /\.dasti-jobs-detail__body\s*\{[\s\S]*display:\s*grid;[\s\S]*flex:\s*1 1 auto;[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(280px,\s*320px\);[\s\S]*min-height:\s*0;[\s\S]*overflow-y:\s*auto;/,
+      /\.dasti-jobs-detail__body\s*\{[\s\S]*display:\s*grid;[\s\S]*flex:\s*0 0 auto;[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);[\s\S]*min-height:\s*0;[\s\S]*overflow:\s*visible;/,
     );
     expect(productCss).not.toMatch(
       /@media\s*\(max-width:\s*1439px\)[\s\S]*grid-template-columns:\s*minmax\(0,\s*min\(100%,\s*560px\)\);/,
     );
     expect(productCss).toMatch(
       /@media\s*\(max-width:\s*1023px\)\s*\{[\s\S]*\.dasti-jobs-layout\s*\{[\s\S]*grid-template-columns:\s*1fr;/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.dasti-job-match-panel__header-line\s*\{[\s\S]*grid-template-columns:\s*1fr;/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.verdict-grid\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\);/,
     );
     expect(productCss).not.toMatch(
       /@media\s*\(max-width:\s*1120px\)[\s\S]*\.dasti-jobs-detail__body\s*\{[\s\S]*grid-template-columns:\s*1fr;/,

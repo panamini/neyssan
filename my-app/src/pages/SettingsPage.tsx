@@ -4,6 +4,7 @@ import { useAuth, useUser } from "@clerk/clerk-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
+import { useForgeTemplatePanel } from "../contexts/ForgeTemplatePanelContext";
 import {
   Check,
   Eraser,
@@ -59,6 +60,9 @@ import {
 import { getFactoryDocumentStyleSlot } from "../lib/document-style-slots";
 import { ProposalColorPickerPopover } from "../components/ProposalColorPickerPopover";
 import type { ToneBadgeTone } from "../components/ui/tone-badge";
+import {
+  normalizeSettingsTab,
+} from "../lib/settings-tabs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -188,6 +192,7 @@ const SETTINGS_ACCENT_OPTIONS: SettingsAccentOption[] = [
 ];
 
 const SETTINGS_CUSTOM_ACCENT_STARTER_HEX = "#8A8176";
+const SETTINGS_DOCKED_DRAWER_MIN_VIEWPORT_WIDTH = 1180;
 
 function normalizeSettingsAccentHex(
   value: string | null | undefined,
@@ -250,14 +255,15 @@ const STYLE_OPTIONS = [
   },
   {
     id: "workshop",
-    label: "Workshop",
-    description: "One-column Workshop ATS. Paired margin twin.",
+    label: "Minimal",
+    description:
+      "A clean one-column CV that works well with recruiters and application systems.",
     resumeTemplateId: WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   },
   {
     id: "workshop-twocol",
-    label: "Workshop 2-col",
-    description: "Two-column Workshop grid with 17/18-inspired rhythm.",
+    label: "French",
+    description: "A structured two-column CV with clear sections and hierarchy.",
     resumeTemplateId: WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
   },
 ] satisfies StyleOption[];
@@ -514,6 +520,7 @@ function HeroPreview({
   return (
     <article
       className={`dasti-settings-hero-preview dasti-settings-hero-preview--${styleOption.id}`}
+      data-font-pair-id={fontPair.id}
       style={{ "--hero-accent": accentColor } as React.CSSProperties}
     >
       <div className="dasti-settings-hero-preview__inner">
@@ -677,6 +684,7 @@ function FontPairGrid({
             ]
               .filter(Boolean)
               .join(" ")}
+            data-font-pair-id={pair.id}
             aria-pressed={active}
             onClick={() => onChange(pair.id)}
           >
@@ -1105,36 +1113,21 @@ function SignatureSelector({
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-type SettingsTab =
-  | "account"
-  | "preferences"
-  | "docstyle"
-  | "voice"
-  | "billing"
-  | "team"
-  | "danger";
-
-const SETTINGS_TABS: Array<{ id: SettingsTab; label: string }> = [
-  { id: "account", label: "Account" },
-  { id: "preferences", label: "Preferences" },
-  { id: "docstyle", label: "Document style" },
-  { id: "voice", label: "Voice & tone" },
-  { id: "billing", label: "Billing" },
-  { id: "team", label: "Team" },
-  { id: "danger", label: "Danger zone" },
-];
-
-function normalizeSettingsTab(value: string | null): SettingsTab {
-  return SETTINGS_TABS.some((tab) => tab.id === value)
-    ? (value as SettingsTab)
-    : "account";
-}
-
 export function SettingsPage(): JSX.Element {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const activeTab = normalizeSettingsTab(searchParams.get("tab"));
   const { currentCvId } = useCvLibrary();
+  const {
+    activeSurface: activeForgePanelSurface,
+    dockedSurface: dockedForgePanelSurface,
+    open: forgePanelOpen,
+    openMode: forgePanelOpenMode,
+    openSurface: openForgePanelSurface,
+  } = useForgeTemplatePanel();
+  const [viewportWidth, setViewportWidth] = React.useState(() =>
+    typeof window === "undefined" ? 1280 : window.innerWidth,
+  );
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
   const { preference: motionPreference, setPreference: setMotionPreference } =
     useMotionPreference();
@@ -1186,6 +1179,17 @@ export function SettingsPage(): JSX.Element {
   const voiceHydrated = React.useRef(false);
   const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] =
     React.useState(false);
+
+  React.useEffect(() => {
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   // Sync from server once
   React.useEffect(() => {
@@ -1453,10 +1457,6 @@ export function SettingsPage(): JSX.Element {
     [flashSaved, isSignedIn, setCurrentProposalSettings],
   );
 
-  const selectSettingsTab = (tab: SettingsTab) => {
-    setSearchParams({ tab });
-  };
-
   const accountDisplayName =
     user?.fullName ??
     user?.primaryEmailAddress?.emailAddress ??
@@ -1464,11 +1464,47 @@ export function SettingsPage(): JSX.Element {
     "Your account";
   const accountEmail =
     user?.primaryEmailAddress?.emailAddress ?? "Not connected";
+  const isWideEnoughForSettingsDrawerDock =
+    viewportWidth >= SETTINGS_DOCKED_DRAWER_MIN_VIEWPORT_WIDTH;
+  const isSettingsDrawerDocked =
+    forgePanelOpen &&
+    forgePanelOpenMode === "docked" &&
+    isWideEnoughForSettingsDrawerDock &&
+    (activeForgePanelSurface === "settings" ||
+      dockedForgePanelSurface === "settings");
+
+  React.useEffect(() => {
+    const isSettingsPanelActive =
+      forgePanelOpen &&
+      (activeForgePanelSurface === "settings" ||
+        dockedForgePanelSurface === "settings");
+
+    if (!isSettingsPanelActive || forgePanelOpenMode === "peek") {
+      return;
+    }
+
+    const nextMode = isWideEnoughForSettingsDrawerDock ? "docked" : "overlay";
+    if (forgePanelOpenMode === nextMode) {
+      return;
+    }
+
+    openForgePanelSurface("settings", { mode: nextMode });
+  }, [
+    activeForgePanelSurface,
+    dockedForgePanelSurface,
+    forgePanelOpen,
+    forgePanelOpenMode,
+    isWideEnoughForSettingsDrawerDock,
+    openForgePanelSurface,
+  ]);
 
   return (
     <div className="dasti-page-scroll" style={{ minWidth: 0 }}>
       <div
-        className="dasti-page-shell"
+        className="dasti-page-shell dasti-page-shell--settings"
+        data-forge-drawer-docked={
+          isSettingsDrawerDocked ? "true" : undefined
+        }
         style={
           {
             "--page-shell-max-width": "1320px",
@@ -1477,7 +1513,12 @@ export function SettingsPage(): JSX.Element {
           } as React.CSSProperties
         }
       >
-        <div className="dasti-settings-layout settings">
+        <div
+          className="dasti-settings-layout settings"
+          data-forge-drawer-docked={
+            isSettingsDrawerDocked ? "true" : undefined
+          }
+        >
           <div className="settings__content">
             {activeTab === "docstyle" ? (
               <div

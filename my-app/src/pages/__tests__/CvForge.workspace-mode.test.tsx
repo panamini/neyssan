@@ -12,7 +12,9 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach } from "vitest";
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { CvForge } from "../CvForge";
+import { ForgeTemplatePanel } from "../../components/ForgeTemplatePanel";
+import { ForgeTemplatePanelProvider } from "../../contexts/ForgeTemplatePanelContext";
+import { CvForge as CvForgePage } from "../CvForge";
 
 const {
   importFileMock,
@@ -25,6 +27,15 @@ const {
   transformEditorSelectionMock: vi.fn(),
   runCvSectionAiActionMock: vi.fn(),
 }));
+
+function CvForge(): JSX.Element {
+  return (
+    <ForgeTemplatePanelProvider>
+      <CvForgePage />
+      <ForgeTemplatePanel />
+    </ForgeTemplatePanelProvider>
+  );
+}
 
 vi.mock("../../components/ProfileReviewCard", () => ({
   ProfileReviewCard: ({
@@ -328,7 +339,9 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
     hostMode,
     inlineEditing,
     onLinkIntent,
+    sectionActions,
     stylePreset,
+    paperAi,
   }: {
     data?: {
       summary?: string;
@@ -462,14 +475,34 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
       requestId: string;
       sectionType:
         | "summary"
+        | "profile"
         | "experience"
         | "education"
+        | "skills"
+        | "languages"
+        | "achievements"
+        | "certifications"
+        | "projects"
         | "additional_information"
         | "custom";
       sectionId: string;
       source: "preview-panel";
       shouldOpenModal: boolean;
     }) => void;
+    sectionActions?: {
+      onAsk: (sectionId: string) => void;
+    } | null;
+    paperAi?: {
+      listSuggestion?: {
+        sectionId: string;
+        sectionType?: string;
+        items: string[];
+        state: "loading" | "ready" | "error";
+        errorMessage?: string;
+      } | null;
+      onAcceptListSuggestion?: (value: string) => void;
+      onClearListSuggestions?: () => void;
+    } | null;
     stylePreset?: {
       accentHex?: string | null;
       layout?: string | null;
@@ -558,6 +591,7 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
         <p
           aria-label="Paper Summary paragraph"
           data-testid="paper-summary-paragraph"
+          data-preview-section-id={summaryEditTarget.sectionId}
           contentEditable={isSummaryEditable ? "plaintext-only" : undefined}
           suppressContentEditableWarning={isSummaryEditable}
           role={isSummaryEditable ? "textbox" : undefined}
@@ -597,6 +631,15 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
             data?.summary ?? ""
           )}
         </p>
+        {inlineEditing?.enabled && sectionActions ? (
+          <button
+            type="button"
+            aria-label="Ask AI for Summary"
+            onClick={() => sectionActions.onAsk(summaryEditTarget.sectionId)}
+          >
+            Ask AI for Summary
+          </button>
+        ) : null}
         {(data?.projects ?? []).map((project) => (
           <div key={project.id} data-testid={`paper-project-${project.id}`}>
             <p>{project.name}</p>
@@ -627,48 +670,59 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
             const isTextSectionEditable = Boolean(inlineEditing?.enabled);
 
             return (
-              <p
-                key={section.id}
-                aria-label={`Paper ${section.sectionTitle} paragraph`}
-                data-testid={`paper-text-section-${section.sectionId}`}
-                contentEditable={
-                  isTextSectionEditable ? "plaintext-only" : undefined
-                }
-                suppressContentEditableWarning={isTextSectionEditable}
-                role={isTextSectionEditable ? "textbox" : undefined}
-                tabIndex={isTextSectionEditable ? 0 : undefined}
-                data-inline-paper-editable={
-                  isTextSectionEditable ? "true" : undefined
-                }
-                data-paper-section-id={textEditTarget.sectionId}
-                data-paper-section-type={textEditTarget.sectionType}
-                data-paper-field-path={textEditTarget.fieldPath}
-                data-paper-field-kind={textEditTarget.fieldKind}
-                onFocus={() => inlineEditing?.onActivate(textEditTarget)}
-                onClick={(event) => {
-                  if (inlineEditing?.enabled) {
-                    event.stopPropagation();
-                    inlineEditing.onActivate(textEditTarget);
-                    return;
+              <React.Fragment key={section.id}>
+                <p
+                  aria-label={`Paper ${section.sectionTitle} paragraph`}
+                  data-testid={`paper-text-section-${section.sectionId}`}
+                  data-preview-section-id={section.sectionId}
+                  contentEditable={
+                    isTextSectionEditable ? "plaintext-only" : undefined
                   }
-                  onLinkIntent?.({
-                    requestId: `paper-${section.sectionId}`,
-                    sectionType: section.sectionType,
-                    sectionId: section.sectionId,
-                    source: "preview-panel",
-                    shouldOpenModal: false,
-                  });
-                }}
-                onInput={(event) => {
-                  inlineEditing?.onActivate(textEditTarget);
-                  inlineEditing?.onTextSectionChange(
-                    section.sectionId,
-                    event.currentTarget.textContent ?? "",
-                  );
-                }}
-              >
-                {section.text}
-              </p>
+                  suppressContentEditableWarning={isTextSectionEditable}
+                  role={isTextSectionEditable ? "textbox" : undefined}
+                  tabIndex={isTextSectionEditable ? 0 : undefined}
+                  data-inline-paper-editable={
+                    isTextSectionEditable ? "true" : undefined
+                  }
+                  data-paper-section-id={textEditTarget.sectionId}
+                  data-paper-section-type={textEditTarget.sectionType}
+                  data-paper-field-path={textEditTarget.fieldPath}
+                  data-paper-field-kind={textEditTarget.fieldKind}
+                  onFocus={() => inlineEditing?.onActivate(textEditTarget)}
+                  onClick={(event) => {
+                    if (inlineEditing?.enabled) {
+                      event.stopPropagation();
+                      inlineEditing.onActivate(textEditTarget);
+                      return;
+                    }
+                    onLinkIntent?.({
+                      requestId: `paper-${section.sectionId}`,
+                      sectionType: section.sectionType,
+                      sectionId: section.sectionId,
+                      source: "preview-panel",
+                      shouldOpenModal: false,
+                    });
+                  }}
+                  onInput={(event) => {
+                    inlineEditing?.onActivate(textEditTarget);
+                    inlineEditing?.onTextSectionChange(
+                      section.sectionId,
+                      event.currentTarget.textContent ?? "",
+                    );
+                  }}
+                >
+                  {section.text}
+                </p>
+                {isTextSectionEditable && sectionActions ? (
+                  <button
+                    type="button"
+                    aria-label={`Ask AI for ${section.sectionTitle}`}
+                    onClick={() => sectionActions.onAsk(section.sectionId)}
+                  >
+                    {`Ask AI for ${section.sectionTitle}`}
+                  </button>
+                ) : null}
+              </React.Fragment>
             );
           })(),
         )}
@@ -694,16 +748,89 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
           {(data?.skillItems ?? []).map((item) => (
             <span key={item.name}>{item.name}</span>
           ))}
+          {inlineEditing?.enabled && sectionActions ? (
+            <button
+              type="button"
+              aria-label="Suggest skills"
+              onClick={() => sectionActions.onAsk("skills-cv_123")}
+            >
+              Suggest skills
+            </button>
+          ) : null}
           {(data?.languages ?? []).map((item) => (
             <span key={item.name}>{item.name}</span>
           ))}
+          {inlineEditing?.enabled && sectionActions ? (
+            <button
+              type="button"
+              aria-label="Suggest languages"
+              onClick={() => sectionActions.onAsk("languages-cv_123")}
+            >
+              Suggest languages
+            </button>
+          ) : null}
           {(data?.hobbyItems ?? []).map((item) => (
             <span key={item.name}>{item.name}</span>
           ))}
+          {inlineEditing?.enabled && sectionActions ? (
+            <button
+              type="button"
+              aria-label="Suggest hobbies"
+              onClick={() => sectionActions.onAsk("hobbies-cv_123")}
+            >
+              Suggest hobbies
+            </button>
+          ) : null}
+          {paperAi?.listSuggestion &&
+          paperAi.listSuggestion.state === "ready" ? (
+            <div
+              role="region"
+              aria-label={`Paper suggestions for ${paperAi.listSuggestion.sectionId}`}
+            >
+              <span>
+                {paperAi.listSuggestion.sectionType === "languages"
+                  ? "Suggested languages"
+                  : paperAi.listSuggestion.sectionType === "hobbies"
+                    ? "Suggested hobbies"
+                    : "Suggested skills"}
+              </span>
+              {paperAi.listSuggestion.items.map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  onClick={() => paperAi.onAcceptListSuggestion?.(item)}
+                >
+                  {item}
+                </button>
+              ))}
+              {paperAi.onClearListSuggestions ? (
+                <button
+                  type="button"
+                  onClick={() => paperAi.onClearListSuggestions?.()}
+                >
+                  Clear suggestions
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {(data?.achievementItems ?? []).map((item) => (
             <p key={item.text}>{item.text}</p>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={() =>
+            onLinkIntent?.({
+              requestId: "paper-profile",
+              sectionType: "profile",
+              sectionId: "profile-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: false,
+            })
+          }
+        >
+          Paper Profile
+        </button>
         <button
           type="button"
           onClick={() =>
@@ -731,6 +858,62 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
           }
         >
           Paper Education
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onLinkIntent?.({
+              requestId: "paper-skills",
+              sectionType: "skills",
+              sectionId: "skills-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: true,
+            })
+          }
+        >
+          Paper Skills
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onLinkIntent?.({
+              requestId: "paper-languages",
+              sectionType: "languages",
+              sectionId: "languages-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: true,
+            })
+          }
+        >
+          Paper Languages
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onLinkIntent?.({
+              requestId: "paper-achievements",
+              sectionType: "achievements",
+              sectionId: "achievements-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: true,
+            })
+          }
+        >
+          Paper Achievements
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onLinkIntent?.({
+              requestId: "paper-certifications",
+              sectionType: "certifications",
+              sectionId: "certifications-cv_123",
+              source: "preview-panel",
+              shouldOpenModal: true,
+            })
+          }
+        >
+          Paper Certifications
         </button>
         {inlineEditing?.enabled ? (
           <>
@@ -994,6 +1177,21 @@ vi.mock("../../components/useStructuredMistralImport", () => ({
 vi.mock("../../contexts/CvLibraryContext", () => ({
   useCvLibrary: () => useCvLibraryMock(),
 }));
+
+async function openSectionsPanel(user: ReturnType<typeof userEvent.setup>) {
+  if (!screen.queryByRole("complementary", { name: "CV sections" })) {
+    await user.click(screen.getByRole("button", { name: "Sections" }));
+  }
+  return screen.findByRole("complementary", { name: "CV sections" });
+}
+
+async function clickSectionOrganizerButton(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string | RegExp,
+) {
+  const sectionsPanel = await openSectionsPanel(user);
+  await user.click(within(sectionsPanel).getByRole("button", { name }));
+}
 
 function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
   const now = "2026-04-17T12:00:00.000Z";
@@ -1452,6 +1650,26 @@ describe("CvForge workspace mode", () => {
     useCvLibraryMock.mockReturnValue(buildCvLibraryState());
   });
 
+  it("consumes create-new template intent from the Templates route", async () => {
+    const createNewCv = vi.fn(async () => undefined);
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ createNewCv }));
+
+    render(
+      <MemoryRouter
+        initialEntries={["/cv?cvForgeAction=createBlank&templateId=french"]}
+      >
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(createNewCv).toHaveBeenCalledWith(undefined, {
+        forceV1: true,
+        resumeTemplateId: "workshop_resume_twocol_ats",
+      });
+    });
+  });
+
   it("appends one draft bullet to canonical rich responsibilities while preserving paragraph text", async () => {
     const user = userEvent.setup();
     const { state, importCv } = buildStateWithExperienceItem({
@@ -1735,7 +1953,7 @@ describe("CvForge workspace mode", () => {
       writable: true,
     });
 
-    const { container } = render(
+    render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
         <CvForge />
       </MemoryRouter>,
@@ -1877,7 +2095,7 @@ describe("CvForge workspace mode", () => {
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
 
-    const { container } = render(
+    render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
         <CvForge />
       </MemoryRouter>,
@@ -1898,59 +2116,59 @@ describe("CvForge workspace mode", () => {
     setItemSpy.mockRestore();
   });
 
-  it("renders the PR4 skeleton stage and section-scoped CV rail tabs", async () => {
-    const user = userEvent.setup();
-
-    const { container } = render(
+  it("renders the PR4 skeleton stage without edit-mode Ask", () => {
+    render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
         <CvForge />
       </MemoryRouter>,
     );
 
     expect(
-      screen.getByRole("complementary", { name: "CV forge rail" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
+      screen.queryByRole("complementary", { name: "CV forge rail" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("cv-ask-handle")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Import CV" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Import PDF" }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "New CV" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Sections" })).toHaveAttribute(
-      "aria-selected",
-      "true",
+      screen.queryByRole("button", { name: "Import PDF" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "New CV" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sections" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
     );
+    expect(screen.getByRole("button", { name: "Design" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(
+      screen.queryByRole("tab", { name: "Sections" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Ask" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Ask", { selector: ".dasti-cv-rail-heading" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Structuring sections/i }),
     ).toBeNull();
 
-    await user.click(screen.getByRole("tab", { name: "Ask" }));
-
     expect(
-      screen.getByText("Profile fields use direct field editing."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Ask section" })).toBeDisabled();
+      screen.queryByText("Ask is unavailable for this section."),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ask section" })).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Ask Profile" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/whole CV/i)).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("tab", { name: "Style" }));
-
-    expect(container.querySelector(".dasti-cv-style-note")).toHaveTextContent(
-      /^Default settings → Document style\.$/,
-    );
-    expect(
-      screen.getByRole("link", { name: "→ Document style" }),
-    ).toHaveAttribute("href", "/settings?tab=docstyle");
   });
 
-  it("opens a non-empty section editor from the paper in preview mode and highlights the rail row", async () => {
+  it("opens a paper section editor in preview mode without opening Ask", async () => {
     const user = userEvent.setup();
 
-    const { container } = render(
+    render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
         <CvForge />
       </MemoryRouter>,
@@ -1962,18 +2180,45 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByRole("dialog", { name: "Experience" }),
     ).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Lead designer")).toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "experience-cv_123",
     );
     expect(
-      container.querySelector(
-        '.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title',
-      ),
-    ).toHaveTextContent("Experience");
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    expect(document.body.querySelector(".ds-island-panel")).toBeInTheDocument();
   });
 
-  it("keeps edit mode paper body clicks from opening the drawer", async () => {
+  it("opens the currently focused preview section from the Ask handle without the Ask composer", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    await user.click(screen.getByRole("button", { name: "Paper Languages" }));
+    expect(
+      screen.getByRole("dialog", { name: "Languages" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    await user.click(screen.getByTestId("cv-ask-handle"));
+
+    expect(
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Languages" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
+      "languages-cv_123",
+    );
+  });
+
+  it("opens a paper section editor in edit mode", async () => {
     const user = userEvent.setup();
 
     const { container } = render(
@@ -1985,16 +2230,15 @@ describe("CvForge workspace mode", () => {
     await user.click(screen.getByRole("button", { name: "Paper Experience" }));
 
     expect(
-      screen.queryByRole("dialog", { name: "Experience" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("dialog", { name: "Experience" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "experience-cv_123",
     );
     expect(
-      container.querySelector(
-        '.dasti-cv-org-row[data-active="true"] .dasti-cv-org-row__title',
-      ),
-    ).toHaveTextContent("Experience");
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    expect(document.body.querySelector(".ds-island-panel")).toBeInTheDocument();
   });
 
   it("edits the rendered Summary paragraph inline in edit mode", async () => {
@@ -2030,6 +2274,7 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.queryByRole("dialog", { name: /Paper Summary/i }),
     ).not.toBeInTheDocument();
+    await openSectionsPanel(user);
     await waitFor(() =>
       expect(
         container.querySelector(
@@ -2055,7 +2300,7 @@ describe("CvForge workspace mode", () => {
     ).toBe("Inline summary rewrite.\nSecond line.");
   });
 
-  it("keeps Summary paper clicks as drawer focus in preview mode", async () => {
+  it("opens Summary from a paper click in preview mode without opening Ask", async () => {
     const user = userEvent.setup();
 
     render(
@@ -2070,14 +2315,138 @@ describe("CvForge workspace mode", () => {
 
     await user.click(summaryParagraph);
 
-    expect(screen.getByRole("dialog", { name: "Summary" })).toBeInTheDocument();
+    const summaryDialog = screen.getByRole("dialog", { name: "Summary" });
+    expect(summaryDialog).toBeInTheDocument();
+    expect(
+      within(summaryDialog).getByRole("button", { name: "Done" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "summary-cv_123",
     );
     expect(summaryParagraph).not.toHaveAttribute("contenteditable");
   });
 
-  it("routes inline paper clicks away from drawers in edit mode but keeps preview drawer routing", async () => {
+  it("opens Summary editor from a preview section click even when Ask is open", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    await user.click(screen.getByTestId("cv-ask-handle"));
+    await user.click(screen.getByTestId("paper-summary-paragraph"));
+
+    expect(
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    const summaryDialog = screen.getByRole("dialog", { name: "Summary" });
+    expect(summaryDialog).toBeInTheDocument();
+    expect(
+      within(summaryDialog).getByRole("button", { name: "Done" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ask Summary" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["Experience", "Paper Experience"],
+    ["Education", "Paper Education"],
+    ["Skills", "Paper Skills"],
+    ["Languages", "Paper Languages"],
+    ["Achievements", "Paper Achievements"],
+    ["Certifications", "Paper Certifications"],
+  ])(
+    "opens %s editor from a preview section click even when Ask is open",
+    async (sectionLabel, paperButtonName) => {
+      const user = userEvent.setup();
+
+      render(
+        <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+          <CvForge />
+        </MemoryRouter>,
+      );
+
+      await user.click(screen.getByRole("button", { name: "Page preview" }));
+      await user.click(screen.getByTestId("cv-ask-handle"));
+      await user.click(screen.getByRole("button", { name: paperButtonName }));
+
+      expect(
+        screen.queryByRole("dialog", { name: "Ask" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("dialog", { name: sectionLabel }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: `Open ${sectionLabel} editor` }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it("closes Ask and opens the editor on repeated preview section clicks", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    await user.click(screen.getByTestId("cv-ask-handle"));
+
+    await user.click(screen.getByTestId("paper-summary-paragraph"));
+    expect(
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Summary" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Done" }));
+
+    await user.click(screen.getByRole("button", { name: "Paper Experience" }));
+    expect(
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Experience" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open Experience editor" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens Profile in preview mode without showing Ask explanation", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Page preview" }));
+    await user.click(screen.getByRole("button", { name: "Paper Profile" }));
+
+    expect(screen.getByRole("dialog", { name: "Profile" })).toHaveClass(
+      "dasti-cv-section-sheet-panel--stage",
+    );
+    expect(
+      screen.queryByRole("dialog", { name: "Ask" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
+      "profile-cv_123",
+    );
+    expect(
+      screen.queryByRole("complementary", { name: "CV composer drawer" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("routes inline paper clicks away from drawers in edit mode and opens preview clicks as editors", async () => {
     const user = userEvent.setup();
 
     render(
@@ -2104,6 +2473,9 @@ describe("CvForge workspace mode", () => {
     await user.click(summaryParagraph);
 
     expect(screen.getByRole("dialog", { name: "Summary" })).toBeInTheDocument();
+    expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
+      "summary-cv_123",
+    );
   });
 
   it("edits the rendered custom text paragraph inline in edit mode", async () => {
@@ -2141,6 +2513,7 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.queryByRole("dialog", { name: /Paper Custom section/i }),
     ).not.toBeInTheDocument();
+    await openSectionsPanel(user);
     await waitFor(() =>
       expect(
         container.querySelector(
@@ -2740,6 +3113,7 @@ describe("CvForge workspace mode", () => {
   });
 
   it("keeps structured rendered sections out of raw inline editing", async () => {
+    const user = userEvent.setup();
     const { container } = render(
       <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
         <CvForge />
@@ -2767,8 +3141,9 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.getByRole("button", { name: "Paper Experience" }),
     ).toBeInTheDocument();
+    const sectionsPanel = await openSectionsPanel(user);
     expect(
-      screen.getByRole("button", { name: /^Education$/i }),
+      within(sectionsPanel).getByRole("button", { name: /^Education$/i }),
     ).toBeInTheDocument();
   });
 
@@ -2781,7 +3156,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Education$/i }));
+    await clickSectionOrganizerButton(user, /^Education$/i);
 
     expect(
       screen.getByRole("dialog", { name: "Education" }),
@@ -2790,6 +3165,32 @@ describe("CvForge workspace mode", () => {
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
       "education-cv_123",
     );
+  });
+
+  it("opens Summary from the sections row as an editor island, not Ask", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await clickSectionOrganizerButton(user, /^Summary$/i);
+
+    const summaryDialog = screen.getByRole("dialog", { name: "Summary" });
+    expect(summaryDialog).toBeInTheDocument();
+    expect(
+      within(summaryDialog).getByRole("button", { name: "Done" }),
+    ).toBeInTheDocument();
+    expect(
+      within(summaryDialog).getByRole("button", {
+        name: "Revert this section to when it was opened",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ask Summary" }),
+    ).not.toBeInTheDocument();
   });
 
   it("adds education entries inside the focused section sheet", async () => {
@@ -2803,7 +3204,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Education$/i }));
+    await clickSectionOrganizerButton(user, /^Education$/i);
     await user.click(
       screen.getByRole("button", { name: "Add education entry" }),
     );
@@ -2830,7 +3231,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Profile$/i }));
+    await clickSectionOrganizerButton(user, /^Profile$/i);
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "Grace Hopper");
     await waitFor(() => expect(importCv).toHaveBeenCalled());
@@ -2850,7 +3251,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Profile$/i }));
+    await clickSectionOrganizerButton(user, /^Profile$/i);
     await user.type(screen.getByLabelText("Location"), "Paris");
 
     await waitFor(() =>
@@ -2884,6 +3285,54 @@ describe("CvForge workspace mode", () => {
     expect(source).toContain("isInlineAiToolbarActiveElement");
     expect(styles).toContain("data-inline-ai-selection-active");
     expect(styles).toContain("::highlight(cv-inline-ai-selection)");
+  });
+
+  it("keeps the CV Ask drawer aligned to the shared stage island position", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/pages/CvForge.tsx"),
+      "utf8",
+    );
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles/product.css"),
+      "utf8",
+    );
+
+    expect(source).toContain(
+      'className="dasti-composer-drawer--stage dasti-composer-drawer--cv"',
+    );
+    expect(source).toContain("titleHidden");
+    expect(styles).toContain(".dasti-composer-drawer--stage,");
+  });
+
+  it("reveals CV paper controls from section and item hover/focus surfaces", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/styles/product-cv.css"),
+      "utf8",
+    );
+    const renderer = readFileSync(
+      resolve(
+        process.cwd(),
+        "src/features/verbati/resume/ResumeOneColAtsPage.tsx",
+      ),
+      "utf8",
+    );
+
+    expect(renderer).toContain("dasti-cv-paper-section-region");
+    expect(renderer).toContain("dasti-cv-paper-experience-item");
+    expect(renderer).toContain("dasti-cv-paper-item-wand");
+    expect(styles).toContain(
+      ".dasti-cv-paper-section-region:hover .dasti-cv-paper-section-controls",
+    );
+    expect(styles).toContain(
+      ".dasti-cv-paper-section-region:focus-within .dasti-cv-paper-section-controls",
+    );
+    expect(styles).toContain(
+      ".dasti-cv-paper-experience-item:hover .dasti-cv-paper-item-wand",
+    );
+    expect(styles).toContain(
+      ".dasti-cv-paper-experience-item:focus .dasti-cv-paper-item-wand",
+    );
+    expect(styles).toContain("@media (hover: none)");
   });
 
   it("clears inline paper Ask AI loading after a completed request closes the toolbar", () => {
@@ -2926,6 +3375,125 @@ describe("CvForge workspace mode", () => {
       "outputShape: getResponsibilitySourceShape(source)",
     );
     expect(source).toContain("updateStructuredItemResponsibilities");
+  });
+
+  it("routes the Summary paper wand to the contextual popup instead of the Ask rail", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    runCvSectionAiActionMock.mockResolvedValueOnce({
+      kind: "text",
+      text: "Paper-local summary rewrite.",
+    });
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Ask AI for Summary" }),
+    );
+
+    expect(
+      await screen.findByRole("dialog", { name: "AI review for Summary" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "CV forge rail" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Suggested edit for Summary"),
+    ).not.toBeInTheDocument();
+    expect(transformEditorSelectionMock).not.toHaveBeenCalled();
+    expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "improve_summary_text",
+        existingText: "Focused builder.",
+      }),
+    );
+    const callsBeforeReplace = importCv.mock.calls.length;
+
+    await user.click(
+      screen.getByRole("button", { name: "Replace in Summary" }),
+    );
+
+    await waitFor(() =>
+      expect(importCv).toHaveBeenCalledTimes(callsBeforeReplace + 1),
+    );
+    expect(
+      readSavedPlainText(getLastSavedSummaryItem(importCv).summary),
+    ).toContain("Paper-local summary rewrite.");
+  });
+
+  it("dismisses the local Summary paper wand popup without mutating the CV", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    runCvSectionAiActionMock.mockResolvedValueOnce({
+      kind: "text",
+      text: "Discarded paper-local summary.",
+    });
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Ask AI for Summary" }),
+    );
+    expect(
+      await screen.findByRole("dialog", { name: "AI review for Summary" }),
+    ).toBeInTheDocument();
+    const callsBeforeDismiss = importCv.mock.calls.length;
+
+    await user.click(
+      screen.getByRole("button", { name: "Back from AI review" }),
+    );
+
+    expect(importCv).toHaveBeenCalledTimes(callsBeforeDismiss);
+    expect(
+      screen.queryByRole("dialog", { name: "AI review for Summary" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps selected text and paper text AI review out of the right rail", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/pages/CvForge.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("runInlinePaperAiForSelectionContext");
+    expect(source).toContain("runPaperTextSectionAiReview");
+    expect(source).toContain("setCvAiReview({");
+    expect(source).toContain("setCvRailAiSuggestion(null)");
+    expect(source).toContain("flushPendingInlineFieldChange();");
+    expect(source).toContain("setCvComposerOpen(false)");
+  });
+
+  it("routes structured paper wands through inline paper suggestions", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "src/pages/CvForge.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("if (sectionUsesStructuredSuggestions(section))");
+    expect(source).toContain(
+      'void handleRunAskAiForSection({ sectionId, prompt: "", tone: cvTone });',
+    );
+    expect(source).not.toContain(
+      "handleSelectSection(sectionId, { openEditor: true });",
+    );
+    expect(source).toContain("listSuggestion:");
+    expect(source).toContain("onAcceptListSuggestion: handleAcceptListAiSuggestion");
+    expect(source).toContain("onClearListSuggestions: handleClearListAiSuggestions");
+    expect(source).toContain(
+      "onRunListAiSuggestion={handleRunListAiSuggestion}",
+    );
+    expect(source).not.toContain("runPaperStructuredListAiReview");
+    expect(source).not.toContain("listItems={cvAiReview.listItems}");
   });
 
   it("keeps paper contact order stable without Website and Portfolio duplication", async () => {
@@ -2998,7 +3566,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Profile$/i }));
+    await clickSectionOrganizerButton(user, /^Profile$/i);
     await user.clear(screen.getByLabelText("Name"));
     await user.type(screen.getByLabelText("Name"), "Unsaved Name");
     await waitFor(() =>
@@ -3006,14 +3574,14 @@ describe("CvForge workspace mode", () => {
         importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name,
       ).toBe("Unsaved Name"),
     );
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
 
     await waitFor(() =>
       expect(
         importCv.mock.lastCall?.[0].sections[0].structuredContent[0].name,
       ).toBe("Ada Lovelace"),
     );
-    await user.click(screen.getByRole("button", { name: /^Profile$/i }));
+    await clickSectionOrganizerButton(user, /^Profile$/i);
     expect(screen.getByLabelText("Name")).toHaveValue("Ada Lovelace");
   });
 
@@ -3026,7 +3594,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Skills$/i }));
+    await clickSectionOrganizerButton(user, /^Skills$/i);
     const skillsDialog = screen.getByRole("dialog", { name: "Skills" });
     expect(screen.queryByLabelText("Section title")).not.toBeInTheDocument();
     expect(screen.getByTestId("preview-active-section")).toHaveTextContent(
@@ -3053,7 +3621,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await clickSectionOrganizerButton(user, /^Summary$/i);
 
     const summaryEditor = screen.getByTestId("drawer-rich-editor-summary");
     expect(summaryEditor).toBeInTheDocument();
@@ -3084,7 +3652,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Experience$/i }));
+    await clickSectionOrganizerButton(user, /^Experience$/i);
 
     const roleInput = screen.getByLabelText("Role 1");
     expect(roleInput.tagName).toBe("INPUT");
@@ -3181,9 +3749,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open Projects item editor" }),
-    );
+    await clickSectionOrganizerButton(user, "Open Projects item editor");
 
     const descriptionEditor = screen.getByTestId(
       "drawer-rich-editor-project-description-0",
@@ -3239,7 +3805,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await clickSectionOrganizerButton(user, /^Summary$/i);
     expect(screen.getByTestId("drawer-rich-editor-summary")).toHaveTextContent(
       "Focused builder.",
     );
@@ -3288,9 +3854,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open Projects item editor" }),
-    );
+    await clickSectionOrganizerButton(user, "Open Projects item editor");
     expect(
       screen.getByTestId("drawer-rich-editor-project-description-0"),
     ).toHaveTextContent("Project bullet");
@@ -3327,7 +3891,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Experience$/i }));
+    await clickSectionOrganizerButton(user, /^Experience$/i);
     expect(
       screen.getByTestId("drawer-rich-editor-experience-responsibilities-0"),
     ).toHaveTextContent("Led product design.");
@@ -3383,7 +3947,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await clickSectionOrganizerButton(user, /^Summary$/i);
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
@@ -3391,9 +3955,7 @@ describe("CvForge workspace mode", () => {
       true,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open Projects item editor" }),
-    );
+    await clickSectionOrganizerButton(user, "Open Projects item editor");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
@@ -3414,8 +3976,8 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await clickSectionOrganizerButton(user, /^Summary$/i);
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
     const saved = getLastSavedSummaryItem(importCv);
@@ -3433,7 +3995,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Experience$/i }));
+    await clickSectionOrganizerButton(user, /^Experience$/i);
     const roleInput = screen.getByLabelText("Role 1");
     await user.clear(roleInput);
     await user.type(roleInput, "Senior product designer");
@@ -3460,7 +4022,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await clickSectionOrganizerButton(user, /^Summary$/i);
     await user.click(screen.getByRole("button", { name: "Rewrite summary" }));
 
     await waitFor(() =>
@@ -3490,7 +4052,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Summary$/i }));
+    await clickSectionOrganizerButton(user, /^Summary$/i);
     await user.click(screen.getByRole("button", { name: "Rewrite summary" }));
     await screen.findByText("Evidence-backed summary.");
     await user.click(screen.getByRole("button", { name: "Accept" }));
@@ -3517,10 +4079,13 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Skills" }));
+    await clickSectionOrganizerButton(user, "Ask for Skills");
 
     const skillsDialog = screen.getByRole("dialog", { name: "Skills" });
     expect(skillsDialog).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "AI review for Skills" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Accept" }),
     ).not.toBeInTheDocument();
@@ -3536,9 +4101,7 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.queryByRole("button", { name: "Warm" }),
     ).not.toBeInTheDocument();
-    expect(
-      document.body.querySelector(".dasti-cv-section-sheet-overlay"),
-    ).toBeInTheDocument();
+    expect(document.body.querySelector(".ds-island-panel")).toBeInTheDocument();
 
     await waitFor(() =>
       expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
@@ -3557,6 +4120,7 @@ describe("CvForge workspace mode", () => {
     expect(
       within(skillsDialog).getByText("Design systems"),
     ).toBeInTheDocument();
+    expect(screen.getByDisplayValue("TypeScript")).toBeInTheDocument();
   });
 
   it("launches language suggestions directly from the languages wand", async () => {
@@ -3572,7 +4136,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Languages" }));
+    await clickSectionOrganizerButton(user, "Ask for Languages");
 
     const languagesDialog = screen.getByRole("dialog", { name: "Languages" });
     expect(languagesDialog).toBeInTheDocument();
@@ -3606,7 +4170,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Hobbies" }));
+    await clickSectionOrganizerButton(user, "Ask for Hobbies");
 
     const hobbiesDialog = screen.getByRole("dialog", { name: "Hobbies" });
     expect(
@@ -3633,6 +4197,159 @@ describe("CvForge workspace mode", () => {
       within(hobbiesDialog).queryByText("TypeScript"),
     ).not.toBeInTheDocument();
     expect(within(hobbiesDialog).getByText("Chess")).toBeInTheDocument();
+  });
+
+  it("renders language suggestions inline from the paper wand", async () => {
+    const user = userEvent.setup();
+    runCvSectionAiActionMock.mockResolvedValueOnce({
+      kind: "list",
+      items: ["French", "Spanish"],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      within(screen.getByTestId("paper-structured-sections")).getByRole(
+        "button",
+        { name: "Suggest languages" },
+      ),
+    );
+
+    await waitFor(() =>
+      expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "generate_language_suggestions",
+          existingItems: ["English"],
+          maxItems: 5,
+        }),
+      ),
+    );
+    expect(
+      screen.queryByRole("dialog", { name: "Languages" }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("region", {
+        name: "Paper suggestions for languages-cv_123",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Suggested languages")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "French" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear suggestions" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("region", {
+          name: "Paper suggestions for languages-cv_123",
+        }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("renders title-based language sections inline from the paper wand", async () => {
+    const user = userEvent.setup();
+    const importCv = vi.fn(async () => undefined);
+    const baseState = buildCvLibraryState({ importCv });
+    const currentCv = {
+      ...baseState.currentCv,
+      sections: baseState.currentCv.sections.map((section) =>
+        section.id === "languages-cv_123"
+          ? {
+              ...section,
+              type: "text",
+              title: "Languages",
+            }
+          : section,
+      ),
+    };
+    useCvLibraryMock.mockReturnValue({
+      ...baseState,
+      currentCv,
+      cvs: [currentCv],
+    });
+    runCvSectionAiActionMock.mockResolvedValueOnce({
+      kind: "list",
+      items: ["French", "Spanish"],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      within(screen.getByTestId("paper-structured-sections")).getByRole(
+        "button",
+        { name: "Suggest languages" },
+      ),
+    );
+
+    await waitFor(() =>
+      expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "generate_language_suggestions",
+          existingItems: ["English"],
+          maxItems: 5,
+        }),
+      ),
+    );
+    expect(
+      screen.queryByRole("dialog", { name: "Languages" }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("region", {
+        name: "Paper suggestions for languages-cv_123",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders hobby suggestions inline from the paper wand", async () => {
+    const user = userEvent.setup();
+    runCvSectionAiActionMock.mockResolvedValueOnce({
+      kind: "list",
+      items: ["TypeScript", "Photography", "Chess"],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Suggest hobbies" }),
+    );
+
+    await waitFor(() =>
+      expect(runCvSectionAiActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "generate_hobby_suggestions",
+          existingItems: ["Photography"],
+          excludeItems: expect.arrayContaining(["TypeScript"]),
+          maxItems: 6,
+        }),
+      ),
+    );
+    expect(
+      screen.queryByRole("dialog", { name: "Hobbies" }),
+    ).not.toBeInTheDocument();
+    const suggestions = await screen.findByRole("region", {
+      name: "Paper suggestions for hobbies-cv_123",
+    });
+    expect(
+      within(suggestions).queryByRole("button", { name: "TypeScript" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(suggestions).queryByRole("button", { name: "Photography" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(suggestions).getByRole("button", { name: "Chess" }),
+    ).toBeInTheDocument();
+    expect(within(suggestions).getByText("Suggested hobbies")).toBeInTheDocument();
   });
 
   it("accepts structured section AI suggestions into the active CV state", async () => {
@@ -3665,12 +4382,17 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Skills" }));
+    await clickSectionOrganizerButton(user, "Ask for Skills");
     await user.click(
       await screen.findByRole("button", {
         name: "Add suggested item Design systems",
       }),
     );
+    expect(
+      screen.queryByRole("button", {
+        name: "Add suggested item Design systems",
+      }),
+    ).not.toBeInTheDocument();
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
     const savedSections = importCv.mock.lastCall?.[0].sections;
@@ -3707,7 +4429,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Skills$/i }));
+    await clickSectionOrganizerButton(user, /^Skills$/i);
     const skillsDialog = screen.getByRole("dialog", { name: "Skills" });
 
     expect(screen.getByDisplayValue("TypeScript")).toBeInTheDocument();
@@ -3718,7 +4440,7 @@ describe("CvForge workspace mode", () => {
       skillsDialog.querySelector(".dasti-cv-pill-editor__chip"),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Ask for Skills" }));
+    await clickSectionOrganizerButton(user, "Ask for Skills");
     await user.click(
       await screen.findByRole("button", {
         name: "Add suggested item Design systems",
@@ -3757,7 +4479,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Summary" }));
+    await clickSectionOrganizerButton(user, "Ask for Summary");
 
     expect(screen.getAllByText("Summary").length).toBeGreaterThan(0);
     await waitFor(() =>
@@ -3807,7 +4529,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Languages" }));
+    await clickSectionOrganizerButton(user, "Ask for Languages");
 
     expect(
       screen.getByRole("dialog", { name: "Languages" }),
@@ -3835,7 +4557,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: /^Skills$/i }));
+    await clickSectionOrganizerButton(user, /^Skills$/i);
     const addSkillInput = screen.getByLabelText("Skill");
     await user.type(addSkillInput, "Design systems");
     await user.click(screen.getByRole("button", { name: "Add" }));
@@ -3853,14 +4575,14 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Skills" }));
+    await clickSectionOrganizerButton(user, "Ask for Skills");
     const skillsDialog = screen.getByRole("dialog", { name: "Skills" });
     expect(
       await within(skillsDialog).findByText("Design systems"),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Sections" }));
-    await user.click(screen.getByRole("button", { name: "Ask for Summary" }));
+    await user.click(screen.getByRole("button", { name: "Sections" }));
+    await clickSectionOrganizerButton(user, "Ask for Summary");
 
     expect(screen.getAllByText("Summary").length).toBeGreaterThan(0);
     expect(screen.queryByText("Design systems")).not.toBeInTheDocument();
@@ -3908,17 +4630,16 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open Projects item editor" }),
-    );
+    await clickSectionOrganizerButton(user, "Open Projects item editor");
 
     expect(
       screen.getByRole("dialog", { name: "Projects" }),
     ).toBeInTheDocument();
     expect(screen.getByDisplayValue("CV Forge")).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: "Ask" })).toHaveAttribute(
+    expect(screen.queryByRole("tab", { name: "Sections" })).toBeNull();
+    expect(screen.getByRole("tab", { name: "Ask" })).toHaveAttribute(
       "aria-selected",
-      "false",
+      "true",
     );
     expect(transformEditorSelectionMock).not.toHaveBeenCalled();
   });
@@ -3966,9 +4687,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Open Projects item editor" }),
-    );
+    await clickSectionOrganizerButton(user, "Open Projects item editor");
     await user.click(
       screen.getByRole("button", { name: "Improve description" }),
     );
@@ -4003,9 +4722,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      screen.getByRole("button", { name: "Delete Certifications" }),
-    );
+    await clickSectionOrganizerButton(user, "Delete Certifications");
 
     await waitFor(() => expect(importCv).toHaveBeenCalledTimes(1));
     expect(
@@ -4015,7 +4732,7 @@ describe("CvForge workspace mode", () => {
     ).toBe(false);
   });
 
-  it("persists keyboard reorder from the rail handle", async () => {
+  it("persists keyboard reorder from the section organizer row", async () => {
     const user = userEvent.setup();
     const importCv = vi.fn(async () => undefined);
     useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
@@ -4026,7 +4743,10 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    screen.getByRole("button", { name: "Reorder Skills" }).focus();
+    const sectionsPanel = await openSectionsPanel(user);
+    within(sectionsPanel)
+      .getByRole("button", { name: /^Skills$/i })
+      .focus();
     await user.keyboard("{ArrowUp}");
 
     await waitFor(() => expect(importCv).toHaveBeenCalled());
@@ -4064,7 +4784,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Ask for Summary" }));
+    await clickSectionOrganizerButton(user, "Ask for Summary");
     expect(importCv).not.toHaveBeenCalled();
     expect(
       screen.queryByRole("button", { name: "Warm" }),
@@ -4112,7 +4832,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Add section" }));
+    await clickSectionOrganizerButton(user, "Add section");
     expect(
       document.body.querySelector(".dasti-cv-add-section-menu"),
     ).toBeInTheDocument();
@@ -4157,8 +4877,7 @@ describe("CvForge workspace mode", () => {
     );
   });
 
-  it("routes rail import pdf through the hidden file input", async () => {
-    const user = userEvent.setup();
+  it("does not duplicate create/import document actions in the right rail", () => {
     const clickSpy = vi
       .spyOn(HTMLInputElement.prototype, "click")
       .mockImplementation(() => undefined);
@@ -4169,9 +4888,15 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Import PDF" }));
-
-    expect(clickSpy).toHaveBeenCalled();
+    const rail = screen.getByRole("complementary", { name: "CV forge rail" });
+    expect(within(rail).queryByText("Create")).not.toBeInTheDocument();
+    expect(
+      within(rail).queryByRole("button", { name: "New CV" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(rail).queryByRole("button", { name: "Import PDF" }),
+    ).not.toBeInTheDocument();
+    expect(clickSpy).not.toHaveBeenCalled();
     clickSpy.mockRestore();
   });
 
@@ -4290,17 +5015,21 @@ describe("CvForge workspace mode", () => {
       screen.getByText("Preview style: swiss|quiet-editorial|sauge|none"),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Style" }));
+    await user.click(screen.getByRole("button", { name: "Design" }));
 
-    expect(screen.getByRole("button", { name: /^Style 1/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Style 2/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Style 3/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Style 1/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Style 2/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /^Style 3/ }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Fraunces Bold/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Workshop" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Minimal" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open saved resume styles" }),
     ).toBeNull();
@@ -4329,7 +5058,7 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("tab", { name: "Style" }));
+    await user.click(screen.getByRole("button", { name: "Design" }));
     await user.click(screen.getByRole("button", { name: "Style 2" }));
 
     await waitFor(() =>
@@ -4378,7 +5107,11 @@ describe("CvForge workspace mode", () => {
       },
     };
     useCvLibraryMock.mockReturnValue(
-      buildCvLibraryState({ currentCv, cvs: [currentCv], saveCurrentCvStyleOnly }),
+      buildCvLibraryState({
+        currentCv,
+        cvs: [currentCv],
+        saveCurrentCvStyleOnly,
+      }),
     );
 
     render(
@@ -4387,13 +5120,17 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByRole("tab", { name: "Style" }));
+    await userEvent.click(screen.getByRole("button", { name: "Design" }));
 
-    expect(
-      screen.getByRole("button", { name: "Style 2 · Custom" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Style 2" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByLabelText("Customized")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Reset Style 2" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Reset Style 2" }),
+    );
 
     await waitFor(() =>
       expect(saveCurrentCvStyleOnly).toHaveBeenCalledWith(
@@ -4415,7 +5152,7 @@ describe("CvForge workspace mode", () => {
     );
   });
 
-  it("marks a selected CV style custom when the CV template differs from the base slot", async () => {
+  it("marks a selected CV style custom when the CV layout differs from the base slot", async () => {
     const baseState = buildCvLibraryState();
     const currentCv = {
       ...baseState.currentCv,
@@ -4450,11 +5187,13 @@ describe("CvForge workspace mode", () => {
       </MemoryRouter>,
     );
 
-    await userEvent.click(screen.getByRole("tab", { name: "Style" }));
+    await userEvent.click(screen.getByRole("button", { name: "Design" }));
 
-    expect(
-      screen.getByRole("button", { name: "Style 2 · Custom" }),
-    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Style 2" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByLabelText("Customized")).toBeInTheDocument();
   });
 
   it("applies template and font edits to the cv preview", async () => {
@@ -4470,7 +5209,7 @@ describe("CvForge workspace mode", () => {
       screen.getByText("Preview style: swiss|quiet-editorial|sauge|none"),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Style" }));
+    await user.click(screen.getByRole("button", { name: "Design" }));
     await user.click(screen.getByRole("button", { name: "Style 2" }));
 
     await waitFor(() =>
@@ -4483,7 +5222,7 @@ describe("CvForge workspace mode", () => {
       "true",
     );
 
-    await user.click(screen.getByRole("button", { name: "Workshop 2-col" }));
+    await user.click(screen.getByRole("button", { name: "French" }));
 
     await waitFor(() =>
       expect(

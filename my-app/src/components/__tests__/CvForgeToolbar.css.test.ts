@@ -21,6 +21,33 @@ const cvRailSource = readFileSync(
   resolve(process.cwd(), "src/components/cv/CvRail.tsx"),
   "utf8",
 );
+const cvStageBarSource = readFileSync(
+  resolve(process.cwd(), "src/components/cv/CvStageBar.tsx"),
+  "utf8",
+);
+const cvSectionsOrganizerSource = readFileSync(
+  resolve(process.cwd(), "src/components/cv/CvSectionsOrganizer.tsx"),
+  "utf8",
+);
+const cvSectionsDrawerSource = readFileSync(
+  resolve(process.cwd(), "src/components/cv/CvSectionsDrawer.tsx"),
+  "utf8",
+);
+const forgeTemplatePanelSource = readFileSync(
+  resolve(process.cwd(), "src/components/ForgeTemplatePanel.tsx"),
+  "utf8",
+);
+const verbatiResumePreviewSource = readFileSync(
+  resolve(process.cwd(), "src/features/verbati/VerbatiResumePreview.tsx"),
+  "utf8",
+);
+
+function getCssRuleBlock(selector: string): string {
+  const start = productCss.indexOf(selector);
+  if (start === -1) return "";
+  const end = productCss.indexOf("}", start);
+  return end === -1 ? "" : productCss.slice(start, end + 1);
+}
 
 describe("CvForge toolbar CSS contracts", () => {
   it("uses the shared proposal rail shell for the anchored CV edit toolbar", () => {
@@ -60,8 +87,14 @@ describe("CvForge toolbar CSS contracts", () => {
   });
 
   it("keeps the CV organize helper copy short enough for one rail line", () => {
-    expect(cvRailSource).toContain("Open a section row to edit its items.");
-    expect(cvRailSource).not.toContain(
+    expect(cvSectionsOrganizerSource).toContain(
+      "Open a section row to edit its items.",
+    );
+    expect(cvSectionsOrganizerSource).toContain("dasti-cv-sections-organizer");
+    expect(cvSectionsOrganizerSource).not.toContain(
+      'data-rail-pane="sections"',
+    );
+    expect(cvSectionsOrganizerSource).not.toContain(
       "Each section opens its own editor.",
     );
   });
@@ -114,7 +147,10 @@ describe("CvForge toolbar CSS contracts", () => {
 
   it("matches Proposal paper geometry and material on the CV preview stage", () => {
     expect(productCss).toMatch(
-      /\.dasti-cv-skeleton-forge__stage\s*\{[\s\S]*gap:\s*var\(--space-2\);/,
+      /\.dasti-cv-skeleton-forge__stage\s*\{[\s\S]*--document-command-layer-rest-gutter:\s*calc\([\s\S]*var\(--space-4\)\s*\+\s*var\(--space-2\)[\s\S]*\);[\s\S]*gap:\s*var\(--space-2\);[\s\S]*padding-block-start:\s*var\(--document-command-layer-rest-gutter\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-skeleton-forge__stage\s*\{[\s\S]*--editor-toolbar-control-block-size:\s*var\(--control-sm\);[\s\S]*--editor-toolbar-icon-control-block-size:\s*var\(--control-sm\);/,
     );
     expect(productCss).toMatch(
       /\.dasti-cv-page-preview-stage\s+\.dasti-doc-viewer-shell--resume-panel\s*\{[\s\S]*padding:\s*0;[\s\S]*box-shadow:\s*none;/,
@@ -123,7 +159,7 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-cv-paper-stage\s+\.dasti-doc-viewer-shell--resume-panel\s*\{[\s\S]*padding:\s*0;[\s\S]*box-shadow:\s*[\s\S]*var\(--document-viewer-frame-shadow\),[\s\S]*0\s+12px\s+28px\s+-24px\s+color-mix\(in\s+srgb,\s*var\(--shadow-color\)\s+92%,\s*transparent\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-cv-paper-stage\s+\.dasti-document-stage__canvas\[data-document-page="true"\]\s*\{[\s\S]*box-shadow:\s*var\(--document-stage-halo,\s*var\(--sh-paper\)\);/,
+      /\.dasti-cv-paper-stage\s+\.dasti-document-stage__canvas\[data-document-page="true"\]\s*\{[\s\S]*box-shadow:\s*[\s\S]*var\(--document-viewer-frame-shadow\),[\s\S]*0\s+12px\s+28px\s+-24px\s+color-mix\(in\s+srgb,\s*var\(--shadow-color\)\s+92%,\s*transparent\);/,
     );
   });
 
@@ -132,17 +168,137 @@ describe("CvForge toolbar CSS contracts", () => {
       /\.dasti-cv-stage-bar\s*\{[\s\S]*overflow:\s*visible;/,
     );
     expect(productCss).toMatch(
+      /\.dasti-cv-stage-bar\s*\{[\s\S]*min-height:\s*0;[\s\S]*gap:\s*var\([\s\S]*--proposal-command-toolbar-shell-gap,/,
+    );
+    expect(productCss).not.toMatch(
+      /\.dasti-cv-stage-bar\s*\{[^}]*--editor-toolbar-icon-control-block-size:\s*var\(--control-sm\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-bar__primary-action\s*\{[\s\S]*height:\s*var\(--editor-toolbar-control-block-size\);[\s\S]*padding-inline:\s*11px;[\s\S]*border-color:\s*transparent;[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-bar__primary-action:hover:not\(:disabled\),[\s\S]*\.dasti-cv-stage-bar__primary-action:focus-visible,[\s\S]*\.dasti-cv-stage-bar__primary-action\[aria-expanded="true"\]\s*\{[\s\S]*background:\s*var\(--proposal-chrome-control-hover-bg\);[\s\S]*box-shadow:\s*none;[\s\S]*transform:\s*none;/,
+    );
+    expect(productCss).toMatch(
       /\.dasti-cv-stage-bar__plain-action\s*\{[\s\S]*border:\s*1px\s+solid\s+transparent;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/,
     );
     expect(productCss).toMatch(
       /\.dasti-cv-stage-bar__action-divider\s*\{[\s\S]*width:\s*1px;[\s\S]*height:\s*24px;/,
     );
     expect(productCss).toMatch(
-      /@media\s*\(max-width:\s*1419px\)\s*\{[\s\S]*\.dasti-cv-ats\s*\{[\s\S]*inline-size:\s*48px;[\s\S]*padding-inline:\s*0;[\s\S]*\.dasti-cv-ats\[data-state="ready"\]\s*\{[\s\S]*background:\s*var\(--okb\);[\s\S]*\.dasti-cv-ats__mark\s*\{[\s\S]*display:\s*inline-grid;[\s\S]*background:\s*transparent;[\s\S]*\.dasti-cv-ats__label,[\s\S]*\.dasti-cv-stage-bar__pick-label\s*\{[\s\S]*display:\s*none;/,
+      /@media\s*\(max-width:\s*1419px\)\s*\{[\s\S]*\.dasti-cv-ats\s*\{[\s\S]*inline-size:\s*48px;[\s\S]*padding-inline:\s*0;[\s\S]*\.dasti-cv-ats\[data-state="success"\]\s*\{[\s\S]*background:\s*var\(--okb\);[\s\S]*\.dasti-cv-ats__mark\s*\{[\s\S]*display:\s*inline-grid;[\s\S]*background:\s*transparent;[\s\S]*\.dasti-cv-ats__label,[\s\S]*\.dasti-cv-stage-bar__pick-label\s*\{[\s\S]*display:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*980px\)\s*\{[\s\S]*\.dasti-cv-skeleton-forge\s*\{[\s\S]*padding-inline:\s*var\(--space-3\);[\s\S]*\.dasti-cv-stage-bar\s*\{[\s\S]*gap:\s*var\(--space-1\);/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.dasti-cv-stage-bar__primary-action\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*\.dasti-cv-stage-bar__primary-action\s+\.dasti-cv-stage-bar__action-label\s*\{[\s\S]*display:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-cv-skeleton-forge\s*\{[\s\S]*padding-inline:\s*var\(--space-2\);[\s\S]*\.dasti-cv-stage-bar\s*\{[\s\S]*padding:\s*calc\(var\(--space-1\) \+ 1px\);/,
     );
   });
 
-  it("keeps CV forge canvas and rail tabs aligned with Proposal forge", () => {
+  it("keeps the command-layer CV toolbar from wrapping left in compact sticky states", () => {
+    const compactStageBarRule = productCss.match(
+      /@media\s*\(max-width:\s*1419px\)\s*\{[\s\S]*?\.dasti-cv-stage-bar\s*\{(?<rule>[\s\S]*?)\}/,
+    )?.groups?.rule;
+
+    expect(compactStageBarRule).not.toContain("flex-wrap: wrap");
+    expect(compactStageBarRule).toContain("flex-wrap: nowrap");
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-bar\s*\{[\s\S]*flex-wrap:\s*nowrap;/,
+    );
+  });
+
+  it("uses a centered side handle for the ATS audit drawer close control", () => {
+    expect(productCss).toMatch(
+      /\.dasti-cv-ats-sheet \.ds-sheet__close\s*\{[\s\S]*display:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-ats-sheet__collapse\s*\{[\s\S]*inset-block-start:\s*50%;[\s\S]*inset-inline-start:\s*0;[\s\S]*width:\s*26px;[\s\S]*height:\s*42px;[\s\S]*transform:\s*translate\(-50%,\s*-50%\);/,
+    );
+  });
+
+  it("moves CV workspace zoom into a footer slider", () => {
+    expect(verbatiResumePreviewSource).toContain("dasti-cv-stage-footer");
+    expect(verbatiResumePreviewSource).toContain('aria-label="CV zoom"');
+    expect(verbatiResumePreviewSource).toContain('ariaLabel="CV zoom menu"');
+    expect(verbatiResumePreviewSource).toContain(
+      "CV_DOCUMENT_ZOOM_STEPS = [0.3, 0.5",
+    );
+    expect(verbatiResumePreviewSource).toContain(
+      "const CV_DOCUMENT_ZOOM_SLIDER_STEP = 0.01",
+    );
+    expect(verbatiResumePreviewSource).toContain(
+      "clampCvDocumentZoomLevel(Number(event.currentTarget.value))",
+    );
+    expect(verbatiResumePreviewSource).toContain("visibleZoomPercent");
+    expect(verbatiResumePreviewSource).not.toContain(
+      "onStageGeometryChange?: (geometryKey: string) => void",
+    );
+    expect(cvForgeSource).not.toContain(
+      "const [cvCommandLayerRefreshKey, setCvCommandLayerRefreshKey]",
+    );
+    expect(cvForgeSource).not.toContain(
+      'refreshKey: `${workspaceMode}:${cvCommandLayerRefreshKey}`',
+    );
+    expect(cvForgeSource).not.toContain("cvCommandLayerGeometryKey");
+    expect(verbatiResumePreviewSource).not.toContain("MagnifyingGlassMinus");
+    expect(verbatiResumePreviewSource).not.toContain("MagnifyingGlassPlus");
+    expect(verbatiResumePreviewSource).not.toContain(
+      "dasti-doc-zoom-bar--rail",
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-footer\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset-block-end:\s*0;[\s\S]*min-height:\s*var\(--cv-stage-footer-block-size,\s*28px\);[\s\S]*padding:\s*2px\s+var\(--space-2\);[\s\S]*border-block-start:\s*1px\s+solid\s+var\(--border-soft\);[\s\S]*background:\s*var\(--bg\);[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-footer__zoom-slider\s*\{[\s\S]*--cv-zoom-slider-thumb-size:\s*13px;[\s\S]*appearance:\s*none;[\s\S]*block-size:\s*24px;[\s\S]*accent-color:\s*var\(--cv-zoom-slider-fill\);/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-paper-stage\s+\.dasti-doc-viewport--resume-panel\[data-document-stage="true"\]\s*\{[\s\S]*max-inline-size:\s*100%;[\s\S]*overflow:\s*auto;/,
+    );
+    expect(productCss).toMatch(
+      /\.dasti-cv-stage-footer__zoom-menu\s*\{[\s\S]*min-inline-size:\s*132px;/,
+    );
+    expect(productCss).toMatch(
+      /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-cv-stage-footer__meta\s*\{[\s\S]*display:\s*none;[\s\S]*\.dasti-cv-stage-footer__zoom-slider\s*\{[\s\S]*flex:\s*1 1 auto;/,
+    );
+  });
+
+  it("uses the Proposal Ask handle surface tokens in CV Forge", () => {
+    expect(cvStageBarSource).toMatch(
+      /className="dasti-icon-button dasti-proposal-skeleton-stage__ask-handle"/,
+    );
+    expect(cvStageBarSource).toContain(
+      'className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-toolbar--surface-tooltips"',
+    );
+    expect(cvForgeSource).toContain(
+      'className="dasti-cv-skeleton-forge__stage dasti-proposal-skeleton-stage"',
+    );
+    expect(cvForgeSource).toContain(
+      'data-toolbar-density={getCommandLayerToolbarDensity(',
+    );
+    expect(cvForgeSource).toContain('cssVarPrefix: "proposal"');
+    expect(cvForgeSource).toContain(
+      "\".dasti-document-stage__canvas[data-document-page='true']\"",
+    );
+    expect(cvForgeSource).toContain(
+      "\".dasti-doc-viewport--resume-panel[data-document-stage='true']\"",
+    );
+    expect(cvForgeSource).not.toContain(".dasti-resume-mini-preview");
+    expect(cvStageBarSource).not.toContain("dasti-cv-stage-bar__ask-handle\"");
+    expect(cvStageBarSource).not.toContain("dasti-cv-stage-bar-layer");
+    expect(cvStageBarSource).not.toContain("data-toolbar-density=");
+    expect(productCss).not.toMatch(/\.dasti-cv-stage-bar__ask-handle\s*\{/);
+    expect(productCss).not.toContain(".dasti-cv-stage-bar-layer");
+    expect(productCss).not.toContain(".dasti-cv-stage-bar__ask-handle-layer");
+    expect(productCss).not.toMatch(
+      /\.dark\s+\.dasti-cv-stage-bar__mode button,[\s\S]*\.dark\s+\.dasti-cv-stage-bar__primary-action,[\s\S]*\.dark\s+\.dasti-cv-stage-bar__ask-handle\s*\{[\s\S]*background:\s*transparent;/,
+    );
+  });
+
+  it("keeps CV forge canvas and Ask rail aligned with Proposal forge", () => {
     expect(productCss).toMatch(
       /\.dasti-cv-skeleton-forge\s*\{[\s\S]*background:\s*transparent;/,
     );
@@ -153,13 +309,35 @@ describe("CvForge toolbar CSS contracts", () => {
       /@media\s*\(max-width:\s*1419px\)\s*\{[\s\S]*\.dasti-cv-rail\s*\{[\s\S]*max-height:\s*none;[\s\S]*position:\s*static;[\s\S]*padding:\s*var\(--space-5\);[\s\S]*border:\s*1px\s+solid\s+var\(--border-soft\);[\s\S]*border-radius:\s*var\(--r-surface,\s*var\(--radius-card\)\);[\s\S]*background:\s*var\(--sfr\);/,
     );
     expect(productCss).toMatch(
-      /\.dasti-cv-rail-tabs\s*\{[\s\S]*padding:\s*var\(--space-1\);[\s\S]*\.dasti-cv-rail-tabs button\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*min-block-size:\s*var\(--control-sm\);/,
+      /\.dasti-cv-rail-heading\s*\{[\s\S]*color:\s*var\(--ti\);[\s\S]*font-weight:\s*750;/,
     );
-    expect(productCss).toMatch(
-      /\.dasti-cv-rail-tabs button\[data-active="true"\]\s*\{[\s\S]*background:\s*var\(--color-surface-raised\);/,
+    expect(cvSectionsDrawerSource).toContain("forge-template-panel");
+    expect(cvForgeSource).not.toContain("data-cv-sections-panel-docked");
+    expect(productCss).not.toContain("dasti-cv-sections-drawer-backdrop");
+    expect(productCss).not.toContain("data-cv-sections-panel-docked");
+    expect(cvRailSource).not.toContain('data-rail-pane="style"');
+    expect(forgeTemplatePanelSource).toContain(
+      "forge-template-panel__content--cv-sections",
     );
-    expect(productCss).toMatch(
-      /\.dasti-cv-org-row\[data-active="true"\]\s*\{[\s\S]*border-color:\s*var\(--proposal-chrome-control-active-border,\s*var\(--ac\)\);[\s\S]*background:\s*var\(--proposal-chrome-control-active-bg,\s*var\(--cv-rail-row-active-bg\)\);[\s\S]*box-shadow:\s*none;/,
+    expect(getCssRuleBlock(".forge-template-panel__content")).toContain(
+      "overflow: hidden",
+    );
+    expect(
+      getCssRuleBlock(".forge-template-panel__content--cv-sections"),
+    ).toContain("overflow: visible");
+    const activeSectionRowBlock = getCssRuleBlock(
+      '.dasti-cv-org-row[data-active="true"]',
+    );
+    expect(activeSectionRowBlock).toContain(
+      "border-color: var(--proposal-chrome-control-active-border, var(--ac))",
+    );
+    expect(activeSectionRowBlock).toContain(
+      "background: var(--color-surface-raised, var(--sf1))",
+    );
+    expect(activeSectionRowBlock).toContain("background-clip: padding-box");
+    expect(activeSectionRowBlock).toContain("box-shadow: none");
+    expect(activeSectionRowBlock).not.toContain(
+      "--proposal-chrome-control-active-bg",
     );
     expect(cvForgeSource).toContain("CV_PAPER_VISUAL_INLINE_SIZE");
     expect(cvForgeSource).toContain('"--cv-paper-visual-inline-size"');

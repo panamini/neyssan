@@ -10,14 +10,17 @@ export interface SheetProps {
   onOpenChange: (open: boolean) => void;
   side?: "right" | "bottom";
   title: string;
+  titleHidden?: boolean;
   description?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
   ariaLabel?: string;
   className?: string;
+  rootClassName?: string;
   overlayClassName?: string;
   bodyClassName?: string;
   footerClassName?: string;
+  modal?: boolean;
 }
 
 const SHEET_EXIT_DURATION = 220;
@@ -43,14 +46,17 @@ export function Sheet({
   onOpenChange,
   side = "right",
   title,
+  titleHidden = false,
   description,
   children,
   footer,
   ariaLabel,
   className,
+  rootClassName,
   overlayClassName,
   bodyClassName,
   footerClassName,
+  modal = true,
 }: SheetProps): JSX.Element | null {
   const titleId = React.useId();
   const descriptionId = React.useId();
@@ -101,9 +107,11 @@ export function Sheet({
   React.useEffect(() => {
     if (!open) return undefined;
 
-    const focusFrame = requestAnimationFrame(() => {
-      panelRef.current?.focus?.({ preventScroll: true });
-    });
+    const focusFrame = modal
+      ? requestAnimationFrame(() => {
+          panelRef.current?.focus?.({ preventScroll: true });
+        })
+      : null;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -113,6 +121,7 @@ export function Sheet({
       }
 
       if (event.key !== "Tab") return;
+      if (!modal) return;
       const focusable = getFocusableElements(panelRef.current);
       if (focusable.length === 0) {
         event.preventDefault();
@@ -135,10 +144,10 @@ export function Sheet({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      cancelAnimationFrame(focusFrame);
+      if (focusFrame !== null) cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open]);
+  }, [modal, open]);
 
   if (!isVisible) return null;
 
@@ -147,20 +156,33 @@ export function Sheet({
 
   return (
     <BodyPortal>
-      <div className="ds-sheet-root" data-side={side}>
-        <button
-          type="button"
-          className={clsx("ds-sheet__overlay", overlayClassName)}
-          data-state={surfaceState}
-          onClick={() => onOpenChange(false)}
-          aria-label="Close panel"
-        />
+      <div
+        className={clsx("ds-sheet-root", rootClassName)}
+        data-modal={modal ? "true" : "false"}
+        data-side={side}
+      >
+        {modal ? (
+          <button
+            type="button"
+            className={clsx("ds-sheet__overlay", overlayClassName)}
+            data-state={surfaceState}
+            onClick={() => onOpenChange(false)}
+            aria-label="Close panel"
+          />
+        ) : (
+          <div
+            className={clsx("ds-sheet__overlay", overlayClassName)}
+            data-state={surfaceState}
+            aria-hidden="true"
+          />
+        )}
         <aside
           ref={panelRef}
           className={clsx(panelClassName, className)}
           data-state={surfaceState}
           role="dialog"
-          aria-modal="true"
+          aria-modal={modal ? "true" : undefined}
+          data-title-hidden={titleHidden ? "true" : undefined}
           aria-label={ariaLabel}
           aria-labelledby={ariaLabel ? undefined : titleId}
           aria-describedby={description ? descriptionId : undefined}
@@ -175,7 +197,13 @@ export function Sheet({
             }
           >
             <div>
-              <h3 id={titleId} className="ds-sheet__title">
+              <h3
+                id={titleId}
+                className={clsx(
+                  "ds-sheet__title",
+                  titleHidden ? "ds-sheet__title--hidden" : null,
+                )}
+              >
                 {title}
               </h3>
               {description ? (

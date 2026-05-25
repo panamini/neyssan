@@ -1,317 +1,555 @@
 import React from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { Button, Card, CardContent, CardTitle, IconButton, Pill } from "../components/ui";
-import { createQuickStartLocationState } from "../lib/quick-start-routing";
-import { isQuickStartCompleted, markQuickStartCompleted } from "../lib/onboarding-state";
-import { X } from "../lib/icons";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@clerk/clerk-react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { Button, Card, Menu, Pill } from "../components/ui";
+import { ProposalDocumentRenderer } from "../components/proposal-render/ProposalDocumentRenderer";
+import ResumeTemplateRenderer from "../features/verbati/resume/ResumeTemplateRenderer";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
+import {
+  DotsThree,
+  FilePdf,
+  FilePlus,
+  Layout,
+  PencilLine,
+  Target,
+  TrashSimple,
+  Upload,
+} from "../lib/icons";
+import { resolveVerbatiStyle } from "../features/verbati/style";
+import {
+  buildWorkLibraryModel,
+  type LibraryProposalRecord,
+  type LibraryItem,
+  type WorkTarget,
+} from "../lib/application-library";
+import { readStoredProposalOutputDraft } from "../lib/proposal-output-draft";
+import {
+  clearStoredProposalWorkspaceState,
+  createProposalWorkspaceResetState,
+  readStoredProposalComposeDraft,
+  startFreshProposalWorkspace,
+} from "../lib/proposal-workspace-state";
+import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
+import { buildStyledResumePrintSource } from "../lib/document-export-models";
+import {
+  resolvePreviewCanonicalAppearance,
+  serializeProposalDocumentThemeVars,
+} from "../lib/layout/documentAppearance";
+import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
+import {
+  downloadLibraryItems,
+  isLibraryItemDownloadable,
+} from "../lib/library-download";
+import {
+  clearActiveLocalCvId,
+  getLocalCvDocumentById,
+} from "../lib/proposal-personalization";
+import { useCvLibrary } from "../contexts/CvLibraryContext";
+import type { CvDocument } from "../types/cvDocument";
 
-const QUICK_START_DISMISSED_KEY = "twoweeks:dashboard-quick-start-dismissed";
+const TODAY_PROPOSAL_PREVIEW_STYLE = resolveVerbatiStyle({
+  familyId: "workshop",
+  typography: "geist-baskervville",
+  palette: "sauge",
+});
 
-function readQuickStartDismissed(): boolean {
-  if (typeof window === "undefined") {
-    return true;
+function formatUpdatedLabel(value: number): string {
+  if (!value) return "Recently updated";
+  const elapsedMs = Math.max(0, Date.now() - value);
+  const hourMs = 60 * 60 * 1000;
+  const dayMs = 24 * hourMs;
+  if (elapsedMs < hourMs) return "Updated just now";
+  if (elapsedMs < dayMs) {
+    const hours = Math.max(1, Math.floor(elapsedMs / hourMs));
+    return `Updated ${hours}h ago`;
   }
-  try {
-    return window.localStorage.getItem(QUICK_START_DISMISSED_KEY) === "1";
-  } catch {
-    return true;
+  const days = Math.max(1, Math.floor(elapsedMs / dayMs));
+  return `Updated ${days}d ago`;
+}
+
+function navigateTarget(
+  target: WorkTarget,
+  navigate: ReturnType<typeof useNavigate>,
+) {
+  if (target.kind === "route") {
+    navigate(target.to);
   }
 }
 
-function dismissQuickStart(): void {
-  if (typeof window === "undefined") {
-    return;
+function uniqueCvs(currentCv: CvDocument | null, cvs: CvDocument[]): CvDocument[] {
+  const seen = new Set<string>();
+  return [currentCv, ...cvs].filter((cv): cv is CvDocument => {
+    if (!cv?.id || seen.has(String(cv.id))) return false;
+    seen.add(String(cv.id));
+    return true;
+  });
+}
+
+function isLibrarySummaryOnlyCv(cv: CvDocument | null | undefined): boolean {
+  return Boolean(
+    (cv?.metadata as { librarySummaryOnly?: boolean } | undefined)
+      ?.librarySummaryOnly,
+  );
+}
+
+function hydrateLibraryCvDocument(cv: CvDocument): CvDocument {
+  if (!isLibrarySummaryOnlyCv(cv)) {
+    return cv;
   }
-  try {
-    window.localStorage.setItem(QUICK_START_DISMISSED_KEY, "1");
-  } catch {
-    /* noop */
-  }
+
+  const fullDocument = getLocalCvDocumentById(String(cv.id));
+  return fullDocument && !isLibrarySummaryOnlyCv(fullDocument)
+    ? fullDocument
+    : cv;
+}
+
+function hydrateLibraryCvDocuments(cvs: CvDocument[]): CvDocument[] {
+  return cvs.map(hydrateLibraryCvDocument);
+}
+
+function itemSourceId(item: LibraryItem): string {
+  return item.id.slice(item.id.indexOf(":") + 1);
+}
+
+function itemActionLabel(item: LibraryItem): string {
+  if (item.type === "cv") return "Open CV";
+  if (item.type === "proposal") return "Continue";
+  return "Open";
+}
+
+function itemTypeLabel(item: LibraryItem): "CV" | "Proposal" | "Job" {
+  if (item.type === "cv") return "CV";
+  if (item.type === "job") return "Job";
+  return "Proposal";
+}
+
+function itemContextLabel(item: LibraryItem): string {
+  if (item.type === "cv") return "CV profile";
+  if (item.type === "job") return "Job";
+  const jobPart = item.jobId || item.jobTitle ? "Job linked" : "No job";
+  const cvPart = item.linkedCvTitle
+    ? `CV: ${item.linkedCvTitle}`
+    : item.linkedCvId
+      ? "CV linked"
+      : "No CV linked";
+  return `${jobPart} · ${cvPart}`;
 }
 
 export function DashboardPage(): JSX.Element {
   const navigate = useNavigate();
-  const location = useLocation();
-  const [showQuickStart, setShowQuickStart] = React.useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    return !isQuickStartCompleted() && !readQuickStartDismissed();
-  });
-
-  const openQuickStart = React.useCallback(
-    (resumeMode: "choice" | "upload-only" = "choice") => {
-      void navigate(
-        {
-          pathname: location.pathname,
-          search: location.search,
-        },
-        {
-          state: createQuickStartLocationState(location.state, {
-            resumeMode,
-          }),
-        },
-      );
-    },
-    [location.pathname, location.search, location.state, navigate],
+  const { isLoaded, isSignedIn } = useAuth();
+  const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
+  const { currentCv, currentCvId, cvs, deleteCv } = useCvLibrary();
+  const deleteProposal = useMutation(api.deleteProposalPublic.default);
+  const canQueryLiveData =
+    isLoaded && Boolean(isSignedIn) && isConvexAuthenticated;
+  const proposals = useQuery(
+    api.proposalsPublic.default,
+    canQueryLiveData ? {} : "skip",
+  ) as LibraryProposalRecord[] | undefined;
+  const localOutputDraft = React.useMemo(() => readStoredProposalOutputDraft(), []);
+  const localComposeDraft = React.useMemo(() => readStoredProposalComposeDraft(), []);
+  const cvRecords = React.useMemo(
+    () => hydrateLibraryCvDocuments(uniqueCvs(currentCv, cvs)),
+    [currentCv, cvs],
+  );
+  const model = React.useMemo(
+    () =>
+      buildWorkLibraryModel({
+        proposals,
+        cvs: cvRecords,
+        currentCvId,
+        outputDraft: localOutputDraft,
+        composeDraft: localComposeDraft,
+      }),
+    [currentCvId, cvRecords, localComposeDraft, localOutputDraft, proposals],
   );
 
-  const closeQuickStartCard = React.useCallback(() => {
-    dismissQuickStart();
-    markQuickStartCompleted();
-    setShowQuickStart(false);
+  const startNewProposal = React.useCallback(() => {
+    clearActiveLocalCvId();
+    startFreshProposalWorkspace();
+    navigate("/proposal", { state: createProposalWorkspaceResetState() });
+  }, [navigate]);
+
+  const importCv = React.useCallback(() => {
+    navigate("/cv?cvForgeAction=importCv");
+  }, [navigate]);
+
+  const deleteItem = React.useCallback(
+    (item: LibraryItem) => {
+      if (!window.confirm(`Delete ${item.title}?`)) return;
+      const id = itemSourceId(item);
+      if (item.source === "local") {
+        clearStoredProposalWorkspaceState();
+        return;
+      }
+      if (item.type === "cv") {
+        deleteCv(id);
+        return;
+      }
+      if (!isConvexAuthenticated) return;
+      void deleteProposal({ id: id as Id<"proposals"> });
+    },
+    [deleteCv, deleteProposal, isConvexAuthenticated],
+  );
+
+  const downloadItem = React.useCallback(async (item: LibraryItem) => {
+    try {
+      await downloadLibraryItems([item]);
+    } catch (error) {
+      console.warn("Failed to download library item", error);
+    }
   }, []);
 
+  const previewItems = model.items.filter(
+    (item) => item.type === "proposal" || item.type === "cv",
+  );
+  const primaryContinueItem = previewItems[0] ?? null;
+  const secondaryContinueItems = previewItems.slice(1, 3);
+  const continueItemIds = new Set(
+    [primaryContinueItem, ...secondaryContinueItems]
+      .filter((item): item is LibraryItem => Boolean(item))
+      .map((item) => item.id),
+  );
+  const recentItems = previewItems
+    .filter((item) => !continueItemIds.has(item.id))
+    .slice(0, 6);
+
   return (
-    <main className="dashboard-page" aria-labelledby="dashboard-title">
-      <div className="dashboard-page__inner">
-        <header className="dashboard-head">
+    <main className="dashboard-page today-page" aria-labelledby="today-title">
+      <div className="dashboard-page__inner today-page__inner">
+        <header className="dashboard-head today-head">
           <div>
-            <h1 id="dashboard-title" className="dashboard-head__title page-head__title">
-              Dashboard
+            <h1 id="today-title" className="dashboard-head__title page-head__title">
+              Today
             </h1>
             <p className="dashboard-head__sub page-head__sub">
-              Review the next application task and keep the CV-to-proposal flow moving.
+              Pick up the next proposal task and keep the work moving.
             </p>
-          </div>
-          <div className="dashboard-head__actions">
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => openQuickStart("upload-only")}
-            >
-              Import CV
-            </Button>
-            <Button variant="secondary" size="md" onClick={() => navigate("/proposal")}>
-              New proposal
-            </Button>
           </div>
         </header>
 
-        {showQuickStart ? (
-          <section className="qstart" aria-labelledby="quick-start-title">
-            <div className="qstart__head">
-              <div>
-                <h2 id="quick-start-title" className="qstart__title">
-                  Quick start
-                </h2>
-                <p className="qstart__sub">
-                  Four steps until your first cover letter is ready to review.
-                </p>
-              </div>
-              <div className="qstart__progress">
-                <span>2 of 4</span>
-                <div className="qstart__progress-bar" aria-hidden="true">
-                  <span />
-                </div>
-                <IconButton
-                  label="Dismiss quick start"
-                  variant="ghost"
-                  onClick={closeQuickStartCard}
-                >
-                  <X size={14} aria-hidden="true" />
-                </IconButton>
-              </div>
-            </div>
-            <div className="qstart__list">
-              <QuickStartStep
-                state="done"
-                number="✓"
-                title="Import or build your CV"
-                description="Use the CV forge as your profile source."
-                action="Open"
-                onAction={() => navigate("/cv")}
-              />
-              <QuickStartStep
-                state="done"
-                number="✓"
-                title="Pick your style"
-                description="Use the active document style defaults."
-                action="Change"
-                onAction={() => navigate("/style")}
-              />
-              <QuickStartStep
-                state="active"
-                number="3"
-                title="Capture jobs"
-                description="Install the extension or pick an existing job in Jobs."
-                action="Open jobs"
-                onAction={() => navigate("/jobs")}
-              />
-              <QuickStartStep
-                state="pending"
-                number="4"
-                title="Generate your first proposal"
-                description="Pick a job and review the tailored draft."
-                action="Locked"
-                disabled
-              />
-            </div>
-          </section>
-        ) : null}
-
-        <section className="dash-next-action" aria-labelledby="next-best-action">
-          <div className="dash-next-action__label">Next best action</div>
-          <h2 id="next-best-action" className="dash-next-action__title">
-            Review match evidence before drafting.
-          </h2>
-          <p className="dash-next-action__copy">
-            The next proposal should start from a checked job match and the current CV.
-            Confirm the evidence first, then open the draft.
-          </p>
-          <div className="dash-next-action__bar">
-            <Button size="lg" onClick={() => navigate("/jobs")}>
-              Review match
+        <section className="today-section" aria-labelledby="create-title">
+          <SectionHeading
+            id="create-title"
+            title="Create"
+            copy="Start a concrete workflow."
+          />
+          <div className="today-create-actions">
+            <Button
+              variant="secondary"
+              onClick={importCv}
+              iconLeft={<Upload size={16} aria-hidden="true" />}
+            >
+              Import CV
             </Button>
-            <Button size="lg" variant="secondary" onClick={() => navigate("/proposal")}>
-              Open draft
+            <Button
+              variant="secondary"
+              onClick={() => navigate("/jobs")}
+              iconLeft={<Target size={16} aria-hidden="true" />}
+            >
+              Add job
             </Button>
-            <Pill tone="warning">2 watch-outs</Pill>
-            <Pill tone="success">CV ready</Pill>
+            <Button
+              variant="secondary"
+              onClick={startNewProposal}
+              iconLeft={<PencilLine size={16} aria-hidden="true" />}
+            >
+              New proposal
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => navigate("/templates")}
+              iconLeft={<Layout size={16} aria-hidden="true" />}
+            >
+              Start from template
+            </Button>
           </div>
         </section>
 
-        <div className="dash-grid">
-          <div className="dash-grid__main">
-            <Card>
-              <CardContent>
-                <div className="dash-stats">
-                  <DashboardStat value="14" label="Proposals sent (30d)" />
-                  <DashboardStat value="3" label="Replies waiting" />
-                  <DashboardStat value="28" label="Strong matches waiting" />
+        <section className="today-section" aria-labelledby="continue-title">
+          <SectionHeading
+            id="continue-title"
+            title="Continue"
+            copy="Pick up the document you recognize."
+          />
+          {primaryContinueItem ? (
+            <div className="today-preview-board">
+              <WorkPreviewCard
+                item={primaryContinueItem}
+                variant="primary"
+                onOpen={() => navigateTarget(primaryContinueItem.routeTarget, navigate)}
+                onDelete={() => deleteItem(primaryContinueItem)}
+                onDownload={() => downloadItem(primaryContinueItem)}
+              />
+              {secondaryContinueItems.length > 0 ? (
+                <div className="today-preview-board__side">
+                  {secondaryContinueItems.map((item) => (
+                    <WorkPreviewCard
+                      key={item.id}
+                      item={item}
+                      variant="secondary"
+                      onOpen={() => navigateTarget(item.routeTarget, navigate)}
+                      onDelete={() => deleteItem(item)}
+                      onDownload={() => downloadItem(item)}
+                    />
+                  ))}
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardTitle>Recent activity</CardTitle>
-              <CardContent>
-                <div className="dash-list">
-                  <ActivityRow
-                    status="Sent"
-                    tone="success"
-                    title="Senior Frontend Engineer · Linear"
-                    sub="Cover letter generated and exported."
-                    time="2h ago"
-                  />
-                  <ActivityRow
-                    status="Drafting"
-                    tone="warning"
-                    title="Staff Designer · Vercel"
-                    sub="Verdict is worth a shot."
-                    time="yesterday"
-                  />
-                  <ActivityRow
-                    status="Saved"
-                    tone="neutral"
-                    title="Product Engineer · Stripe"
-                    sub="Saved for later."
-                    time="Mon"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <aside className="dash-grid__side" aria-label="Dashboard actions">
-            <Card>
-              <CardTitle>Quick actions</CardTitle>
-              <CardContent className="dash-actions">
-                <Button variant="secondary" onClick={() => openQuickStart("upload-only")}>
+              ) : null}
+            </div>
+          ) : (
+            <div className="today-empty-work">
+              <strong>NO WORK YET.</strong>
+              <span>Import a CV. Add a job. Draft when ready.</span>
+              <div>
+                <Button
+                  variant="secondary"
+                  onClick={importCv}
+                  iconLeft={<Upload size={16} aria-hidden="true" />}
+                >
                   Import CV
                 </Button>
-                <Button variant="secondary" onClick={() => navigate("/jobs")}>
-                  Capture jobs
+                <Button
+                  variant="secondary"
+                  onClick={() => navigate("/jobs")}
+                  iconLeft={<Target size={16} aria-hidden="true" />}
+                >
+                  Add job
                 </Button>
-                <Button variant="secondary" onClick={() => navigate("/proposal")}>
+                <Button
+                  variant="primary"
+                  onClick={startNewProposal}
+                  iconLeft={<FilePlus size={16} aria-hidden="true" />}
+                >
                   New proposal
                 </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardTitle>Command palette</CardTitle>
-              <CardContent>
-                <p className="dash-tip">
-                  Press Cmd/Ctrl+K to create, navigate, toggle theme, or replay onboarding.
-                </p>
-              </CardContent>
-            </Card>
-          </aside>
-        </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="today-section" aria-labelledby="recent-work-title">
+          <SectionHeading
+            id="recent-work-title"
+            title="Recent work"
+            copy="Recent CVs and proposals."
+          />
+          {recentItems.length > 0 ? (
+            <div className="today-recent-grid">
+              {recentItems.map((item) => (
+                    <WorkPreviewCard
+                      key={item.id}
+                      item={item}
+                  variant="compact"
+                  onOpen={() => navigateTarget(item.routeTarget, navigate)}
+                  onDelete={() => deleteItem(item)}
+                  onDownload={() => downloadItem(item)}
+                    />
+                  ))}
+            </div>
+          ) : (
+            <p className="dash-tip">No recent work yet.</p>
+          )}
+        </section>
+
       </div>
     </main>
   );
 }
 
-function QuickStartStep({
-  state,
-  number,
+function SectionHeading({
+  id,
   title,
-  description,
-  action,
-  onAction,
-  disabled = false,
+  copy,
 }: {
-  state: "done" | "active" | "pending";
-  number: string;
+  id: string;
   title: string;
-  description: string;
-  action: string;
-  onAction?: () => void;
-  disabled?: boolean;
+  copy: string;
 }) {
   return (
-    <div className="qstart__step" data-state={state}>
-      <span className="qstart__step-num">{number}</span>
-      <div className="qstart__step-body">
-        <div className="qstart__step-title">{title}</div>
-        <div className="qstart__step-desc">{description}</div>
-      </div>
-      <Button
-        size="sm"
-        variant={state === "active" ? "secondary" : "ghost"}
-        onClick={onAction}
-        disabled={disabled}
+    <div className="today-section__head">
+      <h2 id={id}>{title}</h2>
+      <p>{copy}</p>
+    </div>
+  );
+}
+
+function WorkDocumentPreview({
+  item,
+  scale = "default",
+}: {
+  item: LibraryItem;
+  scale?: "default" | "small";
+}) {
+  const context = itemContextLabel(item);
+  if (item.type === "proposal") {
+    return (
+      <div
+        className="work-doc-preview work-doc-preview--rendered"
+        data-kind={item.type}
+        data-scale={scale}
+        aria-hidden="true"
       >
-        {action}
-      </Button>
-    </div>
-  );
-}
-
-function DashboardStat({ value, label }: { value: string; label: string }) {
-  return (
-    <div>
-      <div className="dash-stat__num">{value}</div>
-      <div className="dash-stat__label">{label}</div>
-    </div>
-  );
-}
-
-function ActivityRow({
-  status,
-  tone,
-  title,
-  sub,
-  time,
-}: {
-  status: string;
-  tone: "neutral" | "warning" | "success";
-  title: string;
-  sub: string;
-  time: string;
-}) {
-  return (
-    <div className="dash-row">
-      <span className={`ds-status ds-status--${tone}`}>
-        <span className="ds-status__dot" />
-        {status}
-      </span>
-      <div>
-        <div className="dash-row__title">{title}</div>
-        <div className="dash-row__sub">{sub}</div>
+        <div className="work-doc-preview__document-scale">
+          <ProposalDocumentRenderer
+            content={item.content ?? item.subtitle ?? item.title}
+            proposalType="cover_letter"
+            templateId="workshop_proposal_margin"
+            railTitle={item.title}
+            railMeta={context}
+            documentTitle={item.title}
+            documentMeta={context}
+            documentTypography={getProposalDocumentTypography(
+              "direct",
+              TODAY_PROPOSAL_PREVIEW_STYLE,
+            )}
+            pageWidth={A4_PAGE_WIDTH_PX}
+            stylePreset={TODAY_PROPOSAL_PREVIEW_STYLE}
+            documentThemeVars={serializeProposalDocumentThemeVars(
+              resolvePreviewCanonicalAppearance(TODAY_PROPOSAL_PREVIEW_STYLE),
+            )}
+          />
+        </div>
       </div>
-      <span className="dash-row__time">{time}</span>
+    );
+  }
+
+  if (item.type === "cv" && item.cvDocument) {
+    return <WorkCvDocumentPreview item={item} scale={scale} />;
+  }
+
+  return (
+    <div
+      className="work-doc-preview work-doc-preview--empty"
+      data-kind={item.type}
+      data-scale={scale}
+      aria-hidden="true"
+    />
+  );
+}
+
+function WorkCvDocumentPreview({
+  item,
+  scale,
+}: {
+  item: LibraryItem;
+  scale: "default" | "small";
+}) {
+  const cvDocument = item.cvDocument;
+  const preview = React.useMemo(() => {
+    if (!cvDocument) return null;
+    const source = buildStyledResumePrintSource({ currentCv: cvDocument });
+    return source
+      ? {
+          data: source.resumeData,
+          stylePreset: source.stylePreset,
+          resumeTemplateId: source.resumeTemplateId,
+          committedPages: source.committedPages?.slice(0, 1),
+        }
+      : null;
+  }, [cvDocument]);
+
+  if (!preview) {
+    return (
+      <div
+        className="work-doc-preview work-doc-preview--empty"
+        data-kind={item.type}
+        data-scale={scale}
+        aria-hidden="true"
+      />
+    );
+  }
+
+  return (
+    <div
+      className="work-doc-preview work-doc-preview--resume-rendered"
+      data-kind={item.type}
+      data-scale={scale}
+      aria-hidden="true"
+    >
+      <div className="work-doc-preview__resume-scale">
+        <ResumeTemplateRenderer
+          data={preview.data}
+          stylePreset={preview.stylePreset}
+          resumeTemplateId={preview.resumeTemplateId}
+          committedPages={preview.committedPages}
+        />
+      </div>
     </div>
   );
 }
+
+function WorkPreviewCard({
+  item,
+  variant,
+  onOpen,
+  onDelete,
+  onDownload,
+}: {
+  item: LibraryItem;
+  variant: "primary" | "secondary" | "compact";
+  onOpen: () => void;
+  onDelete: () => void;
+  onDownload: () => void;
+}) {
+  const label = itemTypeLabel(item);
+  return (
+    <Card interactive className="today-preview-card" data-variant={variant}>
+      <div className="today-preview-card__menu">
+        <Menu
+          ariaLabel={`More actions for ${item.title}`}
+          align="end"
+          sections={[
+            {
+              items: [
+                { id: "open", label: itemActionLabel(item), onSelect: onOpen },
+                {
+                  id: "download",
+                  label: "Download PDF",
+                  icon: <FilePdf size={14} aria-hidden="true" />,
+                  disabled: !isLibraryItemDownloadable(item),
+                  onSelect: onDownload,
+                },
+                {
+                  id: "delete",
+                  label: "Delete",
+                  icon: <TrashSimple size={14} aria-hidden="true" />,
+                  tone: "danger",
+                  onSelect: onDelete,
+                },
+              ],
+            },
+          ]}
+          trigger={
+            <button
+              type="button"
+              className="dasti-documents-card__menu"
+              aria-label={`More actions for ${item.title}`}
+            >
+              <DotsThree size={16} aria-hidden="true" />
+            </button>
+          }
+        />
+      </div>
+      <button type="button" className="today-preview-card__surface" onClick={onOpen}>
+        <span className="today-preview-card__preview-shell">
+          <WorkDocumentPreview item={item} scale={variant === "compact" ? "small" : "default"} />
+        </span>
+        <span className="today-preview-card__meta">
+          {item.type === "proposal" ? (
+            <span className="today-preview-card__type">{label}</span>
+          ) : null}
+          <strong>{item.title}</strong>
+          <span className="today-preview-card__bottom">
+            <span>{itemContextLabel(item)}</span>
+            <span>{formatUpdatedLabel(item.updatedAt)}</span>
+          </span>
+        </span>
+      </button>
+    </Card>
+  );
+}
+
+export default DashboardPage;

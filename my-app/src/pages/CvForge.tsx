@@ -3,19 +3,39 @@ import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import type { RemirrorJSON } from "remirror";
-import { PenLine, Upload, X } from "@/lib/icons";
+import {
+  ArrowSquareOut,
+  FileUser,
+  FolderSimple,
+  PenLine,
+  Upload,
+  X,
+} from "@/lib/icons";
 import { api } from "../../convex/_generated/api";
 import FloatingAiToolbar, {
   type InlineAiActionId,
 } from "../components/FloatingAiToolbar";
 import type { ResumeExportRequest } from "../components/ResumeExportControl";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
+import {
+  useForgeTemplatePanel,
+  useRegisterForgePanel,
+  useRegisterForgeTemplates,
+} from "../contexts/ForgeTemplatePanelContext";
+import { useRegisterCvForgeTopbar } from "../contexts/CvForgeTopbarContext";
+import {
+  DrawerDocumentTile,
+  DrawerUnavailableThumbnail,
+} from "../components/library/LibraryDocumentPreview";
 import { VerbatiResumePreview } from "../features/verbati/VerbatiResumePreview";
 import type {
   ActivePaperEditTarget,
   ResumeInlineEditing,
 } from "../features/verbati/resume/InlineEditableText";
-import type { ResumePaperAiState } from "../features/verbati/resume/ResumeOneColAtsPage";
+import {
+  shouldRenderPaperSectionAiControl,
+  type ResumePaperAiState,
+} from "../features/verbati/resume/ResumeOneColAtsPage";
 import { hasRenderableResumeData } from "../features/verbati/cvDocumentToResumeData";
 import type {
   ResumeActiveTarget,
@@ -29,6 +49,7 @@ import type { VerbatiStylePreset } from "../features/verbati/types";
 import {
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
+  type ResumeTemplateId,
 } from "../lib/layout/resumeTemplates";
 import {
   DOCUMENT_STYLE_VERSION,
@@ -42,11 +63,17 @@ import {
 } from "../components/remirror-editor/utils/conversion";
 import { normalizeResponsibilityAiResultForSource } from "../components/structured-blocks/ExperienceEducationModal";
 import { useToast } from "../components/ui/toast";
+import { useDocumentCommandLayerPosition } from "../hooks/use-document-command-layer-position";
+import {
+  getCommandLayerToolbarDensity,
+} from "../lib/document-command-layer-layout";
+import type { CvAiSurfacePosition } from "../lib/cv-ai-surface-position";
 import {
   buildAuthoritativeResumeDebugSnapshot,
   buildAuthoritativeResumeExportModel,
   readAuthoritativeResumeFromCv,
 } from "../lib/authoritative-resume";
+import { evaluateCvAtsAudit } from "../lib/ats-audit/evaluateCvAtsAudit";
 import {
   TRUSTED_MISTRAL_FILE_INPUT_ACCEPT,
   useStructuredMistralImport,
@@ -64,10 +91,20 @@ import {
 } from "../lib/document-export-models";
 import {
   applyHiddenSectionsToCvDocument,
+  insertSectionByCanonicalOrder,
+  isSectionReorderLocked,
+  normalizeCvSectionOrder,
   readStoredHiddenSectionIds,
   sanitizeHiddenSectionIds,
   writeStoredHiddenSectionIds,
 } from "../lib/cv-section-organization";
+import {
+  applyImportRecoveryItems,
+  buildRecoveryCommitState,
+  collectRecoveryDestinationSectionIds,
+  formatRecoveryCommitToast,
+  normalizeRecoverySectionTarget,
+} from "../lib/import-recovery";
 import {
   buildResumeTypographyAuditMetadata,
   readResumePreviewDebugCapture,
@@ -76,30 +113,52 @@ import {
 import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
 import type { CvDocument } from "../types/cvDocument";
+import {
+  buildWorkLibraryModel,
+  type LibraryItem,
+  type LibraryProposalRecord,
+} from "../lib/application-library";
 import { buildCanonicalResumeRenderModelFromCv } from "../lib/buildCanonicalResumeRenderModel";
-import { deriveCvTitleFromSections } from "../lib/normalize-cv";
+import {
+  deriveCvTitleCandidateFromSections,
+  deriveCvTitleFromSections,
+} from "../lib/normalize-cv";
 import CvStageBar from "../components/cv/CvStageBar";
-import CvReviewBanner from "../components/cv/CvReviewBanner";
-import CvRail, {
+import CvDesignFields, {
   type CvAccentChoice,
+} from "../components/cv/CvDesignFields";
+import CvReviewBanner from "../components/cv/CvReviewBanner";
+import ImportRecoveryPanel from "../components/ImportRecoveryPanel";
+import ComposerDrawer from "../components/ComposerDrawer";
+import CvRail, {
   type CvAddSectionKind,
   type CvRailAppliedAiEdit,
   type CvRailAiSuggestion,
   type CvRailTab,
   type CvToneChoice,
 } from "../components/cv/CvRail";
-import ImportReviewSheet, {
-  type CvImportReviewBlock,
-} from "../components/cv/ImportReviewSheet";
+import CvAiReviewOverlay, {
+  type CvAiReviewState,
+  type CvAiReviewTarget,
+} from "../components/cv/CvAiReviewOverlay";
+import CvSectionsOrganizer from "../components/cv/CvSectionsOrganizer";
+import CvAtsAuditPanel from "../components/cv/CvAtsAuditPanel";
 import SectionEditorSheet from "../components/cv/SectionEditorSheet";
+import { Sheet } from "../components/ui";
 import type { CvSection } from "../types/cvDocument";
-import type { ImportRecoverySession } from "../types/importRecovery";
+import type {
+  ImportRecoveryItem,
+  ImportRecoverySectionType,
+  ImportRecoverySession,
+} from "../types/importRecovery";
 import {
   createAiInteractionId,
   recordAiInteractionEvent,
 } from "../lib/ai/aiInteractionTelemetry";
 import { normalizeEditorAiTextResult } from "../lib/ai/applyAiSuggestion";
 import {
+  findInlinePaperEditableForSelection,
+  getDomRangeSelectionState,
   getDomSelectionState,
   isInlineAiToolbarActiveElement,
   isPrimaryPointerPressed,
@@ -112,25 +171,84 @@ import {
 } from "../lib/resumeResponsibilityAuthority";
 
 const CV_PAPER_VISUAL_INLINE_SIZE = `${Math.round(A4_PAGE_WIDTH_PX * 100) / 100}px`;
+const CV_COMMAND_LAYER_TOOLBAR_MIN_WIDTH = 300;
+const CV_COMMAND_LAYER_TOOLBAR_NATURAL_WIDTH = 520;
+const CV_COMMAND_LAYER_TOOLBAR_HEIGHT = 44;
+const CV_COMMAND_LAYER_SAFE_MARGIN = 12;
+const CV_COMMAND_LAYER_GAP = 12;
+const CV_ASK_OFFSET_FROM_PAPER_TOP = 16;
+const CV_ASK_HANDLE_ICON_SIZE = 32;
+const CV_COMMAND_LAYER_ASK_HANDLE = {
+  iconWidth: CV_ASK_HANDLE_ICON_SIZE,
+  height: CV_ASK_HANDLE_ICON_SIZE,
+};
+const CV_PAPER_ANCHOR_SELECTOR = [
+  ".dasti-document-stage__canvas[data-document-page='true']",
+  ".dasti-doc-viewport--resume-panel[data-document-stage='true']",
+].join(",");
+const CV_COMMAND_LAYER_CANVAS_SELECTOR = ".dasti-cv-skeleton-forge";
+const CV_WORKSPACE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH = 1180;
+const CV_INLINE_PAPER_AI_TIMEOUT_MS = 30_000;
 
 type CvForgeWorkspaceMode = "edit" | "preview";
+type CvWorkspacePanel = "sections" | "design" | "templates";
 type CvForgeCanonicalJob = {
   id: string;
   title: string;
   company: string;
 } | null;
+type CvImportRecoveryDraft = {
+  cycleId: string;
+  baseSections: CvSection[];
+  items: ImportRecoveryItem[];
+  overflowCount: number;
+  reviewLimit: number;
+};
+
+function withCvInlinePaperAiTimeout<T>(request: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error("Generation is taking too long. Try again."));
+    }, CV_INLINE_PAPER_AI_TIMEOUT_MS);
+
+    request.then(
+      (value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      },
+    );
+  });
+}
+
 type InlinePaperSelectionState = {
   text: string;
   anchor: EditorSelectionAnchor;
   editTarget: ActivePaperEditTarget;
   range: Range | null;
 };
-type PaperTextAiSuggestion = NonNullable<
-  ResumePaperAiState["textSuggestion"]
-> & {
+type CvAskSelectionContext = {
+  selectedText: string;
+  editTarget: ActivePaperEditTarget;
+  anchor: EditorSelectionAnchor | null;
+};
+type CvContextualAiReview = {
+  key: string;
+  target: CvAiReviewTarget;
+  anchor: EditorSelectionAnchor | null;
+  beforeText: string;
+  afterText: string;
+  state: CvAiReviewState;
+  errorMessage?: string;
+  actionId: string;
+  primaryActionLabel: string;
   afterDoc?: unknown;
   responsibilityBullets?: string[];
   previousSection?: CvSection;
+  previousSections?: CvSection[];
   interactionId?: string;
 };
 
@@ -138,6 +256,14 @@ const CV_FORGE_WORKSPACE_MODE_STORAGE_KEY = "dasti:cv-forge-workspace-mode:v1";
 const ENTRY_PICKER_PENDING_ROUTE_ID = "__entry-picker-pending-route__";
 const DRAFT_EMPTY_RESPONSIBILITY_BULLET =
   "__draft_empty_responsibility_bullet__";
+
+function resolveCvTemplateIntent(
+  value: string | null | undefined,
+): ResumeTemplateId | null {
+  if (value === "minimal") return WORKSHOP_RESUME_ONECOL_TEMPLATE_ID;
+  if (value === "french") return WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID;
+  return null;
+}
 
 function mapDefaultVoicePresetToCvTone(value: unknown): CvToneChoice {
   if (value === "engaging") return "warm";
@@ -257,7 +383,7 @@ function getCurrentCvLanguages(
   cv: CvDocument | null | undefined,
 ): Array<{ name?: string; level?: string }> {
   return (cv?.sections ?? [])
-    .filter((section) => String(section.type) === "languages")
+    .filter((section) => getCanonicalSectionType(section) === "languages")
     .flatMap((section) =>
       getStructuredItems(section as CvSection).map((item) => ({
         name: typeof item.name === "string" ? item.name.trim() : undefined,
@@ -1576,7 +1702,9 @@ function appendListSuggestionToSection(
   );
   if (existing.has(normalizeListName(clean))) return section;
 
-  if (section.type === "languages") {
+  const canonicalType = getCanonicalSectionType(section);
+
+  if (canonicalType === "languages") {
     return {
       ...section,
       structuredContent: [
@@ -1590,7 +1718,7 @@ function appendListSuggestionToSection(
     };
   }
 
-  if (section.type === "skills") {
+  if (canonicalType === "skills") {
     return {
       ...section,
       structuredContent: [
@@ -1604,10 +1732,7 @@ function appendListSuggestionToSection(
     };
   }
 
-  if (
-    String(section.type) === "hobbies" ||
-    section.title.trim().toLowerCase() === "hobbies"
-  ) {
+  if (canonicalType === "hobbies") {
     return {
       ...section,
       structuredContent: [
@@ -1638,6 +1763,15 @@ function readStoredCvForgeWorkspaceMode(): CvForgeWorkspaceMode {
   }
 }
 
+function getCvWorkspacePanel(
+  surface: string | null,
+): CvWorkspacePanel | null {
+  if (surface === "cv-sections") return "sections";
+  if (surface === "cv-design") return "design";
+  if (surface === "cv") return "templates";
+  return null;
+}
+
 function readImportRecoverySession(
   currentCv: CvDocument | null | undefined,
 ): ImportRecoverySession | null {
@@ -1648,24 +1782,78 @@ function readImportRecoverySession(
   return session;
 }
 
-function buildImportReviewBlocks(
-  currentCv: CvDocument | null | undefined,
-): CvImportReviewBlock[] {
-  const session = readImportRecoverySession(currentCv);
-  if (!session) return [];
+function normalizeCvRecoveryItemTargets(
+  item: ImportRecoveryItem,
+): ImportRecoveryItem {
+  return {
+    ...item,
+    predictedSection: normalizeRecoverySectionTarget(item.predictedSection),
+    selectedSection: normalizeRecoverySectionTarget(
+      item.selectedSection ?? item.predictedSection,
+    ),
+    fragmentAssignments: (item.fragmentAssignments ?? []).map((fragment) => ({
+      ...fragment,
+      targetSection: normalizeRecoverySectionTarget(fragment.targetSection),
+    })),
+  };
+}
 
-  return session.items
-    .filter((item) => item.reviewStatus === "pending")
-    .map((item) => ({
-      id: item.blockId,
-      title:
-        item.sourceSectionTitle ||
-        item.selectedSectionTitle ||
-        item.predictedSection,
-      original: item.rawText || item.cleanedText,
-      parsed: item.cleanedText || item.rawText,
-      status: "uncertain" as const,
-    }));
+function getCvRecoveryDecisionStatus(
+  item: ImportRecoveryItem,
+  targetSection: ImportRecoverySectionType,
+  targetSectionTitle?: string | null,
+): ImportRecoveryItem["reviewStatus"] {
+  const normalizedPredicted = normalizeRecoverySectionTarget(
+    item.predictedSection,
+  );
+  const normalizedSelected = normalizeRecoverySectionTarget(targetSection);
+  const normalizedTitle =
+    normalizedSelected === "custom" ? targetSectionTitle?.trim() ?? "" : "";
+
+  return normalizedSelected === normalizedPredicted &&
+    normalizedTitle.length === 0
+    ? "accepted"
+    : "reassigned";
+}
+
+function createCvImportRecoverySession(
+  items: ImportRecoveryItem[],
+  reviewLimit: number,
+): ImportRecoverySession {
+  return {
+    status: items.length > 0 ? "pending" : "completed",
+    updatedAt: new Date().toISOString(),
+    items: items.map(normalizeCvRecoveryItemTargets),
+    overflowCount: Math.max(items.length - reviewLimit, 0),
+    reviewLimit,
+  };
+}
+
+function createCompletedCvImportRecoverySession(
+  items: ImportRecoveryItem[],
+  reviewLimit: number,
+  baseSectionsSnapshot?: CvSection[],
+): ImportRecoverySession {
+  return {
+    status: "completed",
+    updatedAt: new Date().toISOString(),
+    items: items.map(normalizeCvRecoveryItemTargets),
+    overflowCount: Math.max(items.length - reviewLimit, 0),
+    reviewLimit,
+    ...(Array.isArray(baseSectionsSnapshot) ? { baseSectionsSnapshot } : {}),
+  };
+}
+
+function buildTouchedSectionRevealState(
+  sections: CvSection[],
+  touchedSectionIds: string[],
+) {
+  const revealedIds = new Set(touchedSectionIds.map(String));
+  return sections.map((section) =>
+    revealedIds.has(String(section.id ?? ""))
+      ? { ...section, collapsed: false }
+      : section,
+  );
 }
 
 function getCvSectionId(section: CvSection, index: number): string {
@@ -1776,25 +1964,15 @@ function isSectionEditorSheetFocusOwner(): boolean {
 
 function getSectionRailAiMode(section: CvSection): "none" | "rail" | "editor" {
   if (section.type === "profile" || section.type === "contact") return "none";
-  if (
-    section.type === "summary" ||
-    section.type === "skills" ||
-    section.type === "languages" ||
-    String(section.type) === "hobbies" ||
-    section.title.trim().toLowerCase() === "hobbies" ||
-    section.type === "text"
-  ) {
-    return "rail";
-  }
-  return "editor";
+  return "rail";
 }
 
 function sectionUsesStructuredSuggestions(section: CvSection): boolean {
+  const canonicalType = getCanonicalSectionType(section);
   return (
-    section.type === "skills" ||
-    section.type === "languages" ||
-    String(section.type) === "hobbies" ||
-    section.title.trim().toLowerCase() === "hobbies"
+    canonicalType === "skills" ||
+    canonicalType === "languages" ||
+    canonicalType === "hobbies"
   );
 }
 
@@ -2166,6 +2344,513 @@ function resolveAccentStyle(
   }
 }
 
+function isSummaryOnlyCvDocument(cv: CvDocument | null | undefined): boolean {
+  return Boolean(
+    (cv?.metadata as { librarySummaryOnly?: boolean } | undefined)
+      ?.librarySummaryOnly,
+  );
+}
+
+function cvForgeDrawerSourceId(item: LibraryItem): string {
+  return item.id.slice(item.id.indexOf(":") + 1);
+}
+
+function readCvForgeDrawerRecentSearches(storageKey: string): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(storageKey) ?? "[]");
+    return Array.isArray(parsed)
+      ? parsed
+          .filter((item): item is string => typeof item === "string")
+          .slice(0, 5)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function useCvForgeDrawerRecentSearches(storageKey: string) {
+  const [recentSearches, setRecentSearches] = React.useState<string[]>(() =>
+    readCvForgeDrawerRecentSearches(storageKey),
+  );
+
+  const writeRecentSearches = React.useCallback(
+    (next: string[]) => {
+      setRecentSearches(next);
+      if (typeof window === "undefined") return;
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(next));
+      } catch {
+        /* local-only enhancement */
+      }
+    },
+    [storageKey],
+  );
+
+  const rememberSearch = React.useCallback(
+    (value: string) => {
+      const normalized = value.trim();
+      if (!normalized) return;
+      writeRecentSearches(
+        [
+          normalized,
+          ...recentSearches.filter(
+            (item) => item.toLowerCase() !== normalized.toLowerCase(),
+          ),
+        ].slice(0, 5),
+      );
+    },
+    [recentSearches, writeRecentSearches],
+  );
+
+  const clearRecentSearches = React.useCallback(() => {
+    writeRecentSearches([]);
+  }, [writeRecentSearches]);
+
+  return { recentSearches, rememberSearch, clearRecentSearches };
+}
+
+function CvForgeDrawerSearch({
+  value,
+  onChange,
+  placeholder = "Search library",
+  storageKey = "twoweeks:forge-drawer:recent-cvforge-library-searches",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  storageKey?: string;
+}): JSX.Element {
+  const [focused, setFocused] = React.useState(false);
+  const { recentSearches, rememberSearch, clearRecentSearches } =
+    useCvForgeDrawerRecentSearches(storageKey);
+  const showRecentSearches =
+    focused && value.trim() === "" && recentSearches.length > 0;
+  const commitSearch = React.useCallback(() => {
+    rememberSearch(value);
+  }, [rememberSearch, value]);
+
+  return (
+    <div className="forge-rail-drawer__search-wrap">
+      <label className="forge-rail-drawer__search">
+        <span className="sr-only">{placeholder}</span>
+        <input
+          type="search"
+          value={value}
+          onChange={(event) => onChange(event.currentTarget.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => {
+            commitSearch();
+            window.setTimeout(() => setFocused(false), 120);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") commitSearch();
+          }}
+          placeholder={placeholder}
+        />
+      </label>
+      {showRecentSearches ? (
+        <div className="forge-rail-drawer__recent-searches" role="listbox">
+          <div className="forge-rail-drawer__recent-searches-head">
+            <span>Recent searches</span>
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={clearRecentSearches}
+            >
+              Clear
+            </button>
+          </div>
+          {recentSearches.map((recent) => (
+            <button
+              key={recent}
+              type="button"
+              role="option"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onChange(recent)}
+            >
+              {recent}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CvForgeDrawerSectionTitle({
+  title,
+  actionLabel,
+  onAction,
+  sectionRef,
+  focusable = false,
+}: {
+  title: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  sectionRef?: React.Ref<HTMLDivElement>;
+  focusable?: boolean;
+}): JSX.Element {
+  return (
+    <div
+      ref={sectionRef}
+      className="forge-rail-drawer__section-title"
+      tabIndex={focusable ? -1 : undefined}
+    >
+      <span>{title}</span>
+      {actionLabel ? (
+        <button type="button" onClick={onAction}>
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function CvForgeDrawerPreview({
+  item,
+  hydrateCvDocument,
+  badge,
+  actionPill,
+}: {
+  item: LibraryItem;
+  hydrateCvDocument: (id: string) => Promise<CvDocument | null>;
+  badge?: string | null;
+  actionPill?: React.ReactNode;
+}): JSX.Element {
+  if (item.type === "proposal") {
+    return (
+      <DrawerDocumentTile item={item} badge={badge} actionPill={actionPill} />
+    );
+  }
+
+  const sourceId = cvForgeDrawerSourceId(item);
+  const [hydratedCv, setHydratedCv] = React.useState<CvDocument | null>(
+    item.cvDocument && !isSummaryOnlyCvDocument(item.cvDocument)
+      ? item.cvDocument
+      : null,
+  );
+  const [failed, setFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    if (item.cvDocument && !isSummaryOnlyCvDocument(item.cvDocument)) {
+      setHydratedCv(item.cvDocument);
+      setFailed(false);
+      return () => undefined;
+    }
+    setHydratedCv(null);
+    setFailed(false);
+    hydrateCvDocument(sourceId).then((doc) => {
+      if (cancelled) return;
+      if (doc && !isSummaryOnlyCvDocument(doc)) {
+        setHydratedCv(doc);
+      } else {
+        setFailed(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrateCvDocument, item, sourceId]);
+
+  if (!hydratedCv) {
+    return (
+      <DrawerUnavailableThumbnail
+        label={failed ? "Preview unavailable" : "Loading preview"}
+      />
+    );
+  }
+
+  return (
+    <DrawerDocumentTile
+      item={item}
+      cvDocument={hydratedCv}
+      badge={badge}
+      actionPill={actionPill}
+    />
+  );
+}
+
+export function CvForgeCvDrawer({
+  items,
+  currentCvId,
+  hydrateCvDocument,
+  onSelectCv,
+  onOpenCv,
+}: {
+  items: LibraryItem[];
+  currentCvId: string | null;
+  hydrateCvDocument: (id: string) => Promise<CvDocument | null>;
+  onSelectCv: (id: string) => void;
+  onOpenCv: (id: string) => void;
+}): JSX.Element {
+  const [query, setQuery] = React.useState("");
+  const allResultsRef = React.useRef<HTMLDivElement | null>(null);
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredItems = items.filter((item) => {
+    if (item.type !== "cv") return false;
+    return normalizedQuery
+      ? [item.title, item.subtitle]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery)
+      : true;
+  });
+  const recentItems = React.useMemo(() => {
+    const alternatives = filteredItems.filter(
+      (item) => currentCvId !== cvForgeDrawerSourceId(item),
+    );
+    return (alternatives.length >= 2 ? alternatives : filteredItems).slice(
+      0,
+      2,
+    );
+  }, [currentCvId, filteredItems]);
+  const handleShowAll = () => {
+    setQuery("");
+    window.setTimeout(() => {
+      allResultsRef.current?.scrollIntoView({ block: "start" });
+      allResultsRef.current?.focus();
+    }, 0);
+  };
+  const renderItem = (item: LibraryItem, keyPrefix = "") => {
+    const sourceId = cvForgeDrawerSourceId(item);
+    const selected = currentCvId === sourceId;
+    return (
+      <article
+        key={`${keyPrefix}${item.id}`}
+        className="forge-rail-drawer__thumb-item"
+        data-state={selected ? "current" : undefined}
+        role="listitem"
+      >
+        <button
+          type="button"
+          className="forge-template-card forge-rail-drawer__thumb-button"
+          aria-label={`Open CV: ${item.title}`}
+          aria-pressed={selected}
+          onClick={() => onSelectCv(sourceId)}
+        >
+          <CvForgeDrawerPreview
+            item={item}
+            hydrateCvDocument={hydrateCvDocument}
+            badge={selected ? "Current" : null}
+            actionPill="Switch CV"
+          />
+        </button>
+        <button
+          type="button"
+          className="forge-rail-drawer__thumb-menu forge-rail-drawer__thumb-menu--direct"
+          aria-label={`Open full CV: ${item.title}`}
+          data-toolbar-tooltip="Open full CV"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenCv(sourceId);
+          }}
+        >
+          <ArrowSquareOut size={15} aria-hidden="true" />
+        </button>
+      </article>
+    );
+  };
+
+  return (
+    <div className="forge-rail-drawer">
+      <CvForgeDrawerSearch
+        value={query}
+        onChange={setQuery}
+        placeholder="Search CVs"
+        storageKey="twoweeks:forge-drawer:recent-cvforge-cv-searches"
+      />
+      <div className="forge-rail-drawer__grid" role="list">
+        <CvForgeDrawerSectionTitle
+          title="Recently viewed"
+          actionLabel={
+            filteredItems.length > recentItems.length
+              ? "Show all CVs"
+              : undefined
+          }
+          onAction={handleShowAll}
+        />
+        {recentItems.map((item) => renderItem(item, "recent-"))}
+        <CvForgeDrawerSectionTitle
+          title="All results"
+          sectionRef={allResultsRef}
+          focusable
+        />
+        {filteredItems.map((item) => renderItem(item))}
+        {filteredItems.length === 0 ? (
+          <p className="forge-rail-drawer__empty">No CVs found.</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function CvForgeLibraryDrawer({
+  items,
+  currentCvId,
+  hydrateCvDocument,
+  onSelectCv,
+  onOpenItem,
+  onOpenLibraryType,
+}: {
+  items: LibraryItem[];
+  currentCvId: string | null;
+  hydrateCvDocument: (id: string) => Promise<CvDocument | null>;
+  onSelectCv: (id: string) => void;
+  onOpenItem: (item: LibraryItem) => void;
+  onOpenLibraryType: (type: "cvs" | "proposals") => void;
+}): JSX.Element {
+  const [query, setQuery] = React.useState("");
+  const [filter, setFilter] = React.useState<"all" | "cvs" | "proposals">(
+    "cvs",
+  );
+  const allResultsRef = React.useRef<HTMLDivElement | null>(null);
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredItems = items.filter((item) => {
+    if (filter === "cvs" && item.type !== "cv") return false;
+    if (filter === "proposals" && item.type !== "proposal") return false;
+    return normalizedQuery
+      ? [item.title, item.subtitle, item.jobTitle, item.linkedCvTitle]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery)
+      : true;
+  });
+  const recentItems = React.useMemo(() => {
+    const alternatives = filteredItems.filter((item) => {
+      if (item.type !== "cv") return true;
+      const sourceId = item.id.slice(item.id.indexOf(":") + 1);
+      return currentCvId !== sourceId;
+    });
+    return (alternatives.length >= 2 ? alternatives : filteredItems).slice(
+      0,
+      2,
+    );
+  }, [currentCvId, filteredItems]);
+  const renderItem = (item: LibraryItem, keyPrefix = "") => {
+    const sourceId = cvForgeDrawerSourceId(item);
+    const selected = item.type === "cv" && currentCvId === sourceId;
+    return (
+      <article
+        key={`${keyPrefix}${item.id}`}
+        className="forge-rail-drawer__thumb-item"
+        data-state={selected ? "current" : undefined}
+        role="listitem"
+      >
+        <button
+          type="button"
+          className="forge-template-card forge-rail-drawer__thumb-button"
+          aria-label={
+            item.type === "cv"
+              ? `Open CV: ${item.title}`
+              : `Open proposal: ${item.title}`
+          }
+          aria-pressed={item.type === "cv" ? selected : undefined}
+          onClick={() => {
+            if (item.type === "cv") {
+              onSelectCv(sourceId);
+              return;
+            }
+            onOpenItem(item);
+          }}
+        >
+          <CvForgeDrawerPreview
+            item={item}
+            hydrateCvDocument={hydrateCvDocument}
+            badge={selected ? "Current" : null}
+          />
+        </button>
+        <button
+          type="button"
+          className="forge-rail-drawer__thumb-menu forge-rail-drawer__thumb-menu--direct"
+          aria-label={
+            item.type === "cv"
+              ? `Open CV library for ${item.title}`
+              : `Open proposals library for ${item.title}`
+          }
+          data-toolbar-tooltip={
+            item.type === "cv" ? "Open CV library" : "Open proposals"
+          }
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenLibraryType(item.type === "cv" ? "cvs" : "proposals");
+          }}
+        >
+          <ArrowSquareOut size={15} aria-hidden="true" />
+        </button>
+      </article>
+    );
+  };
+
+  return (
+    <div className="forge-rail-drawer">
+      <CvForgeDrawerSearch
+        value={query}
+        onChange={setQuery}
+        placeholder="Search library"
+      />
+      <div
+        className="forge-rail-drawer__tabs"
+        role="tablist"
+        aria-label="Library filter"
+      >
+        {[
+          ["all", "All"],
+          ["cvs", "CVs"],
+          ["proposals", "Proposals"],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={filter === id}
+            data-active={filter === id ? "true" : undefined}
+            onClick={() => {
+              setFilter(id as "all" | "cvs" | "proposals");
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="forge-rail-drawer__grid" role="list">
+        <CvForgeDrawerSectionTitle
+          title="Recently viewed"
+          actionLabel={
+            filteredItems.length <= recentItems.length
+              ? undefined
+              : filter === "cvs"
+                ? "Show all CVs"
+                : filter === "proposals"
+                  ? "Show all proposals"
+                  : "Show all"
+          }
+          onAction={() => {
+            setQuery("");
+            window.setTimeout(() => {
+              allResultsRef.current?.scrollIntoView({ block: "start" });
+              allResultsRef.current?.focus();
+            }, 0);
+          }}
+        />
+        {recentItems.map((item) => renderItem(item, "recent-"))}
+        <CvForgeDrawerSectionTitle
+          title="All results"
+          sectionRef={allResultsRef}
+          focusable
+        />
+        {filteredItems.map((item) => renderItem(item))}
+        {filteredItems.length === 0 ? (
+          <p className="forge-rail-drawer__empty">No documents found.</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /**
  * CvForge — page Resume
  *
@@ -2177,7 +2862,20 @@ export function CvForge(): JSX.Element {
   const location = useLocation();
   const { search } = location;
   const navigate = useNavigate();
-  const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
+  const {
+    activeSurface: activeTemplateSurface,
+    open: templatePanelOpen,
+    openMode: templatePanelOpenMode,
+    openSurface: openTemplateSurface,
+    closePanel: closeForgePanel,
+  } = useForgeTemplatePanel();
+  const [viewportWidth, setViewportWidth] = React.useState(() =>
+    typeof window === "undefined" ? 1440 : window.innerWidth,
+  );
+  const {
+    isAuthenticated: isConvexAuthenticated,
+    isLoading: isConvexAuthLoading,
+  } = useConvexAuth();
   const setJobResume = useMutation(
     ((api as any).jobsPublic?.setResumeForJob ??
       "jobsPublic.setResumeForJob") as any,
@@ -2188,12 +2886,26 @@ export function CvForge(): JSX.Element {
     cvs,
     createNewCv,
     importCv,
+    renameCv,
+    deleteCv,
     saveCurrentCvStyleOnly,
     isLoading: isCvLibraryLoading,
     isLibraryHydrated,
     lastLibraryFetchFailed,
     loadCv,
+    hydrateCvDocument,
   } = useCvLibrary();
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
   const { importFile: importStructuredCvFile } = useStructuredMistralImport({
     probeOnMount: false,
   });
@@ -2216,6 +2928,10 @@ export function CvForge(): JSX.Element {
         verbatiStyle?: VerbatiStylePreset | null;
       }
     | undefined;
+  const cvForgeLibraryProposals = useQuery(
+    (api as any).proposalsPublic?.default ?? "proposalsPublic.default",
+    isConvexAuthenticated ? {} : "skip",
+  ) as LibraryProposalRecord[] | undefined;
   const documentStylePresets = useQuery(
     ((api.proposalSettings as any)?.getPresets ??
       "proposalSettings.getPresets") as any,
@@ -2248,6 +2964,7 @@ export function CvForge(): JSX.Element {
     | undefined;
   const cvImportInputRef = React.useRef<HTMLInputElement | null>(null);
   const consumedCvForgeActionRef = React.useRef<string | null>(null);
+  const cvDocumentStageRef = React.useRef<HTMLDivElement | null>(null);
   const paperStageRef = React.useRef<HTMLDivElement | null>(null);
   const inlinePaperSelectionDebounceRef = React.useRef<number | null>(null);
   const [workspaceMode, setWorkspaceMode] =
@@ -2259,7 +2976,8 @@ export function CvForge(): JSX.Element {
   const [resumeActiveTarget, setResumeActiveTarget] =
     React.useState<ResumeActiveTarget | null>(null);
   const [hiddenSectionIds, setHiddenSectionIds] = React.useState<string[]>([]);
-  const [cvRailTab, setCvRailTab] = React.useState<CvRailTab>("sections");
+  const [cvRailTab, setCvRailTab] = React.useState<CvRailTab>("ai");
+  const [cvComposerOpen, setCvComposerOpen] = React.useState(false);
   const cvTone = mapDefaultVoicePresetToCvTone(
     defaultProposalSettings?.savedVoicePreset ??
       defaultProposalSettings?.voicePreset,
@@ -2268,8 +2986,9 @@ export function CvForge(): JSX.Element {
     React.useState<CvRailAiSuggestion | null>(null);
   const [cvRailAppliedAiEdit, setCvRailAppliedAiEdit] =
     React.useState<CvRailAppliedAiEdit | null>(null);
-  const [paperTextAiSuggestion, setPaperTextAiSuggestion] =
-    React.useState<PaperTextAiSuggestion | null>(null);
+  const [cvAiReview, setCvAiReview] =
+    React.useState<CvContextualAiReview | null>(null);
+  const cvAiReviewRef = React.useRef<CvContextualAiReview | null>(null);
   const [activeSectionId, setActiveSectionId] = React.useState<string | null>(
     null,
   );
@@ -2285,6 +3004,10 @@ export function CvForge(): JSX.Element {
   const latestInlineSectionsRef = React.useRef<CvSection[]>([]);
   const [inlinePaperSelectionState, setInlinePaperSelectionState] =
     React.useState<InlinePaperSelectionState | null>(null);
+  const [cvAiSurfacePosition, setCvAiSurfacePosition] =
+    React.useState<CvAiSurfacePosition | null>(null);
+  const [cvAskSelectionContext, setCvAskSelectionContext] =
+    React.useState<CvAskSelectionContext | null>(null);
   const activeInlinePaperAiRequestIdRef = React.useRef<string | null>(null);
   const [isApplyingInlinePaperAi, setIsApplyingInlinePaperAi] =
     React.useState(false);
@@ -2297,14 +3020,46 @@ export function CvForge(): JSX.Element {
     toggleHidden?: (sectionId: string) => void;
     delete?: (sectionId: string) => void;
   }>({});
+
+  React.useEffect(() => {
+    cvAiReviewRef.current = cvAiReview;
+  }, [cvAiReview]);
+
+  React.useEffect(() => {
+    if (!inlinePaperSelectionState && !cvAiReview) {
+      setCvAiSurfacePosition(null);
+    }
+  }, [cvAiReview, inlinePaperSelectionState]);
+
   const [sectionEditorOpen, setSectionEditorOpen] = React.useState(false);
   const [importReviewOpen, setImportReviewOpen] = React.useState(false);
+  const [atsAuditOpen, setAtsAuditOpen] = React.useState(false);
+  const [cvImportRecoveryDraft, setCvImportRecoveryDraft] =
+    React.useState<CvImportRecoveryDraft | null>(null);
   const [dismissedImportReviewCvIds, setDismissedImportReviewCvIds] =
     React.useState<string[]>([]);
-  const currentSections = React.useMemo<CvSection[]>(
+  const [acceptedImportReviewCvIds, setAcceptedImportReviewCvIds] =
+    React.useState<string[]>([]);
+  const [cvPreviewPageCount, setCvPreviewPageCount] = React.useState<
+    number | null
+  >(null);
+  const rawCurrentSections = React.useMemo<CvSection[]>(
     () => (currentCv?.sections ?? []) as CvSection[],
     [currentCv?.sections],
   );
+  const currentSections = React.useMemo<CvSection[]>(
+    () => normalizeCvSectionOrder(rawCurrentSections),
+    [rawCurrentSections],
+  );
+  React.useEffect(() => {
+    if (!currentCv || currentSections === rawCurrentSections) return;
+    const now = new Date().toISOString();
+    void importCv({
+      ...currentCv,
+      metadata: buildUpdatedCvMetadata(currentCv, now),
+      sections: currentSections,
+    });
+  }, [currentCv, currentSections, importCv, rawCurrentSections]);
   const optimisticSections = React.useMemo<CvSection[]>(() => {
     const pendingSectionId = pendingActiveSection?.id
       ? String(pendingActiveSection.id)
@@ -2352,12 +3107,14 @@ export function CvForge(): JSX.Element {
         ? String(matchedSection.id)
         : null;
       if (
-        workspaceMode === "edit" &&
-        (intent.source === "preview-panel" ||
-          intent.source === "preview-workspace")
+        intent.source === "preview-panel" ||
+        intent.source === "preview-workspace"
       ) {
         if (matchedSectionId) {
           setActiveSectionId(matchedSectionId);
+          setSectionEditorOpen(true);
+          setCvComposerOpen(false);
+          setCvAskSelectionContext(null);
           focusPreviewSection(matchedSectionId);
         }
         setResumeActiveTarget({
@@ -2383,7 +3140,7 @@ export function CvForge(): JSX.Element {
         source: intent.source,
       });
     },
-    [currentSections, workspaceMode],
+    [currentSections],
   );
 
   const handleResumeLinkIntentHandled = React.useCallback(
@@ -2395,7 +3152,9 @@ export function CvForge(): JSX.Element {
     [],
   );
   const activeSettingsCvStylePreset = React.useMemo(() => {
-    const activeSlot = resolveDocumentStyleSlotId(documentStylePresets?.activeSlot);
+    const activeSlot = resolveDocumentStyleSlotId(
+      documentStylePresets?.activeSlot,
+    );
     const source = activeSlot
       ? documentStylePresets?.[`preset${activeSlot}`]
       : null;
@@ -2436,7 +3195,9 @@ export function CvForge(): JSX.Element {
     currentCv,
     persistStyle: saveCurrentCvStyleOnly,
     fallbackStylePreset:
-      activeSettingsCvStylePreset ?? defaultProposalSettings?.verbatiStyle ?? null,
+      activeSettingsCvStylePreset ??
+      defaultProposalSettings?.verbatiStyle ??
+      null,
     debounceMs: 700,
     logPrefix: "[CvForge]",
   });
@@ -2487,20 +3248,39 @@ export function CvForge(): JSX.Element {
       null
     );
   }, [activeSectionId, currentSections, pendingActiveSection]);
-  const importReviewBlocks = React.useMemo(
-    () => buildImportReviewBlocks(currentCv),
+  const importRecoverySession = React.useMemo(
+    () => readImportRecoverySession(currentCv),
     [currentCv],
   );
+  const isImportReviewAccepted = currentCv?.id
+    ? acceptedImportReviewCvIds.includes(String(currentCv.id))
+    : false;
+  const activeImportRecoveryItems = React.useMemo(
+    () =>
+      isImportReviewAccepted
+        ? []
+        : (importRecoverySession?.items ?? []).filter(
+            (item) => item.reviewStatus === "pending",
+          ),
+    [importRecoverySession?.items, isImportReviewAccepted],
+  );
   const importReviewSummary = React.useMemo(() => {
-    if (importReviewBlocks.length === 0) return "";
-    return importReviewBlocks
+    if (activeImportRecoveryItems.length === 0) return "";
+    return activeImportRecoveryItems
       .slice(0, 2)
-      .map((block) => block.title)
+      .map(
+        (item) =>
+          item.sourceSectionTitle ||
+          item.selectedSectionTitle ||
+          item.predictedSection,
+      )
       .join(", ");
-  }, [importReviewBlocks]);
+  }, [activeImportRecoveryItems]);
   const isImportReviewBannerDismissed = currentCv?.id
     ? dismissedImportReviewCvIds.includes(String(currentCv.id))
     : false;
+  const isImportReviewBannerVisible =
+    activeImportRecoveryItems.length > 0 && !isImportReviewBannerDismissed;
   const [exportingFormat, setExportingFormat] = React.useState<string | null>(
     null,
   );
@@ -2538,7 +3318,7 @@ export function CvForge(): JSX.Element {
   React.useEffect(() => {
     setCvRailAiSuggestion(null);
     setCvRailAppliedAiEdit(null);
-    setPaperTextAiSuggestion(null);
+    setCvAiReview(null);
     activeInlinePaperAiRequestIdRef.current = null;
     setIsApplyingInlinePaperAi(false);
     setPendingInlinePaperAiActionId(null);
@@ -2657,9 +3437,11 @@ export function CvForge(): JSX.Element {
     const nextCvId = currentCv?.id ? String(currentCv.id) : null;
     if (!nextCvId) {
       setHiddenSectionIds([]);
+      setCvPreviewPageCount(null);
       return;
     }
 
+    setCvPreviewPageCount(null);
     setHiddenSectionIds(
       sanitizeHiddenSectionIds(
         currentCv?.sections ?? [],
@@ -2780,6 +3562,17 @@ export function CvForge(): JSX.Element {
     [authoritativeResume],
   );
   const hasTrustedExport = authoritativeExportModel !== null;
+  const atsAudit = React.useMemo(
+    () =>
+      currentCv
+        ? evaluateCvAtsAudit({
+            cv: currentCv,
+            pageCount: cvPreviewPageCount,
+            importIssueCount: activeImportRecoveryItems.length,
+          })
+        : null,
+    [currentCv, cvPreviewPageCount, activeImportRecoveryItems.length],
+  );
 
   const handleResumeExport = React.useCallback(
     async (request: ResumeExportRequest) => {
@@ -2910,6 +3703,426 @@ export function CvForge(): JSX.Element {
       stylePreset,
     ],
   );
+  const handleOpenImportReview = React.useCallback(() => {
+    if (importRecoverySession) {
+      setCvImportRecoveryDraft({
+        cycleId: uuidv4(),
+        baseSections: Array.isArray(importRecoverySession.baseSectionsSnapshot)
+          ? importRecoverySession.baseSectionsSnapshot
+          : currentSections,
+        items: importRecoverySession.items.map(normalizeCvRecoveryItemTargets),
+        overflowCount: importRecoverySession.overflowCount,
+        reviewLimit: importRecoverySession.reviewLimit,
+      });
+    }
+    setImportReviewOpen(true);
+  }, [currentSections, importRecoverySession]);
+  const handleImportReviewOpenChange = React.useCallback((open: boolean) => {
+    setImportReviewOpen(open);
+    if (!open) {
+      setCvImportRecoveryDraft(null);
+    }
+  }, []);
+  const updateCvRecoveryItem = React.useCallback(
+    (blockId: string, updates: Partial<ImportRecoveryItem>) => {
+      setCvImportRecoveryDraft((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          items: current.items.map((item) => {
+            if (item.blockId !== blockId) return item;
+            const nextSelectedSection =
+              updates.selectedSection === undefined
+                ? item.selectedSection ?? item.predictedSection
+                : updates.selectedSection;
+            const nextStatus = updates.reviewStatus ?? item.reviewStatus;
+            return {
+              ...item,
+              ...updates,
+              selectedSection: nextSelectedSection,
+              reviewStatus:
+                nextStatus === "reassigned" &&
+                nextSelectedSection === item.predictedSection
+                  ? "pending"
+                  : nextStatus,
+            };
+          }),
+        };
+      });
+    },
+    [],
+  );
+  const handleAcceptRecoveryItem = React.useCallback((blockId: string) => {
+    setCvImportRecoveryDraft((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((item) =>
+          item.blockId === blockId
+            ? {
+                ...item,
+                selectedSection: normalizeRecoverySectionTarget(
+                  item.selectedSection ?? item.predictedSection,
+                ),
+                selectedSectionTitle:
+                  normalizeRecoverySectionTarget(
+                    item.selectedSection ?? item.predictedSection,
+                  ) === "custom"
+                    ? item.selectedSectionTitle ?? null
+                    : null,
+                reviewStatus: getCvRecoveryDecisionStatus(
+                  item,
+                  normalizeRecoverySectionTarget(
+                    item.selectedSection ?? item.predictedSection,
+                  ),
+                  item.selectedSectionTitle ?? null,
+                ),
+              }
+            : item,
+        ),
+      };
+    });
+  }, []);
+  const handleUpdateRecoveryRemainingTarget = React.useCallback(
+    (payload: {
+      blockId: string;
+      targetSection: ImportRecoverySectionType;
+      targetSectionTitle?: string | null;
+    }) => {
+      setCvImportRecoveryDraft((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          items: current.items.map((item) => {
+            if (item.blockId !== payload.blockId) return item;
+            const nextSection = normalizeRecoverySectionTarget(
+              payload.targetSection,
+            );
+            const nextTitle =
+              nextSection === "custom"
+                ? payload.targetSectionTitle?.trim() ?? null
+                : null;
+            const nextStatus =
+              item.reviewStatus === "accepted" ||
+              item.reviewStatus === "reassigned"
+                ? getCvRecoveryDecisionStatus(item, nextSection, nextTitle)
+                : item.reviewStatus;
+
+            return {
+              ...item,
+              selectedSection: nextSection,
+              selectedSectionTitle: nextTitle,
+              reviewStatus: nextStatus,
+            };
+          }),
+        };
+      });
+    },
+    [],
+  );
+  const handleAssignRecoveryFragment = React.useCallback(
+    (payload: {
+      blockId: string;
+      range: { start: number; end: number };
+      text: string;
+      selectionSource: "cleaned" | "raw";
+      targetSection: ImportRecoverySectionType;
+      targetSectionTitle?: string | null;
+    }) => {
+      setCvImportRecoveryDraft((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          items: current.items.map((item) =>
+            item.blockId === payload.blockId
+              ? {
+                  ...item,
+                  fragmentAssignments: [
+                    ...item.fragmentAssignments,
+                    {
+                      fragmentId: uuidv4(),
+                      blockId: item.blockId,
+                      startOffset: payload.range.start,
+                      endOffset: payload.range.end,
+                      selectedText: payload.text,
+                      selectionSource: payload.selectionSource,
+                      targetSection: payload.targetSection,
+                      targetSectionTitle: payload.targetSectionTitle ?? null,
+                      status: "assigned",
+                      createdAt: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : item,
+          ),
+        };
+      });
+    },
+    [],
+  );
+  const handleRemoveRecoveryFragment = React.useCallback(
+    (blockId: string, fragmentId: string) => {
+      setCvImportRecoveryDraft((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          items: current.items.map((item) =>
+            item.blockId === blockId
+              ? {
+                  ...item,
+                  fragmentAssignments: item.fragmentAssignments.filter(
+                    (fragment) => fragment.fragmentId !== fragmentId,
+                  ),
+                }
+              : item,
+          ),
+        };
+      });
+    },
+    [],
+  );
+  const handleApplyReviewedRecoveryImport = React.useCallback(() => {
+    if (!currentCv || !cvImportRecoveryDraft) return;
+    const normalizedItems = cvImportRecoveryDraft.items.map(
+      normalizeCvRecoveryItemTargets,
+    );
+    const { itemsToApply, pendingItems, summary } =
+      buildRecoveryCommitState(normalizedItems);
+    const reviewedSections = applyImportRecoveryItems(
+      cvImportRecoveryDraft.baseSections,
+      itemsToApply,
+    );
+    const touchedSectionIds = collectRecoveryDestinationSectionIds(
+      reviewedSections,
+      itemsToApply,
+    );
+    const revealedSections = buildTouchedSectionRevealState(
+      reviewedSections,
+      touchedSectionIds,
+    );
+    const persistedSession = pendingItems.length
+      ? createCvImportRecoverySession(
+          pendingItems,
+          cvImportRecoveryDraft.reviewLimit,
+        )
+      : createCompletedCvImportRecoverySession(
+          normalizedItems,
+          cvImportRecoveryDraft.reviewLimit,
+          cvImportRecoveryDraft.baseSections,
+        );
+    const now = new Date().toISOString();
+    void importCv({
+      ...currentCv,
+      metadata: {
+        ...buildUpdatedCvMetadata(currentCv, now),
+        importRecoverySession: persistedSession,
+      },
+      sections: revealedSections,
+    });
+    if (!pendingItems.length) {
+      const cvId = String(currentCv.id);
+      setAcceptedImportReviewCvIds((current) =>
+        current.includes(cvId) ? current : [...current, cvId],
+      );
+      setDismissedImportReviewCvIds((current) =>
+        current.includes(cvId) ? current : [...current, cvId],
+      );
+    }
+    showToast(formatRecoveryCommitToast(summary), { variant: "success" });
+    setImportReviewOpen(false);
+    setCvImportRecoveryDraft(null);
+  }, [currentCv, cvImportRecoveryDraft, importCv, showToast]);
+  const handleImportRecoveryAsIs = React.useCallback(() => {
+    if (!currentCv || !cvImportRecoveryDraft) return;
+    const normalizedItems = cvImportRecoveryDraft.items.map(
+      normalizeCvRecoveryItemTargets,
+    );
+    const persistedSession = createCompletedCvImportRecoverySession(
+      normalizedItems,
+      cvImportRecoveryDraft.reviewLimit,
+      cvImportRecoveryDraft.baseSections,
+    );
+    const now = new Date().toISOString();
+    void importCv({
+      ...currentCv,
+      metadata: {
+        ...buildUpdatedCvMetadata(currentCv, now),
+        importRecoverySession: persistedSession,
+      },
+      sections: currentSections,
+    });
+    const cvId = String(currentCv.id);
+    setAcceptedImportReviewCvIds((current) =>
+      current.includes(cvId) ? current : [...current, cvId],
+    );
+    setDismissedImportReviewCvIds((current) =>
+      current.includes(cvId) ? current : [...current, cvId],
+    );
+    setImportReviewOpen(false);
+    setCvImportRecoveryDraft(null);
+  }, [currentCv, currentSections, cvImportRecoveryDraft, importCv]);
+  const handleDiscardImportRecovery = React.useCallback(() => {
+    if (!currentCv) return;
+    const now = new Date().toISOString();
+    const metadata = buildUpdatedCvMetadata(currentCv, now);
+    delete (metadata as { importRecoverySession?: unknown })
+      .importRecoverySession;
+    void importCv({
+      ...currentCv,
+      metadata,
+    });
+    const cvId = String(currentCv.id);
+    setAcceptedImportReviewCvIds((current) =>
+      current.includes(cvId) ? current : [...current, cvId],
+    );
+    setDismissedImportReviewCvIds((current) =>
+      current.includes(cvId) ? current : [...current, cvId],
+    );
+    setImportReviewOpen(false);
+    setCvImportRecoveryDraft(null);
+  }, [currentCv, importCv]);
+  const handleOpenAtsAudit = React.useCallback(() => {
+    setAtsAuditOpen(true);
+  }, []);
+  const handleExportStyledPdf = React.useCallback(() => {
+    void handleResumeExport({ format: "pdf", mode: "styled" });
+  }, [handleResumeExport]);
+  const handleExportDocx = React.useCallback(() => {
+    void handleResumeExport({ format: "docx" });
+  }, [handleResumeExport]);
+  const handleCvPreviewPageCountChange = React.useCallback(
+    (pageCount: number) => {
+      setCvPreviewPageCount((current) =>
+        current === pageCount ? current : pageCount,
+      );
+    },
+    [],
+  );
+  const handleCvTitleCommit = React.useCallback(
+    (nextTitle: string) => {
+      if (!currentCvId || !currentCv) return;
+      const resolvedTitle =
+        nextTitle.trim() ||
+        deriveCvTitleCandidateFromSections(currentCv.sections) ||
+        "Untitled CV";
+      renameCv(currentCvId, resolvedTitle);
+    },
+    [currentCv, currentCvId, renameCv],
+  );
+  const handleDuplicateTopbarCv = React.useCallback(() => {
+    if (!currentCv) {
+      showToast("Open a CV first.", { variant: "warning" });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const nextCvId = uuidv4();
+    const baseTitle =
+      typeof currentCv.title === "string" && currentCv.title.trim()
+        ? currentCv.title.trim()
+        : deriveCvTitleFromSections(currentCv.sections, "Untitled CV");
+    const nextTitle = `Copy of ${baseTitle}`;
+    const copiedCv =
+      typeof structuredClone === "function"
+        ? structuredClone(currentCv)
+        : (JSON.parse(JSON.stringify(currentCv)) as CvDocument);
+
+    void importCv({
+      ...copiedCv,
+      id: nextCvId,
+      title: nextTitle,
+      metadata: {
+        ...cleanCvMetadataForImport(copiedCv.metadata),
+        createdAt: now,
+        updatedAt: now,
+        titleLocked: true,
+      },
+    })
+      .then(() => {
+        loadCv(nextCvId);
+        navigateToSelectedCv(nextCvId);
+        showToast("Duplicated.", { variant: "success" });
+      })
+      .catch(() => {
+        showToast("Duplicate failed.", { variant: "error" });
+      });
+  }, [currentCv, importCv, loadCv, navigateToSelectedCv, showToast]);
+  const handleDeleteTopbarCv = React.useCallback(() => {
+    if (!currentCvId) return;
+    const confirmed = window.confirm("Delete CV?");
+    if (!confirmed) return;
+
+    const nextCv = cvs.find((cv) => String(cv.id) !== String(currentCvId));
+    deleteCv(currentCvId);
+    if (nextCv?.id) {
+      const nextCvId = String(nextCv.id);
+      loadCv(nextCvId);
+      navigateToSelectedCv(nextCvId);
+      return;
+    }
+    void navigate("/cv", { replace: true });
+  }, [currentCvId, cvs, deleteCv, loadCv, navigate, navigateToSelectedCv]);
+  const topbarNewCvRef = React.useRef<() => void>(() => {});
+  const topbarImportCvRef = React.useRef<() => void>(() => {});
+  const handleTopbarNewCv = React.useCallback(() => {
+    topbarNewCvRef.current();
+  }, []);
+  const handleTopbarImportCv = React.useCallback(() => {
+    topbarImportCvRef.current();
+  }, []);
+  const cvTopbarRegistration = React.useMemo(
+    () => ({
+      mode: workspaceMode,
+      hasCurrentCv: Boolean(currentCv),
+      documentTitle: currentCv?.title ?? "Untitled CV",
+      titlePlaceholder: "Untitled CV",
+      onTitleCommit: handleCvTitleCommit,
+      resumeOptions,
+      onPickResume: handlePickResume,
+      onNewCv: handleTopbarNewCv,
+      onImportCv: handleTopbarImportCv,
+      onDuplicateCv: handleDuplicateTopbarCv,
+      onDeleteCv: handleDeleteTopbarCv,
+      hasTrustedExport,
+      atsAudit,
+      importIssueCount: activeImportRecoveryItems.length,
+      importReviewBannerVisible: isImportReviewBannerVisible,
+      exporting: exportingFormat !== null,
+      pageCount: currentCv ? cvPreviewPageCount : null,
+      onOpenAtsAudit: handleOpenAtsAudit,
+      onOpenImportReview: handleOpenImportReview,
+      onExportPdf: handleExportStyledPdf,
+      onExportDocx: handleExportDocx,
+    }),
+    [
+      currentCv,
+      atsAudit,
+      cvPreviewPageCount,
+      exportingFormat,
+      handleCvTitleCommit,
+      handleDeleteTopbarCv,
+      handleDuplicateTopbarCv,
+      handleExportDocx,
+      handleOpenAtsAudit,
+      handleExportStyledPdf,
+      handlePickResume,
+      handleTopbarImportCv,
+      handleTopbarNewCv,
+      handleOpenImportReview,
+      hasTrustedExport,
+      activeImportRecoveryItems.length,
+      isImportReviewBannerVisible,
+      resumeOptions,
+      workspaceMode,
+    ],
+  );
+  useRegisterCvForgeTopbar(cvTopbarRegistration);
+  const cvRecoveryOutcomeSummary = React.useMemo(() => {
+    if (!cvImportRecoveryDraft) return null;
+    return buildRecoveryCommitState(
+      cvImportRecoveryDraft.items.map(normalizeCvRecoveryItemTargets),
+    ).summary;
+  }, [cvImportRecoveryDraft]);
 
   const cvWorkbenchShellStyle = {
     width: "100%",
@@ -2918,8 +4131,57 @@ export function CvForge(): JSX.Element {
     "--cv-paper-visual-inline-size": `min(100%, ${CV_PAPER_VISUAL_INLINE_SIZE})`,
     "--cv-workspace-stage-inline-size": "var(--cv-paper-visual-inline-size)",
   } as React.CSSProperties;
+  const activeWorkspacePanel = templatePanelOpen
+    ? getCvWorkspacePanel(activeTemplateSurface)
+    : null;
+  const isWideEnoughForDockedPanel =
+    viewportWidth >= CV_WORKSPACE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH;
+  const isWorkspacePanelDocked =
+    activeWorkspacePanel !== null && isWideEnoughForDockedPanel;
+  const isForgeDrawerDockedDesktop =
+    templatePanelOpen &&
+    templatePanelOpenMode === "docked" &&
+    isWorkspacePanelDocked;
+  const shouldAutoCollapseCvRailForDockedDrawer =
+    isForgeDrawerDockedDesktop && viewportWidth < 1760;
+  React.useEffect(() => {
+    if (!activeTemplateSurface || activeWorkspacePanel === null) return;
+    if (templatePanelOpenMode === "peek") return;
+    const nextMode = isWideEnoughForDockedPanel ? "docked" : "overlay";
+    if (templatePanelOpenMode === nextMode) return;
+    openTemplateSurface(activeTemplateSurface, { mode: nextMode });
+  }, [
+    activeTemplateSurface,
+    activeWorkspacePanel,
+    isWideEnoughForDockedPanel,
+    openTemplateSurface,
+    templatePanelOpenMode,
+  ]);
   const showJobBriefContext = Boolean(requestedJobId);
   const isEntryPickerBusy = isCreatingEntryCv || isImportingEntryCv;
+  const {
+    style: cvCommandLayerStyle,
+    toolbarMode: cvCommandToolbarMode,
+    modeControlMode: cvCommandModeControlMode,
+    askMode: cvCommandAskMode,
+    commandLayerSticky: cvCommandLayerSticky,
+    commandLayerMeasured: cvCommandLayerMeasured,
+  } = useDocumentCommandLayerPosition({
+    stageRef: cvDocumentStageRef,
+    paperRef: paperStageRef,
+    paperAnchorSelector: CV_PAPER_ANCHOR_SELECTOR,
+    commandCanvasSelector: CV_COMMAND_LAYER_CANVAS_SELECTOR,
+    cssVarPrefix: "proposal",
+    toolbarSelector: "[data-testid='cv-toolbar']",
+    toolbarNaturalWidth: CV_COMMAND_LAYER_TOOLBAR_NATURAL_WIDTH,
+    toolbarMinWidth: CV_COMMAND_LAYER_TOOLBAR_MIN_WIDTH,
+    toolbarHeight: CV_COMMAND_LAYER_TOOLBAR_HEIGHT,
+    askHandle: CV_COMMAND_LAYER_ASK_HANDLE,
+    safeMargin: CV_COMMAND_LAYER_SAFE_MARGIN,
+    gap: CV_COMMAND_LAYER_GAP,
+    askOffsetFromPaperTop: CV_ASK_OFFSET_FROM_PAPER_TOP,
+    refreshKey: `${workspaceMode}:${isForgeDrawerDockedDesktop}:${shouldAutoCollapseCvRailForDockedDrawer}`,
+  });
 
   const handleClearJobContext = React.useCallback(() => {
     const nextParams = new URLSearchParams(search);
@@ -2940,6 +4202,8 @@ export function CvForge(): JSX.Element {
       focusPreviewSection(sectionId);
       if (options?.openEditor) {
         setSectionEditorOpen(true);
+        setCvComposerOpen(false);
+        setCvAskSelectionContext(null);
       }
     },
     [currentSections],
@@ -2948,15 +4212,40 @@ export function CvForge(): JSX.Element {
   const handleAskAiForSection = React.useCallback(
     (sectionId: string) => {
       setInlineEditTarget(null);
+      setCvAskSelectionContext(null);
       const section = findSectionById(currentSections, sectionId);
       setCvRailAiSuggestion(null);
       setActiveSectionId(sectionId);
       setResumeActiveTarget(getSectionTarget(section));
       focusPreviewSection(sectionId);
       setCvRailTab("ai");
+      setCvComposerOpen(true);
     },
     [currentSections],
   );
+
+  const handleOpenCvAsk = React.useCallback(() => {
+    const section =
+      (activeSectionId
+        ? findSectionById(currentSections, activeSectionId)
+        : null) ??
+      activeSection;
+    if (!section) return;
+
+    const sectionIndex = currentSections.indexOf(section);
+    const sectionId =
+      activeSectionId && findSectionById(currentSections, activeSectionId)
+        ? activeSectionId
+        : getCvSectionId(section, sectionIndex >= 0 ? sectionIndex : 0);
+
+    setInlineEditTarget(null);
+    setCvAskSelectionContext(null);
+    setActiveSectionId(sectionId);
+    setResumeActiveTarget(getSectionTarget(section));
+    focusPreviewSection(sectionId);
+    setSectionEditorOpen(true);
+    setCvComposerOpen(false);
+  }, [activeSection, activeSectionId, currentSections]);
 
   const handleSectionChange = React.useCallback(
     (nextSection: CvSection) => {
@@ -3091,6 +4380,9 @@ export function CvForge(): JSX.Element {
           : currentSections;
       const section = findSectionById(baseSections, target.sectionId);
       if (!section) return;
+      if (readInlineFieldCanonicalText(section, target) === nextText) {
+        return;
+      }
 
       let nextSection: CvSection | null = null;
       if (target.fieldPath === "structuredContent.0.summary") {
@@ -3695,17 +4987,17 @@ export function CvForge(): JSX.Element {
     const selectionState = getDomSelectionState(root);
     const selection =
       typeof window !== "undefined" ? window.getSelection() : null;
-    const focusElement =
-      selection?.focusNode instanceof Element
-        ? selection.focusNode
-        : selection?.focusNode?.parentElement;
-    const editableElement = focusElement?.closest(
-      '[data-inline-paper-editable="true"]',
+    const editableElement = findInlinePaperEditableForSelection(
+      root,
+      selection,
     );
     const editTarget = readInlinePaperEditTarget(editableElement);
 
     if (!selectionState || !editTarget) {
       if (isInlineAiToolbarActiveElement()) {
+        return;
+      }
+      if (cvAiReviewRef.current && cvAiReviewRef.current.state !== "accepted") {
         return;
       }
       setInlinePaperSelectionState(null);
@@ -3741,6 +5033,27 @@ export function CvForge(): JSX.Element {
     [runInlinePaperSelectionCheck],
   );
 
+  const refreshInlinePaperSelectionAnchor = React.useCallback(() => {
+    if (workspaceMode !== "edit") return;
+
+    const root = paperStageRef.current;
+    setInlinePaperSelectionState((current) => {
+      if (!current?.range) return current;
+
+      const refreshedState = getDomRangeSelectionState(
+        root,
+        current.range,
+        current.text,
+      );
+      if (!refreshedState) return current;
+
+      return {
+        ...current,
+        anchor: refreshedState.anchor,
+      };
+    });
+  }, [workspaceMode]);
+
   React.useEffect(() => {
     if (workspaceMode !== "edit") {
       setInlinePaperSelectionState(null);
@@ -3749,14 +5062,33 @@ export function CvForge(): JSX.Element {
 
     const handleSelectionChange = () => scheduleInlinePaperSelectionCheck();
     const handlePointerUp = () => scheduleInlinePaperSelectionCheck();
+    let scrollFrame: number | null = null;
+    const handleScroll = () => {
+      if (scrollFrame !== null) {
+        window.cancelAnimationFrame(scrollFrame);
+      }
+      scrollFrame = window.requestAnimationFrame(() => {
+        scrollFrame = null;
+        refreshInlinePaperSelectionAnchor();
+      });
+    };
 
     document.addEventListener("selectionchange", handleSelectionChange);
     document.addEventListener("pointerup", handlePointerUp);
+    document.addEventListener("scroll", handleScroll, true);
     return () => {
+      if (scrollFrame !== null) {
+        window.cancelAnimationFrame(scrollFrame);
+      }
       document.removeEventListener("selectionchange", handleSelectionChange);
       document.removeEventListener("pointerup", handlePointerUp);
+      document.removeEventListener("scroll", handleScroll, true);
     };
-  }, [scheduleInlinePaperSelectionCheck, workspaceMode]);
+  }, [
+    refreshInlinePaperSelectionAnchor,
+    scheduleInlinePaperSelectionCheck,
+    workspaceMode,
+  ]);
 
   React.useEffect(() => {
     if (workspaceMode !== "edit" || !inlinePaperSelectionState) {
@@ -3893,27 +5225,88 @@ export function CvForge(): JSX.Element {
     [currentSections, persistSections, showToast],
   );
 
-  const handleRunInlinePaperAiAction = React.useCallback(
-    async (actionId: InlineAiActionId, instruction: string) => {
-      if (!inlinePaperSelectionState) return;
+  const runInlinePaperAiForSelectionContext = React.useCallback(
+    async (
+      context: CvAskSelectionContext,
+      actionId: InlineAiActionId,
+      instruction: string,
+    ) => {
       const escape = (value: string) =>
         typeof CSS !== "undefined" && typeof CSS.escape === "function"
           ? CSS.escape(value)
           : value.replace(/"/g, '\\"');
       const editableElement = document.querySelector<HTMLElement>(
         `[data-inline-paper-editable="true"][data-paper-section-id="${escape(
-          inlinePaperSelectionState.editTarget.sectionId,
-        )}"][data-paper-field-path="${escape(
-          inlinePaperSelectionState.editTarget.fieldPath,
-        )}"]`,
+          context.editTarget.sectionId,
+        )}"][data-paper-field-path="${escape(context.editTarget.fieldPath)}"]`,
       );
       if (!editableElement) return;
 
       const interactionId = createAiInteractionId();
       const requestId = interactionId;
-      const target = inlinePaperSelectionState.editTarget;
-      const section = findSectionById(currentSections, target.sectionId);
+      const target = context.editTarget;
+      flushPendingInlineFieldChange();
+      const baseSections =
+        latestInlineSectionsRef.current.length > 0
+          ? latestInlineSectionsRef.current
+          : currentSections;
+      const section = findSectionById(baseSections, target.sectionId);
       const sectionLabel = section?.title || "Section";
+      const itemId = target.fieldPath.match(/^structuredContent\.item:([^.]*)\./)?.[1];
+      const item = section && itemId ? getStructuredItemById(section, itemId) : undefined;
+      const itemLabel =
+        item && typeof item === "object"
+          ? String(
+              item.position ??
+                item.role ??
+                item.title ??
+                item.company ??
+                "Item",
+            )
+          : undefined;
+
+      if (!isConvexAuthenticated) {
+        const errorMessage = isConvexAuthLoading
+          ? "AI is still connecting. Try again."
+          : "Sign in to use AI writing.";
+        setActiveSectionId(target.sectionId);
+        setResumeActiveTarget(getSectionTarget(section));
+        setCvRailAiSuggestion(null);
+        setCvAiReview({
+          key: interactionId,
+          target: {
+            sectionId: target.sectionId,
+            sectionType: target.sectionType,
+            sectionLabel,
+            itemId,
+            itemLabel,
+            fieldPath: target.fieldPath,
+            fieldKind: target.fieldKind,
+            selectedText: context.selectedText,
+          },
+          anchor: context.anchor,
+          beforeText: context.selectedText,
+          afterText: "",
+          state: "error",
+          errorMessage,
+          actionId,
+          primaryActionLabel:
+            target.sectionType === "experience"
+              ? "Replace responsibilities"
+              : "Replace",
+          interactionId,
+        });
+        showToast(errorMessage, { variant: "warning" });
+        recordAiInteractionEvent({
+          name: "ai_failed",
+          interactionId,
+          surface: "section_editor",
+          actionId,
+          errorKind: "request_failed",
+        });
+        return;
+      }
+
       activeInlinePaperAiRequestIdRef.current = requestId;
       recordAiInteractionEvent({
         name: "ai_started",
@@ -3928,25 +5321,37 @@ export function CvForge(): JSX.Element {
         setCvRailAppliedAiEdit(null);
         setActiveSectionId(target.sectionId);
         setResumeActiveTarget(getSectionTarget(section));
-        setCvRailTab("ai");
-        setCvRailAiSuggestion({
-          sectionId: target.sectionId,
-          sectionLabel,
-          beforeText: inlinePaperSelectionState.text,
+        setCvRailAiSuggestion(null);
+        setCvAiReview({
+          key: interactionId,
+          target: {
+            sectionId: target.sectionId,
+            sectionType: target.sectionType,
+            sectionLabel,
+            itemId,
+            itemLabel,
+            fieldPath: target.fieldPath,
+            fieldKind: target.fieldKind,
+            selectedText: context.selectedText,
+          },
+          anchor: context.anchor,
+          beforeText: context.selectedText,
           afterText: "",
           state: "loading",
+          actionId,
+          primaryActionLabel:
+            target.sectionType === "experience"
+              ? "Replace responsibilities"
+              : "Replace",
           interactionId,
-          inlineTarget: {
-            editTarget: target,
-            selectedText: inlinePaperSelectionState.text,
-            actionId,
-          },
         });
-        const result = await transformEditorSelectionAction({
-          mode: actionId,
-          instruction,
-          selectedText: inlinePaperSelectionState.text,
-        });
+        const result = await withCvInlinePaperAiTimeout(
+          transformEditorSelectionAction({
+            mode: actionId,
+            instruction,
+            selectedText: context.selectedText,
+          }),
+        );
         const normalizedResult = normalizeEditorAiTextResult(result, actionId);
         if (!normalizedResult) {
           if (activeInlinePaperAiRequestIdRef.current !== requestId) {
@@ -3959,7 +5364,7 @@ export function CvForge(): JSX.Element {
             actionId,
             errorKind: "empty_result",
           });
-          setCvRailAiSuggestion((current) =>
+          setCvAiReview((current) =>
             current?.interactionId === interactionId
               ? {
                   ...current,
@@ -3983,21 +5388,31 @@ export function CvForge(): JSX.Element {
         ) {
           pendingInlineFieldChangeRef.current = null;
         }
-        setCvRailAiSuggestion({
-          sectionId: target.sectionId,
-          sectionLabel,
-          beforeText: inlinePaperSelectionState.text,
+        setCvAiReview({
+          key: interactionId,
+          target: {
+            sectionId: target.sectionId,
+            sectionType: target.sectionType,
+            sectionLabel,
+            itemId,
+            itemLabel,
+            fieldPath: target.fieldPath,
+            fieldKind: target.fieldKind,
+            selectedText: context.selectedText,
+          },
+          anchor: context.anchor,
+          beforeText: context.selectedText,
           afterText: normalizedResult.text,
           state: "ready",
+          actionId: normalizedResult.actionId,
+          primaryActionLabel:
+            target.sectionType === "experience"
+              ? "Replace responsibilities"
+              : "Replace",
           interactionId,
-          inlineTarget: {
-            editTarget: target,
-            selectedText: inlinePaperSelectionState.text,
-            actionId: normalizedResult.actionId,
-          },
         });
         focusPreviewSection(target.sectionId);
-        setInlinePaperSelectionState(null);
+        setCvAskSelectionContext(null);
         activeInlinePaperAiRequestIdRef.current = null;
         recordAiInteractionEvent({
           name: "ai_completed",
@@ -4018,7 +5433,7 @@ export function CvForge(): JSX.Element {
           actionId,
           errorKind: "request_failed",
         });
-        setCvRailAiSuggestion((current) =>
+        setCvAiReview((current) =>
           current?.interactionId === interactionId
             ? {
                 ...current,
@@ -4031,7 +5446,6 @@ export function CvForge(): JSX.Element {
               }
             : current,
         );
-        throw error;
       } finally {
         if (activeInlinePaperAiRequestIdRef.current === requestId) {
           activeInlinePaperAiRequestIdRef.current = null;
@@ -4045,9 +5459,40 @@ export function CvForge(): JSX.Element {
     },
     [
       currentSections,
-      inlinePaperSelectionState,
+      flushPendingInlineFieldChange,
+      isConvexAuthenticated,
+      isConvexAuthLoading,
+      showToast,
       transformEditorSelectionAction,
     ],
+  );
+
+  const handleRunInlinePaperAiAction = React.useCallback(
+    async (actionId: InlineAiActionId, instruction: string) => {
+      if (!inlinePaperSelectionState) return;
+      await runInlinePaperAiForSelectionContext(
+        {
+          selectedText: inlinePaperSelectionState.text,
+          editTarget: inlinePaperSelectionState.editTarget,
+          anchor: inlinePaperSelectionState.anchor,
+        },
+        actionId,
+        instruction,
+      );
+    },
+    [inlinePaperSelectionState, runInlinePaperAiForSelectionContext],
+  );
+
+  const handleRunCvAskForSelection = React.useCallback(
+    async (args: { prompt: string; actionId: InlineAiActionId }) => {
+      if (!cvAskSelectionContext) return;
+      await runInlinePaperAiForSelectionContext(
+        cvAskSelectionContext,
+        args.actionId,
+        args.prompt,
+      );
+    },
+    [cvAskSelectionContext, runInlinePaperAiForSelectionContext],
   );
 
   const handleAddSection = React.useCallback(
@@ -4058,10 +5503,14 @@ export function CvForge(): JSX.Element {
       }
       const nextSection = makeDraftSection(sectionKind);
       const now = new Date().toISOString();
+      const nextSections = insertSectionByCanonicalOrder(
+        currentSections,
+        nextSection,
+      );
       void importCv({
         ...currentCv,
         metadata: buildUpdatedCvMetadata(currentCv, now),
-        sections: [...currentSections, nextSection],
+        sections: normalizeCvSectionOrder(nextSections),
       });
       const nextSectionId = String(nextSection.id);
       const nextEditTarget = getInitialEditTargetForSection(nextSection);
@@ -4177,16 +5626,17 @@ export function CvForge(): JSX.Element {
         (section, index) => getCvSectionId(section, index) === overId,
       );
       if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+      if (
+        isSectionReorderLocked(currentSections[fromIndex]) ||
+        isSectionReorderLocked(currentSections[toIndex])
+      ) {
+        return;
+      }
 
       const nextSections = [...currentSections];
       const [movedSection] = nextSections.splice(fromIndex, 1);
       nextSections.splice(toIndex, 0, movedSection);
-      persistSections(
-        nextSections.map((section, order) => ({
-          ...section,
-          order,
-        })),
-      );
+      persistSections(normalizeCvSectionOrder(nextSections));
       setActiveSectionId(activeId);
       focusPreviewSection(activeId);
     },
@@ -4256,8 +5706,9 @@ export function CvForge(): JSX.Element {
         (sourceStyle?.palette as VerbatiStylePreset["palette"] | undefined) ??
         factorySlot.appearance.palette;
       const accentHex =
-        (typeof source?.accentHex === "string" ? source.accentHex : undefined) ??
-        (sourceStyle?.accentHex as string | undefined);
+        (typeof source?.accentHex === "string"
+          ? source.accentHex
+          : undefined) ?? (sourceStyle?.accentHex as string | undefined);
       const resumeTemplateId =
         sourceStyle?.resumeTemplateId ?? factorySlot.defaultCvTemplateId;
 
@@ -4306,11 +5757,7 @@ export function CvForge(): JSX.Element {
     }
 
     return !stylesEqual(stylePreset, cvStyleSlotPresets[selectedStyleSlot]);
-  }, [
-    cvStyleSlotPresets,
-    selectedStyleSlot,
-    stylePreset,
-  ]);
+  }, [cvStyleSlotPresets, selectedStyleSlot, stylePreset]);
 
   const getCvStyleSlotName = React.useCallback(
     (slot: 1 | 2 | 3, source: "factory" | "settings") => {
@@ -4426,6 +5873,185 @@ export function CvForge(): JSX.Element {
     },
     [setStylePreset],
   );
+  const cvTemplatePanelItems = React.useMemo(
+    () => [
+      {
+        id: "workshop-onecol",
+        label: "Minimal",
+        preview: {
+          kind: "Resume" as const,
+          family: "workshop-onecol" as const,
+        },
+      },
+      {
+        id: "workshop-twocol",
+        label: "French",
+        preview: {
+          kind: "Resume" as const,
+          family: "workshop-twocol" as const,
+        },
+      },
+    ],
+    [],
+  );
+  const activeCvTemplatePanelItemId =
+    stylePreset.layout === "workshop" &&
+    stylePreset.resumeTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+      ? "workshop-twocol"
+      : "workshop-onecol";
+  const cvTemplatePanelRegistration = React.useMemo(
+    () => ({
+      surface: "cv" as const,
+      title: "CV templates",
+      subtitle: "A4 · 21 × 29.7 cm",
+      activeItemId: activeCvTemplatePanelItemId,
+      items: cvTemplatePanelItems,
+      onSelect: (itemId: string) => {
+        if (itemId === "workshop-onecol" || itemId === "workshop-twocol") {
+          handleSelectTemplate(itemId);
+        }
+      },
+    }),
+    [activeCvTemplatePanelItemId, cvTemplatePanelItems, handleSelectTemplate],
+  );
+  useRegisterForgeTemplates(cvTemplatePanelRegistration);
+  const cvLibraryDrawerItems = React.useMemo(
+    () =>
+      buildWorkLibraryModel({
+        cvs,
+        currentCvId,
+        proposals: cvForgeLibraryProposals,
+      }).items,
+    [currentCvId, cvForgeLibraryProposals, cvs],
+  );
+  const handleSelectCvFromLibraryDrawer = React.useCallback(
+    (cvId: string) => {
+      loadCv(cvId);
+      closeForgePanel();
+    },
+    [closeForgePanel, loadCv],
+  );
+  const handleOpenCvFromLibraryDrawer = React.useCallback(
+    (cvId: string) => {
+      closeForgePanel();
+      void navigate(`/cv?id=${encodeURIComponent(cvId)}`);
+    },
+    [closeForgePanel, navigate],
+  );
+  const handleOpenCvLibraryItemFromDrawer = React.useCallback(
+    (item: LibraryItem) => {
+      closeForgePanel();
+      if (item.routeTarget.kind === "route") {
+        void navigate(item.routeTarget.to);
+      }
+    },
+    [closeForgePanel, navigate],
+  );
+  const handleOpenCvLibraryTypeFromDrawer = React.useCallback(
+    (type: "cvs" | "proposals") => {
+      closeForgePanel();
+      void navigate(`/documents?type=${type}`);
+    },
+    [closeForgePanel, navigate],
+  );
+  const cvOnlyPanelRegistration = React.useMemo(
+    () => ({
+      surface: "cvs" as const,
+      title: "CV library",
+      icon: <FileUser size={16} aria-hidden="true" />,
+      renderContent: () => (
+        <CvForgeCvDrawer
+          items={cvLibraryDrawerItems}
+          currentCvId={currentCvId}
+          hydrateCvDocument={hydrateCvDocument}
+          onSelectCv={handleSelectCvFromLibraryDrawer}
+          onOpenCv={handleOpenCvFromLibraryDrawer}
+        />
+      ),
+      footer: {
+        label: "Open Library",
+        icon: <FolderSimple size={13} aria-hidden="true" />,
+        onSelect: () => navigate("/documents?type=cvs"),
+      },
+    }),
+    [
+      currentCvId,
+      cvLibraryDrawerItems,
+      handleOpenCvFromLibraryDrawer,
+      handleSelectCvFromLibraryDrawer,
+      hydrateCvDocument,
+      navigate,
+    ],
+  );
+  useRegisterForgePanel(cvOnlyPanelRegistration);
+  const cvLibraryPanelRegistration = React.useMemo(
+    () => ({
+      surface: "documents" as const,
+      title: "Library",
+      icon: <FileUser size={16} aria-hidden="true" />,
+      renderContent: () => (
+        <CvForgeLibraryDrawer
+          items={cvLibraryDrawerItems}
+          currentCvId={currentCvId}
+          hydrateCvDocument={hydrateCvDocument}
+          onSelectCv={handleSelectCvFromLibraryDrawer}
+          onOpenItem={handleOpenCvLibraryItemFromDrawer}
+          onOpenLibraryType={handleOpenCvLibraryTypeFromDrawer}
+        />
+      ),
+      footer: {
+        label: "Open Library",
+        icon: <FolderSimple size={13} aria-hidden="true" />,
+        onSelect: () => navigate("/documents?type=cvs"),
+      },
+    }),
+    [
+      currentCvId,
+      cvLibraryDrawerItems,
+      handleOpenCvLibraryTypeFromDrawer,
+      handleOpenCvLibraryItemFromDrawer,
+      handleSelectCvFromLibraryDrawer,
+      hydrateCvDocument,
+      navigate,
+    ],
+  );
+  useRegisterForgePanel(cvLibraryPanelRegistration);
+  const cvTemplatesOpen = templatePanelOpen && activeTemplateSurface === "cv";
+  const cvDesignOpen =
+    templatePanelOpen && activeTemplateSurface === "cv-design";
+  const sectionsPanelOpen =
+    templatePanelOpen && activeTemplateSurface === "cv-sections";
+  const openCvWorkspacePanel = React.useCallback(
+    (surface: "cv" | "cv-design" | "cv-sections") => {
+      openTemplateSurface(surface, {
+        mode: isWideEnoughForDockedPanel ? "docked" : "overlay",
+      });
+    },
+    [isWideEnoughForDockedPanel, openTemplateSurface],
+  );
+  const handleOpenCvTemplates = React.useCallback(() => {
+    if (cvTemplatesOpen) {
+      closeForgePanel();
+      return;
+    }
+    openCvWorkspacePanel("cv");
+  }, [closeForgePanel, cvTemplatesOpen, openCvWorkspacePanel]);
+
+  const handleOpenCvSections = React.useCallback(() => {
+    if (sectionsPanelOpen) {
+      closeForgePanel();
+      return;
+    }
+    openCvWorkspacePanel("cv-sections");
+  }, [closeForgePanel, openCvWorkspacePanel, sectionsPanelOpen]);
+
+  const handleOpenCvDesign = React.useCallback(() => {
+    if (cvDesignOpen) {
+      closeForgePanel();
+      return;
+    }
+    openCvWorkspacePanel("cv-design");
+  }, [closeForgePanel, cvDesignOpen, openCvWorkspacePanel]);
 
   const handleSelectFontPair = React.useCallback(
     (fontPairId: VerbatiFontPairId) => {
@@ -4464,6 +6090,39 @@ export function CvForge(): JSX.Element {
     [setStylePreset],
   );
 
+  const cvDesignPanelRegistration = React.useMemo(
+    () => ({
+      surface: "cv-design" as const,
+      title: "Design",
+      ariaLabel: "CV design",
+      renderContent: () => (
+        <CvDesignFields
+          stylePreset={stylePreset}
+          selectedStyleSlot={selectedStyleSlot}
+          selectedStyleSlotIsCustom={selectedStyleSlotIsCustom}
+          onSelectStyleSlot={handleSelectStyleSlot}
+          onResetStyleSlot={handleResetStyleSlot}
+          onSelectTemplate={handleSelectTemplate}
+          onSelectFontPair={handleSelectFontPair}
+          onSelectAccent={handleSelectAccent}
+          onSelectCustomAccent={handleSelectCustomAccent}
+        />
+      ),
+    }),
+    [
+      handleResetStyleSlot,
+      handleSelectAccent,
+      handleSelectCustomAccent,
+      handleSelectFontPair,
+      handleSelectStyleSlot,
+      handleSelectTemplate,
+      selectedStyleSlot,
+      selectedStyleSlotIsCustom,
+      stylePreset,
+    ],
+  );
+  useRegisterForgePanel(cvDesignPanelRegistration);
+
   const handleRunAskAiForSection = React.useCallback(
     async ({
       sectionId,
@@ -4481,12 +6140,11 @@ export function CvForge(): JSX.Element {
       );
 
       const sectionLabel = section.title || "Section";
-      const isHobbiesSection =
-        String(section.type) === "hobbies" ||
-        section.title.trim().toLowerCase() === "hobbies";
+      const canonicalSectionType = getCanonicalSectionType(section);
+      const isHobbiesSection = canonicalSectionType === "hobbies";
       if (
-        section.type === "skills" ||
-        section.type === "languages" ||
+        canonicalSectionType === "skills" ||
+        canonicalSectionType === "languages" ||
         isHobbiesSection
       ) {
         const existingItems = getListSectionItems(section);
@@ -4514,7 +6172,7 @@ export function CvForge(): JSX.Element {
         try {
           let suggestions: string[] = [];
 
-          if (section.type === "skills") {
+          if (canonicalSectionType === "skills") {
             if (typeof runCvSectionAiAction !== "function") {
               throw new Error("CV AI action is unavailable.");
             }
@@ -4531,7 +6189,7 @@ export function CvForge(): JSX.Element {
               result?.kind === "list" && Array.isArray(result.items)
                 ? result.items.map((item: unknown) => String(item ?? ""))
                 : [];
-          } else if (section.type === "languages") {
+          } else if (canonicalSectionType === "languages") {
             if (typeof runCvSectionAiAction !== "function") {
               throw new Error("CV AI action is unavailable.");
             }
@@ -4614,9 +6272,15 @@ export function CvForge(): JSX.Element {
         return;
       }
 
-      if (section.type !== "summary" && section.type !== "text") {
-        setSectionEditorOpen(true);
-        showToast("Use the item editor for this section.", { variant: "info" });
+      if (section.type === "profile" || section.type === "contact") {
+        showToast("Ask is unavailable for this section.", { variant: "info" });
+        return;
+      }
+
+      if (!shouldRenderPaperSectionAiControl(String(section.type))) {
+        showToast("Use an item-level AI action for this section.", {
+          variant: "info",
+        });
         return;
       }
 
@@ -4781,33 +6445,256 @@ export function CvForge(): JSX.Element {
     [currentCv, currentSections, runCvSectionAiAction, showToast],
   );
 
+  const cvSectionsPanelRegistration = React.useMemo(
+    () => ({
+      surface: "cv-sections" as const,
+      title: "Sections",
+      ariaLabel: "CV sections",
+      renderContent: () => (
+        <div className="dasti-cv-sections-drawer">
+          <CvSectionsOrganizer
+            sections={currentSections}
+            hiddenSectionIds={hiddenSectionIds}
+            activeSectionId={activeSectionId}
+            selectedTone={cvTone}
+            onSelectSection={handleSelectSection}
+            onToggleHiddenSection={handleToggleHiddenSection}
+            onDeleteSection={handleDeleteSection}
+            onReorderSections={handleReorderSections}
+            onMoveSection={handleMoveSection}
+            onAskAiForSection={handleAskAiForSection}
+            onRunAskAiForSection={handleRunAskAiForSection}
+            onAddSection={handleAddSection}
+          />
+        </div>
+      ),
+    }),
+    [
+      activeSectionId,
+      currentSections,
+      cvTone,
+      handleAddSection,
+      handleAskAiForSection,
+      handleDeleteSection,
+      handleMoveSection,
+      handleReorderSections,
+      handleRunAskAiForSection,
+      handleSelectSection,
+      handleToggleHiddenSection,
+      hiddenSectionIds,
+    ],
+  );
+  useRegisterForgePanel(cvSectionsPanelRegistration);
+
+  const buildPaperSectionAiAnchor = React.useCallback(
+    (sectionId: string): EditorSelectionAnchor | null => {
+      if (typeof document === "undefined") return null;
+      const escape = (value: string) =>
+        typeof CSS !== "undefined" && typeof CSS.escape === "function"
+          ? CSS.escape(value)
+          : value.replace(/"/g, '\\"');
+      const targetElement = document.querySelector<HTMLElement>(
+        `[data-preview-section-id="${escape(sectionId)}"]`,
+      );
+      const targetRect = targetElement?.getBoundingClientRect();
+      const stageRect = paperStageRef.current?.getBoundingClientRect();
+      if (!targetRect) return null;
+
+      return {
+        left: targetRect.left + window.scrollX + targetRect.width / 2,
+        top: targetRect.top + window.scrollY,
+        bottom: targetRect.bottom + window.scrollY,
+        leftEdge: targetRect.left + window.scrollX,
+        rightEdge: targetRect.right + window.scrollX,
+        width: targetRect.width,
+        height: targetRect.height,
+        containerLeft: stageRect ? stageRect.left + window.scrollX : undefined,
+        containerRight: stageRect ? stageRect.right + window.scrollX : undefined,
+        containerTop: stageRect ? stageRect.top + window.scrollY : undefined,
+        containerBottom: stageRect
+          ? stageRect.bottom + window.scrollY
+          : undefined,
+      };
+    },
+    [],
+  );
+
+  const runPaperTextSectionAiReview = React.useCallback(
+    async (section: CvSection, sectionId: string) => {
+      const target = getInitialEditTargetForSection(section);
+      if (!target || target.fieldKind === "chip") return false;
+
+      flushPendingInlineFieldChange();
+      setCvRailAiSuggestion(null);
+      setCvRailAppliedAiEdit(null);
+      setCvAskSelectionContext(null);
+      setCvComposerOpen(false);
+      setActiveSectionId(sectionId);
+      setResumeActiveTarget(getSectionTarget(section));
+      focusPreviewSection(sectionId);
+
+      const beforeText = readCvSectionAiText(section).trim();
+      if (!beforeText && section.type !== "summary") {
+        showToast("Section has no text for AI to rewrite.", {
+          variant: "warning",
+        });
+        return true;
+      }
+
+      const interactionId = createAiInteractionId();
+      const sectionLabel = section.title || "Section";
+      const anchor = buildPaperSectionAiAnchor(sectionId);
+      const primaryActionLabel = "Replace";
+      recordAiInteractionEvent({
+        name: "ai_started",
+        interactionId,
+        surface: "section_editor",
+        actionId: "custom",
+      });
+      setCvAiReview({
+        key: interactionId,
+        target: {
+          sectionId,
+          sectionType: target.sectionType,
+          sectionLabel,
+          fieldPath: target.fieldPath,
+          fieldKind: target.fieldKind,
+          selectedText: beforeText,
+        },
+        anchor,
+        beforeText: beforeText || "No summary yet.",
+        afterText: "",
+        state: "loading",
+        actionId: section.type === "summary" ? "rewrite" : "custom",
+        primaryActionLabel,
+        previousSection: section,
+        interactionId,
+      });
+
+      try {
+        if (typeof runCvSectionAiAction !== "function") {
+          throw new Error("CV AI action is unavailable.");
+        }
+        const result =
+          section.type === "summary"
+            ? await runCvSectionAiAction({
+                action: beforeText
+                  ? "improve_summary_text"
+                  : "rewrite_summary_from_profile",
+                existingText: beforeText,
+                summary: beforeText || getCurrentCvSummaryText(currentCv),
+                skills: getCurrentCvSkills(currentCv),
+                experiences: getCurrentCvExperiences(currentCv),
+                educations: getCurrentCvEducations(currentCv),
+                languages: getCurrentCvLanguages(currentCv),
+                instruction: [
+                  "Rewrite the summary for clarity and impact.",
+                  "Return only the replacement text.",
+                ].join("\n\n"),
+              })
+            : await runCvSectionAiAction({
+                action: "improve_custom_text",
+                instruction: "Improve this CV text. Return only the replacement text.",
+                existingText: beforeText,
+              });
+        const afterText = readAiResultText(result);
+        if (!afterText) {
+          recordAiInteractionEvent({
+            name: "ai_failed",
+            interactionId,
+            surface: "section_editor",
+            actionId: "custom",
+            errorKind: "empty_result",
+          });
+          setCvAiReview((current) =>
+            current?.interactionId === interactionId
+              ? {
+                  ...current,
+                  state: "error",
+                  errorMessage: "AI returned no usable section text.",
+                }
+              : current,
+          );
+          return true;
+        }
+
+        recordAiInteractionEvent({
+          name: "ai_completed",
+          interactionId,
+          surface: "section_editor",
+          actionId: "custom",
+          applyMode: "preview_required",
+          outputMode: "single_text",
+        });
+        setCvAiReview((current) =>
+          current?.interactionId === interactionId
+            ? {
+                ...current,
+                afterText,
+                state: "ready",
+              }
+            : current,
+        );
+      } catch (error) {
+        recordAiInteractionEvent({
+          name: "ai_failed",
+          interactionId,
+          surface: "section_editor",
+          actionId: "custom",
+          errorKind: "request_failed",
+        });
+        setCvAiReview((current) =>
+          current?.interactionId === interactionId
+            ? {
+                ...current,
+                state: "error",
+                errorMessage:
+                  error instanceof Error && error.message
+                    ? error.message
+                    : "AI is unavailable for this section.",
+              }
+            : current,
+        );
+        showToast("AI unavailable.", { variant: "error" });
+      }
+
+      return true;
+    },
+    [
+      buildPaperSectionAiAnchor,
+      currentCv,
+      flushPendingInlineFieldChange,
+      runCvSectionAiAction,
+      showToast,
+    ],
+  );
+
   const handleRunPageWandForSection = React.useCallback(
     (sectionId: string) => {
       const section = findSectionById(currentSections, sectionId);
       if (!section) return;
+      if (!shouldRenderPaperSectionAiControl(String(section.type))) return;
       const railAiMode = getSectionRailAiMode(section);
       if (railAiMode === "none") return;
 
       if (sectionUsesStructuredSuggestions(section)) {
-        handleAskAiForSection(sectionId);
         void handleRunAskAiForSection({ sectionId, prompt: "", tone: cvTone });
         return;
       }
 
       if (railAiMode === "rail") {
-        handleAskAiForSection(sectionId);
-        void handleRunAskAiForSection({ sectionId, prompt: "", tone: cvTone });
+        void runPaperTextSectionAiReview(section, sectionId);
         return;
       }
 
-      handleSelectSection(sectionId, { openEditor: true });
+      handleAskAiForSection(sectionId);
     },
     [
       currentSections,
       cvTone,
       handleAskAiForSection,
       handleRunAskAiForSection,
-      handleSelectSection,
+      runPaperTextSectionAiReview,
     ],
   );
 
@@ -4819,6 +6706,162 @@ export function CvForge(): JSX.Element {
       itemIndex?: number;
       field: "responsibilities" | "achievement" | "education";
     }) => {
+      if (
+        request.sectionType === "achievements" &&
+        request.field === "achievement"
+      ) {
+        const baseSections =
+          latestInlineSectionsRef.current.length > 0
+            ? latestInlineSectionsRef.current
+            : currentSections;
+        const section = findSectionById(baseSections, request.sectionId);
+        const item = section
+          ? getStructuredItemById(section, request.itemId)
+          : undefined;
+        if (!section || !item) return;
+
+        const beforeText = String(item.text ?? "").trim();
+        if (!beforeText) {
+          showToast("This achievement has no text for AI to improve.", {
+            variant: "warning",
+          });
+          return;
+        }
+
+        const interactionId = createAiInteractionId();
+        const key = `${interactionId}:${request.sectionId}:${request.itemId}:achievement`;
+        const fieldPath = `structuredContent.item:${request.itemId}.text`;
+        recordAiInteractionEvent({
+          name: "ai_started",
+          interactionId,
+          surface: "section_editor",
+          actionId: "custom",
+        });
+        setCvRailAiSuggestion(null);
+        setCvRailAppliedAiEdit(null);
+        const rowElement =
+          typeof document !== "undefined"
+            ? document.querySelector<HTMLElement>(
+                `[data-paper-section-id="${request.sectionId.replace(/"/g, '\\"')}"][data-paper-field-path="${fieldPath.replace(/"/g, '\\"')}"]`,
+              )
+            : null;
+        const rowRect = rowElement?.getBoundingClientRect();
+        const stageRect = paperStageRef.current?.getBoundingClientRect();
+        const anchor = rowRect
+          ? {
+              left: rowRect.left + window.scrollX + rowRect.width / 2,
+              top: rowRect.top + window.scrollY,
+              bottom: rowRect.bottom + window.scrollY,
+              leftEdge: rowRect.left + window.scrollX,
+              rightEdge: rowRect.right + window.scrollX,
+              width: rowRect.width,
+              height: rowRect.height,
+              containerLeft: stageRect
+                ? stageRect.left + window.scrollX
+                : undefined,
+              containerRight: stageRect
+                ? stageRect.right + window.scrollX
+                : undefined,
+              containerTop: stageRect
+                ? stageRect.top + window.scrollY
+                : undefined,
+              containerBottom: stageRect
+                ? stageRect.bottom + window.scrollY
+                : undefined,
+            }
+          : null;
+        setCvAiReview({
+          key,
+          target: {
+            sectionId: request.sectionId,
+            sectionType: "achievements",
+            sectionLabel: section.title || "Achievements",
+            itemId: request.itemId,
+            itemLabel: "Achievement",
+            fieldPath,
+            fieldKind: "paragraph",
+            selectedText: beforeText,
+          },
+          anchor,
+          beforeText,
+          afterText: "",
+          state: "loading",
+          actionId: "improve_achievement_line",
+          primaryActionLabel: "Replace achievement",
+          previousSection: section,
+          interactionId,
+        });
+
+        try {
+          if (typeof runCvSectionAiAction !== "function") {
+            throw new Error("CV AI action is unavailable.");
+          }
+          const result = await runCvSectionAiAction({
+            action: "improve_achievement_line",
+            existingText: beforeText,
+          });
+          const afterText = readAiResultText(result);
+          if (!afterText.trim()) {
+            recordAiInteractionEvent({
+              name: "ai_failed",
+              interactionId,
+              surface: "section_editor",
+              actionId: "custom",
+              errorKind: "empty_result",
+            });
+            setCvAiReview((current) =>
+              current?.key === key
+                ? {
+                    ...current,
+                    state: "error",
+                    errorMessage: "AI returned no usable achievement text.",
+                  }
+                : current,
+            );
+            return;
+          }
+
+          recordAiInteractionEvent({
+            name: "ai_completed",
+            interactionId,
+            surface: "section_editor",
+            actionId: "custom",
+            applyMode: "preview_required",
+          });
+          setCvAiReview((current) =>
+            current?.key === key
+              ? {
+                  ...current,
+                  afterText,
+                  state: "ready",
+                }
+              : current,
+          );
+        } catch (error) {
+          recordAiInteractionEvent({
+            name: "ai_failed",
+            interactionId,
+            surface: "section_editor",
+            actionId: "custom",
+            errorKind: "request_failed",
+          });
+          setCvAiReview((current) =>
+            current?.key === key
+              ? {
+                  ...current,
+                  state: "error",
+                  errorMessage:
+                    error instanceof Error && error.message
+                      ? error.message
+                      : "AI is unavailable for this item.",
+                }
+              : current,
+          );
+          showToast("AI unavailable.", { variant: "error" });
+        }
+        return;
+      }
+
       if (
         request.sectionType !== "experience" ||
         request.field !== "responsibilities"
@@ -4853,18 +6896,58 @@ export function CvForge(): JSX.Element {
         name: "ai_started",
         interactionId,
         surface: "section_editor",
-        actionId: "improve_experience_responsibilities",
+        actionId: "custom",
       });
       setCvRailAiSuggestion(null);
       setCvRailAppliedAiEdit(null);
-      setPaperTextAiSuggestion({
+      const itemLabel = String(
+        item.position ?? item.role ?? item.title ?? item.company ?? "Experience entry",
+      );
+      const rowElement =
+        typeof document !== "undefined"
+          ? document.querySelector<HTMLElement>(
+              `[data-preview-row-id="${request.itemId.replace(/"/g, '\\"')}"]`,
+            )
+          : null;
+      const rowRect = rowElement?.getBoundingClientRect();
+      const stageRect = paperStageRef.current?.getBoundingClientRect();
+      const anchor = rowRect
+        ? {
+            left: rowRect.left + window.scrollX + rowRect.width / 2,
+            top: rowRect.top + window.scrollY,
+            bottom: rowRect.bottom + window.scrollY,
+            leftEdge: rowRect.left + window.scrollX,
+            rightEdge: rowRect.right + window.scrollX,
+            width: rowRect.width,
+            height: rowRect.height,
+            containerLeft: stageRect
+              ? stageRect.left + window.scrollX
+              : undefined,
+            containerRight: stageRect
+              ? stageRect.right + window.scrollX
+              : undefined,
+            containerTop: stageRect ? stageRect.top + window.scrollY : undefined,
+            containerBottom: stageRect
+              ? stageRect.bottom + window.scrollY
+              : undefined,
+          }
+        : null;
+      setCvAiReview({
         key,
-        sectionId: request.sectionId,
-        sectionType: "experience",
-        itemId: request.itemId,
+        target: {
+          sectionId: request.sectionId,
+          sectionType: "experience",
+          sectionLabel: section.title || "Experience",
+          itemId: request.itemId,
+          itemLabel,
+          fieldPath: `structuredContent.item:${request.itemId}.responsibilities`,
+        },
+        anchor,
         beforeText,
         afterText: "",
         state: "loading",
+        actionId: "improve_experience_responsibilities",
+        primaryActionLabel: "Replace responsibilities",
         previousSection: section,
         interactionId,
       });
@@ -4894,10 +6977,13 @@ export function CvForge(): JSX.Element {
             name: "ai_failed",
             interactionId,
             surface: "section_editor",
-            actionId: "improve_experience_responsibilities",
-            errorKind: normalized.reason,
+            actionId: "custom",
+            errorKind:
+              normalized.reason === "incomplete_output"
+                ? "request_failed"
+                : "empty_result",
           });
-          setPaperTextAiSuggestion((current) =>
+          setCvAiReview((current) =>
             current?.key === key
               ? {
                   ...current,
@@ -4918,10 +7004,10 @@ export function CvForge(): JSX.Element {
             name: "ai_failed",
             interactionId,
             surface: "section_editor",
-            actionId: "improve_experience_responsibilities",
+            actionId: "custom",
             errorKind: "empty_result",
           });
-          setPaperTextAiSuggestion((current) =>
+          setCvAiReview((current) =>
             current?.key === key
               ? {
                   ...current,
@@ -4937,10 +7023,10 @@ export function CvForge(): JSX.Element {
           name: "ai_completed",
           interactionId,
           surface: "section_editor",
-          actionId: "improve_experience_responsibilities",
+          actionId: "custom",
           applyMode: "preview_required",
         });
-        setPaperTextAiSuggestion((current) =>
+        setCvAiReview((current) =>
           current?.key === key
             ? {
                 ...current,
@@ -4956,10 +7042,10 @@ export function CvForge(): JSX.Element {
           name: "ai_failed",
           interactionId,
           surface: "section_editor",
-          actionId: "improve_experience_responsibilities",
+          actionId: "custom",
           errorKind: "request_failed",
         });
-        setPaperTextAiSuggestion((current) =>
+        setCvAiReview((current) =>
           current?.key === key
             ? {
                 ...current,
@@ -4977,33 +7063,67 @@ export function CvForge(): JSX.Element {
     [currentSections, runCvSectionAiAction, showToast],
   );
 
-  const handleAcceptPaperTextAiSuggestion = React.useCallback(
-    (key: string) => {
-      const suggestion = paperTextAiSuggestion;
-      if (
-        !suggestion ||
-        suggestion.key !== key ||
-        suggestion.state !== "ready" ||
-        suggestion.sectionType !== "experience" ||
-        !suggestion.afterDoc
-      ) {
-        return;
-      }
+  const handleAcceptCvAiReview = React.useCallback(() => {
+      const suggestion = cvAiReview;
+      if (!suggestion || suggestion.state !== "ready") return;
 
       const baseSections =
         latestInlineSectionsRef.current.length > 0
           ? latestInlineSectionsRef.current
           : currentSections;
-      const section = findSectionById(baseSections, suggestion.sectionId);
+      const section = findSectionById(baseSections, suggestion.target.sectionId);
       if (!section) return;
-      const nextSection = updateStructuredItemResponsibilities(
-        section,
-        suggestion.itemId,
-        suggestion.afterDoc,
-        suggestion.responsibilityBullets,
-      );
+
+      let nextSection: CvSection | null = null;
+      if (
+        suggestion.target.sectionType === "experience" &&
+        suggestion.target.itemId &&
+        suggestion.afterDoc
+      ) {
+        nextSection = updateStructuredItemResponsibilities(
+          section,
+          suggestion.target.itemId,
+          suggestion.afterDoc,
+          suggestion.responsibilityBullets,
+        );
+      } else if (
+        suggestion.target.fieldPath &&
+        typeof suggestion.target.selectedText === "string"
+      ) {
+        const target: ActivePaperEditTarget = {
+          sectionId: suggestion.target.sectionId,
+          sectionType: suggestion.target.sectionType,
+          fieldPath: suggestion.target.fieldPath,
+          fieldKind: suggestion.target.fieldKind ?? "paragraph",
+        };
+        if (
+          !applyInlineExperienceResponsibilityAiResult({
+            target,
+            selectedText: suggestion.target.selectedText,
+            resultText: suggestion.afterText,
+            actionId: suggestion.actionId,
+          })
+        ) {
+          nextSection = applyInlineAiTextToSectionField({
+            section,
+            target,
+            selectedText: suggestion.target.selectedText,
+            replacementText: suggestion.afterText,
+          });
+        }
+      }
+
+      if (!nextSection && suggestion.target.sectionType === "experience") {
+        const latestSection = findSectionById(
+          latestInlineSectionsRef.current,
+          suggestion.target.sectionId,
+        );
+        nextSection = latestSection ?? null;
+      }
+      if (!nextSection) return;
+
       const nextSections = baseSections.map((currentSection, index) =>
-        getCvSectionId(currentSection, index) === suggestion.sectionId
+        getCvSectionId(currentSection, index) === suggestion.target.sectionId
           ? nextSection
           : currentSection,
       );
@@ -5015,41 +7135,45 @@ export function CvForge(): JSX.Element {
         name: "ai_accepted",
         interactionId: suggestion.interactionId ?? createAiInteractionId(),
         surface: "section_editor",
-        actionId: "improve_experience_responsibilities",
+        actionId: "custom",
       });
-      setPaperTextAiSuggestion({
+      setCvAiReview({
         ...suggestion,
         state: "accepted",
         previousSection: section,
+        previousSections: baseSections,
       });
-      focusPreviewSection(suggestion.sectionId);
+      focusPreviewSection(suggestion.target.sectionId);
     },
-    [currentSections, paperTextAiSuggestion, persistSections],
+    [
+      applyInlineExperienceResponsibilityAiResult,
+      currentSections,
+      cvAiReview,
+      persistSections,
+    ],
   );
 
-  const handleDiscardPaperTextAiSuggestion = React.useCallback(
-    (key: string) => {
-      setPaperTextAiSuggestion((current) => {
-        if (!current || current.key !== key) return current;
+  const handleDiscardCvAiReview = React.useCallback(() => {
+      setCvAiReview((current) => {
+        if (!current) return current;
         recordAiInteractionEvent({
           name: "ai_discarded",
           interactionId: current.interactionId ?? createAiInteractionId(),
           surface: "section_editor",
-          actionId: "improve_experience_responsibilities",
+          actionId: "custom",
         });
         return null;
       });
+      setInlinePaperSelectionState(null);
     },
     [],
   );
 
-  const handleUndoPaperTextAiSuggestion = React.useCallback(
-    (key: string) => {
-      const suggestion = paperTextAiSuggestion;
+  const handleUndoCvAiReview = React.useCallback(() => {
+      const suggestion = cvAiReview;
       if (
         !suggestion ||
-        suggestion.key !== key ||
-        !suggestion.previousSection
+        (!suggestion.previousSection && !suggestion.previousSections)
       ) {
         return;
       }
@@ -5057,19 +7181,57 @@ export function CvForge(): JSX.Element {
         latestInlineSectionsRef.current.length > 0
           ? latestInlineSectionsRef.current
           : currentSections;
-      const nextSections = baseSections.map((section, index) =>
-        getCvSectionId(section, index) === suggestion.sectionId
-          ? suggestion.previousSection!
-          : section,
+      const currentSection = findSectionById(
+        baseSections,
+        suggestion.target.sectionId,
       );
+      let restoredSection: CvSection | null = null;
+
+      if (
+        currentSection &&
+        suggestion.target.fieldPath &&
+        suggestion.afterText
+      ) {
+        restoredSection = applyInlineAiTextToSectionField({
+          section: currentSection,
+          target: {
+            sectionId: suggestion.target.sectionId,
+            sectionType: suggestion.target.sectionType,
+            fieldPath: suggestion.target.fieldPath,
+            fieldKind: suggestion.target.fieldKind ?? "paragraph",
+          },
+          selectedText: suggestion.afterText,
+          replacementText: suggestion.beforeText,
+        });
+      }
+
+      const nextSections = restoredSection
+        ? baseSections.map((section, index) =>
+            getCvSectionId(section, index) === suggestion.target.sectionId
+              ? restoredSection!
+              : section,
+          )
+        : suggestion.previousSections ??
+          baseSections.map((section, index) =>
+            getCvSectionId(section, index) === suggestion.target.sectionId
+              ? suggestion.previousSection!
+              : section,
+          );
+      const nextActiveSection =
+        findSectionById(nextSections, suggestion.target.sectionId) ??
+        suggestion.previousSection ??
+        null;
       latestInlineSectionsRef.current = nextSections;
-      setPendingActiveSection(suggestion.previousSection);
-      setResumeActiveTarget(getSectionTarget(suggestion.previousSection));
+      setPendingActiveSection(nextActiveSection);
+      setResumeActiveTarget(
+        nextActiveSection ? getSectionTarget(nextActiveSection) : null,
+      );
       persistSections(nextSections);
-      setPaperTextAiSuggestion(null);
-      focusPreviewSection(suggestion.sectionId);
+      setCvAiReview(null);
+      setInlinePaperSelectionState(null);
+      focusPreviewSection(suggestion.target.sectionId);
     },
-    [currentSections, paperTextAiSuggestion, persistSections],
+    [currentSections, cvAiReview, persistSections],
   );
 
   sectionActionHandlersRef.current = {
@@ -5124,7 +7286,7 @@ export function CvForge(): JSX.Element {
           target,
           selectedText: inlineTarget.selectedText,
           resultText: cvRailAiSuggestion.afterText,
-          actionId: inlineTarget.actionId,
+          actionId: inlineTarget.actionId as InlineAiActionId,
         })
       ) {
         recordAiInteractionEvent({
@@ -5132,7 +7294,7 @@ export function CvForge(): JSX.Element {
           interactionId:
             cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
           surface: "section_editor",
-          actionId: inlineTarget.actionId,
+          actionId: inlineTarget.actionId as InlineAiActionId,
         });
         setCvRailAiSuggestion(null);
         setCvRailAppliedAiEdit(null);
@@ -5165,7 +7327,7 @@ export function CvForge(): JSX.Element {
         interactionId:
           cvRailAiSuggestion.interactionId ?? createAiInteractionId(),
         surface: "section_editor",
-        actionId: inlineTarget.actionId,
+        actionId: inlineTarget.actionId as InlineAiActionId,
       });
       setCvRailAiSuggestion(null);
       setCvRailAppliedAiEdit(null);
@@ -5225,7 +7387,7 @@ export function CvForge(): JSX.Element {
   }, [currentCv, currentSections, cvRailAppliedAiEdit, persistSections]);
 
   const handleDiscardAiSuggestion = React.useCallback(() => {
-    if (cvRailAiSuggestion) {
+    if (cvRailAiSuggestion && cvRailAiSuggestion.kind !== "list") {
       const interactionId =
         cvRailAiSuggestion.interactionId ?? createAiInteractionId();
       if (
@@ -5238,7 +7400,9 @@ export function CvForge(): JSX.Element {
         name: "ai_discarded",
         interactionId,
         surface: "section_editor",
-        actionId: cvRailAiSuggestion.inlineTarget?.actionId ?? "custom",
+        actionId:
+          (cvRailAiSuggestion.inlineTarget?.actionId as InlineAiActionId | undefined) ??
+          "custom",
       });
     }
     setCvRailAiSuggestion(null);
@@ -5292,6 +7456,13 @@ export function CvForge(): JSX.Element {
     });
   }, []);
 
+  const handleClearListAiSuggestions = React.useCallback(() => {
+    setCvRailAiSuggestion((current) => {
+      if (!current || current.kind !== "list") return current;
+      return null;
+    });
+  }, []);
+
   const resumePaperAiState = React.useMemo<ResumePaperAiState | null>(() => {
     if (workspaceMode !== "edit") return null;
     const listSuggestion =
@@ -5299,35 +7470,41 @@ export function CvForge(): JSX.Element {
         ? {
             sectionId: cvRailAiSuggestion.sectionId,
             sectionType:
-              findSectionById(currentSections, cvRailAiSuggestion.sectionId)
-                ?.type ?? "skills",
+              getCanonicalSectionType(
+                findSectionById(currentSections, cvRailAiSuggestion.sectionId),
+              ) ?? "skills",
             items: cvRailAiSuggestion.items,
             state: cvRailAiSuggestion.state,
             errorMessage: cvRailAiSuggestion.errorMessage,
           }
         : null;
+    const listSuggestionSection = listSuggestion
+      ? findSectionById(currentSections, listSuggestion.sectionId)
+      : null;
 
     return {
-      textSuggestion: paperTextAiSuggestion,
+      activeTarget: cvAiReview?.target
+        ? {
+            sectionId: cvAiReview.target.sectionId,
+            sectionType: cvAiReview.target.sectionType,
+            itemId: cvAiReview.target.itemId,
+            fieldPath: cvAiReview.target.fieldPath,
+          }
+        : null,
       listSuggestion:
-        listSuggestion && listSuggestion.sectionType === "skills"
+        listSuggestionSection &&
+        sectionUsesStructuredSuggestions(listSuggestionSection)
           ? listSuggestion
           : null,
-      onAcceptTextSuggestion: handleAcceptPaperTextAiSuggestion,
-      onDiscardTextSuggestion: handleDiscardPaperTextAiSuggestion,
-      onUndoTextSuggestion: handleUndoPaperTextAiSuggestion,
       onAcceptListSuggestion: handleAcceptListAiSuggestion,
-      onDismissListSuggestion: handleDismissListAiSuggestion,
+      onClearListSuggestions: handleClearListAiSuggestions,
     };
   }, [
     currentSections,
+    cvAiReview,
     cvRailAiSuggestion,
     handleAcceptListAiSuggestion,
-    handleAcceptPaperTextAiSuggestion,
-    handleDiscardPaperTextAiSuggestion,
-    handleDismissListAiSuggestion,
-    handleUndoPaperTextAiSuggestion,
-    paperTextAiSuggestion,
+    handleClearListAiSuggestions,
     workspaceMode,
   ]);
 
@@ -5431,36 +7608,56 @@ export function CvForge(): JSX.Element {
     ],
   );
 
-  const handleStartFreshEntryCv = React.useCallback(async () => {
-    if (isEntryPickerBusy) {
-      return;
-    }
+  const handleStartFreshEntryCv = React.useCallback(
+    async (resumeTemplateId?: ResumeTemplateId | null) => {
+      if (isEntryPickerBusy) {
+        return;
+      }
 
-    setIsCreatingEntryCv(true);
-    setEntryPickerTransitionCvId(ENTRY_PICKER_PENDING_ROUTE_ID);
-    setPendingFreshEntryBaseCvId(currentCvId ?? "__none__");
-    try {
-      await createNewCv(undefined, { forceV1: true });
-    } catch (error) {
-      setEntryPickerTransitionCvId(null);
-      setPendingFreshEntryBaseCvId(null);
-      showToast("Create failed.", { variant: "error" });
-    } finally {
-      setIsCreatingEntryCv(false);
-    }
-  }, [createNewCv, currentCvId, isEntryPickerBusy, showToast]);
+      setIsCreatingEntryCv(true);
+      setEntryPickerTransitionCvId(ENTRY_PICKER_PENDING_ROUTE_ID);
+      setPendingFreshEntryBaseCvId(currentCvId ?? "__none__");
+      try {
+        await createNewCv(undefined, {
+          forceV1: true,
+          resumeTemplateId: resumeTemplateId ?? undefined,
+        });
+      } catch (error) {
+        setEntryPickerTransitionCvId(null);
+        setPendingFreshEntryBaseCvId(null);
+        showToast("Create failed.", { variant: "error" });
+      } finally {
+        setIsCreatingEntryCv(false);
+      }
+    },
+    [createNewCv, currentCvId, isEntryPickerBusy, showToast],
+  );
+
+  React.useEffect(() => {
+    topbarImportCvRef.current = handleImportEntryCv;
+    topbarNewCvRef.current = () => {
+      void handleStartFreshEntryCv();
+    };
+  }, [handleImportEntryCv, handleStartFreshEntryCv]);
 
   React.useEffect(() => {
     const state =
       typeof location.state === "object" && location.state !== null
         ? (location.state as Record<string, unknown>)
         : null;
-    const cvForgeAction = state?.cvForgeAction;
+    const params = new URLSearchParams(location.search);
+    const queryCvForgeAction = params.get("cvForgeAction");
+    const cvForgeAction =
+      state?.cvForgeAction === "createBlank" ||
+      state?.cvForgeAction === "importCv"
+        ? state.cvForgeAction
+        : queryCvForgeAction;
+    const resumeTemplateId = resolveCvTemplateIntent(params.get("templateId"));
     if (cvForgeAction !== "createBlank" && cvForgeAction !== "importCv") {
       return;
     }
 
-    const actionKey = `${location.key}:${cvForgeAction}`;
+    const actionKey = `${location.key}:${cvForgeAction}:${resumeTemplateId ?? "default"}`;
     if (consumedCvForgeActionRef.current === actionKey) {
       return;
     }
@@ -5468,13 +7665,20 @@ export function CvForge(): JSX.Element {
 
     const nextState = { ...(state ?? {}) };
     delete nextState.cvForgeAction;
+    const nextParams = new URLSearchParams(location.search);
+    nextParams.delete("cvForgeAction");
+    nextParams.delete("templateId");
+    const nextSearch = nextParams.toString();
     void navigate(
-      { pathname: location.pathname, search: location.search },
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
       { replace: true, state: nextState },
     );
 
     if (cvForgeAction === "createBlank") {
-      void handleStartFreshEntryCv();
+      void handleStartFreshEntryCv(resumeTemplateId);
       return;
     }
 
@@ -5547,30 +7751,55 @@ export function CvForge(): JSX.Element {
         <>
           <div
             className="dasti-cv-skeleton-forge"
+            data-forge-drawer-docked={
+              isForgeDrawerDockedDesktop ? "true" : undefined
+            }
+            data-forge-drawer-rail-collapsed={
+              shouldAutoCollapseCvRailForDockedDrawer ? "true" : undefined
+            }
             style={cvWorkbenchShellStyle}
           >
-            <div className="dasti-cv-skeleton-forge__stage">
+            <div
+              ref={cvDocumentStageRef}
+              className="dasti-cv-skeleton-forge__stage dasti-proposal-skeleton-stage"
+              data-testid="cv-canvas"
+              data-toolbar-mode={cvCommandToolbarMode}
+              data-mode-control-mode={cvCommandModeControlMode}
+              data-ask-mode={cvCommandAskMode}
+              data-command-layer-sticky={
+                cvCommandLayerSticky ? "true" : undefined
+              }
+              data-toolbar-density={getCommandLayerToolbarDensity(
+                cvCommandToolbarMode,
+              )}
+              data-ask-placement={
+                cvCommandAskMode === "edgeTab" ? "edge-tab" : "outside"
+              }
+              data-ask-density="icon"
+            >
               <CvStageBar
                 mode={workspaceMode}
-                hasCurrentCv={Boolean(currentCv)}
-                hasTrustedExport={hasTrustedExport}
-                importIssueCount={importReviewBlocks.length}
-                exporting={exportingFormat !== null}
-                tone={cvTone}
-                resumeOptions={resumeOptions}
+                toolbarStyle={cvCommandLayerStyle}
+                modeControlMode={cvCommandModeControlMode}
+                commandLayerSticky={cvCommandLayerSticky}
+                commandLayerMeasured={cvCommandLayerMeasured}
+                templatesOpen={cvTemplatesOpen}
+                sectionsOpen={sectionsPanelOpen}
+                designOpen={cvDesignOpen}
                 onModeChange={setWorkspaceMode}
-                onOpenImportReview={() => setImportReviewOpen(true)}
-                onPickResume={handlePickResume}
-                onExportPdf={() =>
-                  void handleResumeExport({ format: "pdf", mode: "styled" })
+                onOpenSections={handleOpenCvSections}
+                onOpenDesign={handleOpenCvDesign}
+                onOpenTemplates={handleOpenCvTemplates}
+                askOpen={workspaceMode === "preview" && cvComposerOpen}
+                onOpenAsk={
+                  workspaceMode === "preview" ? handleOpenCvAsk : undefined
                 }
-                onExportDocx={() => void handleResumeExport({ format: "docx" })}
               />
-              {!isImportReviewBannerDismissed ? (
+              {isImportReviewBannerVisible ? (
                 <CvReviewBanner
-                  issueCount={importReviewBlocks.length}
+                  issueCount={activeImportRecoveryItems.length}
                   summary={importReviewSummary}
-                  onOpenReview={() => setImportReviewOpen(true)}
+                  onOpenReview={handleOpenImportReview}
                   onDismiss={handleDismissImportReviewBanner}
                 />
               ) : null}
@@ -5661,7 +7890,7 @@ export function CvForge(): JSX.Element {
                   }
                 >
                   <VerbatiResumePreview
-                    data={resumePreviewData}
+                    data={resumePreviewData!}
                     stylePreset={stylePreset}
                     hostMode="panel"
                     scrollMode="natural"
@@ -5670,11 +7899,13 @@ export function CvForge(): JSX.Element {
                     inlineEditing={resumeInlineEditing}
                     sectionActions={resumeSectionActions}
                     paperAi={resumePaperAiState}
+                    showStageZoomFooter={Boolean(currentCv)}
                     showPageCount={
                       workspaceMode === "preview" && Boolean(currentCv)
                     }
+                    onPageCountChange={handleCvPreviewPageCountChange}
                   />
-                  {inlinePaperSelectionState ? (
+                  {inlinePaperSelectionState && !cvAiReview ? (
                     <FloatingAiToolbar
                       open
                       anchor={inlinePaperSelectionState.anchor}
@@ -5682,54 +7913,83 @@ export function CvForge(): JSX.Element {
                       pendingActionId={pendingInlinePaperAiActionId}
                       onClose={() => setInlinePaperSelectionState(null)}
                       onRunAction={handleRunInlinePaperAiAction}
+                      onSurfacePlacementChange={setCvAiSurfacePosition}
+                    />
+                  ) : null}
+                  {cvAiReview ? (
+                    <CvAiReviewOverlay
+                      open
+                      target={cvAiReview.target}
+                      state={cvAiReview.state}
+                      beforeText={cvAiReview.beforeText}
+                      afterText={cvAiReview.afterText}
+                      errorMessage={cvAiReview.errorMessage}
+                      actionId={cvAiReview.actionId}
+                      interactionId={cvAiReview.interactionId}
+                      anchor={cvAiReview.anchor}
+                      preferredPlacement={cvAiSurfacePosition?.placement}
+                      preferredSurfacePosition={cvAiSurfacePosition}
+                      primaryActionLabel={cvAiReview.primaryActionLabel}
+                      onAccept={handleAcceptCvAiReview}
+                      onDiscard={handleDiscardCvAiReview}
+                      onUndo={
+                        cvAiReview.state === "accepted"
+                          ? handleUndoCvAiReview
+                          : undefined
+                      }
+                      onCopy={
+                        cvAiReview.state === "ready"
+                          ? () => {
+                              void navigator.clipboard?.writeText(
+                                cvAiReview.afterText,
+                              );
+                            }
+                          : undefined
+                      }
                     />
                   ) : null}
                 </div>
               )}
             </div>
-            <CvRail
-              sections={currentSections}
-              hiddenSectionIds={hiddenSectionIds}
-              activeSectionId={activeSectionId}
-              activeTab={cvRailTab}
-              stylePreset={stylePreset}
-              selectedTone={cvTone}
-              aiSuggestion={cvRailAiSuggestion}
-              appliedAiEdit={cvRailAppliedAiEdit}
-              isImporting={isImportingEntryCv}
-              onActiveTabChange={setCvRailTab}
-              onSelectSection={handleSelectSection}
-              onToggleHiddenSection={handleToggleHiddenSection}
-              onDeleteSection={handleDeleteSection}
-              onReorderSections={handleReorderSections}
-              onMoveSection={handleMoveSection}
-              onAskAiForSection={handleAskAiForSection}
-              onRunAskAiForSection={handleRunAskAiForSection}
-              onAcceptAiSuggestion={handleAcceptAiSuggestion}
-              onDiscardAiSuggestion={handleDiscardAiSuggestion}
-              onUndoAiSuggestion={handleUndoAiSuggestion}
-              onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
-              onDismissListAiSuggestion={handleDismissListAiSuggestion}
-              onAddSection={handleAddSection}
-              selectedStyleSlot={selectedStyleSlot}
-              selectedStyleSlotIsCustom={selectedStyleSlotIsCustom}
-              onSelectStyleSlot={handleSelectStyleSlot}
-              onResetStyleSlot={handleResetStyleSlot}
-              onSelectTemplate={handleSelectTemplate}
-              onSelectFontPair={handleSelectFontPair}
-              onSelectAccent={handleSelectAccent}
-              onSelectCustomAccent={handleSelectCustomAccent}
-              onNewCv={() => {
-                void handleStartFreshEntryCv();
-              }}
-              onImportPdf={handleImportEntryCv}
-            />
+            {cvComposerOpen && !sectionEditorOpen ? (
+              <ComposerDrawer
+                open
+                onOpenChange={setCvComposerOpen}
+                title="Ask"
+                titleHidden
+                description="Improve the selected CV section."
+                ariaLabel="Ask"
+                className="dasti-composer-drawer--stage dasti-composer-drawer--cv"
+              >
+                <CvRail
+                  sections={currentSections}
+                  activeSectionId={activeSectionId}
+                  activeTab={cvRailTab}
+                  selectedTone={cvTone}
+                  aiSuggestion={cvRailAiSuggestion}
+                  appliedAiEdit={cvRailAppliedAiEdit}
+                  askSelectionContext={cvAskSelectionContext}
+                  isImporting={isImportingEntryCv}
+                  onActiveTabChange={setCvRailTab}
+                  onSelectSection={handleSelectSection}
+                  onRunAskAiForSection={handleRunAskAiForSection}
+                  onRunAskAiForSelection={handleRunCvAskForSelection}
+                  onAcceptAiSuggestion={handleAcceptAiSuggestion}
+                  onDiscardAiSuggestion={handleDiscardAiSuggestion}
+                  onUndoAiSuggestion={handleUndoAiSuggestion}
+                  onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
+                  onDismissListAiSuggestion={handleDismissListAiSuggestion}
+                  hideTabs
+                />
+              </ComposerDrawer>
+            ) : null}
           </div>
           <SectionEditorSheet
             open={sectionEditorOpen}
             section={activeSection}
             aiSuggestion={cvRailAiSuggestion}
             isAiRunning={cvRailAiSuggestion?.state === "loading"}
+            stageAligned={workspaceMode === "preview"}
             onOpenChange={setSectionEditorOpen}
             onSave={handleSectionEditorSave}
             summaryAiEvidence={{
@@ -5742,11 +8002,46 @@ export function CvForge(): JSX.Element {
             onRunListAiSuggestion={handleRunListAiSuggestion}
             onAcceptListAiSuggestion={handleAcceptListAiSuggestion}
             onDismissListAiSuggestion={handleDismissListAiSuggestion}
+            onClearListAiSuggestions={handleClearListAiSuggestions}
           />
-          <ImportReviewSheet
+          <Sheet
             open={importReviewOpen}
-            blocks={importReviewBlocks}
-            onOpenChange={setImportReviewOpen}
+            onOpenChange={handleImportReviewOpenChange}
+            title="CV import review"
+            description="Review uncertain imported blocks, route them to sections, or assign fragments before saving."
+            className="dasti-cv-import-recovery-sheet"
+            bodyClassName="dasti-cv-import-recovery-sheet__body"
+          >
+            {cvImportRecoveryDraft ? (
+              <ImportRecoveryPanel
+                recoveryCycleKey={cvImportRecoveryDraft.cycleId}
+                items={cvImportRecoveryDraft.items}
+                overflowCount={cvImportRecoveryDraft.overflowCount}
+                reviewLimit={cvImportRecoveryDraft.reviewLimit}
+                onAccept={handleAcceptRecoveryItem}
+                onIgnore={(blockId) =>
+                  updateCvRecoveryItem(blockId, { reviewStatus: "ignored" })
+                }
+                onUpdateRemainingTarget={handleUpdateRecoveryRemainingTarget}
+                onAssignFragment={handleAssignRecoveryFragment}
+                onRemoveFragment={handleRemoveRecoveryFragment}
+                onImportAsIs={handleImportRecoveryAsIs}
+                onCancel={() => handleImportReviewOpenChange(false)}
+                onDiscardRecovery={handleDiscardImportRecovery}
+                onApply={handleApplyReviewedRecoveryImport}
+                outcomeSummary={cvRecoveryOutcomeSummary}
+              />
+            ) : (
+              <div className="dasti-cv-import-review__empty">
+                No import recovery items need review.
+              </div>
+            )}
+          </Sheet>
+          <CvAtsAuditPanel
+            open={atsAuditOpen}
+            audit={atsAudit}
+            onOpenChange={setAtsAuditOpen}
+            onOpenImportReview={handleOpenImportReview}
           />
         </>
         <input

@@ -106,6 +106,7 @@ describe("userProfileMetadata", () => {
   it("accepts document style slot metadata and base snapshots", () => {
     expect(
       matchesValidator(userProfileMetadataValidator.json, {
+        titleLocked: true,
         verbatiStyleSlotId: 2,
         verbatiStyleSlotSource: "settings",
         verbatiStyleSlotNameSnapshot: "Style 2",

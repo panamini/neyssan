@@ -13,9 +13,13 @@ export const PROPOSAL_WORKSPACE_RESET_STATE_KEY =
   "proposalWorkspaceResetToken";
 export const PROPOSAL_ENTRY_INTENT_STATE_KEY = "proposalEntryIntent";
 export const PROPOSAL_JOB_IMPORT_FOCUS_STATE_KEY = "jobImportFocus";
+export const PROPOSAL_DRAWER_QUERY_PARAM = "drawer";
+export const PROPOSAL_DRAFT_DRAWER_QUERY_VALUE = "proposal-draft";
 
 export type ProposalEntryIntent = "cover-letter-start";
 export type JobImportFocus = "supported-sites";
+export type ProposalDrawerRouteIntent =
+  typeof PROPOSAL_DRAFT_DRAWER_QUERY_VALUE;
 
 export type StoredProposalComposeDraft = {
   jobTitle?: string;
@@ -170,4 +174,12 @@ export function readProposalJobImportFocus(
   ];
 
   return focus === "supported-sites" ? focus : null;
+}
+
+export function readProposalDrawerRouteIntent(
+  search: string,
+): ProposalDrawerRouteIntent | null {
+  const value = new URLSearchParams(search).get(PROPOSAL_DRAWER_QUERY_PARAM);
+
+  return value === PROPOSAL_DRAFT_DRAWER_QUERY_VALUE ? value : null;
 }

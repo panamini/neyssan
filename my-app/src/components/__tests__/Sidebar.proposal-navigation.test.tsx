@@ -1,597 +1,1019 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+import { ForgeTemplatePanel } from "../ForgeTemplatePanel";
 import { Sidebar } from "../Sidebar";
 import {
-  PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
-  readStoredProposalOutputDraft,
-} from "../../lib/proposal-output-draft";
-import {
-  PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-  readStoredProposalComposeDraft,
-} from "../../lib/proposal-workspace-state";
-import { PROPOSAL_ATTACHED_CV_STORAGE_KEY } from "../../lib/proposal-personalization";
-
-const mockCvLibraryState = {
-  cvs: [] as Array<{ id: string; title: string; sections: unknown[] }>,
-  currentCv: null as { id: string; title: string; sections: unknown[] } | null,
-  currentCvId: null as string | null,
-  loadCv: vi.fn(),
-  createNewCv: vi.fn(async () => {}),
-  deleteCv: vi.fn(),
-};
-
-const mockAuthState = {
-  isSignedIn: true,
-};
-
-let mockThemeMode: "light" | "dark" = "light";
-
-vi.mock("convex/react", () => ({
-  useConvexAuth: () => ({
-    isLoading: false,
-    isAuthenticated: true,
-  }),
-  useQuery: (reference: string) => {
-    if (reference === "proposalsPublic.default") {
-      return [
-        {
-          _id: "proposal_draft",
-          _creationTime: 1711000000000,
-          title: "Server draft proposal",
-          updatedAt: 1711000000000,
-          status: "draft",
-        },
-        {
-          _id: "proposal_saved",
-          _creationTime: 1710000000000,
-          title: "Saved proposal beta",
-          updatedAt: 1710000000000,
-          status: "saved",
-        },
-      ];
-    }
-    if (reference === "proposalsCountPublic.default") {
-      return 1;
-    }
-    return null;
-  },
-  useMutation: () => vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock("../../../convex/_generated/api", () => ({
-  api: {
-    proposalsPublic: { default: "proposalsPublic.default" },
-    proposalsCountPublic: { default: "proposalsCountPublic.default" },
-    deleteProposalPublic: { default: "deleteProposalPublic.default" },
-  },
-}));
-
-vi.mock("@clerk/clerk-react", () => ({
-  useAuth: () => ({
-    isLoaded: true,
-    isSignedIn: mockAuthState.isSignedIn,
-  }),
-  useUser: () => ({
-    user: {
-      firstName: "Pana",
-      username: "pana",
-    },
-  }),
-  UserButton: () => <div data-testid="user-button" />,
-}));
-
-vi.mock("../../contexts/CvLibraryContext", () => ({
-  useCvLibrary: () => mockCvLibraryState,
-}));
-
-vi.mock("../../lib/theme-mode", () => ({
-  useThemeMode: () => ({
-    mode: mockThemeMode,
-    toggle: vi.fn(),
-  }),
-}));
-
-function CvRoute(): JSX.Element {
-  return <div>Resume workspace</div>;
-}
-
-function ProposalRouteProbe(): JSX.Element {
-  const composeDraft = readStoredProposalComposeDraft();
-  const outputDraft = readStoredProposalOutputDraft();
-
-  return (
-    <div>
-      <div data-testid="proposal-compose-title">
-        {composeDraft?.jobTitle ?? "empty-title"}
-      </div>
-      <div data-testid="proposal-compose-description">
-        {composeDraft?.jobDescription ?? "empty-description"}
-      </div>
-      <div data-testid="proposal-output-content">
-        {outputDraft?.proposalContent ?? "empty-output"}
-      </div>
-    </div>
-  );
-}
+  ForgeTemplatePanelProvider,
+  useRegisterForgePanel,
+  useRegisterForgeTemplates,
+} from "../../contexts/ForgeTemplatePanelContext";
 
 function LocationProbe(): JSX.Element {
   const location = useLocation();
   return (
-    <div data-testid="sidebar-location">
-      {`${location.pathname}${location.search}::${JSON.stringify(location.state ?? null)}`}
-    </div>
+    <div data-testid="location">{`${location.pathname}${location.search}`}</div>
   );
 }
 
-function setViewportWidth(width: number): void {
-  Object.defineProperty(window, "innerWidth", {
-    configurable: true,
-    writable: true,
-    value: width,
-  });
-  window.dispatchEvent(new Event("resize"));
-}
-
-function writeProposalDraftToStorage(): void {
-  window.localStorage.setItem(
-    PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-    JSON.stringify({
-      jobTitle: "Operations Associate",
-      jobDescription:
-        "Support recurring processes and coordinate communication.",
-      proposalType: "cover_letter",
-      voicePreset: "signature",
-    }),
-  );
-  window.localStorage.setItem(
-    PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
-    JSON.stringify({
-      proposalContent: "Freshly generated proposal body.",
-      proposalType: "cover_letter",
-      proposalVoicePreset: "signature",
-      proposalTemplateId: null,
-      proposalVerbatiStyle: null,
-      proposalStyleLinkMode: "inherit_cv",
-      proposalStyleChoice: "auto",
-      proposalApplicantName: "Alex Martin",
-      proposalApplicantRole: "Operations Associate",
-      proposalDocumentTitle: "Operations Associate Proposal",
-      proposalDocumentMeta: "Cover letter · Signature",
-      generatedProposalId: "proposal_new",
-      proposalOutputMode: "edit",
-      paletteOverride: null,
-      customAccentHex: null,
-      templateBundleId: null,
-      typographyOverride: null,
-      layoutOverride: null,
-      proposalDocumentTitleManual: false,
-      characterLimitMode: null,
-      characterLimitValue: null,
-    }),
-  );
-}
-
-function pinSidebar(): void {
-  const openButton = screen.queryByRole("button", { name: "Open sidebar" });
-  if (openButton) {
-    fireEvent.click(openButton);
-  }
-  const pinButton = screen.queryByRole("button", { name: "Open sidebar" });
-  if (pinButton) {
-    fireEvent.click(pinButton);
-  }
-}
-
-describe("Sidebar proposal navigation", () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-    setViewportWidth(1280);
-    mockThemeMode = "light";
-    mockCvLibraryState.cvs = [];
-    mockCvLibraryState.currentCv = null;
-    mockCvLibraryState.currentCvId = null;
-    mockCvLibraryState.loadCv.mockReset();
-    mockCvLibraryState.createNewCv.mockReset();
-    mockCvLibraryState.deleteCv.mockReset();
-    mockAuthState.isSignedIn = true;
-  });
-
-  it("does not clear stored proposal draft when the collapsed proposals control re-enters the workspace", () => {
-    setViewportWidth(640);
-    window.localStorage.setItem("cvActiveId", "cv_beta");
-    window.localStorage.setItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY, "cv_alpha");
-
-    render(
-      <MemoryRouter initialEntries={["/cv"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    writeProposalDraftToStorage();
-
-    fireEvent.click(screen.getByRole("link", { name: "Proposal forge" }));
-
-    expect(screen.getByTestId("proposal-compose-title")).toHaveTextContent(
-      "Operations Associate",
-    );
-    expect(
-      screen.getByTestId("proposal-compose-description"),
-    ).toHaveTextContent(
-      "Support recurring processes and coordinate communication.",
-    );
-    expect(screen.getByTestId("proposal-output-content")).toHaveTextContent(
-      "Freshly generated proposal body.",
-    );
-    expect(window.localStorage.getItem(PROPOSAL_ATTACHED_CV_STORAGE_KEY)).toBe(
-      "cv_alpha",
-    );
-    expect(window.localStorage.getItem("cvActiveId")).toBe("cv_beta");
-  });
-
-  it("renders the settings trigger in the sidebar footer", () => {
-    render(
-      <MemoryRouter initialEntries={["/cv"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
-      "href",
-      "/settings",
-    );
-  });
-
-  it("does not render the footer theme toggle on the settings route", () => {
-    render(
-      <MemoryRouter initialEntries={["/settings"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/settings" element={<LocationProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    expect(
-      screen.queryByRole("button", {
-        name: /dark mode|light mode|toggle dark theme|toggle light theme/i,
+function RegisterTemplates({
+  surface,
+  onSelect,
+}: {
+  surface: "cv" | "proposal";
+  onSelect: (itemId: string) => void;
+}): null {
+  useRegisterForgeTemplates(
+    React.useMemo(
+      () => ({
+        surface,
+        title: surface === "cv" ? "CV templates" : "Proposal templates",
+        subtitle: "A4 · 21 × 29.7 cm",
+        activeItemId: "schematic",
+        items: [
+          {
+            id: "schematic",
+            label: "Schematic",
+            meta: "A4 · 21 × 29.7 cm",
+          },
+        ],
+        onSelect,
       }),
+      [onSelect, surface],
+    ),
+  );
+  return null;
+}
+
+function RegisterProposalPanels(): null {
+  const navigate = useNavigate();
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "jobs",
+        title: "Attach job",
+        subtitle: "Select a captured job.",
+        renderContent: () => <div>Job drawer content</div>,
+        footer: { label: "Open Jobs page", onSelect: () => navigate("/jobs") },
+      }),
+      [],
+    ),
+  );
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "cvs",
+        title: "Attach CV",
+        subtitle: "Attach a CV.",
+        renderContent: () => <div>CV drawer content</div>,
+        footer: { label: "Open CV Forge", onSelect: () => navigate("/cv") },
+      }),
+      [],
+    ),
+  );
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "documents",
+        title: "Library",
+        subtitle: "Use saved work.",
+        renderContent: () => <div>Library drawer content</div>,
+        footer: {
+          label: "Open Library",
+          onSelect: () => navigate("/documents?type=proposals"),
+        },
+      }),
+      [],
+    ),
+  );
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "proposals",
+        title: "Saved proposals",
+        subtitle: "Use a saved letter.",
+        renderContent: () => <div>Saved proposals drawer content</div>,
+        footer: {
+          label: "Open Library",
+          onSelect: () => navigate("/documents?type=proposals"),
+        },
+      }),
+      [],
+    ),
+  );
+  return null;
+}
+
+function RegisterCvPanels(): null {
+  const navigate = useNavigate();
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "cvs",
+        title: "CV library",
+        renderContent: () => <div>CV library drawer content</div>,
+        footer: {
+          label: "Open Library",
+          onSelect: () => navigate("/documents?type=cvs"),
+        },
+      }),
+      [],
+    ),
+  );
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "proposals",
+        title: "Saved proposals",
+        renderContent: () => <div>Saved proposals drawer content</div>,
+        footer: {
+          label: "Open Library",
+          onSelect: () => navigate("/documents?type=proposals"),
+        },
+      }),
+      [],
+    ),
+  );
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "documents",
+        title: "Library",
+        renderContent: () => <div>Library drawer content</div>,
+        footer: {
+          label: "Open Library",
+          onSelect: () => navigate("/documents?type=cvs"),
+        },
+      }),
+      [],
+    ),
+  );
+  return null;
+}
+
+function renderSidebar(initialPath = "/dashboard", children?: React.ReactNode) {
+  return render(
+    <MemoryRouter initialEntries={[initialPath]}>
+      <ForgeTemplatePanelProvider>
+        <Sidebar />
+        {children}
+        <ForgeTemplatePanel />
+        <Routes>
+          <Route path="*" element={<LocationProbe />} />
+        </Routes>
+      </ForgeTemplatePanelProvider>
+    </MemoryRouter>,
+  );
+}
+
+function primaryNavItems(): HTMLElement[] {
+  const navigation = screen.getByRole("navigation", {
+    name: "Primary navigation",
+  });
+  return Array.from(navigation.querySelectorAll<HTMLElement>("a, button"));
+}
+
+function mockFinePointer(matches = true) {
+  const mediaQueries: MediaQueryList[] = [];
+  vi.spyOn(window, "matchMedia").mockImplementation((query: string) => {
+    const mediaQuery = {
+      matches:
+        query === "(hover: hover) and (pointer: fine)"
+          ? matches
+          : query === "(max-width: 767px)"
+            ? window.innerWidth <= 767
+            : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    } as unknown as MediaQueryList;
+    mediaQueries.push(mediaQuery);
+    return mediaQuery;
+  });
+  return mediaQueries;
+}
+
+describe("Sidebar permanent rail", () => {
+  beforeEach(() => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 1280,
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("renders Templates as a global link outside forge routes", () => {
+    renderSidebar();
+
+    const items = primaryNavItems();
+    expect(items.map((item) => item.getAttribute("aria-label"))).toEqual([
+      "Today",
+      "Jobs",
+      "CV",
+      "Proposal",
+      "Projects",
+      "Templates",
+      "Settings",
+    ]);
+    expect(
+      items.every((item) => !item.hasAttribute("data-toolbar-tooltip")),
+    ).toBe(true);
+    expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
+      "href",
+      "/templates",
+    );
+  });
+
+  it.each(["/cv", "/proposal"])(
+    "renders Templates between Projects and Settings on %s",
+    (path) => {
+      renderSidebar(path);
+
+      expect(
+        primaryNavItems().map((item) => item.getAttribute("aria-label")),
+      ).toEqual([
+        "Today",
+        "Jobs",
+        "CV",
+        "Proposal",
+        "Projects",
+        "Templates",
+        "Settings",
+      ]);
+    },
+  );
+
+  it("keeps Settings anchored at the bottom of the rail", () => {
+    renderSidebar();
+
+    expect(screen.getByRole("button", { name: "Settings" })).toHaveClass(
+      "sb-rail-button--bottom",
+    );
+  });
+
+  it("keeps the compact rail rendered and discoverable at 390px", () => {
+    window.innerWidth = 390;
+    mockFinePointer(true);
+
+    const { container } = renderSidebar("/proposal");
+
+    const sidebar = container.querySelector(".sb");
+    expect(sidebar).toBeInTheDocument();
+    expect(sidebar).toHaveAttribute("data-rail-compact", "true");
+
+    const items = primaryNavItems();
+    expect(items.map((item) => item.getAttribute("aria-label"))).toEqual([
+      "Today",
+      "Jobs",
+      "CV",
+      "Proposal",
+      "Projects",
+      "Templates",
+      "Settings",
+    ]);
+    for (const item of items) {
+      expect(item).toHaveAttribute("aria-label");
+      expect(item).toHaveAttribute(
+        "data-toolbar-tooltip",
+        item.getAttribute("aria-label"),
+      );
+      expect(item).toHaveAttribute(
+        "data-toolbar-tooltip-placement",
+        "below",
+      );
+    }
+
+    expect(screen.getByRole("button", { name: "Proposal" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("button", { name: "Settings" })).toHaveClass(
+      "sb-rail-button--bottom",
+    );
+  });
+
+  it("does not render expanded sidebar controls or legacy expanded content", () => {
+    renderSidebar();
+
+    expect(
+      screen.queryByRole("button", { name: /open sidebar|close sidebar/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Workspace")).not.toBeInTheDocument();
+    expect(screen.queryByText("Library")).not.toBeInTheDocument();
+    expect(screen.queryByText("Recent")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["/dashboard", "Today"],
+    ["/jobs", "Jobs"],
+    ["/cv", "CV"],
+    ["/proposal", "Proposal"],
+    ["/documents", "Projects"],
+    ["/templates", "Templates"],
+    ["/settings", "Settings"],
+  ])("marks %s as the current route", (path, label) => {
+    renderSidebar(path);
+
+    const currentItem =
+      path === "/proposal" || path === "/cv" || path === "/settings"
+        ? screen.getByRole("button", { name: label })
+        : screen.getByRole("link", { name: label });
+    expect(currentItem).toHaveAttribute("aria-current", "page");
+  });
+
+  it("opens Settings in the shared rail drawer and switches settings panes", async () => {
+    renderSidebar("/dashboard");
+
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/settings");
+    await waitFor(() => {
+      expect(
+        screen.getByRole("complementary", { name: "Settings sections" }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("button", { name: /Document style/ }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Document style/ }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/settings?tab=docstyle",
+    );
+    expect(screen.getByRole("button", { name: "Settings" })).toHaveClass(
+      "sb-rail-button--panel-open",
+    );
+  });
+
+  it("links Projects to the documents surface", () => {
+    renderSidebar();
+
+    expect(screen.getByRole("link", { name: "Projects" })).toHaveAttribute(
+      "href",
+      "/documents",
+    );
+  });
+
+  it("opens the CV template panel without navigating", () => {
+    const onSelect = vi.fn();
+    renderSidebar(
+      "/cv",
+      <RegisterTemplates surface="cv" onSelect={onSelect} />,
+    );
+
+    const templates = screen.getByRole("button", { name: "Templates" });
+    expect(templates).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(templates);
+
+    expect(templates).toHaveAttribute("aria-expanded", "true");
+    expect(templates).toHaveClass("sb-rail-button--panel-open");
+    expect(screen.getByRole("button", { name: "CV" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(
+      screen.getByRole("complementary", { name: "CV templates" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/cv");
+
+    fireEvent.click(screen.getByRole("listitem", { name: "Schematic" }));
+    expect(onSelect).toHaveBeenCalledWith("schematic");
+  });
+
+  it("opens the CV Forge CV drawer without navigating and keeps Proposal as page navigation", () => {
+    renderSidebar("/cv", <RegisterCvPanels />);
+
+    const cv = screen.getByRole("button", { name: "CV" });
+
+    fireEvent.click(cv);
+
+    expect(
+      screen.getByRole("complementary", { name: "CV library" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("CV library drawer content")).toBeInTheDocument();
+    expect(cv).toHaveAttribute("aria-current", "page");
+    expect(screen.getByTestId("location")).toHaveTextContent("/cv");
+
+    const proposal = screen.getByRole("link", { name: "Proposal" });
+    expect(proposal).toHaveAttribute("href", "/proposal");
+    fireEvent.click(proposal);
+    expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+    expect(
+      screen.queryByRole("complementary", { name: "CV library" }),
     ).not.toBeInTheDocument();
   });
 
-  it("does not render authenticated recents when signed out", () => {
-    mockAuthState.isSignedIn = false;
-
-    render(
-      <MemoryRouter initialEntries={["/cv"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-          <Route path="/sign-in" element={<LocationProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    pinSidebar();
-
-    expect(screen.getByText("Saved proposal beta")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
-      "href",
-      "/settings",
-    );
-  });
-
-  it("shows the sidebar brand label only when hovered or pinned open", () => {
-    const { unmount } = render(
-      <MemoryRouter initialEntries={["/cv"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    const toggle = screen.getByRole("button", { name: "Open sidebar" });
-    const lightCollapsedLogo = toggle.querySelector(
-      ".sb-toggle__collapsed-logo",
-    ) as HTMLImageElement | null;
-    const lightCollapsedLogoShell = toggle.querySelector(
-      ".sb-toggle__collapsed-logo-shell",
-    ) as HTMLSpanElement | null;
-    expect(lightCollapsedLogoShell).not.toBeNull();
-    expect(lightCollapsedLogo).not.toBeNull();
-    expect(lightCollapsedLogo?.getAttribute("src")).toContain(
-      "two-weeks-logo.png",
-    );
-    expect(lightCollapsedLogo).not.toHaveClass("sb-toggle__collapsed-logo--dark");
-    expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
-
-    fireEvent.click(toggle);
-
-    const expandedToggle = screen.getByRole("button", { name: "Close sidebar" });
-    expect(expandedToggle).toHaveClass("sb-toggle--labeled");
-    expect(expandedToggle).toHaveTextContent("two weeks.");
-    expect(screen.getByText("two weeks")).toHaveClass("sb-toggle__label");
-
-    unmount();
-    setViewportWidth(640);
-    mockThemeMode = "dark";
-    render(
-      <MemoryRouter initialEntries={["/cv"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    const collapsedToggle = screen.getByRole("button", {
-      name: "Open sidebar",
-    });
-    const darkCollapsedLogo = collapsedToggle.querySelector(
-      ".sb-toggle__collapsed-logo",
-    ) as HTMLImageElement | null;
-    const darkCollapsedLogoShell = collapsedToggle.querySelector(
-      ".sb-toggle__collapsed-logo-shell",
-    ) as HTMLSpanElement | null;
-    expect(darkCollapsedLogoShell).not.toBeNull();
-    expect(darkCollapsedLogo).not.toBeNull();
-    expect(darkCollapsedLogo?.getAttribute("src")).toContain(
-      "two-weeks-logo.png",
-    );
-    expect(darkCollapsedLogo).toHaveClass("sb-toggle__collapsed-logo--dark");
-    expect(collapsedToggle.querySelector("svg")).toBeNull();
-    expect(screen.queryByText("two weeks")).not.toBeInTheDocument();
-  });
-
-  it("keeps expanded sidebar content mounted until the unpin collapse animation completes", () => {
+  it("pins the active CV peek drawer from the active CV rail item", () => {
     vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/cv", <RegisterCvPanels />);
 
-    try {
-      const { container } = render(
-        <MemoryRouter initialEntries={["/cv"]}>
-          <Sidebar />
-          <Routes>
-            <Route path="/cv" element={<CvRoute />} />
-            <Route path="/proposal" element={<ProposalRouteProbe />} />
-          </Routes>
-        </MemoryRouter>,
+    const cv = screen.getByRole("button", { name: "CV" });
+    expect(cv).toHaveAttribute("aria-current", "page");
+    expect(cv).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.pointerEnter(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(
+      screen.getByRole("complementary", { name: "CV library" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Collapse drawer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/cv");
+
+    fireEvent.click(cv);
+
+    expect(cv).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getByRole("complementary", { name: "CV library" }),
+    ).toHaveAttribute("data-mode", "docked");
+    expect(
+      screen.queryByRole("button", { name: "Pin drawer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/cv");
+  });
+
+  it("keeps a direct CV rail click as overlay without requiring a second click", () => {
+    mockFinePointer(true);
+    renderSidebar("/cv", <RegisterCvPanels />);
+
+    const cv = screen.getByRole("button", { name: "CV" });
+    fireEvent.click(cv);
+    expect(
+      screen.getByRole("complementary", { name: "CV library" }),
+    ).toHaveAttribute("data-mode", "overlay");
+    expect(
+      screen.getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps CV Forge Jobs as direct navigation and Projects as mixed library", () => {
+    renderSidebar("/cv", <RegisterCvPanels />);
+
+    fireEvent.click(screen.getByRole("link", { name: "Jobs" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/jobs");
+  });
+
+  it("opens the CV Forge mixed library drawer from Projects", () => {
+    renderSidebar("/cv", <RegisterCvPanels />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+
+    expect(
+      screen.getByRole("complementary", { name: "Library" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Library drawer content")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "CV" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent("/cv");
+  });
+
+  it.each(["/dashboard", "/documents"])(
+    "navigates Templates to the global templates page from %s",
+    (path) => {
+      renderSidebar(path);
+
+      fireEvent.click(screen.getByRole("link", { name: "Templates" }));
+
+      expect(screen.getByTestId("location")).toHaveTextContent("/templates");
+    },
+  );
+
+  it("opens the proposal template panel from hover and navigates on click", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    const onSelect = vi.fn();
+    renderSidebar(
+      "/proposal",
+      <RegisterTemplates surface="proposal" onSelect={onSelect} />,
+    );
+
+    const templates = screen.getByRole("link", { name: "Templates" });
+    fireEvent.pointerEnter(templates, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(
+      screen.getByRole("complementary", { name: "Proposal templates" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Proposal" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+
+    fireEvent.click(templates);
+    expect(screen.getByTestId("location")).toHaveTextContent("/templates");
+  });
+
+  it("keeps route-active and drawer-open rail states separate on Proposal Forge", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    const proposal = screen.getByRole("button", { name: "Proposal" });
+    const cv = screen.getByRole("link", { name: "CV" });
+
+    expect(proposal).toHaveAttribute("aria-current", "page");
+    expect(proposal).toHaveClass("sb-rail-button--route-active");
+    expect(cv).not.toHaveAttribute("aria-current");
+
+    fireEvent.pointerEnter(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(proposal).toHaveAttribute("aria-current", "page");
+    expect(proposal).toHaveClass("sb-rail-button--route-active");
+    expect(cv).not.toHaveAttribute("aria-current");
+    expect(cv).toHaveClass("sb-rail-button--panel-open");
+    expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+  });
+
+  it.each([
+    ["Jobs", "/jobs"],
+    ["CV", "/cv"],
+    ["Projects", "/documents"],
+    ["Templates", "/templates"],
+  ])(
+    "navigates from Proposal Forge to %s on desktop click",
+    (railLabel, route) => {
+      mockFinePointer(true);
+      renderSidebar(
+        "/proposal",
+        <>
+          <RegisterProposalPanels />
+          <RegisterTemplates surface="proposal" onSelect={vi.fn()} />
+        </>,
       );
 
-      expect(container.querySelector(".sb__nav--stack")).toBeNull();
-      expect(container.querySelector(".sb__nav--rail")).not.toBeNull();
+      fireEvent.click(screen.getByRole("link", { name: railLabel }));
 
-      pinSidebar();
+      expect(screen.getByTestId("location")).toHaveTextContent(route);
+    },
+  );
 
-      expect(container.querySelector(".sb__nav--stack")).not.toBeNull();
-      expect(container.querySelector(".sb__nav--rail")).toBeNull();
+  it("opens the saved proposals drawer as overlay from Proposal click on Proposal Forge", () => {
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
 
-      fireEvent.click(screen.getAllByRole("button", { name: "Close sidebar" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Proposal" }));
 
-      expect(container.querySelector(".sb--collapsed")).not.toBeNull();
-      expect(container.querySelector(".sb__nav--stack")).toBeNull();
-      expect(container.querySelector(".sb__nav--rail")).not.toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(
+      screen.getByRole("complementary", { name: "Saved proposals" }),
+    ).toHaveAttribute("data-mode", "overlay");
+    expect(
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
   });
 
-  it("renders a top-level Jobs navigation entry", () => {
-    render(
-      <MemoryRouter initialEntries={["/cv"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-          <Route path="/jobs" element={<LocationProbe />} />
-        </Routes>
-      </MemoryRouter>,
+  it("pins the saved proposals peek drawer from Proposal rail click", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    const proposal = screen.getByRole("button", { name: "Proposal" });
+    fireEvent.pointerEnter(proposal, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(
+      screen.getByRole("complementary", { name: "Saved proposals" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(proposal);
+
+    expect(
+      screen.getByRole("complementary", { name: "Saved proposals" }),
+    ).toHaveAttribute("data-mode", "docked");
+    expect(
+      screen.queryByRole("button", { name: "Pin drawer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens proposal drawers from rail hover on fine pointer devices", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    fireEvent.pointerEnter(screen.getByLabelText("Jobs"), {
+      pointerType: "mouse",
+    });
+
+    expect(
+      screen.queryByRole("complementary", { name: "Attach job" }),
+    ).not.toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+  });
+
+  it.each([
+    ["CV", "Attach CV"],
+    ["Jobs", "Attach job"],
+    ["Projects", "Library"],
+    ["Templates", "Proposal templates"],
+  ])("opens the %s drawer from desktop hover", (railLabel, drawerLabel) => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar(
+      "/proposal",
+      <>
+        <RegisterProposalPanels />
+        <RegisterTemplates surface="proposal" onSelect={vi.fn()} />
+      </>,
     );
+
+    fireEvent.pointerEnter(screen.getByLabelText(railLabel), {
+      pointerType: "mouse",
+    });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(
+      screen.getByRole("complementary", { name: drawerLabel }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
+  });
+
+  it("does not show the collapse handle for hover peek drawers", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    fireEvent.pointerEnter(screen.getByLabelText("CV"), {
+      pointerType: "mouse",
+    });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Collapse drawer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
+  });
+
+  it("switches to pinned drawer chrome without physical reflow when the viewport is narrow", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    window.innerWidth = 900;
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    fireEvent.pointerEnter(screen.getByLabelText("CV"), {
+      pointerType: "mouse",
+    });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
+
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toHaveAttribute("data-mode", "docked");
+    expect(
+      screen.queryByRole("button", { name: "Pin drawer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
+  });
+
+  it("docks a peek drawer from the drawer pin action when width supports it", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    const cv = screen.getByRole("link", { name: "CV" });
+
+    fireEvent.pointerEnter(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
+    expect(cv).toHaveClass("sb-rail-button--panel-open");
+
+    fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toHaveAttribute("data-mode", "docked");
+    expect(
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
+
+    fireEvent.pointerLeave(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(180);
+    });
+
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
+  });
+
+  it("closes an unpinned hover CV drawer when leaving the rail trigger", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    const cv = screen.getByRole("link", { name: "CV" });
+    fireEvent.pointerEnter(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
+
+    fireEvent.pointerLeave(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(360);
+    });
+
+    expect(
+      screen.queryByRole("complementary", { name: "Attach CV" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not flicker closed immediately after leaving a hover trigger", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    const cv = screen.getByRole("link", { name: "CV" });
+    fireEvent.pointerEnter(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
+
+    fireEvent.pointerLeave(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(180);
+    });
+
+    expect(
+      screen.getByRole("complementary", { name: "Attach CV" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps a docked drawer stable across other hovers", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    const jobs = screen.getByRole("link", { name: "Jobs" });
+    const cv = screen.getByRole("link", { name: "CV" });
+
+    fireEvent.pointerEnter(jobs, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
+    expect(jobs).toHaveClass("sb-rail-button--panel-open");
+
+    fireEvent.pointerEnter(cv, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "Attach CV" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("closes docked drawers from the collapse handle", () => {
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Jobs" }));
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pin drawer" }));
+    expect(
+      screen.getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse drawer" }));
+
+    expect(
+      screen.queryByRole("complementary", { name: "Attach job" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps hover-open drawers persistent while moving from rail into panel", () => {
+    vi.useFakeTimers();
+    mockFinePointer(true);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    const jobs = screen.getByRole("link", { name: "Jobs" });
+    fireEvent.pointerEnter(jobs, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+
+    const drawer = screen.getByRole("complementary", { name: "Attach job" });
+    fireEvent.pointerLeave(jobs, { pointerType: "mouse" });
+    fireEvent.pointerEnter(drawer, { pointerType: "mouse" });
+    act(() => {
+      vi.advanceTimersByTime(180);
+    });
+
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not open contextual drawers from hover on touch pointer devices", () => {
+    vi.useFakeTimers();
+    mockFinePointer(false);
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    fireEvent.pointerEnter(screen.getByRole("button", { name: "Jobs" }), {
+      pointerType: "touch",
+    });
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    expect(
+      screen.queryByRole("complementary", { name: "Attach job" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Jobs" }));
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
+  });
+
+  it("closes contextual drawers with Escape", () => {
+    renderSidebar("/proposal", <RegisterProposalPanels />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Jobs" }));
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(
+      screen.queryByRole("complementary", { name: "Attach job" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps Jobs as normal navigation from CV Forge", () => {
+    renderSidebar("/cv", <RegisterTemplates surface="cv" onSelect={vi.fn()} />);
 
     expect(screen.getByRole("link", { name: "Jobs" })).toHaveAttribute(
       "href",
       "/jobs",
     );
-    pinSidebar();
-
-    expect(screen.getByRole("link", { name: /Jobs/ })).toHaveClass(
-      "sb-section__action",
-    );
-    expect(screen.queryByText("Workspace")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Onboarding \(preview\)/i)).not.toBeInTheDocument();
   });
 
-  it("fully removes the sidebar from layout on very narrow mobile widths", () => {
-    setViewportWidth(440);
+  it("opens the mixed library drawer from Projects on CV Forge", () => {
+    renderSidebar("/cv", <RegisterCvPanels />);
 
-    const { container } = render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    expect(container.querySelector("aside.sb")).toBeNull();
-  });
-
-  it("refreshes proposal workspace draft state when the window regains focus", async () => {
-    render(
-      <MemoryRouter initialEntries={["/cv"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Projects" }));
 
     expect(
-      screen.queryByText("Operations Associate Proposal"),
-    ).not.toBeInTheDocument();
+      screen.getByRole("complementary", { name: "Library" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Library drawer content")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/cv");
+  });
 
-    pinSidebar();
-    writeProposalDraftToStorage();
-    await act(async () => {
-      window.dispatchEvent(new Event("focus"));
-    });
+  it.each([
+    ["Jobs", "Attach job", "Open Jobs page", "/jobs"],
+    ["CV", "Attach CV", "Open CV Forge", "/cv"],
+    [
+      "Proposal",
+      "Saved proposals",
+      "Open Library",
+      "/documents?type=proposals",
+    ],
+    ["Projects", "Library", "Open Library", "/documents?type=proposals"],
+  ])(
+    "uses explicit full-page header route from proposal %s drawer",
+    (railLabel, drawerLabel, browseLabel, route) => {
+      renderSidebar("/proposal", <RegisterProposalPanels />);
 
-    await waitFor(() => {
+      fireEvent.click(screen.getByRole("button", { name: railLabel }));
       expect(
-        screen.getByText("Operations Associate Proposal"),
+        screen.getByRole("complementary", { name: drawerLabel }),
       ).toBeInTheDocument();
-    });
+
+      const headerAction = screen.getByRole("button", { name: browseLabel });
+      expect(headerAction.querySelector("svg")).toBeTruthy();
+      fireEvent.click(headerAction);
+
+      expect(screen.getByTestId("location")).toHaveTextContent(route);
+    },
+  );
+
+  it("uses canonical documents browse route from the CV Forge library drawer", () => {
+    renderSidebar("/cv", <RegisterCvPanels />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Projects" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Library" }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/documents?type=cvs",
+    );
   });
 
-  it("does not ship the static skeleton onboarding preview link", () => {
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-        </Routes>
-      </MemoryRouter>,
+  it("contextual panel browse action navigates to all templates", () => {
+    renderSidebar(
+      "/proposal",
+      <RegisterTemplates surface="proposal" onSelect={vi.fn()} />,
     );
 
-    pinSidebar();
+    fireEvent.click(screen.getByRole("button", { name: "Templates" }));
+    const headerAction = screen.getByRole("button", { name: "Open Templates" });
+    expect(headerAction.querySelector("svg")).toBeTruthy();
+    fireEvent.click(headerAction);
 
-    expect(screen.queryByText("Onboarding (preview)")).not.toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/templates");
     expect(
-      screen.queryByRole("button", { name: "Replay onboarding" }),
+      screen.queryByRole("complementary", { name: "Proposal templates" }),
     ).not.toBeInTheDocument();
-  });
-
-  it("keeps the resume workspace item visible from currentCvId while proposal stays active", () => {
-    mockCvLibraryState.cvs = [
-      {
-        id: "cv_alpha",
-        title: "Alex Martin Resume",
-        sections: [],
-      },
-    ];
-    mockCvLibraryState.currentCvId = "cv_alpha";
-    writeProposalDraftToStorage();
-
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    pinSidebar();
-
-    expect(screen.getByText("Operations Associate Proposal")).toBeInTheDocument();
-    expect(screen.getByText("Alex Martin Resume")).toBeInTheDocument();
-  });
-
-  it("uses the canonical saved proposal href in the sidebar list", () => {
-    render(
-      <MemoryRouter initialEntries={["/cv"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    pinSidebar();
-
-    expect(screen.getByText("Saved proposal beta").closest("a")).toHaveAttribute(
-      "href",
-      "/proposal?view=saved&id=proposal_saved",
-    );
-  });
-
-  it("keeps recents focused on saved proposal rows", () => {
-    writeProposalDraftToStorage();
-
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    pinSidebar();
-
-    expect(screen.queryByText("Server draft proposal")).not.toBeInTheDocument();
-    expect(screen.getByText("Saved proposal beta").closest("a")).toHaveAttribute(
-      "href",
-      "/proposal?view=saved&id=proposal_saved",
-    );
-  });
-
-  it("shows the just-saved proposal in the saved list immediately when the saved route opens", () => {
-    writeProposalDraftToStorage();
-
-    render(
-      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_new"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    pinSidebar();
-
-    expect(screen.queryByText("Operations Associate Proposal")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Proposal forge/ })).toHaveAttribute(
-      "href",
-      "/proposal?view=saved&id=proposal_new",
-    );
-  });
-
-  it("uses in-place active rows instead of a separate Current section", () => {
-    mockCvLibraryState.currentCv = {
-      id: "cv_alpha",
-      title: "Alex Martin Resume",
-      sections: [],
-    };
-    mockCvLibraryState.currentCvId = "cv_alpha";
-    writeProposalDraftToStorage();
-
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <Sidebar />
-        <Routes>
-          <Route path="/cv" element={<CvRoute />} />
-          <Route path="/proposal" element={<ProposalRouteProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    pinSidebar();
-
-    expect(screen.queryByText("Current")).not.toBeInTheDocument();
-    expect(screen.getByText("Recent")).toBeInTheDocument();
-    expect(screen.getByText("Documents")).toBeInTheDocument();
-    expect(
-      screen.getByText("Operations Associate Proposal").closest("a"),
-    ).toHaveAttribute("aria-current", "page");
   });
 });

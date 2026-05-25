@@ -58,9 +58,13 @@ import {
   LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY,
   LOCAL_CV_LIBRARY_STORAGE_KEY,
 } from "../lib/cv-local-storage";
-import { serializeVerbatiStyle } from "../features/verbati/style";
+import { resolveVerbatiStyle, serializeVerbatiStyle } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import type { DocumentStyleMetadata } from "../lib/document-style-slots";
+import {
+  isWorkshopResumeTemplateId,
+  type ResumeTemplateId,
+} from "../lib/layout/resumeTemplates";
 
 /**
  * Small, safe deep equality check used for dirty detection.
@@ -75,10 +79,23 @@ function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 function applyAutoTitleIfPlaceholder(doc: CvDocument): CvDocument {
+  if (doc.metadata?.titleLocked === true) return doc;
   if (!isPlaceholderCvTitle(doc.title)) return doc;
   const derived = deriveCvTitleCandidateFromSections(doc.sections);
   if (!derived || derived === doc.title) return doc;
   return { ...doc, title: derived };
+}
+
+function applyManualTitle(doc: CvDocument, newTitle: string): CvDocument {
+  return {
+    ...doc,
+    title: newTitle,
+    metadata: {
+      ...(doc.metadata ?? {}),
+      updatedAt: new Date().toISOString(),
+      titleLocked: true,
+    },
+  };
 }
 
 function readUpdatedAtMs(doc: CvDocument | null | undefined): number | null {
@@ -434,7 +451,7 @@ function buildRemoteLibrarySummary(
     return null;
   }
 
-  return inflateCvLibraryIndexEntry(buildCvLibraryIndexEntry(sourceDocument));
+  return sourceDocument;
 }
 
 /**
@@ -462,6 +479,7 @@ export interface ICvLibraryContext {
   // True when currentCv carries user-provided content beyond the blank template.
   hasMeaningfulContent: boolean;
   loadCv: (id: string) => boolean;
+  hydrateCvDocument: (id: string) => Promise<CvDocument | null>;
   saveCurrentCv: () => Promise<void>;
   // Create a CV document from an ICvState snapshot (used by LocalBackupsPanel)
   createCvFromState: (
@@ -469,7 +487,10 @@ export interface ICvLibraryContext {
     title?: string,
   ) => void;
   // Create a new CV from a built-in template
-  createNewCv: (title?: string, opts?: { forceV1?: boolean }) => Promise<void>;
+  createNewCv: (
+    title?: string,
+    opts?: { forceV1?: boolean; resumeTemplateId?: ResumeTemplateId },
+  ) => Promise<void>;
   // Import a fully-normalized CvDocument (used by file import workflows).
   // This replaces the current CV with the provided document and schedules persistence.
   importCv: (doc: CvDocument) => Promise<void>;
@@ -1655,6 +1676,107 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     }
   }
 
+  const readCachedFullCvDocument = useCallback(
+    (id: string): CvDocument | null => {
+      if (typeof window === "undefined" || !window.localStorage) {
+        return null;
+      }
+
+      const keys = [
+        getLocalCvDocumentStorageKey(id),
+        getLegacyLocalCvDocumentStorageKey(id),
+      ];
+
+      for (const key of keys) {
+        try {
+          const raw = window.localStorage.getItem(key);
+          if (!raw) continue;
+          const parsed = JSON.parse(raw);
+          const parsedResult = safeParseCvDocument(parsed);
+          const doc = parsedResult.ok
+            ? parsedResult.value
+            : parsed &&
+                typeof parsed === "object" &&
+                typeof parsed.id === "string" &&
+                Array.isArray(parsed.sections)
+              ? (parsed as CvDocument)
+              : null;
+          if (doc && !isLibrarySummaryOnlyCv(doc)) {
+            return doc;
+          }
+        } catch {
+          /* ignore malformed cached documents */
+        }
+      }
+
+      return null;
+    },
+    [],
+  );
+
+  const normalizeHydratedCvDocument = useCallback((doc: CvDocument) => {
+    let migrated = doc;
+    try {
+      migrated = migrateLegacyIds(doc);
+    } catch {
+      /* noop */
+    }
+    const docV1 = normalizeToV1Document(migrated);
+    return ensureRepresentativeBlocks(docV1);
+  }, []);
+
+  const hydrateCvDocument = useCallback(
+    async (id: string): Promise<CvDocument | null> => {
+      const targetId = String(id).trim();
+      if (!targetId) return null;
+
+      const inMemoryDoc =
+        currentCvRef.current && String(currentCvRef.current.id) === targetId
+          ? currentCvRef.current
+          : cvsRef.current.find((candidate) => String(candidate.id) === targetId) ??
+            null;
+
+      if (inMemoryDoc && !isLibrarySummaryOnlyCv(inMemoryDoc)) {
+        return normalizeHydratedCvDocument(inMemoryDoc);
+      }
+
+      const cachedDoc = readCachedFullCvDocument(targetId);
+      if (cachedDoc) {
+        const normalized = normalizeHydratedCvDocument(cachedDoc);
+        cacheDocumentLocally(normalized);
+        setCvs((prev) =>
+          prev.some((candidate) => String(candidate.id) === targetId)
+            ? prev.map((candidate) =>
+                String(candidate.id) === targetId ? normalized : candidate,
+              )
+            : [...prev, normalized],
+        );
+        return normalized;
+      }
+
+      try {
+        const remoteDoc = await adapter.load(targetId);
+        if (!remoteDoc || isLibrarySummaryOnlyCv(remoteDoc)) {
+          return null;
+        }
+        const normalized = normalizeHydratedCvDocument(remoteDoc);
+        cacheDocumentLocally(normalized);
+        setCvs((prev) =>
+          prev.some((candidate) => String(candidate.id) === targetId)
+            ? prev.map((candidate) =>
+                String(candidate.id) === targetId ? normalized : candidate,
+              )
+            : [...prev, normalized],
+        );
+        return normalized;
+      } catch (error) {
+        console.warn("[CvLibraryContext] hydrateCvDocument failed", error);
+        return null;
+      }
+    },
+    [adapter, normalizeHydratedCvDocument, readCachedFullCvDocument],
+  );
+
   function removeDocumentLocally(id: string) {
     try {
       if (typeof window !== "undefined" && window.localStorage) {
@@ -2747,7 +2869,10 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
    * This function uses generateCvTemplate() to ensure a fresh document.
    */
   const createNewCv = useCallback(
-    async (title?: string, opts?: { forceV1?: boolean }) => {
+    async (
+      title?: string,
+      opts?: { forceV1?: boolean; resumeTemplateId?: ResumeTemplateId },
+    ) => {
       try {
         await prepareCurrentCvForReplacement();
 
@@ -2756,6 +2881,21 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         // documents are v1-shaped and avoid legacy UI being shown for new docs.
         const explicitDisableV1 = opts?.forceV1 === false;
         const shouldUseV1 = !explicitDisableV1;
+        const requestedResumeTemplateId = isWorkshopResumeTemplateId(
+          opts?.resumeTemplateId,
+        )
+          ? opts.resumeTemplateId
+          : null;
+        const initialVerbatiStyle = requestedResumeTemplateId
+          ? serializeVerbatiStyle(
+              resolveVerbatiStyle({
+                familyId: "workshop",
+                typography: "geist-baskervville",
+                palette: "sauge",
+                resumeTemplateId: requestedResumeTemplateId,
+              }),
+            )
+          : null;
 
         let cvRaw = shouldUseV1
           ? generateCvTemplateV1(title)
@@ -2817,6 +2957,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
 
         const cv = {
           ...(ensureRepresentativeBlocks(cvRaw as CvDocument) as CvDocument),
+          metadata: {
+            ...((cvRaw as CvDocument).metadata ?? {}),
+            ...(initialVerbatiStyle
+              ? { verbatiStyle: initialVerbatiStyle }
+              : null),
+          },
           // Back-compat: seed legacy cvState so tests relying on it can function
           cvState: { sections: [], source: "manual", history: [] } as any,
         } as CvDocument;
@@ -2914,13 +3060,29 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       const importOrderIndex = new Map(
         preferredImportOrder.map((t, i) => [t, i]),
       );
-      const reorderedSections = [...validated.sections].sort((a, b) => {
-        const aRank =
-          importOrderIndex.get(String((a as any).type ?? "") as any) ?? 999;
-        const bRank =
-          importOrderIndex.get(String((b as any).type ?? "") as any) ?? 999;
-        return aRank - bRank;
-      });
+      const hasExplicitSectionOrder = validated.sections.some(
+        (section) => typeof section.order === "number",
+      );
+      const reorderedSections = [...validated.sections]
+        .map((section, index) => ({ section, index }))
+        .sort((a, b) => {
+          if (hasExplicitSectionOrder) {
+            const aOrder =
+              typeof a.section.order === "number" ? a.section.order : a.index;
+            const bOrder =
+              typeof b.section.order === "number" ? b.section.order : b.index;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return a.index - b.index;
+          }
+
+          const aRank =
+            importOrderIndex.get(String((a.section as any).type ?? "") as any) ?? 999;
+          const bRank =
+            importOrderIndex.get(String((b.section as any).type ?? "") as any) ?? 999;
+          if (aRank !== bRank) return aRank - bRank;
+          return a.index - b.index;
+        })
+        .map(({ section }) => section);
       const validatedReordered = {
         ...validated,
         sections: reorderedSections,
@@ -3781,13 +3943,20 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   }
 
   function renameCvCtx(id: string, newTitle: string): void {
+    let renamedCurrent: CvDocument | null = null;
     setCvs((prev) =>
       prev.map((c) =>
-        String(c.id) === String(id) ? { ...c, title: newTitle } : c,
+        String(c.id) === String(id) ? applyManualTitle(c, newTitle) : c,
       ),
     );
-    if (currentCv && String(currentCv.id) === String(id)) {
-      safeSetCurrentCv({ ...currentCv, title: newTitle });
+    const activeCv = currentCvRef.current ?? currentCv;
+    if (activeCv && String(activeCv.id) === String(id)) {
+      renamedCurrent = applyManualTitle(activeCv, newTitle);
+      safeSetCurrentCv(renamedCurrent);
+    }
+    if (renamedCurrent) {
+      cacheDocumentLocally(renamedCurrent);
+      void scheduleSave(renamedCurrent);
     }
   }
 
@@ -3862,6 +4031,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       isV1Active,
       hasMeaningfulContent: hasMeaningfulCvContent(currentCv),
       loadCv,
+      hydrateCvDocument,
       saveCurrentCv,
       createCvFromState,
       createNewCv,
@@ -3915,6 +4085,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       lastLibraryFetchFailed,
       isDirty,
       loadCv,
+      hydrateCvDocument,
       saveCurrentCv,
       createCvFromState,
       createNewCv,

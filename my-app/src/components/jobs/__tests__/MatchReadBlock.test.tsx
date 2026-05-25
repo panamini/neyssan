@@ -106,7 +106,7 @@ describe("MatchReadBlock", () => {
     );
 
     expect(screen.queryByText("No scoring profile data available")).toBeNull();
-    expect(screen.getByText("Strong match — review.")).toBeInTheDocument();
+    expect(screen.getByText("Compatibility analysis")).toBeInTheDocument();
     expect(screen.getByText("Skills")).toBeInTheDocument();
     expect(screen.queryByText(/Confidence/)).toBeNull();
     expect(screen.queryByText("Airtable")).toBeNull();
@@ -206,11 +206,12 @@ describe("MatchReadBlock", () => {
     fireEvent.click(screen.getByRole("button", { name: "See full breakdown" }));
     expect(screen.getAllByText("Missing").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Customer-facing experience")).toBeInTheDocument();
-    expect(screen.getByText("Miami · match.")).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText(/Miami · match/)).toBeInTheDocument();
     expect(screen.queryByText("Compensation")).toBeNull();
     expect(screen.queryByText("Acme")).toBeNull();
     expect(screen.queryByText("Equal opportunity employer")).toBeNull();
-    expect(screen.getByText("Worth a shot — review.")).toBeInTheDocument();
+    expect(screen.getByText("Compatibility analysis")).toBeInTheDocument();
   });
 
   it("renders a compact match review panel when the backend projection provides one", () => {
@@ -221,16 +222,16 @@ describe("MatchReadBlock", () => {
       />,
     );
 
-    expect(screen.getByText("Worth a shot — apply.")).toBeInTheDocument();
     expect(
       screen.getByText("Partial match. A few checks left."),
     ).toBeInTheDocument();
     expect(screen.getByText("Operations overlaps.")).toBeInTheDocument();
-    expect(screen.getByText("Guard card/license unclear.")).toBeInTheDocument();
+    expect(screen.getByText(/Guard card\/license unclear/)).toBeInTheDocument();
     expect(screen.getByText("Skills")).toBeInTheDocument();
     expect(screen.getByText("Seniority")).toBeInTheDocument();
-    expect(screen.getByText("Location")).toBeInTheDocument();
-    expect(screen.getByText("Gap")).toBeInTheDocument();
+    expect(screen.getByText("Gaps")).toBeInTheDocument();
+    expect(screen.queryByText("Location")).toBeNull();
+    expect(screen.queryByText("Gap")).toBeNull();
     expect(screen.queryAllByRole("listitem")).toHaveLength(0);
     expect(screen.queryByText("Possible lead · 68%")).toBeNull();
     expect(screen.queryByText("Partial · 50%")).toBeNull();
@@ -248,7 +249,7 @@ describe("MatchReadBlock", () => {
     );
 
     expect(screen.getByText("Operations overlap.").tagName).toBe("SPAN");
-    expect(screen.getByText("License unclear.").tagName).toBe("SPAN");
+    expect(screen.getByText(/License unclear/).tagName).toBe("SPAN");
     expect(screen.queryAllByRole("listitem")).toHaveLength(0);
   });
 
@@ -267,7 +268,7 @@ describe("MatchReadBlock", () => {
       />,
     );
 
-    expect(screen.getByText("Worth a shot — review.")).toBeInTheDocument();
+    expect(screen.getByText("Compatibility analysis")).toBeInTheDocument();
     expect(screen.queryByText("Probably skip · 0%")).toBeNull();
     expect(screen.queryByText("Operations overlaps.")).toBeNull();
   });
@@ -291,8 +292,10 @@ describe("MatchReadBlock", () => {
       />,
     );
 
-    expect(screen.getByText("Probably skip.")).toBeInTheDocument();
-    expect(screen.getByText("Weak match. Limited overlap.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Weak match. Limited overlap."),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Probably skip — review.")).toBeNull();
+    expect(screen.queryByText("Probably skip.")).toBeNull();
   });
 });

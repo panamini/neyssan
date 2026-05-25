@@ -1,402 +1,212 @@
 import React from "react";
 import {
-  ClipboardText,
+  ChatCircleText,
+  Layout,
   Eye,
-  FilePdf,
-  FolderOpen,
-  FolderSimple,
+  Palette,
+  ListNumbers,
   PenLine,
-  ShareFat,
 } from "@/lib/icons";
-import { Button, Menu, Pill, Sheet, ToneBadge } from "../ui";
-import type { CvToneChoice } from "./CvRail";
-
-type SafeSendRowState = "clear" | "warn" | "danger";
-
-type SafeSendRow = {
-  title: string;
-  meta: string;
-  state: SafeSendRowState;
-  label: string;
-  action?: React.ReactNode;
-};
-
-export type CvStageBarResumeOption = {
-  id: string;
-  title: string;
-  description: string | null;
-  selected: boolean;
-};
+import { Button } from "../ui";
+import type { CommandLayerModeControlMode } from "@/lib/document-command-layer-layout";
 
 type CvStageBarProps = {
   mode: "edit" | "preview";
-  hasCurrentCv: boolean;
-  hasTrustedExport: boolean;
-  importIssueCount: number;
-  exporting: boolean;
-  tone: CvToneChoice;
-  resumeOptions: CvStageBarResumeOption[];
+  toolbarStyle?: React.CSSProperties;
+  modeControlMode?: CommandLayerModeControlMode;
+  commandLayerSticky?: boolean;
+  commandLayerMeasured?: boolean;
+  templatesOpen?: boolean;
+  sectionsOpen?: boolean;
+  designOpen?: boolean;
   onModeChange: (mode: "edit" | "preview") => void;
-  onOpenImportReview: () => void;
-  onPickResume: (cvId: string) => void;
-  onExportPdf: () => void;
-  onExportDocx: () => void;
+  onOpenSections?: () => void;
+  onOpenDesign?: () => void;
+  onOpenTemplates?: () => void;
+  askOpen?: boolean;
+  onOpenAsk?: () => void;
 };
 
 export function CvStageBar({
   mode,
-  hasCurrentCv,
-  hasTrustedExport,
-  importIssueCount,
-  exporting,
-  tone,
-  resumeOptions,
+  toolbarStyle,
+  modeControlMode = "split",
+  commandLayerSticky = false,
+  commandLayerMeasured = true,
+  templatesOpen = false,
+  sectionsOpen = false,
+  designOpen = false,
   onModeChange,
-  onOpenImportReview,
-  onPickResume,
-  onExportPdf,
-  onExportDocx,
+  onOpenSections,
+  onOpenDesign,
+  onOpenTemplates,
+  askOpen = false,
+  onOpenAsk,
 }: CvStageBarProps): JSX.Element {
-  const [safeSendOpen, setSafeSendOpen] = React.useState(false);
-  const resumeMenuSections = React.useMemo(
-    () => [
-      {
-        label: "Pick resume",
-        items:
-          resumeOptions.length > 0
-            ? resumeOptions.map((option) => ({
-                id: option.id,
-                role: "menuitemradio" as const,
-                selected: option.selected,
-                label: option.title,
-                description: option.description ?? "Saved resume.",
-                onSelect: () => onPickResume(option.id),
-              }))
-            : [
-                {
-                  id: "no-resumes",
-                  label: "No resumes available",
-                  description: "Import or create a resume first.",
-                  disabled: true,
-                },
-              ],
-      },
-    ],
-    [onPickResume, resumeOptions],
-  );
-  const safeSendRows: SafeSendRow[] = [
-    {
-      title: "Source job linked",
-      meta: "Optional for standalone CV export.",
-      state: "clear",
-      label: "Clear",
-    },
-    {
-      title: "Match review accepted",
-      meta: "No source job is required for CV-only export.",
-      state: "clear",
-      label: "Clear",
-    },
-    {
-      title: "CV variant selected",
-      meta: hasCurrentCv ? "Current CV is open." : "Open or create a CV.",
-      state: hasCurrentCv ? "clear" : "warn",
-      label: hasCurrentCv ? "Clear" : "Missing",
-    },
-    {
-      title: "Proposal linked",
-      meta: "Not required for CV-only export.",
-      state: "clear",
-      label: "Clear",
-    },
-    {
-      title: "Unresolved import issues",
-      meta:
-        importIssueCount > 0
-          ? `${importIssueCount} import ${importIssueCount === 1 ? "block needs" : "blocks need"} review.`
-          : "No import uncertainty detected.",
-      state: importIssueCount > 0 ? "warn" : "clear",
-      label: importIssueCount > 0 ? "Resolve" : "Clear",
-      action:
-        importIssueCount > 0 ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={onOpenImportReview}
-          >
-            Resolve
-          </Button>
-        ) : undefined,
-    },
-    {
-      title: "Unresolved AI suggestion",
-      meta: "Detection pending until section AI suggestions are attached.",
-      state: "warn",
-      label: "Detection pending",
-    },
-    {
-      title: "Unsupported claim",
-      meta: "Detection pending.",
-      state: "warn",
-      label: "Detection pending",
-    },
-    {
-      title: "No placeholder text",
-      meta: "No placeholder detector is active in this slice.",
-      state: "warn",
-      label: "Detection pending",
-    },
-    {
-      title: "Recipient or export target",
-      meta: "Pick PDF, DOCX, or handoff target.",
-      state: "warn",
-      label: "Not started",
-    },
-    {
-      title: "Final export reviewed",
-      meta: "Open Page preview before generating the sendable PDF.",
-      state: mode === "preview" ? "clear" : "warn",
-      label: mode === "preview" ? "Clear" : "Pending",
-    },
-  ];
-  const blocked = safeSendRows.some((row) => row.state !== "clear");
+  const stageIconSize = 18;
+  const isUltraCompactToolbar = modeControlMode === "toggle";
+  const nextMode = mode === "edit" ? "preview" : "edit";
+  const modeToggleLabel =
+    mode === "edit" ? "Switch to Preview" : "Switch to Edit";
+  const showAskHandle = mode === "preview" && Boolean(onOpenAsk);
 
   return (
     <>
-      <div className="dasti-cv-stage-bar dasti-toolbar--surface-tooltips">
-        <span
-          className={`ds-status ds-status--${exporting ? "accent" : hasCurrentCv ? "success" : "warning"} dasti-cv-stage-bar__status`}
-        >
-          <span
-            className="ds-status__dot"
-            data-pulsing={exporting ? "true" : undefined}
-            aria-hidden="true"
-          />
-          <span className="dasti-cv-stage-bar__status-label">
-            {exporting ? "Exporting PDF" : hasCurrentCv ? "Saved" : "No CV"}
-          </span>
-        </span>
-        <span
-          className="dasti-cv-ats"
-          data-state={hasTrustedExport ? "ready" : "warn"}
-          title={
-            hasTrustedExport
-              ? "Parses cleanly into Applicant Tracking Systems."
-              : "Use standard export until trusted parsing metadata is available."
-          }
-        >
-          <span className="dasti-cv-ats__mark" aria-hidden="true">
-            ATS
-          </span>
-          <span className="dasti-cv-ats__label">
-            {hasTrustedExport ? "ATS-ready" : "ATS review"}
-          </span>
-        </span>
-        <ToneBadge tone={tone}>
-          {tone.charAt(0).toUpperCase() + tone.slice(1)}
-        </ToneBadge>
-        <span className="dasti-cv-stage-bar__divider" aria-hidden="true" />
-        <div
-          className="style-segmented dasti-cv-stage-bar__mode"
-          role="group"
-          aria-label="CV view mode"
-        >
-          <button
-            type="button"
-            className="dasti-cv-mode-toggle"
-            data-selected={mode === "edit" ? "true" : undefined}
-            onClick={() => onModeChange("edit")}
-            aria-label="Edit"
-            data-toolbar-tooltip="Edit"
-          >
-            <PenLine size={14} strokeWidth={1.8} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className="dasti-cv-mode-toggle"
-            data-selected={mode === "preview" ? "true" : undefined}
-            onClick={() => onModeChange("preview")}
-            aria-label="Page preview"
-            data-toolbar-tooltip="Preview"
-          >
-            <Eye size={14} strokeWidth={1.8} aria-hidden="true" />
-          </button>
-        </div>
-        <Button type="button" size="sm" variant="ghost" disabled>
-          Version history
-        </Button>
-        <Menu
-          ariaLabel="Pick resume"
-          align="end"
-          menuClassName="dasti-cv-stage-bar__resume-menu"
-          sections={resumeMenuSections}
-          trigger={
-            <button
-              type="button"
-              className="dasti-cv-stage-bar__plain-action dasti-cv-stage-bar__pick-resume"
-              disabled={exporting}
-              aria-label="Pick resume"
-              data-toolbar-tooltip="Pick resume"
-            >
-              <span
-                className="dasti-cv-stage-bar__pick-icon dasti-cv-stage-bar__pick-icon--closed"
-                aria-hidden="true"
-              >
-                <FolderSimple size={15} strokeWidth={1.8} />
-              </span>
-              <span
-                className="dasti-cv-stage-bar__pick-icon dasti-cv-stage-bar__pick-icon--open"
-                aria-hidden="true"
-              >
-                <FolderOpen size={15} strokeWidth={1.8} />
-              </span>
-            </button>
-          }
-        />
-        <span
-          className="dasti-cv-stage-bar__action-divider"
-          aria-hidden="true"
-        />
-        <Menu
-          ariaLabel="Share CV"
-          align="end"
-          sections={[
-            {
-              items: [
-                {
-                  id: "safe-send",
-                  label: "Safe-send checklist",
-                  icon: <ClipboardText size={15} strokeWidth={1.8} />,
-                  onSelect: () => setSafeSendOpen(true),
-                },
-              ],
-            },
-            {
-              label: "Send",
-              items: [
-                { id: "email", label: "Send by email", disabled: true },
-                { id: "copy-link", label: "Copy link", disabled: true },
-                {
-                  id: "preview-link",
-                  label: "Public preview link",
-                  disabled: true,
-                },
-              ],
-            },
-            {
-              items: [
-                {
-                  id: "export-pdf",
-                  label: "Export PDF",
-                  icon: <FilePdf size={15} strokeWidth={1.8} />,
-                  disabled: !hasCurrentCv || exporting,
-                  onSelect: onExportPdf,
-                },
-                {
-                  id: "export-docx",
-                  label: "Export DOCX",
-                  icon: <FilePdf size={15} strokeWidth={1.8} />,
-                  disabled: !hasCurrentCv || exporting,
-                  onSelect: onExportDocx,
-                },
-              ],
-            },
-          ]}
-          trigger={
-            <button
-              type="button"
-              className="dasti-icon-button dasti-cv-stage-bar__plain-action dasti-cv-stage-bar__share"
-              aria-label="Share"
-              data-toolbar-tooltip="Share"
-            >
-              <ShareFat size={15} strokeWidth={1.8} aria-hidden="true" />
-            </button>
-          }
-        />
-      </div>
-      <Sheet
-        open={safeSendOpen}
-        onOpenChange={setSafeSendOpen}
-        title="Safe-send checklist"
-        description="Trust gate for export, share, and send. Each row must be cleared before the package can leave your hands."
-        footer={
-          <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="md"
-              onClick={() => setSafeSendOpen(false)}
-            >
-              Cancel
-            </Button>
-            <span className="dasti-proposal-safe-send__footer-spacer" />
-            <Button type="button" variant="secondary" size="md" disabled>
-              Review match
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              disabled={blocked}
-            >
-              Continue to send
-            </Button>
-          </>
-        }
+      <div
+        className="forge__stage-bar dasti-proposal-skeleton-stage__bar dasti-toolbar--surface-tooltips"
+        data-sticky={commandLayerSticky ? "true" : undefined}
+        data-command-layer-measured={commandLayerMeasured ? "true" : "false"}
+        data-testid="cv-toolbar"
+        style={toolbarStyle}
       >
-        <div className="dasti-proposal-safe-send">
-          <div className="dasti-proposal-safe-send__status">
-            <Pill tone={blocked ? "danger" : "success"}>
-              {blocked ? "Blocked" : "Clear"}
-            </Pill>
-            <strong>
-              {blocked
-                ? "CV package cannot be sent yet."
-                : "CV package can be sent."}
-            </strong>
-            <small>
-              {blocked
-                ? "Review pending checks before export or handoff."
-                : "All checks are clear for this CV."}
-            </small>
-          </div>
-          <div className="dasti-proposal-safe-send__list">
-            {safeSendRows.map((row) => (
-              <div
-                key={row.title}
-                className="dasti-proposal-safe-send__row"
-                data-state={row.state}
+        <div
+          className="dasti-proposal-skeleton-stage__toolbar-main dasti-cv-stage-bar"
+          role="group"
+          aria-label="CV toolbar"
+        >
+          <div
+            className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__actions dasti-proposal-skeleton-stage__actions--document dasti-cv-stage-bar__actions"
+            role="group"
+            aria-label="Document controls"
+          >
+            {isUltraCompactToolbar ? (
+              <button
+                type="button"
+                className="dasti-icon-button dasti-proposal-mode-toggle dasti-proposal-mode-toggle--single dasti-cv-mode-toggle dasti-cv-mode-toggle--single"
+                onClick={() => onModeChange(nextMode)}
+                aria-label={modeToggleLabel}
+                data-toolbar-tooltip={modeToggleLabel}
               >
-                <span className="dasti-proposal-safe-send__mark">
-                  {row.state === "clear"
-                    ? "OK"
-                    : row.state === "danger"
-                      ? "x"
-                      : "!"}
-                </span>
-                <span className="dasti-proposal-safe-send__copy">
-                  <strong>{row.title}</strong>
-                  <small>{row.meta}</small>
-                </span>
-                {row.action ?? (
-                  <Pill
-                    tone={
-                      row.state === "clear"
-                        ? "success"
-                        : row.state === "danger"
-                          ? "danger"
-                          : "warning"
-                    }
-                  >
-                    {row.label}
-                  </Pill>
+                {mode === "edit" ? (
+                  <PenLine
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Eye
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
                 )}
+              </button>
+            ) : (
+              <div
+                className="style-segmented dasti-proposal-skeleton-stage__mode dasti-cv-stage-bar__mode"
+                role="group"
+                aria-label="CV view mode"
+              >
+                <button
+                  type="button"
+                  className="dasti-proposal-mode-toggle dasti-cv-mode-toggle"
+                  data-selected={mode === "edit" ? "true" : undefined}
+                  onClick={() => onModeChange("edit")}
+                  aria-label="Edit"
+                  data-toolbar-tooltip="Edit"
+                >
+                  <PenLine
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                </button>
+                <button
+                  type="button"
+                  className="dasti-proposal-mode-toggle dasti-cv-mode-toggle"
+                  data-selected={mode === "preview" ? "true" : undefined}
+                  onClick={() => onModeChange("preview")}
+                  aria-label="Page preview"
+                  data-toolbar-tooltip="Preview"
+                >
+                  <Eye
+                    size={stageIconSize}
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
+                </button>
               </div>
-            ))}
+            )}
+            {onOpenSections ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="dasti-proposal-skeleton-stage__primary-action dasti-cv-stage-bar__primary-action"
+                iconLeft={
+                  <ListNumbers size={stageIconSize} strokeWidth={1.8} />
+                }
+                aria-expanded={sectionsOpen}
+                aria-label="Sections"
+                data-toolbar-tooltip="Sections"
+                data-stage-tooltip-mode="compact"
+                onClick={onOpenSections}
+              >
+                <span className="dasti-proposal-skeleton-stage__action-label dasti-cv-stage-bar__action-label">
+                  Sections
+                </span>
+              </Button>
+            ) : null}
+            {onOpenDesign ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="dasti-proposal-skeleton-stage__primary-action dasti-cv-stage-bar__primary-action"
+                iconLeft={<Palette size={stageIconSize} strokeWidth={1.8} />}
+                aria-expanded={designOpen}
+                aria-label="Design"
+                data-toolbar-tooltip="Design"
+                data-stage-tooltip-mode="compact"
+                onClick={onOpenDesign}
+              >
+                <span className="dasti-proposal-skeleton-stage__action-label dasti-cv-stage-bar__action-label">
+                  Design
+                </span>
+              </Button>
+            ) : null}
+            {onOpenTemplates ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="dasti-proposal-skeleton-stage__primary-action dasti-cv-stage-bar__primary-action"
+                iconLeft={<Layout size={stageIconSize} strokeWidth={1.8} />}
+                aria-expanded={templatesOpen}
+                aria-label="Templates"
+                data-toolbar-tooltip="Templates"
+                data-stage-tooltip-mode="compact"
+                onClick={onOpenTemplates}
+              >
+                <span className="dasti-proposal-skeleton-stage__action-label dasti-cv-stage-bar__action-label">
+                  Templates
+                </span>
+              </Button>
+            ) : null}
           </div>
         </div>
-      </Sheet>
+      </div>
+      {showAskHandle ? (
+        <div
+          className="dasti-proposal-skeleton-stage__ask-handle-layer dasti-toolbar--surface-tooltips"
+          data-sticky={commandLayerSticky ? "true" : undefined}
+          style={toolbarStyle}
+        >
+          <button
+            type="button"
+            className="dasti-icon-button dasti-proposal-skeleton-stage__ask-handle"
+            aria-expanded={askOpen}
+            aria-label="Ask"
+            title="Ask"
+            data-testid="cv-ask-handle"
+            data-toolbar-tooltip="Ask"
+            data-stage-tooltip-mode="compact"
+            onClick={onOpenAsk}
+          >
+            <ChatCircleText size={16} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }

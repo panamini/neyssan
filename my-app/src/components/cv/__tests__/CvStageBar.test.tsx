@@ -1,94 +1,85 @@
-import React from "react";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import CvStageBar from "../CvStageBar";
 
-const baseProps = {
-  mode: "edit" as const,
-  hasCurrentCv: true,
-  hasTrustedExport: true,
-  importIssueCount: 0,
-  exporting: false,
-  tone: "natural" as const,
-  onModeChange: vi.fn(),
-  onOpenImportReview: vi.fn(),
-  onPickResume: vi.fn(),
-  onExportPdf: vi.fn(),
-  onExportDocx: vi.fn(),
-};
-
-describe("CvStageBar", () => {
-  it("shows a compact pick resume menu and selects saved resumes", async () => {
-    const user = userEvent.setup();
-    const onPickResume = vi.fn();
-
+describe("CvStageBar command layer", () => {
+  it("renders CV document tools without Draft or toolbar Ask", () => {
     render(
       <CvStageBar
-        {...baseProps}
-        onPickResume={onPickResume}
-        resumeOptions={[
-          {
-            id: "resume_alpha",
-            title: "Product resume",
-            description: "6 sections",
-            selected: true,
-          },
-          {
-            id: "resume_beta",
-            title: "Design resume",
-            description: "5 sections",
-            selected: false,
-          },
-        ]}
+        mode="preview"
+        onModeChange={vi.fn()}
+        onOpenSections={vi.fn()}
+        onOpenDesign={vi.fn()}
+        onOpenTemplates={vi.fn()}
+        onOpenAsk={vi.fn()}
       />,
     );
 
-    const pickResumeTrigger = screen.getByRole("button", {
-      name: /Pick resume/i,
-    });
-    expect(pickResumeTrigger).toBeInTheDocument();
-    expect(pickResumeTrigger).toHaveClass("dasti-cv-stage-bar__plain-action");
-    expect(pickResumeTrigger).not.toHaveAttribute("title");
-    expect(pickResumeTrigger).toHaveAttribute(
-      "data-toolbar-tooltip",
-      "Pick resume",
-    );
-    expect(screen.queryByText("Pick resume")).not.toBeInTheDocument();
+    const toolbar = screen.getByTestId("cv-toolbar");
+
     expect(
-      pickResumeTrigger.closest(".dasti-toolbar--surface-tooltips"),
-    ).toBeTruthy();
-    const editTrigger = screen.getByRole("button", { name: "Edit" });
-    const previewTrigger = screen.getByRole("button", {
-      name: "Page preview",
-    });
-    const shareTrigger = screen.getByRole("button", { name: "Share" });
-    expect(editTrigger).toHaveAttribute("data-toolbar-tooltip", "Edit");
-    expect(previewTrigger).toHaveAttribute("data-toolbar-tooltip", "Preview");
-    expect(shareTrigger).toHaveAttribute("data-toolbar-tooltip", "Share");
-    expect(editTrigger).not.toHaveAttribute("title");
-    expect(previewTrigger).not.toHaveAttribute("title");
-    expect(shareTrigger).not.toHaveAttribute("title");
-    expect(screen.getByText("Natural")).toBeInTheDocument();
-    expect(screen.queryByText("Natural tone")).not.toBeInTheDocument();
-    expect(screen.getByText("Saved").closest(".ds-status")).toBeTruthy();
-    expect(
-      screen.getByText("ATS", { selector: ".dasti-cv-ats__mark" }),
+      within(toolbar).getByRole("button", { name: "Edit" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("OK")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /Import CV/i }),
+      within(toolbar).getByRole("button", { name: "Page preview" }),
+    ).toBeInTheDocument();
+    expect(
+      within(toolbar).getByRole("button", { name: "Sections" }),
+    ).toBeInTheDocument();
+    expect(
+      within(toolbar).getByRole("button", { name: "Design" }),
+    ).toBeInTheDocument();
+    expect(
+      within(toolbar).getByRole("button", { name: "Templates" }),
+    ).toBeInTheDocument();
+    expect(
+      within(toolbar).queryByRole("button", { name: /Draft/i }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /New CV/i }),
+      within(toolbar).queryByRole("button", { name: "Ask" }),
     ).not.toBeInTheDocument();
+    expect(screen.getByTestId("cv-ask-handle")).toHaveAttribute(
+      "aria-label",
+      "Ask",
+    );
+  });
 
-    await user.click(screen.getByRole("button", { name: /Pick resume/i }));
-    expect(pickResumeTrigger).toHaveAttribute("aria-expanded", "true");
-    await user.click(
-      await screen.findByRole("menuitemradio", { name: /Design resume/i }),
+  it("wires document toolbar actions to left-drawer modes and Ask to the side handle in preview", () => {
+    const onOpenSections = vi.fn();
+    const onOpenDesign = vi.fn();
+    const onOpenTemplates = vi.fn();
+    const onOpenAsk = vi.fn();
+
+    render(
+      <CvStageBar
+        mode="edit"
+        onModeChange={vi.fn()}
+        onOpenSections={onOpenSections}
+        onOpenDesign={onOpenDesign}
+        onOpenTemplates={onOpenTemplates}
+        onOpenAsk={onOpenAsk}
+      />,
     );
 
-    expect(onPickResume).toHaveBeenCalledWith("resume_beta");
+    fireEvent.click(screen.getByRole("button", { name: "Sections" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
+    fireEvent.click(screen.getByRole("button", { name: "Templates" }));
+
+    expect(onOpenSections).toHaveBeenCalledTimes(1);
+    expect(onOpenDesign).toHaveBeenCalledTimes(1);
+    expect(onOpenTemplates).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("cv-ask-handle")).not.toBeInTheDocument();
+    expect(onOpenAsk).not.toHaveBeenCalled();
+
+    render(
+      <CvStageBar
+        mode="preview"
+        onModeChange={vi.fn()}
+        onOpenAsk={onOpenAsk}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("cv-ask-handle"));
+    expect(onOpenAsk).toHaveBeenCalledTimes(1);
   });
 });

@@ -24,6 +24,7 @@ const SAVED_PROPOSALS = [
 
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigateMock,
+  useLocation: () => ({ search: "" }),
 }));
 
 vi.mock("@clerk/clerk-react", () => ({
@@ -55,24 +56,24 @@ describe("ProposalsLibrary empty search results", () => {
     deleteProposalMock.mockClear();
   });
 
-  it("keeps the search controls anchored when a search returns no cover letters", () => {
+  it("keeps the search controls anchored when a search returns no proposals", () => {
     render(<ProposalsLibrary />);
 
     const searchInput = screen.getByRole("searchbox", {
-      name: "Search all cover letters",
+      name: "Search all proposals",
     });
 
     fireEvent.change(searchInput, { target: { value: "zzz" } });
 
     expect(
-      screen.getByRole("searchbox", { name: "Search all cover letters" }),
+      screen.getByRole("searchbox", { name: "Search all proposals" }),
     ).toHaveValue("zzz");
     expect(
-      screen.getByRole("button", { name: "Filter all cover letters by tone" }),
+      screen.getByRole("button", { name: "Filter all proposals by tone" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Sort all cover letters" }),
+      screen.getByRole("button", { name: "Sort all proposals" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("No cover letters match this search")).toBeInTheDocument();
+    expect(screen.getByText("No proposals match this search")).toBeInTheDocument();
   });
 });

@@ -46,3 +46,12 @@ The active canon is now:
 
 - This does not introduce new backend data or persistence.
 - A global typography switcher remains out of scope until more screens share the same text primitives.
+
+## Button Geometry and Action Hierarchy
+
+- Icon-only toolbar controls use canonical squircle icon buttons.
+- Primary workflow actions use pills when labeled.
+- Assistant handles use a squircle when icon-only and a soft pill when labeled.
+- Global header actions use neutral header pills unless they are the current primary action.
+- Circles are reserved for avatars, status dots, knobs, and explicit circular controls.
+- Shape follows action semantics.
