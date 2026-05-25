@@ -135,6 +135,31 @@ export type ProposalTruthPlanOutputCheck = {
   violations: ProposalTruthPlanOutputViolation[];
 };
 
+export type ProposalTruthPlanRepairReason = {
+  type:
+    | "truth_plan_violation_unhandled"
+    | "truth_plan_violation_already_detected"
+    | "repair_should_remove_blocked_claim"
+    | "fallback_preferred_for_no_context"
+    | "adjacent_mode_requires_reframe"
+    | "missing_requirement_should_remain_gap"
+    | "unsupported_leadership_should_be_removed";
+  claim?: string;
+  evidence?: string;
+  severity: "low" | "medium" | "high";
+};
+
+export type ProposalTruthPlanRepairAnalysis = {
+  status: "not_run" | "pass" | "warn" | "fail";
+  recommendedAction:
+    | "none"
+    | "keep_output"
+    | "repair_with_truth_plan"
+    | "fallback"
+    | "fail_closed";
+  reasons: ProposalTruthPlanRepairReason[];
+};
+
 export type ProposalEvalResult = {
   fixtureId: string;
   variant: ProposalQualityHarnessVariant;
@@ -171,6 +196,7 @@ export type ProposalEvalResult = {
   plannedMissingCriticalRequirementsCount: number | null;
   truthPlanValidationWarnings: ProposalTruthPlanValidationIssue[];
   truthPlanOutputCheck: ProposalTruthPlanOutputCheck;
+  truthPlanRepairAnalysis: ProposalTruthPlanRepairAnalysis;
   safetyReason?: string;
 };
 
@@ -343,6 +369,10 @@ function buildTruthPlanForFixture(
 
 function truthPlanOutputCheckNotRun(): ProposalTruthPlanOutputCheck {
   return { status: "not_run", violations: [] };
+}
+
+function truthPlanRepairAnalysisNotRun(): ProposalTruthPlanRepairAnalysis {
+  return { status: "not_run", recommendedAction: "none", reasons: [] };
 }
 
 function truthPlanOutputCheckStatus(
@@ -530,6 +560,145 @@ function analyzeTruthPlanOutput(args: {
   return {
     status: truthPlanOutputCheckStatus(violations),
     violations,
+  };
+}
+
+function addTruthPlanRepairReason(
+  reasons: ProposalTruthPlanRepairReason[],
+  reason: ProposalTruthPlanRepairReason,
+): void {
+  const key = `${reason.type}:${normalize(reason.claim ?? "")}:${normalize(
+    reason.evidence ?? "",
+  )}`;
+  if (
+    reasons.some(
+      (entry) =>
+        `${entry.type}:${normalize(entry.claim ?? "")}:${normalize(
+          entry.evidence ?? "",
+        )}` === key,
+    )
+  ) {
+    return;
+  }
+  reasons.push(reason);
+}
+
+function existingFindingCoversTruthPlanViolation(args: {
+  violation: ProposalTruthPlanOutputViolation;
+  unsupportedClaims: number;
+  bannedCompanyPraise: number;
+  credentialInflation: boolean;
+  noContextViolation: boolean;
+}): boolean {
+  if (args.violation.type === "no_context_personal_claim") {
+    return args.noContextViolation;
+  }
+  if (args.violation.type === "blocked_claim_used") {
+    return args.unsupportedClaims > 0 || args.bannedCompanyPraise > 0;
+  }
+  if (args.violation.type === "unsupported_leadership_claim") {
+    return args.unsupportedClaims > 0;
+  }
+  if (args.violation.type === "missing_requirement_claimed") {
+    return args.unsupportedClaims > 0 || args.credentialInflation;
+  }
+  if (args.violation.type === "adjacent_mode_overclaim") {
+    return args.unsupportedClaims > 0 || args.noContextViolation;
+  }
+  return false;
+}
+
+function truthPlanRepairReasonForViolation(
+  violation: ProposalTruthPlanOutputViolation,
+): ProposalTruthPlanRepairReason["type"] {
+  if (violation.type === "blocked_claim_used") {
+    return "repair_should_remove_blocked_claim";
+  }
+  if (violation.type === "missing_requirement_claimed") {
+    return "missing_requirement_should_remain_gap";
+  }
+  if (violation.type === "no_context_personal_claim") {
+    return "fallback_preferred_for_no_context";
+  }
+  if (violation.type === "adjacent_mode_overclaim") {
+    return "adjacent_mode_requires_reframe";
+  }
+  if (violation.type === "unsupported_leadership_claim") {
+    return "unsupported_leadership_should_be_removed";
+  }
+  return "truth_plan_violation_unhandled";
+}
+
+function analyzeTruthPlanRepair(args: {
+  truthPlan: ProposalTruthPlanV1 | null;
+  outputCheck: ProposalTruthPlanOutputCheck;
+  unsupportedClaims: number;
+  bannedCompanyPraise: number;
+  credentialInflation: boolean;
+  noContextViolation: boolean;
+}): ProposalTruthPlanRepairAnalysis {
+  if (!args.truthPlan || args.outputCheck.status === "not_run") {
+    return truthPlanRepairAnalysisNotRun();
+  }
+  if (args.outputCheck.violations.length === 0) {
+    return { status: "pass", recommendedAction: "keep_output", reasons: [] };
+  }
+
+  const reasons: ProposalTruthPlanRepairReason[] = [];
+  let recommendedAction: ProposalTruthPlanRepairAnalysis["recommendedAction"] =
+    "repair_with_truth_plan";
+
+  for (const violation of args.outputCheck.violations) {
+    const mappedReason = truthPlanRepairReasonForViolation(violation);
+    addTruthPlanRepairReason(reasons, {
+      type: mappedReason,
+      claim: violation.claim,
+      evidence: violation.evidence,
+      severity: violation.severity,
+    });
+
+    const existingFindingCoversViolation = existingFindingCoversTruthPlanViolation({
+      violation,
+      unsupportedClaims: args.unsupportedClaims,
+      bannedCompanyPraise: args.bannedCompanyPraise,
+      credentialInflation: args.credentialInflation,
+      noContextViolation: args.noContextViolation,
+    });
+    addTruthPlanRepairReason(reasons, {
+      type: existingFindingCoversViolation
+        ? "truth_plan_violation_already_detected"
+        : "truth_plan_violation_unhandled",
+      claim: violation.claim,
+      evidence: violation.evidence,
+      severity: violation.severity,
+    });
+
+    if (
+      args.truthPlan.writingMode === "no_context_safe" &&
+      violation.severity === "high" &&
+      (violation.type === "no_context_personal_claim" ||
+        violation.type === "direct_claim_without_fact")
+    ) {
+      recommendedAction = "fallback";
+    }
+  }
+
+  if (
+    recommendedAction !== "fallback" &&
+    args.truthPlan.writerPolicy === "bypass_writer_use_fallback" &&
+    args.outputCheck.violations.some((violation) => violation.severity === "high")
+  ) {
+    recommendedAction = "fallback";
+  }
+
+  return {
+    status: args.outputCheck.violations.some(
+      (violation) => violation.severity === "high",
+    )
+      ? "fail"
+      : "warn",
+    recommendedAction,
+    reasons,
   };
 }
 
@@ -747,6 +916,14 @@ function evaluateFixtureVariant(args: {
     grounding,
   });
   const selectorReadiness = readinessFromScore(recruiterCaseScore);
+  const truthPlanRepairAnalysis = analyzeTruthPlanRepair({
+    truthPlan,
+    outputCheck: truthPlanOutputCheck,
+    unsupportedClaims,
+    bannedCompanyPraise,
+    credentialInflation,
+    noContextViolation,
+  });
   const worseThanBaseline = args.baseline
     ? selectorReadiness !== args.baseline.selectorReadiness &&
         readinessRank(selectorReadiness) <
@@ -794,6 +971,7 @@ function evaluateFixtureVariant(args: {
       truthPlan?.missingCriticalRequirements.length ?? null,
     truthPlanValidationWarnings,
     truthPlanOutputCheck,
+    truthPlanRepairAnalysis,
     safetyReason:
       coverage < (args.baseline?.supportedKeywordCoverage ?? 0)
         ? "lower keyword coverage only allowed when avoiding unsupported claims"

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-
 import type { RunManifest } from "../../../benchmarks/proposal-generation/core/exporters";
 import {
   benchmarkCaseToQualityFixture,
   buildBlindRevealMap,
+  renderMarkdownReport,
   scoreBenchmarkManifest,
 } from "../proposal-quality-adapter";
 
@@ -179,7 +179,10 @@ describe("proposal quality benchmark adapter", () => {
             score.truthPlan.missingCriticalRequirements.length &&
           Array.isArray(score.truthPlanValidationWarnings) &&
           ["pass", "warn", "fail"].includes(score.truthPlanOutputCheck.status) &&
-          Array.isArray(score.truthPlanOutputCheck.violations)
+          Array.isArray(score.truthPlanOutputCheck.violations) &&
+          ["pass", "warn", "fail"].includes(score.truthPlanRepairAnalysis.status) &&
+          typeof score.truthPlanRepairAnalysis.recommendedAction === "string" &&
+          Array.isArray(score.truthPlanRepairAnalysis.reasons)
         );
       }),
     ).toBe(true);
@@ -245,6 +248,10 @@ describe("proposal quality benchmark adapter", () => {
         truthPlanValidationWarnings: [],
         truthPlanOutputCheck: expect.objectContaining({
           violations: expect.any(Array),
+        }),
+        truthPlanRepairAnalysis: expect.objectContaining({
+          status: "warn",
+          recommendedAction: "repair_with_truth_plan",
         }),
       }),
     );
@@ -319,6 +326,10 @@ describe("proposal quality benchmark adapter", () => {
         truthPlanValidationWarnings: [],
         truthPlanOutputCheck: expect.objectContaining({
           status: "fail",
+        }),
+        truthPlanRepairAnalysis: expect.objectContaining({
+          status: "fail",
+          recommendedAction: "fallback",
         }),
       }),
     );
@@ -400,6 +411,11 @@ describe("proposal quality benchmark adapter", () => {
           status: "pass",
           violations: [],
         }),
+        truthPlanRepairAnalysis: expect.objectContaining({
+          status: "pass",
+          recommendedAction: "keep_output",
+          reasons: [],
+        }),
       }),
     );
     expect(score?.status === "ok" ? score.truthPlan?.missingCriticalRequirements : []).toEqual(
@@ -407,5 +423,28 @@ describe("proposal quality benchmark adapter", () => {
         expect.objectContaining({ requirement: "vendor communication" }),
       ]),
     );
+  });
+
+  it("renders compact plan repair columns in markdown and keeps full repair detail in JSON data", () => {
+    const { report } = scoreBenchmarkManifest({
+      manifest: makeManifest() as any,
+      sourceResultsPath: "/tmp/results.json",
+      blind: false,
+    });
+
+    const markdown = renderMarkdownReport(report);
+    expect(markdown).toContain("Plan repair");
+    expect(markdown).toContain("Plan repair action");
+    expect(markdown).toContain("Plan repair reasons");
+    expect(markdown).not.toContain("truthPlanRepairAnalysis");
+
+    expect(
+      report.scores.some(
+        (score) =>
+          score.status === "ok" &&
+          score.truthPlanRepairAnalysis &&
+          Array.isArray(score.truthPlanRepairAnalysis.reasons),
+      ),
+    ).toBe(true);
   });
 });
