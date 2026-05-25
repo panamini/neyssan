@@ -514,6 +514,7 @@
   }
 
   .ds-toast {
+    position: relative;
     display: flex;
     align-items: flex-start;
     gap: var(--s3);
@@ -562,6 +563,7 @@
   .ds-toast__body {
     min-width: 0;
     flex: 1;
+    padding-inline-end: calc(var(--toast-close-size) + var(--s2));
   }
 
   .ds-toast__head {
@@ -599,6 +601,17 @@
     font-size: var(--tx);
     font-weight: var(--font-label-weight);
     cursor: pointer;
+  }
+
+  .ds-toast__close {
+    position: absolute;
+    top: var(--s2);
+    right: var(--s2);
+    width: var(--toast-close-size);
+    height: var(--toast-close-size);
+    min-height: var(--toast-close-size);
+    padding: 0;
+    font-size: var(--toast-close-glyph-size);
   }
 
   .ds-toast__close:hover,
