@@ -493,6 +493,12 @@ function buildManualReviewShortlist(
     if (score.missingCriticalRequirements.length > 0) {
       addShortlistEntry(entries, score, "missing critical requirements");
     }
+    if (score.coverLetterWritingCanon.hardFailures.length > 0) {
+      addShortlistEntry(entries, score, "cover letter canon hard failure");
+    }
+    if (score.coverLetterWritingCanon.warnings.length > 0) {
+      addShortlistEntry(entries, score, "cover letter canon warning");
+    }
   }
 
   return entries;
@@ -670,8 +676,8 @@ export function renderMarkdownReport(report: ProposalBenchmarkQualityReport): st
   lines.push("");
   lines.push("## Fixture Scores");
   lines.push("");
-  lines.push("| Fixture | Blind label | Readiness | Recruiter | Unsupported claims | Praise | Credential inflation | No-context violation | Keyword coverage | Planned mode | Planned blocked | Planned missing | Plan warnings | Plan check | Plan violations | Plan repair | Plan repair action | Plan repair reasons |");
-  lines.push("| --- | --- | --- | ---: | ---: | ---: | --- | --- | ---: | --- | ---: | ---: | ---: | --- | ---: | --- | --- | ---: |");
+  lines.push("| Fixture | Blind label | Readiness | Recruiter | Unsupported claims | Praise | Credential inflation | No-context violation | Keyword coverage | Opening mode | Canon failures | Canon warnings | Planned mode | Planned blocked | Planned missing | Plan warnings | Plan check | Plan violations | Plan repair | Plan repair action | Plan repair reasons |");
+  lines.push("| --- | --- | --- | ---: | ---: | ---: | --- | --- | ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | --- | ---: | --- | --- | ---: |");
   for (const score of report.scores) {
     if (score.status !== "ok") continue;
     lines.push(
@@ -685,6 +691,9 @@ export function renderMarkdownReport(report: ProposalBenchmarkQualityReport): st
         score.credentialInflation ? "yes" : "no",
         score.noContextViolation ? "yes" : "no",
         score.supportedKeywordCoverage,
+        score.coverLetterWritingCanon.openingMode,
+        score.coverLetterWritingCanon.hardFailures.length,
+        score.coverLetterWritingCanon.warnings.length,
         score.plannedWritingMode ?? "none",
         score.plannedBlockedClaimsCount ?? 0,
         score.plannedMissingCriticalRequirementsCount ?? 0,

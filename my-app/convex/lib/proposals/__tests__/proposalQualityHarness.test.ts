@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { analyzeCompanyValues } from "../companyValues";
 import {
+  COVER_LETTER_WRITING_CANON_V1,
   DEFAULT_PROPOSAL_QUALITY_HARNESS_HARDNESS,
   PROPOSAL_QUALITY_FIXTURES,
   PROPOSAL_QUALITY_HARNESS_ARCHITECTURE,
@@ -39,6 +40,7 @@ describe("proposal quality harness", () => {
 
   it("contains selector-ready fixtures for baseline and criteria shadow comparison", () => {
     expect(PROPOSAL_QUALITY_FIXTURES.map((fixture) => fixture.id)).toEqual([
+      "employment-strong-frontend",
       "strong-fit",
       "weak-candidate-ambitious-job",
       "no-context",
@@ -69,6 +71,40 @@ describe("proposal quality harness", () => {
     }
   });
 
+  it("defines CoverLetterWritingCanonV1 with the strong frontend gold target", () => {
+    const gold =
+      COVER_LETTER_WRITING_CANON_V1.goldTargets["employment-strong-frontend"];
+    const wordCount = gold.letter.split(/\s+/).filter(Boolean).length;
+
+    expect(COVER_LETTER_WRITING_CANON_V1.version).toBe(
+      "CoverLetterWritingCanonV1",
+    );
+    expect(Object.keys(COVER_LETTER_WRITING_CANON_V1.openingModes)).toEqual([
+      "proof_led",
+      "through_line",
+      "candidate_work_context",
+      "adjacent_boundary",
+      "no_context_work_surface",
+    ]);
+    expect(COVER_LETTER_WRITING_CANON_V1.bannedOpeningStarts).toEqual(
+      expect.arrayContaining([
+        "I am excited to apply",
+        "I'm excited to apply",
+        "I am writing to express my interest",
+        "Your role requires",
+        "My background aligns with",
+        "The role's focus aligns with",
+        "What interests me about this role",
+      ]),
+    );
+    expect(gold.openingMode).toBe("proof_led");
+    expect(wordCount).toBeGreaterThanOrEqual(180);
+    expect(wordCount).toBeLessThanOrEqual(240);
+    expect(gold.letter).toContain("design system migration used across 4 product squads");
+    expect(gold.letter).toContain("reduced page load time by 28 percent");
+    expect(gold.letter).toContain("improved conversion by 11 percent");
+  });
+
   it("compares baseline with criteria_audit_shadow without regressions", () => {
     const results = runProposalQualityHarness({
       variants: ["baseline", "criteria_audit_shadow"],
@@ -87,6 +123,76 @@ describe("proposal quality harness", () => {
         .filter((result) => result.variant === "criteria_audit_shadow")
         .every((result) => result.criteriaAudit !== null),
     ).toBe(true);
+  });
+
+  it("passes the strong frontend gold target through writing-canon checks", () => {
+    const result = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: PROPOSAL_QUALITY_FIXTURES.filter(
+        (fixture) => fixture.id === "employment-strong-frontend",
+      ),
+    })[0];
+
+    expect(result.coverLetterWritingCanon).toEqual(
+      expect.objectContaining({
+        version: "CoverLetterWritingCanonV1",
+        openingMode: "proof_led",
+        hardFailures: [],
+        warnings: [],
+      }),
+    );
+    expect(assertProposalQualityHardGates([result])).toEqual([]);
+  });
+
+  it("detects banned openings, unsupported claims, and checklist prose for strong frontend outputs", () => {
+    const fixture = PROPOSAL_QUALITY_FIXTURES.find(
+      (candidate) => candidate.id === "employment-strong-frontend",
+    );
+    expect(fixture).toBeTruthy();
+
+    const badLetter = [
+      "I am writing to express my interest in the Senior Frontend Engineer role. My background aligns with the opportunity and directly aligns with your needs.",
+      "The role requires React and TypeScript; I have React and TypeScript; therefore I can contribute. I own backend architecture, mobile development, and analytics instrumentation.",
+      "I enjoy mentoring junior engineers and people management.",
+    ].join("\n\n");
+    const [result] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [
+        {
+          ...fixture!,
+          letters: {
+            baseline: badLetter,
+            criteria_audit_shadow: badLetter,
+          },
+        },
+      ],
+    });
+
+    expect(result.coverLetterWritingCanon.hardFailures).toEqual(
+      expect.arrayContaining([
+        "banned_opening_start",
+        "unsupported_mentoring",
+        "people_management",
+        "backend_mobile_ownership",
+        "analytics_instrumentation_ownership",
+      ]),
+    );
+    expect(result.coverLetterWritingCanon.warnings).toEqual(
+      expect.arrayContaining([
+        "overused_aligns_with",
+        "visible_checklist_rhythm",
+        "sounds_like_job_description_paraphrase",
+        "missing_sourced_metric",
+        "missing_design_system_evidence",
+        "missing_performance_evidence",
+      ]),
+    );
+    expect(assertProposalQualityHardGates([result])).toEqual(
+      expect.arrayContaining([
+        "employment-strong-frontend:semantic_planner_shadow:banned_opening_start",
+        "employment-strong-frontend:semantic_planner_shadow:unsupported_mentoring",
+      ]),
+    );
   });
 
   it("does not claim quality improvement when shadow uses the same letter text", () => {

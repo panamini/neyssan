@@ -403,7 +403,7 @@ export function buildStructuredCoverLetterComposerPrompt(args: {
     "Keep the body natural, concrete, and recruiter-credible.",
     "Prefer simple transitions and grounded detail over stock application formulas or slogan-like filler.",
     "Keep paragraphs compact at 1 to 3 sentences each.",
-    "Evidence chain for each paragraph: name the job priority, use only the paragraph's source-backed candidate fact or allowed theme, then state why that evidence matters for the role.",
+    "Use the paragraph evidence chain internally for safety, but do not expose it as a visible checklist or repeated job-priority -> candidate-fact -> why-it-matters formula.",
     "If a required job keyword is not supported by the allowed facts or themes, frame it as a gap, omission, client need, or collaboration boundary; never claim it as candidate experience.",
     "Do not praise the company mission, culture, values, market, or project as the main argument.",
     "",
