@@ -174,6 +174,9 @@ describe("proposal quality benchmark adapter", () => {
         if (!score.truthPlan) return false;
         return (
           score.plannedWritingMode === score.truthPlan.writingMode &&
+          score.coverLetterWritingCanon.version === "CoverLetterWritingCanonV1" &&
+          Array.isArray(score.coverLetterWritingCanon.hardFailures) &&
+          Array.isArray(score.coverLetterWritingCanon.warnings) &&
           score.plannedBlockedClaimsCount === score.truthPlan.blockedClaims.length &&
           score.plannedMissingCriticalRequirementsCount ===
             score.truthPlan.missingCriticalRequirements.length &&
@@ -240,6 +243,9 @@ describe("proposal quality benchmark adapter", () => {
       expect.objectContaining({
         missingCriticalRequirements: [],
         supportedKeywordCoverage: 1,
+        coverLetterWritingCanon: expect.objectContaining({
+          openingMode: "proof_led",
+        }),
         truthPlan: expect.objectContaining({
           writingMode: "normal",
           writerPolicy: "normal_writer",
@@ -524,6 +530,9 @@ describe("proposal quality benchmark adapter", () => {
     });
 
     const markdown = renderMarkdownReport(report);
+    expect(markdown).toContain("Opening mode");
+    expect(markdown).toContain("Canon failures");
+    expect(markdown).toContain("Canon warnings");
     expect(markdown).toContain("Plan repair");
     expect(markdown).toContain("Plan repair action");
     expect(markdown).toContain("Plan repair reasons");

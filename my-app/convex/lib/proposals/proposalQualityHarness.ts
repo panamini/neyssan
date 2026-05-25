@@ -96,6 +96,70 @@ export type ProposalQualityFixture = {
   letters: Record<"baseline" | "criteria_audit_shadow", string>;
 };
 
+export type CoverLetterWritingCanonOpeningMode =
+  | "proof_led"
+  | "through_line"
+  | "candidate_work_context"
+  | "adjacent_boundary"
+  | "no_context_work_surface";
+
+export type CoverLetterWritingCanonResult = {
+  version: "CoverLetterWritingCanonV1";
+  openingMode: CoverLetterWritingCanonOpeningMode;
+  hardFailures: string[];
+  warnings: string[];
+};
+
+export const COVER_LETTER_WRITING_CANON_V1 = {
+  version: "CoverLetterWritingCanonV1",
+  principle:
+    "The truthPlan is for the machine. The letter is for the reader.",
+  openingModes: {
+    proof_led:
+      "Open with the candidate's strongest source-backed proof, metric, or achievement.",
+    through_line:
+      "Open with a compact through-line that connects backed work across roles.",
+    candidate_work_context:
+      "Open from the candidate's actual work surface before naming role fit.",
+    adjacent_boundary:
+      "Open by stating the supported adjacent surface and the boundary honestly.",
+    no_context_work_surface:
+      "Open from the role's concrete work surface without candidate-history claims.",
+  },
+  openingModeRules: {
+    normal:
+      "Strong evidence should prefer proof_led, through_line, or candidate_work_context. Do not start by paraphrasing the role.",
+    adjacent_only:
+      "Adjacent-only evidence should use adjacent_boundary and avoid target-role readiness claims.",
+    no_context_safe:
+      "No-context letters should use no_context_work_surface and avoid candidate-history, trait, or habit claims.",
+  },
+  bannedOpeningStarts: [
+    "I am excited to apply",
+    "I'm excited to apply",
+    "I am writing to express my interest",
+    "Your role requires",
+    "My background aligns with",
+    "The role's focus aligns with",
+    "What interests me about this role",
+  ],
+  warningTerms: [
+    "aligns with",
+    "opportunity",
+    "contribute",
+    "passion",
+    "compelling",
+    "excited",
+  ],
+  goldTargets: {
+    "employment-strong-frontend": {
+      openingMode: "proof_led",
+      letter:
+        "Dear Hiring Manager,\n\nAt BrightLayer, I worked on the kind of frontend foundation that matters once a product is already in customers' hands: React and TypeScript work, a design system migration used across 4 product squads, and bundle and rendering optimizations that reduced page load time by 28 percent.\n\nThat was not only component cleanup. It meant making reusable UI patterns easier for product squads to ship, keeping performance visible, and staying close to product and design decisions. At Northline Labs, I built experimentation dashboards used by product and growth teams and partnered directly with design on customer-facing workflow improvements.\n\nThose projects are the through-line I would bring here: frontend systems that make the product faster, clearer, and easier to iterate. The strongest example is the signup work, where iterative UI experiments improved conversion by 11 percent. For a recruiter, the evidence is not a list of tools, but shipped interface work tied to speed, consistency, and conversion. I would treat analytics instrumentation as a learning area rather than claim ownership of it, while bringing a grounded React, TypeScript, performance, and product-design collaboration base.\n\nSincerely,\nAlex Martin",
+    },
+  },
+} as const;
+
 type ProposalQualityFixtureInput = Omit<
   ProposalQualityFixture,
   | "topJobPriorities"
@@ -197,6 +261,7 @@ export type ProposalEvalResult = {
   truthPlanValidationWarnings: ProposalTruthPlanValidationIssue[];
   truthPlanOutputCheck: ProposalTruthPlanOutputCheck;
   truthPlanRepairAnalysis: ProposalTruthPlanRepairAnalysis;
+  coverLetterWritingCanon: CoverLetterWritingCanonResult;
   safetyReason?: string;
 };
 
@@ -210,6 +275,34 @@ const VALUE_LANGUAGE_PATTERN =
   /\b(?:mission|values?|principles?|culture|resonates|admire|alignment|share)\b/i;
 const GAP_OR_SAFETY_PATTERN =
   /\b(?:gap|not source-backed|not backed|rather than claim|rather than claims|rather than inflate|flag rather than claim|should remain a gap|should stay (?:as )?(?:a topic|an area|areas)|topic to discuss|areas to discuss|should be led by|technical seo specialist|not technical seo|outside my expertise|outside my core skill|not the person to lead|(?:have not|haven['’]t) directly handled)\b/i;
+const BANNED_OPENING_START_PATTERNS = [
+  /^\s*i am excited to apply\b/i,
+  /^\s*i['’]m excited to apply\b/i,
+  /^\s*i am writing to express my interest\b/i,
+  /^\s*your role requires\b/i,
+  /^\s*my background aligns with\b/i,
+  /^\s*the role['’]s focus aligns with\b/i,
+  /^\s*what interests me about this role\b/i,
+] as const;
+const ROLE_PARAPHRASE_OPENING_PATTERN =
+  /^\s*(?:the role|this role|your role|the position|this position|the job|your posting)\b/i;
+const VISIBLE_CHECKLIST_RHYTHM_PATTERNS = [
+  /\brole requires\b/i,
+  /\bcandidate has\b/i,
+  /\btherefore\b/i,
+  /\bthis directly supports\b/i,
+  /\bdirectly aligns with\b/i,
+  /\bwhich matters for\b/i,
+  /\bjob priority\b/i,
+] as const;
+const UNSUPPORTED_MENTORING_PATTERN =
+  /\b(?:mentor(?:ing|ed)?|junior engineers?|share best practices|coach(?:ing|ed)?)\b/i;
+const PEOPLE_MANAGEMENT_PATTERN =
+  /\b(?:people management|managed people|managing people|direct reports?|hiring decisions?|performance reviews?|managed a team|led a team)\b/i;
+const BACKEND_OR_MOBILE_OWNERSHIP_PATTERN =
+  /\b(?:own(?:ed)?|lead|led|build|built|develop(?:ed)?|implement(?:ed)?|architect(?:ed)?|managed?)\b.{0,80}\b(?:backend|back-end|mobile|ios|android)\b|\b(?:backend|back-end|mobile|ios|android)\b.{0,80}\b(?:own(?:ed)?|lead|led|build|built|develop(?:ed)?|implement(?:ed)?|architect(?:ed)?|managed?)\b/i;
+const ANALYTICS_INSTRUMENTATION_OWNERSHIP_PATTERN =
+  /\b(?:own(?:ed)?|lead|led|implement(?:ed)?|instrument(?:ed)?|set up|built|practical expertise in|hands-on experience with)\b.{0,80}\banalytics instrumentation\b|\banalytics instrumentation\b.{0,80}\b(?:own(?:ed)?|lead|led|implement(?:ed)?|instrument(?:ed)?|direct experience|practical expertise|hands-on experience)\b/i;
 const MATCH_STOPWORDS = new Set([
   "about",
   "after",
@@ -702,6 +795,163 @@ function analyzeTruthPlanRepair(args: {
   };
 }
 
+function isLetterBoundaryParagraph(value: string): boolean {
+  return (
+    /^dear\b/i.test(value) ||
+    /^(best regards|regards|sincerely|kind regards|thank you),?$/i.test(value) ||
+    /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$/.test(value)
+  );
+}
+
+function compactCanonWhitespace(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function readerParagraphs(letter: string): string[] {
+  return letter
+    .replace(/\r/g, "\n")
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .filter((paragraph) => !isLetterBoundaryParagraph(paragraph));
+}
+
+function firstReaderParagraph(letter: string): string {
+  return readerParagraphs(letter)[0] ?? compactCanonWhitespace(letter);
+}
+
+function countCanonTerm(letter: string, term: string): number {
+  const normalizedLetter = compactCanonWhitespace(letter).toLowerCase();
+  const normalizedTerm = term.toLowerCase();
+  let count = 0;
+  let index = normalizedLetter.indexOf(normalizedTerm);
+  while (index >= 0) {
+    count += 1;
+    index = normalizedLetter.indexOf(normalizedTerm, index + normalizedTerm.length);
+  }
+  return count;
+}
+
+function factBankMatches(
+  fixture: ProposalQualityFixture,
+  pattern: RegExp,
+): boolean {
+  const factBank =
+    fixture.sourceBackedCandidateFacts ??
+    fixture.candidateFacts?.map((fact) => fact.text) ??
+    [];
+  return factBank.some((fact) => pattern.test(fact));
+}
+
+function classifyCoverLetterOpeningMode(args: {
+  fixture: ProposalQualityFixture;
+  opening: string;
+  truthPlan: ProposalTruthPlanV1 | null;
+}): CoverLetterWritingCanonOpeningMode {
+  if (args.truthPlan?.writingMode === "no_context_safe" || args.fixture.contextMode === "none") {
+    return "no_context_work_surface";
+  }
+  if (args.truthPlan?.writingMode === "adjacent_only") {
+    return "adjacent_boundary";
+  }
+  if (/\b(?:through-line|through line|thread)\b/i.test(args.opening)) {
+    return "through_line";
+  }
+  if (/\b(?:\d+\s*%|\d+\s*percent|improved|reduced|led|built|brightlayer|northline)\b/i.test(args.opening)) {
+    return "proof_led";
+  }
+  return "candidate_work_context";
+}
+
+function evaluateCoverLetterWritingCanon(args: {
+  fixture: ProposalQualityFixture;
+  letter: string;
+  truthPlan: ProposalTruthPlanV1 | null;
+}): CoverLetterWritingCanonResult {
+  const opening = firstReaderParagraph(args.letter);
+  const hardFailures: string[] = [];
+  const warnings: string[] = [];
+  const addHardFailure = (code: string) => {
+    if (!hardFailures.includes(code)) hardFailures.push(code);
+  };
+  const addWarning = (code: string) => {
+    if (!warnings.includes(code)) warnings.push(code);
+  };
+
+  if (BANNED_OPENING_START_PATTERNS.some((pattern) => pattern.test(opening))) {
+    addHardFailure("banned_opening_start");
+  }
+  if (
+    UNSUPPORTED_MENTORING_PATTERN.test(args.letter) &&
+    !factBankMatches(args.fixture, /\bmentor(?:ing|ed)?|junior engineers?|coach(?:ing|ed)?\b/i)
+  ) {
+    addHardFailure("unsupported_mentoring");
+  }
+  if (
+    PEOPLE_MANAGEMENT_PATTERN.test(args.letter) &&
+    !factBankMatches(args.fixture, /\bpeople management|managed people|direct reports?|managed a team|led a team\b/i)
+  ) {
+    addHardFailure("people_management");
+  }
+  if (BACKEND_OR_MOBILE_OWNERSHIP_PATTERN.test(args.letter)) {
+    addHardFailure("backend_mobile_ownership");
+  }
+  if (ANALYTICS_INSTRUMENTATION_OWNERSHIP_PATTERN.test(args.letter)) {
+    addHardFailure("analytics_instrumentation_ownership");
+  }
+
+  for (const term of COVER_LETTER_WRITING_CANON_V1.warningTerms) {
+    if (countCanonTerm(args.letter, term) > 1) {
+      addWarning(`overused_${term.replace(/\s+/g, "_")}`);
+    }
+  }
+  if (
+    args.fixture.contextMode !== "none" &&
+    args.fixture.contextMode !== "minimal" &&
+    ROLE_PARAPHRASE_OPENING_PATTERN.test(opening)
+  ) {
+    addWarning("opens_with_role_paraphrase");
+  }
+  if (
+    factBankMatches(args.fixture, /\b(?:\d+\s*%|\d+\s*percent)\b/i) &&
+    !/\b(?:\d+\s*%|\d+\s*percent)\b/i.test(args.letter)
+  ) {
+    addWarning("missing_sourced_metric");
+  }
+  if (
+    factBankMatches(args.fixture, /\bdesign[-\s]?system\b/i) &&
+    !/\bdesign[-\s]?system\b/i.test(args.letter)
+  ) {
+    addWarning("missing_design_system_evidence");
+  }
+  if (
+    factBankMatches(args.fixture, /\b(?:page[-\s]?load|performance|rendering|bundle)\b/i) &&
+    !/\b(?:page[-\s]?load|load time|performance|rendering|bundle)\b/i.test(args.letter)
+  ) {
+    addWarning("missing_performance_evidence");
+  }
+  if (
+    ROLE_PARAPHRASE_OPENING_PATTERN.test(opening) ||
+    /\b(?:your goal|your need|your needs|your emphasis|your interest|the role includes|this role includes)\b/i.test(args.letter)
+  ) {
+    addWarning("sounds_like_job_description_paraphrase");
+  }
+  if (VISIBLE_CHECKLIST_RHYTHM_PATTERNS.some((pattern) => pattern.test(args.letter))) {
+    addWarning("visible_checklist_rhythm");
+  }
+
+  return {
+    version: "CoverLetterWritingCanonV1",
+    openingMode: classifyCoverLetterOpeningMode({
+      fixture: args.fixture,
+      opening,
+      truthPlan: args.truthPlan,
+    }),
+    hardFailures,
+    warnings,
+  };
+}
+
 function selectFactsUsed(
   fixture: ProposalQualityFixture,
   letter: string,
@@ -906,6 +1156,11 @@ function evaluateFixtureVariant(args: {
   const coverage = supportedKeywordCoverage(fixture, letter);
   const advisoryKeywordLeakage = countAdvisoryLeakage(fixture, letter);
   const grounding = paragraphGrounding(fixture, letter);
+  const coverLetterWritingCanon = evaluateCoverLetterWritingCanon({
+    fixture,
+    letter,
+    truthPlan,
+  });
   const recruiterCaseScore = scoreRecruiterCase({
     unsupportedClaims,
     bannedCompanyPraise,
@@ -972,6 +1227,7 @@ function evaluateFixtureVariant(args: {
     truthPlanValidationWarnings,
     truthPlanOutputCheck,
     truthPlanRepairAnalysis,
+    coverLetterWritingCanon,
     safetyReason:
       coverage < (args.baseline?.supportedKeywordCoverage ?? 0)
         ? "lower keyword coverage only allowed when avoiding unsupported claims"
@@ -1015,6 +1271,9 @@ export function assertProposalQualityHardGates(
       (entry) => !entry.hasSourceBackedFact && !entry.hasJustifiedRoleTransition,
     );
     if (ungroundedParagraph) failures.push(`${result.fixtureId}:${result.variant}:ungroundedParagraph`);
+    for (const failure of result.coverLetterWritingCanon.hardFailures) {
+      failures.push(`${result.fixtureId}:${result.variant}:${failure}`);
+    }
   }
   return failures;
 }
@@ -1063,6 +1322,92 @@ function withFixtureMetadata(
 }
 
 export const PROPOSAL_QUALITY_FIXTURES: ProposalQualityFixture[] = ([
+  {
+    id: "employment-strong-frontend",
+    label: "gold target: strong frontend cover letter",
+    jobTitle: "Senior Frontend Engineer",
+    jobDescription:
+      "Lead React and TypeScript development for a customer-facing SaaS platform, build reusable UI systems, improve performance, collaborate with product and design, and use experimentation carefully.",
+    contextMode: "rich",
+    candidateFacts: [
+      {
+        id: "f1",
+        text: "React and TypeScript work on product-facing web apps.",
+        source: "profile",
+        mapsTo: ["React and TypeScript development"],
+        priority: "tool",
+      },
+      {
+        id: "f2",
+        text: "Led a design system migration used across 4 product squads.",
+        source: "profile",
+        mapsTo: ["reusable UI systems"],
+        priority: "responsibility",
+      },
+      {
+        id: "f3",
+        text: "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+        source: "profile",
+        mapsTo: ["performance optimization"],
+        priority: "achievement",
+      },
+      {
+        id: "f4",
+        text: "Built experimentation dashboards used by product and growth teams.",
+        source: "profile",
+        mapsTo: ["experimentation"],
+        priority: "workflow",
+      },
+      {
+        id: "f5",
+        text: "Partnered directly with design on customer-facing workflow improvements.",
+        source: "profile",
+        mapsTo: ["collaboration with product and design"],
+        priority: "workflow",
+      },
+      {
+        id: "f6",
+        text: "Improved signup conversion by 11 percent after iterative UI experiments.",
+        source: "profile",
+        mapsTo: ["experimentation"],
+        priority: "achievement",
+      },
+    ],
+    expectedCriticalRequirements: [
+      "React and TypeScript development",
+      "reusable UI systems",
+      "performance optimization",
+      "collaboration with product and design",
+    ],
+    expectedSupportedKeywords: [
+      "React",
+      "TypeScript",
+      "design system",
+      "page load",
+      "28 percent",
+      "product and design",
+      "11 percent",
+    ],
+    expectedBlockedKeywords: [
+      "mentoring junior engineers",
+      "people management",
+      "backend ownership",
+      "mobile development",
+      "analytics instrumentation ownership",
+    ],
+    expectedForbiddenPhrases: SHARED_FORBIDDEN,
+    safeRoleTransitions: [
+      "analytics instrumentation as a learning area",
+      "frontend systems",
+    ],
+    letters: sameLetter(
+      [
+        "At BrightLayer, I worked on the kind of frontend foundation that matters once a product is already in customers' hands: React and TypeScript work, a design system migration used across 4 product squads, and bundle and rendering optimizations that reduced page load time by 28 percent.",
+        "That was not only component cleanup. It meant making reusable UI patterns easier for product squads to ship, keeping performance visible, and staying close to product and design decisions. At Northline Labs, I built experimentation dashboards used by product and growth teams and partnered directly with design on customer-facing workflow improvements.",
+        "Those projects are the through-line I would bring here: frontend systems that make the product faster, clearer, and easier to iterate. The strongest example is the signup work, where iterative UI experiments improved conversion by 11 percent. For a recruiter, the evidence is not a list of tools, but shipped interface work tied to speed, consistency, and conversion. I would treat analytics instrumentation as a learning area rather than claim ownership of it, while bringing a grounded React, TypeScript, performance, and product-design collaboration base.",
+      ].join("\n\n"),
+    ),
+  },
   {
     id: "strong-fit",
     label: "strong candidate / strong fit",
