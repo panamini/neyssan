@@ -128,6 +128,12 @@ function includesPhrase(haystack: string, phrase: string): boolean {
   );
 }
 
+function isGroundingInstruction(value: string): boolean {
+  return /\b(?:should|do not|don't|must not|avoid|pretend|pretending|remain honest|stay generic|only transferable|cautious tone)\b/i.test(
+    value,
+  );
+}
+
 function priorityForFact(value: string): ProposalQualityCandidateFact["priority"] {
   if (/\b(?:improved|increased|reduced|cut|grew|lift|percent|%)\b/i.test(value)) {
     return "achievement";
@@ -149,6 +155,7 @@ function factSourceForCase(benchmarkCase: BenchmarkCase): ProposalFactSource {
 
 function normalizedGroundingPhrases(benchmarkCase: BenchmarkCase): string[] {
   return benchmarkCase.expectedGrounding
+    .filter((value) => !isGroundingInstruction(value))
     .map(normalizePhrase)
     .flatMap((value) => {
       const phrases = [value];
@@ -235,6 +242,9 @@ export function benchmarkCaseToQualityFixture(args: {
   );
   const blockedClaims = extractForbiddenClaimPhrases(benchmarkCase);
   const candidateFacts = buildCandidateFacts(benchmarkCase);
+  const explicitJobPriorities = benchmarkCase.expectedGrounding.filter(
+    (value) => !isGroundingInstruction(value),
+  );
   const expectedSupportedKeywords = [
     ...normalizedGroundingPhrases(benchmarkCase),
     ...(benchmarkCase.candidateContext?.topSkills ?? []),
@@ -254,8 +264,8 @@ export function benchmarkCaseToQualityFixture(args: {
       : "none",
     candidateFacts,
     expectedCriticalRequirements:
-      benchmarkCase.expectedGrounding.length > 0
-        ? benchmarkCase.expectedGrounding
+      explicitJobPriorities.length > 0
+        ? explicitJobPriorities
         : [benchmarkCase.jobTitle],
     expectedSupportedKeywords,
     expectedBlockedKeywords: blockedClaims,
@@ -268,8 +278,8 @@ export function benchmarkCaseToQualityFixture(args: {
       ...blockedClaims,
     ],
     topJobPriorities:
-      benchmarkCase.expectedGrounding.length > 0
-        ? benchmarkCase.expectedGrounding
+      explicitJobPriorities.length > 0
+        ? explicitJobPriorities
         : [benchmarkCase.jobTitle],
     sourceBackedCandidateFacts: candidateFacts.map((fact) => fact.text),
     allowedTransferableEvidence: candidateFacts
@@ -280,7 +290,7 @@ export function benchmarkCaseToQualityFixture(args: {
     expectedCompanyValuesBehavior: "none",
     safeRoleTransitions: [
       benchmarkCase.jobTitle,
-      ...benchmarkCase.expectedGrounding,
+      ...explicitJobPriorities,
       ...expectedSupportedKeywords,
     ],
     letters: {

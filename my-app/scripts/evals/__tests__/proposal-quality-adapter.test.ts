@@ -335,6 +335,97 @@ describe("proposal quality benchmark adapter", () => {
     );
   });
 
+  it("keeps weak SEO benchmark safety instructions out of candidate facts", () => {
+    const weakSeoCase = {
+      ...benchmarkCase,
+      id: "freelance-weak-seo",
+      label: "Weak freelance SEO",
+      jobTitle: "Technical SEO Overhaul for Marketplace",
+      jobDescription:
+        "Looking for a freelancer to audit and improve technical SEO for a large marketplace site, including indexing, schema, crawl diagnostics, and internal linking recommendations.",
+      proposalType: "freelance_proposal",
+      personalizationRichness: "minimal",
+      candidateContext: {
+        name: "Jordan Lee",
+        summary:
+          "Frontend-focused freelance designer-developer with conversion and landing page experience.",
+        desiredPosition: "Freelance Product Designer",
+        topSkills: ["Frontend", "Landing Pages", "Conversion Optimization"],
+      },
+      expectedGrounding: [
+        "Should avoid pretending to be a technical SEO specialist",
+      ],
+      forbiddenClaims: [
+        "Do not invent indexing, schema, or crawl diagnostics experience.",
+      ],
+    } as const;
+
+    const fixture = benchmarkCaseToQualityFixture({
+      benchmarkCase: weakSeoCase,
+      outputText:
+        "Frontend and landing-page execution are the supported areas here. Indexing, schema, crawl diagnostics, and internal linking should be led by a technical SEO specialist.",
+    });
+
+    expect(fixture.candidateFacts.map((fact) => fact.text)).toEqual(
+      expect.arrayContaining([
+        "Frontend",
+        "Landing Pages",
+        "Conversion Optimization",
+      ]),
+    );
+    expect(fixture.candidateFacts.map((fact) => fact.text)).not.toContain(
+      "Should avoid pretending to be a technical SEO specialist",
+    );
+
+    const { report } = scoreBenchmarkManifest({
+      manifest: {
+        ...makeManifest(),
+        models: ["mistral-small-latest"],
+        records: [
+          {
+            benchmarkCase: weakSeoCase,
+            prompt: "prompt",
+            results: {
+              "mistral-small-latest": {
+                status: "ok",
+                model: "mistral-small-latest",
+                provider: "mistral",
+                outputText:
+                  "Frontend and landing-page execution are the supported areas here. Indexing, schema, crawl diagnostics, and internal linking should be led by a technical SEO specialist.",
+                latencyMs: 1200,
+                usage: {
+                  inputTokens: 100,
+                  outputTokens: 100,
+                  totalTokens: 200,
+                },
+                cost: {
+                  inputCostUsd: 0.1,
+                  outputCostUsd: 0.2,
+                  totalCostUsd: 0.3,
+                },
+                rawResponsePath: "/tmp/raw.json",
+              },
+            },
+          },
+        ],
+      } as any,
+      sourceResultsPath: "/tmp/results.json",
+      blind: false,
+    });
+
+    const score = report.scores.find(
+      (entry) => entry.status === "ok" && entry.fixtureId === "freelance-weak-seo",
+    );
+    expect(score).toEqual(
+      expect.objectContaining({
+        plannedWritingMode: "adjacent_only",
+        truthPlan: expect.objectContaining({
+          writingMode: "adjacent_only",
+        }),
+      }),
+    );
+  });
+
   it("surfaces adjacent truth plans in benchmark dry-scoring reports", () => {
     const adjacentAdminCase = {
       ...benchmarkCase,
