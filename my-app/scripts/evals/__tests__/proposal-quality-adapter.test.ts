@@ -244,12 +244,19 @@ describe("proposal quality benchmark adapter", () => {
         missingCriticalRequirements: [],
         supportedKeywordCoverage: 1,
         coverLetterWritingCanon: expect.objectContaining({
-          openingMode: "proof_led",
+          openingMode: "proof_first",
         }),
         truthPlan: expect.objectContaining({
           writingMode: "normal",
           writerPolicy: "normal_writer",
+          roleThesis: expect.objectContaining({
+            role_type: "frontend engineer",
+          }),
         }),
+        criteriaSignals: expect.arrayContaining([
+          expect.objectContaining({ category: "hard_requirement", priority_rank: 1 }),
+          expect.objectContaining({ category: "candidate_evidence", priority_rank: 3 }),
+        ]),
         plannedWritingMode: "normal",
         truthPlanValidationWarnings: [],
         truthPlanOutputCheck: expect.objectContaining({
