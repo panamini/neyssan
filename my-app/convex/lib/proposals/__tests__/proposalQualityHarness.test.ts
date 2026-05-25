@@ -202,6 +202,11 @@ describe("proposal quality harness", () => {
       status: "not_run",
       violations: [],
     });
+    expect(baseline.truthPlanRepairAnalysis).toEqual({
+      status: "not_run",
+      recommendedAction: "none",
+      reasons: [],
+    });
     expect(semanticShadow.truthPlan?.planVersion).toBe("proposal_truth_plan_v1");
     expect(semanticShadow.truthPlan?.writingMode).toBe("normal");
     expect(semanticShadow.plannedWritingMode).toBe("normal");
@@ -214,6 +219,11 @@ describe("proposal quality harness", () => {
     expect(semanticShadow.truthPlanValidationWarnings).toEqual([]);
     expect(semanticShadow.truthPlanOutputCheck.status).toBe("pass");
     expect(semanticShadow.truthPlanOutputCheck.violations).toEqual([]);
+    expect(semanticShadow.truthPlanRepairAnalysis).toEqual({
+      status: "pass",
+      recommendedAction: "keep_output",
+      reasons: [],
+    });
     expect(semanticShadow.criteriaAudit).not.toBeNull();
     expect({
       unsupportedClaims: semanticShadow.unsupportedClaims,
@@ -390,6 +400,17 @@ describe("proposal quality harness", () => {
         /frontend execution/i.test(violation.claim),
       ),
     ).toBe(false);
+    expect(result.truthPlanRepairAnalysis.status).toBe("fail");
+    expect(result.truthPlanRepairAnalysis.recommendedAction).toBe(
+      "repair_with_truth_plan",
+    );
+    expect(result.truthPlanRepairAnalysis.reasons.map((reason) => reason.type)).toEqual(
+      expect.arrayContaining([
+        "repair_should_remove_blocked_claim",
+        "missing_requirement_should_remain_gap",
+        "adjacent_mode_requires_reframe",
+      ]),
+    );
   });
 
   it("flags no-context personal claims while allowing safe role interest", () => {
@@ -433,11 +454,26 @@ describe("proposal quality harness", () => {
       status: "pass",
       violations: [],
     });
+    expect(safeResult.truthPlanRepairAnalysis).toEqual({
+      status: "pass",
+      recommendedAction: "keep_output",
+      reasons: [],
+    });
     expect(unsafeResult.truthPlanOutputCheck.status).toBe("fail");
     expect(unsafeResult.truthPlanOutputCheck.violations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: "no_context_personal_claim",
+        }),
+      ]),
+    );
+    expect(unsafeResult.truthPlanRepairAnalysis.status).toBe("fail");
+    expect(unsafeResult.truthPlanRepairAnalysis.recommendedAction).toBe("fallback");
+    expect(unsafeResult.truthPlanRepairAnalysis.reasons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "fallback_preferred_for_no_context",
+          severity: "high",
         }),
       ]),
     );
@@ -513,12 +549,29 @@ describe("proposal quality harness", () => {
       status: "pass",
       violations: [],
     });
+    expect(backedResult.truthPlanRepairAnalysis).toEqual({
+      status: "pass",
+      recommendedAction: "keep_output",
+      reasons: [],
+    });
     expect(mentoringResult.truthPlanOutputCheck.status).toBe("fail");
     expect(mentoringResult.truthPlanOutputCheck.violations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           type: "unsupported_leadership_claim",
           claim: "mentoring or people-management experience",
+        }),
+      ]),
+    );
+    expect(mentoringResult.truthPlanRepairAnalysis.status).toBe("fail");
+    expect(mentoringResult.truthPlanRepairAnalysis.recommendedAction).toBe(
+      "repair_with_truth_plan",
+    );
+    expect(mentoringResult.truthPlanRepairAnalysis.reasons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "unsupported_leadership_should_be_removed",
+          severity: "high",
         }),
       ]),
     );
@@ -587,12 +640,28 @@ describe("proposal quality harness", () => {
       status: "pass",
       violations: [],
     });
+    expect(allowedResult.truthPlanRepairAnalysis).toEqual({
+      status: "pass",
+      recommendedAction: "keep_output",
+      reasons: [],
+    });
     expect(vendorResult.truthPlanOutputCheck.status).toBe("fail");
     expect(vendorResult.truthPlanOutputCheck.violations.map((violation) => violation.type)).toEqual(
       expect.arrayContaining([
         "blocked_claim_used",
         "missing_requirement_claimed",
         "adjacent_mode_overclaim",
+      ]),
+    );
+    expect(vendorResult.truthPlanRepairAnalysis.status).toBe("fail");
+    expect(vendorResult.truthPlanRepairAnalysis.recommendedAction).toBe(
+      "repair_with_truth_plan",
+    );
+    expect(vendorResult.truthPlanRepairAnalysis.reasons.map((reason) => reason.type)).toEqual(
+      expect.arrayContaining([
+        "repair_should_remove_blocked_claim",
+        "missing_requirement_should_remain_gap",
+        "adjacent_mode_requires_reframe",
       ]),
     );
   });

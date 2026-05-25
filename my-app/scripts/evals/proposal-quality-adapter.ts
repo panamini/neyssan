@@ -600,7 +600,7 @@ export async function loadSavedBenchmarkManifest(args?: {
   return JSON.parse(raw) as BenchmarkManifestResult;
 }
 
-function renderMarkdownReport(report: ProposalBenchmarkQualityReport): string {
+export function renderMarkdownReport(report: ProposalBenchmarkQualityReport): string {
   const lines: string[] = [];
   lines.push("# Proposal Quality Harness Benchmark Report");
   lines.push("");
@@ -660,8 +660,8 @@ function renderMarkdownReport(report: ProposalBenchmarkQualityReport): string {
   lines.push("");
   lines.push("## Fixture Scores");
   lines.push("");
-  lines.push("| Fixture | Blind label | Readiness | Recruiter | Unsupported claims | Praise | Credential inflation | No-context violation | Keyword coverage | Planned mode | Planned blocked | Planned missing | Plan warnings | Plan check | Plan violations |");
-  lines.push("| --- | --- | --- | ---: | ---: | ---: | --- | --- | ---: | --- | ---: | ---: | ---: | --- | ---: |");
+  lines.push("| Fixture | Blind label | Readiness | Recruiter | Unsupported claims | Praise | Credential inflation | No-context violation | Keyword coverage | Planned mode | Planned blocked | Planned missing | Plan warnings | Plan check | Plan violations | Plan repair | Plan repair action | Plan repair reasons |");
+  lines.push("| --- | --- | --- | ---: | ---: | ---: | --- | --- | ---: | --- | ---: | ---: | ---: | --- | ---: | --- | --- | ---: |");
   for (const score of report.scores) {
     if (score.status !== "ok") continue;
     lines.push(
@@ -681,6 +681,9 @@ function renderMarkdownReport(report: ProposalBenchmarkQualityReport): string {
         score.truthPlanValidationWarnings.length,
         score.truthPlanOutputCheck.status,
         score.truthPlanOutputCheck.violations.length,
+        score.truthPlanRepairAnalysis.status,
+        score.truthPlanRepairAnalysis.recommendedAction,
+        score.truthPlanRepairAnalysis.reasons.length,
       ].join(" | "),
     );
   }
