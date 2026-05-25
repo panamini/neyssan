@@ -9,9 +9,9 @@ import {
   type AiActionId,
 } from "@/lib/ai/interactionRulebook";
 import {
-  useCvAiSurfacePosition,
-  type CvAiSurfacePosition,
-} from "@/lib/cv-ai-surface-position";
+  useDocumentAiSurfacePosition,
+  type DocumentAiSurfacePosition,
+} from "@/lib/document-ai-surface-position";
 import type { EditorSelectionAnchor } from "@/lib/editor-ai-selection";
 
 const DS4_VISIBLE_ACTION_IDS = [
@@ -59,7 +59,9 @@ type FloatingAiToolbarProps = {
   includeJobContextActions?: boolean;
   onClose: () => void;
   onRunAction: (actionId: InlineAiActionId, instruction: string) => void;
-  onSurfacePlacementChange?: (position: CvAiSurfacePosition | null) => void;
+  onSurfacePlacementChange?: (
+    position: DocumentAiSurfacePosition | null,
+  ) => void;
 };
 
 type ToolbarMetrics = {
@@ -331,7 +333,7 @@ export function FloatingAiToolbar({
     }),
     [metrics.panelHeight, metrics.panelWidth],
   );
-  const position = useCvAiSurfacePosition({
+  const position = useDocumentAiSurfacePosition({
     anchor,
     desiredSurfaceSize,
     mode: "toolbar",
