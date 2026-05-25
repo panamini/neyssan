@@ -1,12 +1,8 @@
 import React from "react";
-import {
-  ArrowLeft,
-  ArrowSquareOut,
-  Paperclip,
-  Star,
-} from "@/lib/icons";
+import { ArrowLeft, ArrowSquareOut, Paperclip, Star } from "@/lib/icons";
 import { ProposalBriefCard } from "../ProposalBriefCard";
 import { MatchReadBlock } from "./MatchReadBlock";
+import LoadingSpinner from "../LoadingSpinner";
 
 type ResumePickerOption = {
   id: string;
@@ -34,6 +30,7 @@ type JobDetailProps = {
   onAttachResumeToJob: (resumeId: string) => void;
   onDetachResumeFromJob: () => void;
   onCreateProposal: (jobId: string) => void;
+  onDismissJob: (jobId: string) => void;
   onRefreshSelectedJobMatch: () => void;
   onSaveField: (fieldKey: string, nextValue: string | string[]) => void;
   onApproveReviewItem: (item: any) => void;
@@ -51,7 +48,9 @@ function resolveLocationModeLabel(value: string): string {
     .filter(
       (part) =>
         part &&
-        !/\b\d+\s+(?:second|minute|hour|day|week|month|year)s?\s+ago\b/i.test(part) &&
+        !/\b\d+\s+(?:second|minute|hour|day|week|month|year)s?\s+ago\b/i.test(
+          part,
+        ) &&
         !/\b\d+\s+people\s+clicked\s+apply\b/i.test(part) &&
         !/\b\d+\s+applicants?\b/i.test(part),
     );
@@ -59,7 +58,11 @@ function resolveLocationModeLabel(value: string): string {
 }
 
 function formatJobTitle(value: string): string {
-  return String(value ?? "").trim().replace(/[:\s]+$/, "") || "Untitled job";
+  return (
+    String(value ?? "")
+      .trim()
+      .replace(/[:\s]+$/, "") || "Untitled job"
+  );
 }
 
 function resolveDetailStatusLabel(args: {
@@ -93,6 +96,23 @@ function formatLinkedDocumentCount(count: number): string | null {
   return `${count} linked document${count === 1 ? "" : "s"}`;
 }
 
+function resolveCompensationLabel(job: any): string | null {
+  const candidateValues = [
+    job?.hourlyRate,
+    job?.hourlySalary,
+    job?.salaryHourly,
+    job?.compensation,
+    job?.salary,
+    job?.payRange,
+    job?.rate,
+  ];
+  const value = candidateValues
+    .map((candidate) => String(candidate ?? "").trim())
+    .find(Boolean);
+
+  return value ?? null;
+}
+
 export function JobDetail({
   selectedJobId,
   selectedJobIsLoading,
@@ -112,6 +132,7 @@ export function JobDetail({
   onAttachResumeToJob,
   onDetachResumeFromJob,
   onCreateProposal,
+  onDismissJob,
   onRefreshSelectedJobMatch,
   onSaveField,
   onApproveReviewItem,
@@ -123,8 +144,13 @@ export function JobDetail({
 
   if (selectedJobIsLoading) {
     return (
-      <div className="dasti-empty-state dasti-empty-state--panel">
+      <div
+        className="dasti-empty-state dasti-empty-state--panel"
+        role="status"
+        aria-live="polite"
+      >
         <div className="dasti-empty-state__title">Loading job</div>
+        <LoadingSpinner />
       </div>
     );
   }
@@ -148,6 +174,7 @@ export function JobDetail({
   const linkedDocumentLabel = formatLinkedDocumentCount(
     Number(selectedJob.linkedProposalCount ?? 0),
   );
+  const compensationLabel = resolveCompensationLabel(selectedJob);
 
   return (
     <div className="dasti-jobs-detail">
@@ -173,6 +200,12 @@ export function JobDetail({
           </div>
           <div className="dasti-jobs-detail__meta">
             <span>{selectedJob.company || "Unknown company"}</span>
+            {compensationLabel ? (
+              <>
+                <span>·</span>
+                <span>{compensationLabel}</span>
+              </>
+            ) : null}
             <span>·</span>
             <span>{resolveLocationModeLabel(selectedJob.location)}</span>
             {selectedSourceLabel ? (
@@ -308,6 +341,14 @@ export function JobDetail({
               >
                 <span>Generate proposal</span>
               </button>
+              <button
+                type="button"
+                className="dasti-jobs-detail__header-action dasti-jobs-detail__header-action--skip"
+                aria-label="Skip and archive job"
+                onClick={() => onDismissJob(selectedJob.id)}
+              >
+                <span>Skip</span>
+              </button>
             </div>
             {detailStatusLabel || linkedDocumentLabel ? (
               <div className="dasti-jobs-detail__status-line">
@@ -315,7 +356,9 @@ export function JobDetail({
                 {detailStatusLabel && linkedDocumentLabel ? (
                   <span aria-hidden="true">·</span>
                 ) : null}
-                {linkedDocumentLabel ? <span>{linkedDocumentLabel}</span> : null}
+                {linkedDocumentLabel ? (
+                  <span>{linkedDocumentLabel}</span>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -323,6 +366,17 @@ export function JobDetail({
       </div>
 
       <div className="dasti-jobs-detail__body">
+        {selectedJob.matchRead ? (
+          <MatchReadBlock
+            matchRead={selectedJob.matchRead}
+            matchReview={selectedJob.matchReview}
+            visibleRequirements={selectedJob.visibleRequirements}
+            jobTitle={selectedJob.title}
+            jobCompany={selectedJob.company}
+            jobLocation={selectedJob.location}
+            onRefreshMatch={onRefreshSelectedJobMatch}
+          />
+        ) : null}
         <div className="dasti-jobs-detail__content">
           <ProposalBriefCard
             sourceJobTitle={selectedJobTitle}
@@ -337,7 +391,9 @@ export function JobDetail({
             visibleRequirements={selectedJob.visibleRequirements}
             keywords={selectedJob.keywords}
             visibleKeywords={selectedJob.visibleKeywords}
-            extractionUnavailable={selectedJob.visibleExtractionSource !== "llm"}
+            extractionUnavailable={
+              selectedJob.visibleExtractionSource !== "llm"
+            }
             parseStatus={selectedJob.parseStatus}
             trustState={selectedJob.reviewState}
             linkedDocumentCount={selectedJob.linkedProposalCount}
@@ -348,19 +404,6 @@ export function JobDetail({
             onSaveReviewItem={onSaveReviewItem}
           />
         </div>
-        <aside className="dasti-jobs-detail__match" aria-label="Match panel">
-          {selectedJob.matchRead ? (
-            <MatchReadBlock
-              matchRead={selectedJob.matchRead}
-              matchReview={selectedJob.matchReview}
-              visibleRequirements={selectedJob.visibleRequirements}
-              jobTitle={selectedJob.title}
-              jobCompany={selectedJob.company}
-              jobLocation={selectedJob.location}
-              onRefreshMatch={onRefreshSelectedJobMatch}
-            />
-          ) : null}
-        </aside>
       </div>
 
       {debugPanels}

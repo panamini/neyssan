@@ -1244,6 +1244,76 @@ describe('CvLibraryContext', () => {
     expect(ctx.cvs[0].title).toBe('Jane Doe — Product Manager');
   });
 
+  it('importCv preserves explicit section order from CV Forge reordering', async () => {
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+    await waitFor(() => expect(ctx).toBeDefined());
+
+    await act(async () => {
+      await ctx.importCv({
+        id: 'reordered-cv',
+        title: 'Reordered CV',
+        metadata: {
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          version: 1,
+        },
+        sections: [
+          {
+            id: 'sec-profile',
+            title: 'Profile',
+            type: 'profile',
+            order: 0,
+            blocks: [],
+            structuredContent: [
+              {
+                id: 'profile-1',
+                name: 'Jane Doe',
+                desiredPosition: 'Product Manager',
+              },
+            ],
+            collapsed: false,
+          },
+          {
+            id: 'sec-skills',
+            title: 'Skills',
+            type: 'skills',
+            order: 1,
+            blocks: [],
+            structuredContent: [{ id: 'skill-1', name: 'Roadmapping' }],
+            collapsed: false,
+          },
+          {
+            id: 'sec-experience',
+            title: 'Experience',
+            type: 'experience',
+            order: 2,
+            blocks: [],
+            structuredContent: [
+              {
+                id: 'experience-1',
+                position: 'Product Lead',
+                company: 'Example Co',
+              },
+            ],
+            collapsed: false,
+          },
+        ],
+      });
+    });
+
+    await waitFor(() => expect(ctx.currentCv).not.toBeNull());
+    expect(ctx.currentCv.sections.map((section: any) => section.id).slice(0, 3)).toEqual([
+      'sec-profile',
+      'sec-skills',
+      'sec-experience',
+    ]);
+  });
+
   it('preserves authoritative resume metadata through import, save, and load', async () => {
     let ctx: any;
     render(
@@ -1400,10 +1470,14 @@ describe('CvLibraryContext', () => {
     await waitFor(() => expect(ctx.currentCv).not.toBeNull());
 
     const currentId = ctx.currentCvId;
+    const initialLibrarySize = ctx.cvs.length;
     act(() => {
       ctx.renameCv(currentId, 'My Custom CV');
     });
     await waitFor(() => expect(ctx.currentCv.title).toBe('My Custom CV'));
+    expect(ctx.currentCvId).toBe(currentId);
+    expect(ctx.cvs).toHaveLength(initialLibrarySize);
+    expect(ctx.currentCv.metadata?.titleLocked).toBe(true);
 
     const profileSection = ctx.currentCv.sections.find((section: any) => section.type === 'profile');
     const profileItem = profileSection.structuredContent[0];
@@ -1417,6 +1491,46 @@ describe('CvLibraryContext', () => {
 
     await waitFor(() => expect(ctx.currentCv.title).toBe('My Custom CV'));
     expect(ctx.cvs[0].title).toBe('My Custom CV');
+    expect(ctx.cvs).toHaveLength(initialLibrarySize);
+    expect(ctx.currentCvId).toBe(currentId);
+  });
+
+  it('does not auto-retitle a manually locked placeholder title or duplicate the CV', async () => {
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+    await waitFor(() => expect(ctx).toBeDefined());
+
+    act(() => {
+      ctx.createNewCv();
+    });
+    await waitFor(() => expect(ctx.currentCv).not.toBeNull());
+
+    const currentId = ctx.currentCvId;
+    const initialLibrarySize = ctx.cvs.length;
+    act(() => {
+      ctx.renameCv(currentId, 'Imported CV');
+    });
+    await waitFor(() => expect(ctx.currentCv.title).toBe('Imported CV'));
+    expect(ctx.currentCv.metadata?.titleLocked).toBe(true);
+
+    const profileSection = ctx.currentCv.sections.find((section: any) => section.type === 'profile');
+    const profileItem = profileSection.structuredContent[0];
+
+    act(() => {
+      ctx.updateStructuredItem(profileSection.id, profileItem.id, {
+        name: 'Jane Doe',
+        desiredPosition: 'Product Manager',
+      });
+    });
+
+    await waitFor(() => expect(ctx.currentCv.title).toBe('Imported CV'));
+    expect(ctx.currentCvId).toBe(currentId);
+    expect(ctx.cvs).toHaveLength(initialLibrarySize);
+    expect(ctx.cvs.filter((cv: any) => String(cv.id) === String(currentId))).toHaveLength(1);
   });
 
   it('promotes a meaningful current CV before replacing it with a fresh draft', async () => {

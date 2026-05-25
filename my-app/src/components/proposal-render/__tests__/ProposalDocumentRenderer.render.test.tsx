@@ -131,6 +131,62 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(container.textContent).not.toContain("35 mm register");
   });
 
+  it("can render a header-only draft preview without injecting body text", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content=""
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        railTitle="Jane Doe"
+        railMeta="Operations Specialist"
+        contactLine="jane@example.com · Paris"
+        documentTitle="Application for Operations Specialist"
+        emptyBodyPlaceholder="No draft yet. Add a job offer to generate, or start blank."
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    const senderHeader = container.querySelector(
+      ".dasti-proposal-document__sender-header",
+    );
+    const rawBody = container.querySelector(
+      ".dasti-proposal-document__raw-body",
+    );
+
+    expect(senderHeader?.textContent).toContain("Jane Doe");
+    expect(senderHeader?.textContent).toContain("Operations Specialist");
+    expect(senderHeader?.textContent).toContain("jane@example.com · Paris");
+    expect(rawBody?.textContent).toContain("No draft yet.");
+    expect(rawBody?.textContent).not.toContain("Dear Hiring Manager");
+  });
+
+  it("does not render preview-only empty body placeholders by default", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content=""
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        railTitle="Jane Doe"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    expect(container.textContent).not.toContain("No draft yet.");
+    expect(container.textContent).not.toContain("Add a job offer");
+  });
+
   it("renders structured closing when body text has no sign-off", () => {
     const { container } = render(
       <ProposalDocumentRenderer

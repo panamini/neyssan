@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { ProposalForge } from "../ProposalForge";
+import {
+  ForgeTemplatePanelProvider,
+  useForgeTemplatePanel,
+} from "../../contexts/ForgeTemplatePanelContext";
 import { readStoredProposalOutputDraft } from "../../lib/proposal-output-draft";
 
 const toastMocks = vi.hoisted(() => ({
@@ -87,12 +91,14 @@ vi.mock("../../components/ProposalDisplay", () => ({
     contactLine,
     closing,
     mode,
+    showZoomControls,
   }: {
     railTitle?: string | null;
     railMeta?: string | null;
     contactLine?: string | null;
     closing?: { signatureName?: string | null } | null;
     mode?: "preview" | "edit";
+    showZoomControls?: boolean;
   }) => (
     <div data-testid="proposal-display-props">
       {railTitle ?? ""} | {railMeta ?? ""} | {contactLine ?? ""}
@@ -100,6 +106,9 @@ vi.mock("../../components/ProposalDisplay", () => ({
         {closing?.signatureName ?? ""}
       </span>
       <span data-testid="proposal-display-mode">{mode ?? ""}</span>
+      <span data-testid="proposal-display-zoom">
+        {showZoomControls ? "on" : "off"}
+      </span>
     </div>
   ),
   fallbackCopyText: () => "",
@@ -110,6 +119,30 @@ vi.mock("../../components/ProposalsList", () => ({
   default: () => <div>Saved proposals</div>,
 }));
 
+function TestForgePanel(): JSX.Element | null {
+  const { activeRegistration, open } = useForgeTemplatePanel();
+  if (!open || !activeRegistration) return null;
+
+  return (
+    <aside aria-label={activeRegistration.ariaLabel ?? activeRegistration.title}>
+      {activeRegistration.kind === "custom"
+        ? activeRegistration.renderContent()
+        : null}
+    </aside>
+  );
+}
+
+function renderProposalForge(): ReturnType<typeof render> {
+  return render(
+    <MemoryRouter initialEntries={["/proposal"]}>
+      <ForgeTemplatePanelProvider>
+        <ProposalForge />
+        <TestForgePanel />
+      </ForgeTemplatePanelProvider>
+    </MemoryRouter>,
+  );
+}
+
 describe("ProposalForge preview applicant fallback", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -118,20 +151,16 @@ describe("ProposalForge preview applicant fallback", () => {
   });
 
   it("toggles the structured signature switch from the Proposal Forge Style tab", async () => {
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
+    renderProposalForge();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Generate proposal", hidden: true }),
     );
-    fireEvent.click(screen.getByRole("tab", { name: "Heading" }));
+    fireEvent.click(screen.getByRole("button", { name: "Heading" }));
     fireEvent.change(screen.getByLabelText("Full name"), {
       target: { value: "Alex Martin" },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
 
     const signatureSwitch = await screen.findByRole("switch", {
       name: "Printed name",
@@ -163,16 +192,12 @@ describe("ProposalForge preview applicant fallback", () => {
   });
 
   it("keeps edit mode active when the structured signature is toggled", async () => {
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
+    renderProposalForge();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Generate proposal", hidden: true }),
     );
-    fireEvent.click(screen.getByRole("tab", { name: "Heading" }));
+    fireEvent.click(screen.getByRole("button", { name: "Heading" }));
     fireEvent.change(screen.getByLabelText("Full name"), {
       target: { value: "Alex Martin" },
     });
@@ -184,7 +209,7 @@ describe("ProposalForge preview applicant fallback", () => {
       );
     });
 
-    fireEvent.click(screen.getByRole("tab", { name: "Style" }));
+    fireEvent.click(screen.getByRole("button", { name: "Design" }));
     fireEvent.click(await screen.findByRole("switch", { name: "Printed name" }));
 
     await waitFor(() => {
@@ -196,16 +221,12 @@ describe("ProposalForge preview applicant fallback", () => {
   });
 
   it("updates a settings-owned structured signature when the Heading name changes", async () => {
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
+    renderProposalForge();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Generate proposal", hidden: true }),
     );
-    fireEvent.click(screen.getByRole("tab", { name: "Heading" }));
+    fireEvent.click(screen.getByRole("button", { name: "Heading" }));
     fireEvent.change(screen.getByLabelText("Full name"), {
       target: { value: "A" },
     });
@@ -226,11 +247,7 @@ describe("ProposalForge preview applicant fallback", () => {
   });
 
   it("does not use the sample resume header when no CV is attached", () => {
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
+    renderProposalForge();
 
     fireEvent.click(
       screen.getByRole("button", { name: "Generate proposal", hidden: true }),
@@ -245,5 +262,6 @@ describe("ProposalForge preview applicant fallback", () => {
     expect(screen.getByTestId("proposal-display-props")).not.toHaveTextContent(
       "elena@sample.design",
     );
+    expect(screen.getByTestId("proposal-display-zoom")).toHaveTextContent("on");
   });
 });

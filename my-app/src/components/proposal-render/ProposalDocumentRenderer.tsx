@@ -52,8 +52,10 @@ type ProposalDocumentRendererProps = {
   pageWidth?: number;
   pageGapPx?: number;
   stylePreset?: VerbatiStylePreset | null;
+  documentThemeVars?: React.CSSProperties | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  emptyBodyPlaceholder?: string | null;
   onPageCountChange?: (count: number) => void;
 };
 
@@ -546,8 +548,10 @@ export function ProposalDocumentRenderer({
   pageWidth,
   pageGapPx = 0,
   stylePreset = null,
+  documentThemeVars = null,
   signatureSettings = null,
   closing = null,
+  emptyBodyPlaceholder = null,
   onPageCountChange,
 }: ProposalDocumentRendererProps): JSX.Element {
   const resolvedTemplateId = resolveProposalTemplateId(templateId);
@@ -1143,7 +1147,8 @@ export function ProposalDocumentRenderer({
               className="dasti-proposal-document__raw-body"
               data-proposal-block={args.measurement ? true : undefined}
             >
-              {stripInlineProposalMarkdown(parsedDocument.rawBody || content)}
+              {stripInlineProposalMarkdown(parsedDocument.rawBody || content) ||
+                emptyBodyPlaceholder}
             </div>
           ) : null}
         </div>
@@ -1151,6 +1156,7 @@ export function ProposalDocumentRenderer({
     ),
     [
       content,
+      emptyBodyPlaceholder,
       parsedDocument.rawBody,
       renderDocumentBlock,
       renderClassicHeaderStack,
@@ -1261,6 +1267,7 @@ export function ProposalDocumentRenderer({
       data-proposal-template={resolvedTemplateId}
       style={
         {
+          ...(documentThemeVars ?? {}),
           ...serializeProposalPreviewVars(canonicalPreviewTokens),
           ...serializeProposalRuntimeVars(canonicalPreviewTokens),
         } as React.CSSProperties
@@ -1277,7 +1284,7 @@ export function ProposalDocumentRenderer({
                 bodyRef: measurementBodyRef,
                 pageBlocks: documentBlocks,
                 isContinuationPage: false,
-                showFallback: true,
+                showFallback: !emptyBodyPlaceholder,
                 measurement: true,
               })
             : renderGenericDocumentShell({
@@ -1323,7 +1330,7 @@ export function ProposalDocumentRenderer({
                       : null,
                   pageBlocks,
                   isContinuationPage,
-                  showFallback: pageIndex === 0,
+                  showFallback: pageIndex === 0 && !emptyBodyPlaceholder,
                   measurement: false,
                 })
               : renderGenericDocumentShell({

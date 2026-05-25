@@ -18,6 +18,7 @@ export interface MenuItem {
   ariaLabel?: string;
   selected?: boolean;
   role?: "menuitem" | "menuitemradio";
+  closeOnSelect?: boolean;
   onSelect?: () => void;
 }
 
@@ -30,10 +31,11 @@ export interface MenuProps {
   trigger: React.ReactElement;
   sections: MenuSection[];
   align?: "start" | "end";
-  side?: "top" | "bottom";
+  side?: "top" | "bottom" | "left" | "right";
   ariaLabel?: string;
   menuClassName?: string;
   matchTriggerWidth?: boolean;
+  mobileMode?: "popover" | "sheet";
 }
 
 const MENU_EXIT_DURATION = 140;
@@ -76,6 +78,7 @@ export function Menu({
   ariaLabel,
   menuClassName,
   matchTriggerWidth = false,
+  mobileMode = "popover",
 }: MenuProps): JSX.Element {
   const menuId = React.useId();
   const triggerRef = React.useRef<HTMLElement | null>(null);
@@ -94,7 +97,8 @@ export function Menu({
     left: number;
     width?: number;
     maxHeight?: number;
-  }>({ top: 0, left: 0 });
+    side: "top" | "bottom" | "left" | "right" | "sheet";
+  }>({ top: 0, left: 0, side: "bottom" });
   const enabledIndexes = React.useMemo(
     () => enabledItemIndexes(sections),
     [sections],
@@ -120,35 +124,85 @@ export function Menu({
     const menuRect = menuNode.getBoundingClientRect();
     const gap = 8;
     const viewportInset = 8;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const naturalMenuWidth = matchTriggerWidth ? triggerRect.width : menuRect.width;
+
+    if (mobileMode === "sheet" && viewportWidth < 640) {
+      const maxHeight = Math.max(180, Math.round(viewportHeight * 0.72));
+      const menuHeight = Math.min(menuRect.height, maxHeight);
+
+      setPosition({
+        top: Math.max(viewportInset, viewportHeight - menuHeight - viewportInset),
+        left: viewportInset,
+        width: Math.max(0, viewportWidth - viewportInset * 2),
+        maxHeight,
+        side: "sheet",
+      });
+      return;
+    }
+
     const availableTop = Math.max(0, triggerRect.top - gap - viewportInset);
     const availableBottom = Math.max(
       0,
-      window.innerHeight - triggerRect.bottom - gap - viewportInset,
+      viewportHeight - triggerRect.bottom - gap - viewportInset,
     );
-    const maxHeight = side === "top" ? availableTop : availableBottom;
+    const sideAvailable =
+      side === "left"
+        ? triggerRect.left - gap - viewportInset
+        : side === "right"
+          ? viewportWidth - triggerRect.right - gap - viewportInset
+          : Number.POSITIVE_INFINITY;
+    const canUseHorizontalSide =
+      (side === "left" || side === "right") &&
+      sideAvailable >= Math.min(naturalMenuWidth, 300);
+    const resolvedSide =
+      canUseHorizontalSide || side === "top" || side === "bottom"
+        ? side
+        : availableBottom >= availableTop
+          ? "bottom"
+          : "top";
+    const maxHeight =
+      resolvedSide === "left" || resolvedSide === "right"
+        ? Math.max(0, viewportHeight - viewportInset * 2)
+        : resolvedSide === "top"
+          ? availableTop
+          : availableBottom;
     const menuHeight = Math.min(menuRect.height, maxHeight || menuRect.height);
-    const nextTop =
-      side === "top"
+    let nextTop =
+      resolvedSide === "top"
         ? triggerRect.top - menuHeight - gap
-        : triggerRect.bottom + gap;
-    const nextLeft =
-      align === "end"
-        ? triggerRect.right - menuRect.width
-        : triggerRect.left;
+        : resolvedSide === "bottom"
+          ? triggerRect.bottom + gap
+          : align === "end"
+            ? triggerRect.bottom - menuHeight
+            : triggerRect.top;
+    let nextLeft =
+      resolvedSide === "left"
+        ? triggerRect.left - naturalMenuWidth - gap
+        : resolvedSide === "right"
+          ? triggerRect.right + gap
+          : align === "end"
+            ? triggerRect.right - naturalMenuWidth
+            : triggerRect.left;
+
+    nextTop = Math.max(
+      viewportInset,
+      Math.min(nextTop, viewportHeight - menuHeight - viewportInset),
+    );
+    nextLeft = Math.max(
+      viewportInset,
+      Math.min(nextLeft, viewportWidth - naturalMenuWidth - viewportInset),
+    );
 
     setPosition({
-      top: Math.max(
-        viewportInset,
-        Math.min(nextTop, window.innerHeight - menuHeight - viewportInset),
-      ),
-      left: Math.max(
-        viewportInset,
-        Math.min(nextLeft, window.innerWidth - menuRect.width - viewportInset),
-      ),
+      top: nextTop,
+      left: nextLeft,
       width: matchTriggerWidth ? triggerRect.width : undefined,
       maxHeight,
+      side: resolvedSide,
     });
-  }, [align, matchTriggerWidth, side]);
+  }, [align, matchTriggerWidth, mobileMode, side]);
 
   React.useEffect(() => {
     if (open) {
@@ -206,8 +260,10 @@ export function Menu({
     const item = sections[index.sectionIndex]?.items[index.itemIndex];
     if (!item || item.disabled) return;
     item.onSelect?.();
-    closeMenu();
-    triggerRef.current?.focus({ preventScroll: true });
+    if (item.closeOnSelect !== false) {
+      closeMenu();
+      triggerRef.current?.focus({ preventScroll: true });
+    }
   }
 
   function handleMenuKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -268,6 +324,7 @@ export function Menu({
             ref={menuRef}
             className={clsx("ds-menu", menuClassName)}
             data-state={menuState}
+            data-side={position.side}
             role="menu"
             aria-label={ariaLabel}
             aria-activedescendant={
@@ -327,8 +384,10 @@ export function Menu({
                       }}
                       onClick={() => {
                         item.onSelect?.();
-                        closeMenu();
-                        triggerRef.current?.focus({ preventScroll: true });
+                        if (item.closeOnSelect !== false) {
+                          closeMenu();
+                          triggerRef.current?.focus({ preventScroll: true });
+                        }
                       }}
                     >
                       {item.icon ? (

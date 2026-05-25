@@ -1,6 +1,6 @@
 import React from "react";
 import { useAction } from "convex/react";
-import { Plus, Wand2 } from "@/lib/icons";
+import { ArrowCounterClockwise, Plus, Wand2 } from "@/lib/icons";
 import { Remirror, useRemirror, EditorComponent } from "@remirror/react";
 import {
   BoldExtension,
@@ -15,7 +15,7 @@ import {
 } from "remirror/extensions";
 import type { RemirrorJSON } from "remirror";
 import { api } from "../../../convex/_generated/api";
-import { Button, Sheet } from "../ui";
+import { Button, IslandPanel } from "../ui";
 import AiSuggestionCard from "../ai/AiSuggestionCard";
 import type { CvSection } from "../../types/cvDocument";
 import { formatSectionDisplayTitle } from "../../lib/cv-section-organization";
@@ -35,25 +35,6 @@ function getSectionItemCount(section: CvSection | null): number {
     return section.blocks.length;
   }
   return 0;
-}
-
-function getSectionHelper(section: CvSection | null): string {
-  if (!section) return "Pick a section in the paper or rail to start.";
-  switch (section.type) {
-    case "profile":
-    case "contact":
-      return "Edit name, target role, and contact fields.";
-    case "experience":
-      return "Edit roles, companies, dates, and bullet points.";
-    case "education":
-      return "Edit schools, degrees, dates, and location.";
-    case "skills":
-      return "Edit skill chips and proficiency labels.";
-    case "languages":
-      return "Edit languages and proficiency labels.";
-    default:
-      return "Edit this section without changing parser or export behavior.";
-  }
 }
 
 type SectionEditorSheetProps = {
@@ -83,6 +64,8 @@ type SectionEditorSheetProps = {
   onRunListAiSuggestion?: (sectionId: string) => void;
   onAcceptListAiSuggestion?: (value: string) => void;
   onDismissListAiSuggestion?: (value: string) => void;
+  onClearListAiSuggestions?: () => void;
+  stageAligned?: boolean;
 };
 
 type FieldAiSuggestion = {
@@ -108,6 +91,7 @@ type DrawerRichTextEditorProps = {
   ariaLabel: string;
   testId: string;
   showLists?: boolean;
+  toolbarTrailing?: React.ReactNode;
   onChangeDoc: (doc: RemirrorJSON) => void;
   onRegisterFlush?: (key: string, flush: () => boolean) => () => void;
 };
@@ -117,6 +101,7 @@ function DrawerRichTextEditor({
   ariaLabel,
   testId,
   showLists = true,
+  toolbarTrailing,
   onChangeDoc,
   onRegisterFlush,
 }: DrawerRichTextEditorProps) {
@@ -209,7 +194,14 @@ function DrawerRichTextEditor({
     >
       <Remirror manager={manager} initialContent={state} onChange={handleChange}>
         <div className="rich-content">
-          <EditorToolbar position="top" showLists={showLists} />
+          <div className="dasti-cv-rich-editor-toolbar-row">
+            <EditorToolbar position="top" showLists={showLists} />
+            {toolbarTrailing ? (
+              <div className="dasti-cv-rich-editor-toolbar-row__trailing">
+                {toolbarTrailing}
+              </div>
+            ) : null}
+          </div>
           <EditorComponent />
         </div>
       </Remirror>
@@ -458,6 +450,37 @@ function CompactAppliedAiStatus({ onUndo }: { onUndo: () => void }) {
   );
 }
 
+function AiHelperAction({
+  label,
+  loadingLabel,
+  isLoading = false,
+  ariaLabel,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  loadingLabel?: string;
+  isLoading?: boolean;
+  ariaLabel?: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const visibleLabel = isLoading ? (loadingLabel ?? label) : label;
+  return (
+    <button
+      type="button"
+      className="dasti-cv-ai-helper-action"
+      aria-label={ariaLabel ?? label}
+      title={ariaLabel ?? label}
+      disabled={disabled || isLoading}
+      onClick={onClick}
+    >
+      <Wand2 size={13} strokeWidth={1.8} aria-hidden="true" />
+      <span>{visibleLabel}</span>
+    </button>
+  );
+}
+
 export function SectionEditorSheet({
   open,
   section,
@@ -469,6 +492,8 @@ export function SectionEditorSheet({
   onRunListAiSuggestion,
   onAcceptListAiSuggestion,
   onDismissListAiSuggestion,
+  onClearListAiSuggestions,
+  stageAligned = false,
 }: SectionEditorSheetProps): JSX.Element {
   const runCvSectionAiAction = useAction(
     ((api.functions as any)?.runCvSectionAiAction ??
@@ -608,7 +633,7 @@ export function SectionEditorSheet({
     }
   }
 
-  function closeAndDiscard() {
+  function revertChanges() {
     clearAutosaveTimer();
     pendingAutosaveSectionRef.current = null;
     const restoredSection = openedSectionRef.current ?? section;
@@ -620,7 +645,6 @@ export function SectionEditorSheet({
     setAcceptedAiEdit(null);
     setIsSummaryAiLoading(false);
     setNewPillValue("");
-    onOpenChange(false);
   }
 
   function saveAndClose() {
@@ -1075,26 +1099,22 @@ export function SectionEditorSheet({
     if (!editableSection) return null;
     return (
       <div className="dasti-cv-section-stack">
-        <div className="dasti-cv-section-card__head">
-          <span />
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            iconLeft={<Wand2 size={14} strokeWidth={1.8} />}
-            disabled={isSummaryAiLoading}
-            onClick={() => void runSummaryRewriteAi()}
-          >
-            {isSummaryAiLoading ? "Rewriting" : "Rewrite summary"}
-          </Button>
-        </div>
         <div className="dasti-cv-section-field dasti-cv-section-field--wide">
-          <span>{textInputLabel(title, "body")}</span>
+          <span className="sr-only">{textInputLabel(title, "body")}</span>
           <DrawerRichTextEditor
             key={`${String(editableSection.id ?? "summary")}:summary`}
             ariaLabel="Summary body"
             testId="drawer-rich-editor-summary"
             showLists={false}
+            toolbarTrailing={
+              <AiHelperAction
+                label="Rewrite"
+                loadingLabel="Rewriting"
+                isLoading={isSummaryAiLoading}
+                ariaLabel="Rewrite summary"
+                onClick={() => void runSummaryRewriteAi()}
+              />
+            }
             onRegisterFlush={registerDrawerRichEditorFlush}
             value={
               getStructuredItems(editableSection)[0]?.summary ??
@@ -1135,18 +1155,6 @@ export function SectionEditorSheet({
           <section className="dasti-cv-section-card" key={String(item.id ?? index)}>
             <div className="dasti-cv-section-card__head">
               <strong>{`Entry ${index + 1}`}</strong>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                iconLeft={<Wand2 size={14} strokeWidth={1.8} />}
-                disabled={fieldAiLoadingKey === `experience:${String(item.id ?? index)}`}
-                onClick={() => void runExperienceResponsibilitiesAi(index)}
-              >
-                {fieldAiLoadingKey === `experience:${String(item.id ?? index)}`
-                  ? "Improving"
-                  : "Improve responsibilities"}
-              </Button>
             </div>
             <Field
               label={`Role ${index + 1}`}
@@ -1169,7 +1177,17 @@ export function SectionEditorSheet({
               onChange={() => {}}
             />
             <div className="dasti-cv-section-field dasti-cv-section-field--wide">
-              <span>{`Responsibilities ${index + 1}`}</span>
+              <div className="dasti-cv-section-field__topline">
+                <span>{`Responsibilities ${index + 1}`}</span>
+                <AiHelperAction
+                  label="Improve"
+                  loadingLabel="Improving"
+                  isLoading={fieldAiLoadingKey === `experience:${String(item.id ?? index)}`}
+                  disabled={fieldAiLoadingKey === `experience:${String(item.id ?? index)}`}
+                  ariaLabel="Improve responsibilities"
+                  onClick={() => void runExperienceResponsibilitiesAi(index)}
+                />
+              </div>
               <DrawerRichTextEditor
                 key={`${String(item.id ?? index)}:responsibilities`}
                 ariaLabel={`Responsibilities ${index + 1}`}
@@ -1228,18 +1246,14 @@ export function SectionEditorSheet({
           <section className="dasti-cv-section-card" key={itemKey}>
             <div className="dasti-cv-section-card__head">
               <strong>{`Entry ${index + 1}`}</strong>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                iconLeft={<Wand2 size={14} strokeWidth={1.8} />}
+              <AiHelperAction
+                label="Fix"
+                loadingLabel="Fixing"
+                isLoading={fieldAiLoadingKey === `education:${itemKey}`}
                 disabled={fieldAiLoadingKey === `education:${itemKey}`}
+                ariaLabel="Fix education"
                 onClick={() => void runEducationSyntaxAi(index)}
-              >
-                {fieldAiLoadingKey === `education:${itemKey}`
-                  ? "Fixing"
-                  : "Fix wording"}
-              </Button>
+              />
             </div>
             <Field
               label={`Degree ${index + 1}`}
@@ -1300,18 +1314,6 @@ export function SectionEditorSheet({
           <section className="dasti-cv-section-card" key={String(item.id ?? index)}>
             <div className="dasti-cv-section-card__head">
               <strong>{`Project ${index + 1}`}</strong>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                iconLeft={<Wand2 size={14} strokeWidth={1.8} />}
-                disabled={fieldAiLoadingKey === `projects:${String(item.id ?? index)}`}
-                onClick={() => void runProjectDescriptionAi(index)}
-              >
-                {fieldAiLoadingKey === `projects:${String(item.id ?? index)}`
-                  ? "Improving"
-                  : "Improve description"}
-              </Button>
             </div>
             <Field
               label={`Name ${index + 1}`}
@@ -1328,7 +1330,17 @@ export function SectionEditorSheet({
               }
             />
             <div className="dasti-cv-section-field dasti-cv-section-field--wide">
-              <span>{`Description ${index + 1}`}</span>
+              <div className="dasti-cv-section-field__topline">
+                <span>{`Description ${index + 1}`}</span>
+                <AiHelperAction
+                  label="Improve"
+                  loadingLabel="Improving"
+                  isLoading={fieldAiLoadingKey === `projects:${String(item.id ?? index)}`}
+                  disabled={fieldAiLoadingKey === `projects:${String(item.id ?? index)}`}
+                  ariaLabel="Improve description"
+                  onClick={() => void runProjectDescriptionAi(index)}
+                />
+              </div>
               <DrawerRichTextEditor
                 key={`${String(item.id ?? index)}:project-description`}
                 ariaLabel={`Description ${index + 1}`}
@@ -1452,6 +1464,14 @@ export function SectionEditorSheet({
       onAcceptListAiSuggestion?.(cleanValue);
     }
 
+    function clearSuggestedPills() {
+      if (onClearListAiSuggestions) {
+        onClearListAiSuggestions();
+        return;
+      }
+      scopedListSuggestion?.items.forEach((item) => onDismissListAiSuggestion?.(item));
+    }
+
     function removePill(indexToRemove: number) {
       if (!editableSection) return;
       commitSection({
@@ -1493,26 +1513,17 @@ export function SectionEditorSheet({
           >
             Add
           </Button>
-        </form>
-
-        {sectionId && onRunListAiSuggestion ? (
-          <div className="dasti-cv-pill-editor__toolbar">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              iconLeft={<Wand2 size={14} strokeWidth={1.8} />}
+          {sectionId && onRunListAiSuggestion ? (
+            <AiHelperAction
+              label={scopedListSuggestion ? "Refresh" : "Suggest"}
+              loadingLabel="Suggesting"
+              isLoading={isAiRunning}
               disabled={isAiRunning}
+              ariaLabel={`${scopedListSuggestion ? "Refresh" : "Suggest"} ${labelBase}s`}
               onClick={() => onRunListAiSuggestion(sectionId)}
-            >
-              {isAiRunning
-                ? "Generating suggestions"
-                : scopedListSuggestion
-                  ? "Refresh suggestions"
-                  : "Suggest with AI"}
-            </Button>
-          </div>
-        ) : null}
+            />
+          ) : null}
+        </form>
 
         {scopedListSuggestion ? (
           <div
@@ -1533,27 +1544,31 @@ export function SectionEditorSheet({
                 {scopedListSuggestion.errorMessage ?? "AI suggestions are unavailable."}
               </p>
             ) : scopedListSuggestion.items.length > 0 ? (
-              <div className="dasti-cv-pill-suggestions__chips">
-                {scopedListSuggestion.items.map((item) => (
-                  <span className="dasti-cv-pill-suggestions__chip" key={item}>
-                    <span>{item}</span>
+              <>
+                <div className="dasti-cv-pill-suggestions__chips">
+                  {scopedListSuggestion.items.map((item) => (
                     <button
+                      className="dasti-cv-pill-suggestions__chip"
+                      key={item}
                       type="button"
                       aria-label={`Add suggested item ${item}`}
                       onClick={() => acceptSuggestedPill(item)}
                     >
-                      Add
+                      <Plus size={13} strokeWidth={1.8} aria-hidden="true" />
+                      <span>{item}</span>
                     </button>
-                    <button
-                      type="button"
-                      aria-label={`Dismiss suggested item ${item}`}
-                      onClick={() => onDismissListAiSuggestion?.(item)}
-                    >
-                      Dismiss
-                    </button>
-                  </span>
-                ))}
-              </div>
+                  ))}
+                </div>
+                {onDismissListAiSuggestion ? (
+                  <button
+                    type="button"
+                    className="dasti-cv-ai-helper-action dasti-cv-pill-suggestions__clear"
+                    onClick={clearSuggestedPills}
+                  >
+                    Clear suggestions
+                  </button>
+                ) : null}
+              </>
             ) : (
               <p className="dasti-cv-pill-editor__empty">
                 No new suggestions for this section.
@@ -1620,18 +1635,14 @@ export function SectionEditorSheet({
                       : `Item ${index + 1}`}
                 </strong>
                 {isAchievement ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    iconLeft={<Wand2 size={14} strokeWidth={1.8} />}
+                  <AiHelperAction
+                    label="Improve"
+                    loadingLabel="Improving"
+                    isLoading={fieldAiLoadingKey === `achievements:${itemKey}`}
                     disabled={fieldAiLoadingKey === `achievements:${itemKey}`}
+                    ariaLabel="Improve achievement"
                     onClick={() => void runAchievementLineAi(index)}
-                  >
-                    {fieldAiLoadingKey === `achievements:${itemKey}`
-                      ? "Improving"
-                      : "Improve line"}
-                  </Button>
+                  />
                 ) : null}
               </div>
               <Field
@@ -1732,23 +1743,22 @@ export function SectionEditorSheet({
     const suggestionKey = `text:${getSectionDraftKey(editableSection) ?? "section"}`;
     return (
       <div className="dasti-cv-section-stack">
-        <div className="dasti-cv-section-card__head">
-          <span />
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            iconLeft={<Wand2 size={14} strokeWidth={1.8} />}
-            disabled={fieldAiLoadingKey === suggestionKey}
-            onClick={() => void runTextSectionAi()}
-          >
-            {fieldAiLoadingKey === suggestionKey ? "Cleaning" : "Clean up text"}
-          </Button>
-        </div>
-        <label className="dasti-cv-section-field dasti-cv-section-field--wide">
-          <span>{textInputLabel(title, "body")}</span>
+        <div className="dasti-cv-section-field dasti-cv-section-field--wide">
+          <span className="sr-only">{textInputLabel(title, "body")}</span>
+          <span className="dasti-cv-section-field__topline">
+            <span aria-hidden="true" />
+            <AiHelperAction
+              label="Rewrite"
+              loadingLabel="Rewriting"
+              isLoading={fieldAiLoadingKey === suggestionKey}
+              disabled={fieldAiLoadingKey === suggestionKey}
+              ariaLabel={`Rewrite ${title}`}
+              onClick={() => void runTextSectionAi()}
+            />
+          </span>
           <textarea
             className="ds-field ds-field--textarea"
+            aria-label={textInputLabel(title, "body")}
             value={readSectionText(editableSection)}
             onKeyDown={(event) => {
               if (event.key === "Enter") event.stopPropagation();
@@ -1757,7 +1767,7 @@ export function SectionEditorSheet({
               commitSection(updateTextBlock(editableSection, event.currentTarget.value))
             }
           />
-        </label>
+        </div>
         {fieldAiSuggestion?.key === suggestionKey ? (
           <AiSuggestionCard
             compact
@@ -1808,7 +1818,7 @@ export function SectionEditorSheet({
   }
 
   return (
-    <Sheet
+    <IslandPanel
       open={open}
       onOpenChange={(nextOpen) => {
         if (nextOpen) {
@@ -1818,35 +1828,37 @@ export function SectionEditorSheet({
         saveAndClose();
       }}
       title={title}
-      description={getSectionHelper(section)}
-      className="dasti-cv-section-sheet-panel"
-      overlayClassName="dasti-cv-section-sheet-overlay"
-      footer={
-        <>
-          <Button type="button" variant="ghost" size="md" onClick={closeAndDiscard}>
-            Cancel
-          </Button>
-          <span className="dasti-proposal-safe-send__footer-spacer" />
-          <Button
-            type="button"
-            variant="primary"
-            size="md"
-            onClick={saveAndClose}
-          >
-            Save
-          </Button>
-        </>
-      }
+      meta={itemCount > 1 ? `${itemCount} items` : undefined}
+      ariaLabel={title}
+      className={[
+        "dasti-cv-section-sheet-panel",
+        stageAligned ? "dasti-cv-section-sheet-panel--stage" : null,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      showCloseButton={false}
+      discardAction={{
+        label: "Revert changes",
+        ariaLabel: "Revert this section to when it was opened",
+        title: "Revert changes",
+        icon: (
+          <ArrowCounterClockwise
+            size={15}
+            strokeWidth={1.7}
+            aria-hidden="true"
+          />
+        ),
+        onClick: revertChanges,
+      }}
+      saveAction={{
+        label: "Done",
+        onClick: saveAndClose,
+      }}
     >
       <div className="dasti-cv-section-sheet">
-        {itemCount > 1 ? (
-          <div className="dasti-cv-section-sheet__summary">
-            <span>{itemCount} items</span>
-          </div>
-        ) : null}
         {renderBody()}
       </div>
-    </Sheet>
+    </IslandPanel>
   );
 }
 

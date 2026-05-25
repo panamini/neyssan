@@ -137,6 +137,8 @@
   --text-title-line: var(--line-4);
   --text-display-size: var(--font-size-6);
   --text-display-line: var(--line-5);
+  --sidebar-icon-text-size: 13px;
+  --sidebar-icon-text-line: 18px;
 
   /* Typography families and weights */
   --font-body-family: "Geist Variable", "Geist", -apple-system,
@@ -425,6 +427,44 @@
   --app-sidebar-view-indent-compact: 34px;
   --app-sidebar-label-max: 208px;
   --app-sidebar-label-max-compact: 184px;
+
+  --app-nav-rail-width: calc(var(--space-8) + var(--space-4));
+  --app-nav-rail-width-compact: var(--space-8);
+  --app-nav-rail-pad-inline: var(--space-1);
+  --app-nav-rail-pad-block-start: calc(var(--space-1) / 2);
+  --app-nav-rail-pad-block: var(--space-2);
+
+  --app-nav-item-block-size: calc(var(--space-7) + var(--space-4));
+  --app-nav-item-radius: var(--radius-control);
+
+  --app-nav-icon-size: calc(var(--space-5) - var(--space-1));
+  --app-nav-label-size: var(--sidebar-icon-text-size);
+  --app-nav-label-line: var(--sidebar-icon-text-line);
+  --app-nav-icon-label-gap: calc(var(--space-1) / 2);
+
+  --app-nav-panel-width: calc(
+    var(--app-nav-rail-width) +
+    var(--app-nav-rail-width) +
+    var(--app-nav-rail-width) +
+    var(--app-nav-rail-width)
+  );
+  --app-nav-panel-width-wide: calc(
+    var(--app-nav-panel-width)
+  );
+  --app-topbar-edge-inline: 12px;
+  --app-topbar-gap: 8px;
+  --app-topbar-actions-gap: 8px;
+  --app-topbar-control-gap: 4px;
+  --app-topbar-control-padding-inline: 8px;
+  --app-topbar-command-padding-inline: 12px;
+  --app-topbar-icon-size: 15px;
+  --app-topbar-icon-size-compact: 13px;
+  --app-topbar-doc-cluster-gap: 8px;
+  --app-topbar-doc-identity-inline-size: 224px;
+  --app-topbar-doc-identity-inline-size-compact: 160px;
+  --app-topbar-doc-identity-inline-size-collapsed: var(--control-sm);
+  --app-topbar-command-inline-size: 206px;
+  --app-topbar-title-editor-inline-size: 520px;
   --sidebar-hover-bg: var(--sf2);
   --sidebar-active-bg: var(--sfr);
   --sidebar-hover-ink: var(--ti);
@@ -741,6 +781,20 @@
   --color-warning-ink: var(--wat);
   --color-neutral-soft: var(--color-surface);
   --color-neutral-ink: var(--color-text-muted);
+  --panel-island-surface: color-mix(
+    in srgb,
+    var(--color-surface) 88%,
+    transparent
+  );
+  --panel-island-surface-fallback: var(--color-surface);
+  --panel-island-border: var(--color-border);
+  --panel-island-radius: var(--radius-surface, var(--radius-card));
+  --panel-island-shadow: var(--shc);
+  --panel-island-blur: var(--frost-blur);
+  --panel-island-saturate: var(--frost-saturate);
+  --panel-island-inset: var(--space-3);
+  --panel-island-header-min-block-size: 38px;
+  --panel-island-max-inline-size: 420px;
   --color-info-soft: color-mix(
     in srgb,
     var(--color-accent-pale) 48%,
@@ -931,6 +985,17 @@
   --grid-gap-tight: var(--space-3);
   --grid-gap: var(--layout-card-grid);
   --rail-width: var(--card-rail-md);
+
+  /* Forge drawer spacing */
+  --forge-drawer-panel-padding-block: var(--space-3);
+  --forge-drawer-panel-padding-inline: var(--space-3);
+  --forge-drawer-content-gap: var(--space-2);
+  --forge-drawer-grid-gutter: var(--space-2);
+  --forge-drawer-template-grid-gutter: var(--space-3);
+  --forge-drawer-template-thumb-inline-size: 156px;
+  --forge-drawer-template-thumb-block-size: 220px;
+  --forge-drawer-grid-row-gap: var(--space-3);
+  --forge-drawer-scroll-inset: var(--space-1);
 
   /* Font role aliases */
   --font-app: var(--font-body-family);

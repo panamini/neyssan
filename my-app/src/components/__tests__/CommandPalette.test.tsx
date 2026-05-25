@@ -54,7 +54,7 @@ describe("CommandPalette", () => {
 
     expect(screen.getByRole("dialog", { name: "Command palette" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("option", { name: /Dashboard/i }));
+    fireEvent.click(screen.getByRole("option", { name: /Today/i }));
 
     expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
     expect(screen.getByTestId("palette-location")).toHaveTextContent("/dashboard::null");

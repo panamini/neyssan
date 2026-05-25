@@ -1,6 +1,7 @@
 import React from "react";
 import {
   ArrowsClockwise as PhArrowsClockwise,
+  ArrowCounterClockwise as PhArrowCounterClockwise,
   ArrowsOutSimple as PhArrowsOutSimple,
   ArrowLeft as PhArrowLeft,
   ArrowRight as PhArrowRight,
@@ -10,15 +11,23 @@ import {
   ArrowUUpLeft as PhArrowUUpLeft,
   ArrowUp as PhArrowUp,
   Camera as PhCamera,
+  CalendarDots as PhCalendarDots,
+  BookmarkSimple as PhBookmarkSimple,
   CaretDown as PhCaretDown,
+  CaretCircleRight as PhCaretCircleRight,
+  CaretLeft as PhCaretLeft,
+  CaretRight as PhCaretRight,
   CaretUp as PhCaretUp,
   Check as PhCheck,
+  ChatCircleText as PhChatCircleText,
   Briefcase as PhBriefcase,
   ClipboardText as PhClipboardText,
+  Command as PhCommand,
   SealWarning as PhSealWarning,
   CornersIn as PhCornersIn,
   Copy as PhCopy,
   DotsThree as PhDotsThree,
+  DotsThreeOutline as PhDotsThreeOutline,
   DotsSixVertical as PhDotsSixVertical,
   Eraser as PhEraser,
   Eye as PhEye,
@@ -28,26 +37,31 @@ import {
   Feather as PhFeather,
   FileImage as PhFileImage,
   FilePdf as PhFilePdf,
+  FilePlus as PhFilePlus,
   FileText as PhFileText,
   FloppyDisk as PhFloppyDisk,
   FolderOpen as PhFolderOpen,
   FolderSimple as PhFolderSimple,
+  Highlighter as PhHighlighter,
   IdentificationCard as PhIdentificationCard,
   Layout as PhLayout,
   Lightning as PhLightning,
   Link as PhLink,
   ListBullets as PhListBullets,
   ListMagnifyingGlass as PhListMagnifyingGlass,
+  ListNumbers as PhListNumbers,
   MagicWand as PhMagicWand,
   Moon as PhMoon,
   MagnifyingGlass as PhMagnifyingGlass,
   MagnifyingGlassMinus as PhMagnifyingGlassMinus,
   MagnifyingGlassPlus as PhMagnifyingGlassPlus,
+  NewspaperClipping as PhNewspaperClipping,
   PaperPlaneRight as PhPaperPlaneRight,
   PaperPlaneTilt as PhPaperPlaneTilt,
   Paperclip as PhPaperclip,
   Palette as PhPalette,
   Pen as PhPen,
+  PencilLine as PhPencilLine,
   PenNib as PhPenNib,
   PencilSimple as PhPencilSimple,
   PencilSimpleLine as PhPencilSimpleLine,
@@ -75,6 +89,7 @@ import {
   Sun as PhSun,
   Sunglasses as PhSunglasses,
   Stamp as PhStamp,
+  Target as PhTarget,
   TextB as PhTextB,
   TextItalic as PhTextItalic,
   TextUnderline as PhTextUnderline,
@@ -138,6 +153,7 @@ export type { CompatIconProps as IconProps };
 
 export const ArrowLeft = withCompat(PhArrowLeft);
 export const ArrowRight = withCompat(PhArrowRight);
+export const ArrowCounterClockwise = withCompat(PhArrowCounterClockwise);
 export const ArrowDown = withCompat(PhArrowDown);
 export const ArrowSquareOut = withCompat(PhArrowSquareOut);
 export const ArrowUDownRight = withCompat(PhArrowUDownRight);
@@ -145,17 +161,25 @@ export const ArrowUUpLeft = withCompat(PhArrowUUpLeft);
 export const ArrowUp = withCompat(PhArrowUp);
 export const ArrowsOutSimple = withCompat(PhArrowsOutSimple);
 export const Bold = withCompat(PhTextB);
+export const BookmarkSimple = withCompat(PhBookmarkSimple);
 export const Camera = withCompat(PhCamera);
+export const CalendarDots = withCompat(PhCalendarDots);
+export const CaretCircleRight = withCompat(PhCaretCircleRight);
 export const CaretDownIcon = withCompat(PhCaretDown);
+export const CaretLeft = withCompat(PhCaretLeft);
+export const CaretRight = withCompat(PhCaretRight);
 export const CaretUpIcon = withCompat(PhCaretUp);
 export const Check = withCompat(PhCheck);
+export const ChatCircleText = withCompat(PhChatCircleText);
 export const Briefcase = withCompat(PhBriefcase);
 export const ClipboardText = withCompat(PhClipboardText);
 export const ChevronDown = withCompat(PhCaretDown);
 export const ChevronUp = withCompat(PhCaretUp);
+export const Command = withCompat(PhCommand);
 export const Copy = withCompat(PhCopy);
 export const CornersIn = withCompat(PhCornersIn);
 export const DotsThree = withCompat(PhDotsThree);
+export const DotsThreeOutline = withCompat(PhDotsThreeOutline);
 export const Eye = withCompat(PhEye);
 export const EyeClosed = withCompat(PhEyeClosed);
 export const EyeSlash = withCompat(PhEyeSlash);
@@ -164,6 +188,7 @@ export const Eraser = withCompat(PhEraser);
 export const Feather = withCompat(PhFeather);
 export const FileImage = withCompat(PhFileImage);
 export const FilePdf = withCompat(PhFilePdf);
+export const FilePlus = withCompat(PhFilePlus);
 export const FileText = withCompat(PhFileText);
 export const FileUser = withCompat(PhIdentificationCard);
 export const ReadCvLogo = withCompat(PhIdentificationCard);
@@ -172,12 +197,14 @@ export const FolderOpen = withCompat(PhFolderOpen);
 export const FolderSimple = withCompat(PhFolderSimple);
 export const FolderTree = withCompat(PhTreeView);
 export const GripHorizontal = withCompat(PhDotsSixVertical);
+export const Highlighter = withCompat(PhHighlighter);
 export const Italic = withCompat(PhTextItalic);
 export const Layout = withCompat(PhLayout);
 export const Lightning = withCompat(PhLightning);
 export const Link = withCompat(PhLink);
 export const List = withCompat(PhListBullets);
 export const ListMagnifyingGlass = withCompat(PhListMagnifyingGlass);
+export const ListNumbers = withCompat(PhListNumbers);
 export const Loader2 = withCompat(PhSpinnerGap, "bold");
 export const MagnifyingGlass = withCompat(PhMagnifyingGlass);
 export const MagnifyingGlassMinus = withCompat(PhMagnifyingGlassMinus);
@@ -185,12 +212,15 @@ export const MagnifyingGlassPlus = withCompat(PhMagnifyingGlassPlus);
 export const Menu = withCompat(PhRows);
 export const Minus = withCompat(PhMinus);
 export const Moon = withCompat(PhMoon);
+export const NewspaperClipping = withCompat(PhNewspaperClipping);
 export const Paperclip = withCompat(PhPaperclip);
 export const PaperPlaneRight = withCompat(PhPaperPlaneRight);
+export const PaperPlaneTilt = withCompat(PhPaperPlaneTilt);
 export const Palette = withCompat(PhPalette);
 export const Pause = withCompat(PhPause);
 export const PanelLeftDashed = withCompat(PhSidebarSimple);
 export const Pen = withCompat(PhPen);
+export const PencilLine = withCompat(PhPencilLine);
 export const PenNib = withCompat(PhPenNib);
 export const PenLine = withCompat(PhPencilSimpleLine);
 export const Pencil = withCompat(PhPencilSimple);
@@ -217,6 +247,7 @@ export const Sun = withCompat(PhSun);
 export const SunMedium = withCompat(PhSun);
 export const Sunglasses = withCompat(PhSunglasses);
 export const Stamp = withCompat(PhStamp);
+export const Target = withCompat(PhTarget);
 export const TrashSimple = withCompat(PhTrashSimple);
 export const Underline = withCompat(PhTextUnderline);
 export const ToggleLeft = withCompat(PhToggleLeft);

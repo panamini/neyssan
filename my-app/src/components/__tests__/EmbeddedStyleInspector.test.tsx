@@ -199,7 +199,7 @@ describe("EmbeddedStyleInspector", () => {
     });
   });
 
-  it("offers workshop as the active workspace layout family and keeps civic typography available", async () => {
+  it("offers Minimal as the active workspace layout family and keeps civic typography available", async () => {
     const user = userEvent.setup();
 
     renderInspector();
@@ -209,7 +209,7 @@ describe("EmbeddedStyleInspector", () => {
     );
 
     expect(
-      screen.getByRole("menuitemradio", { name: "Workshop" }),
+      screen.getByRole("menuitemradio", { name: "Minimal" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("menuitemradio", { name: "Swiss Minima" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitemradio", { name: "Volk Register" })).not.toBeInTheDocument();
@@ -244,12 +244,12 @@ describe("EmbeddedStyleInspector", () => {
     await user.click(
       screen.getByRole("button", { name: "Open layout controls" }),
     );
-    await user.click(screen.getByRole("menuitemradio", { name: "Workshop" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Minimal" }));
 
     expect(onSelectLayout).toHaveBeenCalledWith("workshop");
   });
 
-  it("applies workshop layout, typography, and palette choices from the direct drawers", async () => {
+  it("applies Minimal layout, typography, and palette choices from the direct drawers", async () => {
     const user = userEvent.setup();
     const onSelectLayout = vi.fn();
     const onSelectTypography = vi.fn();
@@ -275,7 +275,7 @@ describe("EmbeddedStyleInspector", () => {
     await user.click(
       screen.getByRole("button", { name: "Open layout controls" }),
     );
-    await user.click(screen.getByRole("menuitemradio", { name: "Workshop" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Minimal" }));
 
     await user.click(screen.getByRole("button", { name: "Open text styles" }));
     await user.click(screen.getByRole("menuitemradio", { name: "Soft Serif" }));

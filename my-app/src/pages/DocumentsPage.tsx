@@ -1,79 +1,86 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { Button, Card, CardBody, CardFooter, CardTitle, Input, Menu, Pill, type PillTone } from "../components/ui";
-import { useCvLibrary } from "../contexts/CvLibraryContext";
-import { formatCvDisplaySubtitle } from "../lib/proposal-personalization";
 import {
+  Button,
+  Card,
+  CardFooter,
+  CardTitle,
+  Input,
+  Menu,
+} from "../components/ui";
+import { ProposalDocumentRenderer } from "../components/proposal-render/ProposalDocumentRenderer";
+import { useCvLibrary } from "../contexts/CvLibraryContext";
+import ResumeTemplateRenderer from "../features/verbati/resume/ResumeTemplateRenderer";
+import { resolveVerbatiStyle } from "../features/verbati/style";
+import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
+import { buildStyledResumePrintSource } from "../lib/document-export-models";
+import {
+  resolvePreviewCanonicalAppearance,
+  serializeProposalDocumentThemeVars,
+} from "../lib/layout/documentAppearance";
+import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
+import {
+  buildWorkLibraryModel,
+  type LibraryItem,
+  type LibraryProposalRecord,
+  type WorkTarget,
+} from "../lib/application-library";
+import {
+  clearStoredProposalWorkspaceState,
   createProposalWorkspaceResetState,
   readStoredProposalComposeDraft,
   startFreshProposalWorkspace,
 } from "../lib/proposal-workspace-state";
 import { readStoredProposalOutputDraft } from "../lib/proposal-output-draft";
-import { clearActiveLocalCvId } from "../lib/proposal-personalization";
-import { DotsThree } from "../lib/icons";
+import {
+  downloadLibraryItems,
+  isLibraryItemDownloadable,
+} from "../lib/library-download";
+import {
+  clearActiveLocalCvId,
+  getLocalCvDocumentById,
+} from "../lib/proposal-personalization";
+import {
+  Briefcase,
+  DotsThree,
+  ArrowSquareOut,
+  Check,
+  FilePdf,
+  FilePlus,
+  FileUser,
+  List,
+  SquaresFour,
+  TrashSimple,
+  Upload,
+  X,
+} from "../lib/icons";
 import type { CvDocument } from "../types/cvDocument";
 
-const DOCUMENT_TABS = ["all", "proposals", "cvs", "drafts"] as const;
-type DocumentTab = (typeof DOCUMENT_TABS)[number];
+const TYPE_FILTERS = ["all", "cvs", "proposals"] as const;
+type TypeFilter = (typeof TYPE_FILTERS)[number];
+type ViewMode = "grid" | "list";
 
-type ProposalRecord = {
-  _id: Id<"proposals">;
-  _creationTime: number;
-  title?: string;
-  content?: string;
-  status?: string;
-  updatedAt?: number;
-  metadata?: {
-    voicePreset?: string | null;
-    sourceJobDescription?: string | null;
-  } | null;
+type ListEntry = {
+  item: LibraryItem;
 };
 
-type DocumentItem = {
-  id: string;
-  kind: "proposal" | "cv" | "draft";
-  eyebrow: string;
-  title: string;
-  body: string;
-  updatedAt: number;
-  status: string;
-  onOpen: () => void;
-  onDelete?: () => void;
-};
+const PROJECT_PREVIEW_BATCH_SIZE = 4;
+const PROJECT_PREVIEW_BATCH_DELAY_MS = 80;
 
-function normalizeTitle(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.trim() ? value.trim() : fallback;
-}
+const PROJECTS_PROPOSAL_PREVIEW_STYLE = resolveVerbatiStyle({
+  familyId: "workshop",
+  typography: "geist-baskervville",
+  palette: "sauge",
+});
 
-function textSnippet(value: unknown, fallback: string): string {
-  if (typeof value !== "string") return fallback;
-  return value.replace(/\s+/g, " ").trim().slice(0, 160) || fallback;
-}
-
-function cvUpdatedAt(cv: CvDocument): number {
-  const value = cv.metadata?.updatedAt ?? cv.metadata?.createdAt;
-  if (typeof value === "string") {
-    const parsed = Date.parse(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-}
-
-function tabLabel(tab: DocumentTab): string {
-  if (tab === "cvs") return "CVs";
-  return tab.charAt(0).toUpperCase() + tab.slice(1);
-}
-
-function documentStatusTone(item: DocumentItem, currentCvId: string | null): PillTone {
-  if (item.kind === "draft") return "warning";
-  if (item.kind === "cv") {
-    return currentCvId === item.id ? "success" : "neutral";
-  }
-  return "neutral";
+function typeLabel(filter: TypeFilter): string {
+  if (filter === "all") return "All";
+  if (filter === "cvs") return "CVs";
+  return "Proposals";
 }
 
 function formatUpdatedLabel(value: number): string {
@@ -96,18 +103,164 @@ function formatUpdatedLabel(value: number): string {
     const weeks = Math.max(1, Math.floor(elapsedMs / weekMs));
     return `Updated ${weeks} ${weeks === 1 ? "week" : "weeks"} ago`;
   }
-  if (elapsedMs < 12 * monthMs) {
-    const months = Math.max(1, Math.floor(elapsedMs / monthMs));
-    return `Updated ${months} ${months === 1 ? "month" : "months"} ago`;
-  }
   return `Updated ${new Date(value).toLocaleDateString("en-US", {
     month: "short",
     year: "numeric",
   })}`;
 }
 
+function itemTypeLabel(item: LibraryItem): "CV" | "Proposal" {
+  return item.type === "cv" ? "CV" : "Proposal";
+}
+
+function itemSourceId(item: LibraryItem): string {
+  return item.id.slice(item.id.indexOf(":") + 1);
+}
+
+function useBatchedProjectPreviewLoader(items: LibraryItem[]) {
+  const initialPreviewIds = React.useMemo(
+    () => items.slice(0, PROJECT_PREVIEW_BATCH_SIZE).map((item) => item.id),
+    [items],
+  );
+  const [loadedPreviewIds, setLoadedPreviewIds] = React.useState<Set<string>>(
+    () => new Set(initialPreviewIds),
+  );
+  const loadedPreviewIdsRef = React.useRef(loadedPreviewIds);
+  const pendingPreviewIdsRef = React.useRef<string[]>([]);
+  const batchTimerRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    loadedPreviewIdsRef.current = loadedPreviewIds;
+  }, [loadedPreviewIds]);
+
+  React.useEffect(() => {
+    const availableIds = new Set(items.map((item) => item.id));
+    pendingPreviewIdsRef.current = [];
+    if (batchTimerRef.current !== null) {
+      window.clearTimeout(batchTimerRef.current);
+      batchTimerRef.current = null;
+    }
+    setLoadedPreviewIds((previous) => {
+      const next = new Set(initialPreviewIds);
+      previous.forEach((id) => {
+        if (availableIds.has(id)) next.add(id);
+      });
+      loadedPreviewIdsRef.current = next;
+      return next;
+    });
+  }, [initialPreviewIds, items]);
+
+  const schedulePreviewBatch = React.useCallback(() => {
+    if (batchTimerRef.current !== null) return;
+    batchTimerRef.current = window.setTimeout(() => {
+      batchTimerRef.current = null;
+      const batch = pendingPreviewIdsRef.current.splice(0, PROJECT_PREVIEW_BATCH_SIZE);
+      if (batch.length > 0) {
+        setLoadedPreviewIds((previous) => {
+          const next = new Set(previous);
+          batch.forEach((id) => next.add(id));
+          loadedPreviewIdsRef.current = next;
+          return next;
+        });
+      }
+      if (pendingPreviewIdsRef.current.length > 0) {
+        schedulePreviewBatch();
+      }
+    }, PROJECT_PREVIEW_BATCH_DELAY_MS);
+  }, []);
+
+  const requestPreview = React.useCallback(
+    (itemId: string) => {
+      if (
+        loadedPreviewIdsRef.current.has(itemId) ||
+        pendingPreviewIdsRef.current.includes(itemId)
+      ) {
+        return;
+      }
+      pendingPreviewIdsRef.current.push(itemId);
+      schedulePreviewBatch();
+    },
+    [schedulePreviewBatch],
+  );
+
+  React.useEffect(
+    () => () => {
+      if (batchTimerRef.current !== null) {
+        window.clearTimeout(batchTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  return { loadedPreviewIds, requestPreview };
+}
+
+function isLibrarySummaryOnlyCv(cv: CvDocument | null | undefined): boolean {
+  return Boolean(
+    (cv?.metadata as { librarySummaryOnly?: boolean } | undefined)
+      ?.librarySummaryOnly,
+  );
+}
+
+function hydrateLibraryCvDocument(cv: CvDocument): CvDocument {
+  if (!isLibrarySummaryOnlyCv(cv)) {
+    return cv;
+  }
+
+  const fullDocument = getLocalCvDocumentById(String(cv.id));
+  return fullDocument && !isLibrarySummaryOnlyCv(fullDocument)
+    ? fullDocument
+    : cv;
+}
+
+function hydrateLibraryCvDocuments(cvs: CvDocument[]): CvDocument[] {
+  return cvs.map(hydrateLibraryCvDocument);
+}
+
+function navigateTarget(
+  target: WorkTarget,
+  navigate: ReturnType<typeof useNavigate>,
+) {
+  if (target.kind === "route") {
+    void navigate(target.to);
+  }
+}
+
+function proposalContext(item: LibraryItem): string {
+  if (item.type === "cv") return "CV profile";
+  const jobPart = item.jobId || item.jobTitle ? "Job linked" : "No job";
+  const cvPart = item.linkedCvTitle
+    ? `CV: ${item.linkedCvTitle}`
+    : item.linkedCvId
+      ? "CV linked"
+      : "No CV linked";
+  return `${jobPart} · ${cvPart}`;
+}
+
+function matchesType(typeFilter: TypeFilter, item: LibraryItem): boolean {
+  if (typeFilter === "all") return true;
+  if (typeFilter === "cvs") return item.type === "cv";
+  return item.type === "proposal";
+}
+
+function matchesSearch(query: string, item: LibraryItem): boolean {
+  if (!query) return true;
+  return [
+    item.type,
+    item.title,
+    item.subtitle,
+    item.jobTitle,
+    item.linkedCvTitle,
+    proposalContext(item),
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(query);
+}
+
 export function DocumentsPage(): JSX.Element {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isLoaded, isSignedIn } = useAuth();
   const {
     isAuthenticated: isConvexAuthenticated,
@@ -116,11 +269,111 @@ export function DocumentsPage(): JSX.Element {
   const proposals = useQuery(
     api.proposalsPublic.default,
     isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip",
-  ) as ProposalRecord[] | undefined;
+  ) as LibraryProposalRecord[] | undefined;
   const deleteProposal = useMutation(api.deleteProposalPublic.default);
-  const { cvs, currentCvId, loadCv, deleteCv } = useCvLibrary();
-  const [activeTab, setActiveTab] = React.useState<DocumentTab>("all");
+  const { cvs, currentCvId, loadCv, deleteCv, hydrateCvDocument } = useCvLibrary();
+  const urlTypeParam = searchParams.get("type");
+  const [typeFilter, setTypeFilter] = React.useState<TypeFilter>(() =>
+    urlTypeParam === "cvs" || urlTypeParam === "proposals" || urlTypeParam === "all"
+      ? urlTypeParam
+      : "all",
+  );
+  const [viewMode, setViewMode] = React.useState<ViewMode>("grid");
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const localOutputDraft = React.useMemo(() => readStoredProposalOutputDraft(), []);
+  const localComposeDraft = React.useMemo(() => readStoredProposalComposeDraft(), []);
+
+  React.useEffect(() => {
+    const nextType =
+      urlTypeParam === "cvs" || urlTypeParam === "proposals" || urlTypeParam === "all"
+        ? urlTypeParam
+        : "all";
+    setTypeFilter(nextType);
+  }, [urlTypeParam]);
+
+  const updateTypeFilter = React.useCallback(
+    (filter: TypeFilter) => {
+      setTypeFilter(filter);
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set("type", filter);
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const hydratedCvs = React.useMemo(
+    () => hydrateLibraryCvDocuments(cvs),
+    [cvs],
+  );
+
+  const model = React.useMemo(
+    () =>
+      buildWorkLibraryModel({
+        proposals,
+        cvs: hydratedCvs,
+        currentCvId,
+        outputDraft: localOutputDraft,
+        composeDraft: localComposeDraft,
+      }),
+    [currentCvId, hydratedCvs, localComposeDraft, localOutputDraft, proposals],
+  );
+
+  const openItem = React.useCallback(
+    (item: LibraryItem) => {
+      const id = itemSourceId(item);
+      if (item.type === "cv") {
+        loadCv(id);
+      }
+      navigateTarget(item.routeTarget, navigate);
+    },
+    [loadCv, navigate],
+  );
+
+  const performDeleteItem = React.useCallback(
+    (item: LibraryItem) => {
+      const id = itemSourceId(item);
+      if (item.source === "local") {
+        clearStoredProposalWorkspaceState();
+        return;
+      }
+      if (item.type === "cv") {
+        deleteCv(id);
+        return;
+      }
+      if (!isConvexAuthenticated || isConvexAuthLoading) return;
+      void deleteProposal({ id: id as Id<"proposals"> });
+    },
+    [deleteCv, deleteProposal, isConvexAuthLoading, isConvexAuthenticated],
+  );
+
+  const deleteItem = React.useCallback(
+    (item: LibraryItem) => {
+      const itemKind = item.type === "cv" ? "CV" : "proposal";
+      if (!window.confirm(`Delete ${itemKind} "${item.title}"?`)) return;
+      performDeleteItem(item);
+      setSelectedIds((current) => {
+        if (!current.has(item.id)) return current;
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+    },
+    [performDeleteItem],
+  );
+
+  const downloadItem = React.useCallback(async (item: LibraryItem) => {
+    try {
+      await downloadLibraryItems([item], { hydrateCvDocument });
+    } catch (error) {
+      console.warn("Failed to download library item", error);
+    }
+  }, [hydrateCvDocument]);
 
   const handleCreateProposal = React.useCallback(() => {
     clearActiveLocalCvId();
@@ -132,124 +385,91 @@ export function DocumentsPage(): JSX.Element {
     void navigate("/cv", { state: { cvForgeAction: "importCv" } });
   }, [navigate]);
 
-  const items = React.useMemo<DocumentItem[]>(() => {
-    const proposalItems = (proposals ?? [])
-      .filter(
-        (proposal) => proposal.status === "draft" || proposal.status === "saved",
-      )
-      .map<DocumentItem>((proposal) => {
-        const isDraft = proposal.status === "draft";
-        return {
-          id: String(proposal._id),
-          kind: isDraft ? "draft" : "proposal",
-          eyebrow: isDraft ? "Draft" : "Proposal",
-          title: normalizeTitle(
-            proposal.title,
-            isDraft ? "Draft proposal" : "Untitled proposal",
-          ),
-          body: textSnippet(
-            proposal.content,
-            isDraft
-              ? "Generated draft saved to the library."
-              : "Cover letter saved to the library.",
-          ),
-          updatedAt: proposal.updatedAt ?? proposal._creationTime,
-          status: isDraft ? "Draft" : "Saved",
-          onOpen: () =>
-            navigate(
-              isDraft
-                ? `/proposal?draftId=${encodeURIComponent(String(proposal._id))}`
-                : `/proposal?view=saved&id=${encodeURIComponent(String(proposal._id))}`,
-            ),
-          onDelete: () => {
-            if (!isConvexAuthenticated || isConvexAuthLoading) return;
-            void deleteProposal({ id: proposal._id });
-          },
-        };
-      });
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredItems = React.useMemo(
+    () =>
+      model.items.filter(
+        (item) =>
+          matchesType(typeFilter, item) && matchesSearch(normalizedSearch, item),
+      ),
+    [model.items, normalizedSearch, typeFilter],
+  );
 
-    const cvItems = cvs.map<DocumentItem>((cv) => ({
-      id: String(cv.id),
-      kind: "cv",
-      eyebrow: "CV",
-      title: normalizeTitle(cv.title, "Untitled CV"),
-      body: formatCvDisplaySubtitle({ title: String(cv.title ?? "") }) ||
-        "Resume variant kept in your CV library.",
-      updatedAt: cvUpdatedAt(cv),
-      status: currentCvId === String(cv.id) ? "Active" : "Saved",
-      onOpen: () => {
-        const opened = loadCv(String(cv.id));
-        if (opened) {
-          void navigate(`/cv?id=${encodeURIComponent(String(cv.id))}`);
-          return;
-        }
-        void navigate(`/cv?id=${encodeURIComponent(String(cv.id))}`);
-      },
-      onDelete: () => deleteCv(String(cv.id)),
-    }));
+  const selectedItems = React.useMemo(
+    () => model.items.filter((item) => selectedIds.has(item.id)),
+    [model.items, selectedIds],
+  );
+  const selectedDownloadableCount = React.useMemo(
+    () => selectedItems.filter(isLibraryItemDownloadable).length,
+    [selectedItems],
+  );
 
-    const outputDraft = readStoredProposalOutputDraft();
-    const composeDraft = readStoredProposalComposeDraft();
-    const draftTitle = normalizeTitle(
-      outputDraft?.proposalDocumentTitle ?? composeDraft?.jobTitle,
-      "Proposal draft",
-    );
-    const draftContent = textSnippet(
-      outputDraft?.proposalContent ?? composeDraft?.jobDescription,
-      "Draft in progress.",
-    );
-    const draftItems: DocumentItem[] =
-      outputDraft || composeDraft
-        ? [
-            {
-              id: "proposal-draft",
-              kind: "draft",
-              eyebrow: "Draft",
-              title: draftTitle,
-              body: draftContent,
-              updatedAt: Date.now(),
-              status: "Drafting",
-              onOpen: () => navigate("/proposal"),
-            },
-          ]
-        : [];
-
-    return [...draftItems, ...proposalItems, ...cvItems].sort(
-      (a, b) => b.updatedAt - a.updatedAt,
-    );
-  }, [cvs, currentCvId, deleteCv, deleteProposal, isConvexAuthLoading, isConvexAuthenticated, loadCv, navigate, proposals]);
-
-  const filteredItems = React.useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    return items.filter((item) => {
-      if (activeTab === "proposals" && item.kind !== "proposal") return false;
-      if (activeTab === "cvs" && item.kind !== "cv") return false;
-      if (activeTab === "drafts" && item.kind !== "draft") return false;
-      if (!normalizedQuery) return true;
-      return [item.eyebrow, item.title, item.body, item.status]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalizedQuery);
+  const toggleSelected = React.useCallback((itemId: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
     });
-  }, [activeTab, items, searchQuery]);
+  }, []);
+
+  const clearSelection = React.useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const deleteSelected = React.useCallback(() => {
+    if (selectedItems.length === 0) return;
+    if (!window.confirm(`Delete ${selectedItems.length} selected item${selectedItems.length === 1 ? "" : "s"}?`)) {
+      return;
+    }
+    selectedItems.forEach(performDeleteItem);
+    clearSelection();
+  }, [clearSelection, performDeleteItem, selectedItems]);
+
+  const downloadSelected = React.useCallback(async () => {
+    if (selectedItems.length === 0) return;
+    try {
+      await downloadLibraryItems(selectedItems, { hydrateCvDocument });
+    } catch (error) {
+      console.warn("Failed to download selected library items", error);
+    }
+  }, [hydrateCvDocument, selectedItems]);
+
+  const listEntries = React.useMemo<ListEntry[]>(
+    () =>
+      filteredItems.map((item) => ({
+        item,
+      })),
+    [filteredItems],
+  );
+  const { loadedPreviewIds, requestPreview } =
+    useBatchedProjectPreviewLoader(filteredItems);
 
   const authStatusMessage = !isLoaded || isConvexAuthLoading
-    ? "Loading documents."
+    ? "Loading projects."
     : !isSignedIn || !isConvexAuthenticated
-      ? "Sign in to sync saved proposals. Local CVs and drafts still appear here."
+      ? "Sign in to sync proposals. Local CVs and generated proposals still appear here."
       : null;
 
   return (
     <div className="dasti-page-scroll">
-      <div className="dasti-page-shell dasti-documents-page">
+      <div className="dasti-page-shell dasti-documents-page projects-page">
         <div className="dasti-page-header dasti-documents-page__head">
           <div className="dasti-stack">
-            <h1 className="dasti-stack__title page-head__title">Documents</h1>
-            <p className="dasti-stack__subtitle page-head__sub">Proposals, CVs, and drafts you have created.</p>
+            <h1 className="dasti-stack__title page-head__title">Projects</h1>
+            <p className="dasti-stack__subtitle page-head__sub">
+              Jobs, CVs, and proposals in one place.
+            </p>
           </div>
           <div className="dasti-page-actions">
             <Button type="button" variant="secondary" size="md" onClick={handleImportCv}>
               Import CV
+            </Button>
+            <Button type="button" variant="secondary" size="md" onClick={() => navigate("/jobs")}>
+              Add job
             </Button>
             <Button type="button" variant="primary" size="md" onClick={handleCreateProposal}>
               New proposal
@@ -257,97 +477,630 @@ export function DocumentsPage(): JSX.Element {
           </div>
         </div>
 
-        <div className="dasti-documents-toolbar">
-          <div className="library-tabs" role="tablist" aria-label="Document type">
-            {DOCUMENT_TABS.map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === tab}
-                data-active={activeTab === tab ? "true" : undefined}
-                onClick={() => setActiveTab(tab)}
-              >
-                {tabLabel(tab)}
-              </button>
-            ))}
+        <div className="dasti-documents-toolbar projects-toolbar">
+          <div className="projects-filter-group" aria-label="Type filter">
+            <span>Type</span>
+            <div className="library-tabs" role="tablist" aria-label="Type">
+              {TYPE_FILTERS.map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  role="tab"
+                  aria-selected={typeFilter === filter}
+                  data-active={typeFilter === filter ? "true" : undefined}
+                  onClick={() => updateTypeFilter(filter)}
+                >
+                  {typeLabel(filter)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="library-tabs projects-view-toggle" role="tablist" aria-label="View">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "grid"}
+              data-active={viewMode === "grid" ? "true" : undefined}
+              onClick={() => setViewMode("grid")}
+            >
+              <SquaresFour size={14} aria-hidden="true" />
+              Grid
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === "list"}
+              data-active={viewMode === "list" ? "true" : undefined}
+              onClick={() => setViewMode("list")}
+            >
+              <List size={14} aria-hidden="true" />
+              List
+            </button>
           </div>
           <label className="dasti-documents-toolbar__search">
-            <span className="sr-only">Search documents</span>
+            <span className="sr-only">Search projects</span>
             <Input
               type="search"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.currentTarget.value)}
-              placeholder="Search documents"
-              aria-label="Search documents"
+              placeholder="Search projects"
+              aria-label="Search projects"
             />
           </label>
         </div>
 
         {authStatusMessage ? <p className="dasti-hint">{authStatusMessage}</p> : null}
 
-        {filteredItems.length > 0 ? (
-          <div className="dasti-documents-grid" aria-label="Documents">
-            {filteredItems.map((item) => (
-              <Card key={`${item.kind}:${item.id}`} as="article" interactive className="dasti-documents-card">
-                <div className="dasti-documents-card__top">
-                  <span className="ds-card__eyebrow dasti-library-card__eyebrow">{item.eyebrow}</span>
-                  <Menu
-                    ariaLabel={`More actions for ${item.title}`}
-                    align="end"
-                    sections={[
-                      {
-                        items: [
-                          { id: "open", label: "Open", onSelect: item.onOpen },
-                          ...(item.onDelete
-                            ? [{ id: "delete", label: "Delete", tone: "danger" as const, onSelect: item.onDelete }]
-                            : []),
-                        ],
-                      },
-                    ]}
-                    trigger={
-                      <button
-                        type="button"
-                        className="dasti-documents-card__menu"
-                        aria-label={`More actions for ${item.title}`}
-                        title={`More actions for ${item.title}`}
-                      >
-                        <DotsThree size={16} strokeWidth={1.7} aria-hidden="true" />
-                      </button>
-                    }
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="dasti-documents-card__surface"
-                  onClick={item.onOpen}
-                >
-                  <CardTitle className="dasti-library-card__title">{item.title}</CardTitle>
-                  <CardBody className="dasti-library-card__body">{item.body}</CardBody>
-                </button>
-                <CardFooter className="dasti-library-card__footer">
-                  <span>{formatUpdatedLabel(item.updatedAt)}</span>
-                  <Pill tone={documentStatusTone(item, currentCvId)}>{item.status}</Pill>
-                </CardFooter>
-              </Card>
-            ))}
-            <Card interactive className="dasti-documents-card dasti-documents-card--new">
-              <button type="button" onClick={handleCreateProposal}>
-                New document
-              </button>
-            </Card>
-          </div>
+        {viewMode === "grid" ? (
+          filteredItems.length > 0 ? (
+            <ProjectSection
+              title="Recent work"
+              items={filteredItems}
+              renderItem={(item, index) => (
+                <LibraryItemCard
+                  key={item.id}
+                  item={item}
+                  selected={selectedIds.has(item.id)}
+                  previewLoaded={loadedPreviewIds.has(item.id)}
+                  onRequestPreview={() => requestPreview(item.id)}
+                  onOpen={() => openItem(item)}
+                  onDelete={() => deleteItem(item)}
+                  onDownload={() => downloadItem(item)}
+                  onToggleSelected={() => toggleSelected(item.id)}
+                />
+              )}
+            />
+          ) : (
+            <ProjectsEmptyState
+              onImportCv={handleImportCv}
+              onAddJob={() => navigate("/jobs")}
+              onCreateProposal={handleCreateProposal}
+            />
+          )
+        ) : listEntries.length > 0 ? (
+          <ProjectsList
+            entries={listEntries}
+            selectedIds={selectedIds}
+            onOpen={openItem}
+            onDelete={deleteItem}
+            onDownload={downloadItem}
+            onToggleSelected={toggleSelected}
+          />
         ) : (
-          <div className="empty-state">
-            <div className="empty-state__title">No documents yet.</div>
-            <div className="empty-state__desc">
-              Import a CV or start a proposal. Both will appear here with drafts and saved documents.
-            </div>
-            <Button type="button" variant="primary" size="md" onClick={handleImportCv}>
-              Import CV
-            </Button>
-          </div>
+          <ProjectsEmptyState
+            onImportCv={handleImportCv}
+            onAddJob={() => navigate("/jobs")}
+            onCreateProposal={handleCreateProposal}
+          />
         )}
+        {selectedItems.length > 0 ? (
+          <ProjectsBulkActionBar
+            selectedCount={selectedItems.length}
+            downloadableCount={selectedDownloadableCount}
+            onClear={clearSelection}
+            onDownload={downloadSelected}
+            onDelete={deleteSelected}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ProjectSection<T>({
+  title,
+  items,
+  renderItem,
+}: {
+  title: string;
+  items: T[];
+  renderItem: (item: T, index: number) => React.ReactNode;
+}) {
+  return (
+    <section className="projects-section" aria-labelledby={`${title.replace(/\s+/g, "-").toLowerCase()}-title`}>
+      <div className="projects-section__head">
+        <h2 id={`${title.replace(/\s+/g, "-").toLowerCase()}-title`}>{title}</h2>
+        <p>{items.length} item{items.length === 1 ? "" : "s"}</p>
+      </div>
+      <div className="dasti-documents-grid projects-grid">{items.map(renderItem)}</div>
+    </section>
+  );
+}
+
+function LibraryItemCard({
+  item,
+  selected,
+  previewLoaded,
+  onRequestPreview,
+  onOpen,
+  onDelete,
+  onDownload,
+  onToggleSelected,
+}: {
+  item: LibraryItem;
+  selected: boolean;
+  previewLoaded: boolean;
+  onRequestPreview: () => void;
+  onOpen: () => void;
+  onDelete: () => void;
+  onDownload: () => void;
+  onToggleSelected: () => void;
+}) {
+  const typeLabel = itemTypeLabel(item);
+  const context = proposalContext(item);
+  const previewShellRef = React.useRef<HTMLDivElement | null>(null);
+  const shouldRenderPreview = previewLoaded || selected;
+
+  React.useEffect(() => {
+    if (previewLoaded) return;
+    const node = previewShellRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      onRequestPreview();
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          onRequestPreview();
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "160px" },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [onRequestPreview, previewLoaded]);
+
+  return (
+    <Card
+      as="article"
+      interactive
+      className="dasti-documents-card projects-card"
+      aria-selected={selected}
+      data-selected={selected ? "true" : undefined}
+    >
+      <div
+        className="projects-card__preview-shell"
+        ref={previewShellRef}
+        onPointerEnter={onRequestPreview}
+        onFocusCapture={onRequestPreview}
+      >
+        <label className="projects-card__select">
+          <input
+            type="checkbox"
+            checked={selected}
+            aria-label={`Select ${typeLabel.toLowerCase()} ${item.title}`}
+            onChange={onToggleSelected}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          />
+          <span className="projects-card__select-mark" aria-hidden="true">
+            <Check size={13} strokeWidth={2.2} />
+          </span>
+        </label>
+        <Menu
+          ariaLabel={`More actions for ${item.title}`}
+          align="end"
+          sections={[
+            {
+              items: [
+                {
+                  id: "open",
+                  label: item.type === "proposal" ? "Continue" : "Open",
+                  icon: <ArrowSquareOut size={14} aria-hidden="true" />,
+                  onSelect: onOpen,
+                },
+                {
+                  id: "download",
+                  label: "Download PDF",
+                  icon: <FilePdf size={14} aria-hidden="true" />,
+                  disabled: !isLibraryItemDownloadable(item),
+                  onSelect: onDownload,
+                },
+                ...(item.type === "proposal"
+                  ? [
+                      item.linkedCvId
+                        ? {
+                            id: "bundle",
+                            label: "Download CV + proposal",
+                            icon: <FilePlus size={14} aria-hidden="true" />,
+                            disabled: true,
+                            description: "Bundle export is not available yet.",
+                          }
+                        : {
+                            id: "pick-cv",
+                            label: "Pick CV",
+                            icon: <FileUser size={14} aria-hidden="true" />,
+                            onSelect: onOpen,
+                          },
+                    ]
+                  : []),
+                {
+                  id: "delete",
+                  label: "Delete",
+                  icon: <TrashSimple size={14} aria-hidden="true" />,
+                  tone: "danger" as const,
+                  onSelect: onDelete,
+                },
+              ],
+            },
+          ]}
+          trigger={
+            <button
+              type="button"
+              className="dasti-documents-card__menu projects-card__menu"
+              aria-label={`More actions for ${item.title}`}
+              title={`More actions for ${item.title}`}
+            >
+              <DotsThree size={16} strokeWidth={1.7} aria-hidden="true" />
+            </button>
+          }
+        />
+        <button
+          type="button"
+          className="projects-card__preview-button"
+          onClick={onOpen}
+        >
+          <LibraryDocumentPreview item={item} renderPreview={shouldRenderPreview} />
+        </button>
+      </div>
+      <button type="button" className="dasti-documents-card__surface" onClick={onOpen}>
+        {item.type === "proposal" ? (
+          <span className="projects-card__type">{typeLabel}</span>
+        ) : null}
+        <CardTitle className="dasti-library-card__title">{item.title}</CardTitle>
+      </button>
+      <CardFooter className="dasti-library-card__footer">
+        <span className="dasti-library-card__context">{context}</span>
+        <span className="dasti-library-card__updated">{formatUpdatedLabel(item.updatedAt)}</span>
+      </CardFooter>
+    </Card>
+  );
+}
+
+function ProjectsList({
+  entries,
+  selectedIds,
+  onOpen,
+  onDelete,
+  onDownload,
+  onToggleSelected,
+}: {
+  entries: ListEntry[];
+  selectedIds: Set<string>;
+  onOpen: (item: LibraryItem) => void;
+  onDelete: (item: LibraryItem) => void;
+  onDownload: (item: LibraryItem) => void;
+  onToggleSelected: (itemId: string) => void;
+}) {
+  return (
+    <div className="projects-list" role="table" aria-label="Projects list">
+      <div className="projects-list__head" role="row">
+        <span role="columnheader">Name</span>
+        <span role="columnheader">Type</span>
+        <span role="columnheader">Context</span>
+        <span role="columnheader">Updated</span>
+        <span role="columnheader">Action</span>
+      </div>
+      {entries.map((entry) => (
+        <ProjectsListRow
+          key={entry.item.id}
+          item={entry.item}
+          selected={selectedIds.has(entry.item.id)}
+          onOpen={() => onOpen(entry.item)}
+          onDelete={() => onDelete(entry.item)}
+          onDownload={() => onDownload(entry.item)}
+          onToggleSelected={() => onToggleSelected(entry.item.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ProjectsListRow({
+  item,
+  selected,
+  onOpen,
+  onDelete,
+  onDownload,
+  onToggleSelected,
+}: {
+  item: LibraryItem;
+  selected: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+  onDownload: () => void;
+  onToggleSelected: () => void;
+}) {
+  const type = itemTypeLabel(item);
+  const action = item.type === "proposal" ? "Continue" : "Open";
+  const context = proposalContext(item);
+  return (
+    <div
+      className="projects-list__row"
+      role="row"
+      tabIndex={0}
+      aria-selected={selected}
+      data-selected={selected ? "true" : undefined}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+    >
+      <span role="cell" className="projects-list__name-cell">
+        <label className="projects-list__select">
+          <input
+            type="checkbox"
+            checked={selected}
+            aria-label={`Select ${type.toLowerCase()} ${item.title}`}
+            onChange={onToggleSelected}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          />
+        </label>
+        <span>
+          <strong>{item.title}</strong>
+          <small>{item.subtitle ?? ""}</small>
+        </span>
+      </span>
+      <span role="cell">{type}</span>
+      <span role="cell">{context}</span>
+      <span role="cell">{formatUpdatedLabel(item.updatedAt)}</span>
+      <span role="cell" className="projects-list__actions">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
+        >
+          {action}
+        </Button>
+        <span onClick={(event) => event.stopPropagation()}>
+          <Menu
+            ariaLabel={`More actions for ${item.title}`}
+            align="end"
+            sections={[
+              {
+                items: [
+                  { id: "open", label: action, onSelect: onOpen },
+                  {
+                    id: "download",
+                    label: "Download PDF",
+                    icon: <FilePdf size={14} aria-hidden="true" />,
+                    disabled: !isLibraryItemDownloadable(item),
+                    onSelect: onDownload,
+                  },
+                  {
+                    id: "delete",
+                    label: "Delete",
+                    icon: <TrashSimple size={14} aria-hidden="true" />,
+                    tone: "danger",
+                    onSelect: onDelete,
+                  },
+                ],
+              },
+            ]}
+            trigger={
+              <button
+                type="button"
+                className="dasti-documents-card__menu"
+                aria-label={`More actions for ${item.title}`}
+              >
+                <DotsThree size={16} aria-hidden="true" />
+              </button>
+            }
+          />
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function ProjectsBulkActionBar({
+  selectedCount,
+  downloadableCount,
+  onClear,
+  onDownload,
+  onDelete,
+}: {
+  selectedCount: number;
+  downloadableCount: number;
+  onClear: () => void;
+  onDownload: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className="projects-bulk-bar"
+      role="status"
+      aria-live="polite"
+      aria-label={`${selectedCount} item${selectedCount === 1 ? "" : "s"} selected`}
+    >
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onClear}
+        aria-label="Clear selection"
+        title="Clear selection"
+      >
+        <X size={16} aria-hidden="true" />
+      </Button>
+      <span>
+        {selectedCount} item{selectedCount === 1 ? "" : "s"} selected
+      </span>
+      <div className="projects-bulk-bar__actions">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={downloadableCount === 0}
+          title={
+            downloadableCount === 0
+              ? "No selected items can be downloaded."
+              : selectedCount > downloadableCount
+                ? `${selectedCount - downloadableCount} selected item${
+                    selectedCount - downloadableCount === 1 ? "" : "s"
+                  } cannot be downloaded.`
+                : "Download selected PDFs."
+          }
+          onClick={onDownload}
+          iconLeft={<FilePdf size={15} aria-hidden="true" />}
+        >
+          Download
+        </Button>
+        <Button
+          variant="danger"
+          size="sm"
+          onClick={onDelete}
+          iconLeft={<TrashSimple size={15} aria-hidden="true" />}
+        >
+          Delete
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ProjectsEmptyState({
+  onImportCv,
+  onAddJob,
+  onCreateProposal,
+}: {
+  onImportCv: () => void;
+  onAddJob: () => void;
+  onCreateProposal: () => void;
+}) {
+  return (
+    <div className="empty-state">
+      <div className="empty-state__title">NO WORK YET.</div>
+      <div className="empty-state__desc">
+        Import a CV. Add a job. Draft when ready.
+      </div>
+      <div className="projects-empty-actions">
+        <Button type="button" variant="secondary" size="md" onClick={onImportCv}>
+          <Upload size={16} aria-hidden="true" />
+          Import CV
+        </Button>
+        <Button type="button" variant="secondary" size="md" onClick={onAddJob}>
+          <Briefcase size={16} aria-hidden="true" />
+          Add job
+        </Button>
+        <Button type="button" variant="primary" size="md" onClick={onCreateProposal}>
+          <FilePlus size={16} aria-hidden="true" />
+          New proposal
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function LibraryDocumentPreview({
+  item,
+  renderPreview,
+}: {
+  item: LibraryItem;
+  renderPreview: boolean;
+}) {
+  const context = proposalContext(item);
+  if (!renderPreview) {
+    return (
+      <div
+        className="library-doc-preview library-doc-preview--empty library-doc-preview--deferred"
+        data-kind={item.type}
+        aria-hidden="true"
+      />
+    );
+  }
+
+  if (item.type === "proposal") {
+    return (
+      <div
+        className="library-doc-preview library-doc-preview--rendered"
+        data-kind={item.type}
+        aria-hidden="true"
+      >
+        <div className="library-doc-preview__document-scale">
+          <ProposalDocumentRenderer
+            content={item.content ?? item.subtitle ?? item.title}
+            proposalType="cover_letter"
+            templateId="workshop_proposal_margin"
+            railTitle={item.title}
+            railMeta={context}
+            documentTitle={item.title}
+            documentMeta={context}
+            documentTypography={getProposalDocumentTypography(
+              "direct",
+              PROJECTS_PROPOSAL_PREVIEW_STYLE,
+            )}
+            pageWidth={A4_PAGE_WIDTH_PX}
+            stylePreset={PROJECTS_PROPOSAL_PREVIEW_STYLE}
+            documentThemeVars={serializeProposalDocumentThemeVars(
+              resolvePreviewCanonicalAppearance(PROJECTS_PROPOSAL_PREVIEW_STYLE),
+            )}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (item.type === "cv" && item.cvDocument) {
+    return <LibraryCvDocumentPreview item={item} />;
+  }
+
+  return (
+    <div
+      className="library-doc-preview library-doc-preview--empty"
+      data-kind={item.type}
+      aria-hidden="true"
+    />
+  );
+}
+
+function LibraryCvDocumentPreview({ item }: { item: LibraryItem }) {
+  const cvDocument = item.cvDocument;
+  const preview = React.useMemo(() => {
+    if (!cvDocument || isLibrarySummaryOnlyCv(cvDocument)) return null;
+    const source = buildStyledResumePrintSource({ currentCv: cvDocument });
+    return source
+      ? {
+          data: source.resumeData,
+          stylePreset: source.stylePreset,
+          resumeTemplateId: source.resumeTemplateId,
+          committedPages: source.committedPages?.slice(0, 1),
+        }
+      : null;
+  }, [cvDocument]);
+
+  if (!preview) {
+    return (
+      <div
+        className="library-doc-preview library-doc-preview--empty"
+        data-kind={item.type}
+        aria-hidden="true"
+      />
+    );
+  }
+
+  return (
+    <div
+      className="library-doc-preview library-doc-preview--resume-rendered"
+      data-kind={item.type}
+      aria-hidden="true"
+    >
+      <div className="library-doc-preview__resume-scale">
+        <ResumeTemplateRenderer
+          data={preview.data}
+          stylePreset={preview.stylePreset}
+          resumeTemplateId={preview.resumeTemplateId}
+          committedPages={preview.committedPages}
+        />
       </div>
     </div>
   );

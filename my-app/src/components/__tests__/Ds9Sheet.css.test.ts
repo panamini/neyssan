@@ -19,4 +19,23 @@ describe("DS-9 Sheet CSS contracts", () => {
     expect(css).toContain("transform: translateY(100%);");
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
   });
+
+  it("keeps island panel header outside and above the scroll body", () => {
+    expect(css).toContain(".ds-island-panel__header {");
+    expect(css).toContain("pointer-events: none;");
+    expect(css).toContain("pointer-events: auto;");
+    expect(css).toContain("position: relative;");
+    expect(css).toContain("z-index: 1;");
+    expect(css).toContain("flex: 0 0 auto;");
+    expect(css).toContain("background: inherit;");
+    expect(css).toContain("overflow: visible;");
+    expect(css).toContain(".ds-island-panel__body {");
+    expect(css).toContain("flex: 1 1 auto;");
+    expect(css).toContain("min-block-size: 0;");
+    expect(css).toContain("max-block-size: calc(");
+    expect(css).toContain("overflow-y: auto;");
+    expect(css).toContain("overscroll-behavior: contain;");
+    expect(css).toContain("-webkit-overflow-scrolling: touch;");
+    expect(css).toContain("padding: var(--space-2) var(--space-3) var(--space-3);");
+  });
 });

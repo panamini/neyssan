@@ -1,9 +1,17 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { ProposalForge } from "../ProposalForge";
+import { ForgeTemplatePanel } from "../../components/ForgeTemplatePanel";
+import { ForgeTemplatePanelProvider } from "../../contexts/ForgeTemplatePanelContext";
 import { PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY } from "../../lib/proposal-workspace-state";
 import { PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY } from "../../lib/proposal-output-draft";
 
@@ -101,8 +109,8 @@ describe("ProposalForge canonical job brief", () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockUseQuery.mockReset();
-    mockUseQuery.mockImplementation((query: string) => {
-      if (query === "jobsPublic.getById") {
+    mockUseQuery.mockImplementation((query: string, args: unknown) => {
+      if (query === "jobsPublic.getById" && args && args !== "skip") {
         return {
           id: "job_123",
           title: "Operations Associate",
@@ -235,5 +243,89 @@ describe("ProposalForge canonical job brief", () => {
       container.querySelector(".dasti-brief-card__summary"),
     ).not.toBeInTheDocument();
 
+  });
+
+  it("opens and consumes the Draft drawer route intent for canonical jobs", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={["/proposal?jobId=job_123&drawer=proposal-draft"]}
+      >
+        <ForgeTemplatePanelProvider>
+          <ForgeTemplatePanel />
+          <Routes>
+            <Route
+              path="/proposal"
+              element={
+                <>
+                  <ProposalForge />
+                  <LocationProbe />
+                </>
+              }
+            />
+          </Routes>
+        </ForgeTemplatePanelProvider>
+      </MemoryRouter>,
+    );
+
+    const drawer = await screen.findByRole("complementary", {
+      name: "Proposal draft drawer",
+    });
+    expect(drawer).toHaveAttribute("data-mode", "overlay");
+    expect(
+      within(drawer).getByRole("button", { name: "Pin drawer" }),
+    ).toBeInTheDocument();
+    expect(
+      within(drawer).getByRole("button", {
+        name: /Change job: Operations Associate/i,
+      }),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        "/proposal?jobId=job_123",
+      );
+    });
+    expect(screen.getByTestId("proposal-location")).not.toHaveTextContent(
+      "drawer=",
+    );
+
+    fireEvent.click(within(drawer).getByRole("button", { name: "Pin drawer" }));
+    expect(drawer).toHaveAttribute("data-mode", "docked");
+    expect(
+      within(drawer).getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the in-page Jobs drawer from the empty job context action", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ForgeTemplatePanelProvider>
+          <ForgeTemplatePanel />
+          <Routes>
+            <Route
+              path="/proposal"
+              element={
+                <>
+                  <ProposalForge />
+                  <LocationProbe />
+                </>
+              }
+            />
+            <Route path="/jobs" element={<LocationProbe />} />
+          </Routes>
+        </ForgeTemplatePanelProvider>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Choose from Job Forge" }),
+    );
+
+    expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+      "/proposal",
+    );
+    expect(
+      screen.getByRole("complementary", { name: "Attach job" }),
+    ).toBeInTheDocument();
   });
 });

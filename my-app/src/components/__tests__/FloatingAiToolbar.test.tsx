@@ -2,7 +2,7 @@ import React from "react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import FloatingAiToolbar, {
   INLINE_AI_ACTIONS,
 } from "../FloatingAiToolbar";
@@ -37,6 +37,7 @@ describe("FloatingAiToolbar", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    document.body.innerHTML = "";
   });
 
   it("keeps the Ask field collapsed until the Ask action is clicked", () => {
@@ -328,7 +329,7 @@ describe("FloatingAiToolbar", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("stays hidden until it has a measured anchored position", async () => {
+  it("stays hidden on the first selection until initial DOM metrics are non-zero", async () => {
     toolbarMeasurable = false;
 
     render(
@@ -342,16 +343,19 @@ describe("FloatingAiToolbar", () => {
 
     const toolbar = screen.getByRole("toolbar", { hidden: true });
     expect(toolbar).toHaveStyle({ visibility: "hidden" });
+    expect(toolbar).toHaveAttribute("data-state", "closing");
 
     toolbarMeasurable = true;
     fireEvent(window, new Event("resize"));
 
     await waitFor(() => {
       expect(toolbar).toHaveStyle({ visibility: "visible" });
+      expect(toolbar).toHaveAttribute("data-state", "open");
     });
   });
 
   it("prefers a roomier above placement when space is available", async () => {
+    const onSurfacePlacementChange = vi.fn();
     render(
       <FloatingAiToolbar
         anchor={{
@@ -366,13 +370,21 @@ describe("FloatingAiToolbar", () => {
         open
         onClose={vi.fn()}
         onRunAction={vi.fn()}
+        onSurfacePlacementChange={onSurfacePlacementChange}
       />,
     );
 
     const toolbar = screen.getByRole("toolbar", { name: "Selected text actions" });
     await waitFor(() => {
       expect(toolbar).toHaveAttribute("data-placement", "above");
+      expect(toolbar).toHaveAttribute("data-cv-ai-surface-group", "true");
+      expect(toolbar).toHaveAttribute("data-cv-ai-surface-state", "toolbar");
+      expect(toolbar).toHaveAttribute("data-cv-ai-surface-placement", "above");
+      expect(toolbar).toHaveAttribute("data-cv-ai-surface-mode", "popover");
       expect(toolbar).toHaveStyle({ top: "144px" });
+      expect(onSurfacePlacementChange).toHaveBeenCalledWith(
+        expect.objectContaining({ placement: "above", mode: "popover" }),
+      );
     });
   });
 
@@ -469,6 +481,237 @@ describe("FloatingAiToolbar", () => {
     });
   });
 
+  it("does not change horizontal position when a scroll refresh replaces the drag caret with range bounds", async () => {
+    const stage = document.createElement("div");
+    stage.className = "dasti-cv-paper-stage";
+    document.body.appendChild(stage);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function getBoundingClientRectMock() {
+        if (this === stage) {
+          return new DOMRect(100, 0, 700, 500);
+        }
+
+        return new DOMRect(0, 0, 0, 0);
+      },
+    );
+
+    const initialAnchor = {
+      left: 680,
+      top: 200,
+      bottom: 216,
+      leftEdge: 620,
+      rightEdge: 740,
+      width: 120,
+      aboveCenter: 680,
+      aboveLeft: 620,
+      aboveRight: 740,
+      aboveLineHeight: 20,
+      focusCenter: 740,
+      focusLeft: 740,
+      focusRight: 740,
+      focusTop: 200,
+      focusBottom: 216,
+      focusLineHeight: 20,
+      containerLeft: 100,
+      containerRight: 800,
+      containerTop: 0,
+      containerBottom: 500,
+    };
+    const refreshedRangeAnchor = {
+      ...initialAnchor,
+      focusCenter: 680,
+      focusLeft: 620,
+      focusRight: 740,
+    };
+    const { rerender } = render(
+      <FloatingAiToolbar
+        anchor={initialAnchor}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    const toolbar = screen.getByRole("toolbar", { name: "Selected text actions" });
+    await waitFor(() => {
+      expect(toolbar).toHaveStyle({ left: "570px" });
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new Event("scroll"));
+      await Promise.resolve();
+    });
+    rerender(
+      <FloatingAiToolbar
+        anchor={refreshedRangeAnchor}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    expect(toolbar).toHaveStyle({ left: "570px" });
+  });
+
+  it("does not publish the fallback-width position before initial toolbar metrics are measured", async () => {
+    vi.restoreAllMocks();
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(
+      function offsetWidthMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true"
+          ? 280
+          : 0;
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
+      function offsetHeightMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true"
+          ? 48
+          : 0;
+      },
+    );
+    const stage = document.createElement("div");
+    stage.className = "dasti-cv-paper-stage";
+    document.body.appendChild(stage);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function getBoundingClientRectMock() {
+        if (this === stage) {
+          return new DOMRect(100, 0, 700, 500);
+        }
+
+        return new DOMRect(0, 0, 0, 0);
+      },
+    );
+    const onSurfacePlacementChange = vi.fn();
+
+    render(
+      <FloatingAiToolbar
+        anchor={{
+          left: 680,
+          top: 200,
+          bottom: 216,
+          leftEdge: 620,
+          rightEdge: 740,
+          width: 120,
+          aboveCenter: 680,
+          aboveLeft: 620,
+          aboveRight: 740,
+          aboveLineHeight: 20,
+          belowCenter: 680,
+          belowLeft: 620,
+          belowRight: 740,
+          belowLineHeight: 20,
+          containerLeft: 100,
+          containerRight: 800,
+          containerTop: 0,
+          containerBottom: 500,
+        }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+        onSurfacePlacementChange={onSurfacePlacementChange}
+      />,
+    );
+
+    const toolbar = screen.getByRole("toolbar", { name: "Selected text actions" });
+    await waitFor(() => {
+      expect(toolbar).toHaveStyle({ left: "516px" });
+    });
+
+    expect(onSurfacePlacementChange).not.toHaveBeenCalledWith(
+      expect.objectContaining({ left: 570 }),
+    );
+  });
+
+  it("does not reveal a fallback-width caret-biased position before real toolbar metrics settle", async () => {
+    vi.restoreAllMocks();
+    toolbarMeasurable = false;
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(
+      function offsetWidthMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true" &&
+          toolbarMeasurable
+          ? 328
+          : 0;
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
+      function offsetHeightMock() {
+        return (this as HTMLElement).dataset.inlineAiToolbar === "true" &&
+          toolbarMeasurable
+          ? 48
+          : 0;
+      },
+    );
+    const stage = document.createElement("div");
+    stage.className = "dasti-cv-paper-stage";
+    document.body.appendChild(stage);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function getBoundingClientRectMock() {
+        if (this === stage) {
+          return new DOMRect(100, 0, 700, 500);
+        }
+
+        return new DOMRect(0, 0, 0, 0);
+      },
+    );
+    const onSurfacePlacementChange = vi.fn();
+
+    render(
+      <FloatingAiToolbar
+        anchor={{
+          left: 680,
+          top: 200,
+          bottom: 216,
+          leftEdge: 620,
+          rightEdge: 740,
+          width: 120,
+          aboveCenter: 680,
+          aboveLeft: 620,
+          aboveRight: 740,
+          aboveLineHeight: 20,
+          belowCenter: 680,
+          belowLeft: 620,
+          belowRight: 740,
+          belowLineHeight: 20,
+          focusCenter: 740,
+          focusLeft: 740,
+          focusRight: 740,
+          focusTop: 200,
+          focusBottom: 216,
+          focusLineHeight: 20,
+          containerLeft: 100,
+          containerRight: 800,
+          containerTop: 0,
+          containerBottom: 500,
+        }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+        onSurfacePlacementChange={onSurfacePlacementChange}
+      />,
+    );
+
+    const toolbar = screen.getByRole("toolbar", { hidden: true });
+    expect(toolbar).toHaveStyle({ visibility: "hidden" });
+    expect(toolbar).not.toHaveStyle({ left: "570px" });
+    expect(onSurfacePlacementChange).not.toHaveBeenCalledWith(
+      expect.objectContaining({ left: 570 }),
+    );
+
+    toolbarMeasurable = true;
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => {
+      expect(toolbar).toHaveStyle({ visibility: "visible" });
+      expect(toolbar).toHaveStyle({ left: "468px" });
+    });
+    expect(onSurfacePlacementChange).toHaveBeenCalledWith(
+      expect.objectContaining({ left: 468 }),
+    );
+    expect(onSurfacePlacementChange).not.toHaveBeenCalledWith(
+      expect.objectContaining({ left: 570 }),
+    );
+  });
+
   it("uses selected bounds when a left-edge character selection reports a distant focus rect", async () => {
     render(
       <FloatingAiToolbar
@@ -540,7 +783,7 @@ describe("FloatingAiToolbar", () => {
     await waitFor(() => {
       expect(toolbar).toHaveAttribute("data-placement", "above");
       expect(toolbar).toHaveStyle({ top: "164px" });
-      expect(toolbar).toHaveStyle({ left: "376px" });
+      expect(toolbar).toHaveStyle({ left: "210px" });
     });
   });
 });

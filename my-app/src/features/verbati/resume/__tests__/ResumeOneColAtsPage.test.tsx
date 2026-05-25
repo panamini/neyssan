@@ -11,7 +11,10 @@ import {
 } from "../../../../lib/layout/resumeTemplates";
 
 function repeatWords(label: string, count: number) {
-  return Array.from({ length: count }, (_, index) => `${label}-${index + 1}`).join(" ");
+  return Array.from(
+    { length: count },
+    (_, index) => `${label}-${index + 1}`,
+  ).join(" ");
 }
 
 function makeTextBlock(label: string, usefulLines: number) {
@@ -104,7 +107,9 @@ describe("ResumeOneColAtsPage", () => {
       ),
     ).toBeTruthy();
     expect(
-      container.querySelector('[data-preview-section="experience"][data-no-pan="true"]'),
+      container.querySelector(
+        '[data-preview-section="experience"][data-no-pan="true"]',
+      ),
     ).toBeTruthy();
   });
 
@@ -135,14 +140,22 @@ describe("ResumeOneColAtsPage", () => {
       />,
     );
 
-    const pageShell = container.querySelector('[data-testid="resume-template-page"]');
-    const profileHeader = container.querySelector('[data-preview-section="profile"]');
+    const pageShell = container.querySelector(
+      '[data-testid="resume-template-page"]',
+    );
+    const profileHeader = container.querySelector(
+      '[data-preview-section="profile"]',
+    );
 
     expect(pageShell?.getAttribute("style")).toContain(
       "padding: var(--margin-top) var(--margin-right) var(--margin-bottom) var(--margin-left);",
     );
-    expect(pageShell?.getAttribute("style")).toContain("gap: var(--body-row-gap);");
-    expect(profileHeader?.getAttribute("style")).toContain("gap: var(--header-row-gap);");
+    expect(pageShell?.getAttribute("style")).toContain(
+      "gap: var(--body-row-gap);",
+    );
+    expect(profileHeader?.getAttribute("style")).toContain(
+      "gap: var(--header-row-gap);",
+    );
     expect(profileHeader?.getAttribute("style")).toContain(
       "padding-bottom: var(--header-bottom-padding);",
     );
@@ -215,19 +228,13 @@ describe("ResumeOneColAtsPage", () => {
       />,
     );
 
-    const profileHeader = container.querySelector('[data-preview-section="profile"]');
     const sectionHeading = container.querySelector("h2");
     const sectionRule = sectionHeading?.parentElement?.querySelector("div");
 
-    expect(profileHeader?.getAttribute("style")).toContain(
-      "var(--color-accent)",
-    );
     expect(sectionHeading?.getAttribute("style")).toContain(
       "color: var(--color-accent);",
     );
-    expect(sectionRule?.getAttribute("style")).toContain(
-      "var(--color-accent)",
-    );
+    expect(sectionRule?.getAttribute("style")).toContain("var(--color-accent)");
   });
 
   it("renders full workshop summary text in preview mode without clamp or ellipsis styles", () => {
@@ -239,7 +246,7 @@ describe("ResumeOneColAtsPage", () => {
       metadata: resumeMock.metadata.slice(0, 1),
       contact: resumeMock.contact.slice(0, 2),
       experience: resumeMock.experience.slice(0, 1),
-      projects: [],
+      projects: resumeMock.projects.slice(0, 1),
       education: [],
       certifications: [],
       affiliations: [],
@@ -314,6 +321,79 @@ describe("ResumeOneColAtsPage", () => {
     expect(container.querySelector("strong")?.textContent).toBe("Bold summary");
   });
 
+  it("syncs the editable rich summary when an external undo restores the paper text", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const appliedData = {
+      ...resumeMock,
+      summary: "Built better.",
+      summaryRich: {
+        blocks: [
+          {
+            kind: "paragraph" as const,
+            runs: [{ text: "Built better." }],
+          },
+        ],
+      },
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: [],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const restoredData = {
+      ...appliedData,
+      summary: "Builder.",
+      summaryRich: {
+        blocks: [
+          {
+            kind: "paragraph" as const,
+            runs: [{ text: "Builder." }],
+          },
+        ],
+      },
+    };
+    const appliedPlan = planWorkshopResumePages({
+      data: appliedData,
+      template,
+    });
+    const restoredPlan = planWorkshopResumePages({
+      data: restoredData,
+      template,
+    });
+
+    const { container, rerender } = render(
+      <ResumeOneColAtsPage
+        data={appliedData}
+        page={appliedPlan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    const summaryItem = container.querySelector<HTMLElement>(
+      '[data-paper-field-path="structuredContent.0.summary"]',
+    );
+    expect(summaryItem).toHaveTextContent("Built better.");
+    summaryItem?.focus();
+
+    rerender(
+      <ResumeOneColAtsPage
+        data={restoredData}
+        page={restoredPlan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    expect(summaryItem).toHaveTextContent("Builder.");
+    expect(summaryItem).not.toHaveTextContent("Built better.");
+  });
+
   it("preserves multiline summary whitespace in the editable workshop paper field", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const data = {
@@ -347,7 +427,9 @@ describe("ResumeOneColAtsPage", () => {
 
     expect(summaryItem).toHaveValue("First line\nSecond line");
     expect(summaryItem).toHaveAttribute("aria-multiline", "true");
-    expect(summaryItem?.getAttribute("style")).toContain("white-space: pre-wrap;");
+    expect(summaryItem?.getAttribute("style")).toContain(
+      "white-space: pre-wrap;",
+    );
   });
 
   it("hides Add paragraph for an experience entry that already has a paragraph", () => {
@@ -359,7 +441,8 @@ describe("ResumeOneColAtsPage", () => {
       experience: [
         {
           ...resumeMock.experience[0]!,
-          description: "Owned the discovery narrative before the bullet outcomes.",
+          description:
+            "Owned the discovery narrative before the bullet outcomes.",
           bullets: ["Reduced delivery time by 28%."],
         },
       ],
@@ -385,7 +468,9 @@ describe("ResumeOneColAtsPage", () => {
     expect(
       screen.queryByRole("button", { name: /\+ Add paragraph/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /\+ Add bullet/i }),
+    ).toBeInTheDocument();
   });
 
   it("renders an editable empty draft bullet after an existing rich paragraph", () => {
@@ -440,12 +525,16 @@ describe("ResumeOneColAtsPage", () => {
       "data-paper-field-path",
       expect.stringContaining("responsibilities"),
     );
-    expect(richBody.querySelector("p")?.textContent).toBe("Led product design.");
+    expect(richBody.querySelector("p")?.textContent).toBe(
+      "Led product design.",
+    );
     expect(richBody.querySelector("li")?.textContent).toBe("");
     expect(
       screen.queryByRole("textbox", { name: "Edit experience bullet" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /\+ Add bullet/i }),
+    ).toBeInTheDocument();
   });
 
   it("keeps Add paragraph available for an experience entry without a paragraph", () => {
@@ -480,8 +569,12 @@ describe("ResumeOneColAtsPage", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /\+ Add paragraph/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /\+ Add paragraph/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /\+ Add bullet/i }),
+    ).toBeInTheDocument();
   });
 
   it("routes the experience entry wand through the item action instead of the section action", () => {
@@ -520,7 +613,9 @@ describe("ResumeOneColAtsPage", () => {
     );
 
     fireEvent.click(
-      screen.getAllByRole("button", { name: /Improve responsibilities for/i })[1]!,
+      screen.getAllByRole("button", {
+        name: /Improve responsibilities for/i,
+      })[1]!,
     );
 
     expect(onAsk).not.toHaveBeenCalled();
@@ -534,13 +629,12 @@ describe("ResumeOneColAtsPage", () => {
     );
   });
 
-  it("renders experience AI proposals inline with save, discard, and undo controls", () => {
+  it("routes the achievement line wand through the item action instead of the section action", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const data = {
       ...resumeMock,
-      metadata: resumeMock.metadata.slice(0, 1),
       contact: resumeMock.contact.slice(0, 2),
-      experience: resumeMock.experience.slice(0, 1),
+      experience: [],
       projects: [],
       education: [],
       certifications: [],
@@ -548,85 +642,12 @@ describe("ResumeOneColAtsPage", () => {
       hobbyItems: [],
       hobbies: [],
       textSections: [],
+      achievementItems: resumeMock.achievementItems.slice(0, 2),
+      achievements: resumeMock.achievementItems.slice(0, 2).map((item) => item.text),
     };
     const plan = planWorkshopResumePages({ data, template });
-    const onAccept = vi.fn();
-    const onDiscard = vi.fn();
-    const suggestionKey = "request-1:exp-1";
-
-    const { rerender } = render(
-      <ResumeOneColAtsPage
-        data={data}
-        page={plan.committedPages[0]!}
-        template={template}
-        inlineEditing={makeInlineEditing()}
-        paperAi={{
-          textSuggestion: {
-            key: suggestionKey,
-            sectionId: "experience-1",
-            sectionType: "experience",
-            itemId: data.experience[0]!.id,
-            beforeText: "Old responsibility",
-            afterText: "Improved responsibility",
-            state: "ready",
-          },
-          onAcceptTextSuggestion: onAccept,
-          onDiscardTextSuggestion: onDiscard,
-        }}
-      />,
-    );
-
-    expect(screen.getByText("Old responsibility")).toBeInTheDocument();
-    expect(screen.getByText("Improved responsibility")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(onAccept).toHaveBeenCalledWith(suggestionKey);
-    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
-    expect(onDiscard).toHaveBeenCalledWith(suggestionKey);
-
-    const onUndo = vi.fn();
-    rerender(
-      <ResumeOneColAtsPage
-        data={data}
-        page={plan.committedPages[0]!}
-        template={template}
-        inlineEditing={makeInlineEditing()}
-        paperAi={{
-          textSuggestion: {
-            key: suggestionKey,
-            sectionId: "experience-1",
-            sectionType: "experience",
-            itemId: data.experience[0]!.id,
-            beforeText: "Old responsibility",
-            afterText: "Improved responsibility",
-            state: "accepted",
-          },
-          onUndoTextSuggestion: onUndo,
-        }}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
-    expect(onUndo).toHaveBeenCalledWith(suggestionKey);
-  });
-
-  it("renders skill AI suggestions inside the skills section", () => {
-    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
-    const data = {
-      ...resumeMock,
-      metadata: resumeMock.metadata.slice(0, 1),
-      contact: resumeMock.contact.slice(0, 2),
-      experience: resumeMock.experience.slice(0, 1),
-      projects: [],
-      education: [],
-      certifications: [],
-      affiliations: [],
-      hobbyItems: [],
-      hobbies: [],
-      textSections: [],
-    };
-    const plan = planWorkshopResumePages({ data, template });
-    const onAccept = vi.fn();
-    const onDismiss = vi.fn();
+    const onAsk = vi.fn();
+    const onAskItem = vi.fn();
 
     render(
       <ResumeOneColAtsPage
@@ -634,27 +655,355 @@ describe("ResumeOneColAtsPage", () => {
         page={plan.committedPages[0]!}
         template={template}
         inlineEditing={makeInlineEditing()}
-        paperAi={{
-          listSuggestion: {
-            sectionId: "skills-1",
-            sectionType: "skills",
-            items: ["Stakeholder mapping"],
-            state: "ready",
-          },
-          onAcceptListSuggestion: onAccept,
-          onDismissListSuggestion: onDismiss,
+        sectionActions={{
+          hiddenSectionIds: [],
+          onAsk,
+          onAskItem,
+          onToggleHidden: () => {},
+          onDelete: () => {},
         }}
       />,
     );
 
-    const suggestion = screen.getByText("Stakeholder mapping").closest(
-      "[data-paper-ai-suggestion='list']",
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Improve achievement" })[1]!,
     );
-    expect(suggestion).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(onAccept).toHaveBeenCalledWith("Stakeholder mapping");
-    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
-    expect(onDismiss).toHaveBeenCalledWith("Stakeholder mapping");
+
+    expect(onAsk).not.toHaveBeenCalled();
+    expect(onAskItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sectionType: "achievements",
+        itemId: data.achievementItems[1]!.id,
+        itemIndex: 1,
+        field: "achievement",
+      }),
+    );
+  });
+
+  it("anchors section controls to the whole preview section region in edit mode", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container, rerender } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        sectionActions={{
+          hiddenSectionIds: [],
+          onAsk: () => {},
+          onToggleHidden: () => {},
+          onDelete: () => {},
+        }}
+      />,
+    );
+
+    const summaryRegion = container.querySelector(
+      '.dasti-cv-paper-section-region[data-preview-section="summary"]',
+    );
+    expect(summaryRegion).toBeTruthy();
+    expect(
+      summaryRegion?.querySelector("[data-paper-section-controls='true']"),
+    ).toBeTruthy();
+
+    rerender(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    expect(
+      container.querySelector("[data-paper-section-controls='true']"),
+    ).toBeNull();
+  });
+
+  it("hides ambiguous section-level AI for experience and education", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: resumeMock.education.slice(0, 1),
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+    const onAsk = vi.fn();
+    const onAskItem = vi.fn();
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        sectionActions={{
+          hiddenSectionIds: [],
+          onAsk,
+          onAskItem,
+          onToggleHidden: () => {},
+          onDelete: () => {},
+        }}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Ask AI for Experience" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ask AI for Education" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ask AI for Projects" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Improve responsibilities for/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders responsibility wands as contextual item affordances", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        sectionActions={{
+          hiddenSectionIds: [],
+          onAsk: () => {},
+          onAskItem: () => {},
+          onToggleHidden: () => {},
+          onDelete: () => {},
+        }}
+      />,
+    );
+
+    const itemRegion = container.querySelector(
+      ".dasti-cv-paper-experience-item",
+    );
+    expect(itemRegion).toHaveAttribute("tabindex", "0");
+    expect(itemRegion?.querySelector(".dasti-cv-paper-item-wand")).toBeTruthy();
+  });
+
+  it("renders inline paper list suggestions with add and clear actions", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      skillItems: resumeMock.skillItems.slice(0, 2),
+      experience: [],
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+    const skillsFragment = plan.committedPages[0]!.fragments.find(
+      (fragment) => fragment.kind === "skills",
+    );
+    const onAcceptListSuggestion = vi.fn();
+    const onClearListSuggestions = vi.fn();
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        paperAi={{
+          listSuggestion: {
+            sectionId: skillsFragment?.sectionId ?? "skills-1",
+            sectionType: "skills",
+            items: ["Accessibility", "Design systems"],
+            state: "ready",
+          },
+          onAcceptListSuggestion,
+          onClearListSuggestions,
+        }}
+      />,
+    );
+
+    const suggestions = screen.getByText("Accessibility").closest(
+      "[data-cv-paper-list-suggestions]",
+    );
+    expect(suggestions).toHaveAttribute(
+      "data-cv-paper-list-suggestions",
+      "ready",
+    );
+    expect(screen.getByText("Suggested skills")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Accessibility" }));
+    expect(onAcceptListSuggestion).toHaveBeenCalledWith("Accessibility");
+
+    expect(
+      screen.queryByRole("button", { name: "Dismiss Design systems" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear suggestions" }));
+    expect(onClearListSuggestions).toHaveBeenCalled();
+  });
+
+  it("marks the active experience AI target without rendering review UI in the paper flow", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        paperAi={{
+          activeTarget: {
+            sectionId: "experience-1",
+            sectionType: "experience",
+            itemId: data.experience[0]!.id,
+          },
+        }}
+      />,
+    );
+
+    expect(
+      container.querySelector("[data-cv-ai-review-target='true']"),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText("Improved responsibility"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save" }),
+    ).not.toBeInTheDocument();
+    expect(
+      container.querySelector("[data-paper-ai-suggestion]"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render skill AI suggestions inside the paper flow", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+      />,
+    );
+
+    expect(screen.queryByText("Stakeholder mapping")).not.toBeInTheDocument();
+    expect(
+      container.querySelector("[data-paper-ai-suggestion='list']"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows section-level AI only for whitelisted paper sections", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: resumeMock.metadata.slice(0, 1),
+      contact: resumeMock.contact.slice(0, 2),
+      experience: resumeMock.experience.slice(0, 1),
+      projects: [],
+      education: [],
+      certifications: [],
+      affiliations: [],
+      hobbyItems: [],
+      hobbies: [],
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+    const onAsk = vi.fn();
+
+    render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+        inlineEditing={makeInlineEditing()}
+        sectionActions={{
+          hiddenSectionIds: [],
+          onAsk,
+          onToggleHidden: () => {},
+          onDelete: () => {},
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Ask AI for Summary" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Suggest skills" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Ask AI for Experience" }),
+    ).not.toBeInTheDocument();
   });
 
   it("pins the workshop page grid to the top instead of stretching rows across the full A4 shell", () => {
@@ -684,7 +1033,9 @@ describe("ResumeOneColAtsPage", () => {
       />,
     );
 
-    const pageShell = container.querySelector('[data-testid="resume-template-page"]');
+    const pageShell = container.querySelector(
+      '[data-testid="resume-template-page"]',
+    );
 
     expect(pageShell?.getAttribute("style")).toContain("min-height: 100%;");
     expect(pageShell?.getAttribute("style")).toContain("align-content: start;");
@@ -721,7 +1072,9 @@ describe("ResumeOneColAtsPage", () => {
     const pageShell = container.querySelector(
       '[data-testid="resume-template-page"]',
     ) as HTMLElement | null;
-    const firstHeading = container.querySelector("h1, h2, h3") as HTMLElement | null;
+    const firstHeading = container.querySelector(
+      "h1, h2, h3",
+    ) as HTMLElement | null;
 
     expect(pageShell?.getAttribute("style")).toContain(
       "font-family: var(--body-font, var(--font-body-family));",
@@ -760,8 +1113,12 @@ describe("ResumeOneColAtsPage", () => {
     );
 
     const metadataLabel = container.querySelector("dt");
-    const experienceMeta = container.querySelector('[data-preview-row-id="exp-1"] p');
-    const skillItem = container.querySelector('[data-preview-section="skills"][data-preview-item-id]');
+    const experienceMeta = container.querySelector(
+      '[data-preview-row-id="exp-1"] p',
+    );
+    const skillItem = container.querySelector(
+      '[data-preview-section="skills"][data-preview-item-id]',
+    );
     const skillContainer = skillItem?.parentElement;
 
     expect(metadataLabel?.getAttribute("style")).toContain(
@@ -779,7 +1136,9 @@ describe("ResumeOneColAtsPage", () => {
     expect(skillItem?.getAttribute("style")).toContain(
       "padding: var(--skill-pad-block) var(--skill-pad-inline);",
     );
-    expect(skillContainer?.getAttribute("style")).toContain("gap: var(--skill-gap);");
+    expect(skillContainer?.getAttribute("style")).toContain(
+      "gap: var(--skill-gap);",
+    );
   });
 
   it("applies workshop density size adjustment vars to display, title, body, and body-sm roles", () => {
@@ -854,7 +1213,9 @@ describe("ResumeOneColAtsPage", () => {
   });
 
   it("reads workshop section and item spacing from the shared template layout contract", () => {
-    const baseTemplate = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const baseTemplate = getResumeTemplateDefinition(
+      "workshop_resume_onecol_ats",
+    );
     const template = {
       ...baseTemplate,
       preview: {
@@ -899,14 +1260,23 @@ describe("ResumeOneColAtsPage", () => {
     const experienceItem = container.querySelector(
       '[data-preview-section="experience"][data-preview-surface="item"]',
     );
-    const experienceHeadingBlock = experienceItem?.firstElementChild as HTMLElement | null;
-    const experienceRoleHeading = experienceHeadingBlock?.querySelector("h3") as HTMLElement | null;
-    const experienceBulletList = experienceItem?.querySelector("ul") as HTMLElement | null;
+    const experienceHeadingBlock =
+      experienceItem?.firstElementChild as HTMLElement | null;
+    const experienceRoleHeading = experienceHeadingBlock?.querySelector(
+      "h3",
+    ) as HTMLElement | null;
+    const experienceBulletList = experienceItem?.querySelector(
+      "ul",
+    ) as HTMLElement | null;
     const educationSection = container.querySelector(
       '[data-preview-section="education"][data-preview-surface="section"]',
     ) as HTMLElement | null;
-    const educationHeading = educationSection?.querySelector("h2") as HTMLElement | null;
-    const educationContent = educationSection?.children.item(1) as HTMLElement | null;
+    const educationHeading = educationSection?.querySelector(
+      "h2",
+    ) as HTMLElement | null;
+    const educationContent = educationSection?.children.item(
+      1,
+    ) as HTMLElement | null;
     const educationItem = container.querySelector(
       '[data-preview-section="education"][data-preview-surface="item"]',
     );
@@ -951,11 +1321,15 @@ describe("ResumeOneColAtsPage", () => {
     expect(educationContent?.getAttribute("style")).toContain(
       `gap: ${layout.sectionContentGapMm}mm;`,
     );
-    expect(educationItem?.getAttribute("style")).toContain("gap: var(--education-gap);");
+    expect(educationItem?.getAttribute("style")).toContain(
+      "gap: var(--education-gap);",
+    );
     expect(projectHeadline?.getAttribute("style")).toContain(
       `gap: ${layout.compactMetaGapMm}mm;`,
     );
-    expect(projectCard?.getAttribute("style")).toContain("gap: var(--project-gap);");
+    expect(projectCard?.getAttribute("style")).toContain(
+      "gap: var(--project-gap);",
+    );
     expect(languagesList?.getAttribute("style")).toContain(
       "padding-left: var(--flow-list-indent);",
     );
@@ -1031,7 +1405,9 @@ describe("ResumeOneColAtsPage", () => {
           fragment.items.some(
             (item) =>
               item.continued &&
-              item.responsibilitiesRich?.blocks.some((block) => block.kind === "paragraph"),
+              item.responsibilitiesRich?.blocks.some(
+                (block) => block.kind === "paragraph",
+              ),
           ),
       ),
     );
@@ -1042,7 +1418,9 @@ describe("ResumeOneColAtsPage", () => {
         (item) =>
           item.id === "exp-render-continued" &&
           item.continued &&
-          item.responsibilitiesRich?.blocks.some((block) => block.kind === "paragraph"),
+          item.responsibilitiesRich?.blocks.some(
+            (block) => block.kind === "paragraph",
+          ),
       );
     const fallbackOnlyData = {
       ...data,
@@ -1065,15 +1443,19 @@ describe("ResumeOneColAtsPage", () => {
     const experienceItem = container.querySelector(
       '[data-preview-section="experience"][data-preview-item-id="exp-render-continued"]',
     ) as HTMLElement | null;
-    const lists = Array.from(experienceItem?.querySelectorAll(":scope > ul") ?? []);
-    const continuedListItems = Array.from(lists[0]?.querySelectorAll(":scope > li") ?? []).map(
-      (node) => node.textContent,
+    const lists = Array.from(
+      experienceItem?.querySelectorAll(":scope > ul") ?? [],
     );
-    const directParagraphs = Array.from(experienceItem?.querySelectorAll(":scope > p") ?? []).map(
-      (node) => node.textContent,
-    );
+    const continuedListItems = Array.from(
+      lists[0]?.querySelectorAll(":scope > li") ?? [],
+    ).map((node) => node.textContent);
+    const directParagraphs = Array.from(
+      experienceItem?.querySelectorAll(":scope > p") ?? [],
+    ).map((node) => node.textContent);
 
-    expect(container.textContent).toContain(resumeMock.experience[0]?.role ?? "");
+    expect(container.textContent).toContain(
+      resumeMock.experience[0]?.role ?? "",
+    );
     expect(container.textContent).toContain(
       [
         resumeMock.experience[0]?.company,
@@ -1091,13 +1473,17 @@ describe("ResumeOneColAtsPage", () => {
     expect(container.textContent).not.toContain(continuedBullets[0]!);
     expect(container.textContent).not.toContain(continuedBullets[1]!);
     expect(container.textContent).not.toContain(continuedBullets[2]!);
-    expect(container.querySelector('[data-preview-section="experience"] strong')).toBeNull();
-    expect(container.querySelector('[data-preview-section="experience"] em')?.textContent).toBe(
-      continuedBullets[3],
-    );
-    expect(container.querySelector('[data-preview-section="experience"] u')?.textContent).toBe(
-      trailingParagraph,
-    );
+    expect(
+      container.querySelector('[data-preview-section="experience"] strong'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-preview-section="experience"] em')
+        ?.textContent,
+    ).toBe(continuedBullets[3]);
+    expect(
+      container.querySelector('[data-preview-section="experience"] u')
+        ?.textContent,
+    ).toBe(trailingParagraph);
     expect(
       experienceParagraphs.some((node) =>
         node.getAttribute("style")?.includes("overflow-wrap: anywhere;"),
@@ -1159,10 +1545,16 @@ describe("ResumeOneColAtsPage", () => {
       '[data-paper-field-path="structuredContent.item:project-1.description"]',
     );
     expect(projectDescription).toHaveAttribute("role", "textbox");
-    expect(projectDescription?.querySelector("strong")?.textContent).toContain("Rich");
-    expect(projectDescription?.querySelector("em")?.textContent).toBe("project");
+    expect(projectDescription?.querySelector("strong")?.textContent).toContain(
+      "Rich",
+    );
+    expect(projectDescription?.querySelector("em")?.textContent).toBe(
+      "project",
+    );
     expect(projectDescription?.querySelector("u")?.textContent).toBe("project");
-    expect(projectDescription?.querySelector("li")?.textContent).toBe("Bullet win");
+    expect(projectDescription?.querySelector("li")?.textContent).toBe(
+      "Bullet win",
+    );
   });
 
   it("uses the rich body editor for editable experience paragraphs plus bullets", () => {
@@ -1225,12 +1617,18 @@ describe("ResumeOneColAtsPage", () => {
     expect(experienceBody).toHaveClass("paper-rich-inline-editor");
     expect(experienceBody?.querySelector("textarea")).toBeNull();
     expect(experienceBody?.querySelector(".ProseMirror")).toBeTruthy();
-    expect(experienceBody?.querySelector("p")?.textContent).toBe("Owned onboarding.");
+    expect(experienceBody?.querySelector("p")?.textContent).toBe(
+      "Owned onboarding.",
+    );
     expect(experienceBody?.querySelector("li")?.textContent).toBe(
       "Launched activation checklist.",
     );
-    expect(experienceBody?.querySelector("li strong")?.textContent).toBe("activation");
-    expect(experienceBody?.querySelector("li em")?.textContent).toBe(" checklist");
+    expect(experienceBody?.querySelector("li strong")?.textContent).toBe(
+      "activation",
+    );
+    expect(experienceBody?.querySelector("li em")?.textContent).toBe(
+      " checklist",
+    );
     expect(experienceBody?.querySelector("li u")?.textContent).toBe(".");
     expect(
       screen.queryByRole("textbox", { name: "Edit experience bullet" }),
@@ -1285,7 +1683,9 @@ describe("ResumeOneColAtsPage", () => {
       '[data-paper-field-path="structuredContent.item:exp-1.responsibilities"]',
     );
     expect(experienceBody).toHaveAttribute("role", "textbox");
-    expect(experienceBody).not.toHaveTextContent("__draft_empty_experience_description__");
+    expect(experienceBody).not.toHaveTextContent(
+      "__draft_empty_experience_description__",
+    );
   });
 
   it("uses the rich body editor for editable experience bullet-only rich responsibilities", () => {
@@ -1339,8 +1739,12 @@ describe("ResumeOneColAtsPage", () => {
     expect(
       screen.queryByRole("textbox", { name: "Edit experience bullet" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /\+ Add paragraph/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /\+ Add bullet/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /\+ Add paragraph/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /\+ Add bullet/i }),
+    ).toBeInTheDocument();
   });
 
   it("hydrates responsibilitiesRich marks in editable workshop display mode", () => {
@@ -1470,16 +1874,18 @@ describe("ResumeOneColAtsPage", () => {
     const experienceItem = container.querySelector(
       '[data-preview-section="experience"][data-preview-item-id="exp-rich-preview"]',
     ) as HTMLElement | null;
-    const paragraphNode = Array.from(experienceItem?.querySelectorAll("p") ?? []).find(
-      (node) => node.textContent === "Led platform migration planning.",
-    );
-    const bulletTexts = Array.from(experienceItem?.querySelectorAll("li") ?? []).map(
-      (node) => node.textContent,
-    );
-    const richList = experienceItem?.querySelector("ul") as HTMLUListElement | null;
-    const directParagraphs = Array.from(experienceItem?.querySelectorAll(":scope > p") ?? []).map(
-      (node) => node.textContent,
-    );
+    const paragraphNode = Array.from(
+      experienceItem?.querySelectorAll("p") ?? [],
+    ).find((node) => node.textContent === "Led platform migration planning.");
+    const bulletTexts = Array.from(
+      experienceItem?.querySelectorAll("li") ?? [],
+    ).map((node) => node.textContent);
+    const richList = experienceItem?.querySelector(
+      "ul",
+    ) as HTMLUListElement | null;
+    const directParagraphs = Array.from(
+      experienceItem?.querySelectorAll(":scope > p") ?? [],
+    ).map((node) => node.textContent);
 
     expect(paragraphNode).toBeTruthy();
     expect(directParagraphs).toEqual([
@@ -1636,7 +2042,10 @@ describe("ResumeOneColAtsPage", () => {
     const plan = planWorkshopResumePages({
       data: {
         ...buildRendererData(),
-        summary: Array.from({ length: 30 }, (_, index) => `summary-${index + 1}`).join(" "),
+        summary: Array.from(
+          { length: 30 },
+          (_, index) => `summary-${index + 1}`,
+        ).join(" "),
         skillItems: [],
         languages: [],
         education: [
@@ -1682,15 +2091,19 @@ describe("ResumeOneColAtsPage", () => {
     );
 
     const renderedExperienceItems = Array.from(
-      container.querySelectorAll('[data-preview-section="experience"][data-preview-item-id]'),
+      container.querySelectorAll(
+        '[data-preview-section="experience"][data-preview-item-id]',
+      ),
     );
 
-    expect(renderedExperienceItems[0]?.getAttribute("data-preview-item-id")).toBe(
-      "exp-dense-render-2",
-    );
+    expect(
+      renderedExperienceItems[0]?.getAttribute("data-preview-item-id"),
+    ).toBe("exp-dense-render-2");
     expect(renderedExperienceItems).toHaveLength(1);
     expect(container.textContent).toContain("2");
-    expect(container.textContent).toContain(resumeMock.education[0]?.degree ?? "");
+    expect(container.textContent).toContain(
+      resumeMock.education[0]?.degree ?? "",
+    );
     expect(container.textContent).toContain(
       [
         resumeMock.experience[0]?.company,
@@ -1701,7 +2114,9 @@ describe("ResumeOneColAtsPage", () => {
         .join(" · "),
     );
     expect(container.textContent).toContain("Continued");
-    expect(container.textContent).not.toContain(makeDenseTokenBlock("1", 40).slice(2552));
+    expect(container.textContent).not.toContain(
+      makeDenseTokenBlock("1", 40).slice(2552),
+    );
     expect(container.textContent).toContain(makeDenseTokenBlock("2", 20));
   });
 
@@ -1747,8 +2162,12 @@ describe("ResumeOneColAtsPage", () => {
     expect(
       screen.getByText("Bachelor of Science, Computer Science"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("Northbridge University · Grade: 3.9 GPA · 2016 — 2020"),
-    ).toBeInTheDocument();
+    const schoolLine = screen.getByText(
+      "Northbridge University · Grade: 3.9 GPA · 2016 — 2020",
+    );
+    expect(schoolLine).toBeInTheDocument();
+    expect(schoolLine.closest("p")?.getAttribute("style")).toContain(
+      "font-size: var(--text-body-sm-size);",
+    );
   });
 });

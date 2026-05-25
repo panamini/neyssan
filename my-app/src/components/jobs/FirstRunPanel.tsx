@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation } from "convex/react";
-import { ClipboardText } from "@/lib/icons";
+import { NewspaperClipping } from "@/lib/icons";
 import { api } from "../../../convex/_generated/api";
 
 type FirstRunPanelProps = {
@@ -34,37 +34,47 @@ export function FirstRunPanel({
   );
 
   return (
-    <div className="dasti-empty-state dasti-jobs-empty-state">
-      <ClipboardText size={34} strokeWidth={1.25} aria-hidden="true" />
-      <div className="dasti-empty-state__title">Start with one job.</div>
-      <p className="dasti-empty-state__subtitle">
-        Import a role. Or try a sample.
-      </p>
-      <div className="dasti-jobs-empty-state__actions">
-        <button
-          type="button"
-          className="dasti-button dasti-button--primary dasti-button--pill"
-          onClick={() => {
-            selectedPathRef.current = "import";
-            void recordFirstRunPath({ path: "import" }).catch(() => {});
-            onImportFirstJob();
-          }}
-        >
-          <span>Import job</span>
-          <span className="ds-btn__period" aria-hidden="true">.</span>
-        </button>
-        <button
-          type="button"
-          className="dasti-button dasti-button--pill"
-          disabled={isSeedingSample}
-          onClick={() => {
-            selectedPathRef.current = "sample";
-            void onTrySampleJob();
-          }}
-        >
-          {isSeedingSample ? "Loading sample" : "Try a sample"}
-        </button>
-      </div>
+    <div className="dasti-jobs-empty-state">
+      <section className="onb-replay__pane">
+        <div className="dasti-jobs-empty-state__icon-slot" aria-hidden="true">
+          <NewspaperClipping size={34} strokeWidth={1.25} />
+        </div>
+        <h2 className="onb-replay__title">Start with one job.</h2>
+        <p className="onb-replay__copy">Import a role. Or try a sample.</p>
+        <div className="onb-replay__choices">
+          <button
+            type="button"
+            className="onb-replay__choice"
+            data-primary="true"
+            onClick={() => {
+              selectedPathRef.current = "import";
+              void recordFirstRunPath({ path: "import" }).catch(() => {});
+              onImportFirstJob();
+            }}
+          >
+            <span className="onb-replay__choice-title">Add a job</span>
+            <span className="onb-replay__choice-desc">
+              Capture a role with the extension.
+            </span>
+          </button>
+          <button
+            type="button"
+            className="onb-replay__choice"
+            disabled={isSeedingSample}
+            onClick={() => {
+              selectedPathRef.current = "sample";
+              void onTrySampleJob();
+            }}
+          >
+            <span className="onb-replay__choice-title">
+              {isSeedingSample ? "Loading sample" : "Try a sample"}
+            </span>
+            <span className="onb-replay__choice-desc">
+              Load an example role.
+            </span>
+          </button>
+        </div>
+      </section>
       {errorMessage ? (
         <p className="dasti-empty-state__subtitle" role="alert">
           {errorMessage}

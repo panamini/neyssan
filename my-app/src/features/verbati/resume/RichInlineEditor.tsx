@@ -152,16 +152,22 @@ export function PaperRichInlineEditor(args: {
 
   React.useEffect(() => {
     const nextJson = JSON.stringify(externalDoc);
-    if (nextJson === lastExternalDocJsonRef.current) return;
+    const previousExternalJson = lastExternalDocJsonRef.current;
+    if (nextJson === previousExternalJson) return;
+    const currentEditorJson = JSON.stringify(latestDocRef.current);
+    const hasLocalUncommittedChanges = currentEditorJson !== previousExternalJson;
     lastExternalDocJsonRef.current = nextJson;
-    if (isFocusedRef.current) return;
+    if (isFocusedRef.current && hasLocalUncommittedChanges) return;
     const nextState = (manager as any)?.createState?.({ content: externalDoc as any });
     const view = (manager as any)?.view;
     if (nextState && typeof view?.updateState === "function") {
       view.updateState(nextState);
+      (onChange as unknown as (param: { state: unknown }) => void)({
+        state: nextState,
+      });
       latestDocRef.current = externalDoc;
     }
-  }, [externalDoc, manager]);
+  }, [externalDoc, manager, onChange]);
 
   const handleChange = React.useCallback(
     (param: any) => {

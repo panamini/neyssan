@@ -8,6 +8,10 @@ import {
   type AiActionDefinition,
   type AiActionId,
 } from "@/lib/ai/interactionRulebook";
+import {
+  useCvAiSurfacePosition,
+  type CvAiSurfacePosition,
+} from "@/lib/cv-ai-surface-position";
 import type { EditorSelectionAnchor } from "@/lib/editor-ai-selection";
 
 const DS4_VISIBLE_ACTION_IDS = [
@@ -29,6 +33,8 @@ const TOOLBAR_FADE_TRANSITION = {
   ease: MOTION_EASE,
 } as const;
 const COLLAPSED_SHELL_WIDTH = 36;
+const INITIAL_TOOLBAR_WIDTH = 220;
+const INITIAL_TOOLBAR_HEIGHT = 48;
 
 const ASK_SUGGESTIONS = [
   "Make this more persuasive…",
@@ -53,6 +59,7 @@ type FloatingAiToolbarProps = {
   includeJobContextActions?: boolean;
   onClose: () => void;
   onRunAction: (actionId: InlineAiActionId, instruction: string) => void;
+  onSurfacePlacementChange?: (position: CvAiSurfacePosition | null) => void;
 };
 
 type ToolbarMetrics = {
@@ -87,62 +94,6 @@ function resolveCssLength(
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function computeToolbarLeft({
-  panelWidth,
-  boundsMin,
-  boundsMax,
-  preferredCenter,
-  preferredLeftEdge,
-  preferredRightEdge,
-  selectionWidth,
-  edgePadding,
-}: {
-  panelWidth: number;
-  boundsMin: number;
-  boundsMax: number;
-  preferredCenter: number;
-  preferredLeftEdge: number;
-  preferredRightEdge: number;
-  selectionWidth: number;
-  edgePadding: number;
-}): number {
-  const clamp = (value: number, min: number, max: number) =>
-    Math.min(Math.max(value, min), Math.max(min, max));
-  const maxLeft = boundsMax - panelWidth;
-  const centeredLeft = clamp(
-    preferredCenter - panelWidth / 2,
-    boundsMin,
-    maxLeft,
-  );
-  const startAlignedLeft = clamp(
-    preferredLeftEdge - edgePadding,
-    boundsMin,
-    maxLeft,
-  );
-  const endAlignedLeft = clamp(
-    preferredRightEdge - panelWidth + edgePadding,
-    boundsMin,
-    maxLeft,
-  );
-  const shortSelection = selectionWidth <= panelWidth * 0.34;
-  const nearLeadingEdge = preferredCenter - boundsMin < panelWidth * 0.42;
-  const nearTrailingEdge = boundsMax - preferredCenter < panelWidth * 0.42;
-
-  if (!shortSelection) {
-    return centeredLeft;
-  }
-
-  if (nearLeadingEdge && !nearTrailingEdge) {
-    return startAlignedLeft;
-  }
-
-  if (nearTrailingEdge && !nearLeadingEdge) {
-    return endAlignedLeft;
-  }
-
-  return centeredLeft;
-}
-
 function getMeasuredSize(element: HTMLElement | null): {
   width: number;
   height: number;
@@ -174,6 +125,7 @@ export function FloatingAiToolbar({
   includeJobContextActions = false,
   onClose,
   onRunAction,
+  onSurfacePlacementChange,
 }: FloatingAiToolbarProps) {
   const [activeActionId, setActiveActionId] =
     React.useState<InlineAiActionId>(DEFAULT_ACTION_ID);
@@ -181,13 +133,9 @@ export function FloatingAiToolbar({
   const [askPlaceholder, setAskPlaceholder] = React.useState<string>(
     ASK_SUGGESTIONS[0],
   );
-  const [position, setPosition] = React.useState<{
-    left: number;
-    top: number;
-    placement: "above" | "below";
-    pointerOffset: number;
-  } | null>(null);
   const [metrics, setMetrics] = React.useState<ToolbarMetrics>(EMPTY_METRICS);
+  const [hasMeasuredInitialMetrics, setHasMeasuredInitialMetrics] =
+    React.useState(false);
   const [isToolbarMounted, setIsToolbarMounted] = React.useState(() =>
     Boolean(open && anchor),
   );
@@ -197,7 +145,6 @@ export function FloatingAiToolbar({
   const promptShellRef = React.useRef<HTMLDivElement | null>(null);
   const askInputRef = React.useRef<HTMLInputElement | null>(null);
   const lastAnchorRef = React.useRef<EditorSelectionAnchor | null>(anchor);
-  const lastPositionRef = React.useRef<typeof position>(position);
 
   const isAskOpen = activeActionId === "custom";
   const isPromptLoading = isLoading && pendingActionId === "custom";
@@ -209,15 +156,13 @@ export function FloatingAiToolbar({
     [includeJobContextActions],
   );
 
-  const updatePosition = React.useCallback(() => {
-    if (!anchor || !panelRef.current || typeof window === "undefined") {
+  const updateMetrics = React.useCallback(() => {
+    if (!panelRef.current || typeof window === "undefined") {
       return;
     }
 
     const panel = panelRef.current;
     const compactGap = resolveCssLength(panel, "--s1", 4);
-    const baseGap = resolveCssLength(panel, "--s2", compactGap * 2);
-    const margin = resolveCssLength(panel, "--s3", 12);
     const controlSize = resolveCssLength(panel, "--control-md", 36);
     const actionSize = getMeasuredSize(actionShellRef.current);
     const promptSize = isAskOpen
@@ -242,167 +187,7 @@ export function FloatingAiToolbar({
     setMetrics((current) =>
       isSameMetrics(current, nextMetrics) ? current : nextMetrics,
     );
-
-    if (actionSize.width <= 0 || actionSize.height <= 0) {
-      return;
-    }
-
-    const width = Math.max(nextMetrics.panelWidth, COLLAPSED_SHELL_WIDTH);
-    const height = Math.max(nextMetrics.panelHeight, controlSize);
-    const viewportLeft = window.scrollX + margin;
-    const viewportTop = window.scrollY + margin;
-    const viewportRight = window.scrollX + window.innerWidth - margin;
-    const viewportBottom = window.scrollY + window.innerHeight - margin;
-
-    const clamp = (value: number, min: number, max: number) =>
-      Math.min(Math.max(value, min), Math.max(min, max));
-
-    const horizontalMin = Math.max(
-      viewportLeft,
-      (anchor.containerLeft ?? viewportLeft) + compactGap,
-    );
-    const horizontalMax = Math.min(
-      viewportRight,
-      (anchor.containerRight ?? viewportRight) - compactGap,
-    );
-    const containerBottomAvoidance =
-      typeof anchor.containerBottom === "number"
-        ? Math.max(controlSize + baseGap, compactGap)
-        : compactGap;
-    const verticalMin = Math.max(
-      viewportTop,
-      (anchor.containerTop ?? viewportTop) + compactGap,
-    );
-    const verticalMax = Math.min(
-      viewportBottom,
-      (anchor.containerBottom ?? viewportBottom) - containerBottomAvoidance,
-    );
-
-    const maxLeft = horizontalMax - width;
-    const maxTop = verticalMax - height;
-    const selectionLeftBound = anchor.leftEdge;
-    const selectionRightBound = anchor.rightEdge;
-    const hasSelectionHorizontalBounds =
-      typeof selectionLeftBound === "number" &&
-      typeof selectionRightBound === "number";
-    const focusCenter = anchor.focusCenter;
-    const focusMatchesSelection =
-      !hasSelectionHorizontalBounds ||
-      typeof focusCenter !== "number" ||
-      (focusCenter >= selectionLeftBound - compactGap &&
-        focusCenter <= selectionRightBound + compactGap);
-    const focusTop =
-      anchor.focusTop ??
-      (anchor.belowLineHeight
-        ? (anchor.bottom ?? anchor.top) - anchor.belowLineHeight
-        : anchor.top);
-    const focusBottom =
-      anchor.focusBottom ??
-      (anchor.focusLineHeight
-        ? focusTop + anchor.focusLineHeight
-        : anchor.bottom ?? anchor.top);
-    const focusLineHeight = Math.max(
-      compactGap,
-      anchor.focusLineHeight ??
-        anchor.belowLineHeight ??
-        anchor.height ??
-        compactGap,
-    );
-    const isBlockSelection =
-      (anchor.lineCount ?? 1) > 1 ||
-      (anchor.height ?? 0) > focusLineHeight * 1.5;
-    const aboveGap = baseGap;
-    const belowGap = baseGap;
-    const anchorTop = isBlockSelection
-      ? anchor.top
-      : focusMatchesSelection
-        ? focusTop
-        : anchor.top;
-    const anchorBottom = isBlockSelection
-      ? anchor.bottom ?? focusBottom
-      : focusMatchesSelection
-        ? focusBottom
-        : anchor.bottom ?? focusBottom;
-    const preferredAboveTop = anchorTop - height - aboveGap;
-    const preferredBelowTop = anchorBottom + belowGap;
-    const hasRoomAbove = preferredAboveTop >= verticalMin;
-    const hasRoomBelow = preferredBelowTop <= maxTop;
-    const roomAbove = anchorTop - verticalMin;
-    const roomBelow = verticalMax - anchorBottom;
-
-    let placement: "above" | "below" = hasRoomAbove
-      ? "above"
-      : hasRoomBelow
-        ? "below"
-        : roomAbove >= roomBelow
-          ? "above"
-          : "below";
-
-    let top = placement === "above" ? preferredAboveTop : preferredBelowTop;
-
-    if (placement === "above" && top < verticalMin && hasRoomBelow) {
-      placement = "below";
-      top = preferredBelowTop;
-    } else if (placement === "below" && top > maxTop && hasRoomAbove) {
-      placement = "above";
-      top = preferredAboveTop;
-    }
-
-    const useFocusHorizontalAnchor = isBlockSelection || focusMatchesSelection;
-    const lineLeft =
-      placement === "above"
-        ? anchor.aboveLeft ?? anchor.leftEdge ?? anchor.left
-        : anchor.belowLeft ?? anchor.leftEdge ?? anchor.left;
-    const lineRight =
-      placement === "above"
-        ? anchor.aboveRight ?? anchor.rightEdge ?? anchor.left
-        : anchor.belowRight ?? anchor.rightEdge ?? anchor.left;
-    const lineCenter =
-      placement === "above"
-        ? anchor.aboveCenter ?? anchor.left
-        : anchor.belowCenter ?? anchor.left;
-    const preferredLeftEdge = useFocusHorizontalAnchor
-      ? anchor.focusLeft ?? lineLeft
-      : lineLeft;
-    const preferredRightEdge = useFocusHorizontalAnchor
-      ? anchor.focusRight ?? anchor.rightEdge ?? lineRight
-      : lineRight;
-    const preferredCenter = useFocusHorizontalAnchor
-      ? anchor.focusCenter ??
-        preferredLeftEdge + (preferredRightEdge - preferredLeftEdge) / 2
-      : lineCenter;
-    const activeSpanWidth = Math.max(
-      compactGap,
-      preferredRightEdge - preferredLeftEdge,
-    );
-    const desiredLeft = computeToolbarLeft({
-      panelWidth: width,
-      boundsMin: horizontalMin,
-      boundsMax: horizontalMax,
-      preferredCenter,
-      preferredLeftEdge,
-      preferredRightEdge,
-      selectionWidth: activeSpanWidth,
-      edgePadding: compactGap,
-    });
-
-    top = clamp(top, verticalMin, maxTop);
-    const left =
-      isAskOpen && lastPositionRef.current
-        ? clamp(lastPositionRef.current.left, horizontalMin, maxLeft)
-        : clamp(desiredLeft, horizontalMin, maxLeft);
-    const pointerOffset = clamp(
-      preferredCenter - left,
-      compactGap * 2,
-      width - compactGap * 2,
-    );
-
-    setPosition({ left, top, placement, pointerOffset });
   }, [anchor, isAskOpen]);
-
-  React.useEffect(() => {
-    lastPositionRef.current = position;
-  }, [position]);
 
   React.useEffect(() => {
     if (anchor) {
@@ -433,8 +218,8 @@ export function FloatingAiToolbar({
     if (!open) {
       setActiveActionId(DEFAULT_ACTION_ID);
       setCustomInstruction("");
-      setPosition(null);
       setMetrics(EMPTY_METRICS);
+      setHasMeasuredInitialMetrics(false);
     }
   }, [open]);
 
@@ -456,13 +241,12 @@ export function FloatingAiToolbar({
       return undefined;
     }
 
-    setPosition(null);
-
     const update = () => {
-      updatePosition();
+      updateMetrics();
     };
 
     update();
+    setHasMeasuredInitialMetrics(true);
     const frame = window.requestAnimationFrame(update);
 
     const resizeObserver =
@@ -484,7 +268,7 @@ export function FloatingAiToolbar({
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [anchor, open, isAskOpen, updatePosition]);
+  }, [anchor, open, isAskOpen, updateMetrics]);
 
   React.useEffect(() => {
     if (!open) return undefined;
@@ -538,8 +322,34 @@ export function FloatingAiToolbar({
   }, [customInstruction, isLoading, onRunAction]);
 
   const renderAnchor = open && anchor ? anchor : lastAnchorRef.current;
+  const desiredSurfaceSize = React.useMemo(
+    () => ({
+      width: Math.max(metrics.panelWidth, INITIAL_TOOLBAR_WIDTH),
+      height: Math.max(metrics.panelHeight, INITIAL_TOOLBAR_HEIGHT),
+      minWidth: COLLAPSED_SHELL_WIDTH,
+      minHeight: 36,
+    }),
+    [metrics.panelHeight, metrics.panelWidth],
+  );
+  const position = useCvAiSurfacePosition({
+    anchor,
+    desiredSurfaceSize,
+    mode: "toolbar",
+    enabled: open && anchor !== null,
+  });
   const shouldRenderToolbar = isToolbarMounted && renderAnchor !== null;
-  const isPositionReady = open && anchor !== null && position !== null;
+  const hasMeasuredToolbarMetrics =
+    metrics.panelWidth > 0 && metrics.panelHeight > 0;
+  const isPositionReady =
+    open &&
+    anchor !== null &&
+    position !== null &&
+    hasMeasuredInitialMetrics &&
+    hasMeasuredToolbarMetrics;
+
+  React.useEffect(() => {
+    onSurfacePlacementChange?.(isPositionReady ? position : null);
+  }, [isPositionReady, onSurfacePlacementChange, position]);
 
   React.useEffect(() => {
     if (!isAskOpen || !isPositionReady || isPromptLoading) return;
@@ -554,14 +364,19 @@ export function FloatingAiToolbar({
           ref={panelRef}
           className="ds-ai-toolbar"
           data-inline-ai-toolbar="true"
+          data-cv-ai-surface-group="true"
+          data-cv-ai-surface-state="toolbar"
+          data-cv-ai-surface-placement={position?.placement ?? "above"}
+          data-cv-ai-surface-clamped={position?.clamped ? "true" : "false"}
+          data-cv-ai-surface-mode={position?.mode ?? "popover"}
           data-state={isPositionReady ? "open" : "closing"}
           data-placement={position?.placement ?? "above"}
           role="toolbar"
           aria-label="Selected text actions"
           style={{
             position: "absolute",
-            left: position?.left ?? renderAnchor.left,
-            top: position?.top ?? renderAnchor.top,
+            left: isPositionReady && position ? position.left : renderAnchor.left,
+            top: isPositionReady && position ? position.top : renderAnchor.top,
             zIndex: 11000,
             visibility: isPositionReady ? "visible" : "hidden",
             pointerEvents: isPositionReady ? "auto" : "none",
