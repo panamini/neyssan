@@ -1308,34 +1308,35 @@ export function buildPremiumCoverLetterPrompt(args: {
           ]
         : [];
   return [
-    "You write premium employment cover-letter body parts.",
+    "Write premium cover-letter body parts.",
     `Planner priority order: ${COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER.map((item, index) => `${index + 1}. ${item}`).join(" | ")}.`,
-    "Build a dynamic RoleThesis from JD, CV facts, and bounded detector output; never import fixture wording, fixed frontend pillars, or one paragraph structure.",
-    "Use only brief facts. Do not invent experience, credentials, ownership, metrics, technologies, timelines, or compensating evidence.",
-    "Prioritize strongest evidence first. If evidence is modest, let the best available concrete proof carry the case. Order: hard requirement, responsibility proof, metric/scope, similar context, collaboration, transferable skill, grounded motivation.",
-    "Do not lead with secondary qualifications when stronger evidence exists. Do not spend body space on admiration, benefits attraction, checklist summaries, generic enthusiasm, tool repetition, keyword lists, or visible criteria reporting.",
-    "topResponsibilities lead; keyRequirements sharpen; preferredQualifications and lowValueChecklist stay out of the lead.",
-    "Dynamic opening only: grounded job-thesis, proof-first, company/problem, direct-match, or human-short. Never reuse 'Your frontend role sits where...' outside that fixture.",
-    "Criteria signals guide selection, tone, boundaries, and ATS vocabulary; mention only grounded criteria with matching CV evidence. Unsupported requirements become boundaries or omissions.",
+    "Build a dynamic RoleThesis from JD, CV facts, and detector output; never import fixture wording, fixed frontend pillars, or one structure.",
+    "Use brief facts only. Do not invent experience, credentials, ownership, metrics, tools, timelines, or proof.",
+    "Prioritize strongest evidence first. If evidence is modest, let the best available concrete proof carry the case. Order: hard requirement, responsibility proof, metric/scope, similar context, collaboration, transferable skill.",
+    "Do not lead with secondary qualifications when stronger evidence exists. Do not spend body space on admiration, benefits attraction, checklist summaries, generic enthusiasm, tool repetition, keyword lists, or criteria reporting.",
+    "topResponsibilities lead; keyRequirements sharpen; preferredQualifications and lowValueChecklist stay secondary.",
+    "Dynamic opening only: job-thesis, proof-first, company/problem, direct-match, or human-short when grounded. Never reuse 'Your frontend role sits where...' outside that fixture.",
+    "Criteria signals guide selection, tone, boundaries, and ATS vocabulary; mention only grounded criteria with CV evidence. Unsupported requirements become boundaries or omissions.",
     ...(companyValuesPack
       ? [
           "Company values are bounded secondary context only: use at most one explicit bridge, only when grounded and tied to source-backed candidate evidence; never replace stronger proof or infer personal alignment.",
         ]
       : []),
-    "Preset affects rhetorical texture only. It must not change truthfulness, claim strength, or evidence priority. It also must not change ownership, metrics, technologies, responsibilities, or boundaries.",
+    "Preset affects rhetorical texture only. It must not change truthfulness, claim strength, or evidence priority. Do not change ownership, metrics, tools, responsibilities, or boundaries.",
     "Across cv_direct and cv_adjacent modes, sound like a person making a case in a letter, not a memo explaining why the evidence is relevant.",
+    "Do not write clunky constructions where inanimate objects are helped to improve or unlock outcomes. Avoid evaluator/meta phrases like 'the evidence I would bring'.",
     presetGuidance,
     args.generationControlsBlock,
     ...contextGuidance,
-    "Return exactly one JSON object with this schema and no extra text:",
+    "Return one JSON object with this schema and no extra text:",
     JSON.stringify({
       opening: "string",
       proofBlock: "string",
       employerValueBlock: "string",
       closeLine: "string",
     }),
-    "Body-part rules: complete natural sentences only; no greeting, signoff, signature, markdown, bullets, generic excitement, mission praise, defensive gap language, or keyword lists.",
-    "Opening: position through the strongest relevant evidence, not generic fit language. ProofBlock: develop top evidence first. EmployerValueBlock: move directly to an employer-facing implication. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise. CloseLine: one short role-specific sentence; vary shape.",
+    "Body-part rules: complete natural sentences only; no greeting, signoff, markdown, bullets, generic excitement, mission praise, defensive gaps, or keyword lists.",
+    "Opening: position through the strongest relevant evidence, not generic fit language. ProofBlock: develop top evidence first. EmployerValueBlock: move directly to an employer-facing implication. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise. CloseLine: one short role-specific sentence.",
     `Structured brief: ${JSON.stringify(structuredBrief)}`,
   ].filter((line): line is string => typeof line === "string").join("\n");
 }

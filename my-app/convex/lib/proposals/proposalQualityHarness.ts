@@ -575,6 +575,11 @@ function truthPlanOutputCheckStatus(
 }
 
 function sentenceClaimedAsCandidateCapability(sentence: string): boolean {
+  const compacted = sentence
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.!?]+$/, "")
+    .toLowerCase();
   if (
     /\b(?:i(?:'m| am|’m)\s+interested|i(?:'d| would)\s+(?:welcome|value)\s+the\s+opportunity|willing(?:ness)?\s+to\s+discuss|role\s+(?:centers|focuses|involves)|posting\s+(?:centers|focuses|involves))\b/i.test(
       sentence,
@@ -583,9 +588,12 @@ function sentenceClaimedAsCandidateCapability(sentence: string): boolean {
     return false;
   }
   if (
-    /\b(?:that is where my work has been strongest|i have worked from the [^.!?\n]{1,80} side|i can partner(?:\s+cleanly|\s+closely)? with)\b/i.test(
-      sentence,
-    )
+    compacted === "that is where my work has been strongest" ||
+    compacted === "i have worked from the frontend side of experimentation" ||
+    compacted ===
+      "i have worked from the frontend side of experimentation, and i can partner cleanly with product and data teams on the analytics layer behind it" ||
+    compacted ===
+      "i can partner cleanly with product and data teams on the analytics layer behind it"
   ) {
     return false;
   }

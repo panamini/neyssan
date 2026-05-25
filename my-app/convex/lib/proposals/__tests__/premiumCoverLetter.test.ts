@@ -683,11 +683,11 @@ describe("premium cover letter generation and rendering", () => {
       opening:
         "At BrightLayer, I led a design-system migration used across four product squads and reduced page-load time by 28 percent through bundle and rendering improvements.",
       proofBlock:
-        "At Northline Labs, I built experimentation dashboards for product and growth teams, partnered directly with design on customer-facing workflow improvements, and helped targeted UI experiments improve signup conversion by 11 percent.",
+        "At Northline Labs, I built experimentation dashboards for product and growth teams and partnered directly with design on customer-facing workflow improvements; targeted UI experiments improved signup conversion by 11 percent.",
       employerValueBlock:
-        "That is the React and TypeScript evidence I would bring to a frontend role centered on reusable UI systems, performance, product-design collaboration, and careful experimentation.",
+        "That experience maps cleanly to frontend work where reusable systems, performance, and product iteration matter together, with React and TypeScript as the base.",
       closeLine:
-        "I would keep the focus on shipped interface work, reliable performance, and clean partnership with product and design.",
+        "I would bring that same discipline to shipped interface work, reliable performance, and clean partnership with product and design.",
     };
 
     const result = await attemptPremiumCoverLetterGeneration({
@@ -742,6 +742,8 @@ describe("premium cover letter generation and rendering", () => {
     expect(capturedSchema).toEqual(PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA);
     expect(capturedPrompt).toContain("Planner priority order:");
     expect(capturedPrompt).toContain("Structured brief:");
+    expect(capturedPrompt).toContain("Avoid evaluator/meta phrases like 'the evidence I would bring'");
+    expect(capturedPrompt).toContain("Do not write clunky constructions where inanimate objects are helped to improve or unlock outcomes");
     expect(result?.bodyParts).toEqual(bodyParts);
     expect(result?.content).toContain("Dear Hiring Manager,");
     expect(result?.content).toContain("design-system migration used across four product squads");
@@ -749,8 +751,15 @@ describe("premium cover letter generation and rendering", () => {
     expect(result?.content).toContain("React and TypeScript");
     expect(result?.content).toContain("partnered directly with design");
     expect(result?.content).toContain("experimentation dashboards");
+    expect(result?.content).toContain("targeted UI experiments improved signup conversion by 11 percent");
+    expect(result?.content).toContain(
+      "That experience maps cleanly to frontend work where reusable systems, performance, and product iteration matter together",
+    );
     expect(result?.content).toContain("signup conversion by 11 percent");
     expect(result?.content).not.toContain("Your frontend role sits where");
+    expect(result?.content).not.toMatch(
+      /helped targeted UI experiments improve|evidence I would bring/i,
+    );
     expect(result?.content).not.toMatch(/mentoring|people management|backend|mobile/i);
     expect(result?.content).not.toMatch(
       /I am excited to apply|I am writing to express my interest|My background aligns/i,
