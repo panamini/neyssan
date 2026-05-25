@@ -177,7 +177,9 @@ describe("proposal quality benchmark adapter", () => {
           score.plannedBlockedClaimsCount === score.truthPlan.blockedClaims.length &&
           score.plannedMissingCriticalRequirementsCount ===
             score.truthPlan.missingCriticalRequirements.length &&
-          Array.isArray(score.truthPlanValidationWarnings)
+          Array.isArray(score.truthPlanValidationWarnings) &&
+          ["pass", "warn", "fail"].includes(score.truthPlanOutputCheck.status) &&
+          Array.isArray(score.truthPlanOutputCheck.violations)
         );
       }),
     ).toBe(true);
@@ -241,6 +243,9 @@ describe("proposal quality benchmark adapter", () => {
         }),
         plannedWritingMode: "normal",
         truthPlanValidationWarnings: [],
+        truthPlanOutputCheck: expect.objectContaining({
+          violations: expect.any(Array),
+        }),
       }),
     );
   });
@@ -312,6 +317,9 @@ describe("proposal quality benchmark adapter", () => {
         }),
         plannedWritingMode: "no_context_safe",
         truthPlanValidationWarnings: [],
+        truthPlanOutputCheck: expect.objectContaining({
+          status: "fail",
+        }),
       }),
     );
   });
@@ -388,6 +396,10 @@ describe("proposal quality benchmark adapter", () => {
         }),
         plannedWritingMode: "adjacent_only",
         truthPlanValidationWarnings: [],
+        truthPlanOutputCheck: expect.objectContaining({
+          status: "pass",
+          violations: [],
+        }),
       }),
     );
     expect(score?.status === "ok" ? score.truthPlan?.missingCriticalRequirements : []).toEqual(
