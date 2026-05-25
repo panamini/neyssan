@@ -105,6 +105,15 @@ function LocationProbe(): JSX.Element {
   );
 }
 
+function setViewportWidth(width: number): void {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+  window.dispatchEvent(new Event("resize"));
+}
+
 describe("ProposalForge canonical job brief", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -246,6 +255,7 @@ describe("ProposalForge canonical job brief", () => {
   });
 
   it("opens and consumes the Draft drawer route intent for canonical jobs", async () => {
+    setViewportWidth(1024);
     render(
       <MemoryRouter
         initialEntries={["/proposal?jobId=job_123&drawer=proposal-draft"]}
@@ -294,6 +304,40 @@ describe("ProposalForge canonical job brief", () => {
     expect(
       within(drawer).getByRole("button", { name: "Collapse drawer" }),
     ).toBeInTheDocument();
+  });
+
+  it("docks the page when Draft proposal opens at a dockable width", async () => {
+    setViewportWidth(1280);
+    const { container } = render(
+      <MemoryRouter initialEntries={["/proposal?jobId=job_123"]}>
+        <ForgeTemplatePanelProvider>
+          <ForgeTemplatePanel />
+          <Routes>
+            <Route
+              path="/proposal"
+              element={
+                <>
+                  <ProposalForge />
+                  <LocationProbe />
+                </>
+              }
+            />
+          </Routes>
+        </ForgeTemplatePanelProvider>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Draft proposal" }),
+    );
+
+    const drawer = await screen.findByRole("complementary", {
+      name: "Proposal draft drawer",
+    });
+    expect(drawer).toHaveAttribute("data-mode", "docked");
+    expect(
+      container.querySelector(".dasti-proposal-skeleton-forge"),
+    ).toHaveAttribute("data-forge-drawer-docked", "true");
   });
 
   it("opens the in-page Jobs drawer from the empty job context action", async () => {
