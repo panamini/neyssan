@@ -131,6 +131,9 @@ describe("sidebar visual CSS contracts", () => {
       /\.app-topbar__doc-action--new\s*\{[\s\S]*background:\s*color-mix\(in srgb,\s*var\(--ac\) 7%,\s*var\(--sf1\)\);[\s\S]*color:\s*color-mix\(in srgb,\s*var\(--ac\) 82%,\s*var\(--ti\)\);/,
     );
     expect(productCss).toMatch(
+      /\.app-topbar__doc-action--proposal-new\s*\{[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--color-text-muted\);/,
+    );
+    expect(productCss).toMatch(
       /\.app-topbar__doc-action,\s*\.app-topbar__doc-picker\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*border-radius:\s*var\(--radius-pill\);/,
     );
     expect(productCss).toMatch(

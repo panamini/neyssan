@@ -611,6 +611,9 @@ export function AppTopbar({
                   data-has-content={
                     proposalTopbarRegistration.hasProposalContent ? "true" : undefined
                   }
+                  data-has-job-context={
+                    proposalTopbarRegistration.hasJobContext ? "true" : undefined
+                  }
                   aria-label="New proposal"
                   onClick={proposalTopbarRegistration.onNewProposal}
                 >

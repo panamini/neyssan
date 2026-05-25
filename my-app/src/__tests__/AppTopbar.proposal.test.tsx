@@ -208,6 +208,29 @@ describe("AppTopbar Proposal document identity", () => {
     expect(onDeleteProposal).toHaveBeenCalledTimes(1);
   });
 
+  it("marks Proposal create as neutral once job context is loaded", () => {
+    renderProposalTopbar({
+      hasProposalContent: false,
+      hasJobContext: true,
+    });
+
+    const newProposalButton = screen.getByRole("button", { name: "New proposal" });
+    expect(newProposalButton).not.toHaveAttribute("data-has-content");
+    expect(newProposalButton).toHaveAttribute("data-has-job-context", "true");
+  });
+
+  it("keeps Proposal create neutral even for a blank proposal", () => {
+    renderProposalTopbar({
+      hasProposalContent: false,
+      hasJobContext: false,
+    });
+
+    const newProposalButton = screen.getByRole("button", { name: "New proposal" });
+    expect(newProposalButton).not.toHaveAttribute("data-has-content");
+    expect(newProposalButton).not.toHaveAttribute("data-has-job-context");
+    expect(newProposalButton).toHaveClass("app-topbar__doc-action--proposal-new");
+  });
+
   it("falls back to the registered placeholder when the document title is empty", () => {
     renderProposalTopbar({ documentTitle: null });
 
