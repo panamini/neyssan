@@ -418,6 +418,59 @@ describe("proposal quality harness", () => {
     );
   });
 
+  it("does not let fixture-safe fragments bypass unsupported capability claims", () => {
+    const fixture = {
+      id: "fragment-bypass-admin",
+      label: "fragment bypass admin",
+      jobTitle: "Administrative Coordinator",
+      jobDescription:
+        "Coordinate calendars, keep documentation current, and own vendor procurement.",
+      contextMode: "rich" as const,
+      candidateFacts: [
+        {
+          id: "f1",
+          text: "Coordinated schedules and kept stakeholder documentation current.",
+          source: "cv" as const,
+          mapsTo: ["calendar coordination", "documentation"],
+          priority: "workflow" as const,
+        },
+      ],
+      expectedCriticalRequirements: [
+        "calendar coordination",
+        "documentation",
+        "vendor procurement ownership",
+      ],
+      expectedSupportedKeywords: ["documentation"],
+      expectedBlockedKeywords: [],
+      expectedForbiddenPhrases: [],
+      safeRoleTransitions: ["documentation"],
+      letters: {
+        baseline:
+          "Coordinated schedules and kept stakeholder documentation current. That is where my work has been strongest. I can partner with vendor procurement ownership.",
+        criteria_audit_shadow:
+          "Coordinated schedules and kept stakeholder documentation current. That is where my work has been strongest. I can partner with vendor procurement ownership.",
+      },
+    };
+
+    const [result] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [fixture],
+    });
+
+    expect(result.truthPlanOutputCheck.status).toBe("fail");
+    expect(result.truthPlanOutputCheck.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "missing_requirement_claimed",
+          severity: "high",
+        }),
+      ]),
+    );
+    expect(assertProposalQualityHardGates([result])).toContain(
+      "fragment-bypass-admin:semantic_planner_shadow:missing_requirement_claimed",
+    );
+  });
+
   it("matches company-value signals only to genuinely supporting candidate evidence", () => {
     const matchingFixture = {
       id: "company-value-matched-evidence",
