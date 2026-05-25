@@ -1092,7 +1092,7 @@ function applyApprovedValueToJob(
 }
 
 function buildProposalRoute(jobId: string): string {
-  return `/proposal?jobId=${encodeURIComponent(jobId)}`;
+  return `/proposal?jobId=${encodeURIComponent(jobId)}&drawer=proposal-draft`;
 }
 
 function buildJobsRoute(jobId: string): string {

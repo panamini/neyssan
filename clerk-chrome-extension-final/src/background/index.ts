@@ -589,6 +589,7 @@ async function openProposalForgeHandler(
       jobId: saveResult.jobId,
       handoffId: handoffResult.handoffId,
       handoffToken: handoffResult.handoffToken,
+      drawer: "proposal-draft",
     });
     const url = `${buildAppUrl("/proposal", APP_BASE_URL)}?${params.toString()}`;
     chrome.tabs.create({ url });

@@ -54,7 +54,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
     return null;
   }
   const docked = openMode === "docked";
-  const showCollapse = docked;
+  const showCollapse = openMode === "overlay" || docked;
   const handlePinDrawer = () => {
     openSurface(activeRegistration.surface, { mode: "docked" });
   };

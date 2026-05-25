@@ -1,9 +1,18 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 
 import { ProposalForge } from "../ProposalForge";
+import { ForgeTemplatePanel } from "../../components/ForgeTemplatePanel";
+import { ForgeTemplatePanelProvider } from "../../contexts/ForgeTemplatePanelContext";
 
 const {
   authState,
@@ -200,6 +209,36 @@ function renderProposalForge() {
   );
 }
 
+function LocationProbe(): JSX.Element {
+  const location = useLocation();
+  return (
+    <div data-testid="proposal-location">{`${location.pathname}${location.search}`}</div>
+  );
+}
+
+function renderProposalForgeDrawerHandoff() {
+  return (
+    <MemoryRouter
+      initialEntries={[
+        "/proposal?jobId=job_123&handoffId=handoff_123&handoffToken=token_123&drawer=proposal-draft",
+      ]}
+    >
+      <ForgeTemplatePanelProvider>
+        <ProposalForge />
+        <ForgeTemplatePanel />
+        <LocationProbe />
+      </ForgeTemplatePanelProvider>
+    </MemoryRouter>
+  );
+}
+
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: width,
+  });
+}
+
 function buildCanonicalJobRecord(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: "job_123",
@@ -228,6 +267,7 @@ function buildCanonicalJobRecord(overrides: Partial<Record<string, unknown>> = {
 
 describe("ProposalForge public handoff hydration", () => {
   beforeEach(() => {
+    setViewportWidth(1024);
     window.localStorage.clear();
     authState.isLoading = true;
     authState.isAuthenticated = false;
@@ -264,6 +304,42 @@ describe("ProposalForge public handoff hydration", () => {
       .filter((entry) => entry.query === generatedApiModule.api.jobsPublic.getById)
       .map((entry) => entry.args);
     expect(canonicalCalls).toContain("skip");
+  });
+
+  it("opens the Draft drawer and consumes route intents after public handoff cleanup", async () => {
+    setViewportWidth(1280);
+    const { container } = render(renderProposalForgeDrawerHandoff());
+
+    const drawer = await screen.findByRole("complementary", {
+      name: "Proposal draft drawer",
+    });
+    expect(drawer).toHaveAttribute("data-mode", "docked");
+    expect(
+      container.querySelector(".dasti-proposal-skeleton-forge"),
+    ).toHaveAttribute("data-forge-drawer-docked", "true");
+    expect(
+      within(drawer).getByRole("button", {
+        name: /Change job: Imported Product Ops Lead/i,
+      }),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        "/proposal?jobId=job_123",
+      );
+    });
+    expect(screen.getByTestId("proposal-location")).not.toHaveTextContent(
+      "handoff",
+    );
+    expect(screen.getByTestId("proposal-location")).not.toHaveTextContent(
+      "drawer=",
+    );
+    expect(
+      within(drawer).queryByRole("button", { name: "Pin drawer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(drawer).getByRole("button", { name: "Collapse drawer" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the visible fields populated when auth becomes ready and the canonical job resolves", async () => {

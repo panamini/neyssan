@@ -1608,7 +1608,7 @@ describe("JobsPage", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("jobs-location")).toHaveTextContent(
-        "/proposal?jobId=job_alpha",
+        "/proposal?jobId=job_alpha&drawer=proposal-draft",
       );
     });
     expect(trackEventMock).toHaveBeenCalledWith({
@@ -1652,7 +1652,7 @@ describe("JobsPage", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("jobs-location")).toHaveTextContent(
-        "/proposal?jobId=job_alpha",
+        "/proposal?jobId=job_alpha&drawer=proposal-draft",
       );
     });
   });
