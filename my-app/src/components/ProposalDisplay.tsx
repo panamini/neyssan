@@ -12,6 +12,7 @@ import {
   Plus,
   X,
 } from "@/lib/icons";
+import DocumentAiReviewOverlay from "@/components/document-ai/DocumentAiReviewOverlay";
 import type { FormValues } from "./ProposalInputForm.schemas";
 import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
 import { api } from "../../convex/_generated/api";
@@ -20,7 +21,6 @@ import {
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
 import FloatingAiToolbar, { type InlineAiActionId } from "./FloatingAiToolbar";
-import FloatingSuggestionToolbar from "./FloatingSuggestionToolbar";
 import { Menu } from "./ui/menu";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
@@ -185,7 +185,8 @@ type ProposalAiSuggestion = {
   afterText: string;
   selection: { start: number; end: number };
   anchor: EditorSelectionAnchor;
-  status: "preview" | "accepted";
+  status: "preview" | "accepted" | "error";
+  errorMessage?: string;
   undoSnapshot?: AiUndoSnapshot<string>;
 };
 
@@ -251,6 +252,27 @@ function getInlineSelectionTextParts(
     selected: content.slice(start, end),
     after: content.slice(end),
   };
+}
+
+function getTextAtSelectionRange(
+  content: string,
+  selection: { start: number; end: number },
+): string {
+  const start = Math.max(0, Math.min(selection.start, content.length));
+  const end = Math.max(start, Math.min(selection.end, content.length));
+  return content.slice(start, end);
+}
+
+function doesProposalAiSelectionStillMatch(
+  content: string,
+  suggestion: ProposalAiSuggestion,
+): boolean {
+  const currentText = getTextAtSelectionRange(content, suggestion.selection);
+
+  return (
+    currentText === suggestion.beforeText ||
+    currentText.trim() === suggestion.beforeText
+  );
 }
 
 function ProposalInlineProofingOverlay({
@@ -1339,46 +1361,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           anchor: textareaSelectionState.anchor,
         };
 
-        const shouldPreviewBeforeApply =
-          normalizedResult.applyMode === "preview_required" ||
-          normalizedResult.actionId === "shorten";
-
-        if (shouldPreviewBeforeApply) {
-          setAiSuggestion({
-            ...suggestionBase,
-            status: "preview",
-          });
-          return;
-        }
-
-        const nextContent = replaceSelectedText({
-          text: proposalContent,
-          selection: textareaSelectionState,
-          replacementText: normalizedResult.text,
-        });
-        onContentChange?.(nextContent);
         setAiSuggestion({
           ...suggestionBase,
-          status: "accepted",
-          undoSnapshot: createAiUndoSnapshot(proposalContent, nextContent),
+          status: "preview",
         });
-        recordAiInteractionEvent({
-          name: "ai_accepted",
-          interactionId,
-          surface: "proposal_editor",
-          actionId: normalizedResult.actionId,
-          applyMode: normalizedResult.applyMode,
-          outputMode: normalizedResult.outputMode,
-        });
-
-        window.setTimeout(() => {
-          const textarea = editableTextareaRef.current;
-          if (!textarea) return;
-          const selectionEnd =
-            textareaSelectionState.start + normalizedResult.text.length;
-          textarea.focus();
-          textarea.setSelectionRange(selectionEnd, selectionEnd);
-        }, 0);
       } catch (error) {
         recordAiInteractionEvent({
           name: "ai_failed",
@@ -1404,6 +1390,16 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
   const handleAcceptAiSuggestion = React.useCallback(() => {
     if (!aiSuggestion || !proposalContent) return;
+
+    if (!doesProposalAiSelectionStillMatch(proposalContent, aiSuggestion)) {
+      setAiSuggestion({
+        ...aiSuggestion,
+        status: "error",
+        errorMessage:
+          "Selected text changed. Re-select the text and run AI again.",
+      });
+      return;
+    }
 
     const nextContent = replaceSelectedText({
       text: proposalContent,
@@ -1465,17 +1461,56 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     setAiSuggestion(null);
   }, []);
 
-  const inlineProofingOverlay =
-    isEditable && aiSuggestion && proposalContent ? (
-      <ProposalInlineProofingOverlay
-        content={proposalContent}
-        documentTypography={documentTypography}
-        suggestion={aiSuggestion}
-        scrollTop={editableTextareaScrollTop}
+  const proposalAiReviewTarget = React.useMemo(
+    () =>
+      aiSuggestion
+        ? {
+            sectionId: "proposal",
+            sectionType: "proposal",
+            sectionLabel: "Proposal",
+            itemId: "selected-text",
+            itemLabel: "Selected text",
+            fieldPath: "body",
+            fieldKind: "paragraph" as const,
+            selectedText: aiSuggestion.beforeText,
+          }
+        : null,
+    [aiSuggestion],
+  );
+
+  const proposalAiReviewOverlay =
+    isEditable && aiSuggestion && proposalAiReviewTarget ? (
+      <DocumentAiReviewOverlay
+        open
+        target={proposalAiReviewTarget}
+        state={
+          aiSuggestion.status === "accepted"
+            ? "accepted"
+            : aiSuggestion.status === "error"
+              ? "error"
+              : "ready"
+        }
+        beforeText={aiSuggestion.beforeText}
+        afterText={aiSuggestion.afterText}
+        errorMessage={aiSuggestion.errorMessage}
+        actionId={aiSuggestion.actionId}
+        interactionId={aiSuggestion.interactionId}
+        anchor={aiSuggestion.anchor}
+        primaryActionLabel="Replace"
+        onAccept={handleAcceptAiSuggestion}
+        onDiscard={
+          aiSuggestion.status === "accepted"
+            ? handleDismissAiSuggestion
+            : handleDiscardAiSuggestion
+        }
+        onUndo={
+          aiSuggestion.undoSnapshot ? handleUndoAiSuggestion : undefined
+        }
       />
     ) : null;
+  const inlineProofingOverlay = null;
   const inlineSelectionOverlay = null;
-  const shouldMirrorTextareaSelection = Boolean(aiSuggestion);
+  const shouldMirrorTextareaSelection = false;
 
   const handlePreviewParagraphAction = React.useCallback(
     (label: string) => {
@@ -2836,17 +2871,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
   const viewerShell = (
     <div className="dasti-doc-viewer-shell">
-      {isEditable && aiSuggestion ? (
-        <FloatingSuggestionToolbar
-          open
-          anchor={aiSuggestion.anchor}
-          state={aiSuggestion.status}
-          onAccept={handleAcceptAiSuggestion}
-          onDiscard={handleDiscardAiSuggestion}
-          onUndo={handleUndoAiSuggestion}
-          onClose={handleDismissAiSuggestion}
-        />
-      ) : null}
+      {proposalAiReviewOverlay}
       {isEditable && textareaSelectionState && !aiSuggestion ? (
         <FloatingAiToolbar
           open
