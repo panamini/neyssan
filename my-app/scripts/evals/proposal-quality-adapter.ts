@@ -339,7 +339,7 @@ function scoreSuccessResult(args: {
   });
   const [score] = runProposalQualityHarness({
     fixtures: [fixture],
-    variants: ["criteria_audit_shadow"],
+    variants: ["semantic_planner_shadow"],
     hardness: "hard",
   });
 

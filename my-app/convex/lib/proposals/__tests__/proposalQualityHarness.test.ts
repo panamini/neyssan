@@ -182,6 +182,103 @@ describe("proposal quality harness", () => {
     );
   });
 
+  it("attaches truthPlan only to semantic planner shadow results without changing scored output", () => {
+    const fixture = PROPOSAL_QUALITY_FIXTURES.find(
+      (candidate) => candidate.id === "strong-fit",
+    );
+    expect(fixture).toBeTruthy();
+
+    const [baseline, semanticShadow] = runProposalQualityHarness({
+      variants: ["baseline", "semantic_planner_shadow"],
+      fixtures: [fixture!],
+    });
+
+    expect(baseline.truthPlan).toBeNull();
+    expect(semanticShadow.truthPlan?.planVersion).toBe("proposal_truth_plan_v1");
+    expect(semanticShadow.truthPlan?.writingMode).toBe("normal");
+    expect(semanticShadow.criteriaAudit).not.toBeNull();
+    expect(semanticShadow.recruiterCaseScore).toBe(baseline.recruiterCaseScore);
+    expect(semanticShadow.topCandidateFactsUsed).toEqual(
+      baseline.topCandidateFactsUsed,
+    );
+    expect(fixture!.letters.criteria_audit_shadow).toBe(fixture!.letters.baseline);
+  });
+
+  it("classifies semantic planner shadow fixture families without affecting hard gates", () => {
+    const weakSeoFixture = {
+      id: "freelance-weak-seo",
+      label: "Weak freelance match: technical SEO overhaul",
+      jobTitle: "Technical SEO Overhaul for Marketplace",
+      jobDescription:
+        "Looking for a freelancer to audit and improve technical SEO for a large marketplace site, including indexing, schema, crawl diagnostics, and internal linking recommendations.",
+      contextMode: "minimal" as const,
+      candidateFacts: [
+        {
+          id: "f1",
+          text: "Frontend",
+          source: "profile" as const,
+          mapsTo: ["frontend execution"],
+          priority: "tool" as const,
+        },
+        {
+          id: "f2",
+          text: "Landing Pages",
+          source: "profile" as const,
+          mapsTo: ["landing-page structure"],
+          priority: "workflow" as const,
+        },
+        {
+          id: "f3",
+          text: "Conversion Optimization",
+          source: "profile" as const,
+          mapsTo: ["conversion-aware page improvements"],
+          priority: "workflow" as const,
+        },
+      ],
+      expectedCriticalRequirements: [
+        "indexing fixes",
+        "schema strategy / schema implementation",
+        "crawl diagnostics",
+        "internal-linking recommendations",
+      ],
+      expectedSupportedKeywords: ["Frontend", "Landing Pages"],
+      expectedBlockedKeywords: ["indexing fixes", "schema strategy / schema implementation", "crawl diagnostics", "internal-linking recommendations"],
+      expectedForbiddenPhrases: ["I share your values"],
+      safeRoleTransitions: ["should be led by a technical SEO specialist"],
+      letters: {
+        baseline:
+          "Frontend and landing-page work are the supported areas here.\n\nIndexing, schema strategy, crawl diagnostics, and internal-linking recommendations should be led by a technical SEO specialist.",
+        criteria_audit_shadow:
+          "Frontend and landing-page work are the supported areas here.\n\nIndexing, schema strategy, crawl diagnostics, and internal-linking recommendations should be led by a technical SEO specialist.",
+      },
+    };
+
+    const [result] = runProposalQualityHarness({
+      variants: ["semantic_planner_shadow"],
+      fixtures: [weakSeoFixture],
+    });
+
+    expect(result.truthPlan?.writingMode).toBe("adjacent_only");
+    expect(result.truthPlan?.blockedClaims.map((claim) => claim.claim)).toEqual(
+      expect.arrayContaining([
+        "technical SEO specialist",
+        "indexing fixes",
+        "schema strategy / schema implementation",
+        "crawl diagnostics",
+        "internal-linking recommendations",
+      ]),
+    );
+    expect(result.truthPlan?.missingCriticalRequirements.map((entry) => entry.requirement)).toEqual(
+      expect.arrayContaining([
+        "indexing fixes",
+        "schema strategy / schema implementation",
+        "crawl diagnostics",
+        "internal-linking recommendations",
+      ]),
+    );
+    expect(assertProposalQualityHardGates([result])).toEqual([]);
+  });
+
   it("catches negative-control bad letters with hard gates", () => {
     const results = runProposalQualityHarness({
       variants: ["baseline"],
