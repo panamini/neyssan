@@ -63,6 +63,9 @@ describe("jobsPublic.listForUser", () => {
             title: "Legacy job",
             company: "Acme",
             location: "Remote",
+            rawDescription:
+              "Nous recherchons un responsable des opérations avec expérience.",
+            rawLanguageDetected: "fr",
             isSample: false,
             sourceUrl: "https://example.com/job",
             sourceDomain: "example.com",
@@ -191,6 +194,7 @@ describe("jobsPublic.listForUser", () => {
         id: "job_old",
         title: "Legacy job",
         company: "Acme",
+        sourceLanguage: "fr",
         isFavorite: false,
         matchTier: "weak",
       }),
