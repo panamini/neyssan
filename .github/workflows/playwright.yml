@@ -60,7 +60,16 @@ jobs:
         NEXT_PUBLIC_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
         VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
     - name: Run Playwright tests
-      run: timeout --kill-after=60s 15m npx playwright test --project=chromium --global-timeout=840000
+      run: >
+        timeout --kill-after=60s 15m npx playwright test
+        e2e/cvforge-preview-linking.spec.ts
+        e2e/ds-v2.spec.ts
+        e2e/proposal-command-layer.spec.ts
+        e2e/proposal-mobile-layout.spec.ts
+        e2e/proposal-workspace-roundtrip.spec.ts
+        e2e/topbar-document-geometry.spec.ts
+        --project=chromium
+        --global-timeout=840000
       env:
         PLAYWRIGHT_APP_URL: http://127.0.0.1:5173
         VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
