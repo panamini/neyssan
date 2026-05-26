@@ -1,3 +1,10 @@
+import {
+  ENABLED_DOCUMENT_LANGUAGES,
+  getLocaleDirection,
+  normalizeLocaleId,
+  type DocumentLanguage,
+} from "./locale-registry";
+
 export type SupportedExportLocale = "en" | "fr";
 
 const NBSP = "\u00A0";
@@ -50,7 +57,7 @@ const STRUCTURED_LABELS: Record<
   "working proficiency": { en: "Working proficiency", fr: "Maîtrise professionnelle" },
 };
 
-export function normalizeExportLocale(
+export function normalizeExportLabelLocale(
   locale?: string | null,
 ): SupportedExportLocale | null {
   const normalized = String(locale ?? "").trim().toLowerCase();
@@ -69,17 +76,38 @@ export function normalizeExportLocale(
   return null;
 }
 
+export function normalizeExportLocale(
+  locale?: string | null,
+): SupportedExportLocale | null {
+  return normalizeExportLabelLocale(locale);
+}
+
+export function normalizeExportDocumentLanguage(
+  locale?: string | null,
+): DocumentLanguage | null {
+  const normalized = normalizeLocaleId(locale);
+  return normalized && ENABLED_DOCUMENT_LANGUAGES.includes(normalized)
+    ? normalized
+    : null;
+}
+
 export function getExportHtmlLang(
   locale?: string | null,
-): SupportedExportLocale {
-  return normalizeExportLocale(locale) ?? "en";
+): DocumentLanguage | "en" {
+  return normalizeExportDocumentLanguage(locale) ?? "en";
+}
+
+export function getExportHtmlDir(
+  locale?: string | null,
+): "ltr" | "rtl" {
+  return getLocaleDirection(getExportHtmlLang(locale));
 }
 
 export function getLocalizedExportLabel(
   key: string,
   locale?: string | null,
 ): string {
-  const resolvedLocale = normalizeExportLocale(locale) ?? "en";
+  const resolvedLocale = normalizeExportLabelLocale(locale) ?? "en";
   return SECTION_LABELS[resolvedLocale][key] ?? key;
 }
 
@@ -88,7 +116,7 @@ export function localizeStructuredLabel(
   locale?: string | null,
 ): string {
   const normalizedLabel = label.trim().toLowerCase();
-  const resolvedLocale = normalizeExportLocale(locale) ?? "en";
+  const resolvedLocale = normalizeExportLabelLocale(locale) ?? "en";
   return STRUCTURED_LABELS[normalizedLabel]?.[resolvedLocale] ?? label;
 }
 
@@ -131,7 +159,7 @@ export function normalizeLocaleTypography(
     return "";
   }
 
-  const resolvedLocale = normalizeExportLocale(locale);
+  const resolvedLocale = normalizeExportLabelLocale(locale);
   if (resolvedLocale === "fr") {
     return normalizeFrenchTypography(value);
   }

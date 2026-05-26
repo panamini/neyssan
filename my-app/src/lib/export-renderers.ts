@@ -28,6 +28,7 @@ import type {
   ResumePrintSource,
 } from "./document-export-models";
 import {
+  getExportHtmlDir,
   getExportHtmlLang,
   getLocalizedExportLabel,
   localizeStructuredLabel,
@@ -1339,7 +1340,7 @@ function buildHtmlDocument(args: {
   title: string;
 }): string {
   return `<!doctype html>
-<html lang="${escapeHtml(getExportHtmlLang(args.lang))}">
+<html lang="${escapeHtml(getExportHtmlLang(args.lang))}" dir="${escapeHtml(getExportHtmlDir(args.lang))}">
   <head>
     <meta charset="utf-8" />
     <title>${escapeHtml(args.title)}</title>

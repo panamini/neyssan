@@ -25,7 +25,7 @@ import type {
   ResumeData,
   ResumeLayoutVariantId,
 } from "../features/verbati/resume/resume.types";
-import { normalizeExportLocale } from "./export-locale";
+import { normalizeExportDocumentLanguage } from "./export-locale";
 import {
   extractProposalClosingBlockFromParagraphs,
   sanitizeProposalClosingRef,
@@ -402,7 +402,7 @@ export function buildResumeExportSource(args: {
           stylePreset,
         }),
       ),
-      locale: normalizeExportLocale(args.currentCv.metadata.locale),
+      locale: normalizeExportDocumentLanguage(args.currentCv.metadata.locale),
     };
   }
 
@@ -418,7 +418,7 @@ export function buildResumeExportSource(args: {
         stylePreset,
       }),
     ),
-    locale: normalizeExportLocale(args.currentCv.metadata.locale),
+    locale: normalizeExportDocumentLanguage(args.currentCv.metadata.locale),
   };
 }
 
@@ -440,7 +440,7 @@ export function buildStyledResumePrintSource(args: {
     schemaVersion: 1,
     kind: "resume",
     renderSource: "preview",
-    locale: normalizeExportLocale(args.currentCv.metadata.locale),
+    locale: normalizeExportDocumentLanguage(args.currentCv.metadata.locale),
     resumeData,
     stylePreset,
     resumeTemplateId,

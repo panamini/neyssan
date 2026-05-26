@@ -19,6 +19,28 @@ import {
 } from "../document-export-models";
 
 describe("document-export-models", () => {
+  it("preserves supported document locales on resume export sources and falls back for unsupported locales", () => {
+    const supportedLocales = ["en", "fr", "ar", "ru"] as const;
+
+    for (const locale of supportedLocales) {
+      const currentCv = generateCvTemplate(`${locale} CV`);
+      currentCv.metadata.locale = locale;
+
+      expect(
+        buildStyledResumePrintSource({ currentCv })?.locale,
+      ).toBe(locale);
+      expect(buildResumeExportSource({ currentCv })?.locale).toBe(locale);
+    }
+
+    const unsupportedCv = generateCvTemplate("Unsupported locale CV");
+    unsupportedCv.metadata.locale = "ga";
+
+    expect(
+      buildStyledResumePrintSource({ currentCv: unsupportedCv })?.locale,
+    ).toBeNull();
+    expect(buildResumeExportSource({ currentCv: unsupportedCv })?.locale).toBeNull();
+  });
+
   it("captures the live style preset in the styled resume print source", () => {
     const source = buildStyledResumePrintSource({
       currentCv: generateCvTemplate("Styled CV"),
@@ -56,8 +78,8 @@ describe("document-export-models", () => {
         renderSource: "preview",
         stylePreset: expect.objectContaining({
           layout: "workshop",
-          typography: "civic-correspondence",
-          palette: "cobalt",
+          typography: "quiet-editorial",
+          palette: "ink",
         }),
         resumeTemplateId: "workshop_resume_twocol_ats",
       }),
