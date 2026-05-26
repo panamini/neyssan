@@ -1895,6 +1895,24 @@ function resolvePremiumCoverLetterContextGuidance(args: {
   writerProvider?: PremiumCoverLetterWriterProvider;
   writerModel?: string;
 }): string[] {
+  if (args.contextClass === "cv_direct" && isQwenWriterIdentity(args)) {
+    return [
+      "Qwen cv_direct ownership and scope contract:",
+      "- Direct match means strong source-backed overlap, not permission to borrow every JD responsibility as candidate experience.",
+      "- Use exact CV verbs or lower-ownership verbs.",
+      "- Use high-ownership verbs only when directly present in candidate facts, and keep them tied to the exact CV-backed scope.",
+      "- Do not borrow high-ownership verbs from the job description.",
+      "- Do not convert employer objectives into candidate achievements.",
+      "- Do not convert collaboration into ownership or control of product, business, or delivery outcomes.",
+      "- Do not inflate a supported achievement into a broader operational or business outcome.",
+      "- Metrics and measurable outcomes must match candidate facts exactly.",
+      "- Do not expand \"Improved release consistency across shared interface work\" into \"significantly improved release consistency across all shared interface work\" unless that exact scope is source-backed.",
+      "- Avoid unsupported expansion language unless source-backed: directly aligns, your objective, business objectives, perfectly matches, perfect fit, seamless, ensure, ensuring, significantly, across all, elevate design system quality, drive product outcomes, own delivery, manage delivery, or lead development across surfaces.",
+      "- Prefer concrete CV-backed evidence, exact tools and work surfaces, exact metrics and scope, and grounded employer relevance without claiming direct objective fulfillment.",
+      "- Safe direct examples: \"I led a design-system migration used across four product squads.\" \"I improved release consistency across shared interface work.\" \"I built experimentation dashboards used by product and growth teams.\" \"The strongest overlap is around React, TypeScript, design systems, and product-facing interface work.\" \"That experience is relevant to frontend work where reusable systems, product iteration, and customer-facing surfaces matter.\"",
+      "- Keep direct prose specific, confident, grounded, recruiter-readable, and stronger than adjacent; do not turn it into a factual inventory.",
+    ];
+  }
   if (args.contextClass === "cv_adjacent" && isQwenWriterIdentity(args)) {
     return [
       "Qwen cv_adjacent contract:",
