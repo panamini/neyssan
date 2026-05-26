@@ -188,6 +188,112 @@ function getLoggedMistralDiagnostics(infoSpy: ReturnType<typeof vi.spyOn>) {
   return diagnosticsCall?.[1] as Record<string, unknown>;
 }
 
+const qwenPremiumBodyPartsFixture = {
+  opening:
+    "I am applying for the Senior Frontend Engineer role because my recent work has centered on shipping customer-facing React and TypeScript products.",
+  proofBlock:
+    "At Acme, I led a design system migration used across four product squads and improved release consistency across shared interface work.",
+  employerValueBlock:
+    "That background is most relevant in roles where interface quality, collaboration, and iteration all shape the final product experience.",
+  closeLine: "I would welcome the opportunity to discuss the role further.",
+};
+
+function qwenChatResponse(content: string) {
+  return new Response(
+    JSON.stringify({
+      choices: [
+        {
+          message: {
+            content,
+          },
+        },
+      ],
+    }),
+    {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+      },
+    },
+  ) as Response;
+}
+
+function createQwenPremiumCtx() {
+  return {
+    auth: {
+      getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+    },
+    runQuery: vi.fn().mockResolvedValue({
+      _id: "profile_123",
+      proposalVoicePreset: "signature",
+      experience: [],
+      skills: [],
+      achievements: [],
+    }),
+    runMutation: vi.fn().mockResolvedValue("proposal_123"),
+  };
+}
+
+function qwenPremiumArgs() {
+  return {
+    jobTitle: "Senior Frontend Engineer",
+    jobDescription:
+      "Lead React and TypeScript development across customer-facing product surfaces and collaborate closely with product teams.",
+    proposalType: "cover_letter" as const,
+    modelType: "qwen3.7-max" as const,
+    voicePreset: "signature" as const,
+    personalizationMode: "explicit_only" as const,
+    personalizationRichness: "rich" as const,
+    personalizationContext: {
+      name: "Alex Martin",
+      summary: "Frontend engineer focused on design systems.",
+      topSkills: ["React", "TypeScript", "Design systems"],
+      recentExperience: [
+        {
+          company: "Acme",
+          position: "Senior Frontend Engineer",
+          highlights: [
+            "Led a design system migration used across four product squads.",
+            "Improved release consistency across shared interface work.",
+          ],
+        },
+      ],
+      standoutAchievements: [
+        "Improved release consistency across shared interface work.",
+      ],
+    },
+  };
+}
+
+function expectQwenPremiumRequest(fetchSpy: ReturnType<typeof vi.spyOn>) {
+  expect(fetchSpy).toHaveBeenCalledTimes(1);
+  expect(fetchSpy.mock.calls[0]?.[0]).toBe(
+    "https://qwen.test/chat/completions",
+  );
+
+  const qwenRequest = JSON.parse(
+    String(fetchSpy.mock.calls[0]?.[1]?.body ?? "{}"),
+  ) as {
+    model?: string;
+    messages?: Array<{ role?: string; content?: string }>;
+    response_format?: { type?: string };
+    temperature?: number;
+    top_p?: number;
+  };
+  expect(qwenRequest.model).toBe("qwen3.7-max");
+  expect(qwenRequest.response_format).toEqual({ type: "json_object" });
+  expect(qwenRequest.temperature).toBe(0.2);
+  expect(qwenRequest.top_p).toBe(0.8);
+  expect(typeof qwenRequest.messages?.[0]?.content).toBe("string");
+  expect(qwenRequest.messages?.[0]?.content).toContain(
+    "Provider adapter: Qwen",
+  );
+  expect(qwenRequest.messages?.[0]?.content).not.toContain(
+    "Provider adapter: Mistral",
+  );
+  return qwenRequest;
+}
+
 const plannerResultFixture = {
   context_mode: "none",
   domain_gap: "direct",
@@ -459,82 +565,17 @@ describe("proposal provider busy handling", () => {
     process.env.QWEN_CHAT_COMPLETIONS_URL =
       "https://qwen.test/chat/completions";
 
-    const qwenBodyParts = {
-      opening:
-        "I am applying for the Senior Frontend Engineer role because my recent work has centered on shipping customer-facing React and TypeScript products.",
-      proofBlock:
-        "At Acme, I led a design system migration used across four product squads and improved release consistency across shared interface work.",
-      employerValueBlock:
-        "That background is most relevant in roles where interface quality, collaboration, and iteration all shape the final product experience.",
-      closeLine: "I would welcome the opportunity to discuss the role further.",
-    };
-
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify(qwenBodyParts),
-              },
-            },
-          ],
-        }),
-        {
-          status: 200,
-          headers: {
-            "content-type": "application/json",
-          },
-        },
-      ) as Response,
+      qwenChatResponse(JSON.stringify(qwenPremiumBodyPartsFixture)),
     );
 
     const { handleGenerateProposal } = await loadProposalModule();
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
-    const ctx = {
-      auth: {
-        getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
-      },
-      runQuery: vi.fn().mockResolvedValue({
-        _id: "profile_123",
-        proposalVoicePreset: "signature",
-        experience: [],
-        skills: [],
-        achievements: [],
-      }),
-      runMutation: vi.fn().mockResolvedValue("proposal_123"),
-    };
+    const ctx = createQwenPremiumCtx();
 
     try {
-      const result = await handleGenerateProposal(ctx, {
-        jobTitle: "Senior Frontend Engineer",
-        jobDescription:
-          "Lead React and TypeScript development across customer-facing product surfaces and collaborate closely with product teams.",
-        proposalType: "cover_letter",
-        modelType: "qwen3.7-max",
-        voicePreset: "signature",
-        personalizationMode: "explicit_only",
-        personalizationRichness: "rich",
-        personalizationContext: {
-          name: "Alex Martin",
-          summary: "Frontend engineer focused on design systems.",
-          topSkills: ["React", "TypeScript", "Design systems"],
-          recentExperience: [
-            {
-              company: "Acme",
-              position: "Senior Frontend Engineer",
-              highlights: [
-                "Led a design system migration used across four product squads.",
-                "Improved release consistency across shared interface work.",
-              ],
-            },
-          ],
-          standoutAchievements: [
-            "Improved release consistency across shared interface work.",
-          ],
-        },
-      });
+      const result = await handleGenerateProposal(ctx, qwenPremiumArgs());
 
       expect(result).toMatchObject({
         proposalId: "proposal_123",
@@ -543,25 +584,7 @@ describe("proposal provider busy handling", () => {
         fallbackTriggerCode: null,
       });
       expect(result.proposalContent).toMatch(/^Dear Hiring Manager,/);
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(fetchSpy.mock.calls[0]?.[0]).toBe(
-        "https://qwen.test/chat/completions",
-      );
-
-      const qwenRequest = JSON.parse(
-        String(fetchSpy.mock.calls[0]?.[1]?.body ?? "{}"),
-      ) as {
-        model?: string;
-        messages?: Array<{ role?: string; content?: string }>;
-      };
-      expect(qwenRequest.model).toBe("qwen3.7-max");
-      expect(typeof qwenRequest.messages?.[0]?.content).toBe("string");
-      expect(qwenRequest.messages?.[0]?.content).toContain(
-        "Provider adapter: Qwen",
-      );
-      expect(qwenRequest.messages?.[0]?.content).not.toContain(
-        "Provider adapter: Mistral",
-      );
+      expectQwenPremiumRequest(fetchSpy);
       expect(mockOpenAIResponsesCreate).not.toHaveBeenCalled();
       expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
       expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
@@ -612,6 +635,172 @@ describe("proposal provider busy handling", () => {
       fetchSpy.mockRestore();
     }
   });
+
+  it.each([
+    [
+      "fenced json",
+      `\`\`\`json\n${JSON.stringify(qwenPremiumBodyPartsFixture)}\n\`\`\``,
+    ],
+    [
+      "single embedded json object",
+      `Here is the JSON object:\n${JSON.stringify(qwenPremiumBodyPartsFixture)}\nDone.`,
+    ],
+  ])(
+    "routes qwen premium successfully when response contains %s",
+    async (_label, responseContent) => {
+      process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1 = "1";
+      process.env.QWEN_API_KEY = "sk-qwen";
+      process.env.QWEN_CHAT_COMPLETIONS_URL =
+        "https://qwen.test/chat/completions";
+
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(qwenChatResponse(responseContent));
+
+      const { handleGenerateProposal } = await loadProposalModule();
+      const ctx = createQwenPremiumCtx();
+      const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+      try {
+        const result = await handleGenerateProposal(ctx, qwenPremiumArgs());
+
+        expect(result).toMatchObject({
+          proposalId: "proposal_123",
+          requestedModelType: "qwen3.7-max",
+          actualModelType: "qwen3.7-max",
+          fallbackTriggerCode: null,
+        });
+        expectQwenPremiumRequest(fetchSpy);
+        expect(mockOpenAIResponsesCreate).not.toHaveBeenCalled();
+        expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+        expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
+        expect(ctx.runMutation).toHaveBeenCalledTimes(1);
+        const qwenMutationPayload = ctx.runMutation.mock.calls[0]?.[1] as {
+          metadata?: {
+            planned_path?: string;
+            executed_path?: string;
+            fallback_reason?: string;
+            validator_outcome?: string;
+            save_outcome?: string;
+            tags?: string[];
+          };
+        };
+        expect(qwenMutationPayload.metadata?.planned_path).toBe("structured");
+        expect(qwenMutationPayload.metadata?.executed_path).toBe("structured");
+        expect(qwenMutationPayload.metadata?.fallback_reason).toBe(
+          "not_applicable",
+        );
+        expect(qwenMutationPayload.metadata?.validator_outcome).toBe(
+          "structured_success",
+        );
+        expect(qwenMutationPayload.metadata?.save_outcome).toBe(
+          "structured_saved",
+        );
+        expect(qwenMutationPayload.metadata?.tags).toEqual(
+          expect.arrayContaining([
+            "premium_cover_letter_path_v1",
+            "generation_path:premium_success",
+          ]),
+        );
+        expect(getLoggedRoutingTelemetry(infoSpy)).toMatchObject({
+          attemptedPath: "premium success",
+          finalOutcome: "structured_saved",
+          requestedModelType: "qwen3.7-max",
+          actualModelType: "qwen3.7-max",
+          usedFallback: false,
+        });
+      } finally {
+        infoSpy.mockRestore();
+        fetchSpy.mockRestore();
+      }
+    },
+  );
+
+  it.each([
+    ["prose-only response", "I cannot provide JSON for this request."],
+    ["array json response", JSON.stringify([qwenPremiumBodyPartsFixture])],
+    [
+      "missing body-part field",
+      JSON.stringify({
+        opening: qwenPremiumBodyPartsFixture.opening,
+        proofBlock: qwenPremiumBodyPartsFixture.proofBlock,
+        employerValueBlock: qwenPremiumBodyPartsFixture.employerValueBlock,
+      }),
+    ],
+    [
+      "extra body-part field",
+      JSON.stringify({
+        ...qwenPremiumBodyPartsFixture,
+        extra: "This field must not be accepted.",
+      }),
+    ],
+  ])(
+    "does not produce qwen premium success for %s",
+    async (_label, responseContent) => {
+      process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1 = "1";
+      process.env.QWEN_API_KEY = "sk-qwen";
+      process.env.QWEN_CHAT_COMPLETIONS_URL =
+        "https://qwen.test/chat/completions";
+
+      mockGenerateCreativeProposal.mockResolvedValue({
+        content:
+          "I led shared React and TypeScript interface work across customer-facing surfaces and stayed close to product decisions that shaped everyday user experience. That background keeps me focused on roles where interface quality, collaboration, and steady delivery all matter.",
+        metadata: { modelName: "qwen3.7-max" },
+      });
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(qwenChatResponse(responseContent));
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const { handleGenerateProposal } = await loadProposalModule();
+      const ctx = createQwenPremiumCtx();
+
+      try {
+        const result = await handleGenerateProposal(ctx, qwenPremiumArgs());
+
+        expect(result).toMatchObject({
+          proposalId: "proposal_123",
+          requestedModelType: "qwen3.7-max",
+          actualModelType: "qwen3.7-max",
+          fallbackTriggerCode: null,
+        });
+        expectQwenPremiumRequest(fetchSpy);
+        expect(mockOpenAIResponsesCreate).not.toHaveBeenCalled();
+        expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
+        expect(mockGenerateCreativeProposal).toHaveBeenCalledTimes(1);
+        expect(ctx.runMutation).toHaveBeenCalledTimes(1);
+        const mutationPayload = ctx.runMutation.mock.calls[0]?.[1] as {
+          metadata?: {
+            planned_path?: string;
+            executed_path?: string;
+            fallback_reason?: string;
+            validator_outcome?: string;
+            save_outcome?: string;
+            tags?: string[];
+          };
+        };
+        expect(mutationPayload.metadata?.tags ?? []).not.toContain(
+          "premium_cover_letter_path_v1",
+        );
+        expect(mutationPayload.metadata?.fallback_reason).toBe(
+          "premium_generation_failed",
+        );
+        expect(mutationPayload.metadata?.validator_outcome).toBe(
+          "structured_failed",
+        );
+        expect(
+          warnSpy.mock.calls.some(
+            ([message, details]) =>
+              message === "Qwen premium cover-letter diagnostics" &&
+              (details as { provider?: string })?.provider === "qwen",
+          ),
+        ).toBe(true);
+      } finally {
+        warnSpy.mockRestore();
+        fetchSpy.mockRestore();
+      }
+    },
+  );
 
   it("fails closed when qwen premium cover-letter credentials are missing", async () => {
     process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1 = "1";

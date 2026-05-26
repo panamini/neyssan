@@ -145,21 +145,229 @@ function extractCompatibleChatResponseText(response: any): string {
   throw new Error("Compatible chat premium cover-letter response returned no text");
 }
 
-function parsePremiumCoverLetterBodyPartsContent(content: string) {
-  const trimmed = content.trim();
-  const tryParse = (value: string) =>
-    PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(JSON.parse(value));
+type QwenPremiumDiagnostics = {
+  provider: "qwen";
+  stage: "request" | "parse" | "schema" | "validation" | "unknown";
+  reason: string;
+  hasChoices?: boolean;
+  contentType?: "string" | "array" | "missing" | "unknown";
+  exactJsonParsed?: boolean;
+  fencedJsonParsed?: boolean;
+  embeddedJsonParsed?: boolean;
+  schemaParsed?: boolean;
+  validationIssues?: Array<{
+    code?: string;
+    path?: string;
+  }>;
+};
 
-  try {
-    return tryParse(trimmed);
-  } catch {
-    const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
-    if (fenced?.[1]) {
-      return tryParse(fenced[1]);
+class QwenPremiumBodyPartsParseError extends Error {
+  constructor(
+    message: string,
+    readonly diagnostics: QwenPremiumDiagnostics,
+  ) {
+    super(message);
+    this.name = "QwenPremiumBodyPartsParseError";
+  }
+}
+
+function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function collectValidationIssues(error: unknown): QwenPremiumDiagnostics["validationIssues"] {
+  const issues = (error as { issues?: Array<{ code?: string; path?: unknown[] }> })?.issues;
+  if (!Array.isArray(issues)) return undefined;
+  return issues.map((issue) => ({
+    code: issue.code,
+    path: Array.isArray(issue.path) ? issue.path.join(".") : undefined,
+  }));
+}
+
+function describeCompatibleChatResponseShape(response: any): {
+  hasChoices: boolean;
+  contentType: "string" | "array" | "missing" | "unknown";
+} {
+  const choices = Array.isArray(response?.choices) ? response.choices : [];
+  const content = choices[0]?.message?.content;
+  return {
+    hasChoices: choices.length > 0,
+    contentType:
+      typeof content === "string"
+        ? "string"
+        : Array.isArray(content)
+          ? "array"
+          : content === undefined || content === null
+            ? "missing"
+            : "unknown",
+  };
+}
+
+function findEmbeddedJsonObjectCandidates(content: string): string[] {
+  const candidates: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (char === "{") {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        candidates.push(content.slice(start, index + 1));
+        start = -1;
+      }
     }
   }
 
-  throw new Error("Premium cover-letter response did not contain parsed JSON");
+  return candidates;
+}
+
+function parsePremiumCoverLetterBodyPartsContent(content: string) {
+  const trimmed = content.trim();
+  const diagnostics: QwenPremiumDiagnostics = {
+    provider: "qwen",
+    stage: "parse",
+    reason: "no_json_object",
+    exactJsonParsed: false,
+    fencedJsonParsed: false,
+    embeddedJsonParsed: false,
+    schemaParsed: false,
+  };
+  const tryParse = (
+    value: string,
+    source: "exactJsonParsed" | "fencedJsonParsed" | "embeddedJsonParsed",
+  ) => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value);
+      diagnostics[source] = true;
+    } catch {
+      return { parsedJson: false as const, value: null };
+    }
+
+    if (!isPlainJsonObject(parsed)) {
+      throw new QwenPremiumBodyPartsParseError(
+        "Premium cover-letter response JSON was not an object",
+        {
+          ...diagnostics,
+          stage: "schema",
+          reason: Array.isArray(parsed) ? "json_array" : "json_not_object",
+        },
+      );
+    }
+
+    try {
+      const bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(parsed);
+      return { parsedJson: true as const, value: bodyParts };
+    } catch (error) {
+      throw new QwenPremiumBodyPartsParseError(
+        "Premium cover-letter response JSON did not match body-parts schema",
+        {
+          ...diagnostics,
+          stage: "schema",
+          reason: "schema_validation_failed",
+          validationIssues: collectValidationIssues(error),
+        },
+      );
+    }
+  };
+
+  const exact = tryParse(trimmed, "exactJsonParsed");
+  if (exact.parsedJson) {
+    return exact.value;
+  }
+
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
+  if (fenced?.[1]) {
+    const fencedResult = tryParse(fenced[1], "fencedJsonParsed");
+    if (fencedResult.parsedJson) {
+      return fencedResult.value;
+    }
+    throw new QwenPremiumBodyPartsParseError(
+      "Premium cover-letter fenced JSON was malformed",
+      {
+        ...diagnostics,
+        stage: "parse",
+        reason: "fenced_json_malformed",
+      },
+    );
+  }
+
+  const embeddedCandidates = findEmbeddedJsonObjectCandidates(trimmed);
+  if (embeddedCandidates.length === 1) {
+    const embedded = tryParse(embeddedCandidates[0], "embeddedJsonParsed");
+    if (embedded.parsedJson) {
+      return embedded.value;
+    }
+  } else if (embeddedCandidates.length > 1) {
+    throw new QwenPremiumBodyPartsParseError(
+      "Premium cover-letter response contained multiple JSON objects",
+      {
+        ...diagnostics,
+        stage: "parse",
+        reason: "multiple_embedded_json_objects",
+      },
+    );
+  }
+
+  throw new QwenPremiumBodyPartsParseError(
+    "Premium cover-letter response did not contain parsed JSON",
+    diagnostics,
+  );
+}
+
+function logQwenPremiumDiagnostics(diagnostics: QwenPremiumDiagnostics) {
+  console.warn("Qwen premium cover-letter diagnostics", diagnostics);
+}
+
+function buildQwenPremiumOuterDiagnostics(
+  error: unknown,
+): QwenPremiumDiagnostics | null {
+  if (error instanceof QwenPremiumBodyPartsParseError) return null;
+  if (
+    error instanceof Error &&
+    error.message.startsWith("Qwen premium cover-letter request failed:")
+  ) {
+    return null;
+  }
+
+  const validationIssues = collectValidationIssues(error);
+  return {
+    provider: "qwen",
+    stage: validationIssues?.length ? "validation" : "unknown",
+    reason:
+      error instanceof Error
+        ? error.name || "error"
+        : typeof error === "string"
+          ? "string_throw"
+          : "non_error_throw",
+    validationIssues,
+  };
 }
 
 async function generatePremiumCoverLetterBodyPartsWithQwen(args: {
@@ -178,19 +386,47 @@ async function generatePremiumCoverLetterBodyPartsWithQwen(args: {
     body: JSON.stringify({
       model: args.writerModel,
       messages: [{ role: "user", content: args.prompt }],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+      top_p: 0.8,
     }),
     signal: args.signal,
   });
 
   if (!response.ok) {
+    logQwenPremiumDiagnostics({
+      provider: "qwen",
+      stage: "request",
+      reason: `http_${response.status}`,
+    });
     throw new Error(
-      `Qwen premium cover-letter request failed: ${response.status} ${response.statusText} ${await response.text()}`,
+      `Qwen premium cover-letter request failed: ${response.status} ${response.statusText}`,
     );
   }
 
-  return parsePremiumCoverLetterBodyPartsContent(
-    extractCompatibleChatResponseText(await response.json()),
-  );
+  const responseJson = await response.json();
+  const responseShape = describeCompatibleChatResponseShape(responseJson);
+
+  try {
+    return parsePremiumCoverLetterBodyPartsContent(
+      extractCompatibleChatResponseText(responseJson),
+    );
+  } catch (error) {
+    if (error instanceof QwenPremiumBodyPartsParseError) {
+      logQwenPremiumDiagnostics({
+        ...error.diagnostics,
+        ...responseShape,
+      });
+    } else {
+      logQwenPremiumDiagnostics({
+        provider: "qwen",
+        stage: "unknown",
+        reason: error instanceof Error ? error.name : "non_error_throw",
+        ...responseShape,
+      });
+    }
+    throw error;
+  }
 }
 
 function buildWriteFullyInOutputLanguageInstruction(
@@ -9835,6 +10071,11 @@ export async function handleGenerateProposal(
               });
             actualModelName = qwenPremiumCoverLetterWriterModel;
           } catch (premiumError) {
+            const qwenDiagnostics =
+              buildQwenPremiumOuterDiagnostics(premiumError);
+            if (qwenDiagnostics) {
+              logQwenPremiumDiagnostics(qwenDiagnostics);
+            }
             console.warn(
               "Premium cover letter path v1 failed; falling back to legacy cover-letter generation.",
               premiumError,
