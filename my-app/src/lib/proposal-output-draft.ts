@@ -37,6 +37,11 @@ import {
   type DocumentAppearanceSnapshot,
   type DocumentStyleSlotSource,
 } from "./document-style-slots";
+import type { DocumentLanguage } from "./locale-registry";
+import type {
+  DocumentLanguagePreference,
+  DocumentLanguageSource,
+} from "./document-language";
 
 export const PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY =
   "dasti:proposal-output-draft:v1";
@@ -87,6 +92,10 @@ export type StoredProposalOutputDraft = {
   proposalClosing?: ProposalClosingRef | null;
   characterLimitMode: ProposalCharacterLimitMode | null;
   characterLimitValue: number | null;
+  requestedLanguage?: DocumentLanguagePreference | null;
+  resolvedLanguage?: DocumentLanguage | null;
+  languageSource?: DocumentLanguageSource;
+  jobDetectedLanguage?: DocumentLanguage | null;
   sourceComposeDraft?: StoredProposalComposeDraft | null;
 };
 
@@ -400,6 +409,28 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
         Number.isFinite(parsed.characterLimitValue)
           ? parsed.characterLimitValue
           : null,
+      requestedLanguage:
+        typeof parsed.requestedLanguage === "string" ||
+        parsed.requestedLanguage === null
+          ? parsed.requestedLanguage
+          : null,
+      resolvedLanguage:
+        typeof parsed.resolvedLanguage === "string" ||
+        parsed.resolvedLanguage === null
+          ? parsed.resolvedLanguage
+          : null,
+      languageSource:
+        parsed.languageSource === "document-preference" ||
+        parsed.languageSource === "job-detected" ||
+        parsed.languageSource === "ui-fallback" ||
+        parsed.languageSource === "default"
+          ? parsed.languageSource
+          : undefined,
+      jobDetectedLanguage:
+        typeof parsed.jobDetectedLanguage === "string" ||
+        parsed.jobDetectedLanguage === null
+          ? parsed.jobDetectedLanguage
+          : null,
       sourceComposeDraft: normalizeStoredProposalComposeDraft(
         parsed.sourceComposeDraft,
       ),
@@ -546,6 +577,28 @@ function buildSanitizedStoredProposalOutputDraft(
       typeof draft.characterLimitValue === "number" &&
       Number.isFinite(draft.characterLimitValue)
         ? draft.characterLimitValue
+        : null,
+    requestedLanguage:
+      typeof draft.requestedLanguage === "string" ||
+      draft.requestedLanguage === null
+        ? draft.requestedLanguage
+        : null,
+    resolvedLanguage:
+      typeof draft.resolvedLanguage === "string" ||
+      draft.resolvedLanguage === null
+        ? draft.resolvedLanguage
+        : null,
+    languageSource:
+      draft.languageSource === "document-preference" ||
+      draft.languageSource === "job-detected" ||
+      draft.languageSource === "ui-fallback" ||
+      draft.languageSource === "default"
+        ? draft.languageSource
+        : undefined,
+    jobDetectedLanguage:
+      typeof draft.jobDetectedLanguage === "string" ||
+      draft.jobDetectedLanguage === null
+        ? draft.jobDetectedLanguage
         : null,
     sourceComposeDraft: normalizeStoredProposalComposeDraft(
       draft.sourceComposeDraft,

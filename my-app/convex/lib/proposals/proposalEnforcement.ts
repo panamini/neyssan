@@ -662,7 +662,9 @@ function ensureTerminalSentence(value: string): string {
 export function getDeterministicInterestOnlyRepairSentence(
   outputLanguage: ProposalOutputLanguage,
 ): string {
-  return STRICT_INTEREST_ONLY_REPAIR_SENTENCE[outputLanguage];
+  return outputLanguage === "French"
+    ? STRICT_INTEREST_ONLY_REPAIR_SENTENCE.French
+    : STRICT_INTEREST_ONLY_REPAIR_SENTENCE.English;
 }
 
 function getNoContextRepairSentence(args: {
