@@ -22,6 +22,11 @@ export type PremiumCoverLetterPreset = Extract<
   "signature" | "expert" | "engaging"
 >;
 export type PremiumCoverLetterWriterModel = "gpt-5.5" | "gpt-5.4" | "gpt-5-mini";
+export type PremiumCoverLetterWriterProvider =
+  | "openai"
+  | "mistral"
+  | "qwen"
+  | "unknown";
 
 export type AllowedFact = {
   text: string;
@@ -147,6 +152,447 @@ export const PREMIUM_COVER_LETTER_SUPPORTED_PRESETS = [
   "expert",
   "engaging",
 ] as const satisfies readonly PremiumCoverLetterPreset[];
+
+export const MISTRAL_PREMIUM_COVER_LETTER_ADAPTER = [
+  "Provider adapter: Mistral",
+  "",
+  "Follow these rules literally.",
+  "",
+  "Priority order:",
+  "1. Accuracy",
+  "2. Source evidence",
+  "3. Clear writing",
+  "4. Persuasion",
+  "",
+  "Truth outranks fluency.",
+  "CV evidence outranks job-description keywords.",
+  "A safe short letter is better than an inflated impressive letter.",
+  "",
+  "Evidence zones:",
+  "- Candidate facts = the only source for candidate claims.",
+  "- Job facts = role requirements only.",
+  "- Company context = secondary context only.",
+  "",
+  "Never transfer a job requirement into candidate experience.",
+  "Never turn company context into personal motivation.",
+  "Use job facts only to choose which CV-backed candidate facts are relevant.",
+  "",
+  "Before writing, internally classify each possible claim:",
+  "- source-backed: directly supported by candidate facts",
+  "- adjacent-safe: related to candidate facts, but not exact",
+  "- unsupported: not supported by candidate facts",
+  "",
+  "Output only:",
+  "- source-backed claims, stated plainly",
+  "- adjacent-safe claims, stated with low-ownership language",
+  "",
+  "Omit unsupported claims.",
+  "",
+  "Do not output the classification, audit, chain-of-thought, citations, XML, markdown, or explanations.",
+  "",
+  "Verb accuracy rule:",
+  "Use the candidate's actual CV verb when possible.",
+  "If changing verbs, only move to an equal or lower-ownership verb.",
+  "",
+  "Do not upgrade verbs:",
+  "- monitored ≠ managed",
+  "- documented ≠ managed",
+  "- reported ≠ resolved",
+  "- protected ≠ led emergency response",
+  "- assisted ≠ owned",
+  "- supported ≠ led",
+  "- partnered ≠ led unless candidate facts explicitly say led",
+  "- maintained ≠ designed",
+  "- contributed to ≠ owned",
+  "- participated in ≠ directed",
+  "",
+  "High-ownership verbs are forbidden unless directly source-backed:",
+  "- led",
+  "- managed",
+  "- owned",
+  "- directed",
+  "- oversaw",
+  "- drove",
+  "- transformed",
+  "- spearheaded",
+  "- resolved",
+  "- designed",
+  "- implemented",
+  "",
+  "If evidence is adjacent but not exact, use safer constructions:",
+  "- supported",
+  "- documented",
+  "- monitored",
+  "- reported",
+  "- contributed to",
+  "- partnered with",
+  "- worked from the relevant side",
+  "- brought exposure to",
+  "- worked in environments where X mattered",
+  "- maintained visibility over X",
+  "- supported teams responsible for X",
+  "- handled related documentation around X",
+  "- reported changes, risks, or all-clear status related to X",
+  "",
+  "Credential rule:",
+  "Never claim a credential, license, diploma, certification, framework, clearance, or formal qualification unless it appears in candidate facts.",
+  "",
+  "Forbidden unless directly source-backed by candidate facts:",
+  "- valid driver's license",
+  "- active driver's license",
+  "- high school diploma",
+  "- GED",
+  "- bachelor's degree",
+  "- master's degree",
+  "- certification",
+  "- clearance",
+  "- HIPAA",
+  "- OSHA",
+  "- JCAHO",
+  "- Joint Commission",
+  "- ISO",
+  "- SOC 2",
+  "- GDPR",
+  "- PCI",
+  "",
+  "Security ownership rule:",
+  "Do not claim the candidate led, managed, owned, resolved, or coordinated emergency response, incidents, preparedness, drills, investigations, or safety programs unless candidate facts directly say so.",
+  "",
+  "Forbidden unless directly source-backed by candidate facts:",
+  "- led emergency preparedness",
+  "- led emergency preparedness drills",
+  "- managed safety incidents",
+  "- resolved safety incidents",
+  "- coordinated emergency response",
+  "- owned incident response",
+  "- conducted investigations",
+  "- managed security operations",
+  "- led campus security",
+  "- safeguarded patients, staff, and facilities as a mission claim",
+  "",
+  "Mission/value rule:",
+  "Do not invent personal enthusiasm for the company.",
+  "Do not discuss mission, values, purpose, noble work, or alignment unless the candidate facts directly support that specific motivation.",
+  "",
+  "Forbidden:",
+  "- Ascension mission",
+  "- reimagining healthcare security",
+  "- safeguarding patients/staff/facilities as mission alignment",
+  "- your mission",
+  "- your values",
+  "- your purpose",
+  "- noble mission",
+  "- meaningful mission",
+  "- I am drawn to",
+  "- I am inspired by",
+  "- I am passionate about",
+  "",
+  "Tone rule:",
+  "Write as a capable peer.",
+  "Do not sound subordinate, needy, performative, or overly grateful.",
+  "",
+  "Do not use:",
+  "- thrilled",
+  "- passionate",
+  "- eager",
+  "- honored",
+  "- excited",
+  "- delighted",
+  "- deeply committed",
+  "- excited to contribute",
+  "- aligns well",
+  "- perfect fit",
+  "- proven track record",
+  "- fast-paced",
+  "- dynamic environment",
+  "- testament",
+  "- delve",
+  "- tapestry",
+  "- leverage",
+  "- robust",
+  "- impactful",
+  "",
+  "Keyword rule:",
+  "Do not mirror ATS keywords as a list.",
+  "Do not stuff job-description phrases into the letter.",
+  "Use role terminology only when attached to a CV-backed action, responsibility, artifact, environment, or result.",
+  "",
+  "Numbers rule:",
+  "Do not invent metrics.",
+  "Use numbers only when present in candidate facts.",
+  "",
+  "Writing rule:",
+  "Prefer a concise, grounded letter over a comprehensive one.",
+  "Use 2-4 short paragraphs.",
+  "Every sentence must earn its place.",
+  "No checklist formatting.",
+  "No bullet list unless the required JSON body-part schema already expects one.",
+  "",
+  "MISTRAL ADJACENT ROLE-MAPPING LOCK",
+  "",
+  "Apply this section when candidate evidence is adjacent but not exact.",
+  "",
+  "Adjacent evidence means:",
+  "- the candidate facts show related work, nearby workflows, support exposure, monitoring, documentation, reporting, scheduling, coordination, communication, or collaboration;",
+  "- but the candidate facts do not show direct ownership, direct execution, or direct responsibility for the JD requirement.",
+  "",
+  "In adjacent cases, never convert proximity into direct target-role experience, unsupported ownership, guaranteed future performance, or measurable impact not present in candidate facts.",
+  "",
+  "Mistral cv_adjacent may include one restrained employer-facing bridge when grounded in BOTH candidate evidence and a JD work surface.",
+  "The bridge must stay at the level of overlap, relevance, or operating context. It must not claim direct target-role experience, ownership, metrics, measurable impact, guaranteed future performance, or unsupported requirement satisfaction.",
+  "",
+  "Allowed bridge shapes:",
+  "- \"That background is relevant to work where clear handoffs, documentation, and reporting matter.\"",
+  "- \"Those operating habits fit environments that depend on accurate records and timely cross-team updates.\"",
+  "- \"The overlap is strongest around coordination, reporting, and documentation.\"",
+  "- \"That experience is closest to roles where documentation, coordination, and timely updates matter.\"",
+  "",
+  "Forbidden bridge shapes:",
+  "- \"I have direct experience as an Implementation Analyst.\"",
+  "- \"I can own your implementation workflows.\"",
+  "- \"This will improve your delivery speed.\"",
+  "- \"My background perfectly aligns with your role.\"",
+  "- \"I can guarantee smoother operations.\"",
+  "- \"I am passionate about your mission.\"",
+  "- \"I meet your requirements.\"",
+  "- \"I am qualified for every requirement.\"",
+  "",
+  "Role reference rule:",
+  "- The JD role title may appear only as neutral context, not as proof of fit.",
+  "- Do not attach the JD role title to a candidate experience claim.",
+  "- Do not write \"For a [JD role], these skills...\"",
+  "- Do not write \"In this role, I can...\"",
+  "- Do not write \"My experience maps to the [JD role].\"",
+  "- Do not write \"My background aligns with the [JD role].\"",
+  "- Do not write \"This translates into the [JD role].\"",
+  "- Do not use the JD role name as proof of candidate fit.",
+  "",
+  "Forbidden role-mapping phrases:",
+  "- for an Administrative Coordinator",
+  "- for a [JD role]",
+  "- for this role",
+  "- in this role",
+  "- the role you're filling",
+  "- your needs",
+  "- your requirements",
+  "- demands of the role",
+  "- requirements of the role",
+  "- maps to",
+  "- maps closely",
+  "- maps directly",
+  "- aligns with",
+  "- aligns closely",
+  "- directly aligns",
+  "- translates to",
+  "- translates well",
+  "- translates directly",
+  "- direct fit",
+  "- directly fits",
+  "- direct match",
+  "- exact match",
+  "- directly relevant",
+  "- directly applicable",
+  "- well suited",
+  "- ideal fit",
+  "- particularly useful in",
+  "- useful in managing",
+  "- help with",
+  "- helps with",
+  "- contribute to",
+  "- contributes to",
+  "- can contribute",
+  "- can help",
+  "- would help",
+  "- will help",
+  "- can support [JD task]",
+  "- would support [JD task]",
+  "- can help ensure",
+  "- would allow me to",
+  "- I am confident that my skills",
+  "- bring the ability to",
+  "- ready to step into",
+  "- qualified for every requirement",
+  "",
+  "Meta-competency commentary rule:",
+  "Do not use generic relevance explanations. Use candidate evidence directly, with at most one restrained employer-facing bridge grounded in both candidate evidence and a JD work surface.",
+  "",
+  "Forbidden meta-commentary patterns:",
+  "- My closest evidence lies in...",
+  "- This experience has given me a strong foundation...",
+  "- My background can be particularly useful...",
+  "- This background would allow me to...",
+  "- These skills help with...",
+  "- This experience can translate into...",
+  "- My experience is relevant because...",
+  "- That experience would be useful in...",
+  "- This has prepared me to...",
+  "- I am confident that...",
+  "",
+  "Adjacent-safe writing rule:",
+  "For adjacent-safe evidence, prefer neutral CV-backed facts and keep any single bridge grounded in overlap, relevance, or operating context:",
+  "- \"I coordinated [CV-backed workflow].\"",
+  "- \"I documented [CV-backed process].\"",
+  "- \"I tracked [CV-backed deadlines/schedules/items].\"",
+  "- \"I handled [CV-backed correspondence/vendor process],\" only if candidate facts support handling.",
+  "- \"I maintained [CV-backed records/logs/documentation].\"",
+  "- \"I communicated updates to [CV-backed stakeholder type].\"",
+  "- \"I worked from the [CV-backed area] side of this kind of work.\"",
+  "",
+  "Do not write direct role-fit or future-impact explanations.",
+  "Do not write outcome claims unless candidate facts directly support them.",
+  "Keep employerValueBlock grounded in candidate facts and at most one restrained employer-facing bridge in cv_adjacent mode.",
+  "",
+  "Concrete evidence rule:",
+  "Every body paragraph should include at least one concrete CV-derived anchor when available:",
+  "- tool",
+  "- system",
+  "- project",
+  "- named workflow",
+  "- document/deliverable",
+  "- metric",
+  "- volume",
+  "- cadence",
+  "- stakeholder type",
+  "- environment type",
+  "",
+  "If no concrete artifact is available, keep the claim narrow and factual. Do not compensate with abstract fit language.",
+  "",
+  "Result-safety rule:",
+  "Do not claim business outcomes unless candidate facts directly support them.",
+  "",
+  "Forbidden unless source-backed:",
+  "- reduce bottlenecks",
+  "- streamline operations",
+  "- improve efficiency",
+  "- increase reliability",
+  "- keep teams aligned",
+  "- remove friction",
+  "- ensure smooth operations",
+  "- keep operations running smoothly",
+  "- keep an office running efficiently",
+  "- strengthen operations",
+  "- improve office performance",
+  "",
+  "Closing paragraph rule:",
+  "In adjacent-safe cases, the final paragraph must not convert CV-backed experience into role fit, business outcomes, or promised impact.",
+  "",
+  "Do not close with:",
+  "- I can contribute to...",
+  "- I can help...",
+  "- I would help...",
+  "- I am confident that...",
+  "- These skills help with...",
+  "- This experience would allow me to...",
+  "- I am ready to...",
+  "- I would welcome the chance to bring...",
+  "- I can support your needs...",
+  "",
+  "Close by restating only CV-backed operating strengths:",
+  "- coordination",
+  "- documentation",
+  "- scheduling",
+  "- deadline tracking",
+  "- vendor correspondence",
+  "- stakeholder communication",
+  "- follow-through",
+  "- clear records",
+  "",
+  "Allowed closing patterns:",
+  "- \"I bring experience in coordination, documentation, scheduling, and stakeholder communication.\"",
+  "- \"My work has centered on clear records, deadline tracking, vendor correspondence, and cross-team updates.\"",
+  "- \"I bring the same discipline around records, deadlines, and communication.\"",
+  "",
+  "Mistral cv_adjacent body-part override:",
+  "When contextClass is cv_adjacent:",
+  "- employerValueBlock may be a second factual evidence paragraph or one restrained bridge grounded in both candidate evidence and a JD work surface.",
+  "- The bridge must stay at overlap, relevance, or operating-context level; it must not claim direct role experience, future performance, unsupported ownership, or invented impact.",
+  "- closeLine must restate CV-backed operating strengths only.",
+  "- Do not include greeting, signoff, or candidate name in body parts.",
+  "- Do not use target role title, \"this role,\" \"your needs,\" \"helps with,\" \"can help,\" \"can contribute,\" \"translates,\" \"aligns,\" \"smoothly,\" or \"efficiently.\"",
+  "- If this cannot be done safely, return shorter body parts instead of filling space.",
+  "",
+  "Ownership rule:",
+  "If candidate evidence is adjacent, default to low-ownership verbs:",
+  "- supported",
+  "- monitored",
+  "- documented",
+  "- reported",
+  "- maintained",
+  "- contributed to",
+  "- partnered with",
+  "- coordinated, only when candidate facts support coordination",
+  "- tracked, only when candidate facts support tracking",
+  "- handled, only when candidate facts support handling",
+  "- worked from the relevant side",
+  "- supported related workflows",
+  "- maintained visibility over related risks",
+  "",
+  "Do not use high-ownership verbs unless candidate facts explicitly support them:",
+  "- led",
+  "- owned",
+  "- managed",
+  "- directed",
+  "- oversaw",
+  "- drove",
+  "- resolved",
+  "- transformed",
+  "- spearheaded",
+  "",
+  "Result-safety rule:",
+  "Do not claim business outcomes unless candidate facts directly support them.",
+  "",
+  "Forbidden unless source-backed:",
+  "- reduce bottlenecks",
+  "- streamline operations",
+  "- improve efficiency",
+  "- increase reliability",
+  "- keep teams aligned",
+  "- remove friction",
+  "- ensure smooth operations",
+  "- strengthen operations",
+  "- improve office performance",
+  "",
+  "Prefer concrete process language over outcome claims.",
+  "Never imply ownership of adjacent areas.",
+  "Do not say the candidate has direct experience in a role requirement unless candidate facts directly support it.",
+  "",
+  "Output rule:",
+  "Return only the required JSON body parts.",
+  "Do not output audit, chain-of-thought, citations, XML, markdown, or explanations.",
+].join("\n");
+
+export const QWEN_PREMIUM_COVER_LETTER_ADAPTER = [
+  "Provider adapter: Qwen",
+  "",
+  "Treat the structured brief as separated evidence zones:",
+  "- candidate facts: candidate claims only",
+  "- job facts: role requirements only",
+  "- company context: secondary context only",
+  "",
+  "Never transfer a requirement from job facts into candidate experience unless candidate facts support it.",
+  "Never turn company context into personal motivation.",
+  "",
+  "Before writing, internally classify each possible candidate claim as:",
+  "- source-backed",
+  "- adjacent only",
+  "- unsupported",
+  "",
+  "Output only:",
+  "- source-backed claims",
+  "- adjacent-safe claims with low-ownership language",
+  "",
+  "Omit unsupported claims.",
+  "",
+  "Use ATS terms only when attached to a CV-backed action, artifact, responsibility, environment, or result.",
+  "",
+  "Do not use job requirements as candidate experience.",
+  "Do not invent credentials, licenses, education, certifications, compliance frameworks, mission alignment, or personal motivation.",
+  "",
+  "Use the same ownership, license, education, compliance, mission, clipped-fragment, anti-keyword-list, and anti-slop safety rules from the shared premium safety canon.",
+  "",
+  "Return only the required JSON body parts.",
+  "Do not output chain-of-thought, audit, XML, citations, markdown, or explanations.",
+].join("\n");
 
 export const PREMIUM_COVER_LETTER_REQUIRED_MOVES = [
   "build an internal RoleThesis before writing",
@@ -325,6 +771,54 @@ const GREETING_PATTERN =
   /^\s*(?:dear\s+[^,]+|madame,\s*monsieur)\s*,?\s*$/i;
 const DIRECT_FIT_PATTERN =
   /\b(?:direct experience|exact fit|perfect fit|already done this work|step into the role immediately|ready to perform the role from day one)\b/i;
+const ADJACENT_ROLE_MAPPING_PATTERNS = [
+  /\bthis\s+role\s+demands\b/i,
+  /\bfor\s+this\s+role\b/i,
+  /\bfor\s+(?:a|an)\s+[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,5}\b/,
+  /\bfor\s+an?\s+administrative\s+coordinator\b/i,
+  /\bthe\s+role\s+you['’]?re\s+filling\b/i,
+  /\bkey\s+responsibilities\s+for\s+this\s+role\b/i,
+  /\bdemands\s+of\s+the\s+role\b/i,
+  /\brequirements\s+of\s+the\s+role\b/i,
+  /\bmaps?\s+(?:closely\s+|directly\s+)?to\b/i,
+  /\baligns?\s+(?:closely\s+|directly\s+)?with\b/i,
+  /\btranslates?\s+(?:directly\s+|well\s+)?(?:into|to)\b/i,
+  /\bdirect(?:ly)?\s+(?:fit|fits|match|relevant|applicable)\b/i,
+  /\bexact\s+match\b/i,
+  /\b(?:particularly\s+)?useful\s+in\s+managing\b/i,
+  /\b(?:can|would)\s+support\s+(?:general\s+office\s+operations|office\s+support|vendor\s+communication|schedule\s+management|scheduling|documentation|[a-z][^.!?]{0,80})\b/i,
+  /\b(?:i\s+)?meet\s+your\s+requirements\b/i,
+  /\bqualified\s+for\s+every\s+requirement\b/i,
+] as const;
+const ADJACENT_MODAL_FUTURE_CONTRIBUTION_PATTERN =
+  /\b(?:can\s+(?:help(?:\s+ensure)?|contribute|support|guarantee|own|manage|lead|drive|direct|oversee|spearhead|transform|resolve)|would\s+(?:help|support|allow\s+me\s+to)|will\s+(?:help|support|improve|increase|reduce|streamline|strengthen|deliver|ensure)|could\s+(?:help|support))\b/i;
+const ADJACENT_META_COMMENTARY_PATTERNS = [
+  /\bmy\s+closest\s+evidence\s+lies\s+in\b/i,
+  /\bthis\s+experience\s+has\s+given\s+me\s+a\s+strong\s+foundation\b/i,
+  /\bmy\s+background\s+can\s+be\s+particularly\s+useful\b/i,
+  /\bthis\s+background\s+would\s+allow\s+me\s+to\b/i,
+  /\bthese\s+skills\s+help\s+with\b/i,
+  /\bthis\s+experience\s+can\s+translate\b/i,
+  /\bmy\s+experience\s+is\s+relevant\s+because\b/i,
+  /\bthat\s+experience\s+would\s+be\s+useful\b/i,
+  /\bi\s+am\s+confident\s+that\b/i,
+] as const;
+const ADJACENT_UNSUPPORTED_OUTCOME_PHRASES = [
+  "run smoothly",
+  "running smoothly",
+  "smoothly and efficiently",
+  "run efficiently",
+  "office operations run efficiently",
+  "keep operations running smoothly",
+  "keep an office running efficiently",
+  "keep workflows on track",
+  "keep all parties aligned",
+  "reduce bottlenecks",
+  "streamline operations",
+  "improve efficiency",
+  "remove friction",
+  "support smooth office operations",
+] as const;
 const NO_CV_HISTORY_CLAIM_PATTERN =
   /\b(?:in previous roles?|at my previous|during my|my experience|my background|my experience includes|my background includes|i have worked with|i have managed|i worked(?: as| at)?|i served as|i led|i managed|i coordinated|i developed|i built|i improved|i delivered|i implemented|i maintained|i operated|i supervised|i trained|i documented|i reviewed|i monitored|i hold\b|i earned\b|i completed\b|i studied\b)\b/i;
 
@@ -655,7 +1149,20 @@ function stripGreetingAndSignoffLeakage(value: string): string {
     .split(/\n+/)
     .map((line) => compactWhitespace(line))
     .filter(Boolean);
-  return lines
+  const cleanedLines: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (SIGNOFF_PATTERN.test(line)) {
+      const nextLine = lines[index + 1] ?? "";
+      if (CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN.test(nextLine)) {
+        index += 1;
+      }
+      continue;
+    }
+    if (GREETING_PATTERN.test(line)) continue;
+    cleanedLines.push(line);
+  }
+  return cleanedLines
     .map((line) =>
       compactWhitespace(
         line
@@ -664,12 +1171,10 @@ function stripGreetingAndSignoffLeakage(value: string): string {
           .replace(
             /^\s*(?:sincerely|kind regards|best regards|warm regards|cordialement|bien cordialement|respectfully)\s*,?\s*/i,
             "",
-          ),
+        ),
       ),
     )
-    .filter(
-      (line) => line && !GREETING_PATTERN.test(line) && !SIGNOFF_PATTERN.test(line),
-    )
+    .filter((line) => line)
     .join(" ");
 }
 
@@ -1277,10 +1782,16 @@ export function buildPremiumCoverLetterBrief(args: {
 export function buildPremiumCoverLetterPrompt(args: {
   brief: CoverLetterBrief;
   generationControlsBlock?: string;
+  writerProvider?: PremiumCoverLetterWriterProvider;
+  writerModel?: string;
 }): string {
   const presetGuidance = resolvePremiumCoverLetterPresetGuidance(
     args.brief.preset,
   );
+  const providerAdapter = resolvePremiumCoverLetterProviderAdapter({
+    writerProvider: args.writerProvider,
+    writerModel: args.writerModel,
+  });
   const { requiredMoves, forbiddenMoves, companyValuesPack, ...briefRest } =
     args.brief;
   const structuredBrief = {
@@ -1300,18 +1811,16 @@ export function buildPremiumCoverLetterPrompt(args: {
         }
       : {}),
   };
-  const contextGuidance =
-    args.brief.contextClass === "cv_adjacent"
-      ? [
-          "For cv_adjacent, keep the transfer honest and concrete; phrase the link as what this background helps with in the role's actual work, not as a generalized explanation of fit or a claim of direct target-role experience.",
-          "For cv_adjacent, translate adjacent workflow evidence into role value without implying the candidate has already done the target role itself.",
-        ]
-      : args.brief.contextClass === "no_cv"
-        ? [
-            "For no_cv, there is no supported candidate history. Use job-offer work surfaces not prior history.",
-            "For no_cv, stay in first person and sound like a candidate, not a role summary or memo; vary the opening and avoid repeated stems like 'I am drawn to work...', 'I am applying... with a clear focus on...', 'This role centers on...', or 'The highest-value work...'; do not claim prior roles, achievements, credentials, tool usage, readiness, or impact; keep employerValueBlock on operational consequence and closeLine on modest first-person ownership.",
-          ]
-        : [];
+  const contextGuidance = resolvePremiumCoverLetterContextGuidance({
+    contextClass: args.brief.contextClass,
+    writerProvider: args.writerProvider,
+    writerModel: args.writerModel,
+  });
+  const bodyPartGuidance = resolvePremiumCoverLetterBodyPartGuidance({
+    contextClass: args.brief.contextClass,
+    writerProvider: args.writerProvider,
+    writerModel: args.writerModel,
+  });
   return [
     "Write premium cover-letter body parts.",
     `Planner priority order: ${COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER.map((item, index) => `${index + 1}. ${item}`).join(" | ")}.`,
@@ -1340,10 +1849,123 @@ export function buildPremiumCoverLetterPrompt(args: {
       employerValueBlock: "string",
       closeLine: "string",
     }),
-    "Body-part rules: complete natural sentences only; no greeting, signoff, markdown, bullets, generic excitement, mission praise, defensive gaps, keyword lists, clipped fragments like 'St.' or guessed facility/team names.",
-    "Opening: position through the strongest relevant evidence, not generic fit language. ProofBlock: develop top evidence first. EmployerValueBlock: move directly to an employer-facing implication. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise. CloseLine: one short role-specific sentence.",
+    ...bodyPartGuidance,
+    providerAdapter,
     `Structured brief: ${JSON.stringify(structuredBrief)}`,
   ].filter((line): line is string => typeof line === "string").join("\n");
+}
+
+function isMistralWriterIdentity(args: {
+  writerProvider?: PremiumCoverLetterWriterProvider;
+  writerModel?: string;
+}): boolean {
+  const normalizedProvider = args.writerProvider ?? "unknown";
+  const normalizedModel = compactWhitespace(args.writerModel ?? "").toLowerCase();
+  return (
+    normalizedProvider === "mistral" ||
+    /^(?:mistral|ministral)\b/.test(normalizedModel)
+  );
+}
+
+function resolvePremiumCoverLetterContextGuidance(args: {
+  contextClass: PremiumCoverLetterContextClass;
+  writerProvider?: PremiumCoverLetterWriterProvider;
+  writerModel?: string;
+}): string[] {
+  if (isMistralWriterIdentity(args)) {
+    if (args.contextClass === "cv_direct") {
+      return [
+        "Mistral cv_direct contract:",
+        "- Use this as a source-backed cover-letter contract.",
+        "- Write a normal premium cover letter.",
+        "- Use role context only when candidate evidence directly supports the capability.",
+        "- Avoid generic fit language.",
+        "- Avoid sycophancy.",
+        "- Do not use \"excited,\" \"eager,\" \"thrilled,\" \"aligns well,\" \"directly translates,\" \"leverage,\" \"perfect fit,\" or \"proven track record.\"",
+        "- Use concrete candidate evidence: actions, artifacts, tools, metrics, stakeholders, projects, workflows, cadence, or deliverables.",
+        "- Do not invent impact. If the CV says page load improved by 28 percent, do not add user retention unless source-backed.",
+        "- Do not turn a missing requirement into candidate experience.",
+        "- Keep the letter natural and recruiter-readable.",
+      ];
+    }
+    if (args.contextClass === "cv_adjacent") {
+      return [
+        "Mistral cv_adjacent context guidance:",
+        "- This is a grounded adjacent letter with at most one restrained employer-facing bridge.",
+        "- Mistral cv_adjacent may include one restrained employer-facing bridge when grounded in BOTH candidate evidence and a JD work surface.",
+        "- The bridge must stay at the level of overlap, relevance, or operating context.",
+        "- Do not map the background to the target role.",
+        "- Do not state direct target-role experience, unsupported ownership, future contribution, promised impact, or unsupported requirement satisfaction.",
+        "- Use job facts only to select which candidate facts to include.",
+        "- Write only candidate-backed actions, artifacts, scopes, stakeholders, responsibilities, tools, metrics, cadence, or deliverables.",
+        "- Use past or present factual statements.",
+        "- Do not use future contribution claims.",
+        "- Safe bridge examples: \"That background is relevant to work where clear handoffs, documentation, and reporting matter.\" \"The overlap is strongest around coordination, reporting, and documentation.\"",
+        "- Forbidden bridge examples: \"I have direct experience as an Implementation Analyst.\" \"I can own your implementation workflows.\" \"This will improve your delivery speed.\" \"I am passionate about your mission.\"",
+        "- If evidence is limited, return shorter body parts instead of filling space.",
+      ];
+    }
+  }
+
+  if (args.contextClass === "cv_adjacent") {
+    return [
+      "For cv_adjacent, keep the transfer honest and concrete; phrase the link as what this background helps with in the role's actual work, not as a generalized explanation of fit or a claim of direct target-role experience.",
+      "For cv_adjacent, translate adjacent workflow evidence into role value without implying the candidate has already done the target role itself.",
+    ];
+  }
+  if (args.contextClass === "no_cv") {
+    return [
+      "For no_cv, there is no supported candidate history. Use job-offer work surfaces not prior history.",
+      "For no_cv, stay in first person and sound like a candidate, not a role summary or memo; vary the opening and avoid repeated stems like 'I am drawn to work...', 'I am applying... with a clear focus on...', 'This role centers on...', or 'The highest-value work...'; do not claim prior roles, achievements, credentials, tool usage, readiness, or impact; keep employerValueBlock on operational consequence and closeLine on modest first-person ownership.",
+    ];
+  }
+  return [];
+}
+
+function resolvePremiumCoverLetterBodyPartGuidance(args: {
+  contextClass: PremiumCoverLetterContextClass;
+  writerProvider?: PremiumCoverLetterWriterProvider;
+  writerModel?: string;
+}): string[] {
+  if (args.contextClass === "cv_adjacent" && isMistralWriterIdentity(args)) {
+    return [
+      "Mistral cv_adjacent body-part contract:",
+      "- opening: one factual first-person sentence grounded in candidate evidence.",
+      "- proofBlock: concrete CV-backed evidence only.",
+      "- employerValueBlock: concrete CV-backed evidence or one restrained employer-facing bridge grounded in both candidate evidence and a JD work surface.",
+      "- Any bridge must stay at overlap, relevance, or operating-context level; it must not claim direct role experience, future performance, unsupported ownership, or invented impact.",
+      "- closeLine: one short sentence restating CV-backed operating strengths only.",
+      "- Do not include greeting, signoff, or candidate name in body parts.",
+      "- Do not use the target role title.",
+      "- Do not use \"this role,\" \"your needs,\" \"helps with,\" \"can help,\" \"can contribute,\" \"translates,\" \"aligns,\" \"smoothly,\" or \"efficiently.\"",
+      "- Do not explain generic fit; any relevance bridge must be restrained and grounded in both candidate evidence and a JD work surface.",
+      "- Every body part should include at least one concrete CV-backed anchor when available.",
+      "- If no concrete anchor is available, keep the sentence narrow and factual instead of adding abstract fit language.",
+      "- If there is not enough safe evidence, return shorter body parts instead of filling space.",
+    ];
+  }
+  return [
+    "Body-part rules: complete natural sentences only; no greeting, signoff, markdown, bullets, generic excitement, mission praise, defensive gaps, keyword lists, clipped fragments like 'St.' or guessed facility/team names.",
+    "Opening: position through the strongest relevant evidence, not generic fit language. ProofBlock: develop top evidence first. EmployerValueBlock: move directly to an employer-facing implication. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise. CloseLine: one short role-specific sentence.",
+  ];
+}
+
+function resolvePremiumCoverLetterProviderAdapter(args: {
+  writerProvider?: PremiumCoverLetterWriterProvider;
+  writerModel?: string;
+}): string | undefined {
+  const normalizedProvider = args.writerProvider ?? "unknown";
+  const normalizedModel = compactWhitespace(args.writerModel ?? "").toLowerCase();
+  if (isMistralWriterIdentity(args)) {
+    return MISTRAL_PREMIUM_COVER_LETTER_ADAPTER;
+  }
+  if (
+    normalizedProvider === "qwen" ||
+    /^qwen(?:\b|[-_.0-9])/.test(normalizedModel)
+  ) {
+    return QWEN_PREMIUM_COVER_LETTER_ADAPTER;
+  }
+  return undefined;
 }
 
 function resolvePremiumCoverLetterPresetGuidance(
@@ -1375,7 +1997,10 @@ type PremiumBodyPartValidationIssue = {
     | "unsupported_compliance_framework"
     | "unsupported_license_claim"
     | "unsupported_education_credential"
-    | "fabricated_mission_claim";
+    | "fabricated_mission_claim"
+    | "unsupported_numeric_claim"
+    | "unsupported_ownership_verb"
+    | "candidate_name_mismatch";
   repairable: boolean;
 };
 
@@ -1427,7 +2052,25 @@ const UNSUPPORTED_LICENSE_CLAIM_PATTERN =
 const UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN =
   /\b(?:have|hold|earned|completed|with|bring|meet(?:s|ing)?|a|my)\s+(?:a\s+)?(?:high school diploma|GED|diploma equivalency)\b|\b(?:high school diploma|GED|diploma equivalency)\s+(?:further\s+)?(?:meets?|is|are|supports?)\b/i;
 const FABRICATED_MISSION_CLAIM_PATTERN =
-  /\b(?:mission of|mission to|mission is|mission of safeguarding|reimagining healthcare security|contribute to reimagining healthcare)\b/i;
+  /\b(?:mission of|mission to|mission is|mission of safeguarding|reimagining healthcare security|contribute to reimagining healthcare|passionate about (?:your|the) mission|drawn to (?:your|the) mission|inspired by (?:your|the) mission|culture fit)\b/i;
+const CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN =
+  /^[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3}$/;
+const PERCENTAGE_NUMERIC_CLAIM_PATTERN =
+  /\b\d+(?:\.\d+)?\s*(?:%|percent|percentage\s+points?)\b/gi;
+const DIGIT_NUMERIC_CLAIM_PATTERN = /\b\d+(?:\.\d+)?\b/g;
+const WORD_NUMBER_DURATION_CLAIM_PATTERN =
+  /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:day|days|week|weeks|month|months|year|years)\b/gi;
+const HIGH_OWNERSHIP_VERB_PATTERNS = [
+  { verb: "owned", pattern: /\bown(?:ed|s|ing)?\b/i },
+  { verb: "managed", pattern: /\bmanag(?:ed|es|ing)\b/i },
+  { verb: "led", pattern: /\b(?:led|lead(?:s|ing)?)\b/i },
+  { verb: "directed", pattern: /\bdirect(?:ed|s|ing)?\b/i },
+  { verb: "oversaw", pattern: /\b(?:oversaw|oversee(?:s|ing)?|overseen)\b/i },
+  { verb: "drove", pattern: /\b(?:drove|drive(?:s|n|ing)?)\b/i },
+  { verb: "spearheaded", pattern: /\bspearhead(?:ed|s|ing)?\b/i },
+  { verb: "transformed", pattern: /\btransform(?:ed|s|ing)?\b/i },
+  { verb: "resolved", pattern: /\bresolv(?:ed|es|ing)\b/i },
+] as const;
 
 function buildValidationSourceSurface(args: { brief: CoverLetterBrief }): string {
   const companyValuesPack = args.brief.companyValuesPack;
@@ -1465,6 +2108,100 @@ function buildCandidateEvidenceSurface(args: { brief: CoverLetterBrief }): strin
     .join(" ");
 }
 
+function normalizeNumericClaim(value: string): string {
+  return compactWhitespace(value)
+    .toLowerCase()
+    .replace(/percentage\s+points?/g, "percent")
+    .replace(/%/g, " percent");
+}
+
+function extractNumericClaims(value: string): string[] {
+  const claims = new Set<string>();
+  for (const match of value.matchAll(PERCENTAGE_NUMERIC_CLAIM_PATTERN)) {
+    claims.add(normalizeNumericClaim(match[0]));
+  }
+  for (const match of value.matchAll(DIGIT_NUMERIC_CLAIM_PATTERN)) {
+    claims.add(normalizeNumericClaim(match[0]));
+  }
+  for (const match of value.matchAll(WORD_NUMBER_DURATION_CLAIM_PATTERN)) {
+    claims.add(normalizeNumericClaim(match[0]));
+  }
+  return Array.from(claims);
+}
+
+function hasUnsupportedNumericClaim(args: {
+  generatedText: string;
+  sourceSurface: string;
+}): boolean {
+  const generatedClaims = extractNumericClaims(args.generatedText);
+  if (generatedClaims.length === 0) return false;
+  const sourceClaims = new Set(extractNumericClaims(args.sourceSurface));
+  return generatedClaims.some((claim) => !sourceClaims.has(claim));
+}
+
+function hasUnsupportedOwnershipVerb(args: {
+  generatedText: string;
+  candidateEvidenceSurface: string;
+}): boolean {
+  return HIGH_OWNERSHIP_VERB_PATTERNS.some(
+    ({ pattern }) =>
+      pattern.test(args.generatedText) &&
+      !pattern.test(args.candidateEvidenceSurface),
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function targetRolePattern(targetRole: string, prefix: string): RegExp | null {
+  const tokens = compactWhitespace(targetRole).split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return null;
+  return new RegExp(`${prefix}${tokens.map(escapeRegExp).join("\\s+")}\\b`, "i");
+}
+
+function hasUnsupportedAdjacentOutcome(
+  compact: string,
+  candidateEvidenceSurface: string,
+): boolean {
+  const normalizedCompact = normalizeProposalConstraintText(compact);
+  const normalizedCandidateEvidence = normalizeProposalConstraintText(
+    candidateEvidenceSurface,
+  );
+  return ADJACENT_UNSUPPORTED_OUTCOME_PHRASES.some((phrase) => {
+    const normalizedPhrase = normalizeProposalConstraintText(phrase);
+    return (
+      normalizedCompact.includes(normalizedPhrase) &&
+      !normalizedCandidateEvidence.includes(normalizedPhrase)
+    );
+  });
+}
+
+function hasAdjacentRoleMappingLeak(args: {
+  compact: string;
+  brief: CoverLetterBrief;
+  candidateEvidenceSurface: string;
+}): boolean {
+  const targetRolePatterns = [
+    targetRolePattern(args.brief.targetRole, "\\bfor\\s+(?:a|an|the)?\\s*"),
+    targetRolePattern(args.brief.targetRole, "\\brelevant\\s+to\\s+the\\s+"),
+  ].filter((pattern): pattern is RegExp => pattern !== null);
+  return (
+    ADJACENT_ROLE_MAPPING_PATTERNS.some((pattern) =>
+      pattern.test(args.compact),
+    ) ||
+    targetRolePatterns.some((pattern) => pattern.test(args.compact)) ||
+    ADJACENT_MODAL_FUTURE_CONTRIBUTION_PATTERN.test(args.compact) ||
+    ADJACENT_META_COMMENTARY_PATTERNS.some((pattern) =>
+      pattern.test(args.compact),
+    ) ||
+    hasUnsupportedAdjacentOutcome(
+      args.compact,
+      args.candidateEvidenceSurface,
+    )
+  );
+}
+
 export function validatePremiumCoverLetterBodyParts(args: {
   bodyParts: CoverLetterBodyParts;
   brief: CoverLetterBrief;
@@ -1492,10 +2229,15 @@ export function validatePremiumCoverLetterBodyParts(args: {
     if (
       args.brief.contextClass === "cv_adjacent" &&
       (DIRECT_FIT_PATTERN.test(compact) ||
+        hasAdjacentRoleMappingLeak({
+          compact,
+          brief: args.brief,
+          candidateEvidenceSurface,
+        }) ||
         new RegExp(
           `\\b(?:as|worked\\s+as|experience\\s+as)\\s+(?:a|an|the)?\\s*${args.brief.targetRole
             .split(/\s+/)
-            .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+            .map(escapeRegExp)
             .join("\\s+")}\\b`,
           "i",
         ).test(compact))
@@ -1545,6 +2287,17 @@ export function validatePremiumCoverLetterBodyParts(args: {
     }
     if (FABRICATED_MISSION_CLAIM_PATTERN.test(compact)) {
       issues.push({ code: "fabricated_mission_claim", repairable: false });
+    }
+    if (hasUnsupportedNumericClaim({ generatedText: compact, sourceSurface })) {
+      issues.push({ code: "unsupported_numeric_claim", repairable: false });
+    }
+    if (
+      hasUnsupportedOwnershipVerb({
+        generatedText: compact,
+        candidateEvidenceSurface,
+      })
+    ) {
+      issues.push({ code: "unsupported_ownership_verb", repairable: false });
     }
   }
 
@@ -1667,6 +2420,21 @@ export function renderPremiumCoverLetter(args: {
   };
 }
 
+function hasExpectedCandidateSignature(args: {
+  content: string;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+}): boolean {
+  if (!getDeterministicCopyLanguage(args.outputLanguage)) return true;
+  const expectedName = compactWhitespace(args.candidateName);
+  if (!expectedName) return true;
+  const lines = args.content
+    .split(/\n+/)
+    .map((line) => compactWhitespace(line))
+    .filter(Boolean);
+  return lines[lines.length - 1] === expectedName;
+}
+
 export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
   apiKey: string;
   prompt: string;
@@ -1767,6 +2535,62 @@ export function buildPremiumCoverLetterOpenAIRequest(args: {
   };
 }
 
+function buildPremiumCoverLetterRepairPrompt(args: {
+  brief: CoverLetterBrief;
+  previousBodyParts: CoverLetterBodyParts;
+  issues: PremiumBodyPartValidationIssue["code"][];
+}): string {
+  return [
+    "Rewrite the cover-letter body parts to satisfy validation.",
+    "",
+    "The previous output failed because it used adjacent role-mapping, future-impact language, meta-commentary, or unsupported outcome claims.",
+    "",
+    "Remove:",
+    "- role title references",
+    "- \"this role\"",
+    "- \"for this role\"",
+    "- \"your needs\"",
+    "- \"helps with\"",
+    "- \"can help\"",
+    "- \"can contribute\"",
+    "- \"translates\"",
+    "- \"aligns\"",
+    "- \"strong foundation\"",
+    "- \"key responsibilities\"",
+    "- \"smoothly\"",
+    "- \"efficiently\"",
+    "- \"I'd welcome\"",
+    "- \"excited\"",
+    "- \"eager\"",
+    "- business outcome claims not present in candidate evidence",
+    "",
+    "Use only:",
+    "- factual candidate-backed actions",
+    "- factual candidate-backed responsibilities",
+    "- factual candidate-backed stakeholders",
+    "- factual candidate-backed artifacts",
+    "- factual candidate-backed scope, cadence, tools, metrics, projects, workflows, or deliverables",
+    "- short CV-backed closeLine",
+    "",
+    "Structure:",
+    "- opening: factual candidate role/responsibility sentence",
+    "- proofBlock: concrete CV evidence",
+    "- employerValueBlock: more concrete CV evidence, not employer value",
+    "- closeLine: one short factual sentence",
+    "",
+    "Do not include greeting, signoff, or candidate name.",
+    "Return only the same JSON body parts.",
+    "No explanation.",
+    "No markdown.",
+    "No XML.",
+    "No audit.",
+    "",
+    `Validation issues: ${JSON.stringify(args.issues)}`,
+    `Previous body parts: ${JSON.stringify(args.previousBodyParts)}`,
+    `Structured brief: ${JSON.stringify(args.brief)}`,
+  ].join("\n");
+}
+
 export function extractOpenAIJsonPayload(response: any): unknown {
   if (response?.output_parsed && typeof response.output_parsed === "object") {
     return response.output_parsed;
@@ -1841,6 +2665,8 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   candidateName?: string;
   generationControlsBlock?: string;
   companyValuesPack?: CompanyValuesPack;
+  writerProvider?: PremiumCoverLetterWriterProvider;
+  writerModel?: string;
   signal?: AbortSignal;
   systemInferenceHints?: string[];
   writer: PremiumCoverLetterWriter;
@@ -1906,6 +2732,8 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   const prompt = buildPremiumCoverLetterPrompt({
     brief,
     generationControlsBlock: args.generationControlsBlock,
+    writerProvider: args.writerProvider,
+    writerModel: args.writerModel,
   });
   let bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
     await args.writer({
@@ -1916,16 +2744,53 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   );
 
   let issues = validatePremiumCoverLetterBodyParts({ bodyParts, brief });
+  const issueCodes = summarizeValidationIssueCodes(issues);
+  const shouldRetryMistralAdjacentDirectFit =
+    brief.contextClass === "cv_adjacent" &&
+    isMistralWriterIdentity({
+      writerProvider: args.writerProvider,
+      writerModel: args.writerModel,
+    }) &&
+    issueCodes.includes("adjacent_direct_fit");
+
   if (issues.some((issue) => !issue.repairable)) {
-    args.onFailure?.({
-      stage: "validation",
-      reason: "non_repairable_validation",
-      contextClass,
-      issues: summarizeValidationIssueCodes(issues),
+    if (!shouldRetryMistralAdjacentDirectFit) {
+      args.onFailure?.({
+        stage: "validation",
+        reason: "non_repairable_validation",
+        contextClass,
+        issues: issueCodes,
+      });
+      return null;
+    }
+
+    const repairedBodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
+      await args.writer({
+        prompt: buildPremiumCoverLetterRepairPrompt({
+          brief,
+          previousBodyParts: bodyParts,
+          issues: issueCodes,
+        }),
+        schema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+        signal: args.signal,
+      }),
+    );
+    const repairedIssues = validatePremiumCoverLetterBodyParts({
+      bodyParts: repairedBodyParts,
+      brief,
     });
-    return null;
-  }
-  if (issues.length > 0) {
+    if (repairedIssues.some((issue) => !issue.repairable) || repairedIssues.length > 0) {
+      args.onFailure?.({
+        stage: "validation",
+        reason: "repair_failed_validation",
+        contextClass,
+        issues: summarizeValidationIssueCodes(repairedIssues),
+      });
+      return null;
+    }
+
+    bodyParts = repairedBodyParts;
+  } else if (issues.length > 0) {
     bodyParts = repairPremiumCoverLetterBodyParts({ bodyParts, brief });
     issues = validatePremiumCoverLetterBodyParts({ bodyParts, brief });
     if (issues.some((issue) => !issue.repairable) || issues.length > 0) {
@@ -1944,6 +2809,21 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     outputLanguage: args.outputLanguage,
     candidateName: args.candidateName,
   });
+  if (
+    !hasExpectedCandidateSignature({
+      content: rendered.content,
+      outputLanguage: args.outputLanguage,
+      candidateName: args.candidateName,
+    })
+  ) {
+    args.onFailure?.({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      contextClass,
+      issues: ["candidate_name_mismatch"],
+    });
+    return null;
+  }
 
   return {
     content: rendered.content,

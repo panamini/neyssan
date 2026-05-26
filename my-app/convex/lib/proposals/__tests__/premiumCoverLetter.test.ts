@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MISTRAL_PREMIUM_COVER_LETTER_ADAPTER,
   PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+  QWEN_PREMIUM_COVER_LETTER_ADAPTER,
   attemptPremiumCoverLetterGeneration,
   buildAllowedFactsPack,
   buildJobOfferPriorityPack,
@@ -356,6 +358,288 @@ describe("premium cover letter evidence ranking", () => {
 });
 
 describe("premium cover letter prompt contract", () => {
+  const buildDirectBrief = () => {
+    const allowedFactsPack = buildAllowedFactsPack({
+      personalizationContext: directContext,
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+    });
+    const rankedEvidencePack = rankAllowedFacts({
+      allowedFactsPack,
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      contextClass: "cv_direct",
+    });
+    return buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      contextClass: "cv_direct",
+      allowedFactsPack,
+      rankedEvidencePack,
+    });
+  };
+
+  const buildAdjacentAdminBrief = () => {
+    const allowedFactsPack = buildAllowedFactsPack({
+      personalizationContext: {
+        name: "Camille Bernard",
+        summary:
+          "Operations lead experienced in coordination, process documentation, and cross-team communication.",
+        desiredPosition: "Operations Coordinator",
+        topSkills: [
+          "Coordination",
+          "Documentation",
+          "Stakeholder Communication",
+        ],
+        recentExperience: [
+          {
+            company: "Nexa Services",
+            position: "Operations Coordinator",
+            highlights: [
+              "Coordinated workflows, documented procedures, tracked deadlines, handled vendor correspondence, and communicated updates across teams.",
+            ],
+          },
+        ],
+      },
+      jobTitle: "Administrative Coordinator",
+      jobDescription:
+        "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
+    });
+    return buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Administrative Coordinator",
+      jobDescription:
+        "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
+      contextClass: "cv_adjacent",
+      allowedFactsPack,
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack,
+        jobTitle: "Administrative Coordinator",
+        jobDescription:
+          "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
+        contextClass: "cv_adjacent",
+      }),
+    });
+  };
+
+  it("scopes premium provider adapters to Mistral and Qwen without changing GPT/default prompts", () => {
+    const brief = buildDirectBrief();
+    const defaultPrompt = buildPremiumCoverLetterPrompt({ brief });
+    const gptPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+    });
+    const unknownPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "unknown",
+    });
+    const mistralPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "mistral",
+      writerModel: "mistral-large-latest",
+    });
+    const qwenPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+    });
+
+    expect(MISTRAL_PREMIUM_COVER_LETTER_ADAPTER).toContain(
+      "Provider adapter: Mistral",
+    );
+    expect(QWEN_PREMIUM_COVER_LETTER_ADAPTER).toContain(
+      "Provider adapter: Qwen",
+    );
+    expect(gptPrompt).toBe(defaultPrompt);
+    expect(unknownPrompt).toBe(defaultPrompt);
+    for (const prompt of [defaultPrompt, gptPrompt, unknownPrompt]) {
+      expect(prompt).not.toContain("Provider adapter: Mistral");
+      expect(prompt).not.toContain("Provider adapter: Qwen");
+      expect(prompt).not.toContain("Truth outranks fluency");
+      expect(prompt).not.toContain("monitored ≠ managed");
+      expect(prompt).not.toContain("MISTRAL ADJACENT-FIT ADDENDUM");
+      expect(prompt).not.toContain("MISTRAL ADJACENT-FIT STRICT ADDENDUM");
+      expect(prompt).not.toContain("MISTRAL ADJACENT ROLE-MAPPING LOCK");
+      expect(prompt).not.toContain("Mistral cv_direct contract");
+      expect(prompt).not.toContain("normal premium cover letter");
+      expect(prompt).not.toContain("source-backed cover-letter contract");
+      expect(prompt).not.toContain("strict evidence-only adjacent letter");
+      expect(prompt).not.toContain("Mistral cv_adjacent body-part contract");
+      expect(prompt).not.toContain("Let the reader infer relevance");
+      expect(prompt).not.toContain("Do not write a transfer argument");
+      expect(prompt).not.toContain("restrained employer-facing bridge");
+      expect(prompt).not.toContain(
+        "The bridge must stay at the level of overlap, relevance, or operating context",
+      );
+      expect(prompt).not.toContain(
+        "In adjacent cases, never convert proximity into role fit, role alignment, future contribution, or promised impact",
+      );
+    }
+
+    expect(mistralPrompt).toContain("Provider adapter: Mistral");
+    expect(mistralPrompt).toContain("Mistral cv_direct contract");
+    expect(mistralPrompt).toContain("normal premium cover letter");
+    expect(mistralPrompt).toContain("source-backed cover-letter contract");
+    expect(mistralPrompt).toContain("Do not invent impact");
+    expect(mistralPrompt).toContain("Avoid generic fit language");
+    expect(mistralPrompt).toContain("Truth outranks fluency");
+    expect(mistralPrompt).toContain(
+      "CV evidence outranks job-description keywords",
+    );
+    expect(mistralPrompt).toContain("monitored ≠ managed");
+    expect(mistralPrompt).toContain("documented ≠ managed");
+    expect(mistralPrompt).toContain("valid driver's license");
+    expect(mistralPrompt).toContain("high school diploma");
+    expect(mistralPrompt).toContain("MISTRAL ADJACENT ROLE-MAPPING LOCK");
+    expect(mistralPrompt).toContain("Role reference rule:");
+    expect(mistralPrompt).toContain(
+      "In adjacent cases, never convert proximity into direct target-role experience, unsupported ownership, guaranteed future performance, or measurable impact not present in candidate facts",
+    );
+    expect(mistralPrompt).toContain(
+      "Mistral cv_adjacent may include one restrained employer-facing bridge",
+    );
+    expect(mistralPrompt).toContain(
+      "The bridge must stay at the level of overlap, relevance, or operating context",
+    );
+    expect(mistralPrompt).toContain("for an Administrative Coordinator");
+    expect(mistralPrompt).toContain(
+      "Do not write \"For a [JD role], these skills...\"",
+    );
+    expect(mistralPrompt).toContain("Adjacent-safe writing rule:");
+    expect(mistralPrompt).toContain(
+      "Do not use generic relevance explanations",
+    );
+    expect(mistralPrompt).toContain(
+      "Every body paragraph should include at least one concrete CV-derived anchor when available",
+    );
+    expect(mistralPrompt).toContain(
+      "I bring the same discipline around records, deadlines, and communication",
+    );
+    expect(mistralPrompt).toContain(
+      "Return only the required JSON body parts",
+    );
+    expect(mistralPrompt).not.toContain("Provider adapter: Qwen");
+
+    expect(qwenPrompt).toContain("Provider adapter: Qwen");
+    expect(qwenPrompt).toContain("separated evidence zones");
+    expect(qwenPrompt).toContain(
+      "Never transfer a requirement from job facts into candidate experience",
+    );
+    expect(qwenPrompt).toContain(
+      "Use ATS terms only when attached to a CV-backed action",
+    );
+    expect(qwenPrompt).toContain("Return only the required JSON body parts");
+    expect(qwenPrompt).not.toContain("Provider adapter: Mistral");
+    expect(qwenPrompt).not.toContain("Mistral cv_direct contract");
+    expect(qwenPrompt).not.toContain("normal premium cover letter");
+    expect(qwenPrompt).not.toContain("source-backed cover-letter contract");
+    expect(qwenPrompt).not.toContain("strict evidence-only adjacent letter");
+    expect(qwenPrompt).not.toContain("Mistral cv_adjacent body-part contract");
+    expect(qwenPrompt).not.toContain("Let the reader infer relevance");
+    expect(qwenPrompt).not.toContain("Do not write a transfer argument");
+    expect(qwenPrompt).not.toContain("restrained employer-facing bridge");
+    expect(qwenPrompt).not.toContain("MISTRAL ADJACENT-FIT ADDENDUM");
+    expect(qwenPrompt).not.toContain("MISTRAL ADJACENT-FIT STRICT ADDENDUM");
+    expect(qwenPrompt).not.toContain("MISTRAL ADJACENT ROLE-MAPPING LOCK");
+  });
+
+  it("keeps the shared cv_adjacent prompt guidance unchanged for GPT/default and narrows Mistral to a grounded bridge contract", () => {
+    const brief = buildAdjacentAdminBrief();
+    const defaultPrompt = buildPremiumCoverLetterPrompt({ brief });
+    const mistralPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "mistral",
+      writerModel: "mistral-medium-latest",
+    });
+    const qwenPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+    });
+
+    expect(defaultPrompt).toContain(
+      "phrase the link as what this background helps with in the role's actual work",
+    );
+    expect(defaultPrompt).toContain(
+      "translate adjacent workflow evidence into role value",
+    );
+    expect(defaultPrompt).toContain(
+      "EmployerValueBlock: move directly to an employer-facing implication",
+    );
+    expect(defaultPrompt).toContain(
+      "CloseLine: one short role-specific sentence",
+    );
+
+    expect(mistralPrompt).toContain(
+      "grounded adjacent letter with at most one restrained employer-facing bridge",
+    );
+    expect(mistralPrompt).toContain(
+      "Mistral cv_adjacent may include one restrained employer-facing bridge",
+    );
+    expect(mistralPrompt).toContain(
+      "The bridge must stay at the level of overlap, relevance, or operating context",
+    );
+    expect(mistralPrompt).toContain(
+      "employerValueBlock: concrete CV-backed evidence or one restrained employer-facing bridge",
+    );
+    expect(mistralPrompt).toContain(
+      "Do not include greeting, signoff, or candidate name",
+    );
+    expect(mistralPrompt).toContain(
+      "Every body part should include at least one concrete CV-backed anchor",
+    );
+    expect(mistralPrompt).toContain(
+      "If evidence is limited, return shorter body parts",
+    );
+    expect(mistralPrompt).not.toContain(
+      "phrase the link as what this background helps with in the role's actual work",
+    );
+    expect(mistralPrompt).not.toContain(
+      "translate adjacent workflow evidence into role value",
+    );
+    expect(mistralPrompt).not.toContain(
+      "EmployerValueBlock: move directly to an employer-facing implication",
+    );
+    expect(mistralPrompt).not.toContain(
+      "CloseLine: one short role-specific sentence",
+    );
+    expect(qwenPrompt).toContain(
+      "phrase the link as what this background helps with in the role's actual work",
+    );
+    expect(qwenPrompt).toContain(
+      "EmployerValueBlock: move directly to an employer-facing implication",
+    );
+    expect(qwenPrompt).not.toContain(
+      "strict evidence-only adjacent letter",
+    );
+    expect(qwenPrompt).not.toContain(
+      "Mistral cv_adjacent body-part contract",
+    );
+    expect(qwenPrompt).not.toContain("Let the reader infer relevance");
+    expect(qwenPrompt).not.toContain("Do not write a transfer argument");
+    expect(qwenPrompt).not.toContain("restrained employer-facing bridge");
+  });
+
+  it("keeps provider adapter order between the shared premium prompt and structured brief", () => {
+    const prompt = buildPremiumCoverLetterPrompt({
+      brief: buildDirectBrief(),
+      writerModel: "mistral-medium-latest",
+    });
+    const sharedPromptIndex = prompt.indexOf(
+      "Write premium cover-letter body parts.",
+    );
+    const adapterIndex = prompt.indexOf("Provider adapter: Mistral");
+    const structuredBriefIndex = prompt.indexOf("Structured brief:");
+
+    expect(sharedPromptIndex).toBeGreaterThanOrEqual(0);
+    expect(adapterIndex).toBeGreaterThan(sharedPromptIndex);
+    expect(structuredBriefIndex).toBeGreaterThan(adapterIndex);
+  });
+
   it("keeps strongest evidence priority, demotes secondary qualifications, includes forbidden moves, and stays compact", () => {
     const allowedFactsPack = buildAllowedFactsPack({
       personalizationContext: directContext,
@@ -679,6 +963,456 @@ describe("premium cover letter prompt contract", () => {
 });
 
 describe("premium cover letter generation and rendering", () => {
+  const buildDirectFrontendBrief = () => {
+    const allowedFactsPack = buildAllowedFactsPack({
+      personalizationContext: directContext,
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+    });
+    return buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      contextClass: "cv_direct",
+      allowedFactsPack,
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack,
+        jobTitle: directJob.jobTitle,
+        jobDescription: directJob.jobDescription,
+        contextClass: "cv_direct",
+      }),
+    });
+  };
+
+  const buildAdjacentAdminBrief = () => {
+    const allowedFactsPack = buildAllowedFactsPack({
+      personalizationContext: {
+        name: "Camille Bernard",
+        summary:
+          "Operations lead experienced in coordination, process documentation, and cross-team communication.",
+        desiredPosition: "Operations Coordinator",
+        topSkills: [
+          "Coordination",
+          "Documentation",
+          "Stakeholder Communication",
+        ],
+        recentExperience: [
+          {
+            company: "Nexa Services",
+            position: "Operations Coordinator",
+            highlights: [
+              "Coordinated workflows, documented procedures, tracked deadlines, handled vendor correspondence, and communicated updates across teams.",
+            ],
+          },
+        ],
+      },
+      jobTitle: "Administrative Coordinator",
+      jobDescription:
+        "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
+    });
+    return buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Administrative Coordinator",
+      jobDescription:
+        "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
+      contextClass: "cv_adjacent",
+      allowedFactsPack,
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack,
+        jobTitle: "Administrative Coordinator",
+        jobDescription:
+          "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
+        contextClass: "cv_adjacent",
+      }),
+    });
+  };
+
+  const buildAdjacentOpsBrief = () => {
+    const allowedFactsPack = buildAllowedFactsPack({
+      personalizationContext: adjacentContext,
+      jobTitle: adjacentJob.jobTitle,
+      jobDescription: adjacentJob.jobDescription,
+    });
+    return buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: adjacentJob.jobTitle,
+      jobDescription: adjacentJob.jobDescription,
+      contextClass: "cv_adjacent",
+      allowedFactsPack,
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack,
+        jobTitle: adjacentJob.jobTitle,
+        jobDescription: adjacentJob.jobDescription,
+        contextClass: "cv_adjacent",
+      }),
+    });
+  };
+
+  const baseAdjacentAdminBodyParts = {
+    opening:
+      "I coordinated workflows, documented procedures, tracked deadlines, handled vendor correspondence, and communicated updates across teams.",
+    proofBlock:
+      "I maintained clear records, scheduling follow-through, and cross-team updates.",
+    employerValueBlock:
+      "I documented process notes, tracked open items, and maintained vendor correspondence records.",
+    closeLine:
+      "I bring experience in coordination, documentation, scheduling, vendor correspondence, and stakeholder communication.",
+  };
+
+  const adjacentAdminIssueCodesFor = (value: string) =>
+    validatePremiumCoverLetterBodyParts({
+      brief: buildAdjacentAdminBrief(),
+      bodyParts: {
+        ...baseAdjacentAdminBodyParts,
+        employerValueBlock: value,
+      },
+    }).map((issue) => issue.code);
+
+  const adjacentOpsIssueCodesFor = (value: string) =>
+    validatePremiumCoverLetterBodyParts({
+      brief: buildAdjacentOpsBrief(),
+      bodyParts: {
+        opening:
+          "I reduced backlog response times by 18% through queue and handoff changes.",
+        proofBlock:
+          "I owned ticket triage, handoffs, and SLA reporting across support and product teams.",
+        employerValueBlock: value,
+        closeLine:
+          "I bring experience in cross-team coordination, process documentation, and reporting.",
+      },
+    }).map((issue) => issue.code);
+
+  const directFrontendIssueCodesFor = (value: string) =>
+    validatePremiumCoverLetterBodyParts({
+      brief: buildDirectFrontendBrief(),
+      bodyParts: {
+        opening:
+          "I improved signup conversion by 11% after iterative UI experiments.",
+        proofBlock:
+          "I led a design system migration used across 4 product squads.",
+        employerValueBlock: value,
+        closeLine:
+          "I bring experience in React, TypeScript, design systems, and experimentation dashboards.",
+      },
+    }).map((issue) => issue.code);
+
+  it("fails cv_adjacent output when experience translates into role support", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "This experience translates into the ability to support general office operations with clear records, timely communication, and reliable follow-up.",
+      ),
+    ).toContain("adjacent_direct_fit");
+  });
+
+  it("fails cv_adjacent output when skills are mapped to an Administrative Coordinator role", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "For an Administrative Coordinator, these skills help with general office support, vendor communication, and schedule management.",
+      ),
+    ).toContain("adjacent_direct_fit");
+  });
+
+  it("fails cv_adjacent output when strong-foundation commentary maps to role responsibilities", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "This experience has given me a strong foundation in managing vendor communication and general office support, which are key responsibilities for this role.",
+      ),
+    ).toContain("adjacent_direct_fit");
+  });
+
+  it("fails cv_adjacent output when background can help ensure efficient office operations", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "My background in coordination and documentation can help ensure that office operations run efficiently.",
+      ),
+    ).toContain("adjacent_direct_fit");
+  });
+
+  it("fails cv_adjacent output when operating strengths support smooth office operations", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "I bring the same focus on coordination, documentation, and communication to support smooth office operations.",
+      ),
+    ).toContain("adjacent_direct_fit");
+  });
+
+  it("allows neutral cv_adjacent evidence-only wording", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "I coordinated workflows, documented processes, tracked deadlines, handled vendor correspondence, and communicated updates across teams.",
+      ),
+    ).not.toContain("adjacent_direct_fit");
+  });
+
+  it("allows restrained cv_adjacent employer-facing bridges grounded in overlap and operating context", () => {
+    const safeBridgeExamples = [
+      "That background is relevant to work where clear handoffs, documentation, and reporting matter.",
+      "Those operating habits fit environments that depend on accurate records and timely cross-team updates.",
+      "The overlap is strongest around coordination, reporting, and documentation.",
+      "That experience is closest to roles where documentation, coordination, and timely updates matter.",
+    ];
+
+    for (const bridge of safeBridgeExamples) {
+      expect(adjacentAdminIssueCodesFor(bridge)).not.toContain(
+        "adjacent_direct_fit",
+      );
+    }
+  });
+
+  it("fails forbidden cv_adjacent bridge shapes that claim direct role fit, future performance, requirements, or mission alignment", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "I have direct experience as an Implementation Analyst.",
+      ),
+    ).toContain("adjacent_direct_fit");
+    expect(
+      adjacentAdminIssueCodesFor("I can own your implementation workflows."),
+    ).toContain("adjacent_direct_fit");
+    expect(
+      adjacentAdminIssueCodesFor("This will improve your delivery speed."),
+    ).toContain("adjacent_direct_fit");
+    expect(
+      adjacentAdminIssueCodesFor(
+        "My background perfectly aligns with your role.",
+      ),
+    ).toContain("adjacent_direct_fit");
+    expect(
+      adjacentAdminIssueCodesFor("I can guarantee smoother operations."),
+    ).toContain("adjacent_direct_fit");
+    expect(
+      adjacentAdminIssueCodesFor("I am passionate about your mission."),
+    ).toContain("fabricated_mission_claim");
+    expect(
+      adjacentAdminIssueCodesFor("I meet your requirements."),
+    ).toContain("adjacent_direct_fit");
+    expect(
+      adjacentAdminIssueCodesFor("I am qualified for every requirement."),
+    ).toContain("adjacent_direct_fit");
+  });
+
+  it("removes leaked wrong signatures and renders the provided candidate name", async () => {
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writer: async () => ({
+        opening:
+          "I improved signup conversion by 11% after iterative UI experiments.",
+        proofBlock:
+          "I led a design system migration used across 4 product squads.",
+        employerValueBlock:
+          "I built experimentation dashboards used by product and growth teams.",
+        closeLine: "Sincerely,\nCamille Bernard",
+      }),
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.content).toMatch(/Sincerely,\nAlex Martin$/);
+    expect(result?.content).not.toContain("Camille Bernard");
+  });
+
+  it("fails unsupported generated numeric claims", () => {
+    expect(
+      directFrontendIssueCodesFor(
+        "The design system migration reduced component duplication by 40%.",
+      ),
+    ).toContain("unsupported_numeric_claim");
+    expect(
+      adjacentOpsIssueCodesFor(
+        "I restructured the intake form and cut misrouted tickets by 22% over three months.",
+      ),
+    ).toContain("unsupported_numeric_claim");
+  });
+
+  it("allows source-backed generated numeric claims", () => {
+    expect(
+      directFrontendIssueCodesFor(
+        "The iterative UI experiments improved signup conversion by 11%.",
+      ),
+    ).not.toContain("unsupported_numeric_claim");
+    expect(
+      adjacentOpsIssueCodesFor(
+        "I reduced backlog response times by 18%.",
+      ),
+    ).not.toContain("unsupported_numeric_claim");
+    expect(
+      directFrontendIssueCodesFor(
+        "I led a design system migration used across 4 product squads.",
+      ),
+    ).not.toContain("unsupported_numeric_claim");
+  });
+
+  it("allows source-backed ownership verbs", () => {
+    expect(
+      adjacentOpsIssueCodesFor(
+        "I owned ticket triage, handoffs, and SLA reporting across support and product teams.",
+      ),
+    ).not.toContain("unsupported_ownership_verb");
+    expect(
+      directFrontendIssueCodesFor(
+        "I led a design system migration used across 4 product squads.",
+      ),
+    ).not.toContain("unsupported_ownership_verb");
+  });
+
+  it("fails unsupported ownership verb upgrades", () => {
+    expect(
+      adjacentOpsIssueCodesFor(
+        "I managed ticket triage, handoffs, and SLA reporting across support and product teams.",
+      ),
+    ).toContain("unsupported_ownership_verb");
+    expect(
+      directFrontendIssueCodesFor(
+        "I owned the full delivery cycle from implementation to measurable user impact.",
+      ),
+    ).toContain("unsupported_ownership_verb");
+  });
+
+  it("retries Mistral once on adjacent_direct_fit and accepts repaired cv_adjacent output", async () => {
+    const calls: string[] = [];
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: adjacentContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: adjacentJob.jobTitle,
+      jobDescription: adjacentJob.jobDescription,
+      candidateName: "Camille Bernard",
+      writerProvider: "mistral",
+      writerModel: "mistral-medium-latest",
+      writer: async ({ prompt }) => {
+        calls.push(prompt);
+        if (calls.length === 1) {
+          return {
+            opening:
+              "This experience translates into the ability to support general office operations with clear records, timely communication, and reliable follow-up.",
+            proofBlock:
+              "For an Administrative Coordinator, these skills help with general office support, vendor communication, and schedule management.",
+            employerValueBlock:
+              "This experience has given me a strong foundation in managing vendor communication and general office support, which are key responsibilities for this role.",
+            closeLine:
+              "I bring the same focus on coordination, documentation, and communication to support smooth office operations.",
+          };
+        }
+        return {
+          opening:
+            "I coordinated workflows, documented procedures, tracked deadlines, and handled vendor correspondence.",
+          proofBlock:
+            "I maintained clear records and scheduling follow-through for cross-functional projects.",
+          employerValueBlock:
+            "I documented process notes, tracked open items, and maintained vendor correspondence records.",
+          closeLine:
+            "I bring experience in coordination, documentation, scheduling, vendor correspondence, and stakeholder communication.",
+        };
+      },
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toContain(
+      "Rewrite the cover-letter body parts to satisfy validation.",
+    );
+    expect(calls[1]).toContain(
+      "adjacent role-mapping, future-impact language, meta-commentary, or unsupported outcome claims",
+    );
+    expect(result).not.toBeNull();
+    expect(result?.content).toContain(
+      "I bring experience in coordination, documentation, scheduling, vendor correspondence, and stakeholder communication.",
+    );
+  });
+
+  it("does not retry repair for GPT/default or Qwen", async () => {
+    const unsafeBodyParts = {
+      opening:
+        "I coordinated workflows, documented procedures, tracked deadlines, handled vendor correspondence, and communicated updates across teams.",
+      proofBlock:
+        "I maintained clear records and scheduling follow-through for cross-functional projects.",
+      employerValueBlock:
+        "This experience translates into the ability to support general office operations with clear records, timely communication, and reliable follow-up.",
+      closeLine:
+        "I bring experience in coordination, documentation, scheduling, vendor correspondence, and stakeholder communication.",
+    };
+
+    const baseArgs = {
+      personalizationContext: adjacentContext,
+      voicePreset: "signature" as const,
+      outputLanguage: "English" as const,
+      jobTitle: adjacentJob.jobTitle,
+      jobDescription: adjacentJob.jobDescription,
+      candidateName: "Camille Bernard",
+      writer: async () => unsafeBodyParts,
+    };
+
+    const gptCalls: string[] = [];
+    const gptResult = await attemptPremiumCoverLetterGeneration({
+      ...baseArgs,
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      writer: async ({ prompt }) => {
+        gptCalls.push(prompt);
+        return unsafeBodyParts;
+      },
+    });
+    const qwenCalls: string[] = [];
+    const qwenResult = await attemptPremiumCoverLetterGeneration({
+      ...baseArgs,
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+      writer: async ({ prompt }) => {
+        qwenCalls.push(prompt);
+        return unsafeBodyParts;
+      },
+    });
+
+    expect(gptCalls).toHaveLength(1);
+    expect(qwenCalls).toHaveLength(1);
+    expect(gptResult).toBeNull();
+    expect(qwenResult).toBeNull();
+  });
+
+  it("does not accept a Mistral adjacent repair unless second validation passes", async () => {
+    const calls: string[] = [];
+    let failure: any = null;
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: adjacentContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: adjacentJob.jobTitle,
+      jobDescription: adjacentJob.jobDescription,
+      candidateName: "Camille Bernard",
+      writerProvider: "mistral",
+      writerModel: "mistral-large-latest",
+      onFailure: (trace) => {
+        failure = trace;
+      },
+      writer: async ({ prompt }) => {
+        calls.push(prompt);
+        return {
+          opening:
+            "This experience translates into the ability to support general office operations with clear records, timely communication, and reliable follow-up.",
+          proofBlock:
+            "For an Administrative Coordinator, these skills help with general office support, vendor communication, and schedule management.",
+          employerValueBlock:
+            "This experience has given me a strong foundation in managing vendor communication and general office support, which are key responsibilities for this role.",
+          closeLine:
+            "I bring the same focus on coordination, documentation, and communication to support smooth office operations.",
+        };
+      },
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(result).toBeNull();
+    expect(failure).toMatchObject({
+      stage: "validation",
+      reason: "repair_failed_validation",
+      issues: expect.arrayContaining(["adjacent_direct_fit"]),
+    });
+  });
+
   it("runs a mocked employment-strong-frontend premium smoke without fixture-opening reuse", async () => {
     let capturedPrompt = "";
     let capturedSchema: Record<string, unknown> | null = null;
@@ -1213,6 +1947,87 @@ describe("premium cover letter generation and rendering", () => {
     );
   });
 
+  it("keeps premium safety validation gates fail-closed", () => {
+    const brief = buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Security Officer",
+      jobDescription:
+        "Ascension needs a Security Officer to support visitors and staff, document incidents, maintain emergency readiness, hold a valid driver's license, have a bachelor's degree, and follow HIPAA and OSHA requirements.",
+      contextClass: "cv_direct",
+      allowedFactsPack: buildAllowedFactsPack({
+        personalizationContext: {
+          name: "Test Candidate",
+          summary: "Security Guard with monitoring and reporting experience.",
+          recentExperience: [
+            {
+              company: "Sentinel Services",
+              position: "Security Guard",
+              highlights: [
+                "Monitored access points and documented visitor logs.",
+                "Reported all-clear status during routine patrols.",
+              ],
+            },
+          ],
+        },
+        jobTitle: "Security Officer",
+        jobDescription:
+          "Support visitors and staff, document incidents, maintain emergency readiness, hold a valid driver's license, have a bachelor's degree, and follow HIPAA and OSHA requirements.",
+      }),
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack: buildAllowedFactsPack({
+          personalizationContext: {
+            name: "Test Candidate",
+            summary: "Security Guard with monitoring and reporting experience.",
+            recentExperience: [
+              {
+                company: "Sentinel Services",
+                position: "Security Guard",
+                highlights: [
+                  "Monitored access points and documented visitor logs.",
+                  "Reported all-clear status during routine patrols.",
+                ],
+              },
+            ],
+          },
+          jobTitle: "Security Officer",
+          jobDescription:
+            "Support visitors and staff, document incidents, maintain emergency readiness, hold a valid driver's license, have a bachelor's degree, and follow HIPAA and OSHA requirements.",
+        }),
+        jobTitle: "Security Officer",
+        jobDescription:
+          "Support visitors and staff, document incidents, maintain emergency readiness, hold a valid driver's license, have a bachelor's degree, and follow HIPAA and OSHA requirements.",
+        contextClass: "cv_direct",
+      }),
+    });
+
+    const issueCodes = validatePremiumCoverLetterBodyParts({
+      brief,
+      bodyParts: {
+        opening:
+          "A valid driver's license and high school diploma further meet your core requirements without delay.",
+        proofBlock:
+          "Skills: access control, emergency response, HIPAA, and OSHA.",
+        employerValueBlock:
+          "I am drawn to Ascension's mission of safeguarding patients, staff, and facilities.",
+        closeLine:
+          "I managed safety incidents, led emergency preparedness drills, and would contribute to your St. team.",
+      },
+    }).map((issue) => issue.code);
+
+    expect(issueCodes).toEqual(
+      expect.arrayContaining([
+        "unsupported_security_ownership",
+        "unsupported_license_claim",
+        "unsupported_education_credential",
+        "unsupported_compliance_framework",
+        "fabricated_mission_claim",
+        "clipped_source_fragment",
+        "ats_keyword_list",
+      ]),
+    );
+  });
+
   it("generates a direct signature cover letter with strongest evidence in context and no weak-qualification dominance", async () => {
     let capturedPrompt = "";
 
@@ -1414,7 +2229,7 @@ describe("premium cover letter generation and rendering", () => {
       stage: "validation",
       reason: "non_repairable_validation",
       contextClass: "no_cv",
-      issues: ["no_cv_history_claim"],
+      issues: expect.arrayContaining(["no_cv_history_claim"]),
     });
   });
 
