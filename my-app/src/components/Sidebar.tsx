@@ -32,7 +32,10 @@ const SETTINGS_DRAWER_GROUPS: Array<{
   tabs: SettingsTab[];
 }> = [
   { label: "Account", tabs: ["account", "team", "danger"] },
-  { label: "Defaults", tabs: ["preferences", "docstyle", "voice"] },
+  {
+    label: "Defaults",
+    tabs: ["theme", "language", "docstyle", "voice"],
+  },
   { label: "Payment", tabs: ["billing"] },
 ];
 
@@ -215,7 +218,9 @@ function SettingsDrawerContent({
               {group.label}
             </div>
             {group.tabs.map((tabId) => {
-              const tab = SETTINGS_TABS.find((candidate) => candidate.id === tabId);
+              const tab = SETTINGS_TABS.find(
+                (candidate) => candidate.id === tabId,
+              );
               if (!tab) return null;
               const active = activeTab === tab.id;
               return (
@@ -299,7 +304,10 @@ export const Sidebar: React.FC = () => {
   }, []);
 
   React.useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
       return;
     }
     const mediaQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
@@ -314,11 +322,14 @@ export const Sidebar: React.FC = () => {
   }, []);
 
   const { pathname } = location;
-  const dashboardActive = pathname === "/" || isRouteActive(pathname, "/dashboard");
+  const dashboardActive =
+    pathname === "/" || isRouteActive(pathname, "/dashboard");
   const jobsActive = isRouteActive(pathname, "/jobs");
-  const cvActive = isRouteActive(pathname, "/cv") || isRouteActive(pathname, "/cvs");
+  const cvActive =
+    isRouteActive(pathname, "/cv") || isRouteActive(pathname, "/cvs");
   const proposalActive =
-    isRouteActive(pathname, "/proposal") || isRouteActive(pathname, "/proposals");
+    isRouteActive(pathname, "/proposal") ||
+    isRouteActive(pathname, "/proposals");
   const projectsActive = isRouteActive(pathname, "/documents");
   const templatesActive = isRouteActive(pathname, "/templates");
   const settingsActive = isRouteActive(pathname, "/settings");
@@ -395,11 +406,22 @@ export const Sidebar: React.FC = () => {
       return;
     }
 
-    openOrDockPanel("settings");
+    if (
+      templatePanelOpen &&
+      activeTemplateSurface === "settings" &&
+      templatePanelOpenMode === "docked"
+    ) {
+      return;
+    }
+
+    openTemplateSurface("settings", { mode: "docked" });
   };
 
   const handleFocusPanel = (surface: ForgeRailSurface) => {
-    if (templatePanelOpenMode === "overlay" || templatePanelOpenMode === "docked") {
+    if (
+      templatePanelOpenMode === "overlay" ||
+      templatePanelOpenMode === "docked"
+    ) {
       return;
     }
     openTemplateSurface(surface, { mode: "peek" });
@@ -409,7 +431,10 @@ export const Sidebar: React.FC = () => {
     if (!activeForgeSurface) {
       return;
     }
-    if (templatePanelOpenMode === "overlay" || templatePanelOpenMode === "docked") {
+    if (
+      templatePanelOpenMode === "overlay" ||
+      templatePanelOpenMode === "docked"
+    ) {
       return;
     }
     openTemplateSurface(activeForgeSurface, { mode: "peek" });

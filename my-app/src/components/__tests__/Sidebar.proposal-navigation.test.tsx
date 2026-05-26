@@ -368,6 +368,26 @@ describe("Sidebar permanent rail", () => {
     );
   });
 
+  it("keeps the Settings drawer docked when the active Settings rail item is clicked again", async () => {
+    renderSidebar("/settings");
+
+    const settings = screen.getByRole("button", { name: "Settings" });
+    fireEvent.click(settings);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("complementary", { name: "Settings sections" }),
+      ).toHaveAttribute("data-mode", "docked");
+    });
+
+    fireEvent.click(settings);
+
+    expect(
+      screen.getByRole("complementary", { name: "Settings sections" }),
+    ).toHaveAttribute("data-mode", "docked");
+    expect(settings).toHaveClass("sb-rail-button--panel-open");
+  });
+
   it("links Projects to the documents surface", () => {
     renderSidebar();
 
