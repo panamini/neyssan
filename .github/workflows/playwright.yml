@@ -6,7 +6,7 @@ on:
     branches: [ main, master ]
 jobs:
   test:
-    timeout-minutes: 60
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -60,12 +60,19 @@ jobs:
         NEXT_PUBLIC_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
         VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
     - name: Run Playwright tests
-      run: npx playwright test --project=chromium
+      run: timeout --kill-after=60s 15m npx playwright test --project=chromium --global-timeout=840000
       env:
         PLAYWRIGHT_APP_URL: http://127.0.0.1:5173
         VITE_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
         NEXT_PUBLIC_CONVEX_URL: ${{ vars.VITE_CONVEX_URL }}
         VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
+    - uses: actions/upload-artifact@v4
+      if: ${{ failure() }}
+      with:
+        name: playwright-test-results
+        path: test-results/
+        if-no-files-found: ignore
+        retention-days: 14
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
