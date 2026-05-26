@@ -341,6 +341,7 @@ type ProposalForgeCanonicalJob = {
   sourceUrl: string;
   sourceDomain: string;
   sourceType: string;
+  sourceLanguage?: string | null;
   applicationUrl: string;
   parseStatus: string;
   reviewState: string;
@@ -11933,6 +11934,11 @@ export function ProposalForge(): JSX.Element {
                             briefSourcePlatform
                           }
                           canonicalJobId={canonicalJobId}
+                          jobSourceLanguage={
+                            stagedSourceJobRecord?.sourceLanguage ??
+                            canonicalJobRecord?.sourceLanguage ??
+                            null
+                          }
                           onGenerateControlChange={
                             handleComposeGenerateControlChange
                           }

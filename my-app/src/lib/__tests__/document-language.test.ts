@@ -87,6 +87,23 @@ describe("document language scaffold", () => {
     });
   });
 
+  it("uses explicit job language metadata before text detection and UI fallback", () => {
+    expect(
+      resolveDocumentLanguageGenerationMetadata({
+        uiLocale: "en",
+        documentLanguage: "auto",
+        jobDetectedLanguage: "fr",
+        jobText:
+          "We are looking for an operations associate with strong team skills.",
+      }),
+    ).toMatchObject({
+      requestedLanguage: "auto",
+      resolvedLanguage: "fr",
+      languageSource: "job-detected",
+      jobDetectedLanguage: "fr",
+    });
+  });
+
   it("supports Russian and Arabic document generation while UI can stay English", () => {
     expect(
       resolveDocumentLanguageGenerationMetadata({
