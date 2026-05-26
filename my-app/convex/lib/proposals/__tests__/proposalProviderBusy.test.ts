@@ -42,8 +42,43 @@ vi.mock("@langchain/mistralai", () => ({
 
 vi.mock("../../../langchain", () => ({
   ProposalService: vi.fn().mockImplementation(() => ({
-    generateCreativeProposal: mockGenerateCreativeProposal,
-    generateTechnicalProposal: mockGenerateTechnicalProposal,
+    generateCreativeProposal: async (...args: unknown[]) => {
+      const result = await mockGenerateCreativeProposal(...args);
+      if (!result || typeof result !== "object") return result;
+      const typedResult = result as {
+        content?: string;
+        metadata?: Record<string, unknown>;
+      };
+      return {
+        ...typedResult,
+        metadata: {
+          modelName: "gpt-5.5",
+          ...(typedResult.metadata ?? {}),
+        },
+      };
+    },
+    generateTechnicalProposal: async (...args: unknown[]) => {
+      const result = await mockGenerateTechnicalProposal(...args);
+      if (!result || typeof result !== "object") return result;
+      const typedResult = result as {
+        content?: string;
+        metadata?: Record<string, unknown>;
+      };
+      return {
+        ...typedResult,
+        metadata: {
+          modelName: "mistral-large-latest",
+          ...(typedResult.metadata ?? {}),
+        },
+      };
+    },
+    generateTextWithFallbacks: async (
+      prompt: string,
+      config: { signal?: AbortSignal },
+    ) => ({
+      text: await mockGpt4Generate(prompt, config ?? {}),
+      modelName: "gpt-5.5",
+    }),
   })),
 }));
 
@@ -183,6 +218,8 @@ describe("proposal provider busy handling", () => {
     mockOpenAIResponsesCreate.mockReset();
     process.env.MISTRAL_API_KEY = "sk-test";
     process.env.OPENAI_API_KEY = "sk-openai";
+    delete process.env.QWEN_API_KEY;
+    delete process.env.QWEN_CHAT_COMPLETIONS_URL;
     delete process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1;
     delete process.env.COVER_LETTER_PREMIUM_WRITER_MODEL;
     delete process.env.DEV_STUB;
@@ -414,6 +451,220 @@ describe("proposal provider busy handling", () => {
     } finally {
       infoSpy.mockRestore();
     }
+  });
+
+  it("routes an eligible qwen cover letter request through the premium path with qwen provider plumbing", async () => {
+    process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1 = "1";
+    process.env.QWEN_API_KEY = "sk-qwen";
+    process.env.QWEN_CHAT_COMPLETIONS_URL =
+      "https://qwen.test/chat/completions";
+
+    const qwenBodyParts = {
+      opening:
+        "I am applying for the Senior Frontend Engineer role because my recent work has centered on shipping customer-facing React and TypeScript products.",
+      proofBlock:
+        "At Acme, I led a design system migration used across four product squads and improved release consistency across shared interface work.",
+      employerValueBlock:
+        "That background is most relevant in roles where interface quality, collaboration, and iteration all shape the final product experience.",
+      closeLine: "I would welcome the opportunity to discuss the role further.",
+    };
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify(qwenBodyParts),
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        },
+      ) as Response,
+    );
+
+    const { handleGenerateProposal } = await loadProposalModule();
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    const ctx = {
+      auth: {
+        getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+      },
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "profile_123",
+        proposalVoicePreset: "signature",
+        experience: [],
+        skills: [],
+        achievements: [],
+      }),
+      runMutation: vi.fn().mockResolvedValue("proposal_123"),
+    };
+
+    try {
+      const result = await handleGenerateProposal(ctx, {
+        jobTitle: "Senior Frontend Engineer",
+        jobDescription:
+          "Lead React and TypeScript development across customer-facing product surfaces and collaborate closely with product teams.",
+        proposalType: "cover_letter",
+        modelType: "qwen3.7-max",
+        voicePreset: "signature",
+        personalizationMode: "explicit_only",
+        personalizationRichness: "rich",
+        personalizationContext: {
+          name: "Alex Martin",
+          summary: "Frontend engineer focused on design systems.",
+          topSkills: ["React", "TypeScript", "Design systems"],
+          recentExperience: [
+            {
+              company: "Acme",
+              position: "Senior Frontend Engineer",
+              highlights: [
+                "Led a design system migration used across four product squads.",
+                "Improved release consistency across shared interface work.",
+              ],
+            },
+          ],
+          standoutAchievements: [
+            "Improved release consistency across shared interface work.",
+          ],
+        },
+      });
+
+      expect(result).toMatchObject({
+        proposalId: "proposal_123",
+        requestedModelType: "qwen3.7-max",
+        actualModelType: "qwen3.7-max",
+        fallbackTriggerCode: null,
+      });
+      expect(result.proposalContent).toMatch(/^Dear Hiring Manager,/);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(fetchSpy.mock.calls[0]?.[0]).toBe(
+        "https://qwen.test/chat/completions",
+      );
+
+      const qwenRequest = JSON.parse(
+        String(fetchSpy.mock.calls[0]?.[1]?.body ?? "{}"),
+      ) as {
+        model?: string;
+        messages?: Array<{ role?: string; content?: string }>;
+      };
+      expect(qwenRequest.model).toBe("qwen3.7-max");
+      expect(typeof qwenRequest.messages?.[0]?.content).toBe("string");
+      expect(qwenRequest.messages?.[0]?.content).toContain(
+        "Provider adapter: Qwen",
+      );
+      expect(qwenRequest.messages?.[0]?.content).not.toContain(
+        "Provider adapter: Mistral",
+      );
+      expect(mockOpenAIResponsesCreate).not.toHaveBeenCalled();
+      expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+      expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
+      expect(ctx.runMutation).toHaveBeenCalledTimes(1);
+      const qwenMutationPayload = ctx.runMutation.mock.calls[0]?.[1] as {
+        content?: string;
+        metadata?: {
+          planned_path?: string;
+          executed_path?: string;
+          fallback_reason?: string;
+          validator_outcome?: string;
+          save_outcome?: string;
+          tags?: string[];
+        };
+      };
+      expect(qwenMutationPayload.content).toBe(result.proposalContent);
+      expect(qwenMutationPayload.metadata?.planned_path).toBe("structured");
+      expect(qwenMutationPayload.metadata?.executed_path).toBe("structured");
+      expect(qwenMutationPayload.metadata?.fallback_reason).toBe(
+        "not_applicable",
+      );
+      expect(qwenMutationPayload.metadata?.validator_outcome).toBe(
+        "structured_success",
+      );
+      expect(qwenMutationPayload.metadata?.save_outcome).toBe(
+        "structured_saved",
+      );
+      expect(qwenMutationPayload.metadata?.tags).toEqual(
+        expect.arrayContaining([
+          "model:qwen3.7-max",
+          "premium_cover_letter_path_v1",
+          "feature_flag:cover_letter_premium_path_v1",
+          "generation_path:premium_success",
+        ]),
+      );
+      expect(getLoggedRoutingTelemetry(infoSpy)).toMatchObject({
+        attemptedPath: "premium success",
+        finalOutcome: "structured_saved",
+        failureStage: null,
+        requestedModelType: "qwen3.7-max",
+        actualModelType: "qwen3.7-max",
+        usedFallback: false,
+        normalizedFailureCode: null,
+        runtimeFailureReason: null,
+      });
+    } finally {
+      infoSpy.mockRestore();
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("fails closed when qwen premium cover-letter credentials are missing", async () => {
+    process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1 = "1";
+    delete process.env.QWEN_API_KEY;
+    delete process.env.QWEN_CHAT_COMPLETIONS_URL;
+
+    const { handleGenerateProposal } = await loadProposalModule();
+
+    const ctx = {
+      auth: {
+        getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+      },
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "profile_123",
+        proposalVoicePreset: "signature",
+        experience: [],
+        skills: [],
+        achievements: [],
+      }),
+      runMutation: vi.fn(),
+    };
+
+    await expect(
+      handleGenerateProposal(ctx, {
+        jobTitle: "Senior Frontend Engineer",
+        jobDescription:
+          "Lead React and TypeScript development across customer-facing product surfaces and collaborate closely with product teams.",
+        proposalType: "cover_letter",
+        modelType: "qwen3.7-max",
+        voicePreset: "signature",
+        personalizationMode: "explicit_only",
+        personalizationRichness: "rich",
+        personalizationContext: {
+          name: "Alex Martin",
+          summary: "Frontend engineer focused on design systems.",
+          topSkills: ["React", "TypeScript", "Design systems"],
+          recentExperience: [
+            {
+              company: "Acme",
+              position: "Senior Frontend Engineer",
+              highlights: [
+                "Led a design system migration used across four product squads.",
+              ],
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow(
+      "Qwen API credentials are not configured for qwen3.7-max.",
+    );
+
+    expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+    expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
   });
 
   it("falls back to ChatGPT after a legacy-generation 429 in the CV-backed bypass path", async () => {
