@@ -947,6 +947,28 @@ describe("premium cover letter prompt contract", () => {
 });
 
 describe("premium cover letter generation and rendering", () => {
+  const buildDirectFrontendBrief = () => {
+    const allowedFactsPack = buildAllowedFactsPack({
+      personalizationContext: directContext,
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+    });
+    return buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      contextClass: "cv_direct",
+      allowedFactsPack,
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack,
+        jobTitle: directJob.jobTitle,
+        jobDescription: directJob.jobDescription,
+        contextClass: "cv_direct",
+      }),
+    });
+  };
+
   const buildAdjacentAdminBrief = () => {
     const allowedFactsPack = buildAllowedFactsPack({
       personalizationContext: {
@@ -991,6 +1013,28 @@ describe("premium cover letter generation and rendering", () => {
     });
   };
 
+  const buildAdjacentOpsBrief = () => {
+    const allowedFactsPack = buildAllowedFactsPack({
+      personalizationContext: adjacentContext,
+      jobTitle: adjacentJob.jobTitle,
+      jobDescription: adjacentJob.jobDescription,
+    });
+    return buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: adjacentJob.jobTitle,
+      jobDescription: adjacentJob.jobDescription,
+      contextClass: "cv_adjacent",
+      allowedFactsPack,
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack,
+        jobTitle: adjacentJob.jobTitle,
+        jobDescription: adjacentJob.jobDescription,
+        contextClass: "cv_adjacent",
+      }),
+    });
+  };
+
   const baseAdjacentAdminBodyParts = {
     opening:
       "I coordinated workflows, documented procedures, tracked deadlines, handled vendor correspondence, and communicated updates across teams.",
@@ -1008,6 +1052,34 @@ describe("premium cover letter generation and rendering", () => {
       bodyParts: {
         ...baseAdjacentAdminBodyParts,
         employerValueBlock: value,
+      },
+    }).map((issue) => issue.code);
+
+  const adjacentOpsIssueCodesFor = (value: string) =>
+    validatePremiumCoverLetterBodyParts({
+      brief: buildAdjacentOpsBrief(),
+      bodyParts: {
+        opening:
+          "I reduced backlog response times by 18% through queue and handoff changes.",
+        proofBlock:
+          "I owned ticket triage, handoffs, and SLA reporting across support and product teams.",
+        employerValueBlock: value,
+        closeLine:
+          "I bring experience in cross-team coordination, process documentation, and reporting.",
+      },
+    }).map((issue) => issue.code);
+
+  const directFrontendIssueCodesFor = (value: string) =>
+    validatePremiumCoverLetterBodyParts({
+      brief: buildDirectFrontendBrief(),
+      bodyParts: {
+        opening:
+          "I improved signup conversion by 11% after iterative UI experiments.",
+        proofBlock:
+          "I led a design system migration used across 4 product squads.",
+        employerValueBlock: value,
+        closeLine:
+          "I bring experience in React, TypeScript, design systems, and experimentation dashboards.",
       },
     }).map((issue) => issue.code);
 
@@ -1057,6 +1129,87 @@ describe("premium cover letter generation and rendering", () => {
         "I coordinated workflows, documented processes, tracked deadlines, handled vendor correspondence, and communicated updates across teams.",
       ),
     ).not.toContain("adjacent_direct_fit");
+  });
+
+  it("removes leaked wrong signatures and renders the provided candidate name", async () => {
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writer: async () => ({
+        opening:
+          "I improved signup conversion by 11% after iterative UI experiments.",
+        proofBlock:
+          "I led a design system migration used across 4 product squads.",
+        employerValueBlock:
+          "I built experimentation dashboards used by product and growth teams.",
+        closeLine: "Sincerely,\nCamille Bernard",
+      }),
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.content).toMatch(/Sincerely,\nAlex Martin$/);
+    expect(result?.content).not.toContain("Camille Bernard");
+  });
+
+  it("fails unsupported generated numeric claims", () => {
+    expect(
+      directFrontendIssueCodesFor(
+        "The design system migration reduced component duplication by 40%.",
+      ),
+    ).toContain("unsupported_numeric_claim");
+    expect(
+      adjacentOpsIssueCodesFor(
+        "I restructured the intake form and cut misrouted tickets by 22% over three months.",
+      ),
+    ).toContain("unsupported_numeric_claim");
+  });
+
+  it("allows source-backed generated numeric claims", () => {
+    expect(
+      directFrontendIssueCodesFor(
+        "The iterative UI experiments improved signup conversion by 11%.",
+      ),
+    ).not.toContain("unsupported_numeric_claim");
+    expect(
+      adjacentOpsIssueCodesFor(
+        "I reduced backlog response times by 18%.",
+      ),
+    ).not.toContain("unsupported_numeric_claim");
+    expect(
+      directFrontendIssueCodesFor(
+        "I led a design system migration used across 4 product squads.",
+      ),
+    ).not.toContain("unsupported_numeric_claim");
+  });
+
+  it("allows source-backed ownership verbs", () => {
+    expect(
+      adjacentOpsIssueCodesFor(
+        "I owned ticket triage, handoffs, and SLA reporting across support and product teams.",
+      ),
+    ).not.toContain("unsupported_ownership_verb");
+    expect(
+      directFrontendIssueCodesFor(
+        "I led a design system migration used across 4 product squads.",
+      ),
+    ).not.toContain("unsupported_ownership_verb");
+  });
+
+  it("fails unsupported ownership verb upgrades", () => {
+    expect(
+      adjacentOpsIssueCodesFor(
+        "I managed ticket triage, handoffs, and SLA reporting across support and product teams.",
+      ),
+    ).toContain("unsupported_ownership_verb");
+    expect(
+      directFrontendIssueCodesFor(
+        "I owned the full delivery cycle from implementation to measurable user impact.",
+      ),
+    ).toContain("unsupported_ownership_verb");
   });
 
   it("retries Mistral once on adjacent_direct_fit and accepts repaired cv_adjacent output", async () => {
@@ -2014,7 +2167,7 @@ describe("premium cover letter generation and rendering", () => {
       stage: "validation",
       reason: "non_repairable_validation",
       contextClass: "no_cv",
-      issues: ["no_cv_history_claim"],
+      issues: expect.arrayContaining(["no_cv_history_claim"]),
     });
   });
 

@@ -1131,7 +1131,20 @@ function stripGreetingAndSignoffLeakage(value: string): string {
     .split(/\n+/)
     .map((line) => compactWhitespace(line))
     .filter(Boolean);
-  return lines
+  const cleanedLines: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (SIGNOFF_PATTERN.test(line)) {
+      const nextLine = lines[index + 1] ?? "";
+      if (CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN.test(nextLine)) {
+        index += 1;
+      }
+      continue;
+    }
+    if (GREETING_PATTERN.test(line)) continue;
+    cleanedLines.push(line);
+  }
+  return cleanedLines
     .map((line) =>
       compactWhitespace(
         line
@@ -1140,12 +1153,10 @@ function stripGreetingAndSignoffLeakage(value: string): string {
           .replace(
             /^\s*(?:sincerely|kind regards|best regards|warm regards|cordialement|bien cordialement|respectfully)\s*,?\s*/i,
             "",
-          ),
+        ),
       ),
     )
-    .filter(
-      (line) => line && !GREETING_PATTERN.test(line) && !SIGNOFF_PATTERN.test(line),
-    )
+    .filter((line) => line)
     .join(" ");
 }
 
@@ -1965,7 +1976,10 @@ type PremiumBodyPartValidationIssue = {
     | "unsupported_compliance_framework"
     | "unsupported_license_claim"
     | "unsupported_education_credential"
-    | "fabricated_mission_claim";
+    | "fabricated_mission_claim"
+    | "unsupported_numeric_claim"
+    | "unsupported_ownership_verb"
+    | "candidate_name_mismatch";
   repairable: boolean;
 };
 
@@ -2018,6 +2032,24 @@ const UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN =
   /\b(?:have|hold|earned|completed|with|bring|meet(?:s|ing)?|a|my)\s+(?:a\s+)?(?:high school diploma|GED|diploma equivalency)\b|\b(?:high school diploma|GED|diploma equivalency)\s+(?:further\s+)?(?:meets?|is|are|supports?)\b/i;
 const FABRICATED_MISSION_CLAIM_PATTERN =
   /\b(?:mission of|mission to|mission is|mission of safeguarding|reimagining healthcare security|contribute to reimagining healthcare)\b/i;
+const CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN =
+  /^[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3}$/;
+const PERCENTAGE_NUMERIC_CLAIM_PATTERN =
+  /\b\d+(?:\.\d+)?\s*(?:%|percent|percentage\s+points?)\b/gi;
+const DIGIT_NUMERIC_CLAIM_PATTERN = /\b\d+(?:\.\d+)?\b/g;
+const WORD_NUMBER_DURATION_CLAIM_PATTERN =
+  /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:day|days|week|weeks|month|months|year|years)\b/gi;
+const HIGH_OWNERSHIP_VERB_PATTERNS = [
+  { verb: "owned", pattern: /\bown(?:ed|s|ing)?\b/i },
+  { verb: "managed", pattern: /\bmanag(?:ed|es|ing)\b/i },
+  { verb: "led", pattern: /\b(?:led|lead(?:s|ing)?)\b/i },
+  { verb: "directed", pattern: /\bdirect(?:ed|s|ing)?\b/i },
+  { verb: "oversaw", pattern: /\b(?:oversaw|oversee(?:s|ing)?|overseen)\b/i },
+  { verb: "drove", pattern: /\b(?:drove|drive(?:s|n|ing)?)\b/i },
+  { verb: "spearheaded", pattern: /\bspearhead(?:ed|s|ing)?\b/i },
+  { verb: "transformed", pattern: /\btransform(?:ed|s|ing)?\b/i },
+  { verb: "resolved", pattern: /\bresolv(?:ed|es|ing)\b/i },
+] as const;
 
 function buildValidationSourceSurface(args: { brief: CoverLetterBrief }): string {
   const companyValuesPack = args.brief.companyValuesPack;
@@ -2053,6 +2085,48 @@ function buildCandidateEvidenceSurface(args: { brief: CoverLetterBrief }): strin
     .map((value) => compactWhitespace(value))
     .filter(Boolean)
     .join(" ");
+}
+
+function normalizeNumericClaim(value: string): string {
+  return compactWhitespace(value)
+    .toLowerCase()
+    .replace(/percentage\s+points?/g, "percent")
+    .replace(/%/g, " percent");
+}
+
+function extractNumericClaims(value: string): string[] {
+  const claims = new Set<string>();
+  for (const match of value.matchAll(PERCENTAGE_NUMERIC_CLAIM_PATTERN)) {
+    claims.add(normalizeNumericClaim(match[0]));
+  }
+  for (const match of value.matchAll(DIGIT_NUMERIC_CLAIM_PATTERN)) {
+    claims.add(normalizeNumericClaim(match[0]));
+  }
+  for (const match of value.matchAll(WORD_NUMBER_DURATION_CLAIM_PATTERN)) {
+    claims.add(normalizeNumericClaim(match[0]));
+  }
+  return Array.from(claims);
+}
+
+function hasUnsupportedNumericClaim(args: {
+  generatedText: string;
+  sourceSurface: string;
+}): boolean {
+  const generatedClaims = extractNumericClaims(args.generatedText);
+  if (generatedClaims.length === 0) return false;
+  const sourceClaims = new Set(extractNumericClaims(args.sourceSurface));
+  return generatedClaims.some((claim) => !sourceClaims.has(claim));
+}
+
+function hasUnsupportedOwnershipVerb(args: {
+  generatedText: string;
+  candidateEvidenceSurface: string;
+}): boolean {
+  return HIGH_OWNERSHIP_VERB_PATTERNS.some(
+    ({ pattern }) =>
+      pattern.test(args.generatedText) &&
+      !pattern.test(args.candidateEvidenceSurface),
+  );
 }
 
 function escapeRegExp(value: string): string {
@@ -2193,6 +2267,17 @@ export function validatePremiumCoverLetterBodyParts(args: {
     if (FABRICATED_MISSION_CLAIM_PATTERN.test(compact)) {
       issues.push({ code: "fabricated_mission_claim", repairable: false });
     }
+    if (hasUnsupportedNumericClaim({ generatedText: compact, sourceSurface })) {
+      issues.push({ code: "unsupported_numeric_claim", repairable: false });
+    }
+    if (
+      hasUnsupportedOwnershipVerb({
+        generatedText: compact,
+        candidateEvidenceSurface,
+      })
+    ) {
+      issues.push({ code: "unsupported_ownership_verb", repairable: false });
+    }
   }
 
   const normalizedEmployerValue = normalizeProposalConstraintText(
@@ -2312,6 +2397,19 @@ export function renderPremiumCoverLetter(args: {
     content,
     sections: [{ type: "text", content }],
   };
+}
+
+function hasExpectedCandidateSignature(args: {
+  content: string;
+  candidateName?: string;
+}): boolean {
+  const expectedName = compactWhitespace(args.candidateName);
+  if (!expectedName) return true;
+  const lines = args.content
+    .split(/\n+/)
+    .map((line) => compactWhitespace(line))
+    .filter(Boolean);
+  return lines[lines.length - 1] === expectedName;
 }
 
 export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
@@ -2688,6 +2786,20 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     outputLanguage: args.outputLanguage,
     candidateName: args.candidateName,
   });
+  if (
+    !hasExpectedCandidateSignature({
+      content: rendered.content,
+      candidateName: args.candidateName,
+    })
+  ) {
+    args.onFailure?.({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      contextClass,
+      issues: ["candidate_name_mismatch"],
+    });
+    return null;
+  }
 
   return {
     content: rendered.content,
