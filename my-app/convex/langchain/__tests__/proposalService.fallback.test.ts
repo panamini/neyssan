@@ -44,9 +44,9 @@ describe("ProposalService fallback routing", () => {
       getModelName: () => "gpt-5.5",
     } as unknown as ModelAdapter;
     const qwenAdapter = {
-      generate: vi.fn().mockResolvedValue(buildProposalJson("qwen3.6-plus")),
+      generate: vi.fn().mockResolvedValue(buildProposalJson("qwen3.7-max")),
       parseResult: vi.fn(),
-      getModelName: () => "qwen3.6-plus",
+      getModelName: () => "qwen3.7-max",
     } as unknown as ModelAdapter;
     const mistralAdapter = {
       generate: vi.fn().mockResolvedValue(buildProposalJson("mistral-large-latest")),
@@ -68,7 +68,7 @@ describe("ProposalService fallback routing", () => {
     expect(primaryAdapter.generate).toHaveBeenCalledTimes(1);
     expect(qwenAdapter.generate).toHaveBeenCalledTimes(1);
     expect(mistralAdapter.generate).not.toHaveBeenCalled();
-    expect(result.metadata.modelName).toBe("qwen3.6-plus");
+    expect(result.metadata.modelName).toBe("qwen3.7-max");
   });
 
   it("falls back through text generation in the same adapter order", async () => {
@@ -80,7 +80,7 @@ describe("ProposalService fallback routing", () => {
     const qwenAdapter = {
       generate: vi.fn().mockResolvedValue("qwen text"),
       parseResult: vi.fn(),
-      getModelName: () => "qwen3.6-plus",
+      getModelName: () => "qwen3.7-max",
     } as unknown as ModelAdapter;
 
     const service = new ProposalService({
@@ -98,6 +98,6 @@ describe("ProposalService fallback routing", () => {
     expect(primaryAdapter.generate).toHaveBeenCalledTimes(1);
     expect(qwenAdapter.generate).toHaveBeenCalledTimes(1);
     expect(result.text).toBe("qwen text");
-    expect(result.modelName).toBe("qwen3.6-plus");
+    expect(result.modelName).toBe("qwen3.7-max");
   });
 });

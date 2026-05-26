@@ -111,7 +111,7 @@ export const llmConfig: ILLMConfig = {
     productionModelType: "chatgpt",
     developmentModelType: "mistral-small-latest",
     openaiWriterModel: process.env.OPENAI_PROPOSAL_MODEL ?? "gpt-5.5",
-    qwenFallbackModel: process.env.QWEN_PROPOSAL_MODEL ?? "qwen3.6-plus",
+    qwenFallbackModel: process.env.QWEN_PROPOSAL_MODEL ?? "qwen3.7-max",
     mistralFallbackModel:
       process.env.MISTRAL_PROPOSAL_MODEL ?? "mistral-large-latest",
     deepseekFallbackModel:

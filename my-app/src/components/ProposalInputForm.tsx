@@ -152,9 +152,13 @@ const DEFAULT_COMPOSE_CHARACTER_LIMIT_MODE =
 const DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE =
   DEFAULT_PROPOSAL_CHARACTER_LIMIT_VALUE;
 
-const VISIBLE_MODEL_OPTIONS = [{ value: "chatgpt", label: "ChatGPT" }] as const;
+const VISIBLE_MODEL_OPTIONS = [
+  { value: "chatgpt", label: "ChatGPT" },
+  { value: "qwen3.7-max", label: "Qwen3.7-Max" },
+] as const;
 const PROPOSAL_FORM_MODEL_TYPES = [
   "chatgpt",
+  "qwen3.7-max",
   "mistral-small-latest",
   "mistral-medium-latest",
   "mistral-large-latest",
@@ -248,6 +252,7 @@ function readStoredComposeDraft(
     characterLimitValue: DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE,
     modelType:
       parsed.modelType === "chatgpt" ||
+      parsed.modelType === "qwen3.7-max" ||
       parsed.modelType === "mistral-small-latest" ||
       parsed.modelType === "mistral-medium-latest" ||
       parsed.modelType === "mistral-large-latest" ||
@@ -282,6 +287,7 @@ function normalizeProposalFormValues(values: Partial<FormValues>): FormValues {
       DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE,
     modelType:
       values.modelType === "chatgpt" ||
+      values.modelType === "qwen3.7-max" ||
       values.modelType === "mistral-small-latest" ||
       values.modelType === "mistral-medium-latest" ||
       values.modelType === "mistral-large-latest" ||

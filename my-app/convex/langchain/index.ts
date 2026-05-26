@@ -89,7 +89,7 @@ function buildDefaultProposalAdapters(
         url: qwenUrl,
         providerName: "qwen",
         modelName:
-          llmConfig.proposalModels?.qwenFallbackModel ?? "qwen3.6-plus",
+          llmConfig.proposalModels?.qwenFallbackModel ?? "qwen3.7-max",
       }),
     );
   }
