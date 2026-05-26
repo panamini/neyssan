@@ -7,6 +7,7 @@ import { generateCvTemplate } from "../cv-template";
 import { getResumeTemplateDefinition } from "../layout/resumeTemplates";
 import { planWorkshopResumePages } from "../resume/resumePagination";
 import {
+  buildProposalExportSource,
   buildResumeExportSource,
   buildProposalPreviewPrintSource,
   buildProposalPrintDebugSnapshot,
@@ -19,6 +20,28 @@ import {
 } from "../document-export-models";
 
 describe("document-export-models", () => {
+  it("preserves supported document locales on resume export sources and falls back for unsupported locales", () => {
+    const supportedLocales = ["en", "fr", "ar", "ru", "ga"] as const;
+
+    for (const locale of supportedLocales) {
+      const currentCv = generateCvTemplate(`${locale} CV`);
+      currentCv.metadata.locale = locale;
+
+      expect(
+        buildStyledResumePrintSource({ currentCv })?.locale,
+      ).toBe(locale);
+      expect(buildResumeExportSource({ currentCv })?.locale).toBe(locale);
+    }
+
+    const unsupportedCv = generateCvTemplate("Unsupported locale CV");
+    unsupportedCv.metadata.locale = "zz";
+
+    expect(
+      buildStyledResumePrintSource({ currentCv: unsupportedCv })?.locale,
+    ).toBeNull();
+    expect(buildResumeExportSource({ currentCv: unsupportedCv })?.locale).toBeNull();
+  });
+
   it("captures the live style preset in the styled resume print source", () => {
     const source = buildStyledResumePrintSource({
       currentCv: generateCvTemplate("Styled CV"),
@@ -56,8 +79,8 @@ describe("document-export-models", () => {
         renderSource: "preview",
         stylePreset: expect.objectContaining({
           layout: "workshop",
-          typography: "civic-correspondence",
-          palette: "cobalt",
+          typography: "quiet-editorial",
+          palette: "ink",
         }),
         resumeTemplateId: "workshop_resume_twocol_ats",
       }),
@@ -253,6 +276,88 @@ describe("document-export-models", () => {
         }),
       }),
     );
+  });
+
+  it("preserves explicit proposal export locales before falling back to content inference", () => {
+    const englishContent =
+      "Dear Hiring Manager,\n\nI bring proposal operations and delivery leadership.\n\nKind regards,\nAlex Martin";
+    const frenchContent =
+      "Bonjour,\n\nJe construis des systèmes éditoriaux fiables.\n\nCordialement,\nAlex Martin";
+
+    expect(
+      buildProposalPreviewPrintSource({
+        content: englishContent,
+        proposalType: "cover_letter",
+        voicePreset: "signature",
+        railTitle: "Alex Martin",
+        railMeta: "Operations Lead",
+        contactLine: "alex@example.com",
+        letterDate: "Paris, April 16, 2026",
+        recipientDetails: "Hiring Manager",
+        documentTitle: "Proposal",
+        documentMeta: "alex@example.com",
+        applicantHeader: null,
+        locale: "ar",
+      }).locale,
+    ).toBe("ar");
+
+    expect(
+      buildProposalExportSource({
+        content: englishContent,
+        proposalType: "cover_letter",
+        documentTitle: "Proposal",
+        documentMeta: "alex@example.com",
+        contactLine: "alex@example.com",
+        letterDate: "Paris, April 16, 2026",
+        recipientDetails: "Hiring Manager",
+        applicantHeader: null,
+        locale: "ru",
+      }).locale,
+    ).toBe("ru");
+
+    expect(
+      buildProposalExportSource({
+        content: englishContent,
+        proposalType: "cover_letter",
+        documentTitle: "Proposal",
+        documentMeta: "",
+        contactLine: "",
+        letterDate: "",
+        recipientDetails: "",
+        applicantHeader: null,
+        locale: "ga",
+      }).locale,
+    ).toBe("ga");
+
+    expect(
+      buildProposalPreviewPrintSource({
+        content: frenchContent,
+        proposalType: "cover_letter",
+        voicePreset: "signature",
+        railTitle: "Alex Martin",
+        railMeta: "Operations Lead",
+        contactLine: "alex@example.com",
+        letterDate: "Paris, April 16, 2026",
+        recipientDetails: "Hiring Manager",
+        documentTitle: "Proposal",
+        documentMeta: "alex@example.com",
+        applicantHeader: null,
+        locale: "zz",
+      }).locale,
+    ).toBe("fr");
+
+    expect(
+      buildProposalExportSource({
+        content: frenchContent,
+        proposalType: "cover_letter",
+        documentTitle: "Proposition",
+        documentMeta: "",
+        contactLine: "",
+        letterDate: "",
+        recipientDetails: "",
+        applicantHeader: null,
+      }).locale,
+    ).toBe("fr");
   });
 
   it("builds a proposal print route payload that preserves preview state", () => {

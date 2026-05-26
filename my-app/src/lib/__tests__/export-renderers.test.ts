@@ -145,6 +145,77 @@ const proposalFixture: ProposalPrintSource = {
 };
 
 describe("export-renderers", () => {
+  it("renders document-scoped HTML language and direction without changing label localization scope", () => {
+    const arabicDocument = parseExportHtml(
+      renderResumeAtsExportDocument({
+        ...resumeFixture,
+        locale: "ar",
+      }),
+    );
+    const russianDocument = parseExportHtml(
+      renderResumeAtsExportDocument({
+        ...resumeFixture,
+        locale: "ru",
+      }),
+    );
+    const frenchProposalDocument = parseExportHtml(
+      renderProposalAtsExportDocument(proposalFixture),
+    );
+
+    expect(arabicDocument.documentElement.getAttribute("lang")).toBe("ar");
+    expect(arabicDocument.documentElement.getAttribute("dir")).toBe("rtl");
+    expect(russianDocument.documentElement.getAttribute("lang")).toBe("ru");
+    expect(russianDocument.documentElement.getAttribute("dir")).toBe("ltr");
+    expect(frenchProposalDocument.documentElement.getAttribute("lang")).toBe("fr");
+    expect(frenchProposalDocument.documentElement.getAttribute("dir")).toBe("ltr");
+    expect(
+      frenchProposalDocument.querySelector('[data-block="subject"] .section-title')
+        ?.textContent,
+    ).toBe("Objet");
+    expect(
+      frenchProposalDocument.querySelector(".proposal-block--subject")
+        ?.textContent,
+    ).toContain("Candidature «\u00A0Produit\u00A0» 1,5\u00A0mm");
+
+    for (const locale of ["en", "fr", "es", "pt", "it", "de", "nl", "ga", "pl", "ru"] as const) {
+      const document = parseExportHtml(
+        renderResumeAtsExportDocument({
+          ...resumeFixture,
+          locale,
+        }),
+      );
+
+      expect(document.documentElement.getAttribute("lang")).toBe(locale);
+      expect(document.documentElement.getAttribute("dir")).toBe("ltr");
+    }
+  });
+
+  it("renders Arabic proposal exports with document-scoped RTL metadata", () => {
+    const arabicProposal: ProposalPrintSource = {
+      ...proposalFixture,
+      locale: "ar",
+      title: "Arabic proposal",
+    };
+    const atsDocument = parseExportHtml(
+      renderProposalAtsExportDocument(arabicProposal),
+    );
+    const styledDocument = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: arabicProposal,
+        stylePreset: {
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        },
+      }),
+    );
+
+    expect(atsDocument.documentElement.getAttribute("lang")).toBe("ar");
+    expect(atsDocument.documentElement.getAttribute("dir")).toBe("rtl");
+    expect(styledDocument.documentElement.getAttribute("lang")).toBe("ar");
+    expect(styledDocument.documentElement.getAttribute("dir")).toBe("rtl");
+  });
+
   it("renders ATS as the protected one-column baseline and styled resume export as the Robial split baseline", () => {
     const atsDocument = parseExportHtml(
       renderResumeAtsExportDocument(resumeFixture, {
