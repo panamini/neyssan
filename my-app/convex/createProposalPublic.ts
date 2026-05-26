@@ -208,6 +208,10 @@ export default mutation({
         actualModelType: v.optional(v.string()),
         actualModelName: v.optional(v.string()),
         fallbackTriggerCode: v.optional(v.string()),
+        requestedLanguage: v.optional(v.union(v.string(), v.null())),
+        resolvedLanguage: v.optional(v.union(v.string(), v.null())),
+        languageSource: v.optional(v.string()),
+        jobDetectedLanguage: v.optional(v.union(v.string(), v.null())),
         voicePreset: v.optional(proposalVoicePresetChoice),
         requestedVoicePreset: v.optional(
           v.union(proposalVoicePresetChoice, v.null()),

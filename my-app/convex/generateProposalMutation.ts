@@ -70,6 +70,8 @@ import {
 } from "./lib/proposals/proposalBodyComposer";
 import {
   buildProposalOutputLanguageInstruction,
+  resolveProposalOutputLanguageFromCode,
+  resolveProposalPlannerOutputLanguageFromCode,
   resolveProposalOutputLanguage,
   resolveStoredProposalTitle,
   type ProposalOutputLanguage,
@@ -223,6 +225,10 @@ export type GenerateProposalArgs = {
   toneTuning?: ProposalToneTuning | null;
   characterLimitMode?: ProposalCharacterLimitMode | null;
   characterLimitValue?: number | null;
+  requestedLanguage?: string | null;
+  resolvedLanguage?: string | null;
+  languageSource?: string | null;
+  jobDetectedLanguage?: string | null;
 };
 
 export const generateProposalArgs = {
@@ -244,6 +250,10 @@ export const generateProposalArgs = {
     v.union(proposalCharacterLimitModeChoice, v.null()),
   ),
   characterLimitValue: v.optional(v.union(v.number(), v.null())),
+  requestedLanguage: v.optional(v.union(v.string(), v.null())),
+  resolvedLanguage: v.optional(v.union(v.string(), v.null())),
+  languageSource: v.optional(v.union(v.string(), v.null())),
+  jobDetectedLanguage: v.optional(v.union(v.string(), v.null())),
 };
 
 type ProfileFallbackDoc = {
@@ -9301,8 +9311,12 @@ export async function handleGenerateProposal(
     effectivePromptRichness,
     hasCandidateContext,
   );
-  const outputLanguage = resolveProposalOutputLanguage(args.jobDescription);
-  const plannerOutputLanguage = outputLanguage === "French" ? "fr" : "en";
+  const outputLanguage =
+    resolveProposalOutputLanguageFromCode(args.resolvedLanguage) ??
+    resolveProposalOutputLanguage(args.jobDescription);
+  const plannerOutputLanguage =
+    resolveProposalPlannerOutputLanguageFromCode(args.resolvedLanguage) ??
+    (outputLanguage === "French" ? "fr" : "en");
   const candidateName = effectivePersonalization?.name ?? undefined;
   const outputLanguageInstruction =
     buildProposalOutputLanguageInstruction(outputLanguage);
@@ -9432,6 +9446,10 @@ export async function handleGenerateProposal(
     creativity: effectiveTone.creativity,
     characterLimitMode: args.characterLimitMode ?? undefined,
     characterLimitValue: args.characterLimitValue ?? undefined,
+    requestedLanguage: args.requestedLanguage ?? undefined,
+    resolvedLanguage: args.resolvedLanguage ?? undefined,
+    languageSource: args.languageSource ?? undefined,
+    jobDetectedLanguage: args.jobDetectedLanguage ?? undefined,
     proposalType: outputFormat,
   };
   let residualVerifierWarningTag: string | null = null;

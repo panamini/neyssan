@@ -87,7 +87,7 @@ function isUiAccentId(value: string | null): value is UiAccentId {
   return UI_ACCENT_OPTIONS.some((option) => option.id === value);
 }
 
-function readStoredLanguage(): UiLanguageId {
+export function readStoredUiLanguagePreference(): UiLanguageId {
   if (typeof window === "undefined") return "auto";
   const stored = window.localStorage.getItem(UI_LANGUAGE_STORAGE_KEY);
   return isUiLanguageId(stored) ? stored : "auto";
@@ -164,7 +164,7 @@ export function useUiLanguagePreference(): {
   setLanguage: (language: UiLanguageId) => void;
 } {
   const [language, setLanguageState] =
-    React.useState<UiLanguageId>(readStoredLanguage);
+    React.useState<UiLanguageId>(readStoredUiLanguagePreference);
   const resolvedLanguage = resolveUiLocale(language);
 
   React.useEffect(() => {
@@ -184,7 +184,7 @@ export function useUiLanguagePreference(): {
 }
 
 export function applyStoredUiLanguage(): void {
-  const language = readStoredLanguage();
+  const language = readStoredUiLanguagePreference();
   const resolvedLanguage = resolveUiLocale(language);
   if (typeof document !== "undefined") {
     document.documentElement.dataset.uiLanguagePreference = language;

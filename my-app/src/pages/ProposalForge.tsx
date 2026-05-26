@@ -87,6 +87,10 @@ import {
   type StoredProposalOutputDraft,
   writeStoredProposalOutputDraft,
 } from "../lib/proposal-output-draft";
+import type {
+  DocumentLanguageGenerationMetadata,
+  DocumentLanguageSource,
+} from "../lib/document-language";
 import {
   PROPOSAL_DRAWER_QUERY_PARAM,
   PROPOSAL_DRAFT_DRAWER_QUERY_VALUE,
@@ -786,6 +790,10 @@ type ProposalDocumentMetadata = DocumentStyleMetadata & {
   characterLimitMode?: ProposalCharacterLimitMode | null;
   characterLimitValue?: number | null;
   closing?: ProposalClosingRef;
+  requestedLanguage?: string | null;
+  resolvedLanguage?: string | null;
+  languageSource?: DocumentLanguageSource;
+  jobDetectedLanguage?: string | null;
 };
 
 type ProposalWorkspaceCssVars = React.CSSProperties & {
@@ -7795,6 +7803,7 @@ export function ProposalForge(): JSX.Element {
       proposal: string,
       nextFallbackInfo?: ProposalGenerationFallbackInfo,
       nextProposalId?: Id<"proposals">,
+      languageMetadata?: DocumentLanguageGenerationMetadata,
     ) => {
       cancelPendingComposeDraftSync();
       const personalizationSource = generationPersonalizationSource;
@@ -7921,6 +7930,10 @@ export function ProposalForge(): JSX.Element {
         }),
         characterLimitMode: values.characterLimitMode ?? null,
         characterLimitValue: values.characterLimitValue ?? null,
+        requestedLanguage: languageMetadata?.requestedLanguage ?? null,
+        resolvedLanguage: languageMetadata?.resolvedLanguage ?? null,
+        languageSource: languageMetadata?.languageSource,
+        jobDetectedLanguage: languageMetadata?.jobDetectedLanguage ?? null,
         sourceComposeDraft: submittedComposeDraft,
       });
       setLastProposalRequest(values);
@@ -7948,6 +7961,10 @@ export function ProposalForge(): JSX.Element {
           voicePreset: resolvedVoicePreset,
           resolvedVoicePreset,
           requestedVoicePreset: values.voicePreset ?? null,
+          requestedLanguage: languageMetadata?.requestedLanguage ?? null,
+          resolvedLanguage: languageMetadata?.resolvedLanguage ?? null,
+          languageSource: languageMetadata?.languageSource,
+          jobDetectedLanguage: languageMetadata?.jobDetectedLanguage ?? null,
           ...(values.jobDescription?.trim()
             ? { sourceJobDescription: values.jobDescription.trim() }
             : {}),

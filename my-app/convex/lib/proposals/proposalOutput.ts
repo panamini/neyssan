@@ -3,7 +3,61 @@ export type ProposalOutputFormat =
   | "application_message"
   | "freelance_proposal";
 
-export type ProposalOutputLanguage = "English" | "French";
+export const PROPOSAL_DOCUMENT_LANGUAGE_CODES = [
+  "en",
+  "fr",
+  "es",
+  "de",
+  "it",
+  "pt",
+  "pl",
+  "nl",
+  "el",
+  "hu",
+  "lt",
+  "et",
+  "ru",
+  "ar",
+] as const;
+
+export type ProposalDocumentLanguageCode =
+  (typeof PROPOSAL_DOCUMENT_LANGUAGE_CODES)[number];
+
+export type ProposalOutputLanguage =
+  | "English"
+  | "French"
+  | "Spanish"
+  | "German"
+  | "Italian"
+  | "Portuguese"
+  | "Polish"
+  | "Dutch"
+  | "Greek"
+  | "Hungarian"
+  | "Lithuanian"
+  | "Estonian"
+  | "Russian"
+  | "Arabic";
+
+const PROPOSAL_LANGUAGE_LABELS: Record<
+  ProposalDocumentLanguageCode,
+  ProposalOutputLanguage
+> = {
+  en: "English",
+  fr: "French",
+  es: "Spanish",
+  de: "German",
+  it: "Italian",
+  pt: "Portuguese",
+  pl: "Polish",
+  nl: "Dutch",
+  el: "Greek",
+  hu: "Hungarian",
+  lt: "Lithuanian",
+  et: "Estonian",
+  ru: "Russian",
+  ar: "Arabic",
+};
 
 const TITLE_PLACEHOLDER_PATTERN = /^(?:no title found|untitled)$/i;
 const REGENERATED_TITLE_PATTERN = /^(.*?)(?:\s+—\s+Regenerated(?:\s+(\d+))?)$/;
@@ -41,6 +95,30 @@ const ENGLISH_LANGUAGE_MARKERS = [
   "apply",
   "remote",
 ];
+
+function isProposalDocumentLanguageCode(
+  value: string | null | undefined,
+): value is ProposalDocumentLanguageCode {
+  return PROPOSAL_DOCUMENT_LANGUAGE_CODES.includes(
+    value as ProposalDocumentLanguageCode,
+  );
+}
+
+export function resolveProposalOutputLanguageFromCode(
+  value: string | null | undefined,
+): ProposalOutputLanguage | null {
+  const normalized = value?.toLowerCase().split("-")[0]?.trim();
+  return isProposalDocumentLanguageCode(normalized)
+    ? PROPOSAL_LANGUAGE_LABELS[normalized]
+    : null;
+}
+
+export function resolveProposalPlannerOutputLanguageFromCode(
+  value: string | null | undefined,
+): ProposalDocumentLanguageCode | null {
+  const normalized = value?.toLowerCase().split("-")[0]?.trim();
+  return isProposalDocumentLanguageCode(normalized) ? normalized : null;
+}
 
 function countMarkerHits(text: string, markers: readonly string[]): number {
   return markers.reduce((count, marker) => {
@@ -152,6 +230,25 @@ export function buildProposalOutputLanguageInstruction(
       "Do not switch to English because the candidate background or CV is in English.",
       "If the prompt forbids greetings, sign-offs, or boundary lines, do not add them.",
       'Do not use English greetings or closings such as "Dear Hiring Manager" or "Sincerely" when boundary text is not allowed.',
+      "Keep proper nouns, company names, product names, and technology names as-is when needed.",
+    ].join(" ");
+  }
+
+  if (language === "Arabic") {
+    return [
+      "Write the generated text in Arabic.",
+      "Do not switch to English, French, or another language because the candidate background, CV, UI, or job source is in another language.",
+      "Use natural right-to-left Arabic prose for the generated document text.",
+      "If the prompt forbids greetings, sign-offs, or boundary lines, do not add them.",
+      "Keep proper nouns, company names, product names, and technology names as-is when needed.",
+    ].join(" ");
+  }
+
+  if (language !== "English") {
+    return [
+      `Write the generated text in ${language}.`,
+      "Do not switch to English, French, or another language because the candidate background, CV, UI, or job source is in another language.",
+      "If the prompt forbids greetings, sign-offs, or boundary lines, do not add them.",
       "Keep proper nouns, company names, product names, and technology names as-is when needed.",
     ].join(" ");
   }

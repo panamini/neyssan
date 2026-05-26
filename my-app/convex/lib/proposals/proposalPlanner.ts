@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PROPOSAL_DOCUMENT_LANGUAGE_CODES } from "./proposalOutput";
 
 import {
   type ProposalVoicePreset,
@@ -60,7 +61,8 @@ export const PROPOSAL_PLANNER_OPENING_STRATEGIES = [
   "engaging_people",
   "storyteller_thread",
 ] as const;
-export const PROPOSAL_PLANNER_OUTPUT_LANGUAGES = ["en", "fr"] as const;
+export const PROPOSAL_PLANNER_OUTPUT_LANGUAGES =
+  PROPOSAL_DOCUMENT_LANGUAGE_CODES;
 
 export const COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER = [
   "Hard job requirements",
@@ -1983,7 +1985,7 @@ export function buildProposalPlannerPrompt(
     "- domain_gap: direct | adjacent | distant",
     "- credential_status: exact_required | related_not_equivalent | in_progress_only | unsupported",
     "- transfer_mode: literal | abstract_only | no_operational_analogy",
-    "- output_language: en | fr",
+    `- output_language: ${PROPOSAL_PLANNER_OUTPUT_LANGUAGES.join(" | ")}`,
     "- proof_strategy: none | abstract_only | concrete_supported",
     "- opening_strategy: signature_default | expert_structured | direct_fast | engaging_people | storyteller_thread",
     "- allowed_concrete_facts must be exact source-backed facts copied from the source fact bank only. If a concrete candidate fact is unsupported, omit it.",

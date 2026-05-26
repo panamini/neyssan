@@ -43,6 +43,13 @@ import {
   buildProposalGenerationRequest,
   type ProposalGenerationRequestPayload,
 } from "../lib/proposal-generation-request";
+import {
+  readStoredDocumentLanguage,
+  resolveDocumentLanguageGenerationMetadata,
+  type DocumentLanguageGenerationMetadata,
+} from "../lib/document-language";
+import { resolveUiLocale } from "../lib/locale-registry";
+import { readStoredUiLanguagePreference } from "../lib/ui-preferences";
 import { ensureProposalSignatureName } from "../lib/proposal-closing";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
@@ -79,6 +86,7 @@ interface ProposalInputFormProps {
     proposalContent: string,
     fallbackInfo?: ProposalGenerationFallbackInfo,
     proposalId?: Id<"proposals">,
+    languageMetadata?: DocumentLanguageGenerationMetadata,
   ) => void;
   onStart?: (values: FormValues) => void;
   onStop?: () => void;
@@ -1032,12 +1040,18 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       setErrorMessage(null);
       onStart?.(normalizedValues);
 
+      const languageMetadata = resolveDocumentLanguageGenerationMetadata({
+        uiLocale: resolveUiLocale(readStoredUiLanguagePreference()),
+        documentLanguage: readStoredDocumentLanguage(),
+        jobText: normalizedValues.jobDescription,
+      });
       const payload = {
         ...buildProposalGenerationRequest(
           normalizedValues,
           buildAppProposalPersonalizationPayload(currentActiveCvSource),
           undefined,
           canonicalJobId,
+          languageMetadata,
         ),
         clientRunId,
       };
@@ -1087,6 +1101,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
             fallbackTriggerCode: result.fallbackTriggerCode,
           },
           result.proposalId,
+          languageMetadata,
         );
         shouldNotifySubmitAnimationCompleteRef.current = true;
 

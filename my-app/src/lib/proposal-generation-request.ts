@@ -2,6 +2,7 @@ import {
   getProposalVoicePresetDefinition,
 } from "../../convex/lib/proposals/voicePresets";
 import type { FormValues } from "../components/ProposalInputForm.schemas";
+import type { DocumentLanguageGenerationMetadata } from "./document-language";
 import type { ProposalGenerationPersonalizationPayload } from "./proposal-personalization";
 
 export type ProposalGenerationRequestPayload = {
@@ -16,6 +17,10 @@ export type ProposalGenerationRequestPayload = {
   voicePreset?: FormValues["voicePreset"] | null;
   formalityLevel?: FormValues["formalityLevel"];
   creativity?: FormValues["creativity"];
+  requestedLanguage?: DocumentLanguageGenerationMetadata["requestedLanguage"];
+  resolvedLanguage?: DocumentLanguageGenerationMetadata["resolvedLanguage"];
+  languageSource?: DocumentLanguageGenerationMetadata["languageSource"];
+  jobDetectedLanguage?: DocumentLanguageGenerationMetadata["jobDetectedLanguage"];
 } & ProposalGenerationPersonalizationPayload;
 
 export function applyProposalVoiceSelection(
@@ -43,6 +48,7 @@ export function buildProposalGenerationRequest(
   personalization: ProposalGenerationPersonalizationPayload,
   voicePresetOverride?: FormValues["voicePreset"] | null,
   jobId?: string | null,
+  languageMetadata?: DocumentLanguageGenerationMetadata,
 ): ProposalGenerationRequestPayload {
   const normalizedValues = applyProposalVoiceSelection(
     values,
@@ -58,6 +64,13 @@ export function buildProposalGenerationRequest(
     characterLimitValue: normalizedValues.characterLimitValue,
     ...personalization,
   };
+
+  if (languageMetadata) {
+    payload.requestedLanguage = languageMetadata.requestedLanguage;
+    payload.resolvedLanguage = languageMetadata.resolvedLanguage;
+    payload.languageSource = languageMetadata.languageSource;
+    payload.jobDetectedLanguage = languageMetadata.jobDetectedLanguage;
+  }
 
   if (normalizedValues.voicePreset) {
     payload.voicePreset = normalizedValues.voicePreset;
