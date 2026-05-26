@@ -336,9 +336,26 @@ export const MISTRAL_PREMIUM_COVER_LETTER_ADAPTER = [
   "- the candidate facts show related work, nearby workflows, support exposure, monitoring, documentation, reporting, scheduling, coordination, communication, or collaboration;",
   "- but the candidate facts do not show direct ownership, direct execution, or direct responsibility for the JD requirement.",
   "",
-  "In adjacent cases, never convert proximity into role fit, role alignment, future contribution, or promised impact.",
+  "In adjacent cases, never convert proximity into direct target-role experience, unsupported ownership, guaranteed future performance, or measurable impact not present in candidate facts.",
   "",
-  "Let the reader infer relevance from neutral CV-backed facts. Do not state role fit explicitly.",
+  "Mistral cv_adjacent may include one restrained employer-facing bridge when grounded in BOTH candidate evidence and a JD work surface.",
+  "The bridge must stay at the level of overlap, relevance, or operating context. It must not claim direct target-role experience, ownership, metrics, measurable impact, guaranteed future performance, or unsupported requirement satisfaction.",
+  "",
+  "Allowed bridge shapes:",
+  "- \"That background is relevant to work where clear handoffs, documentation, and reporting matter.\"",
+  "- \"Those operating habits fit environments that depend on accurate records and timely cross-team updates.\"",
+  "- \"The overlap is strongest around coordination, reporting, and documentation.\"",
+  "- \"That experience is closest to roles where documentation, coordination, and timely updates matter.\"",
+  "",
+  "Forbidden bridge shapes:",
+  "- \"I have direct experience as an Implementation Analyst.\"",
+  "- \"I can own your implementation workflows.\"",
+  "- \"This will improve your delivery speed.\"",
+  "- \"My background perfectly aligns with your role.\"",
+  "- \"I can guarantee smoother operations.\"",
+  "- \"I am passionate about your mission.\"",
+  "- \"I meet your requirements.\"",
+  "- \"I am qualified for every requirement.\"",
   "",
   "Role reference rule:",
   "- The JD role title may appear only as neutral context, not as proof of fit.",
@@ -397,7 +414,7 @@ export const MISTRAL_PREMIUM_COVER_LETTER_ADAPTER = [
   "- qualified for every requirement",
   "",
   "Meta-competency commentary rule:",
-  "Do not explain why a skill is relevant. State the evidence directly.",
+  "Do not use generic relevance explanations. Use candidate evidence directly, with at most one restrained employer-facing bridge grounded in both candidate evidence and a JD work surface.",
   "",
   "Forbidden meta-commentary patterns:",
   "- My closest evidence lies in...",
@@ -412,7 +429,7 @@ export const MISTRAL_PREMIUM_COVER_LETTER_ADAPTER = [
   "- I am confident that...",
   "",
   "Adjacent-safe writing rule:",
-  "For adjacent-safe evidence, write only neutral CV-backed facts:",
+  "For adjacent-safe evidence, prefer neutral CV-backed facts and keep any single bridge grounded in overlap, relevance, or operating context:",
   "- \"I coordinated [CV-backed workflow].\"",
   "- \"I documented [CV-backed process].\"",
   "- \"I tracked [CV-backed deadlines/schedules/items].\"",
@@ -421,9 +438,9 @@ export const MISTRAL_PREMIUM_COVER_LETTER_ADAPTER = [
   "- \"I communicated updates to [CV-backed stakeholder type].\"",
   "- \"I worked from the [CV-backed area] side of this kind of work.\"",
   "",
-  "Do not write role-fit or future-impact explanations.",
+  "Do not write direct role-fit or future-impact explanations.",
   "Do not write outcome claims unless candidate facts directly support them.",
-  "Keep employerValueBlock and closeLine factual in cv_adjacent mode.",
+  "Keep employerValueBlock grounded in candidate facts and at most one restrained employer-facing bridge in cv_adjacent mode.",
   "",
   "Concrete evidence rule:",
   "Every body paragraph should include at least one concrete CV-derived anchor when available:",
@@ -487,8 +504,8 @@ export const MISTRAL_PREMIUM_COVER_LETTER_ADAPTER = [
   "",
   "Mistral cv_adjacent body-part override:",
   "When contextClass is cv_adjacent:",
-  "- employerValueBlock is not a role-fit, role-value, or future-impact paragraph.",
-  "- Use employerValueBlock as a second factual evidence paragraph.",
+  "- employerValueBlock may be a second factual evidence paragraph or one restrained bridge grounded in both candidate evidence and a JD work surface.",
+  "- The bridge must stay at overlap, relevance, or operating-context level; it must not claim direct role experience, future performance, unsupported ownership, or invented impact.",
   "- closeLine must restate CV-backed operating strengths only.",
   "- Do not include greeting, signoff, or candidate name in body parts.",
   "- Do not use target role title, \"this role,\" \"your needs,\" \"helps with,\" \"can help,\" \"can contribute,\" \"translates,\" \"aligns,\" \"smoothly,\" or \"efficiently.\"",
@@ -768,12 +785,13 @@ const ADJACENT_ROLE_MAPPING_PATTERNS = [
   /\btranslates?\s+(?:directly\s+|well\s+)?(?:into|to)\b/i,
   /\bdirect(?:ly)?\s+(?:fit|fits|match|relevant|applicable)\b/i,
   /\bexact\s+match\b/i,
-  /\brelevant\s+to\s+the\s+[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,5}\b/,
   /\b(?:particularly\s+)?useful\s+in\s+managing\b/i,
   /\b(?:can|would)\s+support\s+(?:general\s+office\s+operations|office\s+support|vendor\s+communication|schedule\s+management|scheduling|documentation|[a-z][^.!?]{0,80})\b/i,
+  /\b(?:i\s+)?meet\s+your\s+requirements\b/i,
+  /\bqualified\s+for\s+every\s+requirement\b/i,
 ] as const;
 const ADJACENT_MODAL_FUTURE_CONTRIBUTION_PATTERN =
-  /\b(?:can\s+(?:help(?:\s+ensure)?|contribute|support)|would\s+(?:help|support|allow\s+me\s+to)|will\s+(?:help|support)|could\s+(?:help|support))\b/i;
+  /\b(?:can\s+(?:help(?:\s+ensure)?|contribute|support|guarantee|own|manage|lead|drive|direct|oversee|spearhead|transform|resolve)|would\s+(?:help|support|allow\s+me\s+to)|will\s+(?:help|support|improve|increase|reduce|streamline|strengthen|deliver|ensure)|could\s+(?:help|support))\b/i;
 const ADJACENT_META_COMMENTARY_PATTERNS = [
   /\bmy\s+closest\s+evidence\s+lies\s+in\b/i,
   /\bthis\s+experience\s+has\s+given\s+me\s+a\s+strong\s+foundation\b/i,
@@ -1873,15 +1891,17 @@ function resolvePremiumCoverLetterContextGuidance(args: {
     if (args.contextClass === "cv_adjacent") {
       return [
         "Mistral cv_adjacent context guidance:",
-        "- This is a strict evidence-only adjacent letter.",
-        "- Do not write a transfer argument.",
+        "- This is a grounded adjacent letter with at most one restrained employer-facing bridge.",
+        "- Mistral cv_adjacent may include one restrained employer-facing bridge when grounded in BOTH candidate evidence and a JD work surface.",
+        "- The bridge must stay at the level of overlap, relevance, or operating context.",
         "- Do not map the background to the target role.",
-        "- Do not state role fit, role value, future contribution, or promised impact.",
+        "- Do not state direct target-role experience, unsupported ownership, future contribution, promised impact, or unsupported requirement satisfaction.",
         "- Use job facts only to select which candidate facts to include.",
         "- Write only candidate-backed actions, artifacts, scopes, stakeholders, responsibilities, tools, metrics, cadence, or deliverables.",
         "- Use past or present factual statements.",
         "- Do not use future contribution claims.",
-        "- Let the reader infer relevance.",
+        "- Safe bridge examples: \"That background is relevant to work where clear handoffs, documentation, and reporting matter.\" \"The overlap is strongest around coordination, reporting, and documentation.\"",
+        "- Forbidden bridge examples: \"I have direct experience as an Implementation Analyst.\" \"I can own your implementation workflows.\" \"This will improve your delivery speed.\" \"I am passionate about your mission.\"",
         "- If evidence is limited, return shorter body parts instead of filling space.",
       ];
     }
@@ -1912,12 +1932,13 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
       "Mistral cv_adjacent body-part contract:",
       "- opening: one factual first-person sentence grounded in candidate evidence.",
       "- proofBlock: concrete CV-backed evidence only.",
-      "- employerValueBlock: second factual evidence paragraph, not employer value, not role fit, not future impact.",
+      "- employerValueBlock: concrete CV-backed evidence or one restrained employer-facing bridge grounded in both candidate evidence and a JD work surface.",
+      "- Any bridge must stay at overlap, relevance, or operating-context level; it must not claim direct role experience, future performance, unsupported ownership, or invented impact.",
       "- closeLine: one short sentence restating CV-backed operating strengths only.",
       "- Do not include greeting, signoff, or candidate name in body parts.",
       "- Do not use the target role title.",
       "- Do not use \"this role,\" \"your needs,\" \"helps with,\" \"can help,\" \"can contribute,\" \"translates,\" \"aligns,\" \"smoothly,\" or \"efficiently.\"",
-      "- Do not explain why the evidence is relevant.",
+      "- Do not explain generic fit; any relevance bridge must be restrained and grounded in both candidate evidence and a JD work surface.",
       "- Every body part should include at least one concrete CV-backed anchor when available.",
       "- If no concrete anchor is available, keep the sentence narrow and factual instead of adding abstract fit language.",
       "- If there is not enough safe evidence, return shorter body parts instead of filling space.",
@@ -2031,7 +2052,7 @@ const UNSUPPORTED_LICENSE_CLAIM_PATTERN =
 const UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN =
   /\b(?:have|hold|earned|completed|with|bring|meet(?:s|ing)?|a|my)\s+(?:a\s+)?(?:high school diploma|GED|diploma equivalency)\b|\b(?:high school diploma|GED|diploma equivalency)\s+(?:further\s+)?(?:meets?|is|are|supports?)\b/i;
 const FABRICATED_MISSION_CLAIM_PATTERN =
-  /\b(?:mission of|mission to|mission is|mission of safeguarding|reimagining healthcare security|contribute to reimagining healthcare)\b/i;
+  /\b(?:mission of|mission to|mission is|mission of safeguarding|reimagining healthcare security|contribute to reimagining healthcare|passionate about (?:your|the) mission|drawn to (?:your|the) mission|inspired by (?:your|the) mission|culture fit)\b/i;
 const CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN =
   /^[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3}$/;
 const PERCENTAGE_NUMERIC_CLAIM_PATTERN =

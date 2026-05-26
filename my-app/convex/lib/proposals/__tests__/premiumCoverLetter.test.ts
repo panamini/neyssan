@@ -471,6 +471,10 @@ describe("premium cover letter prompt contract", () => {
       expect(prompt).not.toContain("Mistral cv_adjacent body-part contract");
       expect(prompt).not.toContain("Let the reader infer relevance");
       expect(prompt).not.toContain("Do not write a transfer argument");
+      expect(prompt).not.toContain("restrained employer-facing bridge");
+      expect(prompt).not.toContain(
+        "The bridge must stay at the level of overlap, relevance, or operating context",
+      );
       expect(prompt).not.toContain(
         "In adjacent cases, never convert proximity into role fit, role alignment, future contribution, or promised impact",
       );
@@ -493,7 +497,13 @@ describe("premium cover letter prompt contract", () => {
     expect(mistralPrompt).toContain("MISTRAL ADJACENT ROLE-MAPPING LOCK");
     expect(mistralPrompt).toContain("Role reference rule:");
     expect(mistralPrompt).toContain(
-        "In adjacent cases, never convert proximity into role fit, role alignment, future contribution, or promised impact",
+      "In adjacent cases, never convert proximity into direct target-role experience, unsupported ownership, guaranteed future performance, or measurable impact not present in candidate facts",
+    );
+    expect(mistralPrompt).toContain(
+      "Mistral cv_adjacent may include one restrained employer-facing bridge",
+    );
+    expect(mistralPrompt).toContain(
+      "The bridge must stay at the level of overlap, relevance, or operating context",
     );
     expect(mistralPrompt).toContain("for an Administrative Coordinator");
     expect(mistralPrompt).toContain(
@@ -501,7 +511,7 @@ describe("premium cover letter prompt contract", () => {
     );
     expect(mistralPrompt).toContain("Adjacent-safe writing rule:");
     expect(mistralPrompt).toContain(
-      "Do not explain why a skill is relevant. State the evidence directly",
+      "Do not use generic relevance explanations",
     );
     expect(mistralPrompt).toContain(
       "Every body paragraph should include at least one concrete CV-derived anchor when available",
@@ -531,12 +541,13 @@ describe("premium cover letter prompt contract", () => {
     expect(qwenPrompt).not.toContain("Mistral cv_adjacent body-part contract");
     expect(qwenPrompt).not.toContain("Let the reader infer relevance");
     expect(qwenPrompt).not.toContain("Do not write a transfer argument");
+    expect(qwenPrompt).not.toContain("restrained employer-facing bridge");
     expect(qwenPrompt).not.toContain("MISTRAL ADJACENT-FIT ADDENDUM");
     expect(qwenPrompt).not.toContain("MISTRAL ADJACENT-FIT STRICT ADDENDUM");
     expect(qwenPrompt).not.toContain("MISTRAL ADJACENT ROLE-MAPPING LOCK");
   });
 
-  it("keeps the shared cv_adjacent prompt guidance unchanged for GPT/default and narrows Mistral to evidence-only wording", () => {
+  it("keeps the shared cv_adjacent prompt guidance unchanged for GPT/default and narrows Mistral to a grounded bridge contract", () => {
     const brief = buildAdjacentAdminBrief();
     const defaultPrompt = buildPremiumCoverLetterPrompt({ brief });
     const mistralPrompt = buildPremiumCoverLetterPrompt({
@@ -564,12 +575,16 @@ describe("premium cover letter prompt contract", () => {
     );
 
     expect(mistralPrompt).toContain(
-      "strict evidence-only adjacent letter",
+      "grounded adjacent letter with at most one restrained employer-facing bridge",
     );
-    expect(mistralPrompt).toContain("Do not write a transfer argument");
-    expect(mistralPrompt).toContain("Let the reader infer relevance");
     expect(mistralPrompt).toContain(
-      "employerValueBlock: second factual evidence paragraph",
+      "Mistral cv_adjacent may include one restrained employer-facing bridge",
+    );
+    expect(mistralPrompt).toContain(
+      "The bridge must stay at the level of overlap, relevance, or operating context",
+    );
+    expect(mistralPrompt).toContain(
+      "employerValueBlock: concrete CV-backed evidence or one restrained employer-facing bridge",
     );
     expect(mistralPrompt).toContain(
       "Do not include greeting, signoff, or candidate name",
@@ -606,6 +621,7 @@ describe("premium cover letter prompt contract", () => {
     );
     expect(qwenPrompt).not.toContain("Let the reader infer relevance");
     expect(qwenPrompt).not.toContain("Do not write a transfer argument");
+    expect(qwenPrompt).not.toContain("restrained employer-facing bridge");
   });
 
   it("keeps provider adapter order between the shared premium prompt and structured brief", () => {
@@ -1129,6 +1145,52 @@ describe("premium cover letter generation and rendering", () => {
         "I coordinated workflows, documented processes, tracked deadlines, handled vendor correspondence, and communicated updates across teams.",
       ),
     ).not.toContain("adjacent_direct_fit");
+  });
+
+  it("allows restrained cv_adjacent employer-facing bridges grounded in overlap and operating context", () => {
+    const safeBridgeExamples = [
+      "That background is relevant to work where clear handoffs, documentation, and reporting matter.",
+      "Those operating habits fit environments that depend on accurate records and timely cross-team updates.",
+      "The overlap is strongest around coordination, reporting, and documentation.",
+      "That experience is closest to roles where documentation, coordination, and timely updates matter.",
+    ];
+
+    for (const bridge of safeBridgeExamples) {
+      expect(adjacentAdminIssueCodesFor(bridge)).not.toContain(
+        "adjacent_direct_fit",
+      );
+    }
+  });
+
+  it("fails forbidden cv_adjacent bridge shapes that claim direct role fit, future performance, requirements, or mission alignment", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "I have direct experience as an Implementation Analyst.",
+      ),
+    ).toContain("adjacent_direct_fit");
+    expect(
+      adjacentAdminIssueCodesFor("I can own your implementation workflows."),
+    ).toContain("adjacent_direct_fit");
+    expect(
+      adjacentAdminIssueCodesFor("This will improve your delivery speed."),
+    ).toContain("adjacent_direct_fit");
+    expect(
+      adjacentAdminIssueCodesFor(
+        "My background perfectly aligns with your role.",
+      ),
+    ).toContain("adjacent_direct_fit");
+    expect(
+      adjacentAdminIssueCodesFor("I can guarantee smoother operations."),
+    ).toContain("adjacent_direct_fit");
+    expect(
+      adjacentAdminIssueCodesFor("I am passionate about your mission."),
+    ).toContain("fabricated_mission_claim");
+    expect(
+      adjacentAdminIssueCodesFor("I meet your requirements."),
+    ).toContain("adjacent_direct_fit");
+    expect(
+      adjacentAdminIssueCodesFor("I am qualified for every requirement."),
+    ).toContain("adjacent_direct_fit");
   });
 
   it("removes leaked wrong signatures and renders the provided candidate name", async () => {
