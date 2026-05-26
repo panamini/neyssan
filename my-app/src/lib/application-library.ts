@@ -15,6 +15,7 @@ export type LibraryItem = {
   title: string;
   subtitle?: string;
   content?: string;
+  resolvedLanguage?: string | null;
   previewLines?: string[];
   cvDocument?: CvDocument;
   updatedAt: number;
@@ -64,6 +65,7 @@ export type LibraryProposalRecord = {
     sourceCompany?: string | null;
     company?: string | null;
     sourceCvId?: string | null;
+    resolvedLanguage?: string | null;
   } | null;
 };
 
@@ -251,6 +253,7 @@ function makeProposalItem(
     title: proposalTitle(proposal),
     subtitle: body,
     content: proposalContent || undefined,
+    resolvedLanguage: normalizeText(metadata.resolvedLanguage) || null,
     previewLines: proposalPreviewLines(proposalContent, body),
     updatedAt: proposalTime(proposal),
     routeTarget: proposalTarget(id, status),
@@ -293,6 +296,7 @@ function makeLocalProposalItem(
       "Local proposal",
     subtitle: snippet(preservedProposalContent, "Proposal text."),
     content: preservedProposalContent,
+    resolvedLanguage: normalizeText(outputDraft?.resolvedLanguage) || null,
     previewLines: proposalPreviewLines(preservedProposalContent, "Proposal text."),
     updatedAt: now,
     routeTarget: routeTarget("/proposal"),
