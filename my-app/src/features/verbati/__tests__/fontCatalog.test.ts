@@ -69,6 +69,18 @@ describe("verbati font catalog", () => {
     });
   });
 
+  it("keeps bundled locale fallback fonts out of the curated font-pair dropdown", () => {
+    expect(
+      VERBATI_FONT_PAIR_OPTIONS.some(
+        (option) =>
+          option.headingLabel.includes("Noto Sans") ||
+          option.bodyLabel.includes("Noto Sans") ||
+          option.headingLabel.includes("Noto Kufi Arabic") ||
+          option.bodyLabel.includes("Noto Kufi Arabic"),
+      ),
+    ).toBe(false);
+  });
+
   it("injects local font-face rules when bundled font assets are present", () => {
     ensureLocalFontFacesLoaded();
     const styleTag = document.head.querySelector("#dasti-local-font-faces");
@@ -81,6 +93,8 @@ describe("verbati font catalog", () => {
     expect(styleTag?.textContent).toContain('font-family:"Source Code Pro"');
     expect(styleTag?.textContent).toContain("font-family:\"FD Garamond\"");
     expect(styleTag?.textContent).toContain('font-family:"Chaumont Script"');
+    expect(styleTag?.textContent).toContain("font-family:\"Noto Sans\"");
+    expect(styleTag?.textContent).toContain('font-family:"Noto Kufi Arabic"');
     expect(styleTag?.textContent).toContain("font-style:italic");
   });
 });

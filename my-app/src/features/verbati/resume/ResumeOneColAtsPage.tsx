@@ -1155,6 +1155,13 @@ function renderInlineAddButton(args: {
   );
 }
 
+function renderInlineAddListItem(
+  args: Parameters<typeof renderInlineAddButton>[0] & { keyName: string },
+) {
+  const button = renderInlineAddButton(args);
+  return button ? <li key={args.keyName}>{button}</li> : null;
+}
+
 function renderProfileFragment(args: {
   data: ResumeData;
   activeTarget?: ResumeActiveTarget | null;
@@ -2134,15 +2141,14 @@ function renderFragmentContent(args: {
                 : null}
             </li>
           )),
-        <li key={`${fragment.fragmentId}:add-language`}>
-          {renderInlineAddButton({
-            inlineEditing,
-            sectionId: fragment.sectionId,
-            sectionType: "languages",
-            itemKind: "language",
-            label: "Add language",
-          })}
-        </li>,
+        renderInlineAddListItem({
+          keyName: `${fragment.fragmentId}:add-language`,
+          inlineEditing,
+          sectionId: fragment.sectionId,
+          sectionType: "languages",
+          itemKind: "language",
+          label: "Add language",
+        }),
       ];
     case "certifications":
       return [
@@ -2213,15 +2219,14 @@ function renderFragmentContent(args: {
               {item.meta ? ` · ${item.meta}` : null}
             </li>
           )),
-        <li key={`${fragment.fragmentId}:add-certification`}>
-          {renderInlineAddButton({
-            inlineEditing,
-            sectionId: fragment.sectionId,
-            sectionType: "certifications",
-            itemKind: "certification",
-            label: "Add certification",
-          })}
-        </li>,
+        renderInlineAddListItem({
+          keyName: `${fragment.fragmentId}:add-certification`,
+          inlineEditing,
+          sectionId: fragment.sectionId,
+          sectionType: "certifications",
+          itemKind: "certification",
+          label: "Add certification",
+        }),
       ];
     case "achievements":
       return [
@@ -2296,15 +2301,14 @@ function renderFragmentContent(args: {
               </li>
             );
           }),
-        <li key={`${fragment.fragmentId}:add-achievement`}>
-          {renderInlineAddButton({
-            inlineEditing,
-            sectionId: fragment.sectionId,
-            sectionType: "achievements",
-            itemKind: "achievement",
-            label: "Add achievement",
-          })}
-        </li>,
+        renderInlineAddListItem({
+          keyName: `${fragment.fragmentId}:add-achievement`,
+          inlineEditing,
+          sectionId: fragment.sectionId,
+          sectionType: "achievements",
+          itemKind: "achievement",
+          label: "Add achievement",
+        }),
       ];
     case "affiliations":
       return [
@@ -2410,15 +2414,14 @@ function renderFragmentContent(args: {
                 : null}
             </li>
           )),
-        <li key={`${fragment.fragmentId}:add-affiliation`}>
-          {renderInlineAddButton({
-            inlineEditing,
-            sectionId: fragment.sectionId,
-            sectionType: "affiliations",
-            itemKind: "affiliation",
-            label: "Add affiliation",
-          })}
-        </li>,
+        renderInlineAddListItem({
+          keyName: `${fragment.fragmentId}:add-affiliation`,
+          inlineEditing,
+          sectionId: fragment.sectionId,
+          sectionType: "affiliations",
+          itemKind: "affiliation",
+          label: "Add affiliation",
+        }),
       ];
     case "hobbies":
       return [
@@ -2457,15 +2460,14 @@ function renderFragmentContent(args: {
               })}
             </li>
           )),
-        <li key={`${fragment.fragmentId}:add-hobby`}>
-          {renderInlineAddButton({
-            inlineEditing,
-            sectionId: fragment.sectionId,
-            sectionType: "hobbies",
-            itemKind: "hobby",
-            label: "Add hobby",
-          })}
-        </li>,
+        renderInlineAddListItem({
+          keyName: `${fragment.fragmentId}:add-hobby`,
+          inlineEditing,
+          sectionId: fragment.sectionId,
+          sectionType: "hobbies",
+          itemKind: "hobby",
+          label: "Add hobby",
+        }),
       ];
     case "additional_information":
       return fragment.items.map((item) =>
