@@ -21,6 +21,7 @@ export type ProposalVerificationIssue = {
     | "completed_qualification_drift"
     | "employer_synthesis"
     | "unsupported_operational_history"
+    | "vague_timeline_claim"
     | "adjacent_readiness"
     | "distant_readiness";
   message: string;
@@ -276,6 +277,15 @@ const ACHIEVEMENT_IMPACT_VERB_PATTERN =
 
 const ACHIEVEMENT_IMPACT_NOUN_PATTERN =
   /\b(?:efficiency|reliability|performance|productivity|output|outcomes?|results?|impact|throughput|quality|revenue|sales|profit|profits|growth|business|commercial)\b/i;
+
+const NUMERIC_CLAIM_PATTERN =
+  /\b\d+(?:[.,]\d+)?(?:[-\s]*(?:%|percent(?:age)?(?:\s+points?)?|pour\s*cent|prozent\p{L}*|procent\p{L}*|proc\.?|процент(?:ов|а)?|por\s*cento))?(?=$|[^\p{L}\p{N}])/giu;
+const DIGIT_DURATION_CLAIM_PATTERN =
+  /\b\d+(?:[.,]\d+)?\s*(?:days?|weeks?|months?|years?|jours?|semaines?|mois|ans?|tage|wochen|monate|jahre|dni|tygodnie|miesi(?:a|ą)ce|lat(?:a)?|rok(?:u)?|дн(?:я|ей)|недел(?:я|и|ь)|месяц(?:а|ев)?|год(?:а|ов)?|سن(?:ة|وات)|أيام|اسابيع|أشهر)\b/giu;
+const VAGUE_DURATION_CLAIM_PATTERN =
+  /(?:^|\s)(?:for\s+years|over\s+the\s+years|last\s+few\s+years|in\s+recent\s+years|depuis\s+des\s+annees|depuis\s+des\s+ans|ces\s+dernieres\s+annees|seit\s+jahren|in\s+den\s+letzten\s+jahren|od\s+lat|przez\s+lata|за\s+годы|на\s+протяжении\s+лет|منذ\s+سنوات)(?=$|\s)/giu;
+const WORD_DURATION_CLAIM_PATTERN =
+  /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|un|une|deux|trois|quatre|cinq|dix|ein|eine|zwei|drei|vier|funf|fünf|zehn|jeden|jedna|dwa|dwie|trzy|cztery|piec|pięć|dziesiec|dziesięć|один|одна|два|две|три|четыре|пять|десять|واحد|اثنان|ثلاث|اربع|خمس|عشر)\s+(?:days?|weeks?|months?|years?|jours?|semaines?|mois|ans?|tage|wochen|monate|jahre|dni|tygodnie|miesi(?:a|ą)ce|lat(?:a)?|rok(?:u)?|дн(?:я|ей)|недел(?:я|и|ь)|месяц(?:а|ев)?|год(?:а|ов)?|سن(?:ة|وات)|أيام|اسابيع|أشهر)\b/giu;
 
 const BUSINESS_IMPACT_PATTERNS: RegExp[] = [
   /\b(?:revenue|sales|profit|profits|commercial impact|business growth|growth|margin|market share|pipeline)\b/i,
@@ -1391,6 +1401,87 @@ function sentenceLooksLikeBusinessImpact(sentence: string): boolean {
   return BUSINESS_IMPACT_PATTERNS.some((pattern) => pattern.test(sentence));
 }
 
+function normalizeNumericClaim(value: string): string {
+  const normalized = normalizeProposalConstraintText(value)
+    .replace(/,/g, ".")
+    .replace(/\s+/g, " ");
+  const number = normalized.match(/\d+(?:\.\d+)?/)?.[0] ?? normalized;
+  const isPercent =
+    /%|percent|percentage|pour\s*cent|prozent|procent|proc|процент|por\s*cento/u.test(
+      normalized,
+    );
+  return isPercent ? `${number} percent` : number;
+}
+
+function extractNumericClaims(value: string): string[] {
+  return Array.from(value.matchAll(NUMERIC_CLAIM_PATTERN))
+    .map((match) => normalizeNumericClaim(match[0]))
+    .filter((claim, index, claims) => claim && claims.indexOf(claim) === index);
+}
+
+function normalizeDurationClaim(value: string): string {
+  const normalized = normalizeProposalConstraintText(value);
+  const digit = normalized.match(/\d+(?:\.\d+)?/)?.[0];
+  if (digit) return `${digit} duration`;
+  const numberWords: Array<[RegExp, string]> = [
+    [/\b(?:one|un|une|ein|eine|jeden|jedna|один|одна|واحد)\b/iu, "1"],
+    [/\b(?:two|deux|zwei|dwa|dwie|два|две|اثنان)\b/iu, "2"],
+    [/\b(?:three|trois|drei|trzy|три|ثلاث)\b/iu, "3"],
+    [/\b(?:four|quatre|vier|cztery|четыре|اربع)\b/iu, "4"],
+    [/\b(?:five|cinq|funf|fünf|piec|pięć|пять|خمس)\b/iu, "5"],
+    [/\b(?:ten|dix|zehn|dziesiec|dziesięć|десять|عشر)\b/iu, "10"],
+  ];
+  for (const [pattern, number] of numberWords) {
+    if (pattern.test(normalized)) return `${number} duration`;
+  }
+  return "vague duration";
+}
+
+function extractDurationClaims(value: string): string[] {
+  const normalized = normalizeProposalConstraintText(value);
+  return [
+    ...Array.from(normalized.matchAll(DIGIT_DURATION_CLAIM_PATTERN)).map(
+      (match) => normalizeDurationClaim(match[0]),
+    ),
+    ...Array.from(normalized.matchAll(WORD_DURATION_CLAIM_PATTERN)).map(
+      (match) => normalizeDurationClaim(match[0]),
+    ),
+    ...Array.from(normalized.matchAll(VAGUE_DURATION_CLAIM_PATTERN)).map(
+      () => "vague duration",
+    ),
+  ].filter((claim, index, claims) => claim && claims.indexOf(claim) === index);
+}
+
+function extractExactDurationClaims(value: string): string[] {
+  const normalized = normalizeProposalConstraintText(value);
+  return [
+    ...Array.from(normalized.matchAll(DIGIT_DURATION_CLAIM_PATTERN)).map(
+      (match) => normalizeDurationClaim(match[0]),
+    ),
+    ...Array.from(normalized.matchAll(WORD_DURATION_CLAIM_PATTERN)).map(
+      (match) => normalizeDurationClaim(match[0]),
+    ),
+  ].filter((claim, index, claims) => claim && claims.indexOf(claim) === index);
+}
+
+function extractVagueDurationClaims(value: string): string[] {
+  const normalized = normalizeProposalConstraintText(value);
+  return Array.from(normalized.matchAll(VAGUE_DURATION_CLAIM_PATTERN))
+    .map(() => "vague duration")
+    .filter((claim, index, claims) => claim && claims.indexOf(claim) === index);
+}
+
+function findUnsupportedClaimTokens(args: {
+  generatedText: string;
+  sourceText: string;
+  extract: (value: string) => string[];
+}): string[] {
+  const sourceClaims = new Set(args.extract(args.sourceText));
+  return args
+    .extract(args.generatedText)
+    .filter((claim) => !sourceClaims.has(claim));
+}
+
 function sentenceLooksLikePastFact(sentence: string): boolean {
   return (
     CANDIDATE_HISTORY_CUES.test(sentence) ||
@@ -1482,6 +1573,8 @@ function getSafeRewriteModeForIssue(args: {
       return sentenceLooksLikeAchievementImpact(args.sentence)
         ? "remove_unsupported_impact"
         : "downgrade_to_past_fact";
+    case "vague_timeline_claim":
+      return "downgrade_to_past_fact";
     case "adjacent_readiness":
     case "distant_readiness":
     case "employer_synthesis":
@@ -1507,15 +1600,17 @@ function rankRepairIssueCode(
       return 2;
     case "employer_synthesis":
       return 3;
-    case "no_context_readiness":
+    case "vague_timeline_claim":
       return 4;
-    case "no_context_phrase":
+    case "no_context_readiness":
       return 5;
-    case "completed_qualification_drift":
+    case "no_context_phrase":
       return 6;
+    case "completed_qualification_drift":
+      return 7;
     case "language_mismatch":
     default:
-      return 7;
+      return 8;
   }
 }
 
@@ -1737,6 +1832,7 @@ export function analyzeProposalDraft(
   const allowedFacts = args.plan.allowed_concrete_facts;
   const allowedEmployers = extractAllowedEmployers(allowedFacts);
   const jobKeywords = buildJobKeywordSet(args.jobTitle, args.jobDescription);
+  const sourceTextForClaimTokens = allowedFacts.join(" ");
   const unsupportedTechnicalSeoContext = isUnsupportedTechnicalSeoContext({
     plan: args.plan,
     jobTitle: args.jobTitle,
@@ -1883,6 +1979,42 @@ export function analyzeProposalDraft(
         code: "unsupported_operational_history",
         message:
           "Do not claim past mentoring unless candidate facts explicitly support mentoring or people-development experience.",
+      });
+    }
+
+    const unsupportedNumericClaims = findUnsupportedClaimTokens({
+      generatedText: sentence,
+      sourceText: sourceTextForClaimTokens,
+      extract: extractNumericClaims,
+    });
+    if (unsupportedNumericClaims.length > 0) {
+      pushSentenceIssue({
+        code: "unsupported_operational_history",
+        message: `Do not add unsupported numeric claims absent from source facts: ${unsupportedNumericClaims.join(", ")}.`,
+      });
+    }
+
+    const unsupportedDurationClaims = findUnsupportedClaimTokens({
+      generatedText: sentence,
+      sourceText: sourceTextForClaimTokens,
+      extract: extractExactDurationClaims,
+    });
+    if (unsupportedDurationClaims.length > 0) {
+      pushSentenceIssue({
+        code: "unsupported_operational_history",
+        message: `Do not add unsupported timeline or duration claims absent from source facts: ${unsupportedDurationClaims.join(", ")}.`,
+      });
+    }
+
+    const unsupportedVagueDurationClaims = findUnsupportedClaimTokens({
+      generatedText: sentence,
+      sourceText: sourceTextForClaimTokens,
+      extract: extractVagueDurationClaims,
+    });
+    if (unsupportedVagueDurationClaims.length > 0) {
+      pushSentenceIssue({
+        code: "vague_timeline_claim",
+        message: `Prefer removing vague unsupported timeline phrasing unless source facts support it: ${unsupportedVagueDurationClaims.join(", ")}.`,
       });
     }
 

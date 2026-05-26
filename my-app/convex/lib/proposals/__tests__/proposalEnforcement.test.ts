@@ -482,6 +482,93 @@ describe("proposal enforcement helpers", () => {
     );
   });
 
+  it("flags unsupported numeric drift in localized proposal output", () => {
+    const issues = verifyProposalDraft({
+      content:
+        "В BrightLayer я возглавлял миграцию дизайн-системы, что позволило сократить время разработки новых функций на 30%.",
+      plan: {
+        ...basePlan,
+        output_language: "ru",
+        allowed_concrete_facts: [
+          "Led a design system migration used across 4 product squads.",
+          "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+          "Improved signup conversion by 11 percent after iterative UI experiments.",
+        ],
+      },
+      format: "cover_letter",
+      outputLanguage: "Russian",
+      candidateName: "Alex Martin",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Lead React and TypeScript development for a customer-facing SaaS platform.",
+    });
+
+    expect(
+      issues.some(
+        (issue) =>
+          issue.code === "unsupported_operational_history" &&
+          issue.message.includes("30 percent"),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not treat job requirement numbers as supported candidate proof", () => {
+    const issues = verifyProposalDraft({
+      content:
+        "Dear Hiring Manager,\n\nI bring 3 years of implementation experience supporting customer rollout teams.\n\nSincerely,\nAlex Martin",
+      plan: {
+        ...basePlan,
+        allowed_concrete_facts: [
+          "Supported customer rollout teams with implementation documentation.",
+          "Coordinated onboarding checklists for product launches.",
+        ],
+      },
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Alex Martin",
+      jobTitle: "Implementation Specialist",
+      jobDescription:
+        "3 years of implementation experience required for customer rollout teams.",
+    });
+
+    expect(
+      issues.some(
+        (issue) =>
+          issue.code === "unsupported_operational_history" &&
+          issue.message.includes("3 duration"),
+      ),
+    ).toBe(true);
+  });
+
+  it("flags unsupported vague duration drift in localized proposal output", () => {
+    const issues = verifyProposalDraft({
+      content:
+        "Als Senior Frontend Engineer habe ich in den letzten Jahren Design-Systeme fuer produktnahe Teams aufgebaut.",
+      plan: {
+        ...basePlan,
+        output_language: "de",
+        allowed_concrete_facts: [
+          "Led a design system migration used across 4 product squads.",
+          "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+        ],
+      },
+      format: "cover_letter",
+      outputLanguage: "German",
+      candidateName: "Alex Martin",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Lead React and TypeScript development for a customer-facing SaaS platform.",
+    });
+
+    expect(
+      issues.some(
+        (issue) =>
+          issue.code === "vague_timeline_claim" &&
+          issue.message.includes("vague duration"),
+      ),
+    ).toBe(true);
+  });
+
   it("does not treat the target employer in an application sentence as candidate history", () => {
     const issues = verifyProposalDraft({
       content:
