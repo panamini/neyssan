@@ -1832,11 +1832,7 @@ export function analyzeProposalDraft(
   const allowedFacts = args.plan.allowed_concrete_facts;
   const allowedEmployers = extractAllowedEmployers(allowedFacts);
   const jobKeywords = buildJobKeywordSet(args.jobTitle, args.jobDescription);
-  const sourceTextForClaimTokens = [
-    ...allowedFacts,
-    args.jobTitle,
-    args.jobDescription,
-  ].join(" ");
+  const sourceTextForClaimTokens = allowedFacts.join(" ");
   const unsupportedTechnicalSeoContext = isUnsupportedTechnicalSeoContext({
     plan: args.plan,
     jobTitle: args.jobTitle,

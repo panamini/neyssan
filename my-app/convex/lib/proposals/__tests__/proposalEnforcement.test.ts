@@ -512,6 +512,34 @@ describe("proposal enforcement helpers", () => {
     ).toBe(true);
   });
 
+  it("does not treat job requirement numbers as supported candidate proof", () => {
+    const issues = verifyProposalDraft({
+      content:
+        "Dear Hiring Manager,\n\nI bring 3 years of implementation experience supporting customer rollout teams.\n\nSincerely,\nAlex Martin",
+      plan: {
+        ...basePlan,
+        allowed_concrete_facts: [
+          "Supported customer rollout teams with implementation documentation.",
+          "Coordinated onboarding checklists for product launches.",
+        ],
+      },
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Alex Martin",
+      jobTitle: "Implementation Specialist",
+      jobDescription:
+        "3 years of implementation experience required for customer rollout teams.",
+    });
+
+    expect(
+      issues.some(
+        (issue) =>
+          issue.code === "unsupported_operational_history" &&
+          issue.message.includes("3 duration"),
+      ),
+    ).toBe(true);
+  });
+
   it("flags unsupported vague duration drift in localized proposal output", () => {
     const issues = verifyProposalDraft({
       content:
