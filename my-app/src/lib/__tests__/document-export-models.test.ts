@@ -7,6 +7,7 @@ import { generateCvTemplate } from "../cv-template";
 import { getResumeTemplateDefinition } from "../layout/resumeTemplates";
 import { planWorkshopResumePages } from "../resume/resumePagination";
 import {
+  buildProposalExportSource,
   buildResumeExportSource,
   buildProposalPreviewPrintSource,
   buildProposalPrintDebugSnapshot,
@@ -275,6 +276,88 @@ describe("document-export-models", () => {
         }),
       }),
     );
+  });
+
+  it("preserves explicit proposal export locales before falling back to content inference", () => {
+    const englishContent =
+      "Dear Hiring Manager,\n\nI bring proposal operations and delivery leadership.\n\nKind regards,\nAlex Martin";
+    const frenchContent =
+      "Bonjour,\n\nJe construis des systèmes éditoriaux fiables.\n\nCordialement,\nAlex Martin";
+
+    expect(
+      buildProposalPreviewPrintSource({
+        content: englishContent,
+        proposalType: "cover_letter",
+        voicePreset: "signature",
+        railTitle: "Alex Martin",
+        railMeta: "Operations Lead",
+        contactLine: "alex@example.com",
+        letterDate: "Paris, April 16, 2026",
+        recipientDetails: "Hiring Manager",
+        documentTitle: "Proposal",
+        documentMeta: "alex@example.com",
+        applicantHeader: null,
+        locale: "ar",
+      }).locale,
+    ).toBe("ar");
+
+    expect(
+      buildProposalExportSource({
+        content: englishContent,
+        proposalType: "cover_letter",
+        documentTitle: "Proposal",
+        documentMeta: "alex@example.com",
+        contactLine: "alex@example.com",
+        letterDate: "Paris, April 16, 2026",
+        recipientDetails: "Hiring Manager",
+        applicantHeader: null,
+        locale: "ru",
+      }).locale,
+    ).toBe("ru");
+
+    expect(
+      buildProposalExportSource({
+        content: englishContent,
+        proposalType: "cover_letter",
+        documentTitle: "Proposal",
+        documentMeta: "",
+        contactLine: "",
+        letterDate: "",
+        recipientDetails: "",
+        applicantHeader: null,
+        locale: "ga",
+      }).locale,
+    ).toBe("ga");
+
+    expect(
+      buildProposalPreviewPrintSource({
+        content: frenchContent,
+        proposalType: "cover_letter",
+        voicePreset: "signature",
+        railTitle: "Alex Martin",
+        railMeta: "Operations Lead",
+        contactLine: "alex@example.com",
+        letterDate: "Paris, April 16, 2026",
+        recipientDetails: "Hiring Manager",
+        documentTitle: "Proposal",
+        documentMeta: "alex@example.com",
+        applicantHeader: null,
+        locale: "zz",
+      }).locale,
+    ).toBe("fr");
+
+    expect(
+      buildProposalExportSource({
+        content: frenchContent,
+        proposalType: "cover_letter",
+        documentTitle: "Proposition",
+        documentMeta: "",
+        contactLine: "",
+        letterDate: "",
+        recipientDetails: "",
+        applicantHeader: null,
+      }).locale,
+    ).toBe("fr");
   });
 
   it("builds a proposal print route payload that preserves preview state", () => {

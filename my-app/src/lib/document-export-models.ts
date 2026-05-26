@@ -506,20 +506,22 @@ export function buildProposalPreviewPrintSource(args: {
   stylePreset?: VerbatiStylePreset | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  locale?: string | null;
 }): ProposalPreviewPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
   const normalizedContent = cleanString(args.content);
   const stylePreset = resolveVerbatiStyle(args.stylePreset);
-  const inferredLocale =
-    resolveProposalOutputLanguage(normalizedContent || documentTitle) === "French"
-      ? "fr"
-      : "en";
+  const locale = resolveProposalExportLocale({
+    explicitLocale: args.locale,
+    content: normalizedContent,
+    documentTitle,
+  });
 
   return {
     schemaVersion: 1,
     kind: "proposal",
     renderSource: "preview",
-    locale: inferredLocale,
+    locale,
     content: normalizedContent,
     proposalType: cleanString(args.proposalType) || null,
     voicePreset: cleanString(args.voicePreset) || null,
@@ -684,6 +686,21 @@ export function buildProposalBodyBlocks(
   return blocks;
 }
 
+function resolveProposalExportLocale(args: {
+  explicitLocale?: string | null;
+  content: string | null | undefined;
+  documentTitle: string | null | undefined;
+}): string {
+  return (
+    normalizeExportDocumentLanguage(args.explicitLocale) ??
+    (resolveProposalOutputLanguage(
+      cleanString(args.content) || cleanString(args.documentTitle),
+    ) === "French"
+      ? "fr"
+      : "en")
+  );
+}
+
 export function buildProposalExportSource(args: {
   content: string | null | undefined;
   proposalType: string | null | undefined;
@@ -697,19 +714,19 @@ export function buildProposalExportSource(args: {
   templateId?: ProposalTemplateId | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  locale?: string | null;
 }): ProposalPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
-  const inferredLocale =
-    resolveProposalOutputLanguage(
-      cleanString(args.content) || documentTitle,
-    ) === "French"
-      ? "fr"
-      : "en";
+  const locale = resolveProposalExportLocale({
+    explicitLocale: args.locale,
+    content: args.content,
+    documentTitle,
+  });
 
   return {
     schemaVersion: 1,
     kind: "proposal",
-    locale: inferredLocale,
+    locale,
     title: documentTitle,
     proposalType: cleanString(args.proposalType) || null,
     documentTitle,

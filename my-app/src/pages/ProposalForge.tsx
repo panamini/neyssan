@@ -9813,6 +9813,7 @@ export function ProposalForge(): JSX.Element {
           fallbackProposalTemplateId,
         signatureSettings: proposalSignatureSettings,
         closing: effectiveProposalClosing,
+        locale: storedOutputDraft?.resolvedLanguage,
       }),
     [
       composePreviewValues?.jobDescription,
@@ -9831,6 +9832,7 @@ export function ProposalForge(): JSX.Element {
       proposalSignatureSettings,
       proposalType,
       proposalContent,
+      storedOutputDraft?.resolvedLanguage,
     ],
   );
   const exportComposeStyledProposalSource = React.useCallback(
@@ -9862,6 +9864,7 @@ export function ProposalForge(): JSX.Element {
         stylePreset: effectiveProposalStylePresetWithPalette,
         signatureSettings: proposalSignatureSettings,
         closing: effectiveProposalClosing,
+        locale: storedOutputDraft?.resolvedLanguage,
       }),
     [
       composePreviewValues?.jobDescription,
@@ -9884,6 +9887,7 @@ export function ProposalForge(): JSX.Element {
       proposalType,
       proposalContent,
       proposalVoicePreset,
+      storedOutputDraft?.resolvedLanguage,
     ],
   );
   const exportSavedProposalSource = React.useCallback(() => {
@@ -9936,6 +9940,7 @@ export function ProposalForge(): JSX.Element {
       templateId: savedProposalTemplateId,
       signatureSettings: proposalSignatureSettings,
       closing: savedClosing,
+      locale: savedMetadata?.resolvedLanguage,
     });
   }, [
     openedSavedProposal,
@@ -10009,6 +10014,7 @@ export function ProposalForge(): JSX.Element {
       stylePreset: effectiveSavedProposalStylePreset,
       signatureSettings: proposalSignatureSettings,
       closing: savedClosing,
+      locale: savedMetadata?.resolvedLanguage,
     });
   }, [
     effectiveSavedProposalStylePreset,
