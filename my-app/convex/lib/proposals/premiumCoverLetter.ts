@@ -486,6 +486,14 @@ export const MISTRAL_PREMIUM_COVER_LETTER_ADAPTER = [
   "- \"My work has centered on clear records, deadline tracking, vendor correspondence, and cross-team updates.\"",
   "- \"I bring the same discipline around records, deadlines, and communication.\"",
   "",
+  "Mistral cv_adjacent body-part override:",
+  "When contextClass is cv_adjacent:",
+  "- employerValueBlock is not a role-fit, role-value, or future-impact paragraph.",
+  "- Use employerValueBlock as a second factual evidence paragraph.",
+  "- closeLine must restate CV-backed operating strengths only.",
+  "- Do not use target role title, \"this role,\" \"your needs,\" \"helps with,\" \"can help,\" \"can contribute,\" \"translates,\" \"aligns,\" \"smoothly,\" or \"efficiently.\"",
+  "- If this cannot be done safely, return shorter body parts instead of filling space.",
+  "",
   "Do not use these role-mapping phrases in adjacent cases:",
   "- bring the required experience",
   "- bring the exact experience",
@@ -760,6 +768,53 @@ const GREETING_PATTERN =
   /^\s*(?:dear\s+[^,]+|madame,\s*monsieur)\s*,?\s*$/i;
 const DIRECT_FIT_PATTERN =
   /\b(?:direct experience|exact fit|perfect fit|already done this work|step into the role immediately|ready to perform the role from day one)\b/i;
+const ADJACENT_ROLE_MAPPING_PATTERNS = [
+  /\bthis\s+role\s+demands\b/i,
+  /\bfor\s+this\s+role\b/i,
+  /\bfor\s+(?:a|an)\s+[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,5}\b/,
+  /\bfor\s+an?\s+administrative\s+coordinator\b/i,
+  /\bthe\s+role\s+you['’]?re\s+filling\b/i,
+  /\bkey\s+responsibilities\s+for\s+this\s+role\b/i,
+  /\bdemands\s+of\s+the\s+role\b/i,
+  /\brequirements\s+of\s+the\s+role\b/i,
+  /\bmaps?\s+(?:closely\s+|directly\s+)?to\b/i,
+  /\baligns?\s+(?:closely\s+|directly\s+)?with\b/i,
+  /\btranslates?\s+(?:directly\s+|well\s+)?(?:into|to)\b/i,
+  /\bdirect(?:ly)?\s+(?:fit|fits|match|relevant|applicable)\b/i,
+  /\bexact\s+match\b/i,
+  /\brelevant\s+to\s+the\s+[A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,5}\b/,
+  /\b(?:particularly\s+)?useful\s+in\s+managing\b/i,
+  /\b(?:can|would)\s+support\s+(?:general\s+office\s+operations|office\s+support|vendor\s+communication|schedule\s+management|scheduling|documentation|[a-z][^.!?]{0,80})\b/i,
+] as const;
+const ADJACENT_MODAL_FUTURE_CONTRIBUTION_PATTERN =
+  /\b(?:can\s+(?:help(?:\s+ensure)?|contribute|support)|would\s+(?:help|support|allow\s+me\s+to)|will\s+(?:help|support)|could\s+(?:help|support))\b/i;
+const ADJACENT_META_COMMENTARY_PATTERNS = [
+  /\bmy\s+closest\s+evidence\s+lies\s+in\b/i,
+  /\bthis\s+experience\s+has\s+given\s+me\s+a\s+strong\s+foundation\b/i,
+  /\bmy\s+background\s+can\s+be\s+particularly\s+useful\b/i,
+  /\bthis\s+background\s+would\s+allow\s+me\s+to\b/i,
+  /\bthese\s+skills\s+help\s+with\b/i,
+  /\bthis\s+experience\s+can\s+translate\b/i,
+  /\bmy\s+experience\s+is\s+relevant\s+because\b/i,
+  /\bthat\s+experience\s+would\s+be\s+useful\b/i,
+  /\bi\s+am\s+confident\s+that\b/i,
+] as const;
+const ADJACENT_UNSUPPORTED_OUTCOME_PHRASES = [
+  "run smoothly",
+  "running smoothly",
+  "smoothly and efficiently",
+  "run efficiently",
+  "office operations run efficiently",
+  "keep operations running smoothly",
+  "keep an office running efficiently",
+  "keep workflows on track",
+  "keep all parties aligned",
+  "reduce bottlenecks",
+  "streamline operations",
+  "improve efficiency",
+  "remove friction",
+  "support smooth office operations",
+] as const;
 const NO_CV_HISTORY_CLAIM_PATTERN =
   /\b(?:in previous roles?|at my previous|during my|my experience|my background|my experience includes|my background includes|i have worked with|i have managed|i worked(?: as| at)?|i served as|i led|i managed|i coordinated|i developed|i built|i improved|i delivered|i implemented|i maintained|i operated|i supervised|i trained|i documented|i reviewed|i monitored|i hold\b|i earned\b|i completed\b|i studied\b)\b/i;
 
@@ -1928,6 +1983,58 @@ function buildCandidateEvidenceSurface(args: { brief: CoverLetterBrief }): strin
     .join(" ");
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function targetRolePattern(targetRole: string, prefix: string): RegExp | null {
+  const tokens = compactWhitespace(targetRole).split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return null;
+  return new RegExp(`${prefix}${tokens.map(escapeRegExp).join("\\s+")}\\b`, "i");
+}
+
+function hasUnsupportedAdjacentOutcome(
+  compact: string,
+  candidateEvidenceSurface: string,
+): boolean {
+  const normalizedCompact = normalizeProposalConstraintText(compact);
+  const normalizedCandidateEvidence = normalizeProposalConstraintText(
+    candidateEvidenceSurface,
+  );
+  return ADJACENT_UNSUPPORTED_OUTCOME_PHRASES.some((phrase) => {
+    const normalizedPhrase = normalizeProposalConstraintText(phrase);
+    return (
+      normalizedCompact.includes(normalizedPhrase) &&
+      !normalizedCandidateEvidence.includes(normalizedPhrase)
+    );
+  });
+}
+
+function hasAdjacentRoleMappingLeak(args: {
+  compact: string;
+  brief: CoverLetterBrief;
+  candidateEvidenceSurface: string;
+}): boolean {
+  const targetRolePatterns = [
+    targetRolePattern(args.brief.targetRole, "\\bfor\\s+(?:a|an|the)?\\s*"),
+    targetRolePattern(args.brief.targetRole, "\\brelevant\\s+to\\s+the\\s+"),
+  ].filter((pattern): pattern is RegExp => pattern !== null);
+  return (
+    ADJACENT_ROLE_MAPPING_PATTERNS.some((pattern) =>
+      pattern.test(args.compact),
+    ) ||
+    targetRolePatterns.some((pattern) => pattern.test(args.compact)) ||
+    ADJACENT_MODAL_FUTURE_CONTRIBUTION_PATTERN.test(args.compact) ||
+    ADJACENT_META_COMMENTARY_PATTERNS.some((pattern) =>
+      pattern.test(args.compact),
+    ) ||
+    hasUnsupportedAdjacentOutcome(
+      args.compact,
+      args.candidateEvidenceSurface,
+    )
+  );
+}
+
 export function validatePremiumCoverLetterBodyParts(args: {
   bodyParts: CoverLetterBodyParts;
   brief: CoverLetterBrief;
@@ -1955,10 +2062,15 @@ export function validatePremiumCoverLetterBodyParts(args: {
     if (
       args.brief.contextClass === "cv_adjacent" &&
       (DIRECT_FIT_PATTERN.test(compact) ||
+        hasAdjacentRoleMappingLeak({
+          compact,
+          brief: args.brief,
+          candidateEvidenceSurface,
+        }) ||
         new RegExp(
           `\\b(?:as|worked\\s+as|experience\\s+as)\\s+(?:a|an|the)?\\s*${args.brief.targetRole
             .split(/\s+/)
-            .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+            .map(escapeRegExp)
             .join("\\s+")}\\b`,
           "i",
         ).test(compact))

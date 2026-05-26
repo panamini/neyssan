@@ -813,6 +813,118 @@ describe("premium cover letter prompt contract", () => {
 });
 
 describe("premium cover letter generation and rendering", () => {
+  const buildAdjacentAdminBrief = () => {
+    const allowedFactsPack = buildAllowedFactsPack({
+      personalizationContext: {
+        name: "Camille Bernard",
+        summary:
+          "Operations lead experienced in coordination, process documentation, and cross-team communication.",
+        desiredPosition: "Operations Coordinator",
+        topSkills: [
+          "Coordination",
+          "Documentation",
+          "Stakeholder Communication",
+        ],
+        recentExperience: [
+          {
+            company: "Nexa Services",
+            position: "Operations Coordinator",
+            highlights: [
+              "Coordinated workflows, documented procedures, tracked deadlines, handled vendor correspondence, and communicated updates across teams.",
+            ],
+          },
+        ],
+      },
+      jobTitle: "Administrative Coordinator",
+      jobDescription:
+        "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
+    });
+    return buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Administrative Coordinator",
+      jobDescription:
+        "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
+      contextClass: "cv_adjacent",
+      allowedFactsPack,
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack,
+        jobTitle: "Administrative Coordinator",
+        jobDescription:
+          "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
+        contextClass: "cv_adjacent",
+      }),
+    });
+  };
+
+  const baseAdjacentAdminBodyParts = {
+    opening:
+      "I coordinated workflows, documented procedures, tracked deadlines, handled vendor correspondence, and communicated updates across teams.",
+    proofBlock:
+      "I maintained clear records, scheduling follow-through, and cross-team updates.",
+    employerValueBlock:
+      "I documented process notes, tracked open items, and maintained vendor correspondence records.",
+    closeLine:
+      "I bring experience in coordination, documentation, scheduling, vendor correspondence, and stakeholder communication.",
+  };
+
+  const adjacentAdminIssueCodesFor = (value: string) =>
+    validatePremiumCoverLetterBodyParts({
+      brief: buildAdjacentAdminBrief(),
+      bodyParts: {
+        ...baseAdjacentAdminBodyParts,
+        employerValueBlock: value,
+      },
+    }).map((issue) => issue.code);
+
+  it("fails cv_adjacent output when experience translates into role support", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "This experience translates into the ability to support general office operations with clear records, timely communication, and reliable follow-up.",
+      ),
+    ).toContain("adjacent_direct_fit");
+  });
+
+  it("fails cv_adjacent output when skills are mapped to an Administrative Coordinator role", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "For an Administrative Coordinator, these skills help with general office support, vendor communication, and schedule management.",
+      ),
+    ).toContain("adjacent_direct_fit");
+  });
+
+  it("fails cv_adjacent output when strong-foundation commentary maps to role responsibilities", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "This experience has given me a strong foundation in managing vendor communication and general office support, which are key responsibilities for this role.",
+      ),
+    ).toContain("adjacent_direct_fit");
+  });
+
+  it("fails cv_adjacent output when background can help ensure efficient office operations", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "My background in coordination and documentation can help ensure that office operations run efficiently.",
+      ),
+    ).toContain("adjacent_direct_fit");
+  });
+
+  it("fails cv_adjacent output when operating strengths support smooth office operations", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "I bring the same focus on coordination, documentation, and communication to support smooth office operations.",
+      ),
+    ).toContain("adjacent_direct_fit");
+  });
+
+  it("allows neutral cv_adjacent evidence-only wording", () => {
+    expect(
+      adjacentAdminIssueCodesFor(
+        "I coordinated workflows, documented processes, tracked deadlines, handled vendor correspondence, and communicated updates across teams.",
+      ),
+    ).not.toContain("adjacent_direct_fit");
+  });
+
   it("runs a mocked employment-strong-frontend premium smoke without fixture-opening reuse", async () => {
     let capturedPrompt = "";
     let capturedSchema: Record<string, unknown> | null = null;
