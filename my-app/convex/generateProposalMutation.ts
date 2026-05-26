@@ -9945,7 +9945,7 @@ export async function handleGenerateProposal(
             const proposal = await proposalService.generateTextWithFallbacks(
               prompt,
               cancellationContext?.signal
-                ? { signal: cancellationContext.signal }
+                ? ({ signal: cancellationContext.signal } as any)
                 : {},
             );
             proposalContent = proposal.text;
