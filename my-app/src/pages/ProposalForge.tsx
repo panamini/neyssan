@@ -303,6 +303,7 @@ type ProposalForgeHandoffRecord = {
 
 const PROPOSAL_MODEL_SELECTOR_OPTIONS = [
   { value: "chatgpt", label: "GPT-5.5" },
+  { value: "qwen3.7-max", label: "Qwen3.7-Max" },
   { value: "mistral-medium-latest", label: "Med" },
   { value: "mistral-large-latest", label: "Lrg" },
 ] as const;
@@ -3192,6 +3193,7 @@ export function ProposalForge(): JSX.Element {
   >(() => {
     const storedComposeDraft = readStoredProposalComposeDraft();
     return storedComposeDraft?.modelType === "chatgpt" ||
+      storedComposeDraft?.modelType === "qwen3.7-max" ||
       storedComposeDraft?.modelType === "mistral-small-latest" ||
       storedComposeDraft?.modelType === "mistral-medium-latest" ||
       storedComposeDraft?.modelType === "mistral-large-latest" ||
@@ -9033,6 +9035,7 @@ export function ProposalForge(): JSX.Element {
           const existingComposeDraft = readStoredProposalComposeDraft() ?? {};
           restoredModelType =
             existingComposeDraft.modelType === "chatgpt" ||
+            existingComposeDraft.modelType === "qwen3.7-max" ||
             existingComposeDraft.modelType === "mistral-small-latest" ||
             existingComposeDraft.modelType === "mistral-medium-latest" ||
             existingComposeDraft.modelType === "mistral-large-latest" ||

@@ -54,6 +54,7 @@ export const formSchema = z.object({
     .enum(
       [
         "chatgpt",
+        "qwen3.7-max",
         "mistral-small-latest",
         "mistral-medium-latest",
         "mistral-large-latest",

@@ -65,7 +65,7 @@ export class OpenAICompatibleChatAdapter implements ModelAdapter {
     this.modelName =
       config.modelName ??
       (config.providerName === "qwen"
-        ? "qwen3.6-plus"
+        ? "qwen3.7-max"
         : config.providerName === "deepseek"
           ? "deepseek-v4-flash"
           : "unknown");

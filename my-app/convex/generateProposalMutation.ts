@@ -5,6 +5,7 @@ import { llmConfig } from "../config/llmConfig";
 import { internal } from "./_generated/api";
 import { ConvexError } from "convex/values";
 import { ProposalService } from "./langchain";
+import { OpenAICompatibleChatAdapter } from "./langchain/models/openai_compatible_chat_adapter";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatMistralAI } from "@langchain/mistralai";
 import { Mistral } from "@mistralai/mistralai";
@@ -129,6 +130,7 @@ const modelChoice = v.union(
   v.literal("mistral-large-latest"),
   v.literal("mistral-small-latest"),
   v.literal("mistral-agent"),
+  v.literal("qwen3.7-max"),
 );
 
 const proposalTypeChoice = v.union(
@@ -227,7 +229,8 @@ export type GenerateProposalArgs = {
     | "mistral-medium-latest"
     | "mistral-large-latest"
     | "mistral-small-latest"
-    | "mistral-agent";
+    | "mistral-agent"
+    | "qwen3.7-max";
   agentId?: string;
   personalizationContext?: PersonalizationContext;
   personalizationRichness?: PersonalizationRichness;
@@ -9634,7 +9637,7 @@ export async function handleGenerateProposal(
     residualVerifierWarningTag = null;
     try {
       await ensureGenerationActive();
-      if (actualModelType === "chatgpt") {
+      if (actualModelType === "chatgpt" || actualModelType === "qwen3.7-max") {
         const apiKey = process.env.OPENAI_API_KEY ?? null;
 
         if (outputFormat === "cover_letter") {
@@ -9709,10 +9712,38 @@ export async function handleGenerateProposal(
         if (premiumPersistencePayload) {
           proposalContent = premiumPersistencePayload.content;
         } else {
-          const proposalService = new ProposalService({
-            apiKey: apiKey ?? undefined,
-            modelName: "chatgpt",
-          });
+          const proposalService = (() => {
+            if (actualModelType === "qwen3.7-max") {
+              const qwenApiKey =
+                llmConfig.qwenKey ?? process.env.QWEN_API_KEY ?? null;
+              const qwenChatCompletionsUrl =
+                llmConfig.qwenChatCompletionsUrl ??
+                process.env.QWEN_CHAT_COMPLETIONS_URL ??
+                null;
+              if (!qwenApiKey || !qwenChatCompletionsUrl) {
+                throw new ConvexError(
+                  "Qwen API credentials are not configured for qwen3.7-max.",
+                );
+              }
+              return new ProposalService({
+                modelAdapters: [
+                  new OpenAICompatibleChatAdapter({
+                    apiKey: qwenApiKey,
+                    url: qwenChatCompletionsUrl,
+                    providerName: "qwen",
+                    modelName:
+                      llmConfig.proposalModels?.qwenFallbackModel ??
+                      "qwen3.7-max",
+                  }),
+                ],
+              });
+            }
+
+            return new ProposalService({
+              apiKey: apiKey ?? undefined,
+              modelName: "chatgpt",
+            });
+          })();
 
           if (outputFormat === "freelance_proposal") {
             const tokenLimit = 3000;
