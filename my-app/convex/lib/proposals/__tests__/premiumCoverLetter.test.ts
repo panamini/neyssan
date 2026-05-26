@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MISTRAL_PREMIUM_COVER_LETTER_ADAPTER,
   PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+  QWEN_PREMIUM_COVER_LETTER_ADAPTER,
   attemptPremiumCoverLetterGeneration,
   buildAllowedFactsPack,
   buildJobOfferPriorityPack,
@@ -356,6 +358,125 @@ describe("premium cover letter evidence ranking", () => {
 });
 
 describe("premium cover letter prompt contract", () => {
+  const buildDirectBrief = () => {
+    const allowedFactsPack = buildAllowedFactsPack({
+      personalizationContext: directContext,
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+    });
+    const rankedEvidencePack = rankAllowedFacts({
+      allowedFactsPack,
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      contextClass: "cv_direct",
+    });
+    return buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      contextClass: "cv_direct",
+      allowedFactsPack,
+      rankedEvidencePack,
+    });
+  };
+
+  it("scopes premium provider adapters to Mistral and Qwen without changing GPT/default prompts", () => {
+    const brief = buildDirectBrief();
+    const defaultPrompt = buildPremiumCoverLetterPrompt({ brief });
+    const gptPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+    });
+    const unknownPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "unknown",
+    });
+    const mistralPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "mistral",
+      writerModel: "mistral-large-latest",
+    });
+    const qwenPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+    });
+
+    expect(MISTRAL_PREMIUM_COVER_LETTER_ADAPTER).toContain(
+      "Provider adapter: Mistral",
+    );
+    expect(QWEN_PREMIUM_COVER_LETTER_ADAPTER).toContain(
+      "Provider adapter: Qwen",
+    );
+    expect(gptPrompt).toBe(defaultPrompt);
+    expect(unknownPrompt).toBe(defaultPrompt);
+    for (const prompt of [defaultPrompt, gptPrompt, unknownPrompt]) {
+      expect(prompt).not.toContain("Provider adapter: Mistral");
+      expect(prompt).not.toContain("Provider adapter: Qwen");
+      expect(prompt).not.toContain("Truth outranks fluency");
+      expect(prompt).not.toContain("monitored ≠ managed");
+      expect(prompt).not.toContain("MISTRAL ADJACENT-FIT ADDENDUM");
+      expect(prompt).not.toContain(
+        "In adjacent cases, never convert proximity into direct fit",
+      );
+    }
+
+    expect(mistralPrompt).toContain("Provider adapter: Mistral");
+    expect(mistralPrompt).toContain("Truth outranks fluency");
+    expect(mistralPrompt).toContain(
+      "CV evidence outranks job-description keywords",
+    );
+    expect(mistralPrompt).toContain("monitored ≠ managed");
+    expect(mistralPrompt).toContain("documented ≠ managed");
+    expect(mistralPrompt).toContain("valid driver's license");
+    expect(mistralPrompt).toContain("high school diploma");
+    expect(mistralPrompt).toContain("MISTRAL ADJACENT-FIT ADDENDUM");
+    expect(mistralPrompt).toContain(
+      "In adjacent cases, never convert proximity into direct fit",
+    );
+    expect(mistralPrompt).toContain("directly aligns");
+    expect(mistralPrompt).toContain(
+      "You may not use JD terms as candidate experience unless the candidate facts support that exact capability",
+    );
+    expect(mistralPrompt).toContain(
+      "My background is closest to the monitoring and documentation side of campus safety",
+    );
+    expect(mistralPrompt).toContain(
+      "Return only the required JSON body parts",
+    );
+    expect(mistralPrompt).not.toContain("Provider adapter: Qwen");
+
+    expect(qwenPrompt).toContain("Provider adapter: Qwen");
+    expect(qwenPrompt).toContain("separated evidence zones");
+    expect(qwenPrompt).toContain(
+      "Never transfer a requirement from job facts into candidate experience",
+    );
+    expect(qwenPrompt).toContain(
+      "Use ATS terms only when attached to a CV-backed action",
+    );
+    expect(qwenPrompt).toContain("Return only the required JSON body parts");
+    expect(qwenPrompt).not.toContain("Provider adapter: Mistral");
+    expect(qwenPrompt).not.toContain("MISTRAL ADJACENT-FIT ADDENDUM");
+  });
+
+  it("keeps provider adapter order between the shared premium prompt and structured brief", () => {
+    const prompt = buildPremiumCoverLetterPrompt({
+      brief: buildDirectBrief(),
+      writerModel: "mistral-medium-latest",
+    });
+    const sharedPromptIndex = prompt.indexOf(
+      "Write premium cover-letter body parts.",
+    );
+    const adapterIndex = prompt.indexOf("Provider adapter: Mistral");
+    const structuredBriefIndex = prompt.indexOf("Structured brief:");
+
+    expect(sharedPromptIndex).toBeGreaterThanOrEqual(0);
+    expect(adapterIndex).toBeGreaterThan(sharedPromptIndex);
+    expect(structuredBriefIndex).toBeGreaterThan(adapterIndex);
+  });
+
   it("keeps strongest evidence priority, demotes secondary qualifications, includes forbidden moves, and stays compact", () => {
     const allowedFactsPack = buildAllowedFactsPack({
       personalizationContext: directContext,
@@ -1209,6 +1330,87 @@ describe("premium cover letter generation and rendering", () => {
           code: "unsupported_education_credential",
           repairable: false,
         }),
+      ]),
+    );
+  });
+
+  it("keeps premium safety validation gates fail-closed", () => {
+    const brief = buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Security Officer",
+      jobDescription:
+        "Ascension needs a Security Officer to support visitors and staff, document incidents, maintain emergency readiness, hold a valid driver's license, have a bachelor's degree, and follow HIPAA and OSHA requirements.",
+      contextClass: "cv_direct",
+      allowedFactsPack: buildAllowedFactsPack({
+        personalizationContext: {
+          name: "Test Candidate",
+          summary: "Security Guard with monitoring and reporting experience.",
+          recentExperience: [
+            {
+              company: "Sentinel Services",
+              position: "Security Guard",
+              highlights: [
+                "Monitored access points and documented visitor logs.",
+                "Reported all-clear status during routine patrols.",
+              ],
+            },
+          ],
+        },
+        jobTitle: "Security Officer",
+        jobDescription:
+          "Support visitors and staff, document incidents, maintain emergency readiness, hold a valid driver's license, have a bachelor's degree, and follow HIPAA and OSHA requirements.",
+      }),
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack: buildAllowedFactsPack({
+          personalizationContext: {
+            name: "Test Candidate",
+            summary: "Security Guard with monitoring and reporting experience.",
+            recentExperience: [
+              {
+                company: "Sentinel Services",
+                position: "Security Guard",
+                highlights: [
+                  "Monitored access points and documented visitor logs.",
+                  "Reported all-clear status during routine patrols.",
+                ],
+              },
+            ],
+          },
+          jobTitle: "Security Officer",
+          jobDescription:
+            "Support visitors and staff, document incidents, maintain emergency readiness, hold a valid driver's license, have a bachelor's degree, and follow HIPAA and OSHA requirements.",
+        }),
+        jobTitle: "Security Officer",
+        jobDescription:
+          "Support visitors and staff, document incidents, maintain emergency readiness, hold a valid driver's license, have a bachelor's degree, and follow HIPAA and OSHA requirements.",
+        contextClass: "cv_direct",
+      }),
+    });
+
+    const issueCodes = validatePremiumCoverLetterBodyParts({
+      brief,
+      bodyParts: {
+        opening:
+          "A valid driver's license and high school diploma further meet your core requirements without delay.",
+        proofBlock:
+          "Skills: access control, emergency response, HIPAA, and OSHA.",
+        employerValueBlock:
+          "I am drawn to Ascension's mission of safeguarding patients, staff, and facilities.",
+        closeLine:
+          "I managed safety incidents, led emergency preparedness drills, and would contribute to your St. team.",
+      },
+    }).map((issue) => issue.code);
+
+    expect(issueCodes).toEqual(
+      expect.arrayContaining([
+        "unsupported_security_ownership",
+        "unsupported_license_claim",
+        "unsupported_education_credential",
+        "unsupported_compliance_framework",
+        "fabricated_mission_claim",
+        "clipped_source_fragment",
+        "ats_keyword_list",
       ]),
     );
   });
