@@ -381,13 +381,15 @@ describe("premium cover letter prompt contract", () => {
 
     expect(prompt).toContain("Prioritize strongest evidence first.");
     expect(prompt).toContain(
-      "Do not lead with secondary qualifications when stronger evidence exists.",
+      "Do not lead with secondary qualifications or spend body space on admiration",
     );
     expect(prompt).toContain(
       "Preset affects rhetorical texture only. It must not change truthfulness, claim strength, or evidence priority.",
     );
     expect(prompt).toContain("Preset contract for signature:");
-    expect(prompt).toContain("Do not spend body space on admiration");
+    expect(prompt).toContain(
+      "Do not lead with secondary qualifications or spend body space on admiration",
+    );
     expect(prompt).toContain(
       "If evidence is modest, let the best available concrete proof carry the case.",
     );
@@ -744,14 +746,21 @@ describe("premium cover letter generation and rendering", () => {
     expect(capturedPrompt).toContain("Planner priority order:");
     expect(capturedPrompt).toContain("Structured brief:");
     expect(capturedPrompt).toContain(
-      "A JD keyword, tool, or responsibility may appear as candidate experience only when the CV supports that exact capability",
+      "A JD keyword, tool, certification, compliance framework, domain, or responsibility may appear as candidate experience only when the CV supports that exact capability",
     );
     expect(capturedPrompt).toContain(
       "Bind ATS terms to a concrete action or result; never list them",
     );
+    expect(capturedPrompt).toContain(
+      "Bind ATS and JD terms to a concrete CV-backed action, artifact, responsibility, or result",
+    );
     expect(capturedPrompt).toContain("clipped fragments like 'St.'");
-    expect(capturedPrompt).toContain("Avoid evaluator/meta phrases like 'the evidence I would bring'");
-    expect(capturedPrompt).toContain("Do not write clunky constructions where inanimate objects are helped to improve or unlock outcomes");
+    expect(capturedPrompt).toContain(
+      "Avoid clunky inanimate-object phrasing and evaluator/meta phrases like 'the evidence I would bring'",
+    );
+    expect(capturedPrompt).toContain(
+      "Avoid clunky inanimate-object phrasing and evaluator/meta phrases like 'the evidence I would bring'",
+    );
     expect(result?.bodyParts).toEqual(bodyParts);
     expect(result?.content).toContain("Dear Hiring Manager,");
     expect(result?.content).toContain("design-system migration used across four product squads");
@@ -833,6 +842,118 @@ describe("premium cover letter generation and rendering", () => {
     expect(safe?.content).not.toContain("your St. campus team");
   });
 
+  it("fails ATS keyword lists and compliance-framework hallucinations but allows source-backed action phrases", () => {
+    const brief = buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Security Officer",
+      jobDescription:
+        "Support access control, document incidents, and maintain routine safety coverage.",
+      contextClass: "cv_direct",
+      allowedFactsPack: buildAllowedFactsPack({
+        personalizationContext: {
+          name: "Test Candidate",
+          summary: "Security Guard with access control monitoring and incident documentation experience.",
+          recentExperience: [
+            {
+              company: "Sentinel Services",
+              position: "Security Guard",
+              highlights: [
+                "Monitored access points and documented safety incidents.",
+                "Maintained routine reporting across security shifts.",
+              ],
+            },
+          ],
+        },
+        jobTitle: "Security Officer",
+        jobDescription:
+          "Support access control, document incidents, and maintain routine safety coverage.",
+      }),
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack: buildAllowedFactsPack({
+          personalizationContext: {
+            name: "Test Candidate",
+            summary: "Security Guard with access control monitoring and incident documentation experience.",
+            recentExperience: [
+              {
+                company: "Sentinel Services",
+                position: "Security Guard",
+                highlights: [
+                  "Monitored access points and documented safety incidents.",
+                  "Maintained routine reporting across security shifts.",
+                ],
+              },
+            ],
+          },
+          jobTitle: "Security Officer",
+          jobDescription:
+            "Support access control, document incidents, and maintain routine safety coverage.",
+        }),
+        jobTitle: "Security Officer",
+        jobDescription:
+          "Support access control, document incidents, and maintain routine safety coverage.",
+        contextClass: "cv_direct",
+      }),
+    });
+
+    const keywordListIssues = validatePremiumCoverLetterBodyParts({
+      brief,
+      bodyParts: {
+        opening:
+          "Skills: access control monitoring, incident documentation, HIPAA, and OSHA.",
+        proofBlock:
+          "I monitored access points and documented safety incidents across shifts.",
+        employerValueBlock:
+          "That work supports routine facility safety and clear reporting.",
+        closeLine: "I would welcome the opportunity to contribute to your team.",
+      },
+    });
+
+    const complianceIssues = validatePremiumCoverLetterBodyParts({
+      brief,
+      bodyParts: {
+        opening:
+          "I bring HIPAA compliance and JCAHO standards to security work.",
+        proofBlock:
+          "I monitored access points and documented safety incidents across shifts.",
+        employerValueBlock:
+          "That work supports routine facility safety and clear reporting.",
+        closeLine: "I would welcome the opportunity to contribute to your team.",
+      },
+    });
+
+    const safeIssues = validatePremiumCoverLetterBodyParts({
+      brief,
+      bodyParts: {
+        opening:
+          "I supported access control monitoring and incident documentation across shifts.",
+        proofBlock:
+          "I monitored access points and documented safety incidents across shifts.",
+        employerValueBlock:
+          "That work supports routine facility safety and clear reporting.",
+        closeLine: "I would welcome the opportunity to contribute to your team.",
+      },
+    });
+
+    expect(keywordListIssues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "ats_keyword_list",
+          repairable: false,
+        }),
+      ]),
+    );
+    expect(complianceIssues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "unsupported_compliance_framework",
+          repairable: false,
+        }),
+      ]),
+    );
+    expect(safeIssues).toEqual([]);
+  });
+
   it("fails closed on unsupported security ownership and fabricated mission claims", () => {
     const brief = buildPremiumCoverLetterBrief({
       preset: "signature",
@@ -909,6 +1030,183 @@ describe("premium cover letter generation and rendering", () => {
         }),
         expect.objectContaining({
           code: "fabricated_mission_claim",
+          repairable: false,
+        }),
+      ]),
+    );
+  });
+
+  it("fails unsupported emergency ownership but allows supported emergency readiness phrasing", () => {
+    const brief = buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Security Officer",
+      jobDescription:
+        "Support visitors and staff, document incidents, and maintain emergency readiness.",
+      contextClass: "cv_direct",
+      allowedFactsPack: buildAllowedFactsPack({
+        personalizationContext: {
+          name: "Test Candidate",
+          summary: "Security Guard with monitoring and reporting experience.",
+          recentExperience: [
+            {
+              company: "Sentinel Services",
+              position: "Security Guard",
+              highlights: [
+                "Monitored access points and documented safety incidents.",
+                "Maintained routine reporting across security shifts.",
+              ],
+            },
+          ],
+        },
+        jobTitle: "Security Officer",
+        jobDescription:
+          "Support visitors and staff, document incidents, and maintain emergency readiness.",
+      }),
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack: buildAllowedFactsPack({
+          personalizationContext: {
+            name: "Test Candidate",
+            summary: "Security Guard with monitoring and reporting experience.",
+            recentExperience: [
+              {
+                company: "Sentinel Services",
+                position: "Security Guard",
+                highlights: [
+                  "Monitored access points and documented safety incidents.",
+                  "Maintained routine reporting across security shifts.",
+                ],
+              },
+            ],
+          },
+          jobTitle: "Security Officer",
+          jobDescription:
+            "Support visitors and staff, document incidents, and maintain emergency readiness.",
+        }),
+        jobTitle: "Security Officer",
+        jobDescription:
+          "Support visitors and staff, document incidents, and maintain emergency readiness.",
+        contextClass: "cv_direct",
+      }),
+    });
+
+    const unsafeIssues = validatePremiumCoverLetterBodyParts({
+      brief,
+      bodyParts: {
+        opening:
+          "I monitored access points and documented safety incidents across shifts.",
+        proofBlock:
+          "I managed safety incidents and led emergency drills as part of my work.",
+        employerValueBlock:
+          "That work supports routine facility safety and clear reporting.",
+        closeLine: "I would welcome the opportunity to contribute to your team.",
+      },
+    });
+
+    const safeIssues = validatePremiumCoverLetterBodyParts({
+      brief,
+      bodyParts: {
+        opening:
+          "I monitored access points and documented safety incidents across shifts.",
+        proofBlock:
+          "I supported emergency readiness by documenting incidents and monitoring access points.",
+        employerValueBlock:
+          "That work supports routine facility safety and clear reporting.",
+        closeLine: "I would welcome the opportunity to contribute to your team.",
+      },
+    });
+
+    expect(unsafeIssues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "unsupported_security_ownership",
+          repairable: false,
+        }),
+      ]),
+    );
+    expect(safeIssues).toEqual([]);
+  });
+
+  it("fails provider-inflated incident, license, and education claims without CV support", () => {
+    const brief = buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Security Officer",
+      jobDescription:
+        "Support visitors and staff, document incidents, maintain emergency readiness, and hold a driver's license before hire.",
+      contextClass: "cv_direct",
+      allowedFactsPack: buildAllowedFactsPack({
+        personalizationContext: {
+          name: "Test Candidate",
+          summary: "Security Guard with monitoring and reporting experience.",
+          recentExperience: [
+            {
+              company: "Sentinel Services",
+              position: "Security Guard",
+              highlights: [
+                "Monitored access points and documented safety incidents.",
+                "Maintained routine reporting across security shifts.",
+              ],
+            },
+          ],
+        },
+        jobTitle: "Security Officer",
+        jobDescription:
+          "Support visitors and staff, document incidents, maintain emergency readiness, and hold a driver's license before hire.",
+      }),
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack: buildAllowedFactsPack({
+          personalizationContext: {
+            name: "Test Candidate",
+            summary: "Security Guard with monitoring and reporting experience.",
+            recentExperience: [
+              {
+                company: "Sentinel Services",
+                position: "Security Guard",
+                highlights: [
+                  "Monitored access points and documented safety incidents.",
+                  "Maintained routine reporting across security shifts.",
+                ],
+              },
+            ],
+          },
+          jobTitle: "Security Officer",
+          jobDescription:
+            "Support visitors and staff, document incidents, maintain emergency readiness, and hold a driver's license before hire.",
+        }),
+        jobTitle: "Security Officer",
+        jobDescription:
+          "Support visitors and staff, document incidents, maintain emergency readiness, and hold a driver's license before hire.",
+        contextClass: "cv_direct",
+      }),
+    });
+
+    const issues = validatePremiumCoverLetterBodyParts({
+      brief,
+      bodyParts: {
+        opening:
+          "My background in monitoring grounds and managing safety incidents aligns directly with this role.",
+        proofBlock:
+          "I documented safety incidents to identify and resolve hazards before they escalated.",
+        employerValueBlock:
+          "A valid driver's license and high school diploma further meet your core requirements without delay.",
+        closeLine:
+          "I look forward to discussing how my active driver's license can contribute to daily campus safety.",
+      },
+    });
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "unsupported_security_ownership",
+          repairable: false,
+        }),
+        expect.objectContaining({
+          code: "unsupported_license_claim",
+          repairable: false,
+        }),
+        expect.objectContaining({
+          code: "unsupported_education_credential",
           repairable: false,
         }),
       ]),
