@@ -24,6 +24,8 @@ Supported auto-detected families:
 - `Ortica`
 - `Source Code Pro`
 - `Doto`
+  - `Noto Sans`
+  - `Noto Kufi Arabic`
 - `FD Garamond`
 - `Chaumont Script`
 

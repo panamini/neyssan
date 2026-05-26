@@ -52,6 +52,13 @@ function makeInlineEditing() {
   };
 }
 
+function getDirectListItems(container: HTMLElement, sectionType: string) {
+  const section = container.querySelector(
+    `[data-preview-section="${sectionType}"][data-preview-surface="section"]`,
+  );
+  return Array.from(section?.querySelectorAll(":scope > ul > li") ?? []);
+}
+
 describe("ResumeOneColAtsPage", () => {
   it("renders shared preview-region attributes and active state for workshop pages", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
@@ -111,6 +118,45 @@ describe("ResumeOneColAtsPage", () => {
         '[data-preview-section="experience"][data-no-pan="true"]',
       ),
     ).toBeTruthy();
+  });
+
+  it("does not render edit-only add rows as empty bullets in non-edit list sections", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...resumeMock,
+      metadata: [],
+      contact: [],
+      summary: "Focused resume preview.",
+      skills: [],
+      skillItems: [],
+      experience: [],
+      projects: [],
+      education: [],
+      languages: resumeMock.languages.slice(0, 1),
+      certifications: resumeMock.certifications.slice(0, 1),
+      achievements: resumeMock.achievements.slice(0, 1),
+      achievementItems: resumeMock.achievementItems.slice(0, 1),
+      affiliations: resumeMock.affiliations.slice(0, 1),
+      hobbies: resumeMock.hobbies.slice(0, 1),
+      hobbyItems: resumeMock.hobbyItems.slice(0, 1),
+      textSections: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    expect(getDirectListItems(container, "languages")).toHaveLength(1);
+    expect(getDirectListItems(container, "certifications")).toHaveLength(1);
+    expect(getDirectListItems(container, "achievements")).toHaveLength(1);
+    expect(getDirectListItems(container, "affiliations")).toHaveLength(1);
+    expect(getDirectListItems(container, "hobbies")).toHaveLength(1);
+    expect(container.querySelector("[data-paper-inline-add]")).toBeNull();
   });
 
   it("uses shared preview spacing tokens for the workshop page shell and header rhythm", () => {
