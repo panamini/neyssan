@@ -1959,6 +1959,204 @@
   flex: 0 0 14px;
 }
 
+.settings-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 34px;
+  padding: 3px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--sf2) 70%, var(--sfr) 30%);
+  box-shadow: var(--sha);
+}
+
+.settings-segmented__button {
+  min-width: 82px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 var(--s3);
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--tm2);
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.settings-segmented__button:hover,
+.settings-segmented__button:focus-visible {
+  color: var(--ti);
+  background: color-mix(in srgb, var(--sfr) 88%, transparent);
+  outline: none;
+}
+
+.settings-segmented__button:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus) 56%, transparent);
+}
+
+.settings-segmented__button[data-active="true"] {
+  border-color: var(--border-soft);
+  background: var(--sfr);
+  color: var(--ti);
+  box-shadow: var(--sha);
+}
+
+.settings-segmented__button svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.settings-segmented__system-dot {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(90deg, var(--ti) 0 50%, var(--sfr) 50% 100%);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.settings-ui-accent-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 320px;
+}
+
+.settings-ui-accent {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-pill);
+  background: color-mix(
+    in srgb,
+    var(--sfr) 72%,
+    var(--settings-ui-accent-swatch) 28%
+  );
+  color: var(--color-on-accent);
+  cursor: pointer;
+  transition:
+    transform var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.settings-ui-accent:hover,
+.settings-ui-accent:focus-visible {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.settings-ui-accent:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus) 48%, transparent);
+}
+
+.settings-ui-accent[data-selected="true"] {
+  border-color: var(--color-accent);
+  box-shadow:
+    inset 0 0 0 2px var(--sfr),
+    0 0 0 1px var(--color-accent);
+}
+
+.settings-ui-accent__swatch {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  background: var(--settings-ui-accent-swatch);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ti) 16%, transparent);
+}
+
+.settings-ui-accent--custom:not([data-selected="true"])
+  .settings-ui-accent__swatch {
+  color: var(--ti);
+  background: conic-gradient(
+    from 0deg,
+    tomato,
+    goldenrod,
+    seagreen,
+    dodgerblue,
+    rebeccapurple,
+    tomato
+  );
+}
+
+.settings-ui-accent__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.settings-theme-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 0.72fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 44px;
+  padding: var(--s3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-control);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-accent) 10%, var(--sfr)),
+    var(--sfr)
+  );
+}
+
+.settings-theme-preview__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-pill);
+  background: var(--color-accent);
+}
+
+.settings-theme-preview__line {
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--ti) 14%, transparent);
+}
+
+.settings-theme-preview__line--strong {
+  background: color-mix(in srgb, var(--ti) 26%, transparent);
+}
+
+.settings-theme-preview__pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 var(--s2);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--sfr));
+  color: var(--ti);
+  font-size: var(--tx);
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
 .settings-token-switch .dasti-theme-switch__label {
   min-width: 7ch;
   text-align: left;
@@ -2214,6 +2412,88 @@ html[data-reduce-motion="true"] *::after {
     0 0 0 2px color-mix(in srgb, var(--color-border-selected) 18%, transparent);
 }
 
+.settings-language-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+.settings-language-card {
+  position: relative;
+  min-width: 0;
+  min-height: 64px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  padding: var(--s3) calc(var(--s4) + 10px) var(--s3) var(--s3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-control);
+  background: color-mix(in srgb, var(--sf2) 42%, var(--sfr) 58%);
+  color: var(--ti);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+
+.settings-language-card:hover,
+.settings-language-card:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--sfr);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.settings-language-card:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus) 48%, transparent);
+}
+
+.settings-language-card[data-selected="true"] {
+  border-color: color-mix(in srgb, var(--color-accent) 52%, transparent);
+  background: color-mix(in srgb, var(--color-accent-pale) 36%, var(--sfr) 64%);
+}
+
+.settings-language-card__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ti);
+  font-size: var(--ts);
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-language-card__native {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tm2);
+  font-size: var(--tx);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-language-card__check {
+  position: absolute;
+  top: var(--s2);
+  right: var(--s2);
+  color: var(--color-accent);
+}
+
+.settings-language-note {
+  padding: var(--s3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-control);
+  background: color-mix(in srgb, var(--sf2) 34%, var(--sfr) 66%);
+  color: var(--tm2);
+  font-size: var(--tx);
+  line-height: 1.5;
+}
+
 .style-swatches {
   display: flex;
   flex-wrap: wrap;
@@ -2234,7 +2514,11 @@ html[data-reduce-motion="true"] *::after {
   padding: 0;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--sfr) 74%, var(--swatch-color, var(--ac)) 26%);
+  background: color-mix(
+    in srgb,
+    var(--sfr) 74%,
+    var(--swatch-color, var(--ac)) 26%
+  );
   color: var(--ti);
   cursor: pointer;
   text-align: center;
@@ -2271,16 +2555,15 @@ html[data-reduce-motion="true"] *::after {
 
 .style-swatch--custom .style-swatch__chip {
   color: var(--ti);
-  background:
-    conic-gradient(
-      from 0deg,
-      #d95843,
-      #d9a441,
-      #4f9d68,
-      #2a78d6,
-      #7a4fa0,
-      #d95843
-    );
+  background: conic-gradient(
+    from 0deg,
+    tomato,
+    goldenrod,
+    seagreen,
+    dodgerblue,
+    rebeccapurple,
+    tomato
+  );
 }
 
 .style-swatch--custom[data-selected="true"] .style-swatch__chip {
@@ -2491,7 +2774,37 @@ html[data-reduce-motion="true"] *::after {
     padding-inline: var(--s4);
   }
 
+  .settings__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s3);
+    align-items: start;
+  }
+
+  .settings-segmented,
+  .settings-ui-accent-row {
+    justify-self: start;
+  }
+
+  .settings-language-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .settings-contact-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .settings-segmented {
+    width: 100%;
+  }
+
+  .settings-segmented__button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .settings-language-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -2500,7 +2813,8 @@ html[data-reduce-motion="true"] *::after {
 .sb__nav--settings .sb-section--settings-back {
   padding-bottom: var(--s2);
   margin-bottom: var(--s2);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--color-border) 60%, transparent);
 }
 
 .sb__nav--settings .sb-section__action--back {
@@ -3575,8 +3889,7 @@ button.dasti-settings-signature-tool:focus-visible {
    Replaces the v2 four-card stack.
    ───────────────────────────────────────────────────────────── */
 
-.dasti-settings-builder__left
-  .dasti-settings-appearance-toolbar--v3 {
+.dasti-settings-builder__left .dasti-settings-appearance-toolbar--v3 {
   display: block;
   padding: 0;
   border: 1.5px solid var(--color-border);
@@ -3588,8 +3901,7 @@ button.dasti-settings-signature-tool:focus-visible {
   overflow: hidden;
 }
 
-.dark .dasti-settings-builder__left
-  .dasti-settings-appearance-toolbar--v3 {
+.dark .dasti-settings-builder__left .dasti-settings-appearance-toolbar--v3 {
   background: var(--sf2);
   border-color: var(--color-border);
   box-shadow:
@@ -3612,13 +3924,16 @@ button.dasti-settings-signature-tool:focus-visible {
 
 .dasti-settings-builder__left
   .dasti-settings-appearance-toolbar--v3
-  .dasti-settings-appearance-group + .dasti-settings-appearance-group {
+  .dasti-settings-appearance-group
+  + .dasti-settings-appearance-group {
   border-top: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
 }
 
-.dark .dasti-settings-builder__left
+.dark
+  .dasti-settings-builder__left
   .dasti-settings-appearance-toolbar--v3
-  .dasti-settings-appearance-group + .dasti-settings-appearance-group {
+  .dasti-settings-appearance-group
+  + .dasti-settings-appearance-group {
   border-top-color: color-mix(in srgb, white 8%, transparent);
 }
 

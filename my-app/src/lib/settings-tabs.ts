@@ -1,6 +1,7 @@
 export type SettingsTab =
   | "account"
-  | "preferences"
+  | "theme"
+  | "language"
   | "docstyle"
   | "voice"
   | "billing"
@@ -18,9 +19,14 @@ export const SETTINGS_TABS: Array<{
     description: "Profile, contact defaults, connected accounts.",
   },
   {
-    id: "preferences",
-    label: "Preferences",
-    description: "Theme and motion preferences.",
+    id: "theme",
+    label: "Theme",
+    description: "Interface mode and accent color.",
+  },
+  {
+    id: "language",
+    label: "Language",
+    description: "Interface language defaults.",
   },
   {
     id: "docstyle",
