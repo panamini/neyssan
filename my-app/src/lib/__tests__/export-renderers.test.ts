@@ -177,7 +177,7 @@ describe("export-renderers", () => {
         ?.textContent,
     ).toContain("Candidature «\u00A0Produit\u00A0» 1,5\u00A0mm");
 
-    for (const locale of ["en", "fr", "es", "pt", "it", "de", "nl", "pl", "ru"] as const) {
+    for (const locale of ["en", "fr", "es", "pt", "it", "de", "nl", "ga", "pl", "ru"] as const) {
       const document = parseExportHtml(
         renderResumeAtsExportDocument({
           ...resumeFixture,

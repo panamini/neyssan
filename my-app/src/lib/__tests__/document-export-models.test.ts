@@ -20,7 +20,7 @@ import {
 
 describe("document-export-models", () => {
   it("preserves supported document locales on resume export sources and falls back for unsupported locales", () => {
-    const supportedLocales = ["en", "fr", "ar", "ru"] as const;
+    const supportedLocales = ["en", "fr", "ar", "ru", "ga"] as const;
 
     for (const locale of supportedLocales) {
       const currentCv = generateCvTemplate(`${locale} CV`);
@@ -33,7 +33,7 @@ describe("document-export-models", () => {
     }
 
     const unsupportedCv = generateCvTemplate("Unsupported locale CV");
-    unsupportedCv.metadata.locale = "ga";
+    unsupportedCv.metadata.locale = "zz";
 
     expect(
       buildStyledResumePrintSource({ currentCv: unsupportedCv })?.locale,

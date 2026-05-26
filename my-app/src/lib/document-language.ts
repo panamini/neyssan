@@ -43,6 +43,7 @@ const DOCUMENT_LANGUAGE_LABELS: Record<DocumentLanguage, string> = {
   pt: "Portuguese",
   pl: "Polish",
   nl: "Dutch",
+  ga: "Irish",
   el: "Greek",
   hu: "Hungarian",
   lt: "Lithuanian",

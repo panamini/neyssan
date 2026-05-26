@@ -74,6 +74,14 @@ export const LOCALE_REGISTRY = {
     marketing: false,
     qaStatus: "none",
   },
+  ga: {
+    nativeName: "Gaeilge",
+    dir: "ltr",
+    ui: false,
+    documents: true,
+    marketing: false,
+    qaStatus: "none",
+  },
   el: {
     nativeName: "Ellinika",
     dir: "ltr",
