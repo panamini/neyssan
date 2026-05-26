@@ -53,6 +53,7 @@ const proposalItem: LibraryItem = {
   type: "proposal",
   title: "Senior Frontend: Linear",
   subtitle: "Proposal text",
+  resolvedLanguage: "ar",
   updatedAt: Date.parse("2026-05-09T12:00:00.000Z"),
   routeTarget: { kind: "route", to: "/proposal?view=saved&id=proposal-1" },
   source: "convex",
@@ -146,6 +147,9 @@ describe("library-download", () => {
         kind: "proposal",
         format: "pdf",
         mode: "styled",
+        data: expect.objectContaining({
+          locale: "ar",
+        }),
         fileNameBase: "Senior Frontend Linear",
       }),
     );
