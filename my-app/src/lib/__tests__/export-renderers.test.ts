@@ -190,6 +190,32 @@ describe("export-renderers", () => {
     }
   });
 
+  it("renders Arabic proposal exports with document-scoped RTL metadata", () => {
+    const arabicProposal: ProposalPrintSource = {
+      ...proposalFixture,
+      locale: "ar",
+      title: "Arabic proposal",
+    };
+    const atsDocument = parseExportHtml(
+      renderProposalAtsExportDocument(arabicProposal),
+    );
+    const styledDocument = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: arabicProposal,
+        stylePreset: {
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        },
+      }),
+    );
+
+    expect(atsDocument.documentElement.getAttribute("lang")).toBe("ar");
+    expect(atsDocument.documentElement.getAttribute("dir")).toBe("rtl");
+    expect(styledDocument.documentElement.getAttribute("lang")).toBe("ar");
+    expect(styledDocument.documentElement.getAttribute("dir")).toBe("rtl");
+  });
+
   it("renders ATS as the protected one-column baseline and styled resume export as the Robial split baseline", () => {
     const atsDocument = parseExportHtml(
       renderResumeAtsExportDocument(resumeFixture, {
