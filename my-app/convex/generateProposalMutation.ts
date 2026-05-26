@@ -9796,29 +9796,22 @@ export async function handleGenerateProposal(
           requestedModelType === "qwen3.7-max" &&
           outputFormat === "cover_letter" &&
           premiumCoverLetterFlagEnabled &&
-          premiumCoverLetterEligibility?.eligible &&
-          !(llmConfig.qwenKey ?? process.env.QWEN_API_KEY ?? null)
-        ) {
-          throw new ConvexError(
-            "Qwen API credentials are not configured for qwen3.7-max.",
-          );
-        } else if (
-          requestedModelType === "qwen3.7-max" &&
-          outputFormat === "cover_letter" &&
-          premiumCoverLetterFlagEnabled &&
           premiumCoverLetterEligibility?.eligible
         ) {
+          const qwenApiKey = llmConfig.qwenKey ?? process.env.QWEN_API_KEY ?? null;
+          const qwenChatCompletionsUrl =
+            process.env.QWEN_CHAT_COMPLETIONS_URL ??
+            (process.env.QWEN_BASE_URL
+              ? `${process.env.QWEN_BASE_URL.replace(/\/$/, "")}/chat/completions`
+              : null) ??
+            null;
+          if (!qwenApiKey || !qwenChatCompletionsUrl) {
+            throw new ConvexError(
+              "Qwen API credentials are not configured for qwen3.7-max.",
+            );
+          }
+
           try {
-            const qwenApiKey = llmConfig.qwenKey ?? process.env.QWEN_API_KEY ?? null;
-            const qwenChatCompletionsUrl =
-              llmConfig.qwenChatCompletionsUrl ??
-              process.env.QWEN_CHAT_COMPLETIONS_URL ??
-              null;
-            if (!qwenApiKey || !qwenChatCompletionsUrl) {
-              throw new ConvexError(
-                "Qwen API credentials are not configured for qwen3.7-max.",
-              );
-            }
             premiumPersistencePayload =
               await attemptPremiumCoverLetterGeneration({
                 personalizationContext: effectivePersonalization,

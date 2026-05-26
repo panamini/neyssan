@@ -667,6 +667,67 @@ describe("proposal provider busy handling", () => {
     expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
   });
 
+  it("fails closed before fallback when qwen premium chat completions URL is missing", async () => {
+    process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1 = "1";
+    process.env.QWEN_API_KEY = "sk-qwen";
+    delete process.env.QWEN_CHAT_COMPLETIONS_URL;
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const { handleGenerateProposal } = await loadProposalModule();
+
+    const ctx = {
+      auth: {
+        getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+      },
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "profile_123",
+        proposalVoicePreset: "signature",
+        experience: [],
+        skills: [],
+        achievements: [],
+      }),
+      runMutation: vi.fn(),
+    };
+
+    try {
+      await expect(
+        handleGenerateProposal(ctx, {
+          jobTitle: "Senior Frontend Engineer",
+          jobDescription:
+            "Lead React and TypeScript development across customer-facing product surfaces and collaborate closely with product teams.",
+          proposalType: "cover_letter",
+          modelType: "qwen3.7-max",
+          voicePreset: "signature",
+          personalizationMode: "explicit_only",
+          personalizationRichness: "rich",
+          personalizationContext: {
+            name: "Alex Martin",
+            summary: "Frontend engineer focused on design systems.",
+            topSkills: ["React", "TypeScript", "Design systems"],
+            recentExperience: [
+              {
+                company: "Acme",
+                position: "Senior Frontend Engineer",
+                highlights: [
+                  "Led a design system migration used across four product squads.",
+                ],
+              },
+            ],
+          },
+        }),
+      ).rejects.toThrow(
+        "Qwen API credentials are not configured for qwen3.7-max.",
+      );
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+      expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
+      expect(ctx.runMutation).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it("falls back to ChatGPT after a legacy-generation 429 in the CV-backed bypass path", async () => {
     mockModelInvoke.mockRejectedValue(makeRateLimitError(5));
     mockGenerateCreativeProposal.mockResolvedValue({
