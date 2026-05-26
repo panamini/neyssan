@@ -2401,8 +2401,10 @@ export function renderPremiumCoverLetter(args: {
 
 function hasExpectedCandidateSignature(args: {
   content: string;
+  outputLanguage: ProposalOutputLanguage;
   candidateName?: string;
 }): boolean {
+  if (!getDeterministicCopyLanguage(args.outputLanguage)) return true;
   const expectedName = compactWhitespace(args.candidateName);
   if (!expectedName) return true;
   const lines = args.content
@@ -2789,6 +2791,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   if (
     !hasExpectedCandidateSignature({
       content: rendered.content,
+      outputLanguage: args.outputLanguage,
       candidateName: args.candidateName,
     })
   ) {
