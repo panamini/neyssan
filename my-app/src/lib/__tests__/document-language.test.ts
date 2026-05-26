@@ -82,7 +82,7 @@ describe("document language scaffold", () => {
     ).toMatchObject({
       requestedLanguage: "auto",
       resolvedLanguage: "de",
-      languageSource: "job",
+      languageSource: "job-detected",
       jobDetectedLanguage: "de",
     });
   });

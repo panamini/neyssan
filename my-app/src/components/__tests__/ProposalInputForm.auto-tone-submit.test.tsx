@@ -357,7 +357,7 @@ describe("ProposalInputForm auto tone submit", () => {
         expect.objectContaining({
           requestedLanguage: "auto",
           resolvedLanguage: "de",
-          languageSource: "job",
+          languageSource: "job-detected",
           jobDetectedLanguage: "de",
         }),
       );
