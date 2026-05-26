@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { PROPOSAL_DOCUMENT_LANGUAGE_CODES } from "./proposalOutput";
+import {
+  PROPOSAL_DOCUMENT_LANGUAGE_CODES,
+  getDeterministicCopyLanguage,
+  getProposalOutputLanguageLabel,
+} from "./proposalOutput";
 
 import {
   type ProposalVoicePreset,
@@ -782,10 +786,15 @@ function buildDefaultDisallowedClaims(args: {
     "Do not synthesize employer-style names, organization names, or role labels that do not appear exactly in source-backed facts.",
   );
 
+  const deterministicLanguage = getDeterministicCopyLanguage(
+    args.outputLanguage,
+  );
   claims.push(
-    args.outputLanguage === "fr"
+    deterministicLanguage === "fr"
       ? "Do not switch to English; final prose must remain entirely in French."
-      : "Do not switch to French or another language; final prose must remain entirely in English.",
+      : deterministicLanguage === "en"
+        ? "Do not switch to French or another language; final prose must remain entirely in English."
+        : `Do not switch to English, French, or another language; final prose must remain entirely in ${getProposalOutputLanguageLabel(args.outputLanguage)}.`,
   );
 
   return claims;
@@ -2254,8 +2263,10 @@ export function buildProposalWriterPlanBlock(
     "Any phrase that combines support, contribute, help, fit, or value with company, team, operations, goals, mission, or clients is forbidden unless it is literally source-backed.",
     buildClosingGuidance(format),
     buildOpeningStrategyContract(plan.opening_strategy),
-    plan.output_language === "fr"
+    getDeterministicCopyLanguage(plan.output_language) === "fr"
       ? "Write the final prose in French only."
-      : "Write the final prose in English only.",
+      : getDeterministicCopyLanguage(plan.output_language) === "en"
+        ? "Write the final prose in English only."
+        : `Write the final prose in ${getProposalOutputLanguageLabel(plan.output_language)} only.`,
   ].join("\n");
 }

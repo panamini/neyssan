@@ -1,6 +1,9 @@
-import type { ProposalOutputFormat, ProposalOutputLanguage } from "./proposalOutput";
 import {
+  getDeterministicCopyLanguage,
+  getProposalOutputLanguageLabel,
   resolveProposalOutputLanguage,
+  type ProposalOutputFormat,
+  type ProposalOutputLanguage,
 } from "./proposalOutput";
 import {
   PROPOSAL_FORBIDDEN_BRIDGES,
@@ -661,8 +664,10 @@ function ensureTerminalSentence(value: string): string {
 
 export function getDeterministicInterestOnlyRepairSentence(
   outputLanguage: ProposalOutputLanguage,
-): string {
-  return outputLanguage === "French"
+): string | null {
+  const deterministicLanguage = getDeterministicCopyLanguage(outputLanguage);
+  if (!deterministicLanguage) return null;
+  return deterministicLanguage === "fr"
     ? STRICT_INTEREST_ONLY_REPAIR_SENTENCE.French
     : STRICT_INTEREST_ONLY_REPAIR_SENTENCE.English;
 }
@@ -671,7 +676,12 @@ function getNoContextRepairSentence(args: {
   outputLanguage: ProposalOutputLanguage;
   plan: ProposalPlannerResult;
   flaggedSentence: FlaggedSentence;
-}): string {
+}): string | null {
+  const deterministicLanguage = getDeterministicCopyLanguage(
+    args.outputLanguage,
+  );
+  if (!deterministicLanguage) return null;
+
   const normalizedSentence = normalizeProposalConstraintText(
     args.flaggedSentence.originalSentence,
   );
@@ -687,7 +697,7 @@ function getNoContextRepairSentence(args: {
     /\b(?:reliability|communication|curiosity|learn)\b/i.test(theme),
   );
 
-  if (args.outputLanguage === "French") {
+  if (deterministicLanguage === "fr") {
     if (
       roleInterestTheme ||
       /\b(?:role|poste|travail|mission|entreprise)\b/i.test(normalizedSentence)
@@ -767,14 +777,20 @@ function isProposalWrapperLine(line: string): boolean {
 
 function getExpectedCoverLetterSalutation(
   outputLanguage?: ProposalOutputLanguage,
-): string {
-  return outputLanguage === "French" ? FRENCH_SALUTATION : ENGLISH_SALUTATION;
+): string | null {
+  const deterministicLanguage = getDeterministicCopyLanguage(outputLanguage);
+  if (deterministicLanguage === "fr") return FRENCH_SALUTATION;
+  if (deterministicLanguage === "en") return ENGLISH_SALUTATION;
+  return null;
 }
 
 function getExpectedCoverLetterClosing(
   outputLanguage?: ProposalOutputLanguage,
-): string {
-  return outputLanguage === "French" ? FRENCH_CLOSING : ENGLISH_CLOSING;
+): string | null {
+  const deterministicLanguage = getDeterministicCopyLanguage(outputLanguage);
+  if (deterministicLanguage === "fr") return FRENCH_CLOSING;
+  if (deterministicLanguage === "en") return ENGLISH_CLOSING;
+  return null;
 }
 
 function compactLines(lines: string[]): string[] {
@@ -1048,61 +1064,63 @@ export function extractFinalProposalContent(
       lines = lines.slice(0, editorialBoundaryIndex);
     }
 
-    let bestBodyCandidate:
-      | {
-          bodyLines: string[];
-          meaningfulCount: number;
-          meaningfulSentenceCount: number;
-          meaningfulChars: number;
-          rank: number;
+    if (expectedSalutation && expectedClosing) {
+      let bestBodyCandidate:
+        | {
+            bodyLines: string[];
+            meaningfulCount: number;
+            meaningfulSentenceCount: number;
+            meaningfulChars: number;
+            rank: number;
+          }
+        | undefined;
+
+      for (let salutationIndex = 0; salutationIndex < lines.length; salutationIndex += 1) {
+        if (!isCoverLetterSalutation(lines[salutationIndex])) continue;
+
+        for (let closingIndex = salutationIndex + 1; closingIndex < lines.length; closingIndex += 1) {
+          if (!isCoverLetterClosing(lines[closingIndex])) continue;
+
+          const bodyCandidate = buildCoverLetterBodyCandidate(
+            lines.slice(salutationIndex + 1, closingIndex),
+            candidateName,
+          );
+          bestBodyCandidate = chooseBetterCoverLetterBodyCandidate(
+            bestBodyCandidate,
+            {
+              ...bodyCandidate,
+              rank: salutationIndex,
+            },
+          );
         }
-      | undefined;
-
-    for (let salutationIndex = 0; salutationIndex < lines.length; salutationIndex += 1) {
-      if (!isCoverLetterSalutation(lines[salutationIndex])) continue;
-
-      for (let closingIndex = salutationIndex + 1; closingIndex < lines.length; closingIndex += 1) {
-        if (!isCoverLetterClosing(lines[closingIndex])) continue;
-
-        const bodyCandidate = buildCoverLetterBodyCandidate(
-          lines.slice(salutationIndex + 1, closingIndex),
-          candidateName,
-        );
-        bestBodyCandidate = chooseBetterCoverLetterBodyCandidate(
-          bestBodyCandidate,
-          {
-            ...bodyCandidate,
-            rank: salutationIndex,
-          },
-        );
       }
-    }
 
-    const fallbackBodyCandidate = buildCoverLetterBodyCandidate(
-      lines,
-      candidateName,
-    );
-    const chosenBodyCandidate = chooseBetterCoverLetterBodyCandidate(
-      bestBodyCandidate,
-      {
-        ...fallbackBodyCandidate,
-        rank: Number.MAX_SAFE_INTEGER,
-      },
-    );
+      const fallbackBodyCandidate = buildCoverLetterBodyCandidate(
+        lines,
+        candidateName,
+      );
+      const chosenBodyCandidate = chooseBetterCoverLetterBodyCandidate(
+        bestBodyCandidate,
+        {
+          ...fallbackBodyCandidate,
+          rank: Number.MAX_SAFE_INTEGER,
+        },
+      );
 
-    const rebuiltLines = [expectedSalutation];
-    if (chosenBodyCandidate && chosenBodyCandidate.bodyLines.length > 0) {
-      rebuiltLines.push("", ...chosenBodyCandidate.bodyLines);
-    }
-    rebuiltLines.push("", expectedClosing);
-    if (candidateName) {
-      rebuiltLines.push(candidateName);
-    }
+      const rebuiltLines = [expectedSalutation];
+      if (chosenBodyCandidate && chosenBodyCandidate.bodyLines.length > 0) {
+        rebuiltLines.push("", ...chosenBodyCandidate.bodyLines);
+      }
+      rebuiltLines.push("", expectedClosing);
+      if (candidateName) {
+        rebuiltLines.push(candidateName);
+      }
 
-    return compactLines(rebuiltLines)
-      .join("\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
+      return compactLines(rebuiltLines)
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    }
   } else {
     const editorialBoundaryIndex = findEditorialBoundaryIndex(lines);
     if (editorialBoundaryIndex >= 0) {
@@ -1735,7 +1753,10 @@ export function analyzeProposalDraft(
         )
       : null;
 
-  if (args.plan.output_language === "en") {
+  const deterministicLanguage = getDeterministicCopyLanguage(
+    args.plan.output_language,
+  );
+  if (deterministicLanguage === "en") {
     if (
       FRENCH_GREETING_OR_CLOSING_PATTERN.test(args.content) ||
       resolveProposalOutputLanguage(args.content) === "French"
@@ -1745,13 +1766,21 @@ export function analyzeProposalDraft(
         message: "Final draft must remain entirely in English.",
       });
     }
-  } else if (
+  } else if (deterministicLanguage === "fr" && (
     ENGLISH_GREETING_OR_CLOSING_PATTERN.test(args.content) ||
     resolveProposalOutputLanguage(args.content) === "English"
-  ) {
+  )) {
     appendIssue(issues, {
       code: "language_mismatch",
       message: "Final draft must remain entirely in French.",
+    });
+  } else if (
+    !deterministicLanguage &&
+    ENGLISH_GREETING_OR_CLOSING_PATTERN.test(args.content)
+  ) {
+    appendIssue(issues, {
+      code: "language_mismatch",
+      message: `Final draft must remain in ${getProposalOutputLanguageLabel(args.plan.output_language)}.`,
     });
   }
 
@@ -2043,9 +2072,11 @@ export function buildProposalRepairPrompt(
     `Respect the shared canonical forbidden bridges list: ${formatQuotedPhraseList(PROPOSAL_FORBIDDEN_BRIDGES)}.`,
     "Return only the replacement sentence text for the flagged target.",
     "",
-    args.outputLanguage === "French"
+    getDeterministicCopyLanguage(args.outputLanguage) === "fr"
       ? "Write the replacement sentence fully in French."
-      : "Write the replacement sentence fully in English.",
+      : getDeterministicCopyLanguage(args.outputLanguage) === "en"
+        ? "Write the replacement sentence fully in English."
+        : `Write the replacement sentence fully in ${args.outputLanguage}.`,
     "Rewrite only this sentence.",
     "Do not add any new claims.",
     "Do not strengthen the claim.",
@@ -2129,7 +2160,7 @@ export function repairProposalSentenceLocally(
   if (!replacement) {
     switch (args.flaggedSentence.safeRewriteMode) {
       case "interest_only":
-        replacement = interestOnlyFallback;
+        replacement = interestOnlyFallback ?? "";
         break;
       case "remove_qualification_conclusion":
         replacement =

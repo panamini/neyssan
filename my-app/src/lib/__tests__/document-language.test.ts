@@ -82,7 +82,7 @@ describe("document language scaffold", () => {
     ).toMatchObject({
       requestedLanguage: "auto",
       resolvedLanguage: "de",
-      languageSource: "job-detected",
+      languageSource: "job",
       jobDetectedLanguage: "de",
     });
   });
@@ -126,6 +126,20 @@ describe("document language scaffold", () => {
     expect(normalizeDocumentLanguage("pt-BR")).toBe("pt");
     expect(normalizeDocumentLanguage("ar")).toBe("ar");
     expect(normalizeDocumentLanguage("ga")).toBe(DEFAULT_DOCUMENT_LANGUAGE);
+  });
+
+  it("keeps Russian document language available when Russian UI falls back to English", () => {
+    expect(
+      resolveDocumentLanguageGenerationMetadata({
+        uiLocale: "en",
+        documentLanguage: "ru",
+        jobText: "We are looking for a team assistant with strong skills.",
+      }),
+    ).toMatchObject({
+      requestedLanguage: "ru",
+      resolvedLanguage: "ru",
+      languageSource: "document-preference",
+    });
   });
 
   it("exposes prepared document language options separately from UI languages", () => {

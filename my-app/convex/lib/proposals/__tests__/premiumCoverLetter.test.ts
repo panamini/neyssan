@@ -14,6 +14,7 @@ import {
   isCoverLetterPremiumPathV1Enabled,
   rankAllowedFacts,
   resolvePremiumCoverLetterWriterModel,
+  validatePremiumCoverLetterBodyParts,
 } from "../premiumCoverLetter";
 
 const directContext = {
@@ -742,6 +743,13 @@ describe("premium cover letter generation and rendering", () => {
     expect(capturedSchema).toEqual(PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA);
     expect(capturedPrompt).toContain("Planner priority order:");
     expect(capturedPrompt).toContain("Structured brief:");
+    expect(capturedPrompt).toContain(
+      "A JD keyword, tool, or responsibility may appear as candidate experience only when the CV supports that exact capability",
+    );
+    expect(capturedPrompt).toContain(
+      "Bind ATS terms to a concrete action or result; never list them",
+    );
+    expect(capturedPrompt).toContain("clipped fragments like 'St.'");
     expect(capturedPrompt).toContain("Avoid evaluator/meta phrases like 'the evidence I would bring'");
     expect(capturedPrompt).toContain("Do not write clunky constructions where inanimate objects are helped to improve or unlock outcomes");
     expect(result?.bodyParts).toEqual(bodyParts);
@@ -763,6 +771,147 @@ describe("premium cover letter generation and rendering", () => {
     expect(result?.content).not.toMatch(/mentoring|people management|backend|mobile/i);
     expect(result?.content).not.toMatch(
       /I am excited to apply|I am writing to express my interest|My background aligns/i,
+    );
+  });
+
+  it("rejects clipped source fragments and allows source-safe team fallbacks", async () => {
+    const baseArgs = {
+      personalizationContext: {
+        name: "Test Candidate",
+        summary:
+          "Safety-conscious Security Guard with eight years of experience protecting VIP individuals.",
+        desiredPosition: "Security Guard",
+        topSkills: ["Safety compliance", "Investigation skills"],
+        recentExperience: [
+          {
+            company: "Sentinel Services",
+            position: "Security Guard",
+            highlights: [
+              "Maintained environments by monitoring grounds and equipment controls.",
+              "Logged into security headquarters on a set schedule to report all-in-order statuses.",
+            ],
+          },
+        ],
+      },
+      voicePreset: "signature" as const,
+      outputLanguage: "English" as const,
+      jobTitle: "Security Officer",
+      jobDescription:
+        "Location: St. Support visitors and staff, patrol campus grounds, and document safety incidents.",
+      candidateName: "Test Candidate",
+    };
+
+    const unsafe = await attemptPremiumCoverLetterGeneration({
+      ...baseArgs,
+      writer: async () => ({
+        opening:
+          "I bring security experience monitoring grounds and equipment controls.",
+        proofBlock:
+          "At Sentinel Services, I logged all-in-order statuses on a set schedule.",
+        employerValueBlock:
+          "That experience fits campus security work that depends on steady monitoring.",
+        closeLine:
+          "I would welcome the opportunity to contribute to your St. campus team.",
+      }),
+    });
+    const safe = await attemptPremiumCoverLetterGeneration({
+      ...baseArgs,
+      writer: async () => ({
+        opening:
+          "I bring security experience monitoring grounds and equipment controls.",
+        proofBlock:
+          "At Sentinel Services, I logged all-in-order statuses on a set schedule.",
+        employerValueBlock:
+          "That experience fits campus security work that depends on steady monitoring.",
+        closeLine:
+          "I would welcome the opportunity to contribute to the campus security team.",
+      }),
+    });
+
+    expect(unsafe).toBeNull();
+    expect(safe?.content).toContain("the campus security team");
+    expect(safe?.content).not.toContain("your St. campus team");
+  });
+
+  it("fails closed on unsupported security ownership and fabricated mission claims", () => {
+    const brief = buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Security Officer",
+      jobDescription:
+        "Support visitors and staff, lead emergency preparedness drills, and manage and document safety incidents.",
+      contextClass: "cv_direct",
+      allowedFactsPack: buildAllowedFactsPack({
+        personalizationContext: {
+          name: "Test Candidate",
+          summary: "Security Guard with monitoring and reporting experience.",
+          recentExperience: [
+            {
+              company: "Sentinel Services",
+              position: "Security Guard",
+              highlights: [
+                "Maintained environments by monitoring grounds and equipment controls.",
+                "Completed reports by recording observations and occurrences.",
+              ],
+            },
+          ],
+        },
+        jobTitle: "Security Officer",
+        jobDescription:
+          "Support visitors and staff, lead emergency preparedness drills, and manage and document safety incidents.",
+      }),
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack: buildAllowedFactsPack({
+          personalizationContext: {
+            name: "Test Candidate",
+            summary: "Security Guard with monitoring and reporting experience.",
+            recentExperience: [
+              {
+                company: "Sentinel Services",
+                position: "Security Guard",
+                highlights: [
+                  "Maintained environments by monitoring grounds and equipment controls.",
+                  "Completed reports by recording observations and occurrences.",
+                ],
+              },
+            ],
+          },
+          jobTitle: "Security Officer",
+          jobDescription:
+            "Support visitors and staff, lead emergency preparedness drills, and manage and document safety incidents.",
+        }),
+        jobTitle: "Security Officer",
+        jobDescription:
+          "Support visitors and staff, lead emergency preparedness drills, and manage and document safety incidents.",
+        contextClass: "cv_direct",
+      }),
+    });
+
+    const issues = validatePremiumCoverLetterBodyParts({
+      brief,
+      bodyParts: {
+        opening:
+          "My monitoring and reporting experience fits security work on a healthcare campus.",
+        proofBlock:
+          "I am adept at leading emergency preparedness drills and my experience includes managing and documenting safety incidents.",
+        employerValueBlock:
+          "That work supports Northstar Care's mission of safeguarding patients and staff.",
+        closeLine:
+          "I am ready to contribute to reimagining healthcare security.",
+      },
+    });
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "unsupported_security_ownership",
+          repairable: false,
+        }),
+        expect.objectContaining({
+          code: "fabricated_mission_claim",
+          repairable: false,
+        }),
+      ]),
     );
   });
 

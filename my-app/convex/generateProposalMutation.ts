@@ -70,6 +70,7 @@ import {
 } from "./lib/proposals/proposalBodyComposer";
 import {
   buildProposalOutputLanguageInstruction,
+  getDeterministicCopyLanguage,
   resolveProposalOutputLanguageFromCode,
   resolveProposalPlannerOutputLanguageFromCode,
   resolveProposalOutputLanguage,
@@ -112,6 +113,15 @@ import {
 } from "./lib/proposals/proposalEnforcement";
 
 export { getDeterministicProposalRenderPolicy };
+
+function buildWriteFullyInOutputLanguageInstruction(
+  outputLanguage: ProposalOutputLanguage,
+): string {
+  const deterministicLanguage = getDeterministicCopyLanguage(outputLanguage);
+  if (deterministicLanguage === "fr") return "Write fully in French.";
+  if (deterministicLanguage === "en") return "Write fully in English.";
+  return `Write fully in ${outputLanguage}.`;
+}
 
 const modelChoice = v.union(
   v.literal("chatgpt"),
@@ -3203,6 +3213,7 @@ function stripRendererOwnedFinalSentenceFromBody(args: {
   });
   const paragraphs = splitParagraphs(args.body);
   if (paragraphs.length === 0) return "";
+  if (!policy.finalSentence) return paragraphs.join("\n\n").trim();
 
   const normalizedFinalSentence = normalizeProposalConstraintText(
     policy.finalSentence,
@@ -3558,9 +3569,7 @@ function buildNoContextConstrainedRepairPrompt(args: {
     "Rewrite the whole generated output, not just one sentence.",
     "Reason: no candidate background is available, but the draft contains candidate claims.",
     "Return only the repaired proposal body. No labels, headings, bullets, salutation, sign-off, signature, or commentary.",
-    args.outputLanguage === "French"
-      ? "Write fully in French."
-      : "Write fully in English.",
+    buildWriteFullyInOutputLanguageInstruction(args.outputLanguage),
     "",
     "Required behavior:",
     "- Be safe, concise, and role-specific.",
@@ -3600,9 +3609,7 @@ function buildUnsupportedCoreConstrainedRepairPrompt(args: {
     "Rewrite the whole generated output as adjacent-only support.",
     "Reason: the draft implies unsupported technical SEO capability.",
     "Return only the repaired proposal body. No labels, headings, bullets, salutation, sign-off, signature, or commentary.",
-    args.outputLanguage === "French"
-      ? "Write fully in French."
-      : "Write fully in English.",
+    buildWriteFullyInOutputLanguageInstruction(args.outputLanguage),
     "",
     "Role and evidence:",
     `- job_title: ${args.jobTitle}`,
@@ -3646,7 +3653,7 @@ function buildLastResortNoContextFallback(args: {
   outputLanguage: ProposalOutputLanguage;
   jobTitle: string;
   jobDescription: string;
-}): string {
+}): string | null {
   const responsibilities = extractConcreteJobResponsibilities(args.jobDescription).map(
     (item) =>
       item
@@ -3661,7 +3668,11 @@ function buildLastResortNoContextFallback(args: {
     responsibilities.length > 0
       ? formatHumanList(responsibilities)
       : "the responsibilities described in the posting";
-  if (args.outputLanguage === "French") {
+  const deterministicLanguage = getDeterministicCopyLanguage(
+    args.outputLanguage,
+  );
+  if (!deterministicLanguage) return null;
+  if (deterministicLanguage === "fr") {
     return [
       `Le poste de ${args.jobTitle} m'interesse parce que le travail porte sur ${workSurface}.`,
       "Je n'ai pas de details de parcours candidat permettant d'affirmer une experience anterieure ici, donc je garde cette candidature centree sur le role lui-meme.",
@@ -3685,8 +3696,12 @@ function buildLastResortNoContextFallback(args: {
 
 function buildLastResortAdjacentOnlyFallback(args: {
   outputLanguage: ProposalOutputLanguage;
-}): string {
-  if (args.outputLanguage === "French") {
+}): string | null {
+  const deterministicLanguage = getDeterministicCopyLanguage(
+    args.outputLanguage,
+  );
+  if (!deterministicLanguage) return null;
+  if (deterministicLanguage === "fr") {
     return [
       "Mon profil est centre sur le frontend, les landing pages et l'optimisation de conversion, pas sur le SEO technique.",
       "L'indexation, la strategie schema, les diagnostics de crawl et les recommandations de maillage interne devraient etre pilotes par un specialiste SEO technique.",
@@ -3801,6 +3816,7 @@ export async function repairProposalDraftWithConstrainedPass(args: {
           outputLanguage: args.outputLanguage,
         });
     if (
+      fallback &&
       verifyConstrainedRepair({
         ...args,
         content: fallback,
@@ -3865,7 +3881,10 @@ function sanitizeRepairSentenceOutput(args: {
       hasOverProjectiveRepairWording(normalized) ||
       containsForbiddenProposalBridge(normalized))
   ) {
-    return getDeterministicInterestOnlyRepairSentence(args.outputLanguage);
+    return (
+      getDeterministicInterestOnlyRepairSentence(args.outputLanguage) ??
+      fallback
+    );
   }
 
   if (
@@ -8139,9 +8158,10 @@ function getFinalSavedOutputFallbackSentence(
   outputLanguage: ProposalOutputLanguage,
 ): string | null {
   if (format !== "freelance_proposal") return null;
-  return outputLanguage === "French"
-    ? FRENCH_SAFE_FREELANCE_FINAL_SENTENCE
-    : ENGLISH_SAFE_FREELANCE_FINAL_SENTENCE;
+  const deterministicLanguage = getDeterministicCopyLanguage(outputLanguage);
+  if (deterministicLanguage === "fr") return FRENCH_SAFE_FREELANCE_FINAL_SENTENCE;
+  if (deterministicLanguage === "en") return ENGLISH_SAFE_FREELANCE_FINAL_SENTENCE;
+  return null;
 }
 
 function isBoundaryParagraph(paragraph: string): boolean {

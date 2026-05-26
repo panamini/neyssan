@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 import { llmConfig } from "../../../config/llmConfig";
-import type { ProposalOutputLanguage } from "./proposalOutput";
+import {
+  getDeterministicCopyLanguage,
+  type ProposalOutputLanguage,
+} from "./proposalOutput";
 import {
   COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER,
   normalizeProposalConstraintText,
@@ -928,7 +931,9 @@ function extractEmployerName(jobTitle: string, jobDescription: string): string |
 }
 
 function resolveCloseFallback(language: string): string {
-  return language === "French"
+  const deterministicLanguage = getDeterministicCopyLanguage(language);
+  if (!deterministicLanguage) return "";
+  return deterministicLanguage === "fr"
     ? "Je serais disponible pour échanger davantage au sujet du poste."
     : "I would welcome the opportunity to discuss the role further.";
 }
@@ -1310,13 +1315,13 @@ export function buildPremiumCoverLetterPrompt(args: {
   return [
     "Write premium cover-letter body parts.",
     `Planner priority order: ${COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER.map((item, index) => `${index + 1}. ${item}`).join(" | ")}.`,
-    "Build a dynamic RoleThesis from JD, CV facts, and detector output; never import fixture wording, fixed frontend pillars, or one structure.",
-    "Use brief facts only. Do not invent experience, credentials, ownership, metrics, tools, timelines, or proof.",
+    "Build a dynamic RoleThesis from JD, CV facts, and detectors; never import fixture wording, fixed frontend pillars, or one structure.",
+    "Use brief facts only. Do not invent credentials, ownership, metrics, tools, timelines, or proof.",
     "Prioritize strongest evidence first. If evidence is modest, let the best available concrete proof carry the case. Order: hard requirement, responsibility proof, metric/scope, similar context, collaboration, transferable skill.",
     "Do not lead with secondary qualifications when stronger evidence exists. Do not spend body space on admiration, benefits attraction, checklist summaries, generic enthusiasm, tool repetition, keyword lists, or criteria reporting.",
     "topResponsibilities lead; keyRequirements sharpen; preferredQualifications and lowValueChecklist stay secondary.",
     "Dynamic opening only: job-thesis, proof-first, company/problem, direct-match, or human-short when grounded. Never reuse 'Your frontend role sits where...' outside that fixture.",
-    "Criteria signals guide selection, tone, boundaries, and ATS vocabulary; mention only grounded criteria with CV evidence. Unsupported requirements become boundaries or omissions.",
+    "A JD keyword, tool, or responsibility may appear as candidate experience only when the CV supports that exact capability. Bind ATS terms to a concrete action or result; never list them.",
     ...(companyValuesPack
       ? [
           "Company values are bounded secondary context only: use at most one explicit bridge, only when grounded and tied to source-backed candidate evidence; never replace stronger proof or infer personal alignment.",
@@ -1335,7 +1340,7 @@ export function buildPremiumCoverLetterPrompt(args: {
       employerValueBlock: "string",
       closeLine: "string",
     }),
-    "Body-part rules: complete natural sentences only; no greeting, signoff, markdown, bullets, generic excitement, mission praise, defensive gaps, or keyword lists.",
+    "Body-part rules: complete natural sentences only; no greeting, signoff, markdown, bullets, generic excitement, mission praise, defensive gaps, keyword lists, clipped fragments like 'St.' or guessed facility/team names.",
     "Opening: position through the strongest relevant evidence, not generic fit language. ProofBlock: develop top evidence first. EmployerValueBlock: move directly to an employer-facing implication. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise. CloseLine: one short role-specific sentence.",
     `Structured brief: ${JSON.stringify(structuredBrief)}`,
   ].filter((line): line is string => typeof line === "string").join("\n");
@@ -1351,7 +1356,7 @@ function resolvePremiumCoverLetterPresetGuidance(
       return "Preset contract for engaging: warmer but restrained; let one grounded sentence show who benefits when coordination, reporting, service, or follow-through are done well, using team, stakeholder, customer, guest, vendor, or user context when the brief supports it; avoid neutral template lead-ins such as a flat relevance summary, and keep the warmth concrete rather than enthusiastic.";
     case "signature":
     default:
-      return "Preset contract for signature: professional, warm, personal, concise, and stable; make the opening sound like direct first-person professional positioning, then let the next movement continue naturally from the evidence — do not step back into an abstract relevance sentence, and do not let it read like colder expert analysis or a minimal shell.";
+      return "Preset contract for signature: professional, warm, personal, concise, and stable; make the opening direct first-person positioning, continue from evidence, and do not let it read like colder expert analysis or a minimal shell.";
   }
 }
 
@@ -1363,7 +1368,10 @@ type PremiumBodyPartValidationIssue = {
     | "signoff_leakage"
     | "adjacent_direct_fit"
     | "no_cv_history_claim"
-    | "duplicate_close_line";
+    | "duplicate_close_line"
+    | "clipped_source_fragment"
+    | "unsupported_security_ownership"
+    | "fabricated_mission_claim";
   repairable: boolean;
 };
 
@@ -1384,6 +1392,15 @@ function summarizeValidationIssueCodes(
 ): PremiumBodyPartValidationIssue["code"][] {
   return Array.from(new Set(issues.map((issue) => issue.code)));
 }
+
+const CLIPPED_SOURCE_FRAGMENT_PATTERN =
+  /\b(?:your|the|this|our)\s+(?:St\.?|Ste\.?|Suite|Dept\.?)\s+(?:campus|team|department|facility|security|operations)\b/i;
+const CLIPPED_CAPITAL_SOURCE_FRAGMENT_PATTERN =
+  /\b(?:your|the|this|our)\s+Campus\s+(?:team|department|facility|operations)\b/;
+const UNSUPPORTED_SECURITY_OWNERSHIP_PATTERN =
+  /\b(?:lead|led|leading|adept at leading|own|owned|manage|managed|managing|drove|driven)\b.{0,90}\b(?:emergency preparedness drills?|safety incidents?|incident management|hazard resolution)\b|\b(?:emergency preparedness drills?|safety incidents?|incident management|hazard resolution)\b.{0,90}\b(?:lead|led|leading|adept at leading|own|owned|manage|managed|managing|drove|driven)\b/i;
+const FABRICATED_MISSION_CLAIM_PATTERN =
+  /\b(?:mission of|mission to|mission is|mission of safeguarding|reimagining healthcare security|contribute to reimagining healthcare)\b/i;
 
 export function validatePremiumCoverLetterBodyParts(args: {
   bodyParts: CoverLetterBodyParts;
@@ -1426,6 +1443,18 @@ export function validatePremiumCoverLetterBodyParts(args: {
     ) {
       issues.push({ code: "no_cv_history_claim", repairable: false });
     }
+    if (
+      CLIPPED_SOURCE_FRAGMENT_PATTERN.test(compact) ||
+      CLIPPED_CAPITAL_SOURCE_FRAGMENT_PATTERN.test(compact)
+    ) {
+      issues.push({ code: "clipped_source_fragment", repairable: false });
+    }
+    if (UNSUPPORTED_SECURITY_OWNERSHIP_PATTERN.test(compact)) {
+      issues.push({ code: "unsupported_security_ownership", repairable: false });
+    }
+    if (FABRICATED_MISSION_CLAIM_PATTERN.test(compact)) {
+      issues.push({ code: "fabricated_mission_claim", repairable: false });
+    }
   }
 
   const normalizedEmployerValue = normalizeProposalConstraintText(
@@ -1465,17 +1494,19 @@ export function repairPremiumCoverLetterBodyParts(args: {
 
   if (!compactWhitespace(cleaned.employerValueBlock)) {
     const workContext = args.brief.workContext?.[0];
-    cleaned.employerValueBlock = ensureSentenceEnding(
-      workContext
-        ? args.brief.contextClass === "cv_adjacent"
-          ? `The role's focus on ${workContext.replace(/[.!?]$/u, "")} is where this background is most relevant`
+    if (getDeterministicCopyLanguage(args.brief.language)) {
+      cleaned.employerValueBlock = ensureSentenceEnding(
+        workContext
+          ? args.brief.contextClass === "cv_adjacent"
+            ? `The role's focus on ${workContext.replace(/[.!?]$/u, "")} is where this background is most relevant`
+            : args.brief.contextClass === "no_cv"
+              ? `The role's focus on ${workContext.replace(/[.!?]$/u, "")} is the clearest signal of where careful, consistent work matters most`
+            : `The role's focus on ${workContext.replace(/[.!?]$/u, "")} matches the work reflected in this background`
           : args.brief.contextClass === "no_cv"
-            ? `The role's focus on ${workContext.replace(/[.!?]$/u, "")} is the clearest signal of where careful, consistent work matters most`
-          : `The role's focus on ${workContext.replace(/[.!?]$/u, "")} matches the work reflected in this background`
-        : args.brief.contextClass === "no_cv"
-          ? "The work described in the role is the clearest signal of where careful, consistent work matters most"
-          : "The work described in the role is where this background is most relevant",
-    );
+            ? "The work described in the role is the clearest signal of where careful, consistent work matters most"
+            : "The work described in the role is where this background is most relevant",
+      );
+    }
   }
 
   if (!compactWhitespace(cleaned.closeLine)) {
@@ -1506,12 +1537,21 @@ export function renderPremiumCoverLetter(args: {
   outputLanguage: ProposalOutputLanguage;
   candidateName?: string;
 }): { content: string; sections: Array<{ type: "text"; content: string }> } {
+  const deterministicLanguage = getDeterministicCopyLanguage(
+    args.outputLanguage,
+  );
   const signoff =
-    args.outputLanguage === "French" ? "Cordialement," : "Sincerely,";
+    deterministicLanguage === "fr"
+      ? "Cordialement,"
+      : deterministicLanguage === "en"
+        ? "Sincerely,"
+        : "";
   const salutation =
-    args.outputLanguage === "French"
+    deterministicLanguage === "fr"
       ? FRENCH_SALUTATION
-      : ENGLISH_SALUTATION;
+      : deterministicLanguage === "en"
+        ? ENGLISH_SALUTATION
+        : "";
   const bodyParagraphs = [
     args.bodyParts.opening,
     args.bodyParts.proofBlock,
@@ -1522,14 +1562,12 @@ export function renderPremiumCoverLetter(args: {
     .filter(Boolean);
 
   const lines = [
-    salutation,
-    "",
+    ...(salutation ? [salutation, ""] : []),
     ...bodyParagraphs.flatMap((paragraph, index) =>
       index === bodyParagraphs.length - 1 ? [paragraph] : [paragraph, ""],
     ),
-    "",
-    signoff,
-    ...(compactWhitespace(args.candidateName) ? [compactWhitespace(args.candidateName)] : []),
+    ...(signoff ? ["", signoff] : []),
+    ...(signoff && compactWhitespace(args.candidateName) ? [compactWhitespace(args.candidateName)] : []),
   ];
   const content = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
   return {

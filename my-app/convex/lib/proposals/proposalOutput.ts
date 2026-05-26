@@ -39,6 +39,8 @@ export type ProposalOutputLanguage =
   | "Russian"
   | "Arabic";
 
+export type DeterministicCopyLanguage = "en" | "fr";
+
 const PROPOSAL_LANGUAGE_LABELS: Record<
   ProposalDocumentLanguageCode,
   ProposalOutputLanguage
@@ -118,6 +120,25 @@ export function resolveProposalPlannerOutputLanguageFromCode(
 ): ProposalDocumentLanguageCode | null {
   const normalized = value?.toLowerCase().split("-")[0]?.trim();
   return isProposalDocumentLanguageCode(normalized) ? normalized : null;
+}
+
+export function getDeterministicCopyLanguage(
+  value: string | null | undefined,
+): DeterministicCopyLanguage | null {
+  const normalized = value?.toLowerCase().split("-")[0]?.trim();
+  if (normalized === "en" || normalized === "english") return "en";
+  if (normalized === "fr" || normalized === "french") return "fr";
+  return null;
+}
+
+export function getProposalOutputLanguageLabel(
+  value: string | null | undefined,
+): ProposalOutputLanguage | string {
+  const normalizedCode = value?.toLowerCase().split("-")[0]?.trim();
+  if (isProposalDocumentLanguageCode(normalizedCode)) {
+    return PROPOSAL_LANGUAGE_LABELS[normalizedCode];
+  }
+  return value && value.trim().length > 0 ? value : "English";
 }
 
 function countMarkerHits(text: string, markers: readonly string[]): number {
@@ -269,6 +290,10 @@ export function getCoverLetterSalutationInstruction(
     return 'Start with a French salutation line such as: Madame, Monsieur,';
   }
 
+  if (language !== "English") {
+    return `Start with a professional salutation in ${language}.`;
+  }
+
   return 'Start with an English salutation line such as: Dear Hiring Manager,';
 }
 
@@ -277,6 +302,10 @@ export function getCoverLetterClosingInstruction(
 ): string {
   if (language === "French") {
     return "End with a simple French professional closing such as Cordialement, and the candidate name on the final line.";
+  }
+
+  if (language !== "English") {
+    return `End with a simple professional closing in ${language}, and the candidate name on the final line.`;
   }
 
   return "End with a simple English professional closing such as Sincerely, and the candidate name on the final line.";
