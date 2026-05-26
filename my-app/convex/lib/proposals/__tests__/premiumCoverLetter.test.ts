@@ -576,6 +576,58 @@ describe("premium cover letter prompt contract", () => {
     expect(qwenPrompt).not.toContain("MISTRAL ADJACENT ROLE-MAPPING LOCK");
   });
 
+  it("adds Qwen cv_direct ownership and scope guidance without leaking to GPT or Mistral", () => {
+    const brief = buildDirectBrief();
+    const defaultPrompt = buildPremiumCoverLetterPrompt({ brief });
+    const mistralPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "mistral",
+      writerModel: "mistral-large-latest",
+    });
+    const qwenPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+    });
+
+    const contractMarker = "Qwen cv_direct ownership and scope contract:";
+
+    expect(qwenPrompt).toContain(contractMarker);
+    expect(qwenPrompt).toContain(
+      "Direct match means strong source-backed overlap, not permission to borrow every JD responsibility as candidate experience.",
+    );
+    expect(qwenPrompt).toContain(
+      "Do not borrow high-ownership verbs from the job description.",
+    );
+    expect(qwenPrompt).toContain(
+      "Do not convert employer objectives into candidate achievements.",
+    );
+    expect(qwenPrompt).toContain(
+      "Do not convert collaboration into ownership or control of product, business, or delivery outcomes.",
+    );
+    expect(qwenPrompt).toContain(
+      "Do not expand \"Improved release consistency across shared interface work\" into \"significantly improved release consistency across all shared interface work\" unless that exact scope is source-backed.",
+    );
+    expect(qwenPrompt).toContain(
+      "Avoid unsupported expansion language unless source-backed: directly aligns, your objective, business objectives, perfectly matches, perfect fit, seamless, ensure, ensuring, significantly, across all, elevate design system quality, drive product outcomes, own delivery, manage delivery, or lead development across surfaces.",
+    );
+    expect(qwenPrompt).toContain(
+      "I led a design-system migration used across four product squads.",
+    );
+    expect(qwenPrompt).toContain(
+      "The strongest overlap is around React, TypeScript, design systems, and product-facing interface work.",
+    );
+    expect(qwenPrompt).toContain(
+      "That experience is relevant to frontend work where reusable systems, product iteration, and customer-facing surfaces matter.",
+    );
+
+    expect(defaultPrompt).not.toContain(contractMarker);
+    expect(mistralPrompt).not.toContain(contractMarker);
+    expect(
+      qwenPrompt.split(contractMarker).length - 1,
+    ).toBe(1);
+  });
+
   it("keeps the shared cv_adjacent prompt guidance unchanged for GPT/default and narrows Mistral to a grounded bridge contract", () => {
     const brief = buildAdjacentAdminBrief();
     const defaultPrompt = buildPremiumCoverLetterPrompt({ brief });
@@ -692,6 +744,9 @@ describe("premium cover letter prompt contract", () => {
       qwenPrompt.split("Ownership boundary: use the candidate's CV verbs exactly")
         .length - 1,
     ).toBe(1);
+    expect(qwenPrompt).not.toContain(
+      "Qwen cv_direct ownership and scope contract:",
+    );
   });
 
   it("keeps provider adapter order between the shared premium prompt and structured brief", () => {
@@ -1342,6 +1397,81 @@ describe("premium cover letter generation and rendering", () => {
         "I owned the full delivery cycle from implementation to measurable user impact.",
       ),
     ).toContain("unsupported_ownership_verb");
+  });
+
+  it("rejects Qwen cv_direct body parts that upgrade source evidence into unsupported ownership", async () => {
+    const failures: any[] = [];
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+      onFailure: (trace) => {
+        failures.push(trace);
+      },
+      writer: async () => ({
+        opening:
+          "I improved signup conversion by 11% after iterative UI experiments.",
+        proofBlock:
+          "I managed customer-facing frontend delivery and oversaw design-system quality across product surfaces.",
+        employerValueBlock:
+          "I built experimentation dashboards used by product and growth teams.",
+        closeLine:
+          "The strongest overlap is around React, TypeScript, design systems, and product-facing interface work.",
+      }),
+    });
+
+    expect(result).toBeNull();
+    expect(failures).toEqual([
+      expect.objectContaining({
+        stage: "validation",
+        reason: "non_repairable_validation",
+        issues: expect.arrayContaining(["unsupported_ownership_verb"]),
+      }),
+    ]);
+  });
+
+  it("allows Qwen cv_direct body parts that stay source-backed and recruiter-readable", async () => {
+    const failures: any[] = [];
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+      onFailure: (trace) => {
+        failures.push(trace);
+      },
+      writer: async () => ({
+        opening:
+          "I led a design-system migration used across four product squads.",
+        proofBlock:
+          "I improved release consistency across shared interface work and built experimentation dashboards used by product and growth teams.",
+        employerValueBlock:
+          "The strongest overlap is around React, TypeScript, design systems, and product-facing interface work.",
+        closeLine:
+          "That experience is relevant to frontend work where reusable systems, product iteration, and customer-facing surfaces matter.",
+      }),
+    });
+
+    expect(result).not.toBeNull();
+    expect(failures).toHaveLength(0);
+    expect(result?.content).toContain(
+      "I led a design-system migration used across four product squads.",
+    );
+    expect(result?.content).toContain(
+      "I improved release consistency across shared interface work",
+    );
+    expect(result?.content).toContain(
+      "built experimentation dashboards used by product and growth teams",
+    );
   });
 
   it("retries Mistral once on adjacent_direct_fit and accepts repaired cv_adjacent output", async () => {
