@@ -532,7 +532,27 @@ describe("premium cover letter prompt contract", () => {
     expect(qwenPrompt).toContain(
       "Use ATS terms only when attached to a CV-backed action",
     );
+    expect(qwenPrompt).toContain(
+      "For cv_adjacent, allow at most one restrained employer-facing bridge.",
+    );
+    expect(qwenPrompt).toContain(
+      "Do not use the target role title as proof.",
+    );
+    expect(qwenPrompt).toContain(
+      "Silently reject any sentence that says the candidate aligns directly with the role",
+    );
+    expect(qwenPrompt).toContain(
+      "Silently reject any sentence that says your goal, your needs, your requirements, I can help, I can support, I would contribute, or I am ready to as proof of fit.",
+    );
+    expect(qwenPrompt).toContain("Preferred safe bridge shapes:");
+    expect(qwenPrompt).toContain(
+      "The overlap is strongest around onboarding handoffs, rollout documentation, and feedback tracking.",
+    );
+    expect(qwenPrompt).toContain(
+      "That background is relevant to work where rollout planning, documentation, and cross-functional updates matter.",
+    );
     expect(qwenPrompt).toContain("Return only the required JSON body parts");
+    expect(qwenPrompt).toContain("Do not output chain-of-thought, audit, XML, citations, markdown, or explanations.");
     expect(qwenPrompt).not.toContain("Provider adapter: Mistral");
     expect(qwenPrompt).not.toContain("Mistral cv_direct contract");
     expect(qwenPrompt).not.toContain("normal premium cover letter");
@@ -541,7 +561,6 @@ describe("premium cover letter prompt contract", () => {
     expect(qwenPrompt).not.toContain("Mistral cv_adjacent body-part contract");
     expect(qwenPrompt).not.toContain("Let the reader infer relevance");
     expect(qwenPrompt).not.toContain("Do not write a transfer argument");
-    expect(qwenPrompt).not.toContain("restrained employer-facing bridge");
     expect(qwenPrompt).not.toContain("MISTRAL ADJACENT-FIT ADDENDUM");
     expect(qwenPrompt).not.toContain("MISTRAL ADJACENT-FIT STRICT ADDENDUM");
     expect(qwenPrompt).not.toContain("MISTRAL ADJACENT ROLE-MAPPING LOCK");
@@ -608,20 +627,45 @@ describe("premium cover letter prompt contract", () => {
       "CloseLine: one short role-specific sentence",
     );
     expect(qwenPrompt).toContain(
-      "phrase the link as what this background helps with in the role's actual work",
+      "Qwen cv_adjacent contract:",
     );
     expect(qwenPrompt).toContain(
-      "EmployerValueBlock: move directly to an employer-facing implication",
+      "Evidence first: keep candidate facts candidate-side and JD facts work-surface context only.",
+    );
+    expect(qwenPrompt).toContain(
+      "Allow at most one restrained employer-facing bridge.",
+    );
+    expect(qwenPrompt).toContain(
+      "Do not use the target role title, job requirements, or employer goals as proof.",
+    );
+    expect(qwenPrompt).toContain(
+      "Silently reject any sentence that says the candidate aligns directly with the role, translates into the role, or provides direct fit or perfect fit.",
+    );
+    expect(qwenPrompt).toContain(
+      "Safe bridge examples:",
+    );
+    expect(qwenPrompt).toContain(
+      "The overlap is strongest around onboarding handoffs, rollout documentation, and feedback tracking.",
+    );
+    expect(qwenPrompt).toContain(
+      "That background is relevant to work where rollout planning, documentation, and cross-functional updates matter.",
+    );
+    expect(qwenPrompt).toContain(
+      "Return only the required JSON body parts",
+    );
+    expect(qwenPrompt).toContain(
+      "Do not output chain-of-thought, audit, XML, citations, markdown, or explanations.",
     );
     expect(qwenPrompt).not.toContain(
-      "strict evidence-only adjacent letter",
+      "phrase the link as what this background helps with in the role's actual work",
     );
     expect(qwenPrompt).not.toContain(
-      "Mistral cv_adjacent body-part contract",
+      "translate adjacent workflow evidence into role value",
     );
+    expect(qwenPrompt).not.toContain("strict evidence-only adjacent letter");
+    expect(qwenPrompt).not.toContain("Mistral cv_adjacent body-part contract");
     expect(qwenPrompt).not.toContain("Let the reader infer relevance");
     expect(qwenPrompt).not.toContain("Do not write a transfer argument");
-    expect(qwenPrompt).not.toContain("restrained employer-facing bridge");
   });
 
   it("keeps provider adapter order between the shared premium prompt and structured brief", () => {
@@ -1372,6 +1416,72 @@ describe("premium cover letter generation and rendering", () => {
     expect(qwenCalls).toHaveLength(1);
     expect(gptResult).toBeNull();
     expect(qwenResult).toBeNull();
+  });
+
+  it("keeps Qwen adjacent validation strict while allowing a safe one-bridge replacement", async () => {
+    const unsafeFailure: any[] = [];
+    const unsafeResult = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: adjacentContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: adjacentJob.jobTitle,
+      jobDescription: adjacentJob.jobDescription,
+      candidateName: "Camille Bernard",
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+      onFailure: (trace) => {
+        unsafeFailure.push(trace);
+      },
+      writer: async () => ({
+        opening:
+          "I coordinated onboarding handoffs and documented rollout workflows across customers and internal teams.",
+        proofBlock:
+          "I tracked open issues between customers and internal teams and kept the handoff notes current.",
+        employerValueBlock:
+          "My experience coordinating onboarding handoffs, managing rollout notes, and tracking issues between customers and internal teams aligns directly with your goal to improve rollout planning and cross-functional coordination.",
+        closeLine:
+          "I bring experience in coordination, documentation, scheduling, vendor correspondence, and stakeholder communication.",
+      }),
+    });
+
+    const safeFailure: any[] = [];
+    const safeResult = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: adjacentContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: adjacentJob.jobTitle,
+      jobDescription: adjacentJob.jobDescription,
+      candidateName: "Camille Bernard",
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+      onFailure: (trace) => {
+        safeFailure.push(trace);
+      },
+      writer: async () => ({
+        opening:
+          "I coordinated onboarding handoffs and documented rollout workflows across customers and internal teams.",
+        proofBlock:
+          "I tracked open issues between customers and internal teams and kept the handoff notes current.",
+        employerValueBlock:
+          "The overlap is strongest around onboarding handoffs, rollout documentation, and feedback tracking.",
+        closeLine:
+          "I bring experience in coordination, documentation, scheduling, issue tracking, and stakeholder communication.",
+      }),
+    });
+
+    expect(unsafeResult).toBeNull();
+    expect(unsafeFailure).toEqual([
+      expect.objectContaining({
+        stage: "validation",
+        reason: "non_repairable_validation",
+        issues: expect.arrayContaining(["adjacent_direct_fit"]),
+      }),
+    ]);
+    expect(safeResult).not.toBeNull();
+    expect(safeResult?.content).toContain(
+      "The overlap is strongest around onboarding handoffs, rollout documentation, and feedback tracking.",
+    );
+    expect(safeFailure).toHaveLength(0);
   });
 
   it("does not accept a Mistral adjacent repair unless second validation passes", async () => {
