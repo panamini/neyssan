@@ -1315,21 +1315,21 @@ export function buildPremiumCoverLetterPrompt(args: {
   return [
     "Write premium cover-letter body parts.",
     `Planner priority order: ${COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER.map((item, index) => `${index + 1}. ${item}`).join(" | ")}.`,
-    "Build a dynamic RoleThesis from JD, CV facts, and detectors; never import fixture wording, fixed frontend pillars, or one structure.",
+    "Build a dynamic RoleThesis from JD, CV facts, and detectors; never import fixture wording or one fixed structure.",
     "Use brief facts only. Do not invent credentials, ownership, metrics, tools, timelines, or proof.",
-    "Prioritize strongest evidence first. If evidence is modest, let the best available concrete proof carry the case. Order: hard requirement, responsibility proof, metric/scope, similar context, collaboration, transferable skill.",
-    "Do not lead with secondary qualifications when stronger evidence exists. Do not spend body space on admiration, benefits attraction, checklist summaries, generic enthusiasm, tool repetition, keyword lists, or criteria reporting.",
-    "topResponsibilities lead; keyRequirements sharpen; preferredQualifications and lowValueChecklist stay secondary.",
+    "Prioritize strongest evidence first. If evidence is modest, let the best available concrete proof carry the case.",
+    "Do not lead with secondary qualifications or spend body space on admiration, benefits attraction, checklist summaries, generic enthusiasm, tool repetition, keyword lists, or criteria reporting.",
+    "topResponsibilities lead; keyRequirements sharpen; the rest stay secondary.",
     "Dynamic opening only: job-thesis, proof-first, company/problem, direct-match, or human-short when grounded. Never reuse 'Your frontend role sits where...' outside that fixture.",
-    "A JD keyword, tool, or responsibility may appear as candidate experience only when the CV supports that exact capability. Bind ATS terms to a concrete action or result; never list them.",
+    "A JD keyword, tool, certification, compliance framework, domain, or responsibility may appear as candidate experience only when the CV supports that exact capability. Bind ATS terms to a concrete action or result; never list them. Bind ATS and JD terms to a concrete CV-backed action, artifact, responsibility, or result. Never use a JD keyword as a floating adjective or implied experience.",
     ...(companyValuesPack
       ? [
           "Company values are bounded secondary context only: use at most one explicit bridge, only when grounded and tied to source-backed candidate evidence; never replace stronger proof or infer personal alignment.",
         ]
       : []),
     "Preset affects rhetorical texture only. It must not change truthfulness, claim strength, or evidence priority. Do not change ownership, metrics, tools, responsibilities, or boundaries.",
-    "Across cv_direct and cv_adjacent modes, sound like a person making a case in a letter, not a memo explaining why the evidence is relevant.",
-    "Do not write clunky constructions where inanimate objects are helped to improve or unlock outcomes. Avoid evaluator/meta phrases like 'the evidence I would bring'.",
+    "Across cv_direct and cv_adjacent modes, sound like a person making a case, not a memo.",
+    "Avoid clunky inanimate-object phrasing and evaluator/meta phrases like 'the evidence I would bring'.",
     presetGuidance,
     args.generationControlsBlock,
     ...contextGuidance,
@@ -1369,8 +1369,12 @@ type PremiumBodyPartValidationIssue = {
     | "adjacent_direct_fit"
     | "no_cv_history_claim"
     | "duplicate_close_line"
+    | "ats_keyword_list"
     | "clipped_source_fragment"
     | "unsupported_security_ownership"
+    | "unsupported_compliance_framework"
+    | "unsupported_license_claim"
+    | "unsupported_education_credential"
     | "fabricated_mission_claim";
   repairable: boolean;
 };
@@ -1397,10 +1401,69 @@ const CLIPPED_SOURCE_FRAGMENT_PATTERN =
   /\b(?:your|the|this|our)\s+(?:St\.?|Ste\.?|Suite|Dept\.?)\s+(?:campus|team|department|facility|security|operations)\b/i;
 const CLIPPED_CAPITAL_SOURCE_FRAGMENT_PATTERN =
   /\b(?:your|the|this|our)\s+Campus\s+(?:team|department|facility|operations)\b/;
-const UNSUPPORTED_SECURITY_OWNERSHIP_PATTERN =
-  /\b(?:lead|led|leading|adept at leading|own|owned|manage|managed|managing|drove|driven)\b.{0,90}\b(?:emergency preparedness drills?|safety incidents?|incident management|hazard resolution)\b|\b(?:emergency preparedness drills?|safety incidents?|incident management|hazard resolution)\b.{0,90}\b(?:lead|led|leading|adept at leading|own|owned|manage|managed|managing|drove|driven)\b/i;
+const ATS_KEYWORD_LIST_PATTERN =
+  /\b(?:Skills|Keywords|ATS terms)\s*:\s*[^.!?\n]*(?:,|\/)[^.!?\n]*(?:,|\/)/i;
+const COMPLIANCE_FRAMEWORK_PATTERNS = [
+  /\bHIPAA\b/i,
+  /\bOSHA\b/i,
+  /\bJCAHO\b/i,
+  /\bJoint Commission\b/i,
+  /\bISO\b/i,
+  /\bSOC 2\b/i,
+  /\bGDPR\b/i,
+  /\bPCI\b/i,
+  /\bregulated healthcare compliance\b/i,
+  /\bhealthcare security standards?\b/i,
+  /\bsafety compliance standards?\b/i,
+] as const;
+const UNSUPPORTED_SECURITY_OWNERSHIP_PATTERNS = [
+  /\b(?:adept at leading|lead(?:s|ing|d)?)\s+(?:emergency preparedness drills?|emergency drills?)\b/i,
+  /\b(?:emergency preparedness drills?|emergency drills?|safety incidents?|incident management|incident response|hazard resolution|emergency readiness|healthcare security strategy)\b\s+(?:led|leading|managed|managing|directed|directing|oversaw|oversight|commanded|commanding|owned|owning|drove|driven)\b/i,
+  /\b(?:manage(?:d|s)?|managing|direct(?:ed|s|ing)?|oversee(?:n|s|ing)?|command(?:ed|s|ing)?|own(?:ed|s|ing)?|drive(?:n|s|ing)?)\b[\s\S]{0,60}\b(?:safety incidents?|incident management|incident response|hazard resolution|emergency preparedness drills?|emergency drills?|emergency readiness|healthcare security strategy)\b/i,
+  /\b(?:identify\s+and\s+resolve|resolve(?:d|s|ing)?)\s+hazards?\b/i,
+] as const;
+const UNSUPPORTED_LICENSE_CLAIM_PATTERN =
+  /\b(?:active|current|valid|have|hold|possess)\s+(?:a\s+)?(?:driver['’]?s|drivers|driving)\s+licen[cs]e\b|\b(?:driver['’]?s|drivers|driving)\s+licen[cs]e\s+(?:is\s+)?(?:active|current|valid)\b/i;
+const UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN =
+  /\b(?:have|hold|earned|completed|with|bring|meet(?:s|ing)?|a|my)\s+(?:a\s+)?(?:high school diploma|GED|diploma equivalency)\b|\b(?:high school diploma|GED|diploma equivalency)\s+(?:further\s+)?(?:meets?|is|are|supports?)\b/i;
 const FABRICATED_MISSION_CLAIM_PATTERN =
   /\b(?:mission of|mission to|mission is|mission of safeguarding|reimagining healthcare security|contribute to reimagining healthcare)\b/i;
+
+function buildValidationSourceSurface(args: { brief: CoverLetterBrief }): string {
+  const companyValuesPack = args.brief.companyValuesPack;
+  return [
+    args.brief.topEvidence,
+    args.brief.supportEvidence,
+    args.brief.transferCore ?? [],
+    args.brief.topResponsibilities ?? [],
+    args.brief.keyRequirements ?? [],
+    args.brief.preferredQualifications ?? [],
+    args.brief.lowValueChecklist ?? [],
+    args.brief.workContext ?? [],
+    companyValuesPack ? companyValuesPack.explicitValues : [],
+    companyValuesPack ? companyValuesPack.implicitValues : [],
+    companyValuesPack ? companyValuesPack.valueEvidenceSnippets : [],
+    companyValuesPack ? companyValuesPack.workSurfaceLinks : [],
+  ]
+    .flat()
+    .map((value) => compactWhitespace(value))
+    .filter(Boolean)
+    .join(" ");
+}
+
+function buildCandidateEvidenceSurface(args: { brief: CoverLetterBrief }): string {
+  const companyValuesPack = args.brief.companyValuesPack;
+  return [
+    args.brief.topEvidence,
+    args.brief.supportEvidence,
+    args.brief.transferCore ?? [],
+    companyValuesPack ? companyValuesPack.valueEvidenceSnippets : [],
+  ]
+    .flat()
+    .map((value) => compactWhitespace(value))
+    .filter(Boolean)
+    .join(" ");
+}
 
 export function validatePremiumCoverLetterBodyParts(args: {
   bodyParts: CoverLetterBodyParts;
@@ -1409,6 +1472,8 @@ export function validatePremiumCoverLetterBodyParts(args: {
   const bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(args.bodyParts);
   const issues: PremiumBodyPartValidationIssue[] = [];
   const values = Object.values(bodyParts);
+  const sourceSurface = buildValidationSourceSurface(args);
+  const candidateEvidenceSurface = buildCandidateEvidenceSurface(args);
   for (const value of values) {
     const compact = compactWhitespace(value);
     if (!compact) {
@@ -1443,14 +1508,40 @@ export function validatePremiumCoverLetterBodyParts(args: {
     ) {
       issues.push({ code: "no_cv_history_claim", repairable: false });
     }
+    if (ATS_KEYWORD_LIST_PATTERN.test(compact)) {
+      issues.push({ code: "ats_keyword_list", repairable: false });
+    }
     if (
       CLIPPED_SOURCE_FRAGMENT_PATTERN.test(compact) ||
       CLIPPED_CAPITAL_SOURCE_FRAGMENT_PATTERN.test(compact)
     ) {
       issues.push({ code: "clipped_source_fragment", repairable: false });
     }
-    if (UNSUPPORTED_SECURITY_OWNERSHIP_PATTERN.test(compact)) {
-      issues.push({ code: "unsupported_security_ownership", repairable: false });
+    for (const pattern of COMPLIANCE_FRAMEWORK_PATTERNS) {
+      if (pattern.test(compact) && !pattern.test(sourceSurface)) {
+        issues.push({ code: "unsupported_compliance_framework", repairable: false });
+        break;
+      }
+    }
+    if (UNSUPPORTED_SECURITY_OWNERSHIP_PATTERNS.some((pattern) => pattern.test(compact))) {
+      const sourceAllowsEmergencyOwnership = UNSUPPORTED_SECURITY_OWNERSHIP_PATTERNS.some(
+        (pattern) => pattern.test(candidateEvidenceSurface),
+      );
+      if (!sourceAllowsEmergencyOwnership) {
+        issues.push({ code: "unsupported_security_ownership", repairable: false });
+      }
+    }
+    if (
+      UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(compact) &&
+      !UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(candidateEvidenceSurface)
+    ) {
+      issues.push({ code: "unsupported_license_claim", repairable: false });
+    }
+    if (
+      UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(compact) &&
+      !UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(candidateEvidenceSurface)
+    ) {
+      issues.push({ code: "unsupported_education_credential", repairable: false });
     }
     if (FABRICATED_MISSION_CLAIM_PATTERN.test(compact)) {
       issues.push({ code: "fabricated_mission_claim", repairable: false });
