@@ -19,7 +19,7 @@ export type DocumentLanguageContext = {
 
 export type DocumentLanguageSource =
   | "document-preference"
-  | "job"
+  | "job-detected"
   | "ui-fallback"
   | "default";
 
@@ -257,7 +257,7 @@ export function resolveDocumentLanguageGenerationMetadata(args: {
     return {
       requestedLanguage,
       resolvedLanguage: jobDetectedLanguage,
-      languageSource: "job",
+      languageSource: "job-detected",
       jobDetectedLanguage,
     };
   }
