@@ -125,7 +125,7 @@ describe("document language scaffold", () => {
   it("normalizes only prepared document languages", () => {
     expect(normalizeDocumentLanguage("pt-BR")).toBe("pt");
     expect(normalizeDocumentLanguage("ar")).toBe("ar");
-    expect(normalizeDocumentLanguage("ga")).toBe(DEFAULT_DOCUMENT_LANGUAGE);
+    expect(normalizeDocumentLanguage("ga")).toBe("ga");
   });
 
   it("keeps Russian document language available when Russian UI falls back to English", () => {
@@ -146,8 +146,7 @@ describe("document language scaffold", () => {
     const optionIds = DOCUMENT_LANGUAGE_OPTIONS.map((option) => option.id);
 
     expect(optionIds).toEqual(
-      expect.arrayContaining(["auto", "en", "fr", "es", "de", "ar"]),
+      expect.arrayContaining(["auto", "en", "fr", "es", "de", "ar", "ga"]),
     );
-    expect(optionIds).not.toContain("ga");
   });
 });
