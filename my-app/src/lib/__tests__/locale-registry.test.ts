@@ -42,6 +42,7 @@ describe("locale registry", () => {
     expect(normalizeUiLocale("fr-CA")).toBe("fr");
     expect(normalizeUiLocale("es-MX")).toBe("es");
     expect(normalizeUiLocale("de-DE")).toBe("en");
+    expect(normalizeUiLocale("ru-RU")).toBe("en");
     expect(normalizeUiLocale("ar")).toBe("en");
     expect(normalizeUiLocale(["pt-BR", "fr-FR"])).toBe("en");
     expect(normalizeUiLocale(["fr-FR", "pt-BR"])).toBe("fr");

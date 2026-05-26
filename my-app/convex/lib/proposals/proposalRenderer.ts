@@ -3,6 +3,7 @@ import type {
   ProposalOutputFormat,
   ProposalOutputLanguage,
 } from "./proposalOutput";
+import { getDeterministicCopyLanguage } from "./proposalOutput";
 import type { ProposalVoicePreset } from "./voicePresets";
 
 export const ENGLISH_SALUTATION = "Dear Hiring Manager,";
@@ -66,7 +67,7 @@ export const FRENCH_APPLICATION_MESSAGE_FINAL_SENTENCE =
 export type ProposalRenderPolicy = {
   salutation?: string;
   signOff?: string;
-  finalSentence: string;
+  finalSentence?: string;
   includeCandidateNameLine: boolean;
 };
 
@@ -120,9 +121,13 @@ function selectDeterministicFinalSentenceVariant(args: {
   outputLanguage: ProposalOutputLanguage;
   voicePreset: ProposalVoicePreset;
   noContextMode: boolean;
-}): string {
+}): string | null {
+  const deterministicLanguage = getDeterministicCopyLanguage(
+    args.outputLanguage,
+  );
+  if (!deterministicLanguage) return null;
   const pools =
-    args.outputLanguage === "French"
+    deterministicLanguage === "fr"
       ? FRENCH_SAFE_FINAL_SENTENCES
       : ENGLISH_SAFE_FINAL_SENTENCES;
   const variants = args.noContextMode ? pools.interestOnly : pools.standard;
@@ -137,7 +142,9 @@ export function getDeterministicProposalRenderPolicy(args: {
   voicePreset: ProposalVoicePreset;
   noContextMode: boolean;
 }): ProposalRenderPolicy {
-  const isFrench = args.outputLanguage === "French";
+  const deterministicLanguage = getDeterministicCopyLanguage(
+    args.outputLanguage,
+  );
   const finalSentence =
     args.format === "cover_letter"
       ? selectDeterministicFinalSentenceVariant({
@@ -145,23 +152,33 @@ export function getDeterministicProposalRenderPolicy(args: {
           voicePreset: args.voicePreset,
           noContextMode: args.noContextMode,
         })
-      : isFrench
+      : deterministicLanguage === "fr"
         ? FRENCH_APPLICATION_MESSAGE_FINAL_SENTENCE
-        : ENGLISH_APPLICATION_MESSAGE_FINAL_SENTENCE;
+        : deterministicLanguage === "en"
+          ? ENGLISH_APPLICATION_MESSAGE_FINAL_SENTENCE
+          : undefined;
 
   if (args.format !== "cover_letter") {
     return {
-      finalSentence,
+      ...(finalSentence ? { finalSentence } : {}),
+      includeCandidateNameLine: false,
+    };
+  }
+
+  if (!deterministicLanguage) {
+    return {
+      ...(finalSentence ? { finalSentence } : {}),
       includeCandidateNameLine: false,
     };
   }
 
   return {
-    salutation: isFrench ? FRENCH_SALUTATION : ENGLISH_SALUTATION,
-    signOff: isFrench
+    salutation:
+      deterministicLanguage === "fr" ? FRENCH_SALUTATION : ENGLISH_SALUTATION,
+    signOff: deterministicLanguage === "fr"
       ? FRENCH_SIGNOFFS[args.voicePreset]
       : ENGLISH_SIGNOFFS[args.voicePreset],
-    finalSentence,
+    ...(finalSentence ? { finalSentence } : {}),
     includeCandidateNameLine: true,
   };
 }
@@ -182,7 +199,7 @@ export function applyDeterministicProposalBoundaries(args: {
   });
   const paragraphs = splitParagraphs(args.body);
   const normalizedFinalSentence = normalizeProposalConstraintText(
-    policy.finalSentence,
+    policy.finalSentence ?? "",
   );
 
   if (args.format === "application_message") {
@@ -191,9 +208,10 @@ export function applyDeterministicProposalBoundaries(args: {
   }
 
   if (
-    paragraphs.length === 0 ||
-    normalizeProposalConstraintText(paragraphs[paragraphs.length - 1]) !==
-      normalizedFinalSentence
+    policy.finalSentence &&
+    (paragraphs.length === 0 ||
+      normalizeProposalConstraintText(paragraphs[paragraphs.length - 1]) !==
+        normalizedFinalSentence)
   ) {
     paragraphs.push(policy.finalSentence);
   }

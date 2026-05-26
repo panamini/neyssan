@@ -421,7 +421,7 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
           : null,
       languageSource:
         parsed.languageSource === "document-preference" ||
-        parsed.languageSource === "job-detected" ||
+        parsed.languageSource === "job" ||
         parsed.languageSource === "ui-fallback" ||
         parsed.languageSource === "default"
           ? parsed.languageSource
@@ -590,7 +590,7 @@ function buildSanitizedStoredProposalOutputDraft(
         : null,
     languageSource:
       draft.languageSource === "document-preference" ||
-      draft.languageSource === "job-detected" ||
+      draft.languageSource === "job" ||
       draft.languageSource === "ui-fallback" ||
       draft.languageSource === "default"
         ? draft.languageSource
