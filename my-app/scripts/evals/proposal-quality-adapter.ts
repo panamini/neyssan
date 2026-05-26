@@ -10,6 +10,10 @@ import type {
 } from "../../benchmarks/proposal-generation/core/types";
 import type { RunManifest } from "../../benchmarks/proposal-generation/core/exporters";
 import {
+  analyzeBenchmarkOutputQuality,
+  type BenchmarkOutputQualityGateFailure,
+} from "../../benchmarks/proposal-generation/core/outputQualityGates";
+import {
   PROPOSAL_QUALITY_NEGATIVE_CONTROL_FIXTURES,
   PROPOSAL_QUALITY_FIXTURES,
   assertProposalQualityHardGates,
@@ -41,6 +45,7 @@ export type ProposalBenchmarkQualityScore = Omit<
   blindLabel: string;
   generatedLetter: string;
   outputTextForScoring: string;
+  benchmarkGateFailures: BenchmarkOutputQualityGateFailure[];
   status: "ok";
   latencyMs: number | null;
   totalCostUsd: number | null;
@@ -71,6 +76,7 @@ export type ProposalBenchmarkQualityReport = {
     credentialInflationCount: number;
     noContextViolationCount: number;
     averageSupportedKeywordCoverage: number;
+    benchmarkGateFailures: number;
     selectorReadiness: Record<ProposalEvalResult["selectorReadiness"], number>;
     averageLatencyMs: number | null;
     totalCostUsd: number | null;
@@ -96,6 +102,7 @@ export type ProposalBenchmarkQualityReport = {
     recruiterCaseScore: ProposalEvalResult["recruiterCaseScore"];
     selectorReadiness: ProposalEvalResult["selectorReadiness"];
     unsupportedClaims: number;
+    benchmarkGateFailures: BenchmarkOutputQualityGateFailure[];
     missingCriticalRequirements: string[];
   }>;
 };
@@ -352,6 +359,10 @@ function scoreSuccessResult(args: {
     variants: ["semantic_planner_shadow"],
     hardness: "hard",
   });
+  const benchmarkGateFailures = analyzeBenchmarkOutputQuality({
+    benchmarkCase: args.benchmarkCase,
+    outputText: args.result.outputText,
+  });
 
   return {
     ...score,
@@ -360,6 +371,7 @@ function scoreSuccessResult(args: {
     blindLabel: args.blindLabel,
     generatedLetter: args.result.outputText,
     outputTextForScoring: fixture.letters.baseline,
+    benchmarkGateFailures,
     status: "ok",
     latencyMs: args.result.latencyMs,
     totalCostUsd: args.result.cost.totalCostUsd,
@@ -396,6 +408,9 @@ function buildAverages(
       bannedCompanyPraise: sum(okScores.map((score) => score.bannedCompanyPraise)),
       credentialInflationCount: okScores.filter((score) => score.credentialInflation).length,
       noContextViolationCount: okScores.filter((score) => score.noContextViolation).length,
+      benchmarkGateFailures: sum(
+        okScores.map((score) => score.benchmarkGateFailures.length),
+      ),
       averageSupportedKeywordCoverage:
         okScores.length === 0
           ? 0
@@ -458,6 +473,7 @@ function addShortlistEntry(
     recruiterCaseScore: score.recruiterCaseScore,
     selectorReadiness: score.selectorReadiness,
     unsupportedClaims: score.unsupportedClaims,
+    benchmarkGateFailures: score.benchmarkGateFailures,
     missingCriticalRequirements: score.missingCriticalRequirements,
   });
 }
@@ -489,6 +505,15 @@ function buildManualReviewShortlist(
     }
     if (score.unsupportedClaims > 0) {
       addShortlistEntry(entries, score, "unsupported claims detected");
+    }
+    if (score.benchmarkGateFailures.length > 0) {
+      addShortlistEntry(
+        entries,
+        score,
+        `benchmark gates: ${score.benchmarkGateFailures
+          .map((failure) => `${failure.code}=${failure.evidence}`)
+          .join(", ")}`,
+      );
     }
     if (score.missingCriticalRequirements.length > 0) {
       addShortlistEntry(entries, score, "missing critical requirements");
@@ -626,8 +651,8 @@ export function renderMarkdownReport(report: ProposalBenchmarkQualityReport): st
   lines.push("");
   lines.push("## Per-Model Averages");
   lines.push("");
-  lines.push("| Blind label | Fixtures | Avg recruiter | Unsupported claims | Praise | Credential inflation | No-context violations | Avg keyword coverage | Readiness | Avg latency | Total cost |");
-  lines.push("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: |");
+  lines.push("| Blind label | Fixtures | Avg recruiter | Unsupported claims | Benchmark gates | Praise | Credential inflation | No-context violations | Avg keyword coverage | Readiness | Avg latency | Total cost |");
+  lines.push("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: |");
   for (const row of report.averagesByBlindLabel) {
     lines.push(
       [
@@ -635,6 +660,7 @@ export function renderMarkdownReport(report: ProposalBenchmarkQualityReport): st
         row.fixtureCount,
         row.averageRecruiterCaseScore,
         row.unsupportedClaims,
+        row.benchmarkGateFailures,
         row.bannedCompanyPraise,
         row.credentialInflationCount,
         row.noContextViolationCount,
@@ -648,8 +674,8 @@ export function renderMarkdownReport(report: ProposalBenchmarkQualityReport): st
   lines.push("");
   lines.push("## Manual Review Shortlist");
   lines.push("");
-  lines.push("| Fixture | Blind label | Reasons | Readiness | Recruiter | Unsupported claims | Missing critical requirements |");
-  lines.push("| --- | --- | --- | --- | ---: | ---: | --- |");
+  lines.push("| Fixture | Blind label | Reasons | Readiness | Recruiter | Unsupported claims | Benchmark gates | Missing critical requirements |");
+  lines.push("| --- | --- | --- | --- | ---: | ---: | --- | --- |");
   for (const row of report.manualReviewShortlist) {
     lines.push(
       [
@@ -659,6 +685,9 @@ export function renderMarkdownReport(report: ProposalBenchmarkQualityReport): st
         row.selectorReadiness,
         row.recruiterCaseScore,
         row.unsupportedClaims,
+        row.benchmarkGateFailures
+          .map((failure) => `${failure.code}: ${failure.evidence}`)
+          .join("<br>") || "none",
         row.missingCriticalRequirements.join("<br>") || "none",
       ].join(" | "),
     );
@@ -676,8 +705,8 @@ export function renderMarkdownReport(report: ProposalBenchmarkQualityReport): st
   lines.push("");
   lines.push("## Fixture Scores");
   lines.push("");
-  lines.push("| Fixture | Blind label | Readiness | Recruiter | Unsupported claims | Praise | Credential inflation | No-context violation | Keyword coverage | Opening mode | Canon failures | Canon warnings | Planned mode | Planned blocked | Planned missing | Plan warnings | Plan check | Plan violations | Plan repair | Plan repair action | Plan repair reasons |");
-  lines.push("| --- | --- | --- | ---: | ---: | ---: | --- | --- | ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | --- | ---: | --- | --- | ---: |");
+  lines.push("| Fixture | Blind label | Readiness | Recruiter | Unsupported claims | Benchmark gates | Praise | Credential inflation | No-context violation | Keyword coverage | Opening mode | Canon failures | Canon warnings | Planned mode | Planned blocked | Planned missing | Plan warnings | Plan check | Plan violations | Plan repair | Plan repair action | Plan repair reasons |");
+  lines.push("| --- | --- | --- | ---: | ---: | --- | ---: | --- | --- | ---: | --- | ---: | ---: | --- | ---: | ---: | ---: | --- | ---: | --- | --- | ---: |");
   for (const score of report.scores) {
     if (score.status !== "ok") continue;
     lines.push(
@@ -687,6 +716,9 @@ export function renderMarkdownReport(report: ProposalBenchmarkQualityReport): st
         score.selectorReadiness,
         score.recruiterCaseScore,
         score.unsupportedClaims,
+        score.benchmarkGateFailures
+          .map((failure) => `${failure.code}: ${failure.evidence}`)
+          .join("<br>") || "none",
         score.bannedCompanyPraise,
         score.credentialInflation ? "yes" : "no",
         score.noContextViolation ? "yes" : "no",
