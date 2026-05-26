@@ -131,6 +131,7 @@ interface ProposalInputFormProps {
   sourceUrl?: string | null;
   sourcePlatform?: string | null;
   canonicalJobId?: string | null;
+  jobSourceLanguage?: string | null;
 }
 
 export type ProposalGenerateControl = {
@@ -402,6 +403,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   sourceUrl: liveSourceUrl = null,
   sourcePlatform: liveSourcePlatform = null,
   canonicalJobId = null,
+  jobSourceLanguage = null,
 }) => {
   const navigate = useNavigate();
   const hasHeaderLabel = Boolean(headerLabel);
@@ -1049,6 +1051,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
       const languageMetadata = resolveDocumentLanguageGenerationMetadata({
         uiLocale: resolveUiLocale(readStoredUiLanguagePreference()),
         documentLanguage: readStoredDocumentLanguage(),
+        jobDetectedLanguage: jobSourceLanguage,
         jobText: normalizedValues.jobDescription,
       });
       const payload = {

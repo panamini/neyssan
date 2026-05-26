@@ -308,7 +308,7 @@ describe("ProposalInputForm auto tone submit", () => {
     window.localStorage.setItem("twoweeks:ui-language", "en");
     window.localStorage.setItem("twoweeks:document-language", "fr");
 
-    render(<ProposalInputForm onSubmit={vi.fn()} />);
+    render(<ProposalInputForm onSubmit={vi.fn()} jobSourceLanguage="de" />);
 
     fireEvent.change(screen.getByPlaceholderText("Job title"), {
       target: { value: "Operations Associate" },
@@ -328,7 +328,37 @@ describe("ProposalInputForm auto tone submit", () => {
           requestedLanguage: "fr",
           resolvedLanguage: "fr",
           languageSource: "document-preference",
-          jobDetectedLanguage: "en",
+          jobDetectedLanguage: "de",
+        }),
+      );
+    });
+  });
+
+  it("resolves Auto document language from stored job source language before text detection", async () => {
+    window.localStorage.setItem("twoweeks:ui-language", "en");
+    window.localStorage.setItem("twoweeks:document-language", "auto");
+
+    render(<ProposalInputForm onSubmit={vi.fn()} jobSourceLanguage="fr" />);
+
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
+      target: { value: "Operations Associate" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Paste job offer"), {
+      target: {
+        value:
+          "We are looking for an operations associate with strong team skills and clear communication.",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => {
+      expect(mockGenerateProposalAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestedLanguage: "auto",
+          resolvedLanguage: "fr",
+          languageSource: "job-detected",
+          jobDetectedLanguage: "fr",
         }),
       );
     });
