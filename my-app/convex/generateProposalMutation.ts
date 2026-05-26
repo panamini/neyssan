@@ -94,6 +94,7 @@ import {
 import {
   attemptPremiumCoverLetterGeneration,
   buildJobOfferPriorityPack,
+  PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
   evaluatePremiumCoverLetterEligibility,
   generatePremiumCoverLetterBodyPartsWithOpenAI,
   isCoverLetterPremiumPathV1Enabled,
@@ -114,6 +115,83 @@ import {
 } from "./lib/proposals/proposalEnforcement";
 
 export { getDeterministicProposalRenderPolicy };
+
+function extractCompatibleChatResponseText(response: any): string {
+  const choices = Array.isArray(response?.choices) ? response.choices : [];
+  const content = choices[0]?.message?.content;
+
+  if (typeof content === "string" && content.trim()) {
+    return content.trim();
+  }
+
+  if (Array.isArray(content)) {
+    const joined = content
+      .map((part: any) =>
+        typeof part?.text === "string"
+          ? part.text
+          : typeof part?.content === "string"
+            ? part.content
+            : "",
+      )
+      .join(" ")
+      .trim();
+    if (joined) return joined;
+  }
+
+  if (typeof response?.output_text === "string" && response.output_text.trim()) {
+    return response.output_text.trim();
+  }
+
+  throw new Error("Compatible chat premium cover-letter response returned no text");
+}
+
+function parsePremiumCoverLetterBodyPartsContent(content: string) {
+  const trimmed = content.trim();
+  const tryParse = (value: string) =>
+    PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(JSON.parse(value));
+
+  try {
+    return tryParse(trimmed);
+  } catch {
+    const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
+    if (fenced?.[1]) {
+      return tryParse(fenced[1]);
+    }
+  }
+
+  throw new Error("Premium cover-letter response did not contain parsed JSON");
+}
+
+async function generatePremiumCoverLetterBodyPartsWithQwen(args: {
+  apiKey: string;
+  chatCompletionsUrl: string;
+  prompt: string;
+  writerModel: string;
+  signal?: AbortSignal;
+}) {
+  const response = await fetch(args.chatCompletionsUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${args.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: args.writerModel,
+      messages: [{ role: "user", content: args.prompt }],
+    }),
+    signal: args.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Qwen premium cover-letter request failed: ${response.status} ${response.statusText} ${await response.text()}`,
+    );
+  }
+
+  return parsePremiumCoverLetterBodyPartsContent(
+    extractCompatibleChatResponseText(await response.json()),
+  );
+}
 
 function buildWriteFullyInOutputLanguageInstruction(
   outputLanguage: ProposalOutputLanguage,
@@ -9412,8 +9490,12 @@ export async function handleGenerateProposal(
       : [];
   const premiumCoverLetterFlagEnabled = isCoverLetterPremiumPathV1Enabled();
   const premiumCoverLetterWriterModel = resolvePremiumCoverLetterWriterModel();
+  const qwenPremiumCoverLetterWriterModel =
+    llmConfig.proposalModels?.qwenFallbackModel ?? "qwen3.7-max";
   const premiumCoverLetterEligibility =
-    requestedModelType === "chatgpt" && outputFormat === "cover_letter"
+    (requestedModelType === "chatgpt" ||
+      requestedModelType === "qwen3.7-max") &&
+    outputFormat === "cover_letter"
       ? evaluatePremiumCoverLetterEligibility({
           personalizationContext: effectivePersonalization,
           voicePreset: resolvedVoicePreset,
@@ -9502,6 +9584,11 @@ export async function handleGenerateProposal(
         : requestedModelType === "chatgpt" &&
             outputFormat === "cover_letter" &&
             coverLetterPrimaryPathEligibility.eligible
+          ? "premium fail-closed to legacy fallback"
+          : requestedModelType === "qwen3.7-max" &&
+              outputFormat === "cover_letter" &&
+              premiumCoverLetterFlagEnabled &&
+              premiumCoverLetterEligibility?.eligible
           ? "premium fail-closed to legacy fallback"
           : "legacy-only path";
   const routingTrace: ProposalRoutingTrace = {
@@ -9641,17 +9728,23 @@ export async function handleGenerateProposal(
         const apiKey = process.env.OPENAI_API_KEY ?? null;
 
         if (outputFormat === "cover_letter") {
-          console.info("Premium cover letter runtime check", {
-            requestedModelType,
-            actualModelType,
-            premiumFlagEnabled: premiumCoverLetterFlagEnabled,
-            premiumWriterModel: premiumCoverLetterWriterModel,
-            premiumEligibilityResult:
-              premiumCoverLetterEligibility ?? "not_evaluated",
-            enteringPremiumAttempt:
-              requestedModelType === "chatgpt" &&
-              coverLetterPrimaryPathEligibility.eligible,
-          });
+        console.info("Premium cover letter runtime check", {
+          requestedModelType,
+          actualModelType,
+          premiumFlagEnabled: premiumCoverLetterFlagEnabled,
+          premiumWriterModel:
+            requestedModelType === "qwen3.7-max"
+              ? qwenPremiumCoverLetterWriterModel
+              : premiumCoverLetterWriterModel,
+          premiumEligibilityResult:
+            premiumCoverLetterEligibility ?? "not_evaluated",
+          enteringPremiumAttempt:
+            (requestedModelType === "chatgpt" &&
+              coverLetterPrimaryPathEligibility.eligible) ||
+            (requestedModelType === "qwen3.7-max" &&
+              premiumCoverLetterFlagEnabled &&
+              premiumCoverLetterEligibility?.eligible),
+        });
         }
 
         if (
@@ -9680,7 +9773,7 @@ export async function handleGenerateProposal(
               });
           } catch (premiumError) {
             console.warn(
-              "Premium cover letter path v1 failed; falling back to legacy ChatGPT cover-letter generation.",
+              "Premium cover letter path v1 failed; falling back to legacy cover-letter generation.",
               premiumError,
             );
             premiumPersistencePayload = null;
@@ -9688,6 +9781,70 @@ export async function handleGenerateProposal(
 
           if (premiumPersistencePayload) {
             attemptedGenerationPath = "premium success";
+            routingTrace.plannedPath = "structured";
+            routingTrace.executedPath = "structured";
+            routingTrace.fallbackReason = "not_applicable";
+            routingTrace.validatorOutcome = "structured_success";
+          } else {
+            attemptedGenerationPath = "premium fail-closed to legacy fallback";
+            routingTrace.fallbackReason = "premium_generation_failed";
+            if (routingTrace.validatorOutcome === "not_run") {
+              routingTrace.validatorOutcome = "structured_failed";
+            }
+          }
+        } else if (
+          requestedModelType === "qwen3.7-max" &&
+          outputFormat === "cover_letter" &&
+          premiumCoverLetterFlagEnabled &&
+          premiumCoverLetterEligibility?.eligible
+        ) {
+          const qwenApiKey = process.env.QWEN_API_KEY ?? null;
+          const qwenChatCompletionsUrl =
+            process.env.QWEN_CHAT_COMPLETIONS_URL ??
+            (process.env.QWEN_BASE_URL
+              ? `${process.env.QWEN_BASE_URL.replace(/\/$/, "")}/chat/completions`
+              : null) ??
+            null;
+          if (!qwenApiKey || !qwenChatCompletionsUrl) {
+            throw new ConvexError(
+              "Qwen API credentials are not configured for qwen3.7-max.",
+            );
+          }
+
+          try {
+            premiumPersistencePayload =
+              await attemptPremiumCoverLetterGeneration({
+                personalizationContext: effectivePersonalization,
+                voicePreset: resolvedVoicePreset,
+                outputLanguage,
+                jobTitle: effectiveJobTitle,
+                jobDescription: args.jobDescription,
+                candidateName,
+                generationControlsBlock,
+                companyValuesPack,
+                writerProvider: "qwen",
+                writerModel: qwenPremiumCoverLetterWriterModel,
+                writer: ({ prompt }) =>
+                  generatePremiumCoverLetterBodyPartsWithQwen({
+                    apiKey: qwenApiKey,
+                    chatCompletionsUrl: qwenChatCompletionsUrl,
+                    prompt,
+                    writerModel: qwenPremiumCoverLetterWriterModel,
+                    signal: cancellationContext?.signal,
+                  }),
+              });
+            actualModelName = qwenPremiumCoverLetterWriterModel;
+          } catch (premiumError) {
+            console.warn(
+              "Premium cover letter path v1 failed; falling back to legacy cover-letter generation.",
+              premiumError,
+            );
+            premiumPersistencePayload = null;
+          }
+
+          if (premiumPersistencePayload) {
+            attemptedGenerationPath = "premium success";
+            routingTrace.plannedPath = "structured";
             routingTrace.executedPath = "structured";
             routingTrace.fallbackReason = "not_applicable";
             routingTrace.validatorOutcome = "structured_success";
@@ -9707,6 +9864,15 @@ export async function handleGenerateProposal(
           console.info(
             "OpenAI API key unavailable; skipping premium proposal path and using fallbacks.",
           );
+        } else if (
+          requestedModelType === "qwen3.7-max" &&
+          outputFormat === "cover_letter" &&
+          coverLetterPrimaryPathEligibility.eligible &&
+          !(process.env.QWEN_API_KEY ?? null)
+        ) {
+          throw new ConvexError(
+            "Qwen API credentials are not configured for qwen3.7-max.",
+          );
         }
 
         if (premiumPersistencePayload) {
@@ -9714,8 +9880,7 @@ export async function handleGenerateProposal(
         } else {
           const proposalService = (() => {
             if (actualModelType === "qwen3.7-max") {
-              const qwenApiKey =
-                llmConfig.qwenKey ?? process.env.QWEN_API_KEY ?? null;
+              const qwenApiKey = process.env.QWEN_API_KEY ?? null;
               const qwenChatCompletionsUrl =
                 llmConfig.qwenChatCompletionsUrl ??
                 process.env.QWEN_CHAT_COMPLETIONS_URL ??
@@ -9779,7 +9944,9 @@ export async function handleGenerateProposal(
           } else if (outputFormat === "application_message") {
             const proposal = await proposalService.generateTextWithFallbacks(
               prompt,
-              {},
+              cancellationContext?.signal
+                ? ({ signal: cancellationContext.signal } as any)
+                : {},
             );
             proposalContent = proposal.text;
             actualModelName = proposal.modelName;
