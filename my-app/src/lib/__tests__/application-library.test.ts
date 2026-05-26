@@ -78,6 +78,7 @@ describe("buildWorkLibraryModel", () => {
           content: "Saved proposal body.",
           status: "saved",
           updatedAt: now - 1_000,
+          metadata: { resolvedLanguage: "fr" },
         },
       ],
       now,
@@ -90,6 +91,7 @@ describe("buildWorkLibraryModel", () => {
           type: "proposal",
           title: "Senior Frontend Engineer",
           content: "Saved proposal body.",
+          resolvedLanguage: "fr",
           routeTarget: {
             kind: "route",
             to: "/proposal?view=saved&id=proposal-1",
@@ -104,6 +106,7 @@ describe("buildWorkLibraryModel", () => {
       outputDraft: {
         proposalDocumentTitle: "Local proposal",
         proposalContent: "Local generated body.",
+        resolvedLanguage: "ru",
         sourceComposeDraft: {
           jobTitle: "Security Officer",
           jobDescription: "Guard building access.",
@@ -118,6 +121,7 @@ describe("buildWorkLibraryModel", () => {
         type: "proposal",
         title: "Local proposal",
         content: "Local generated body.",
+        resolvedLanguage: "ru",
         jobTitle: "Security Officer",
         source: "local",
         routeTarget: { kind: "route", to: "/proposal" },

@@ -119,6 +119,7 @@ export async function buildLibraryItemPdfBlob(
       headerVisibility: null,
       templateId: "workshop_proposal_margin",
       stylePreset: LIBRARY_PROPOSAL_DOWNLOAD_STYLE,
+      locale: item.resolvedLanguage ?? null,
     });
     const exported = await buildExportDocumentFileBlob({
       kind: "proposal",
