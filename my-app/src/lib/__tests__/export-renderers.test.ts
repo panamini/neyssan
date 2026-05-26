@@ -37,6 +37,41 @@ function getInlineStyles(document: Document): string {
   return document.querySelector("style")?.textContent ?? "";
 }
 
+async function readDocxMainXml(buffer: Buffer): Promise<{
+  documentXml: string;
+  stylesXml: string;
+}> {
+  const archive = await JSZip.loadAsync(buffer);
+
+  return {
+    documentXml: (await archive.file("word/document.xml")?.async("string")) ?? "",
+    stylesXml: (await archive.file("word/styles.xml")?.async("string")) ?? "",
+  };
+}
+
+function expectDocxLanguageMetadata(args: {
+  documentXml: string;
+  stylesXml: string;
+  locale: string;
+  rtl: boolean;
+}): void {
+  const combinedXml = `${args.documentXml}\n${args.stylesXml}`;
+
+  expect(combinedXml).toContain("w:lang");
+  expect(combinedXml).toContain(`w:val="${args.locale}"`);
+
+  if (args.rtl) {
+    expect(args.documentXml).toContain("w:bidi");
+    expect(args.documentXml).toContain("w:rtl");
+    expect(combinedXml).toContain(`w:bidi="${args.locale}"`);
+    return;
+  }
+
+  expect(args.documentXml).not.toContain("w:bidi");
+  expect(args.documentXml).not.toContain("w:rtl");
+  expect(combinedXml).not.toContain(`w:bidi="${args.locale}"`);
+}
+
 const resumeFixture: ResumePrintSource = {
   schemaVersion: 1,
   kind: "resume",
@@ -619,6 +654,88 @@ describe("export-renderers", () => {
     expect(proposalDocumentXml).not.toContain("w:cols");
     expect(proposalDocumentXml).toContain("Fraunces");
     expect(proposalStylesXml).toContain("Syne");
+  });
+
+  it("emits Arabic DOCX document language and RTL metadata for resume and proposal exports", async () => {
+    const resumeXml = await readDocxMainXml(
+      await buildResumeDocxBuffer({
+        data: {
+          ...resumeFixture,
+          locale: "ar",
+          profile: {
+            ...resumeFixture.profile,
+            name: "أحمد مرسي",
+            title: "مصمم أنظمة منتجات",
+            summary: "يبني أنظمة مستندات قابلة للتصدير.",
+          },
+        },
+      }),
+    );
+    const proposalXml = await readDocxMainXml(
+      await buildProposalDocxBuffer({
+        data: {
+          ...proposalFixture,
+          locale: "ar",
+          title: "خطاب تقديم",
+          documentTitle: "طلب توظيف",
+          body: [
+            { type: "salutation", text: "مرحباً،" },
+            {
+              type: "paragraph",
+              text: "أبني أنظمة مستندات دقيقة للتصدير.",
+            },
+            {
+              type: "closing",
+              signOff: "مع خالص التحية،",
+              signatureName: "أحمد مرسي",
+            },
+          ],
+        },
+      }),
+    );
+
+    expectDocxLanguageMetadata({
+      ...resumeXml,
+      locale: "ar",
+      rtl: true,
+    });
+    expectDocxLanguageMetadata({
+      ...proposalXml,
+      locale: "ar",
+      rtl: true,
+    });
+  });
+
+  it("emits LTR DOCX language metadata without RTL markers for Russian and Irish", async () => {
+    for (const locale of ["ru", "ga"] as const) {
+      const resumeXml = await readDocxMainXml(
+        await buildResumeDocxBuffer({
+          data: {
+            ...resumeFixture,
+            locale,
+          },
+        }),
+      );
+      const proposalXml = await readDocxMainXml(
+        await buildProposalDocxBuffer({
+          data: {
+            ...proposalFixture,
+            locale,
+          },
+        }),
+      );
+
+      expectDocxLanguageMetadata({
+        ...resumeXml,
+        locale,
+        rtl: false,
+      });
+      expectDocxLanguageMetadata({
+        ...proposalXml,
+        locale,
+        rtl: false,
+      });
+    }
   });
 
   it("preserves supported Styled typography presets and structural hooks across long-content fixtures", () => {
