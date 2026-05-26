@@ -287,6 +287,18 @@ const LOCAL_FONT_FACES: LocalFontFace[] = [
     fontStyle: "normal",
     fontWeight: "100 900",
   },
+  {
+    family: "Noto Sans",
+    matchTokens: ["notosans", "variablefont", "wdth", "wght"],
+    fontStyle: "normal",
+    fontWeight: "100 900",
+  },
+  {
+    family: "Noto Kufi Arabic",
+    matchTokens: ["notokufiarabic", "variablefont", "wght"],
+    fontStyle: "normal",
+    fontWeight: "100 900",
+  },
 ];
 
 const LOCAL_FONT_FILES =
@@ -360,7 +372,7 @@ function findLocalFontAsset(face: LocalFontFace): string | null {
   return match?.[1] ?? null;
 }
 
-function buildFontFaceCss(): string {
+export function getLocalFontFaceCss(): string {
   const rules = LOCAL_FONT_FACES.flatMap((face) => {
     const url = findLocalFontAsset(face);
     if (!url) return [];
@@ -387,7 +399,7 @@ export function ensureLocalFontFacesLoaded(): void {
     return;
   }
 
-  const css = buildFontFaceCss();
+  const css = getLocalFontFaceCss();
   if (!css) {
     return;
   }

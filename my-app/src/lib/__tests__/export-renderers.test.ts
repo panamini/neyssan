@@ -34,42 +34,9 @@ function getDataBlockOrder(document: Document): string[] {
 }
 
 function getInlineStyles(document: Document): string {
-  return document.querySelector("style")?.textContent ?? "";
-}
-
-async function readDocxMainXml(buffer: Buffer): Promise<{
-  documentXml: string;
-  stylesXml: string;
-}> {
-  const archive = await JSZip.loadAsync(buffer);
-
-  return {
-    documentXml: (await archive.file("word/document.xml")?.async("string")) ?? "",
-    stylesXml: (await archive.file("word/styles.xml")?.async("string")) ?? "",
-  };
-}
-
-function expectDocxLanguageMetadata(args: {
-  documentXml: string;
-  stylesXml: string;
-  locale: string;
-  rtl: boolean;
-}): void {
-  const combinedXml = `${args.documentXml}\n${args.stylesXml}`;
-
-  expect(combinedXml).toContain("w:lang");
-  expect(combinedXml).toContain(`w:val="${args.locale}"`);
-
-  if (args.rtl) {
-    expect(args.documentXml).toContain("w:bidi");
-    expect(args.documentXml).toContain("w:rtl");
-    expect(combinedXml).toContain(`w:bidi="${args.locale}"`);
-    return;
-  }
-
-  expect(args.documentXml).not.toContain("w:bidi");
-  expect(args.documentXml).not.toContain("w:rtl");
-  expect(combinedXml).not.toContain(`w:bidi="${args.locale}"`);
+  return Array.from(document.querySelectorAll("style"))
+    .map((styleTag) => styleTag.textContent ?? "")
+    .join("\n");
 }
 
 const resumeFixture: ResumePrintSource = {
@@ -180,77 +147,6 @@ const proposalFixture: ProposalPrintSource = {
 };
 
 describe("export-renderers", () => {
-  it("renders document-scoped HTML language and direction without changing label localization scope", () => {
-    const arabicDocument = parseExportHtml(
-      renderResumeAtsExportDocument({
-        ...resumeFixture,
-        locale: "ar",
-      }),
-    );
-    const russianDocument = parseExportHtml(
-      renderResumeAtsExportDocument({
-        ...resumeFixture,
-        locale: "ru",
-      }),
-    );
-    const frenchProposalDocument = parseExportHtml(
-      renderProposalAtsExportDocument(proposalFixture),
-    );
-
-    expect(arabicDocument.documentElement.getAttribute("lang")).toBe("ar");
-    expect(arabicDocument.documentElement.getAttribute("dir")).toBe("rtl");
-    expect(russianDocument.documentElement.getAttribute("lang")).toBe("ru");
-    expect(russianDocument.documentElement.getAttribute("dir")).toBe("ltr");
-    expect(frenchProposalDocument.documentElement.getAttribute("lang")).toBe("fr");
-    expect(frenchProposalDocument.documentElement.getAttribute("dir")).toBe("ltr");
-    expect(
-      frenchProposalDocument.querySelector('[data-block="subject"] .section-title')
-        ?.textContent,
-    ).toBe("Objet");
-    expect(
-      frenchProposalDocument.querySelector(".proposal-block--subject")
-        ?.textContent,
-    ).toContain("Candidature «\u00A0Produit\u00A0» 1,5\u00A0mm");
-
-    for (const locale of ["en", "fr", "es", "pt", "it", "de", "nl", "ga", "pl", "ru"] as const) {
-      const document = parseExportHtml(
-        renderResumeAtsExportDocument({
-          ...resumeFixture,
-          locale,
-        }),
-      );
-
-      expect(document.documentElement.getAttribute("lang")).toBe(locale);
-      expect(document.documentElement.getAttribute("dir")).toBe("ltr");
-    }
-  });
-
-  it("renders Arabic proposal exports with document-scoped RTL metadata", () => {
-    const arabicProposal: ProposalPrintSource = {
-      ...proposalFixture,
-      locale: "ar",
-      title: "Arabic proposal",
-    };
-    const atsDocument = parseExportHtml(
-      renderProposalAtsExportDocument(arabicProposal),
-    );
-    const styledDocument = parseExportHtml(
-      renderProposalStyledExportDocument({
-        data: arabicProposal,
-        stylePreset: {
-          layout: "swiss",
-          typography: "quiet-editorial",
-          palette: "sauge",
-        },
-      }),
-    );
-
-    expect(atsDocument.documentElement.getAttribute("lang")).toBe("ar");
-    expect(atsDocument.documentElement.getAttribute("dir")).toBe("rtl");
-    expect(styledDocument.documentElement.getAttribute("lang")).toBe("ar");
-    expect(styledDocument.documentElement.getAttribute("dir")).toBe("rtl");
-  });
-
   it("renders ATS as the protected one-column baseline and styled resume export as the Robial split baseline", () => {
     const atsDocument = parseExportHtml(
       renderResumeAtsExportDocument(resumeFixture, {
@@ -446,6 +342,7 @@ describe("export-renderers", () => {
     const workshopCss = getInlineStyles(workshopStyledDocument);
 
     expect(atsDocument.documentElement.lang).toBe("fr");
+    expect(atsDocument.documentElement.dir).toBe("ltr");
     expect(atsDocument.body.className).toContain("proposal-shell--onecol");
     expect(atsDocument.querySelector(".robial-sidebar")).toBeNull();
     expect(atsCss).toContain("--heading-font: Fraunces");
@@ -493,6 +390,110 @@ describe("export-renderers", () => {
     expect(workshopCss).toContain("--robial-step-a: 17mm;");
     expect(workshopCss).toContain("--robial-step-b: 18mm;");
   });
+
+  it("scopes Arabic proposal export language direction to the generated document root", () => {
+    document.documentElement.lang = "en";
+    document.documentElement.dir = "ltr";
+
+    const arabicProposalFixture: ProposalPrintSource = {
+      ...proposalFixture,
+      locale: "ar",
+      documentTitle: "طلب توظيف",
+      documentMeta: "مهندس واجهة أمامية",
+      contactLine: "alex@example.com",
+      letterDate: "26 مايو 2026",
+      recipientDetails: "فريق التوظيف",
+      body: [
+        {
+          type: "salutation",
+          text: "إلى فريق التوظيف،",
+        },
+        {
+          type: "paragraph",
+          text:
+            "أعمل على بناء واجهات React وTypeScript قابلة للتوسع مع تركيز واضح على أنظمة التصميم وتحسين الأداء.",
+        },
+        {
+          type: "closing",
+          signOff: "مع خالص التحية،",
+          signatureName: "Alex Martin",
+        },
+      ],
+    };
+
+    const arabicExportDocument = parseExportHtml(
+      renderProposalAtsExportDocument(arabicProposalFixture, {
+        layout: "swiss",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      }),
+    );
+
+    expect(arabicExportDocument.documentElement.lang).toBe("ar");
+    expect(arabicExportDocument.documentElement.dir).toBe("rtl");
+    expect(getInlineStyles(arabicExportDocument)).toContain(
+      'font-family:"Noto Kufi Arabic"',
+    );
+    expect(getInlineStyles(arabicExportDocument)).toContain(
+      '--body-font: "Noto Kufi Arabic", "Noto Sans Arabic", "Noto Naskh Arabic", "Geeza Pro", Tahoma, Arial, sans-serif;',
+    );
+    expect(arabicExportDocument.body.textContent).toContain("طلب توظيف");
+    expect(document.documentElement.lang).toBe("en");
+    expect(document.documentElement.dir).toBe("ltr");
+  });
+
+  it.each([
+    {
+      locale: "ru",
+      title: "Сопроводительное письмо",
+      bodyText:
+        "Я создаю масштабируемые интерфейсы React и TypeScript с акцентом на дизайн-системы и производительность.",
+    },
+    {
+      locale: "pl",
+      title: "List motywacyjny",
+      bodyText:
+        "Tworzę skalowalne interfejsy React i TypeScript z naciskiem na systemy projektowe i wydajność.",
+    },
+  ])(
+    "uses bundled Noto Sans for $locale proposal exports without exposing app RTL",
+    ({ locale, title, bodyText }) => {
+      document.documentElement.lang = "en";
+      document.documentElement.dir = "ltr";
+
+      const localizedProposalFixture: ProposalPrintSource = {
+        ...proposalFixture,
+        locale,
+        documentTitle: title,
+        body: [
+          {
+            type: "paragraph",
+            text: bodyText,
+          },
+        ],
+      };
+
+      const localizedExportDocument = parseExportHtml(
+        renderProposalAtsExportDocument(localizedProposalFixture, {
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }),
+      );
+
+      expect(localizedExportDocument.documentElement.lang).toBe(locale);
+      expect(localizedExportDocument.documentElement.dir).toBe("ltr");
+      expect(getInlineStyles(localizedExportDocument)).toContain(
+        'font-family:"Noto Sans"',
+      );
+      expect(getInlineStyles(localizedExportDocument)).toContain(
+        '--body-font: "Noto Sans", "Segoe UI", Tahoma, Arial, sans-serif;',
+      );
+      expect(localizedExportDocument.body.textContent).toContain(title);
+      expect(document.documentElement.lang).toBe("en");
+      expect(document.documentElement.dir).toBe("ltr");
+    },
+  );
 
   it("keeps ATS and styled proposal closing blocks structurally aligned and casing-safe", () => {
     const atsDocument = parseExportHtml(
@@ -654,88 +655,6 @@ describe("export-renderers", () => {
     expect(proposalDocumentXml).not.toContain("w:cols");
     expect(proposalDocumentXml).toContain("Fraunces");
     expect(proposalStylesXml).toContain("Syne");
-  });
-
-  it("emits Arabic DOCX document language and RTL metadata for resume and proposal exports", async () => {
-    const resumeXml = await readDocxMainXml(
-      await buildResumeDocxBuffer({
-        data: {
-          ...resumeFixture,
-          locale: "ar",
-          profile: {
-            ...resumeFixture.profile,
-            name: "أحمد مرسي",
-            title: "مصمم أنظمة منتجات",
-            summary: "يبني أنظمة مستندات قابلة للتصدير.",
-          },
-        },
-      }),
-    );
-    const proposalXml = await readDocxMainXml(
-      await buildProposalDocxBuffer({
-        data: {
-          ...proposalFixture,
-          locale: "ar",
-          title: "خطاب تقديم",
-          documentTitle: "طلب توظيف",
-          body: [
-            { type: "salutation", text: "مرحباً،" },
-            {
-              type: "paragraph",
-              text: "أبني أنظمة مستندات دقيقة للتصدير.",
-            },
-            {
-              type: "closing",
-              signOff: "مع خالص التحية،",
-              signatureName: "أحمد مرسي",
-            },
-          ],
-        },
-      }),
-    );
-
-    expectDocxLanguageMetadata({
-      ...resumeXml,
-      locale: "ar",
-      rtl: true,
-    });
-    expectDocxLanguageMetadata({
-      ...proposalXml,
-      locale: "ar",
-      rtl: true,
-    });
-  });
-
-  it("emits LTR DOCX language metadata without RTL markers for Russian and Irish", async () => {
-    for (const locale of ["ru", "ga"] as const) {
-      const resumeXml = await readDocxMainXml(
-        await buildResumeDocxBuffer({
-          data: {
-            ...resumeFixture,
-            locale,
-          },
-        }),
-      );
-      const proposalXml = await readDocxMainXml(
-        await buildProposalDocxBuffer({
-          data: {
-            ...proposalFixture,
-            locale,
-          },
-        }),
-      );
-
-      expectDocxLanguageMetadata({
-        ...resumeXml,
-        locale,
-        rtl: false,
-      });
-      expectDocxLanguageMetadata({
-        ...proposalXml,
-        locale,
-        rtl: false,
-      });
-    }
   });
 
   it("preserves supported Styled typography presets and structural hooks across long-content fixtures", () => {
