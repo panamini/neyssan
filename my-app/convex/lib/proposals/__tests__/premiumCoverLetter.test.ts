@@ -418,8 +418,10 @@ describe("premium cover letter prompt contract", () => {
       expect(prompt).not.toContain("Truth outranks fluency");
       expect(prompt).not.toContain("monitored ≠ managed");
       expect(prompt).not.toContain("MISTRAL ADJACENT-FIT ADDENDUM");
+      expect(prompt).not.toContain("MISTRAL ADJACENT-FIT STRICT ADDENDUM");
+      expect(prompt).not.toContain("MISTRAL ADJACENT ROLE-MAPPING LOCK");
       expect(prompt).not.toContain(
-        "In adjacent cases, never convert proximity into direct fit",
+        "In adjacent cases, never convert proximity into role fit, role alignment, future contribution, or promised impact",
       );
     }
 
@@ -432,16 +434,25 @@ describe("premium cover letter prompt contract", () => {
     expect(mistralPrompt).toContain("documented ≠ managed");
     expect(mistralPrompt).toContain("valid driver's license");
     expect(mistralPrompt).toContain("high school diploma");
-    expect(mistralPrompt).toContain("MISTRAL ADJACENT-FIT ADDENDUM");
+    expect(mistralPrompt).toContain("MISTRAL ADJACENT ROLE-MAPPING LOCK");
     expect(mistralPrompt).toContain(
-      "In adjacent cases, never convert proximity into direct fit",
+      "In adjacent cases, never convert proximity into role fit, role alignment, future contribution, or promised impact",
     );
-    expect(mistralPrompt).toContain("directly aligns");
+    expect(mistralPrompt).toContain("for an Administrative Coordinator");
     expect(mistralPrompt).toContain(
-      "You may not use JD terms as candidate experience unless the candidate facts support that exact capability",
+      "Do not write \"For a [JD role], these skills...\"",
     );
     expect(mistralPrompt).toContain(
-      "My background is closest to the monitoring and documentation side of campus safety",
+      "Do not use \"can,\" \"will,\" \"would,\" \"could,\" \"may,\" or \"might\" to describe future impact, help, support, contribution, fit, or role performance",
+    );
+    expect(mistralPrompt).toContain(
+      "Do not explain why a skill is relevant. State the evidence directly",
+    );
+    expect(mistralPrompt).toContain(
+      "Every body paragraph should include at least one concrete CV-derived anchor when available",
+    );
+    expect(mistralPrompt).toContain(
+      "I bring the same discipline around records, deadlines, and communication",
     );
     expect(mistralPrompt).toContain(
       "Return only the required JSON body parts",
@@ -459,6 +470,8 @@ describe("premium cover letter prompt contract", () => {
     expect(qwenPrompt).toContain("Return only the required JSON body parts");
     expect(qwenPrompt).not.toContain("Provider adapter: Mistral");
     expect(qwenPrompt).not.toContain("MISTRAL ADJACENT-FIT ADDENDUM");
+    expect(qwenPrompt).not.toContain("MISTRAL ADJACENT-FIT STRICT ADDENDUM");
+    expect(qwenPrompt).not.toContain("MISTRAL ADJACENT ROLE-MAPPING LOCK");
   });
 
   it("keeps provider adapter order between the shared premium prompt and structured brief", () => {
