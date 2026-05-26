@@ -159,6 +159,7 @@ type QwenPremiumDiagnostics = {
     code?: string;
     path?: string;
   }>;
+  contextClass?: string;
 };
 
 class QwenPremiumBodyPartsParseError extends Error {
@@ -10060,6 +10061,24 @@ export async function handleGenerateProposal(
                 companyValuesPack,
                 writerProvider: "qwen",
                 writerModel: qwenPremiumCoverLetterWriterModel,
+                onFailure: (failure) => {
+                  try {
+                    logQwenPremiumDiagnostics({
+                      provider: "qwen",
+                      stage:
+                        failure.stage === "validation"
+                          ? "validation"
+                          : "unknown",
+                      reason: failure.reason,
+                      contextClass: failure.contextClass,
+                      validationIssues: failure.issues?.map((code) => ({
+                        code,
+                      })),
+                    });
+                  } catch {
+                    // Diagnostics must not change premium fallback behavior.
+                  }
+                },
                 writer: ({ prompt }) =>
                   generatePremiumCoverLetterBodyPartsWithQwen({
                     apiKey: qwenApiKey,

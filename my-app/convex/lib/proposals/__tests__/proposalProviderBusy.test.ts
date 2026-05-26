@@ -265,6 +265,39 @@ function qwenPremiumArgs() {
   };
 }
 
+function qwenAdjacentPremiumArgs() {
+  return {
+    jobTitle: "Administrative Liaison",
+    jobDescription:
+      "Coordinate office schedules, maintain clear records, support vendor correspondence, and share timely updates across teams.",
+    proposalType: "cover_letter" as const,
+    modelType: "qwen3.7-max" as const,
+    voicePreset: "signature" as const,
+    personalizationMode: "explicit_only" as const,
+    personalizationRichness: "rich" as const,
+    personalizationContext: {
+      name: "Camille Bernard",
+      summary:
+        "Customer support specialist with experience in records, scheduling, and vendor correspondence.",
+      topSkills: ["Records", "Scheduling", "Vendor correspondence"],
+      recentExperience: [
+        {
+          company: "Northline Services",
+          position: "Customer Support Representative",
+          highlights: [
+            "Maintained clear service records for recurring customer updates.",
+            "Coordinated shift schedules and vendor correspondence.",
+            "Tracked deadlines and shared timely updates across teams.",
+          ],
+        },
+      ],
+      standoutAchievements: [
+        "Maintained clear service records for recurring customer updates.",
+      ],
+    },
+  };
+}
+
 function expectQwenPremiumRequest(fetchSpy: ReturnType<typeof vi.spyOn>) {
   expect(fetchSpy).toHaveBeenCalledTimes(1);
   expect(fetchSpy.mock.calls[0]?.[0]).toBe(
@@ -326,6 +359,7 @@ describe("proposal provider busy handling", () => {
     process.env.OPENAI_API_KEY = "sk-openai";
     delete process.env.QWEN_API_KEY;
     delete process.env.QWEN_CHAT_COMPLETIONS_URL;
+    delete process.env.QWEN_BASE_URL;
     delete process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1;
     delete process.env.COVER_LETTER_PREMIUM_WRITER_MODEL;
     delete process.env.DEV_STUB;
@@ -802,6 +836,93 @@ describe("proposal provider busy handling", () => {
     },
   );
 
+  it("logs qwen validation diagnostics when valid body parts fail premium validation", async () => {
+    process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1 = "1";
+    process.env.QWEN_API_KEY = "sk-qwen";
+    process.env.QWEN_CHAT_COMPLETIONS_URL =
+      "https://qwen.test/chat/completions";
+
+    const invalidButSchemaValidBodyParts = {
+      opening:
+        "I coordinated schedules, maintained records, handled vendor correspondence, and shared updates across teams.",
+      proofBlock:
+        "At Northline Services, I tracked deadlines and documented recurring customer updates.",
+      employerValueBlock:
+        "This experience translates into the ability to support general office operations with clear records.",
+      closeLine:
+        "I bring experience in coordination, documentation, scheduling, vendor correspondence, and stakeholder communication.",
+    };
+    mockGenerateCreativeProposal.mockResolvedValue({
+      content:
+        "I maintained records, coordinated schedules, handled vendor correspondence, and shared timely updates across teams. That background keeps the focus on documentation, scheduling, and communication rather than unsupported claims.",
+      metadata: { modelName: "qwen3.7-max" },
+    });
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        qwenChatResponse(JSON.stringify(invalidButSchemaValidBodyParts)),
+      );
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const { handleGenerateProposal } = await loadProposalModule();
+    const ctx = createQwenPremiumCtx();
+
+    try {
+      const result = await handleGenerateProposal(
+        ctx,
+        qwenAdjacentPremiumArgs(),
+      );
+
+      expect(result).toMatchObject({
+        proposalId: "proposal_123",
+        requestedModelType: "qwen3.7-max",
+        actualModelType: "qwen3.7-max",
+        fallbackTriggerCode: null,
+      });
+      expectQwenPremiumRequest(fetchSpy);
+      expect(mockGenerateCreativeProposal).toHaveBeenCalledTimes(1);
+      expect(ctx.runMutation).toHaveBeenCalledTimes(1);
+      const mutationPayload = ctx.runMutation.mock.calls[0]?.[1] as {
+        metadata?: {
+          fallback_reason?: string;
+          validator_outcome?: string;
+          tags?: string[];
+        };
+      };
+      expect(mutationPayload.metadata?.tags ?? []).not.toContain(
+        "premium_cover_letter_path_v1",
+      );
+      expect(mutationPayload.metadata?.fallback_reason).toBe(
+        "premium_generation_failed",
+      );
+      expect(mutationPayload.metadata?.validator_outcome).toBe(
+        "structured_failed",
+      );
+      expect(
+        warnSpy.mock.calls.some(
+          ([message, details]) =>
+            message === "Qwen premium cover-letter diagnostics" &&
+            (details as {
+              provider?: string;
+              stage?: string;
+              reason?: string;
+              validationIssues?: Array<{ code?: string }>;
+            })?.provider === "qwen" &&
+            (details as { stage?: string })?.stage === "validation" &&
+            (details as { reason?: string })?.reason ===
+              "non_repairable_validation" &&
+            (details as { validationIssues?: Array<{ code?: string }> })
+              ?.validationIssues?.some(
+                (issue) => issue.code === "adjacent_direct_fit",
+              ),
+        ),
+      ).toBe(true);
+    } finally {
+      warnSpy.mockRestore();
+      fetchSpy.mockRestore();
+    }
+  });
+
   it("fails closed when qwen premium cover-letter credentials are missing", async () => {
     process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1 = "1";
     delete process.env.QWEN_API_KEY;
@@ -868,6 +989,7 @@ describe("proposal provider busy handling", () => {
     process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1 = "1";
     process.env.QWEN_API_KEY = "sk-qwen";
     delete process.env.QWEN_CHAT_COMPLETIONS_URL;
+    delete process.env.QWEN_BASE_URL;
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     const { handleGenerateProposal } = await loadProposalModule();
