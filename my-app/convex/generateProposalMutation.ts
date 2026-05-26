@@ -9798,7 +9798,7 @@ export async function handleGenerateProposal(
           premiumCoverLetterFlagEnabled &&
           premiumCoverLetterEligibility?.eligible
         ) {
-          const qwenApiKey = llmConfig.qwenKey ?? process.env.QWEN_API_KEY ?? null;
+          const qwenApiKey = process.env.QWEN_API_KEY ?? null;
           const qwenChatCompletionsUrl =
             process.env.QWEN_CHAT_COMPLETIONS_URL ??
             (process.env.QWEN_BASE_URL
@@ -9868,7 +9868,7 @@ export async function handleGenerateProposal(
           requestedModelType === "qwen3.7-max" &&
           outputFormat === "cover_letter" &&
           coverLetterPrimaryPathEligibility.eligible &&
-          !(llmConfig.qwenKey ?? process.env.QWEN_API_KEY ?? null)
+          !(process.env.QWEN_API_KEY ?? null)
         ) {
           throw new ConvexError(
             "Qwen API credentials are not configured for qwen3.7-max.",
@@ -9880,8 +9880,7 @@ export async function handleGenerateProposal(
         } else {
           const proposalService = (() => {
             if (actualModelType === "qwen3.7-max") {
-              const qwenApiKey =
-                llmConfig.qwenKey ?? process.env.QWEN_API_KEY ?? null;
+              const qwenApiKey = process.env.QWEN_API_KEY ?? null;
               const qwenChatCompletionsUrl =
                 llmConfig.qwenChatCompletionsUrl ??
                 process.env.QWEN_CHAT_COMPLETIONS_URL ??

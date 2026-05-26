@@ -616,7 +616,9 @@ describe("proposal provider busy handling", () => {
   it("fails closed when qwen premium cover-letter credentials are missing", async () => {
     process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1 = "1";
     delete process.env.QWEN_API_KEY;
-    delete process.env.QWEN_CHAT_COMPLETIONS_URL;
+    process.env.QWEN_CHAT_COMPLETIONS_URL =
+      "https://qwen.test/v1/chat/completions";
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     const { handleGenerateProposal } = await loadProposalModule();
 
@@ -634,37 +636,43 @@ describe("proposal provider busy handling", () => {
       runMutation: vi.fn(),
     };
 
-    await expect(
-      handleGenerateProposal(ctx, {
-        jobTitle: "Senior Frontend Engineer",
-        jobDescription:
-          "Lead React and TypeScript development across customer-facing product surfaces and collaborate closely with product teams.",
-        proposalType: "cover_letter",
-        modelType: "qwen3.7-max",
-        voicePreset: "signature",
-        personalizationMode: "explicit_only",
-        personalizationRichness: "rich",
-        personalizationContext: {
-          name: "Alex Martin",
-          summary: "Frontend engineer focused on design systems.",
-          topSkills: ["React", "TypeScript", "Design systems"],
-          recentExperience: [
-            {
-              company: "Acme",
-              position: "Senior Frontend Engineer",
-              highlights: [
-                "Led a design system migration used across four product squads.",
-              ],
-            },
-          ],
-        },
-      }),
-    ).rejects.toThrow(
-      "Qwen API credentials are not configured for qwen3.7-max.",
-    );
+    try {
+      await expect(
+        handleGenerateProposal(ctx, {
+          jobTitle: "Senior Frontend Engineer",
+          jobDescription:
+            "Lead React and TypeScript development across customer-facing product surfaces and collaborate closely with product teams.",
+          proposalType: "cover_letter",
+          modelType: "qwen3.7-max",
+          voicePreset: "signature",
+          personalizationMode: "explicit_only",
+          personalizationRichness: "rich",
+          personalizationContext: {
+            name: "Alex Martin",
+            summary: "Frontend engineer focused on design systems.",
+            topSkills: ["React", "TypeScript", "Design systems"],
+            recentExperience: [
+              {
+                company: "Acme",
+                position: "Senior Frontend Engineer",
+                highlights: [
+                  "Led a design system migration used across four product squads.",
+                ],
+              },
+            ],
+          },
+        }),
+      ).rejects.toThrow(
+        "Qwen API credentials are not configured for qwen3.7-max.",
+      );
 
-    expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
-    expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+      expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
+      expect(ctx.runMutation).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it("fails closed before fallback when qwen premium chat completions URL is missing", async () => {
