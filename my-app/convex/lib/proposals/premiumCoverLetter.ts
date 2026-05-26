@@ -577,9 +577,23 @@ export const QWEN_PREMIUM_COVER_LETTER_ADAPTER = [
   "- adjacent only",
   "- unsupported",
   "",
+  "For cv_adjacent, allow at most one restrained employer-facing bridge.",
+  "The bridge must stay at overlap, relevance, or operating-context level.",
+  "Do not use the target role title as proof.",
+  "Do not use job requirements as candidate experience.",
+  "Silently reject any sentence that says the candidate aligns directly with the role, aligns with your goal, translates into the role, or offers direct fit, perfect fit, direct match, or direct role experience.",
+  "Silently reject any sentence that says your goal, your needs, your requirements, I can help, I can support, I would contribute, or I am ready to as proof of fit.",
+  "Silently reject any sentence that claims the candidate can improve, own, support, or guarantee the JD work surface.",
+  "Silently reject any sentence that upgrades verbs beyond the CV or turns JD surfaces into candidate proof.",
+  "",
   "Output only:",
   "- source-backed claims",
   "- adjacent-safe claims with low-ownership language",
+  "",
+  "Preferred safe bridge shapes:",
+  "- \"The overlap is strongest around onboarding handoffs, rollout documentation, and feedback tracking.\"",
+  "- \"That background is relevant to work where rollout planning, documentation, and cross-functional updates matter.\"",
+  "- \"Those operating habits fit environments that depend on accurate records, documentation, and timely updates.\"",
   "",
   "Omit unsupported claims.",
   "",
@@ -1867,11 +1881,37 @@ function isMistralWriterIdentity(args: {
   );
 }
 
+function isQwenWriterIdentity(args: {
+  writerProvider?: PremiumCoverLetterWriterProvider;
+  writerModel?: string;
+}): boolean {
+  const normalizedProvider = args.writerProvider ?? "unknown";
+  const normalizedModel = compactWhitespace(args.writerModel ?? "").toLowerCase();
+  return normalizedProvider === "qwen" || /^qwen(?:\b|[-_.0-9])/.test(normalizedModel);
+}
+
 function resolvePremiumCoverLetterContextGuidance(args: {
   contextClass: PremiumCoverLetterContextClass;
   writerProvider?: PremiumCoverLetterWriterProvider;
   writerModel?: string;
 }): string[] {
+  if (args.contextClass === "cv_adjacent" && isQwenWriterIdentity(args)) {
+    return [
+      "Qwen cv_adjacent contract:",
+      "- Evidence first: keep candidate facts candidate-side and JD facts work-surface context only.",
+      "- Allow at most one restrained employer-facing bridge.",
+      "- The bridge must stay at overlap, relevance, or operating-context level.",
+      "- Do not use the target role title, job requirements, or employer goals as proof.",
+      "- Do not write generic fit explanations.",
+      "- Do not use direct target-role experience, direct-fit wording, or future performance promises.",
+      "- Silently reject any sentence that says the candidate aligns directly with the role, translates into the role, or provides direct fit or perfect fit.",
+      "- Silently reject any sentence that says your goal, your needs, your requirements, I can help, or I can support as proof of fit.",
+      "- Silently reject any sentence that says the candidate would contribute, own, or guarantee the JD work surface.",
+      "- Prefer a bridge only when it stays concrete and grounded in overlap, relevance, or operating context.",
+      "- Safe bridge examples: \"The overlap is strongest around onboarding handoffs, rollout documentation, and feedback tracking.\" \"That background is relevant to work where rollout planning, documentation, and cross-functional updates matter.\" \"Those operating habits fit environments that depend on accurate records, documentation, and timely updates.\"",
+      "- Keep the result concise, recruiter-readable, and human; do not turn it into a factual inventory.",
+    ];
+  }
   if (isMistralWriterIdentity(args)) {
     if (args.contextClass === "cv_direct") {
       return [
@@ -1927,6 +1967,22 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
   writerProvider?: PremiumCoverLetterWriterProvider;
   writerModel?: string;
 }): string[] {
+  if (args.contextClass === "cv_adjacent" && isQwenWriterIdentity(args)) {
+    return [
+      "Qwen cv_adjacent body-part contract:",
+      "- opening: one factual first-person sentence grounded in candidate evidence.",
+      "- proofBlock: concrete CV-backed evidence only.",
+      "- employerValueBlock: one restrained bridge or one concrete CV-backed implication, never a generic fit explanation.",
+      "- Any bridge must stay at overlap, relevance, or operating-context level.",
+      "- closeLine: one short sentence restating CV-backed operating strengths only.",
+      "- Do not include greeting, signoff, or candidate name in body parts.",
+      "- Do not use the target role title as proof.",
+      "- Do not use \"this role,\" \"your needs,\" \"helps with,\" \"can help,\" \"can support,\" \"translates,\" \"aligns,\" \"smoothly,\" or \"efficiently.\"",
+      "- Do not explain generic fit; any relevance bridge must be restrained and grounded in both candidate evidence and a JD work surface.",
+      "- Every body part should include at least one concrete CV-backed anchor when available.",
+      "- If evidence is limited, return shorter body parts instead of filling space.",
+    ];
+  }
   if (args.contextClass === "cv_adjacent" && isMistralWriterIdentity(args)) {
     return [
       "Mistral cv_adjacent body-part contract:",
