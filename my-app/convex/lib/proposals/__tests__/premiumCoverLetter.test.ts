@@ -612,6 +612,9 @@ describe("premium cover letter prompt contract", () => {
       "Avoid unsupported expansion language unless source-backed: directly aligns, your objective, business objectives, perfectly matches, perfect fit, seamless, ensure, ensuring, significantly, across all, elevate design system quality, drive product outcomes, own delivery, manage delivery, or lead development across surfaces.",
     );
     expect(qwenPrompt).toContain(
+      "Do not make design systems, reusable components, collaboration, or cross-functional delivery the actor that drives, ensures, or elevates outcomes unless candidate facts directly support that exact outcome.",
+    );
+    expect(qwenPrompt).toContain(
       "I led a design-system migration used across four product squads.",
     );
     expect(qwenPrompt).toContain(
@@ -1422,6 +1425,42 @@ describe("premium cover letter generation and rendering", () => {
           "I built experimentation dashboards used by product and growth teams.",
         closeLine:
           "The strongest overlap is around React, TypeScript, design systems, and product-facing interface work.",
+      }),
+    });
+
+    expect(result).toBeNull();
+    expect(failures).toEqual([
+      expect.objectContaining({
+        stage: "validation",
+        reason: "non_repairable_validation",
+        issues: expect.arrayContaining(["unsupported_ownership_verb"]),
+      }),
+    ]);
+  });
+
+  it("rejects captured Qwen cv_direct wording that turns design-system evidence into outcome control", async () => {
+    const failures: any[] = [];
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+      onFailure: (trace) => {
+        failures.push(trace);
+      },
+      writer: async () => ({
+        opening:
+          "My frontend engineering work centers on building and scaling design systems that drive interface consistency across multiple product teams.",
+        proofBlock:
+          "At Acme, I led a design system migration used across four product squads. This initiative improved release consistency across shared interface work, relying on close coordination with product teams to align component delivery with active development cycles.",
+        employerValueBlock:
+          "That background is relevant to frontend work where reusable systems, product iteration, and customer-facing surfaces matter. The overlap is strongest around design system quality, shared interface work, and cross-functional delivery.",
+        closeLine:
+          "I would welcome the chance to discuss how my background in design system migrations applies to your current frontend initiatives.",
       }),
     });
 
