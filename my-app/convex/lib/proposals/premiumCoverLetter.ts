@@ -1907,8 +1907,13 @@ function resolvePremiumCoverLetterContextGuidance(args: {
       "- Silently reject any sentence that says the candidate aligns directly with the role, translates into the role, or provides direct fit or perfect fit.",
       "- Silently reject any sentence that says your goal, your needs, your requirements, I can help, or I can support as proof of fit.",
       "- Silently reject any sentence that says the candidate would contribute, own, or guarantee the JD work surface.",
+      "- Ownership boundary: use the candidate's CV verbs exactly or lower-ownership verbs; do not upgrade adjacent execution work into ownership, management, resolution, or strategic outcome control.",
+      "- Do not use high-ownership verbs unless the exact verb and scope are directly present in candidate facts: owned, owning, managed, managing, led, leading, drove, driving, resolved, resolving, transformed, transforming, oversaw, overseeing, directed, directing, spearheaded, guaranteed, guaranteeing, ensured, or ensuring outcome control.",
+      "- Do not claim the candidate controls employer outcomes unless candidate facts directly support that exact outcome.",
+      "- Avoid outcome-control bridges such as ensure smooth coordination, seamless transitions, frictionless operations, focused on resolution, actionable insights, translate friction into insights, turn feedback into actionable insights, improve rollout planning, improve cross-functional coordination, keep coordination smooth, systematically captured and addressed, robust operational foundation, or scalable operational foundation.",
+      "- Prefer lower-ownership supported verbs: documented, tracked, maintained, reported, shared updates, kept notes current, supported handoffs, coordinated when candidate facts support coordination, worked from the customer-facing side, and maintained visibility over issues.",
       "- Prefer a bridge only when it stays concrete and grounded in overlap, relevance, or operating context.",
-      "- Safe bridge examples: \"The overlap is strongest around onboarding handoffs, rollout documentation, and feedback tracking.\" \"That background is relevant to work where rollout planning, documentation, and cross-functional updates matter.\" \"Those operating habits fit environments that depend on accurate records, documentation, and timely updates.\"",
+      "- Safe bridge examples: \"I documented recurring onboarding handoffs and kept rollout notes current for internal teams.\" \"I tracked customer issues and shared updates between customer-facing and internal teams.\" \"The overlap is strongest around documented handoffs, rollout notes, and feedback tracking.\" \"That background is relevant to work where rollout planning, documentation, and cross-functional updates matter.\"",
       "- Keep the result concise, recruiter-readable, and human; do not turn it into a factual inventory.",
     ];
   }
@@ -1977,7 +1982,7 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
       "- closeLine: one short sentence restating CV-backed operating strengths only.",
       "- Do not include greeting, signoff, or candidate name in body parts.",
       "- Do not use the target role title as proof.",
-      "- Do not use \"this role,\" \"your needs,\" \"helps with,\" \"can help,\" \"can support,\" \"translates,\" \"aligns,\" \"smoothly,\" or \"efficiently.\"",
+      "- Do not use \"this role,\" \"your needs,\" \"helps with,\" \"can help,\" \"can support,\" \"translates,\" \"aligns,\" \"smoothly,\" \"seamless,\" \"ensure,\" \"ensuring,\" \"actionable insights,\" or \"focused on resolution.\"",
       "- Do not explain generic fit; any relevance bridge must be restrained and grounded in both candidate evidence and a JD work surface.",
       "- Every body part should include at least one concrete CV-backed anchor when available.",
       "- If evidence is limited, return shorter body parts instead of filling space.",

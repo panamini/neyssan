@@ -461,6 +461,11 @@ describe("premium cover letter prompt contract", () => {
       expect(prompt).not.toContain("Provider adapter: Qwen");
       expect(prompt).not.toContain("Truth outranks fluency");
       expect(prompt).not.toContain("monitored ≠ managed");
+      expect(prompt).not.toContain(
+        "Ownership boundary: use the candidate's CV verbs exactly",
+      );
+      expect(prompt).not.toContain("ensure smooth coordination");
+      expect(prompt).not.toContain("kept notes current");
       expect(prompt).not.toContain("MISTRAL ADJACENT-FIT ADDENDUM");
       expect(prompt).not.toContain("MISTRAL ADJACENT-FIT STRICT ADDENDUM");
       expect(prompt).not.toContain("MISTRAL ADJACENT ROLE-MAPPING LOCK");
@@ -523,6 +528,11 @@ describe("premium cover letter prompt contract", () => {
       "Return only the required JSON body parts",
     );
     expect(mistralPrompt).not.toContain("Provider adapter: Qwen");
+    expect(mistralPrompt).not.toContain(
+      "Ownership boundary: use the candidate's CV verbs exactly",
+    );
+    expect(mistralPrompt).not.toContain("ensure smooth coordination");
+    expect(mistralPrompt).not.toContain("kept notes current");
 
     expect(qwenPrompt).toContain("Provider adapter: Qwen");
     expect(qwenPrompt).toContain("separated evidence zones");
@@ -642,6 +652,18 @@ describe("premium cover letter prompt contract", () => {
       "Silently reject any sentence that says the candidate aligns directly with the role, translates into the role, or provides direct fit or perfect fit.",
     );
     expect(qwenPrompt).toContain(
+      "Ownership boundary: use the candidate's CV verbs exactly or lower-ownership verbs",
+    );
+    expect(qwenPrompt).toContain(
+      "Do not use high-ownership verbs unless the exact verb and scope are directly present in candidate facts",
+    );
+    expect(qwenPrompt).toContain(
+      "Avoid outcome-control bridges such as ensure smooth coordination",
+    );
+    expect(qwenPrompt).toContain(
+      "Prefer lower-ownership supported verbs: documented, tracked, maintained, reported, shared updates, kept notes current",
+    );
+    expect(qwenPrompt).toContain(
       "Safe bridge examples:",
     );
     expect(qwenPrompt).toContain(
@@ -666,6 +688,10 @@ describe("premium cover letter prompt contract", () => {
     expect(qwenPrompt).not.toContain("Mistral cv_adjacent body-part contract");
     expect(qwenPrompt).not.toContain("Let the reader infer relevance");
     expect(qwenPrompt).not.toContain("Do not write a transfer argument");
+    expect(
+      qwenPrompt.split("Ownership boundary: use the candidate's CV verbs exactly")
+        .length - 1,
+    ).toBe(1);
   });
 
   it("keeps provider adapter order between the shared premium prompt and structured brief", () => {
@@ -1480,6 +1506,103 @@ describe("premium cover letter generation and rendering", () => {
     expect(safeResult).not.toBeNull();
     expect(safeResult?.content).toContain(
       "The overlap is strongest around onboarding handoffs, rollout documentation, and feedback tracking.",
+    );
+    expect(safeFailure).toHaveLength(0);
+  });
+
+  it("keeps Qwen adjacent ownership validation strict while allowing lower-ownership wording", async () => {
+    const qwenAdjacentContext = {
+      name: "Maya Chen",
+      summary:
+        "Customer success specialist coordinating onboarding handoffs, rollout notes, and issue tracking between customers and internal teams.",
+      topSkills: [
+        "Customer onboarding",
+        "Workflow documentation",
+        "Issue tracking",
+        "Stakeholder coordination",
+      ],
+      recentExperience: [
+        {
+          company: "CareBridge Systems",
+          position: "Customer Success Specialist",
+          highlights: [
+            "Documented rollout workflows for recurring onboarding handoffs.",
+            "Tracked open issues between customers and internal teams.",
+            "Synthesized customer feedback into notes for support and implementation teams.",
+          ],
+        },
+      ],
+      standoutAchievements: [
+        "Documented rollout workflows for recurring onboarding handoffs.",
+      ],
+    };
+    const qwenAdjacentJob = {
+      jobTitle: "Product Operations Associate",
+      jobDescription:
+        "The company is hiring a Product Operations Associate to improve rollout planning, internal documentation, customer feedback loops, and cross-functional coordination. The role values operational process hygiene, clear handoffs, and practical support for teams working across customers and internal stakeholders.",
+    };
+
+    const unsafeFailure: any[] = [];
+    const unsafeResult = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: qwenAdjacentContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: qwenAdjacentJob.jobTitle,
+      jobDescription: qwenAdjacentJob.jobDescription,
+      candidateName: "Maya Chen",
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+      onFailure: (trace) => {
+        unsafeFailure.push(trace);
+      },
+      writer: async () => ({
+        opening:
+          "I documented recurring onboarding handoffs and kept rollout notes current for internal teams.",
+        proofBlock:
+          "I tracked customer issues and shared updates between customer-facing and internal teams.",
+        employerValueBlock:
+          "I managed rollout notes and resolved customer-facing friction across internal teams.",
+        closeLine:
+          "I bring experience in documentation, issue tracking, handoffs, and customer-facing updates.",
+      }),
+    });
+
+    const safeFailure: any[] = [];
+    const safeResult = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: qwenAdjacentContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: qwenAdjacentJob.jobTitle,
+      jobDescription: qwenAdjacentJob.jobDescription,
+      candidateName: "Maya Chen",
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+      onFailure: (trace) => {
+        safeFailure.push(trace);
+      },
+      writer: async () => ({
+        opening:
+          "I documented recurring onboarding handoffs and kept rollout notes current for internal teams.",
+        proofBlock:
+          "I tracked customer issues and shared updates between customer-facing and internal teams.",
+        employerValueBlock:
+          "The overlap is strongest around documented handoffs, rollout notes, and feedback tracking.",
+        closeLine:
+          "I bring experience in documentation, issue tracking, handoffs, and customer-facing updates.",
+      }),
+    });
+
+    expect(unsafeResult).toBeNull();
+    expect(unsafeFailure).toEqual([
+      expect.objectContaining({
+        stage: "validation",
+        reason: "non_repairable_validation",
+        issues: expect.arrayContaining(["unsupported_ownership_verb"]),
+      }),
+    ]);
+    expect(safeResult).not.toBeNull();
+    expect(safeResult?.content).toContain(
+      "The overlap is strongest around documented handoffs, rollout notes, and feedback tracking.",
     );
     expect(safeFailure).toHaveLength(0);
   });
