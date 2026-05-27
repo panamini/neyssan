@@ -6,6 +6,8 @@ import { X } from "@/lib/icons";
 import { useCloseOnEscape } from "@/hooks/use-close-on-escape";
 import { BodyPortal } from "@/components/ui/body-portal";
 import { IconButton } from "@/components/ui/icon-button";
+import { translateUi } from "@/lib/i18n";
+import { useUiLanguagePreference } from "@/lib/ui-preferences";
 
 const DIALOG_EXIT_DURATION = 160;
 
@@ -26,6 +28,8 @@ function DialogRootComponent({
   className,
   size = "md",
 }: DialogProps) {
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const closeLabel = translateUi(resolvedLanguage, "common.close");
   const [isVisible, setIsVisible] = React.useState(open);
   const [surfaceState, setSurfaceState] = React.useState<"closing" | "open">(
     open ? "open" : "closing",
@@ -85,7 +89,7 @@ function DialogRootComponent({
             </div>
           ) : null}
           <IconButton
-            label="Close."
+            label={closeLabel}
             variant="ghost"
             onClick={onClose}
             className="ds-dialog__close"
