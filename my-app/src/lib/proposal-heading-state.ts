@@ -4,6 +4,7 @@ import type { ProposalApplicantHeaderData } from "./proposal-personalization";
 export type ProposalHeadingMetadata = {
   applicantName?: string;
   applicantRole?: string;
+  applicantCompany?: string;
   contactLine?: string;
   letterDate?: string;
   recipientDetails?: string;
@@ -17,6 +18,7 @@ export type ProposalHeadingMetadata = {
 export type ProposalHeadingTextKey =
   | "applicantName"
   | "applicantRole"
+  | "applicantCompany"
   | "contactLine"
   | "letterDate"
   | "recipientDetails";
@@ -59,14 +61,16 @@ export function buildProposalApplicantHeaderFromMetadata(
 ): ProposalApplicantHeaderData | null {
   const name = resolveProposalHeadingText(metadata, "applicantName");
   const role = resolveProposalHeadingText(metadata, "applicantRole");
+  const company = resolveProposalHeadingText(metadata, "applicantCompany");
 
-  if (name === null && role === null) {
+  if (name === null && role === null && company === null) {
     return null;
   }
 
   return {
     name,
     role,
+    company,
     email: null,
     phone: null,
     linkedin: null,
@@ -221,6 +225,7 @@ export function resolveAutoHeadingField(args: {
 export function buildProposalHeadingMetadataPatch(args: {
   applicantName: string;
   applicantRole: string;
+  applicantCompany?: string;
   contactLine: string;
   letterDate: string;
   recipientDetails: string;
@@ -229,6 +234,7 @@ export function buildProposalHeadingMetadataPatch(args: {
   return {
     applicantName: args.applicantName.trim(),
     applicantRole: args.applicantRole.trim(),
+    applicantCompany: args.applicantCompany?.trim() ?? "",
     contactLine: args.contactLine.trim(),
     letterDate: args.letterDate.trim(),
     recipientDetails: args.recipientDetails.trim(),

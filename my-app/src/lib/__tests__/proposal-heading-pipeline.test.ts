@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getLocalCvDocumentStorageKey } from "../cv-local-storage";
 import {
@@ -359,7 +359,13 @@ function buildPipelineResult(args: {
 }
 
 describe("proposal heading JSON pipeline", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-11T10:00:00.000Z"));
+  });
+
   afterEach(() => {
+    vi.useRealTimers();
     clearProposalAttachedCvId();
     window.localStorage.clear();
   });
@@ -450,6 +456,7 @@ describe("proposal heading JSON pipeline", () => {
         "autoSalutation": "Dear Talent Acquisition Lead,",
         "exportSource": {
           "applicantHeader": {
+            "company": "",
             "email": "alex@cv.example",
             "linkedin": "linkedin.com/in/alexmartin",
             "location": "Paris",
@@ -484,6 +491,7 @@ describe("proposal heading JSON pipeline", () => {
       Paris",
         },
         "headingMetadataPatch": {
+          "applicantCompany": "",
           "applicantName": "Alex Martin",
           "applicantRole": "Manual Operations Lead",
           "contactLine": "manual@proposal.example · +33 6 99 99 99 99 · Rome · linkedin.com/in/manualalex · manualalex.dev",
@@ -530,6 +538,7 @@ describe("proposal heading JSON pipeline", () => {
         },
         "previewSource": {
           "applicantHeader": {
+            "company": "",
             "email": "alex@cv.example",
             "linkedin": "linkedin.com/in/alexmartin",
             "location": "Paris",

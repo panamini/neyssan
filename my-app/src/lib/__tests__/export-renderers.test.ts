@@ -653,6 +653,61 @@ describe("export-renderers", () => {
     {
       templateId: "director-letterhead" as const,
       scope: "proposal-cover-letter--director",
+      secondarySelector: ".proposal-cover-letter__masthead-secondary",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+      secondarySelector: ".proposal-cover-letter__volk-title--right",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: "proposal-cover-letter--film-foto",
+      secondarySelector: ".proposal-cover-letter__film-company",
+    },
+  ])(
+    "renders applicant company as the optional exported letterhead title for $templateId",
+    ({ templateId, scope, secondarySelector }) => {
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            templateId,
+            recipientDetails: "Hiring Manager",
+            applicantHeader: {
+              ...proposalFixture.applicantHeader,
+              name: "Robert Cooper",
+              role: "Senior Security Specialist",
+              company: "Cooper Studio",
+              email: "email@email.com",
+              phone: "",
+              linkedin: "",
+              website: "",
+              location: "Los Angeles",
+              tag: "",
+            },
+          },
+          stylePreset: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "expert",
+            palette: "terre",
+          },
+        }),
+      );
+      const page = document.querySelector(`.${scope}`);
+
+      expect(page?.querySelector(secondarySelector)?.textContent).toBe(
+        "Cooper Studio",
+      );
+      expect(page?.textContent).toContain("Senior Security Specialist");
+    },
+  );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
       headerSelector: ".proposal-cover-letter__masthead",
     },
     {
@@ -700,7 +755,6 @@ describe("export-renderers", () => {
       const page = document.querySelector(`.${scope}`);
       const header = page?.querySelector(headerSelector);
 
-      expect(header?.textContent).toContain("Los Angeles");
       expect(header?.textContent).not.toContain("1515 Pacific Ave");
       expect(header?.textContent).not.toContain("CA 90291");
       expect(header?.textContent).not.toContain("United States");

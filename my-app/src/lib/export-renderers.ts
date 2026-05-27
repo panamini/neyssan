@@ -923,6 +923,17 @@ function buildStyledProposalAppearanceCss(): string {
       align-items: baseline;
     }
 
+    .proposal-cover-letter--director .proposal-cover-letter__masthead--no-secondary {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    }
+
+    .proposal-cover-letter--director .proposal-cover-letter__masthead--no-secondary
+      .proposal-cover-letter__masthead-role {
+      grid-column: 2;
+      max-width: 84mm;
+      white-space: normal;
+    }
+
     .proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
     .proposal-cover-letter--director .proposal-cover-letter__masthead-secondary {
       margin: 0;
@@ -1088,6 +1099,10 @@ function buildStyledProposalAppearanceCss(): string {
       align-items: baseline;
     }
 
+    .proposal-cover-letter--film-foto .proposal-cover-letter__film-header--no-company {
+      grid-template-columns: minmax(0, 70mm) minmax(0, 1fr);
+    }
+
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-heading {
       margin: 0;
       min-width: 0;
@@ -1117,16 +1132,22 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
       grid-column: 3;
       justify-self: end;
-      max-width: 48mm;
+      max-width: 64mm;
       text-align: right;
+      white-space: normal;
+    }
+
+    .proposal-cover-letter--film-foto
+      .proposal-cover-letter__film-header--no-company
+      .proposal-cover-letter__film-title {
+      grid-column: 2;
+      max-width: 82mm;
     }
 
     .proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
     .proposal-cover-letter--director .proposal-cover-letter__masthead-secondary,
-    .proposal-cover-letter--director .proposal-cover-letter__masthead-role,
     .proposal-cover-letter--volk .proposal-cover-letter__volk-title,
-    .proposal-cover-letter--film-foto .proposal-cover-letter__film-company,
-    .proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
+    .proposal-cover-letter--film-foto .proposal-cover-letter__film-company {
       min-width: 0;
       overflow: hidden;
       overflow-wrap: normal;
@@ -2740,6 +2761,7 @@ function buildProposalLetterheadExportViewModel(
   const recipientFields = parseProposalRecipientDetails(data.recipientDetails);
   const candidateName = data.applicantHeader.name.trim();
   const candidateRole = data.applicantHeader.role.trim() || data.documentMeta.trim();
+  const candidateCompany = (data.applicantHeader.company ?? "").trim();
   const candidatePhone = data.applicantHeader.phone.trim();
   const candidateEmail = data.applicantHeader.email.trim();
   const candidateWebsite = data.applicantHeader.website.trim();
@@ -2803,17 +2825,20 @@ function buildProposalLetterheadExportViewModel(
     data.headerVisibility.showDate && data.letterDate
       ? normalizeLocaleTypography(data.letterDate, locale).trim()
       : "";
-  const secondaryTitle = resolveProposalLetterheadShortTitle({
-    recipientFields,
-    candidateLocation: resolvedContactParts.location,
-    showRecipient: data.headerVisibility.showRecipient,
-  });
+  const secondaryTitle =
+    candidateCompany ||
+    resolveProposalLetterheadShortTitle({
+      recipientFields,
+      candidateLocation: "",
+      showRecipient: data.headerVisibility.showRecipient,
+    });
   const metaRole = recipientRole || candidateRole;
   const shortRoleTitle = candidateRole || recipientRole;
 
   return {
     candidateName,
     candidateRole,
+    candidateCompany,
     candidatePhone: resolvedContactParts.phone,
     candidateEmail: resolvedContactParts.email,
     candidateWebsite:
@@ -2889,8 +2914,11 @@ function renderProposalLetterheadExportPage(args: {
         : "proposal-cover-letter--film-foto";
 
   if (args.templateId === "director-letterhead") {
+    const mastheadClass = viewModel.secondaryTitle
+      ? "proposal-cover-letter__masthead"
+      : "proposal-cover-letter__masthead proposal-cover-letter__masthead--no-secondary";
     return `<main class="export-page ${scopeClass}" data-export-doc="proposal">
-      <header class="proposal-cover-letter__masthead">
+      <header class="${mastheadClass}">
         ${renderExportParagraph(viewModel.candidateName, "proposal-cover-letter__masthead-primary")}
         ${renderExportParagraph(viewModel.secondaryTitle, "proposal-cover-letter__masthead-secondary")}
         ${renderExportParagraph(viewModel.candidateRole, "proposal-cover-letter__masthead-role")}
@@ -2931,19 +2959,22 @@ function renderProposalLetterheadExportPage(args: {
   }
 
   const largeTitle = viewModel.shortRoleTitle || viewModel.secondaryTitle;
+  const filmHeaderClass = viewModel.secondaryTitle
+    ? "proposal-cover-letter__film-header"
+    : "proposal-cover-letter__film-header proposal-cover-letter__film-header--no-company";
 
   return `<main class="export-page ${scopeClass}" data-export-doc="proposal">
-    <header class="proposal-cover-letter__film-header">
+    <header class="${filmHeaderClass}">
       ${renderExportParagraph(viewModel.candidateName, "proposal-cover-letter__film-heading")}
       ${renderExportParagraph(viewModel.secondaryTitle, "proposal-cover-letter__film-company")}
       ${renderExportParagraph(largeTitle, "proposal-cover-letter__film-title")}
       <span class="proposal-cover-letter__film-rule"></span>
     </header>
     <section class="proposal-cover-letter__info-blocks">
-      <div><p class="proposal-cover-letter__info-label">sender</p>${renderExportParagraph(viewModel.filmSenderLine, "")}</div>
-      <div><p class="proposal-cover-letter__info-label">phone</p>${renderExportParagraph(viewModel.candidatePhone, "")}</div>
-      <div><p class="proposal-cover-letter__info-label">portfolio</p>${renderExportParagraph(viewModel.candidateWebsite, "")}</div>
-      <div><p class="proposal-cover-letter__info-label">company</p>${renderExportParagraph(viewModel.recipientCompany, "")}</div>
+      ${viewModel.filmSenderLine ? `<div><p class="proposal-cover-letter__info-label">sender</p>${renderExportParagraph(viewModel.filmSenderLine, "")}</div>` : ""}
+      ${viewModel.candidatePhone ? `<div><p class="proposal-cover-letter__info-label">phone</p>${renderExportParagraph(viewModel.candidatePhone, "")}</div>` : ""}
+      ${viewModel.candidateWebsite ? `<div><p class="proposal-cover-letter__info-label">portfolio</p>${renderExportParagraph(viewModel.candidateWebsite, "")}</div>` : ""}
+      ${viewModel.recipientCompany ? `<div><p class="proposal-cover-letter__info-label">company</p>${renderExportParagraph(viewModel.recipientCompany, "")}</div>` : ""}
     </section>
     ${renderProposalLetterheadMetaRow(viewModel)}
     ${renderProposalLetterheadSubjectRow(viewModel)}

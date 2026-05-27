@@ -100,6 +100,7 @@ export interface ProposalGenerationPersonalizationPayload {
 export type ProposalApplicantHeaderData = {
   name: string | null;
   role: string | null;
+  company: string | null;
   email: string | null;
   phone: string | null;
   linkedin: string | null;
@@ -854,6 +855,7 @@ export function getProposalApplicantHeaderData(source: {
   return {
     name: identity.name,
     role: identity.role,
+    company: null,
     email: compactDisplayPart(source.email ?? undefined, 120) ?? null,
     phone: compactDisplayPart(source.phone ?? undefined, 48) ?? null,
     linkedin: compactDisplayPart(source.linkedin ?? undefined, 120) ?? null,
