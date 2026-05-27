@@ -54,6 +54,7 @@ import {
   useUiLanguagePreference,
   type UiAccentId,
 } from "../lib/ui-preferences";
+import { translateUi } from "../lib/i18n";
 import {
   DOCUMENT_LANGUAGE_OPTIONS,
   useDocumentLanguagePreference,
@@ -1145,8 +1146,11 @@ export function SettingsPage(): JSX.Element {
   } = useThemeMode();
   const { preference: motionPreference, setPreference: setMotionPreference } =
     useMotionPreference();
-  const { language: uiLanguage, setLanguage: setUiLanguage } =
-    useUiLanguagePreference();
+  const {
+    language: uiLanguage,
+    resolvedLanguage: resolvedUiLanguage,
+    setLanguage: setUiLanguage,
+  } = useUiLanguagePreference();
   const { language: documentLanguage, setLanguage: setDocumentLanguage } =
     useDocumentLanguagePreference();
   const { accent: uiAccent, setAccent: setUiAccent } = useUiAccentPreference();
@@ -1499,6 +1503,18 @@ export function SettingsPage(): JSX.Element {
     isWideEnoughForSettingsDrawerDock &&
     (activeForgePanelSurface === "settings" ||
       dockedForgePanelSurface === "settings");
+  const interfaceLanguageLabel = translateUi(
+    resolvedUiLanguage,
+    "settings.interfaceLanguage",
+  );
+  const defaultDocumentLanguageLabel = translateUi(
+    resolvedUiLanguage,
+    "settings.defaultDocumentLanguage",
+  );
+  const documentLanguageAutoHelp = translateUi(
+    resolvedUiLanguage,
+    "settings.documentLanguageAutoHelp",
+  );
 
   React.useEffect(() => {
     const isSettingsPanelActive =
@@ -2203,7 +2219,7 @@ export function SettingsPage(): JSX.Element {
                   <div
                     className="settings-language-grid"
                     role="group"
-                    aria-label="Interface language"
+                    aria-label={interfaceLanguageLabel}
                   >
                     {UI_LANGUAGE_OPTIONS.map((option) => {
                       const active = uiLanguage === option.id;
@@ -2262,13 +2278,13 @@ export function SettingsPage(): JSX.Element {
                   <div
                     className="settings-language-grid settings-language-grid--documents"
                     role="group"
-                    aria-label="Default document language"
+                    aria-label={defaultDocumentLanguageLabel}
                   >
 	                    {DOCUMENT_LANGUAGE_OPTIONS.map((option) => {
 	                      const active = documentLanguage === option.id;
 	                      const optionCaption =
 	                        option.id === "auto"
-	                          ? "Match the job/source language when available."
+	                          ? documentLanguageAutoHelp
 	                          : option.nativeLabel;
 	                      return (
 	                        <button

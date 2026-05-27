@@ -212,6 +212,7 @@ function mockFinePointer(matches = true) {
 
 describe("Sidebar permanent rail", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       writable: true,
@@ -243,6 +244,100 @@ describe("Sidebar permanent rail", () => {
     expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
       "href",
       "/templates",
+    );
+  });
+
+  it("keeps default English nav labels and route hrefs stable", () => {
+    renderSidebar();
+
+    expect(screen.getByRole("link", { name: "Today" })).toHaveAttribute(
+      "href",
+      "/dashboard",
+    );
+    expect(screen.getByRole("link", { name: "Jobs" })).toHaveAttribute(
+      "href",
+      "/jobs",
+    );
+    expect(screen.getByRole("link", { name: "CV" })).toHaveAttribute(
+      "href",
+      "/cv",
+    );
+    expect(screen.getByRole("link", { name: "Proposal" })).toHaveAttribute(
+      "href",
+      "/proposal",
+    );
+    expect(screen.getByRole("link", { name: "Projects" })).toHaveAttribute(
+      "href",
+      "/documents",
+    );
+    expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
+      "href",
+      "/templates",
+    );
+    expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+  });
+
+  it("renders primary nav labels from the French UI locale", () => {
+    window.localStorage.setItem("twoweeks:ui-language", "fr");
+    window.localStorage.setItem("twoweeks:document-language", "ar");
+
+    renderSidebar();
+
+    expect(
+      primaryNavItems().map((item) => item.getAttribute("aria-label")),
+    ).toEqual([
+      "Aujourd'hui",
+      "Offres",
+      "CV",
+      "Proposition",
+      "Projets",
+      "Modeles",
+      "Parametres",
+    ]);
+    expect(screen.getByRole("link", { name: "Offres" })).toHaveAttribute(
+      "href",
+      "/jobs",
+    );
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+      "ar",
+    );
+  });
+
+  it("renders primary nav labels from the Spanish UI locale and keeps active state", () => {
+    window.localStorage.setItem("twoweeks:ui-language", "es");
+
+    renderSidebar("/jobs");
+
+    expect(
+      primaryNavItems().map((item) => item.getAttribute("aria-label")),
+    ).toEqual([
+      "Hoy",
+      "Empleos",
+      "CV",
+      "Propuesta",
+      "Proyectos",
+      "Plantillas",
+      "Ajustes",
+    ]);
+    expect(screen.getByRole("link", { name: "Empleos" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("link", { name: "Empleos" })).toHaveAttribute(
+      "href",
+      "/jobs",
+    );
+  });
+
+  it("does not use document language storage as the nav locale", () => {
+    window.localStorage.setItem("twoweeks:document-language", "fr");
+
+    renderSidebar();
+
+    expect(screen.getByRole("link", { name: "Today" })).toBeInTheDocument();
+    expect(window.localStorage.getItem("twoweeks:ui-language")).toBeNull();
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+      "fr",
     );
   });
 

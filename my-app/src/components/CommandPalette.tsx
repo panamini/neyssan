@@ -5,6 +5,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useClerk } from "@clerk/clerk-react";
 import { APP_COMMANDS, COMMAND_GROUPS, type AppCommand } from "../lib/commands";
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
+import { translateUi } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 
 type CommandPaletteProps = {
   open: boolean;
@@ -38,9 +40,18 @@ export function CommandPalette({
   const navigate = useNavigate();
   const location = useLocation();
   const { signOut } = useClerk();
+  const { resolvedLanguage } = useUiLanguagePreference();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = React.useState("");
   const [activeIndex, setActiveIndex] = React.useState<number | null>(null);
+  const commandPaletteTitle = translateUi(
+    resolvedLanguage,
+    "commandPalette.title",
+  );
+  const emptyStateLabel = translateUi(
+    resolvedLanguage,
+    "commandPalette.emptyState",
+  );
 
   const filteredCommands = React.useMemo(
     () => APP_COMMANDS.filter((command) => commandMatches(command, query)),
@@ -191,7 +202,7 @@ export function CommandPalette({
         className="cmdk__panel"
         role="dialog"
         aria-modal="true"
-        aria-label="Command palette"
+        aria-label={commandPaletteTitle}
         onKeyDown={handlePanelKeyDown}
       >
         <input
@@ -247,7 +258,7 @@ export function CommandPalette({
           })}
           {filteredCommands.length === 0 ? (
             <div className={clsx("cmdk__item", "cmdk__item--empty")}>
-              No commands found.
+              {emptyStateLabel}
             </div>
           ) : null}
         </div>
