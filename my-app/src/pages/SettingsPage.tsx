@@ -2347,19 +2347,6 @@ export function SettingsPage(): JSX.Element {
                 <div className="settings__group">
                   <div className="settings__group-head">
                     <div className="settings__group-title">
-                      {t("settings.coverage")}
-                    </div>
-                    <div className="settings__group-desc">
-                      {t("settings.coverageDescription")}
-                    </div>
-                  </div>
-                  <div className="settings-language-note">
-                    {t("settings.languageNote")}
-                  </div>
-                </div>
-                <div className="settings__group">
-                  <div className="settings__group-head">
-                    <div className="settings__group-title">
                       {t("settings.documentGeneration")}
                     </div>
                     <div className="settings__group-desc">
