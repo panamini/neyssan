@@ -292,6 +292,56 @@ describe("DashboardPage", () => {
     expect(within(createSection).getByRole("button", { name: /Start from template/ })).toBeInTheDocument();
   });
 
+  it("renders Today create actions in French without touching document language", () => {
+    window.localStorage.setItem("twoweeks:ui-language", "fr");
+    window.localStorage.setItem("twoweeks:document-language", "es");
+
+    renderToday();
+
+    const createSection = sectionByHeading("Créer");
+    expect(
+      within(createSection).getByRole("button", { name: "Importer le CV" }),
+    ).toBeInTheDocument();
+    expect(
+      within(createSection).getByRole("button", { name: "Ajouter une offre" }),
+    ).toBeInTheDocument();
+    expect(
+      within(createSection).getByRole("button", { name: "Nouvelle lettre" }),
+    ).toBeInTheDocument();
+    expect(
+      within(createSection).getByRole("button", { name: "Partir d'un modèle" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Proposition|proposition/)).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe("es");
+  });
+
+  it("renders Today create actions in Spanish and keeps routing behavior", () => {
+    window.localStorage.setItem("twoweeks:ui-language", "es");
+    window.localStorage.setItem("twoweeks:document-language", "fr");
+
+    renderToday();
+
+    const createSection = sectionByHeading("Crear");
+    expect(
+      within(createSection).getByRole("button", { name: "Importar CV" }),
+    ).toBeInTheDocument();
+    expect(
+      within(createSection).getByRole("button", { name: "Agregar empleo" }),
+    ).toBeInTheDocument();
+    expect(
+      within(createSection).getByRole("button", { name: "Nueva carta" }),
+    ).toBeInTheDocument();
+    expect(
+      within(createSection).getByRole("button", { name: "Usar plantilla" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Propuesta|propuesta/)).not.toBeInTheDocument();
+
+    fireEvent.click(within(createSection).getByRole("button", { name: "Usar plantilla" }));
+
+    expect(screen.getByTestId("dashboard-location")).toHaveTextContent("/templates::null");
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe("fr");
+  });
+
   it("shows real recent work from proposals and CV library data", () => {
     resetCvLibrary({ currentCv, currentCvId: "cv-1", cvs: [currentCv] });
     renderToday({ proposals: [sentProposal, savedProposal, draftProposal], jobs: [linkedDraftJob] });
