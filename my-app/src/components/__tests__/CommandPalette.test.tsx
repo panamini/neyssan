@@ -61,7 +61,7 @@ describe("CommandPalette", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("listbox", { name: "Commands" })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText("Search or run a command..."), {
+    fireEvent.change(screen.getByPlaceholderText("Search"), {
       target: { value: "zzzz" },
     });
 
@@ -72,16 +72,20 @@ describe("CommandPalette", () => {
     {
       locale: "fr",
       title: "Palette de commandes",
-      emptyState: "Aucune commande trouvee.",
+      emptyState: "Aucune commande trouvée.",
+      placeholder: "Rechercher",
+      oldPlaceholder: ["Rechercher", " ou lancer", " une commande..."].join(""),
     },
     {
       locale: "es",
       title: "Paleta de comandos",
       emptyState: "No se encontraron comandos.",
+      placeholder: "Buscar",
+      oldPlaceholder: ["Buscar", " o ejecutar", " un comando..."].join(""),
     },
   ])(
     "renders command palette shell chrome in $locale without migrating command items",
-    ({ locale, title, emptyState }) => {
+    ({ locale, title, emptyState, placeholder, oldPlaceholder }) => {
       window.localStorage.setItem("twoweeks:ui-language", locale);
       window.localStorage.setItem("twoweeks:document-language", "ar");
 
@@ -103,16 +107,11 @@ describe("CommandPalette", () => {
       ).toBeInTheDocument();
       expect(screen.getByRole("option", { name: /Today/i })).toBeInTheDocument();
 
-      fireEvent.change(
-        screen.getByPlaceholderText(
-          locale === "fr"
-            ? "Rechercher ou lancer une commande..."
-            : "Buscar o ejecutar un comando...",
-        ),
-        {
-          target: { value: "zzzz" },
-        },
-      );
+      expect(screen.queryByPlaceholderText(oldPlaceholder)).not.toBeInTheDocument();
+
+      fireEvent.change(screen.getByPlaceholderText(placeholder), {
+        target: { value: "zzzz" },
+      });
 
       expect(screen.getByText(emptyState)).toBeInTheDocument();
       expect(window.localStorage.getItem("twoweeks:document-language")).toBe(

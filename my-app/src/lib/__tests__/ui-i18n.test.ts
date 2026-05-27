@@ -30,6 +30,26 @@ describe("UI i18n foundation", () => {
     expect(translateUi("fr", "settings.tabs.account.label")).toBe("Profil");
     expect(translateUi("es", "settings.tabs.theme.label")).toBe("Tema");
     expect(translateUi("fr", "settings.themeMode.light")).toBe("Clair");
+    expect(translateUi("en", "topbar.searchOrRunCommand")).toBe("Search");
+    expect(translateUi("fr", "topbar.searchOrRunCommand")).toBe("Rechercher");
+    expect(translateUi("es", "topbar.searchOrRunCommand")).toBe("Buscar");
+    expect(translateUi("fr", "workspace.draftProposal")).toBe(
+      "Rédiger la lettre",
+    );
+    expect(translateUi("es", "workspace.draftProposal")).toBe(
+      "Redactar carta",
+    );
+  });
+
+  it("keeps FR/ES letter terminology out of proposition/propuesta wording", () => {
+    const localizedMessages = [
+      ...Object.values(UI_MESSAGES.fr),
+      ...Object.values(UI_MESSAGES.es),
+    ].join("\n");
+
+    expect(localizedMessages).not.toMatch(
+      /Proposition|Propositions|proposition|propositions|Propuesta|Propuestas|propuesta|propuestas/,
+    );
   });
 
   it("exposes only production UI locales for UI dictionaries", () => {

@@ -21,7 +21,9 @@ import ProposalInputForm, {
   type ProposalGenerateControl,
 } from "../components/ProposalInputForm";
 import ProposalAIStream from "../components/proposal/ProposalAIStream";
-import ProposalDocumentStage from "../components/proposal/ProposalDocumentStage";
+import ProposalDocumentStage, {
+  type ProposalDocumentStageLabels,
+} from "../components/proposal/ProposalDocumentStage";
 import ProposalHeadingFields, {
   type ProposalHeadingField,
 } from "../components/proposal/ProposalHeadingFields";
@@ -102,6 +104,8 @@ import {
   type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
+import { translateUi } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
 import {
   CANONICAL_PROPOSAL_TEMPLATE_ID,
@@ -2393,6 +2397,7 @@ export function ProposalForge(): JSX.Element {
   const location = useLocation();
   const { search } = location;
   const navigate = useNavigate();
+  const { resolvedLanguage } = useUiLanguagePreference();
   const {
     activeSurface: activeTemplateSurface,
     open: templatePanelOpen,
@@ -10794,7 +10799,10 @@ export function ProposalForge(): JSX.Element {
   const proposalTemplatePanelRegistration = React.useMemo(
     () => ({
       surface: "proposal" as const,
-      title: "Proposal templates",
+      title: translateUi(
+        resolvedLanguage,
+        "workspace.proposalTemplatesPanel",
+      ),
       subtitle: "A4 · 21 × 29.7 cm",
       activeItemId: effectiveProposalTemplateBundleId,
       items: proposalTemplatePanelItems,
@@ -10804,6 +10812,7 @@ export function ProposalForge(): JSX.Element {
       effectiveProposalTemplateBundleId,
       handleProposalStyleBundleSelect,
       proposalTemplatePanelItems,
+      resolvedLanguage,
     ],
   );
   useRegisterForgeTemplates(proposalTemplatePanelRegistration);
@@ -10914,13 +10923,16 @@ export function ProposalForge(): JSX.Element {
   const proposalHeadingPanelRegistration = React.useMemo(
     () => ({
       surface: "proposal-heading" as const,
-      title: "Heading",
-      ariaLabel: "Proposal heading",
+      title: translateUi(resolvedLanguage, "workspace.heading"),
+      ariaLabel: translateUi(
+        resolvedLanguage,
+        "workspace.proposalHeadingPanel",
+      ),
       renderContent: () => (
         <ProposalHeadingFields variableFields={proposalHeadingFields} />
       ),
     }),
-    [proposalHeadingFields],
+    [proposalHeadingFields, resolvedLanguage],
   );
   useRegisterForgePanel(proposalHeadingPanelRegistration);
   const proposalHeadingOpen =
@@ -10935,8 +10947,11 @@ export function ProposalForge(): JSX.Element {
   const proposalDesignPanelRegistration = React.useMemo(
     () => ({
       surface: "proposal-design" as const,
-      title: "Design",
-      ariaLabel: "Proposal design",
+      title: translateUi(resolvedLanguage, "workspace.design"),
+      ariaLabel: translateUi(
+        resolvedLanguage,
+        "workspace.proposalDesignPanel",
+      ),
       renderContent: () => (
         <ProposalDesignFields
           proposalTemplateId={effectiveProposalTemplateId}
@@ -10985,6 +11000,7 @@ export function ProposalForge(): JSX.Element {
       handleToggleSignature,
       proposalSignatureSettings.imageDataUrl,
       proposalTemplateBundleId,
+      resolvedLanguage,
     ],
   );
   useRegisterForgePanel(proposalDesignPanelRegistration);
@@ -11398,8 +11414,11 @@ export function ProposalForge(): JSX.Element {
   const proposalDraftPanelRegistration = React.useMemo(
     () => ({
       surface: "proposal-draft" as const,
-      title: "Draft",
-      ariaLabel: "Proposal draft drawer",
+      title: translateUi(resolvedLanguage, "workspace.draftProposalShort"),
+      ariaLabel: translateUi(
+        resolvedLanguage,
+        "workspace.proposalDraftPanel",
+      ),
       renderContent: () => (
         <ProposalDraftDrawer
           jobTitle={briefJobTitle}
@@ -11472,6 +11491,7 @@ export function ProposalForge(): JSX.Element {
       proposalRailToneOptions,
       proposalType,
       proposalTypeOptions,
+      resolvedLanguage,
       stagedProposalSourceMeta,
       stagedProposalSourcePreview,
       stagedProposalSourceTitle,
@@ -11586,6 +11606,61 @@ export function ProposalForge(): JSX.Element {
   ]);
 
   const shouldShowSavedList = isSavedView && !selectedProposalId;
+  const proposalDocumentStageLabels = React.useMemo<ProposalDocumentStageLabels>(
+    () => ({
+      proposalToolbar: translateUi(resolvedLanguage, "workspace.proposalToolbar"),
+      proposalViewMode: translateUi(
+        resolvedLanguage,
+        "workspace.proposalViewMode",
+      ),
+      documentControls: translateUi(
+        resolvedLanguage,
+        "workspace.documentControls",
+      ),
+      switchToPreview: translateUi(
+        resolvedLanguage,
+        "workspace.switchToPreview",
+      ),
+      switchToEdit: translateUi(resolvedLanguage, "workspace.switchToEdit"),
+      edit: translateUi(resolvedLanguage, "workspace.edit"),
+      preview: translateUi(resolvedLanguage, "workspace.preview"),
+      editProposal: translateUi(resolvedLanguage, "workspace.editProposal"),
+      previewProposal: translateUi(
+        resolvedLanguage,
+        "workspace.previewProposal",
+      ),
+      heading: translateUi(resolvedLanguage, "workspace.heading"),
+      design: translateUi(resolvedLanguage, "workspace.design"),
+      templates: translateUi(resolvedLanguage, "workspace.templates"),
+      proposalUndoRedoActions: translateUi(
+        resolvedLanguage,
+        "workspace.proposalUndoRedoActions",
+      ),
+      undo: translateUi(resolvedLanguage, "workspace.undo"),
+      redo: translateUi(resolvedLanguage, "workspace.redo"),
+      proposalLibraryActions: translateUi(
+        resolvedLanguage,
+        "workspace.proposalLibraryActions",
+      ),
+      saveProposalToLibrary: translateUi(
+        resolvedLanguage,
+        "workspace.saveProposalToLibrary",
+      ),
+      saveToLibrary: translateUi(resolvedLanguage, "workspace.saveToLibrary"),
+      deleteDraft: translateUi(resolvedLanguage, "workspace.deleteDraft"),
+      primaryWritingAction: translateUi(
+        resolvedLanguage,
+        "workspace.primaryWritingAction",
+      ),
+      draftProposal: translateUi(resolvedLanguage, "workspace.draftProposal"),
+      draftProposalShort: translateUi(
+        resolvedLanguage,
+        "workspace.draftProposalShort",
+      ),
+      ask: translateUi(resolvedLanguage, "workspace.ask"),
+    }),
+    [resolvedLanguage],
+  );
 
   return (
     <div
@@ -11933,6 +12008,7 @@ export function ProposalForge(): JSX.Element {
                       <ProposalDocumentStage
                         mode={proposalOutputMode}
                         hasProposalContent={hasMeaningfulProposalContent}
+                        labels={proposalDocumentStageLabels}
                         styleControl={null}
                         headingOpen={proposalHeadingOpen}
                         onOpenHeading={handleOpenProposalHeading}

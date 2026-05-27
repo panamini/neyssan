@@ -67,6 +67,8 @@ import { useDocumentCommandLayerPosition } from "../hooks/use-document-command-l
 import {
   getCommandLayerToolbarDensity,
 } from "../lib/document-command-layer-layout";
+import { translateUi } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 import type { CvAiSurfacePosition } from "../lib/cv-ai-surface-position";
 import {
   buildAuthoritativeResumeDebugSnapshot,
@@ -2862,6 +2864,7 @@ export function CvForge(): JSX.Element {
   const location = useLocation();
   const { search } = location;
   const navigate = useNavigate();
+  const { resolvedLanguage } = useUiLanguagePreference();
   const {
     activeSurface: activeTemplateSurface,
     open: templatePanelOpen,
@@ -5902,7 +5905,7 @@ export function CvForge(): JSX.Element {
   const cvTemplatePanelRegistration = React.useMemo(
     () => ({
       surface: "cv" as const,
-      title: "CV templates",
+      title: translateUi(resolvedLanguage, "workspace.cvTemplatesPanel"),
       subtitle: "A4 · 21 × 29.7 cm",
       activeItemId: activeCvTemplatePanelItemId,
       items: cvTemplatePanelItems,
@@ -5912,7 +5915,12 @@ export function CvForge(): JSX.Element {
         }
       },
     }),
-    [activeCvTemplatePanelItemId, cvTemplatePanelItems, handleSelectTemplate],
+    [
+      activeCvTemplatePanelItemId,
+      cvTemplatePanelItems,
+      handleSelectTemplate,
+      resolvedLanguage,
+    ],
   );
   useRegisterForgeTemplates(cvTemplatePanelRegistration);
   const cvLibraryDrawerItems = React.useMemo(
@@ -6093,8 +6101,8 @@ export function CvForge(): JSX.Element {
   const cvDesignPanelRegistration = React.useMemo(
     () => ({
       surface: "cv-design" as const,
-      title: "Design",
-      ariaLabel: "CV design",
+      title: translateUi(resolvedLanguage, "workspace.design"),
+      ariaLabel: translateUi(resolvedLanguage, "workspace.cvDesignPanel"),
       renderContent: () => (
         <CvDesignFields
           stylePreset={stylePreset}
@@ -6116,6 +6124,7 @@ export function CvForge(): JSX.Element {
       handleSelectFontPair,
       handleSelectStyleSlot,
       handleSelectTemplate,
+      resolvedLanguage,
       selectedStyleSlot,
       selectedStyleSlotIsCustom,
       stylePreset,
@@ -6448,8 +6457,8 @@ export function CvForge(): JSX.Element {
   const cvSectionsPanelRegistration = React.useMemo(
     () => ({
       surface: "cv-sections" as const,
-      title: "Sections",
-      ariaLabel: "CV sections",
+      title: translateUi(resolvedLanguage, "workspace.sections"),
+      ariaLabel: translateUi(resolvedLanguage, "workspace.cvSectionsPanel"),
       renderContent: () => (
         <div className="dasti-cv-sections-drawer">
           <CvSectionsOrganizer
@@ -6482,6 +6491,7 @@ export function CvForge(): JSX.Element {
       handleSelectSection,
       handleToggleHiddenSection,
       hiddenSectionIds,
+      resolvedLanguage,
     ],
   );
   useRegisterForgePanel(cvSectionsPanelRegistration);

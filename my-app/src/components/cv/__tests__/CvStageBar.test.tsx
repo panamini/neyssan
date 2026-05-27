@@ -1,8 +1,12 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import CvStageBar from "../CvStageBar";
 
 describe("CvStageBar command layer", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it("renders CV document tools without Draft or toolbar Ask", () => {
     render(
       <CvStageBar
@@ -82,4 +86,50 @@ describe("CvStageBar command layer", () => {
     fireEvent.click(screen.getByTestId("cv-ask-handle"));
     expect(onOpenAsk).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    {
+      locale: "fr",
+      sections: "Sections",
+      design: "Style",
+      templates: "Modèles",
+      ask: "Demander",
+    },
+    {
+      locale: "es",
+      sections: "Secciones",
+      design: "Diseño",
+      templates: "Plantillas",
+      ask: "Preguntar",
+    },
+  ])(
+    "renders CV toolbar chrome in $locale without touching document language",
+    ({ locale, sections, design, templates, ask }) => {
+      window.localStorage.setItem("twoweeks:ui-language", locale);
+      window.localStorage.setItem("twoweeks:document-language", "ar");
+
+      render(
+        <CvStageBar
+          mode="preview"
+          onModeChange={vi.fn()}
+          onOpenSections={vi.fn()}
+          onOpenDesign={vi.fn()}
+          onOpenTemplates={vi.fn()}
+          onOpenAsk={vi.fn()}
+        />,
+      );
+
+      const toolbar = screen.getByTestId("cv-toolbar");
+      expect(within(toolbar).getByRole("button", { name: sections })).toBeInTheDocument();
+      expect(within(toolbar).getByRole("button", { name: design })).toBeInTheDocument();
+      expect(within(toolbar).getByRole("button", { name: templates })).toBeInTheDocument();
+      expect(screen.getByTestId("cv-ask-handle")).toHaveAttribute(
+        "aria-label",
+        ask,
+      );
+      expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+        "ar",
+      );
+    },
+  );
 });
