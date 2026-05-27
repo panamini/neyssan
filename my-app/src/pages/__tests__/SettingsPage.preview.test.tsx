@@ -198,7 +198,7 @@ describe("SettingsPage preview controls", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Open custom interface accent color picker",
+        name: "Open custom color picker",
       }),
     );
     await user.click(
@@ -385,6 +385,46 @@ describe("SettingsPage preview controls", () => {
 	    expect(document.documentElement.lang).toBe("es");
 	    expect(document.documentElement.dir).toBe("ltr");
 	  });
+
+  it.each([
+    {
+      locale: "fr",
+      modeLabel: "Mode d'interface",
+      appearanceLabel: "Apparence",
+      lightLabel: "Clair",
+      darkLabel: "Sombre",
+      systemLabel: "Systeme",
+    },
+    {
+      locale: "es",
+      modeLabel: "Modo de interfaz",
+      appearanceLabel: "Apariencia",
+      lightLabel: "Claro",
+      darkLabel: "Oscuro",
+      systemLabel: "Sistema",
+    },
+  ])(
+    "renders Settings theme chrome through $locale UI messages",
+    ({ locale, modeLabel, appearanceLabel, lightLabel, darkLabel, systemLabel }) => {
+      window.localStorage.setItem("twoweeks:ui-language", locale);
+
+      renderSettings("/settings?tab=theme");
+
+      expect(screen.getByText(appearanceLabel)).toBeInTheDocument();
+      expect(
+        screen.getByRole("group", { name: modeLabel }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: lightLabel }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: darkLabel }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: systemLabel }),
+      ).toBeInTheDocument();
+    },
+  );
 
   it("hydrates default style slots from the onboarding document style set", () => {
     presetsQueryMock.mockReturnValue({
@@ -1050,7 +1090,7 @@ describe("SettingsPage preview controls", () => {
     const signatureGroup = screen.getByRole("group", { name: "Printed name" });
     await user.click(
       within(signatureGroup).getByRole("button", {
-        name: "FD Garamond printed name",
+        name: /FD Garamond/i,
       }),
     );
 

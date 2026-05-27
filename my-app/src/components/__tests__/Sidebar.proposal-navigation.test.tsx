@@ -483,6 +483,22 @@ describe("Sidebar permanent rail", () => {
     expect(settings).toHaveClass("sb-rail-button--panel-open");
   });
 
+  it("renders translated Settings drawer chrome in French", async () => {
+    window.localStorage.setItem("twoweeks:ui-language", "fr");
+    renderSidebar("/dashboard");
+
+    fireEvent.click(screen.getByRole("button", { name: "Parametres" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("complementary", { name: "Sections des parametres" }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("button", { name: /Style du document/ }),
+    ).toBeInTheDocument();
+  });
+
   it("links Projects to the documents surface", () => {
     renderSidebar();
 

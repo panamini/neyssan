@@ -27,6 +27,9 @@ describe("UI i18n foundation", () => {
     expect(translateUi("es", "settings.defaultDocumentLanguage")).toBe(
       "Idioma predeterminado del documento",
     );
+    expect(translateUi("fr", "settings.tabs.account.label")).toBe("Profil");
+    expect(translateUi("es", "settings.tabs.theme.label")).toBe("Tema");
+    expect(translateUi("fr", "settings.themeMode.light")).toBe("Clair");
   });
 
   it("exposes only production UI locales for UI dictionaries", () => {
