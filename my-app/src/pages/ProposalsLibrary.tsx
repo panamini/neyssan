@@ -14,6 +14,8 @@ import {
 } from "../lib/proposal-workspace-state";
 import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import { clearActiveLocalCvId } from "../lib/proposal-personalization";
+import { translateUi } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 
 const PROPOSAL_TONE_FILTER_OPTIONS = [
   { value: "all", label: "All tones", description: "Show every tone." },
@@ -117,6 +119,41 @@ function buildProposalSnippet(value: unknown): string {
 export function ProposalsLibrary(): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const proposalToneFilterOptions = React.useMemo(
+    () =>
+      PROPOSAL_TONE_FILTER_OPTIONS.map((option) => ({
+        ...option,
+        label:
+          option.value === "all"
+            ? translateUi(resolvedLanguage, "filters.allTones")
+            : option.label,
+        description:
+          option.value === "all"
+            ? translateUi(resolvedLanguage, "filters.showEveryTone")
+            : option.description,
+      })),
+    [resolvedLanguage],
+  );
+  const proposalSortOptions = React.useMemo(
+    () =>
+      PROPOSAL_SORT_OPTIONS.map((option) => ({
+        ...option,
+        label:
+          option.value === "newest"
+            ? translateUi(resolvedLanguage, "filters.sortNewestFirst")
+            : option.value === "oldest"
+              ? translateUi(resolvedLanguage, "filters.sortOldestFirst")
+              : translateUi(resolvedLanguage, "filters.sortTitle"),
+        description:
+          option.value === "newest"
+            ? translateUi(resolvedLanguage, "filters.sortRecentlyUpdatedFirst")
+            : option.value === "oldest"
+              ? translateUi(resolvedLanguage, "filters.sortOldestUpdatedFirst")
+              : translateUi(resolvedLanguage, "filters.sortAlphabeticalByTitle"),
+      })),
+    [resolvedLanguage],
+  );
   const { isLoaded, isSignedIn } = useAuth();
   const {
     isAuthenticated: isConvexAuthenticated,
@@ -225,9 +262,9 @@ export function ProposalsLibrary(): JSX.Element {
   }
 
   const authStatusMessage = !isLoaded || isConvexAuthLoading
-    ? "Loading…"
+    ? translateUi(resolvedLanguage, "common.loading")
     : !isSignedIn || !isConvexAuthenticated
-      ? "Sign in to view your proposals."
+      ? translateUi(resolvedLanguage, "documents.signInToViewProposals")
       : null;
   const hasActiveLibraryFilters =
     searchQuery.trim().length > 0 || toneFilter !== "all";
@@ -245,7 +282,9 @@ export function ProposalsLibrary(): JSX.Element {
       >
         <div className="dasti-page-header">
           <div className="dasti-stack">
-            <h1 className="dasti-stack__title">All proposals</h1>
+            <h1 className="dasti-stack__title">
+              {translateUi(resolvedLanguage, "documents.allProposals")}
+            </h1>
           </div>
           <div className="dasti-page-actions">
             <button
@@ -269,26 +308,28 @@ export function ProposalsLibrary(): JSX.Element {
           <>
             <div className="dasti-proposal-library-utility-row">
               <label className="dasti-proposal-library-utility-row__search">
-                <span className="sr-only">Search all proposals</span>
+                <span className="sr-only">
+                  {translateUi(resolvedLanguage, "documents.searchAllProposals")}
+                </span>
                 <Input
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search all proposals"
-                  aria-label="Search all proposals"
+                  placeholder={translateUi(resolvedLanguage, "documents.searchAllProposals")}
+                  aria-label={translateUi(resolvedLanguage, "documents.searchAllProposals")}
                   className="dasti-proposal-library-utility-row__input"
                 />
               </label>
               <LibraryFilterMenu
-                label="Filter all proposals by tone"
+                label={translateUi(resolvedLanguage, "documents.filterAllProposalsByTone")}
                 value={toneFilter}
-                options={PROPOSAL_TONE_FILTER_OPTIONS}
+                options={proposalToneFilterOptions}
                 onChange={setToneFilter}
               />
               <LibraryFilterMenu
-                label="Sort all proposals"
+                label={translateUi(resolvedLanguage, "documents.sortAllProposals")}
                 value={sortOrder}
-                options={PROPOSAL_SORT_OPTIONS}
+                options={proposalSortOptions}
                 onChange={setSortOrder}
               />
               <span className="dasti-proposal-library-utility-row__count">
@@ -301,10 +342,10 @@ export function ProposalsLibrary(): JSX.Element {
               <div className="dasti-empty-state">
                 <FileText size={32} strokeWidth={1.2} />
                 <div className="dasti-empty-state__title">
-                  No proposals match this search
+                  {translateUi(resolvedLanguage, "documents.noProposalsMatch")}
                 </div>
                 <p className="dasti-empty-state__subtitle">
-                  Search checks the title, document text, and imported job offer.
+                  {translateUi(resolvedLanguage, "documents.noProposalsMatchHelp")}
                 </p>
               </div>
             ) : (
@@ -357,7 +398,8 @@ export function ProposalsLibrary(): JSX.Element {
                               : "dasti-doc-card__snippet dasti-doc-card__snippet--library dasti-doc-card__snippet--muted"
                           }
                         >
-                          {snippet || "Preview appears here once the document has content."}
+                          {snippet ||
+                            translateUi(resolvedLanguage, "documents.previewPending")}
                         </p>
                       </div>
 
@@ -442,10 +484,12 @@ export function ProposalsLibrary(): JSX.Element {
           <div className="dasti-empty-state">
             <FileText size={32} strokeWidth={1.2} />
             <div className="dasti-empty-state__title">
-              {statusFilter === "sent" ? "No sent proposals yet" : "No proposals yet"}
+              {statusFilter === "sent"
+                ? translateUi(resolvedLanguage, "documents.noSentProposalsYet")
+                : translateUi(resolvedLanguage, "documents.noProposalsYet")}
             </div>
             <p className="dasti-empty-state__subtitle">
-              Proposals appear here automatically with their title, type, and last update.
+              {translateUi(resolvedLanguage, "documents.noProposalsYetHelp")}
             </p>
             <button
               onClick={handleCreateProposal}
