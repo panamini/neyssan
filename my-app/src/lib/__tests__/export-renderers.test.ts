@@ -486,6 +486,9 @@ describe("export-renderers", () => {
       expect(css).toContain(`.${scope}.export-page`);
       expect(css).toContain("width: 210mm;");
       expect(css).toContain("min-height: 297mm;");
+      expect(css).toContain("width: min(112mm, 66ch);");
+      expect(css).toContain("max-width: min(112mm, 66ch);");
+      expect(css).toContain("overflow-wrap: break-word;");
       expect(css).toContain(
         "font-family: var(--heading-font, var(--font-heading-family));",
       );

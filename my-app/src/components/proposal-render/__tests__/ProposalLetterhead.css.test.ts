@@ -49,4 +49,26 @@ describe("proposal letterhead CSS", () => {
       /\.proposal-cover-letter--(?:director|volk|film-foto)[^{]+(?:masthead-primary|volk-title|film-title)[^{]*\{[^}]*font-family:\s*var\(--font-body-family\)/,
     );
   });
+
+  it("caps cover letter body measure to the 50-70 character reading range", () => {
+    [
+      ".proposal-cover-letter--director",
+      ".proposal-cover-letter--volk",
+      ".proposal-cover-letter--film-foto",
+    ].forEach((scope) => {
+      expect(proposalCss).toMatch(
+        new RegExp(
+          `${scope.replace(".", "\\.")}\\s+\\.proposal-cover-letter__body\\s*\\{[\\s\\S]*width:\\s*min\\(112mm,\\s*66ch\\);`,
+        ),
+      );
+    });
+
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__body,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__body\s*\{[\s\S]*max-width:\s*min\(112mm,\s*66ch\);[\s\S]*\}/,
+    );
+    expect(proposalCss).toContain("overflow-wrap: break-word;");
+    expect(proposalCss).not.toContain("width: 158mm;");
+    expect(proposalCss).not.toContain("width: 160mm;");
+    expect(proposalCss).not.toContain("width: 168mm;");
+  });
 });

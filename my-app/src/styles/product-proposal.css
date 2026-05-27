@@ -3751,7 +3751,7 @@
 .proposal-cover-letter--director .proposal-cover-letter__body {
   left: 25mm;
   top: 118mm;
-  width: 158mm;
+  width: min(112mm, 66ch);
 }
 
 .proposal-cover-letter--volk .dasti-proposal-document__page {
@@ -3873,7 +3873,7 @@
 .proposal-cover-letter--volk .proposal-cover-letter__body {
   left: 24mm;
   top: 122mm;
-  width: 160mm;
+  width: min(112mm, 66ch);
 }
 
 .proposal-cover-letter--volk .proposal-cover-letter__dot {
@@ -4011,7 +4011,7 @@
 .proposal-cover-letter--film-foto .proposal-cover-letter__body {
   left: 20mm;
   top: 120mm;
-  width: 168mm;
+  width: min(112mm, 66ch);
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__dot {
@@ -4029,7 +4029,7 @@
   display: grid;
   align-content: start;
   min-width: 0;
-  max-width: none;
+  max-width: min(112mm, 66ch);
   padding: 0;
 }
 
@@ -4052,6 +4052,7 @@
   font-size: 3.15mm;
   line-height: 1.48;
   color: var(--proposal-document-ink);
+  overflow-wrap: break-word;
 }
 
 .proposal-cover-letter--director .proposal-cover-letter__body .dasti-proposal-document__signature,

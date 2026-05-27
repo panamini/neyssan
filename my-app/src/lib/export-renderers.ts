@@ -993,7 +993,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--director .proposal-cover-letter__body {
       left: 25mm;
       top: 118mm;
-      width: 158mm;
+      width: min(112mm, 66ch);
     }
 
     .proposal-cover-letter--volk .proposal-cover-letter__volk-header {
@@ -1061,7 +1061,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--volk .proposal-cover-letter__body {
       left: 24mm;
       top: 122mm;
-      width: 160mm;
+      width: min(112mm, 66ch);
     }
 
     .proposal-cover-letter--volk .proposal-cover-letter__dot {
@@ -1133,7 +1133,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--film-foto .proposal-cover-letter__body {
       left: 20mm;
       top: 120mm;
-      width: 168mm;
+      width: min(112mm, 66ch);
     }
 
     .proposal-cover-letter--film-foto .proposal-cover-letter__dot {
@@ -1208,6 +1208,7 @@ function buildStyledProposalAppearanceCss(): string {
       display: grid;
       align-content: start;
       gap: 0;
+      max-width: min(112mm, 66ch);
       color: var(--ink);
     }
 
@@ -1226,6 +1227,7 @@ function buildStyledProposalAppearanceCss(): string {
       line-height: 1.48;
       color: var(--ink);
       white-space: pre-wrap;
+      overflow-wrap: break-word;
     }
 
     .proposal-cover-letter--director .proposal-cover-letter__body .proposal-block + .proposal-block,
