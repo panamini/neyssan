@@ -50,6 +50,7 @@ type ProposalDocumentStageProps = {
   finalExportReviewed?: boolean;
   onReviewMatch?: () => void;
   onResolveImportIssues?: () => void;
+  reserveToolbarBeforeContent?: boolean;
   labels?: Partial<ProposalDocumentStageLabels>;
 };
 
@@ -147,6 +148,7 @@ export function ProposalDocumentStage({
   composerMode = null,
   onDeleteDraft,
   onSaveToLibrary,
+  reserveToolbarBeforeContent = false,
   labels,
 }: ProposalDocumentStageProps): JSX.Element {
   const stageIconSize = 18;
@@ -163,6 +165,7 @@ export function ProposalDocumentStage({
     stageRef,
     paperRef,
     paperAnchorSelector: PAPER_ANCHOR_SELECTOR,
+    toolbarTopAnchorSelector: ".dasti-proposal-template-job-empty",
     commandCanvasSelector: COMMAND_LAYER_CANVAS_SELECTOR,
     cssVarPrefix: "proposal",
     toolbarSelector: "[data-testid='proposal-toolbar']",
@@ -195,6 +198,9 @@ export function ProposalDocumentStage({
       data-ask-placement={askMode === "edgeTab" ? "edge-tab" : "outside"}
       data-ask-density="icon"
       data-draft-density={getCommandLayerLabelDensity(draftLabelMode)}
+      data-toolbar-before-content={
+        reserveToolbarBeforeContent ? "true" : undefined
+      }
       aria-label="Proposal document stage"
     >
       <div

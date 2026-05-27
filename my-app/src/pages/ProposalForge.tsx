@@ -3266,6 +3266,7 @@ export function ProposalForge(): JSX.Element {
           id: site.key,
           label: site.label,
           onSelect: () => {
+            setIsTemplateJobContextEmptyStateDismissed(true);
             if (typeof window === "undefined") return;
             window.open(site.href, "_blank", "noopener,noreferrer");
           },
@@ -11536,6 +11537,7 @@ export function ProposalForge(): JSX.Element {
   }, []);
 
   const handleOpenJobsFromRail = React.useCallback(() => {
+    setIsTemplateJobContextEmptyStateDismissed(true);
     openTemplateSurface("jobs", {
       mode: isWideEnoughForDockedForgePanel ? "docked" : "overlay",
     });
@@ -11760,11 +11762,8 @@ export function ProposalForge(): JSX.Element {
     ],
   );
   useRegisterForgePanel(proposalPasteJobPanelRegistration);
-  const handleTemplateStartBlank = React.useCallback(() => {
+  const handleDismissTemplateJobContext = React.useCallback(() => {
     setIsTemplateJobContextEmptyStateDismissed(true);
-    setProposalType("cover_letter");
-    setProposalLibraryStatus("draft");
-    setProposalOutputMode("edit");
   }, []);
 
   React.useEffect(() => {
@@ -12292,13 +12291,27 @@ export function ProposalForge(): JSX.Element {
                             proposalOutputMode === "preview",
                         )}
                         onModeChange={handleProposalOutputModeChange}
+                        reserveToolbarBeforeContent={
+                          shouldShowTemplateJobContextEmptyState
+                        }
                       >
                         {shouldShowTemplateJobContextEmptyState ? (
                           <section
                             className="dasti-proposal-template-job-empty"
                             aria-label="Job context"
                           >
-                            <p>Load a job to tailor this letter.</p>
+                            <div className="dasti-proposal-template-job-empty__head">
+                              <p>Load a job to tailor this letter.</p>
+                              <button
+                                type="button"
+                                className="dasti-proposal-template-job-empty__dismiss"
+                                onClick={handleDismissTemplateJobContext}
+                                aria-label="Hide job prompt"
+                                data-toolbar-tooltip="Hide"
+                              >
+                                <X size={14} strokeWidth={1.8} aria-hidden="true" />
+                              </button>
+                            </div>
                             <div className="dasti-proposal-template-job-empty__actions">
                               <button
                                 type="button"
@@ -12320,13 +12333,6 @@ export function ProposalForge(): JSX.Element {
                                   </button>
                                 }
                               />
-                              <button
-                                type="button"
-                                className="dasti-button dasti-button--ghost dasti-button--sm"
-                                onClick={handleTemplateStartBlank}
-                              >
-                                Start blank
-                              </button>
                             </div>
                           </section>
                         ) : null}
