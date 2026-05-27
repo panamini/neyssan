@@ -842,25 +842,86 @@ function buildStyledProposalAppearanceCss(): string {
   `;
 }
 
+const LATIN_EXPORT_FALLBACK_LOCALES = new Set([
+  "en",
+  "fr",
+  "es",
+  "pt",
+  "it",
+  "de",
+  "nl",
+  "ga",
+  "pl",
+  "hu",
+  "lt",
+  "et",
+]);
+
+const CYRILLIC_GREEK_EXPORT_FALLBACK_LOCALES = new Set(["ru", "el"]);
+
+const LATIN_EXPORT_FALLBACK_STACK = '"Noto Sans", system-ui, sans-serif';
+const CYRILLIC_GREEK_EXPORT_FALLBACK_STACK =
+  '"Noto Sans", "Segoe UI", Tahoma, Arial, sans-serif';
+const ARABIC_EXPORT_FONT_STACK =
+  '"Noto Kufi Arabic", "Noto Sans Arabic", "Noto Naskh Arabic", "Geeza Pro", Tahoma, Arial, sans-serif';
+
+function resolveExportFontFallbackStack(locale?: string | null): string | null {
+  const htmlLang = getExportHtmlLang(locale);
+  if (LATIN_EXPORT_FALLBACK_LOCALES.has(htmlLang)) {
+    return LATIN_EXPORT_FALLBACK_STACK;
+  }
+  if (CYRILLIC_GREEK_EXPORT_FALLBACK_LOCALES.has(htmlLang)) {
+    return CYRILLIC_GREEK_EXPORT_FALLBACK_STACK;
+  }
+  return null;
+}
+
+function appendExportFontFallback(
+  fontStack: string | undefined,
+  fallbackStack: string | null,
+): string | undefined {
+  if (!fontStack || !fallbackStack || fontStack.includes('"Noto Sans"')) {
+    return fontStack;
+  }
+  return `${fontStack}, ${fallbackStack}`;
+}
+
+function buildLocaleTypographyVars(
+  vars: Record<string, string>,
+  locale?: string | null,
+): Record<string, string> {
+  const htmlLang = getExportHtmlLang(locale);
+  if (htmlLang === "ar") {
+    return {
+      ...vars,
+      "--heading-font": ARABIC_EXPORT_FONT_STACK,
+      "--body-font": ARABIC_EXPORT_FONT_STACK,
+    };
+  }
+
+  const fallbackStack = resolveExportFontFallbackStack(locale);
+  if (!fallbackStack) {
+    return vars;
+  }
+
+  return {
+    ...vars,
+    "--heading-font":
+      appendExportFontFallback(vars["--heading-font"], fallbackStack) ??
+      fallbackStack,
+    "--body-font":
+      appendExportFontFallback(vars["--body-font"], fallbackStack) ??
+      fallbackStack,
+  };
+}
+
 function buildLocaleTypographyCss(locale?: string | null): string {
   const htmlLang = getExportHtmlLang(locale);
-  const localeFont =
-    htmlLang === "ar"
-      ? '"Noto Kufi Arabic", "Noto Sans Arabic", "Noto Naskh Arabic", "Geeza Pro", Tahoma, Arial, sans-serif'
-      : htmlLang === "ru" || htmlLang === "pl"
-        ? '"Noto Sans", "Segoe UI", Tahoma, Arial, sans-serif'
-        : null;
-
-  if (!localeFont) {
+  if (htmlLang !== "ar") {
     return "";
   }
 
   return `
-    :root {
-      --heading-font: ${localeFont};
-      --body-font: ${localeFont};
-    }
-
     html[lang="ar"],
     html[dir="rtl"] {
       text-align: right;
@@ -902,7 +963,7 @@ function buildPageCss(args: {
 
   return `
     :root {
-${buildCssVarBlock(layoutProfileVars)}
+${buildCssVarBlock(buildLocaleTypographyVars(layoutProfileVars, args.lang))}
     }
 ${buildLocaleTypographyCss(args.lang)}
 
