@@ -703,6 +703,30 @@ export const PROPOSAL_PREVIEW_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
       ),
   },
   {
+    name: "--font-heading-family",
+    fieldPath: "appearance.font.heading.family",
+    classification: "canonical",
+    resolve: (tokens) => tokens.appearance.font.heading.family,
+  },
+  {
+    name: "--font-body-family",
+    fieldPath: "appearance.font.body.family",
+    classification: "canonical",
+    resolve: (tokens) => tokens.appearance.font.body.family,
+  },
+  {
+    name: "--heading-font",
+    fieldPath: "appearance.font.heading.family",
+    classification: "canonical",
+    resolve: (tokens) => tokens.appearance.font.heading.family,
+  },
+  {
+    name: "--body-font",
+    fieldPath: "appearance.font.body.family",
+    classification: "canonical",
+    resolve: (tokens) => tokens.appearance.font.body.family,
+  },
+  {
     name: "--proposal-document-font-family",
     fieldPath: "appearance.font.body.family",
     classification: "canonical",

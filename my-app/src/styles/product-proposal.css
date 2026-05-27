@@ -3626,7 +3626,22 @@
 .proposal-cover-letter--director .proposal-cover-letter__subject-label,
 .proposal-cover-letter--director .proposal-cover-letter__subject-value {
   margin: 0;
-  font-family: var(--font-body-family);
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
+.proposal-cover-letter--director .proposal-cover-letter__masthead-secondary,
+.proposal-cover-letter--director .proposal-cover-letter__masthead-role,
+.proposal-cover-letter--director .proposal-cover-letter__phone-mark,
+.proposal-cover-letter--director .proposal-cover-letter__subject-label,
+.proposal-cover-letter--director .proposal-cover-letter__subject-value {
+  font-family: var(--heading-font, var(--font-heading-family));
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__sender-label,
+.proposal-cover-letter--director .proposal-cover-letter__sender-lines p,
+.proposal-cover-letter--director .proposal-cover-letter__phone-block p,
+.proposal-cover-letter--director .proposal-cover-letter__meta-item {
+  font-family: var(--body-font, var(--font-body-family));
 }
 
 .proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
@@ -3770,8 +3785,19 @@
 .proposal-cover-letter--volk .proposal-cover-letter__subject-label,
 .proposal-cover-letter--volk .proposal-cover-letter__subject-value {
   margin: 0;
-  font-family: var(--font-body-family);
   color: var(--proposal-document-accent-ink);
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__volk-title,
+.proposal-cover-letter--volk .proposal-cover-letter__volk-subtitle,
+.proposal-cover-letter--volk .proposal-cover-letter__subject-label,
+.proposal-cover-letter--volk .proposal-cover-letter__subject-value {
+  font-family: var(--heading-font, var(--font-heading-family));
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__volk-sender,
+.proposal-cover-letter--volk .proposal-cover-letter__meta-item {
+  font-family: var(--body-font, var(--font-body-family));
 }
 
 .proposal-cover-letter--volk .proposal-cover-letter__volk-title {
@@ -3888,8 +3914,18 @@
 .proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
 .proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
   margin: 0;
-  font-family: var(--font-body-family);
   color: var(--proposal-document-accent-ink);
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-title,
+.proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
+.proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
+  font-family: var(--heading-font, var(--font-heading-family));
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p,
+.proposal-cover-letter--film-foto .proposal-cover-letter__meta-item {
+  font-family: var(--body-font, var(--font-body-family));
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-title {

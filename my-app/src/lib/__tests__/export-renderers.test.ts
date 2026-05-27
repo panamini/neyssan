@@ -486,6 +486,12 @@ describe("export-renderers", () => {
       expect(css).toContain(`.${scope}.export-page`);
       expect(css).toContain("width: 210mm;");
       expect(css).toContain("min-height: 297mm;");
+      expect(css).toContain(
+        "font-family: var(--heading-font, var(--font-heading-family));",
+      );
+      expect(css).toContain(
+        "font-family: var(--body-font, var(--font-body-family));",
+      );
       expect(document.body.textContent).toMatch(/Alex Mercer|alex mercer/);
       expect(document.body.textContent).toContain("Studio Nord");
       expect(blocks.slice(0, 4)).toEqual([
