@@ -233,47 +233,79 @@ describe("SettingsPage preview controls", () => {
     expect(
       within(group).queryByRole("button", { name: /Arabic/ }),
     ).not.toBeInTheDocument();
-    expect(
-      within(group).queryByRole("button", { name: /Irish/ }),
-    ).not.toBeInTheDocument();
-  });
+	    expect(
+	      within(group).queryByRole("button", { name: /Irish/ }),
+	    ).not.toBeInTheDocument();
+	    expect(
+	      within(group).queryByRole("button", { name: /Greek/ }),
+	    ).not.toBeInTheDocument();
+	    expect(
+	      within(group).queryByRole("button", { name: /Russian/ }),
+	    ).not.toBeInTheDocument();
+	  });
 
   it("persists document generation language separately from UI language", async () => {
     const user = userEvent.setup();
     renderSettings("/settings?tab=language");
 
     const uiGroup = screen.getByRole("group", { name: "Interface language" });
-    const documentGroup = screen.getByRole("group", {
-      name: "Default document language",
-    });
+	    const documentGroup = screen.getByRole("group", {
+	      name: "Default document language",
+	    });
 
-    expect(
-      within(documentGroup).getByRole("button", { name: /German Deutsch/ }),
-    ).toBeInTheDocument();
-    expect(
-      within(documentGroup).getByRole("button", {
-        name: /Arabic Al-Arabiyyah/,
-      }),
-    ).toBeInTheDocument();
-    expect(
-      within(documentGroup).queryByRole("button", { name: /Irish/ }),
-    ).not.toBeInTheDocument();
+	    expect(
+	      within(documentGroup).getByRole("button", {
+	        name: /Auto Match the job\/source language when available\./,
+	      }),
+	    ).toBeInTheDocument();
+	    expect(
+	      within(documentGroup).getByRole("button", { name: /German Deutsch/ }),
+	    ).toBeInTheDocument();
+	    expect(
+	      within(documentGroup).getByRole("button", { name: /Irish Gaeilge/ }),
+	    ).toBeInTheDocument();
+	    expect(
+	      within(documentGroup).getByRole("button", { name: /Greek Ellinika/ }),
+	    ).toBeInTheDocument();
+	    expect(
+	      within(documentGroup).getByRole("button", { name: /Russian Russkiy/ }),
+	    ).toBeInTheDocument();
+	    expect(
+	      within(documentGroup).getByRole("button", {
+	        name: /Arabic Al-Arabiyyah/,
+	      }),
+	    ).toBeInTheDocument();
 
-    await user.click(
-      within(documentGroup).getByRole("button", {
-        name: /Arabic Al-Arabiyyah/,
+	    await user.click(
+	      within(documentGroup).getByRole("button", {
+	        name: /Arabic Al-Arabiyyah/,
       }),
     );
 
-    expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
-      "ar",
-    );
-    expect(document.documentElement.dataset.uiLanguage).toBe("en");
-    expect(document.documentElement.dir).toBe("ltr");
-    expect(
-      within(uiGroup).queryByRole("button", { name: /Arabic/ }),
-    ).not.toBeInTheDocument();
-  });
+	    expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+	      "ar",
+	    );
+	    expect(window.localStorage.getItem("twoweeks:ui-language")).toBeNull();
+	    expect(document.documentElement.dataset.uiLanguage).toBe("en");
+	    expect(document.documentElement.lang).toBe("en");
+	    expect(document.documentElement.dir).toBe("ltr");
+	    expect(
+	      within(uiGroup).queryByRole("button", { name: /Arabic/ }),
+	    ).not.toBeInTheDocument();
+
+	    await user.click(
+	      within(uiGroup).getByRole("button", {
+	        name: /Spanish Espanol/,
+	      }),
+	    );
+
+	    expect(window.localStorage.getItem("twoweeks:ui-language")).toBe("es");
+	    expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+	      "ar",
+	    );
+	    expect(document.documentElement.lang).toBe("es");
+	    expect(document.documentElement.dir).toBe("ltr");
+	  });
 
   it("hydrates default style slots from the onboarding document style set", () => {
     presetsQueryMock.mockReturnValue({

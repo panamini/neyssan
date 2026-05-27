@@ -2264,11 +2264,15 @@ export function SettingsPage(): JSX.Element {
                     role="group"
                     aria-label="Default document language"
                   >
-                    {DOCUMENT_LANGUAGE_OPTIONS.map((option) => {
-                      const active = documentLanguage === option.id;
-                      return (
-                        <button
-                          key={option.id}
+	                    {DOCUMENT_LANGUAGE_OPTIONS.map((option) => {
+	                      const active = documentLanguage === option.id;
+	                      const optionCaption =
+	                        option.id === "auto"
+	                          ? "Match the job/source language when available."
+	                          : option.nativeLabel;
+	                      return (
+	                        <button
+	                          key={option.id}
                           type="button"
                           className="settings-language-card"
                           data-selected={active ? "true" : undefined}
@@ -2278,9 +2282,9 @@ export function SettingsPage(): JSX.Element {
                           <span className="settings-language-card__name">
                             {option.label}
                           </span>
-                          <span className="settings-language-card__native">
-                            {option.nativeLabel}
-                          </span>
+	                          <span className="settings-language-card__native">
+	                            {optionCaption}
+	                          </span>
                           {active ? (
                             <Check
                               className="settings-language-card__check"
