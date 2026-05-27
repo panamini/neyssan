@@ -220,6 +220,27 @@ describe("ProposalForge preview applicant fallback", () => {
     });
   });
 
+  it("keeps partial contact typing in the Heading drawer fields", async () => {
+    renderProposalForge();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Generate proposal", hidden: true }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Heading" }));
+
+    const email = screen.getByLabelText("Email");
+    fireEvent.change(email, { target: { value: "zoe@" } });
+    expect(email).toHaveValue("zoe@");
+
+    const phone = screen.getByLabelText("Phone");
+    fireEvent.change(phone, { target: { value: "09" } });
+    expect(phone).toHaveValue("09");
+
+    const website = screen.getByLabelText("Website / portfolio");
+    fireEvent.change(website, { target: { value: "portfolio" } });
+    expect(website).toHaveValue("portfolio");
+  });
+
   it("updates a settings-owned structured signature when the Heading name changes", async () => {
     renderProposalForge();
 

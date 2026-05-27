@@ -3135,6 +3135,12 @@ export function ProposalForge(): JSX.Element {
   const [proposalContactLine, setProposalContactLine] = React.useState<string>(
     storedOutputDraft?.proposalContactLine ?? defaultPreviewContactLine,
   );
+  const [proposalStructuredContactDraft, setProposalStructuredContactDraft] =
+    React.useState<ProposalStructuredContactFields>(() =>
+      parseProposalContactLine(
+        storedOutputDraft?.proposalContactLine ?? defaultPreviewContactLine,
+      ),
+    );
   const [proposalLetterDate, setProposalLetterDate] = React.useState<string>(
     storedOutputDraft?.proposalLetterDate ||
       getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
@@ -3363,6 +3369,7 @@ export function ProposalForge(): JSX.Element {
   const syncedStoredOutputSourceComposeRef = React.useRef(false);
   const suppressStoredOutputDraftSyncRef = React.useRef(false);
   const skipNextStoredOutputDraftSyncRef = React.useRef(false);
+  const skipNextStructuredContactSyncRef = React.useRef(false);
   const lastAutoApplicantHeaderRef = React.useRef({
     name: defaultPreviewApplicantHeader.name ?? "",
     role: defaultPreviewApplicantHeader.role ?? "",
@@ -3462,21 +3469,31 @@ export function ProposalForge(): JSX.Element {
   const handleProposalContactLineCommit = React.useCallback(() => {
     setProposalContactLine((current) => normalizeProposalContactLine(current));
   }, []);
-  const proposalStructuredContactFields = React.useMemo(
-    () => parseProposalContactLine(proposalContactLine),
-    [proposalContactLine],
-  );
+  React.useEffect(() => {
+    if (skipNextStructuredContactSyncRef.current) {
+      skipNextStructuredContactSyncRef.current = false;
+      return;
+    }
+    setProposalStructuredContactDraft(
+      parseProposalContactLine(proposalContactLine),
+    );
+  }, [proposalContactLine]);
+
+  const proposalStructuredContactFields = proposalStructuredContactDraft;
   const handleProposalStructuredContactChange = React.useCallback(
     (field: keyof ProposalStructuredContactFields, value: string) => {
       markHeadingFieldDirty("contactLine");
-      setProposalContactLine((current) =>
-        buildProposalContactLineFromParts({
-          ...parseProposalContactLine(current),
-          [field]: value,
-        }),
+      const nextContactFields = {
+        ...proposalStructuredContactDraft,
+        [field]: value,
+      };
+      setProposalStructuredContactDraft(nextContactFields);
+      skipNextStructuredContactSyncRef.current = true;
+      setProposalContactLine(
+        buildProposalContactLineFromParts(nextContactFields),
       );
     },
-    [markHeadingFieldDirty],
+    [markHeadingFieldDirty, proposalStructuredContactDraft],
   );
   const handleProposalLetterDateChange = React.useCallback(
     (value: string) => {
