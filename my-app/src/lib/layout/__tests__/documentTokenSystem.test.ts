@@ -131,6 +131,10 @@ describe("document token system", () => {
       ]),
     ).toEqual(
       [
+        "--body-font",
+        "--font-body-family",
+        "--font-heading-family",
+        "--heading-font",
         "--proposal-block-mm",
         "--proposal-document-font-family",
         "--proposal-document-font-size",
@@ -232,6 +236,32 @@ describe("document token system", () => {
       "calc(var(--proposal-inline-mm) * 17)",
     );
     expect(previewVars["--proposal-template-left-zone-mm"]).toBe("35");
+    expect(previewVars["--font-heading-family"]).toBe(
+      exportVars["--heading-font"],
+    );
+    expect(previewVars["--font-body-family"]).toBe(exportVars["--body-font"]);
+    expect(previewVars["--heading-font"]).toBe(exportVars["--heading-font"]);
+    expect(previewVars["--body-font"]).toBe(exportVars["--body-font"]);
+
+    const mixedFontStylePreset = resolveVerbatiStyle({
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "ledger-sans",
+      palette: "terre",
+    });
+    const mixedPreviewVars = serializeProposalPreviewVars(
+      normalizeProposalPreviewTokens({
+        templateId: "workshop_proposal_margin",
+        documentTypography: getProposalDocumentTypography(
+          "ledger-sans",
+          mixedFontStylePreset,
+        ),
+        stylePreset: mixedFontStylePreset,
+      }),
+    );
+    expect(mixedPreviewVars["--heading-font"]).not.toBe(
+      mixedPreviewVars["--body-font"],
+    );
 
     expect(exportProfile.shell).toBe("onecol");
     expect(exportTokens.geometry.page.margin.leftMm).toBe(35);
@@ -440,6 +470,69 @@ describe("document token system", () => {
       docxTokens.bodySizeHalfPt,
     );
   });
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      leftMm: 25,
+      rightMm: 25,
+      bodyStartMm: 118,
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      leftMm: 24,
+      rightMm: 26,
+      bodyStartMm: 122,
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      leftMm: 20,
+      rightMm: 22,
+      bodyStartMm: 120,
+    },
+  ])(
+    "derives $templateId preview, export, and DOCX geometry from proposal tokens",
+    ({ templateId, leftMm, rightMm, bodyStartMm }) => {
+      const stylePreset = resolveVerbatiStyle({
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "expert",
+        palette: "terre",
+      });
+      const previewTokens = normalizeProposalPreviewTokens({
+        templateId,
+        documentTypography: getProposalDocumentTypography("expert", stylePreset),
+        stylePreset,
+      });
+      const exportProfile = normalizeProposalExportTokens({
+        mode: "styled",
+        proposalTemplateId: templateId,
+        stylePreset,
+      });
+      const exportVars = serializeExportVars(exportProfile.canonical);
+      const docxTokens = resolveProposalDocxSurfaceTokens(
+        exportProfile.canonical,
+      );
+
+      expect(previewTokens.geometry.page.widthMm).toBe(210);
+      expect(previewTokens.geometry.page.heightMm).toBe(297);
+      expect(previewTokens.geometry.page.margin.leftMm).toBe(leftMm);
+      expect(previewTokens.geometry.page.margin.rightMm).toBe(rightMm);
+      expect(previewTokens.geometry.template?.bodyStartMm).toBe(bodyStartMm);
+      expect(exportProfile.shell).toBe("onecol");
+      expect(exportProfile.canonical.geometry.template).toEqual(
+        previewTokens.geometry.template,
+      );
+      expect(exportVars["--page-width"]).toBe("210mm");
+      expect(exportVars["--page-height"]).toBe("297mm");
+      expect(docxTokens.pageMarginsTwip.left).toBe(
+        mmToTwip(exportProfile.canonical.geometry.page.margin.leftMm),
+      );
+      expect(docxTokens.pageMarginsTwip.right).toBe(
+        mmToTwip(exportProfile.canonical.geometry.page.margin.rightMm),
+      );
+    },
+  );
 });
   it("resolves workshop preview and export resume tokens from the exact template id", () => {
     const stylePreset = resolveVerbatiStyle({

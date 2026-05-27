@@ -2219,6 +2219,12 @@ body,
   overflow: auto;
 }
 
+.forge-template-panel--proposal-heading .forge-template-panel__content {
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .forge-rail-drawer {
   min-height: 0;
   height: 100%;

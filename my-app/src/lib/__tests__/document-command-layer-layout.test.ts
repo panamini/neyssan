@@ -275,6 +275,51 @@ describe("computeDocumentCommandLayerLayout", () => {
     expect(intersects(layout.askRect, layout.toolbarRect)).toBe(false);
   });
 
+  it("places the toolbar above a pre-paper context block when one is present", () => {
+    const paperRect = {
+      left: 240,
+      top: 210,
+      width: 794,
+      height: 1123,
+    };
+    const jobContextRect = {
+      left: paperRect.left,
+      top: STICKY_TOP + TOOLBAR_HEIGHT + GAP + 16,
+      width: paperRect.width,
+      height: 82,
+    };
+    const layout = computeDocumentCommandLayerLayout({
+      canvasRect: {
+        left: 0,
+        top: 0,
+        width: 1280,
+        height: 900,
+      },
+      paperRect,
+      toolbarTop: jobContextRect.top,
+      zoom: 1,
+      toolbarNaturalWidth: 680,
+      toolbarMinWidth: TOOLBAR_MIN_WIDTH,
+      toolbarHeight: TOOLBAR_HEIGHT,
+      stickyTop: STICKY_TOP,
+      askHandle: {
+        iconWidth: ASK_ICON_WIDTH,
+        height: ASK_HEIGHT,
+      },
+      safeMargin: SAFE_MARGIN,
+      gap: GAP,
+      askOffsetFromPaperTop: ASK_OFFSET_FROM_PAPER_TOP,
+      viewportWidth: 1280,
+    });
+
+    expect(layout.commandLayerY).toBe(jobContextRect.top - TOOLBAR_HEIGHT - GAP);
+    expect(bottom(layout.toolbarRect) + GAP).toBeLessThanOrEqual(
+      jobContextRect.top,
+    );
+    expect(layout.askRect.top).toBe(paperRect.top + ASK_OFFSET_FROM_PAPER_TOP);
+    expect(intersects(layout.toolbarRect, jobContextRect)).toBe(false);
+  });
+
   it("keeps Ask on the paper side while the paper-side placement fits outside the toolbar", () => {
     const paperRect = {
       left: 320,

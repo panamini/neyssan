@@ -85,6 +85,47 @@ describe("ProposalHeadingFields", () => {
     );
   });
 
+  it("supports structured applicant contact fields in the applicant group", () => {
+    render(
+      <ProposalHeadingFields
+        variableFields={[
+          fields()[1],
+          fields()[2],
+          {
+            id: "contact-email",
+            label: "Email",
+            value: "alex@example.com",
+            onChange: vi.fn(),
+          },
+          {
+            id: "contact-phone",
+            label: "Phone",
+            value: "+33 6 00 00 00 00",
+            onChange: vi.fn(),
+          },
+          {
+            id: "contact-location",
+            label: "City / location",
+            value: "Paris",
+            onChange: vi.fn(),
+          },
+        ]}
+      />,
+    );
+
+    const applicantGroup = screen
+      .getByText("Applicant details")
+      .closest(".dasti-proposal-skeleton-rail__variable-group");
+
+    expect(applicantGroup).toBeTruthy();
+    expect(within(applicantGroup as HTMLElement).getByLabelText("Email")).toHaveValue(
+      "alex@example.com",
+    );
+    expect(within(applicantGroup as HTMLElement).getByLabelText("Phone")).toHaveValue(
+      "+33 6 00 00 00 00",
+    );
+  });
+
   it("preserves field callbacks", () => {
     const onChange = vi.fn();
     const onBlur = vi.fn();

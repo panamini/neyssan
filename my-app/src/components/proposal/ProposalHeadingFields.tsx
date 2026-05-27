@@ -18,7 +18,16 @@ const HEADING_FIELD_GROUPS = [
   {
     id: "applicant",
     label: "Applicant details",
-    fieldIds: ["applicant-name", "applicant-role", "contact-line"],
+    fieldIds: [
+      "applicant-name",
+      "applicant-role",
+      "contact-email",
+      "contact-phone",
+      "contact-location",
+      "contact-linkedin",
+      "contact-website",
+      "contact-line",
+    ],
   },
   {
     id: "recipient",

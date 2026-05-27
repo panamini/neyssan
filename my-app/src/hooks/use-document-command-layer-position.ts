@@ -16,6 +16,7 @@ type DocumentCommandLayerPositionOptions = {
   stageRef: React.RefObject<HTMLElement | null>;
   paperRef: React.RefObject<HTMLElement | null>;
   paperAnchorSelector: string;
+  toolbarTopAnchorSelector?: string;
   commandCanvasSelector?: string;
   cssVarPrefix: string;
   toolbarSelector?: string;
@@ -74,6 +75,7 @@ export function useDocumentCommandLayerPosition({
   stageRef,
   paperRef,
   paperAnchorSelector,
+  toolbarTopAnchorSelector,
   commandCanvasSelector,
   cssVarPrefix,
   toolbarSelector,
@@ -186,6 +188,9 @@ export function useDocumentCommandLayerPosition({
         };
       observePaperAnchor(anchorCandidate.element);
       const anchorRect = anchorCandidate.rect;
+      const toolbarTopAnchorRect = toolbarTopAnchorSelector
+        ? paper.querySelector<HTMLElement>(toolbarTopAnchorSelector)?.getBoundingClientRect()
+        : null;
       const viewportWidth = window.innerWidth;
       const visibleCanvasLeft = Math.max(commandCanvasRect.left, 0);
       const visibleCanvasRight = Math.min(commandCanvasRect.right, viewportWidth);
@@ -200,6 +205,12 @@ export function useDocumentCommandLayerPosition({
         width: anchorRect.width,
         height: anchorRect.height,
       };
+      const toolbarTop =
+        toolbarTopAnchorRect &&
+        toolbarTopAnchorRect.width > 0 &&
+        toolbarTopAnchorRect.height > 0
+          ? toolbarTopAnchorRect.top - stageRect.top
+          : undefined;
       const canvasRect = {
         left: visibleCanvasLeft - stageRect.left,
         top: visibleCanvasTop - stageRect.top,
@@ -231,6 +242,7 @@ export function useDocumentCommandLayerPosition({
         toolbarNaturalWidth,
         toolbarMinWidth,
         toolbarHeight: effectiveToolbarHeight,
+        toolbarTop,
         stickyTop: stickyTopViewport - stageRect.top,
         askHandle,
         safeMargin,
@@ -336,6 +348,7 @@ export function useDocumentCommandLayerPosition({
     stageRef,
     toolbarHeight,
     toolbarSelector,
+    toolbarTopAnchorSelector,
     toolbarMinWidth,
     toolbarNaturalWidth,
   ]);

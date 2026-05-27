@@ -3560,6 +3560,526 @@
   mix-blend-mode: multiply;
 }
 
+.proposal-cover-letter--director .dasti-proposal-document__page,
+.proposal-cover-letter--volk .dasti-proposal-document__page,
+.proposal-cover-letter--film-foto .dasti-proposal-document__page {
+  position: relative;
+  width: 210mm;
+  min-height: 297mm;
+  height: 297mm;
+  max-height: 297mm;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 16% 8%,
+      color-mix(in srgb, var(--proposal-document-paper) 58%, white 42%),
+      transparent 30%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--proposal-document-paper) 92%, white 8%),
+      color-mix(in srgb, var(--proposal-document-paper) 96%, var(--proposal-document-accent-ink) 4%)
+    );
+  color: var(--proposal-document-ink);
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__masthead,
+.proposal-cover-letter--director .proposal-cover-letter__sender-block,
+.proposal-cover-letter--director .proposal-cover-letter__phone-block,
+.proposal-cover-letter--director .proposal-cover-letter__meta-row,
+.proposal-cover-letter--director .proposal-cover-letter__subject-row,
+.proposal-cover-letter--director .proposal-cover-letter__body,
+.proposal-cover-letter--volk .proposal-cover-letter__volk-header,
+.proposal-cover-letter--volk .proposal-cover-letter__meta-row,
+.proposal-cover-letter--volk .proposal-cover-letter__subject-row,
+.proposal-cover-letter--volk .proposal-cover-letter__body,
+.proposal-cover-letter--volk .proposal-cover-letter__dot,
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-header,
+.proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks,
+.proposal-cover-letter--film-foto .proposal-cover-letter__meta-row,
+.proposal-cover-letter--film-foto .proposal-cover-letter__subject-row,
+.proposal-cover-letter--film-foto .proposal-cover-letter__body,
+.proposal-cover-letter--film-foto .proposal-cover-letter__dot {
+  position: absolute;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__masthead {
+  left: 25mm;
+  top: 22.8mm;
+  right: 14mm;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.75fr) auto;
+  column-gap: 9mm;
+  align-items: baseline;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
+.proposal-cover-letter--director .proposal-cover-letter__masthead-secondary,
+.proposal-cover-letter--director .proposal-cover-letter__masthead-role,
+.proposal-cover-letter--director .proposal-cover-letter__sender-label,
+.proposal-cover-letter--director .proposal-cover-letter__sender-lines p,
+.proposal-cover-letter--director .proposal-cover-letter__phone-block p,
+.proposal-cover-letter--director .proposal-cover-letter__meta-item,
+.proposal-cover-letter--director .proposal-cover-letter__subject-label,
+.proposal-cover-letter--director .proposal-cover-letter__subject-value {
+  margin: 0;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
+.proposal-cover-letter--director .proposal-cover-letter__masthead-secondary,
+.proposal-cover-letter--director .proposal-cover-letter__masthead-role,
+.proposal-cover-letter--director .proposal-cover-letter__phone-mark,
+.proposal-cover-letter--director .proposal-cover-letter__subject-label,
+.proposal-cover-letter--director .proposal-cover-letter__subject-value {
+  font-family: var(--heading-font, var(--font-heading-family));
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__sender-label,
+.proposal-cover-letter--director .proposal-cover-letter__sender-lines p,
+.proposal-cover-letter--director .proposal-cover-letter__phone-block p,
+.proposal-cover-letter--director .proposal-cover-letter__meta-item {
+  font-family: var(--body-font, var(--font-body-family));
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
+.proposal-cover-letter--director .proposal-cover-letter__masthead-secondary {
+  font-size: 6.15mm;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0;
+  color: var(--proposal-document-accent-ink);
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__masthead-role {
+  justify-self: end;
+  font-size: 6.2mm;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0;
+  color: var(--proposal-document-ink);
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__sender-block {
+  left: 25mm;
+  top: 43.5mm;
+  display: grid;
+  grid-template-columns: 16mm minmax(0, 60mm);
+  column-gap: 3mm;
+  align-items: start;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__sender-label,
+.proposal-cover-letter--director .proposal-cover-letter__sender-lines p,
+.proposal-cover-letter--director .proposal-cover-letter__phone-block p {
+  font-size: 2.15mm;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__sender-lines {
+  display: grid;
+  gap: 0.2mm;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__phone-block {
+  left: 111mm;
+  top: 43.5mm;
+  display: grid;
+  grid-template-columns: 3.4mm minmax(0, 54mm);
+  column-gap: 2mm;
+  align-items: start;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__phone-mark {
+  font-size: 6mm !important;
+  line-height: 1;
+  font-weight: 800 !important;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__meta-row {
+  left: 25mm;
+  right: 14mm;
+  top: 87.8mm;
+  display: grid;
+  grid-template-columns: 45mm 51mm 44mm minmax(0, 1fr);
+  column-gap: 8mm;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__meta-item {
+  min-width: 0;
+  font-size: 2.2mm;
+  line-height: 1.25;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__meta-item:nth-child(n + 3) {
+  color: var(--proposal-document-accent-ink);
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__subject-row {
+  left: 24mm;
+  right: 25mm;
+  top: 98.4mm;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 3mm;
+  align-items: baseline;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__subject-label {
+  font-size: 2.35mm;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--proposal-document-accent-ink);
+  text-transform: uppercase;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__subject-value {
+  font-size: 3.35mm;
+  line-height: 1.16;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__body {
+  left: 25mm;
+  top: 118mm;
+  width: min(112mm, 66ch);
+}
+
+.proposal-cover-letter--volk .dasti-proposal-document__page {
+  background:
+    radial-gradient(
+      circle at 14% 8%,
+      color-mix(in srgb, var(--proposal-document-paper) 60%, white 40%),
+      transparent 32%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--proposal-document-paper) 88%, white 12%),
+      color-mix(in srgb, var(--proposal-document-paper) 95%, var(--proposal-document-accent-ink) 5%)
+    );
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__volk-header {
+  left: 24mm;
+  top: 30.7mm;
+  right: 18mm;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+  column-gap: 10mm;
+  row-gap: 1mm;
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__volk-title,
+.proposal-cover-letter--volk .proposal-cover-letter__volk-subtitle,
+.proposal-cover-letter--volk .proposal-cover-letter__volk-sender,
+.proposal-cover-letter--volk .proposal-cover-letter__meta-item,
+.proposal-cover-letter--volk .proposal-cover-letter__subject-label,
+.proposal-cover-letter--volk .proposal-cover-letter__subject-value {
+  margin: 0;
+  color: var(--proposal-document-accent-ink);
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__volk-title,
+.proposal-cover-letter--volk .proposal-cover-letter__volk-subtitle,
+.proposal-cover-letter--volk .proposal-cover-letter__subject-label,
+.proposal-cover-letter--volk .proposal-cover-letter__subject-value {
+  font-family: var(--heading-font, var(--font-heading-family));
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__volk-sender,
+.proposal-cover-letter--volk .proposal-cover-letter__meta-item {
+  font-family: var(--body-font, var(--font-body-family));
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__volk-title {
+  font-size: 5.95mm;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__volk-title--right {
+  grid-column: 2;
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__volk-subtitle {
+  grid-column: 1 / -1;
+  font-size: 4.1mm;
+  line-height: 1;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__volk-sender {
+  grid-column: 1 / -1;
+  margin-top: 3.2mm;
+  font-size: 2.55mm;
+  line-height: 1.25;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__meta-row {
+  left: 24mm;
+  right: 18mm;
+  top: 91.7mm;
+  display: grid;
+  grid-template-columns: 50mm 46mm 40mm minmax(0, 1fr);
+  column-gap: 8mm;
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__meta-item {
+  min-width: 0;
+  font-size: 2.45mm;
+  line-height: 1.18;
+  font-weight: 800;
+  text-transform: lowercase;
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__subject-row {
+  left: 24mm;
+  right: 24mm;
+  top: 101.9mm;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 3mm;
+  align-items: baseline;
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__subject-label,
+.proposal-cover-letter--volk .proposal-cover-letter__subject-value {
+  font-size: 4.05mm;
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: lowercase;
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__subject-value {
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__body {
+  left: 24mm;
+  top: 122mm;
+  width: min(112mm, 66ch);
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__dot {
+  left: 24mm;
+  top: 260mm;
+  width: 2.2mm;
+  height: 2.2mm;
+  border-radius: 50%;
+  background: var(--proposal-document-accent-ink);
+}
+
+.proposal-cover-letter--film-foto .dasti-proposal-document__page {
+  background:
+    radial-gradient(
+      circle at 16% 7%,
+      color-mix(in srgb, var(--proposal-document-paper) 58%, white 42%),
+      transparent 32%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--proposal-document-paper) 89%, white 11%),
+      color-mix(in srgb, var(--proposal-document-paper) 96%, var(--proposal-document-accent-ink) 4%)
+    );
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-header {
+  left: 20mm;
+  top: 23.1mm;
+  right: 3mm;
+  display: grid;
+  grid-template-columns: minmax(0, 70mm) minmax(0, 1fr);
+  align-items: baseline;
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-title,
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-heading,
+.proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p,
+.proposal-cover-letter--film-foto .proposal-cover-letter__meta-item,
+.proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
+.proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
+  margin: 0;
+  color: var(--proposal-document-accent-ink);
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-title,
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-heading,
+.proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
+.proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
+  font-family: var(--heading-font, var(--font-heading-family));
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-heading {
+  min-width: 0;
+  font-size: 3.25mm;
+  line-height: 1;
+  font-weight: 700;
+  text-transform: lowercase;
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p,
+.proposal-cover-letter--film-foto .proposal-cover-letter__meta-item {
+  font-family: var(--body-font, var(--font-body-family));
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
+  grid-column: 2;
+  justify-self: end;
+  max-width: 178mm;
+  text-align: right;
+  font-size: 8.1mm;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: lowercase;
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-rule {
+  grid-column: 1 / -1;
+  margin-top: 1.7mm;
+  height: 0.32mm;
+  background: var(--proposal-document-accent-ink);
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks {
+  left: 20mm;
+  right: 8mm;
+  top: 42mm;
+  display: grid;
+  grid-template-columns: 80mm 11mm 37mm minmax(0, 1fr);
+  column-gap: 4mm;
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p {
+  min-width: 0;
+  font-size: 2.95mm;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__info-label {
+  font-weight: 700;
+  text-transform: lowercase;
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__meta-row {
+  left: 20mm;
+  right: 8mm;
+  top: 90mm;
+  display: grid;
+  grid-template-columns: 47mm 51mm 39mm minmax(0, 1fr);
+  column-gap: 8mm;
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__meta-item {
+  min-width: 0;
+  font-size: 2.85mm;
+  line-height: 1.18;
+  font-weight: 600;
+  text-transform: lowercase;
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__subject-row {
+  left: 20mm;
+  right: 22mm;
+  top: 102.3mm;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 2mm;
+  align-items: baseline;
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
+.proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
+  font-size: 3.35mm;
+  line-height: 1.16;
+  font-weight: 700;
+  color: var(--proposal-document-ink);
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__body {
+  left: 20mm;
+  top: 120mm;
+  width: min(112mm, 66ch);
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__dot {
+  left: 20mm;
+  top: 256mm;
+  width: 2.2mm;
+  height: 2.2mm;
+  border-radius: 50%;
+  background: var(--proposal-document-accent-ink);
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__body,
+.proposal-cover-letter--volk .proposal-cover-letter__body,
+.proposal-cover-letter--film-foto .proposal-cover-letter__body {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  max-width: min(112mm, 66ch);
+  padding: 0;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__body .dasti-proposal-document__salutation,
+.proposal-cover-letter--director .proposal-cover-letter__body .dasti-proposal-document__paragraph,
+.proposal-cover-letter--director .proposal-cover-letter__body .dasti-proposal-document__signoff,
+.proposal-cover-letter--director .proposal-cover-letter__body .dasti-proposal-document__signature,
+.proposal-cover-letter--director .proposal-cover-letter__body .dasti-proposal-document__raw-body,
+.proposal-cover-letter--volk .proposal-cover-letter__body .dasti-proposal-document__salutation,
+.proposal-cover-letter--volk .proposal-cover-letter__body .dasti-proposal-document__paragraph,
+.proposal-cover-letter--volk .proposal-cover-letter__body .dasti-proposal-document__signoff,
+.proposal-cover-letter--volk .proposal-cover-letter__body .dasti-proposal-document__signature,
+.proposal-cover-letter--volk .proposal-cover-letter__body .dasti-proposal-document__raw-body,
+.proposal-cover-letter--film-foto .proposal-cover-letter__body .dasti-proposal-document__salutation,
+.proposal-cover-letter--film-foto .proposal-cover-letter__body .dasti-proposal-document__paragraph,
+.proposal-cover-letter--film-foto .proposal-cover-letter__body .dasti-proposal-document__signoff,
+.proposal-cover-letter--film-foto .proposal-cover-letter__body .dasti-proposal-document__signature,
+.proposal-cover-letter--film-foto .proposal-cover-letter__body .dasti-proposal-document__raw-body {
+  font-family: var(--proposal-document-font-family);
+  font-size: 3.15mm;
+  line-height: 1.48;
+  color: var(--proposal-document-ink);
+  overflow-wrap: break-word;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__body .dasti-proposal-document__signature,
+.proposal-cover-letter--volk .proposal-cover-letter__body .dasti-proposal-document__signature,
+.proposal-cover-letter--film-foto .proposal-cover-letter__body .dasti-proposal-document__signature {
+  font-family: var(--proposal-signature-font-family, var(--proposal-document-font-family));
+  font-weight: var(--proposal-signature-font-weight, inherit);
+}
+
+.proposal-cover-letter--director .dasti-proposal-document__page--continuation .proposal-cover-letter__body,
+.proposal-cover-letter--volk .dasti-proposal-document__page--continuation .proposal-cover-letter__body,
+.proposal-cover-letter--film-foto .dasti-proposal-document__page--continuation .proposal-cover-letter__body {
+  top: 35mm;
+}
+
 .dasti-proposal-document--volk-register .dasti-proposal-document__page {
   position: relative;
   grid-template-columns: minmax(0, 1fr);
@@ -7941,6 +8461,13 @@
   padding-block-start: var(--document-command-layer-rest-gutter);
 }
 
+.dasti-proposal-skeleton-stage[data-toolbar-before-content="true"] {
+  padding-block-start: calc(
+    var(--document-command-layer-rest-gutter) +
+    var(--document-viewer-toolbar-block-size) + var(--space-3)
+  );
+}
+
 .dasti-proposal-skeleton-stage__bar {
   --proposal-command-toolbar-min-width: 300px;
   position: fixed;
@@ -8528,11 +9055,48 @@
   background: color-mix(in srgb, var(--sf1) 74%, transparent);
 }
 
+.dasti-proposal-template-job-empty__head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
 .dasti-proposal-template-job-empty p {
   margin: 0;
+  min-width: 0;
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-weight: 560;
+}
+
+.dasti-proposal-template-job-empty__dismiss {
+  appearance: none;
+  flex: 0 0 var(--control-xs);
+  inline-size: var(--control-xs);
+  block-size: var(--control-xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-toolbar-control, var(--radius-control));
+  background: transparent;
+  color: var(--tm2);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-proposal-template-job-empty__dismiss:hover,
+.dasti-proposal-template-job-empty__dismiss:focus-visible {
+  border-color: color-mix(in srgb, var(--color-border) 44%, transparent);
+  background: var(--proposal-chrome-control-hover-bg);
+  color: var(--ti);
+  outline: none;
 }
 
 .dasti-proposal-template-job-empty__actions {
