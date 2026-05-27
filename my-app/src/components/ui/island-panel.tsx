@@ -4,6 +4,8 @@ import React from "react";
 import clsx from "clsx";
 import { X } from "@/lib/icons";
 import { BodyPortal } from "@/components/ui/body-portal";
+import { translateUi } from "@/lib/i18n";
+import { useUiLanguagePreference } from "@/lib/ui-preferences";
 
 type IslandPanelAction = {
   label: string;
@@ -63,6 +65,8 @@ export function IslandPanel({
   bodyClassName,
   showCloseButton = true,
 }: IslandPanelProps): JSX.Element | null {
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const closePanelLabel = translateUi(resolvedLanguage, "common.closePanel");
   const titleId = React.useId();
   const panelRef = React.useRef<HTMLElement | null>(null);
   const returnFocusRef = React.useRef<HTMLElement | null>(null);
@@ -217,7 +221,7 @@ export function IslandPanel({
                 <button
                   type="button"
                   className="ds-island-panel__close"
-                  aria-label="Close panel"
+                  aria-label={closePanelLabel}
                   onClick={() => onOpenChange(false)}
                 >
                   <X size={16} strokeWidth={1.8} aria-hidden="true" />

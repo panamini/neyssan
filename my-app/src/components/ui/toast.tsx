@@ -10,6 +10,8 @@ import React, {
   useState,
 } from "react";
 import clsx from "clsx";
+import { translateUi } from "@/lib/i18n";
+import { useUiLanguagePreference } from "@/lib/ui-preferences";
 
 type LegacyToastVariant =
   | "info"
@@ -193,6 +195,8 @@ function ToastContainer({
 }
 
 function Toast({ item, onClose }: { item: ToastItem; onClose: () => void }) {
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const dismissLabel = translateUi(resolvedLanguage, "common.dismiss");
   const timerRef = useRef<number | null>(null);
   const startedAtRef = useRef(0);
   const remainingRef = useRef(item.durationMs);
@@ -243,7 +247,7 @@ function Toast({ item, onClose }: { item: ToastItem; onClose: () => void }) {
         <div className="ds-toast__head">
           <div className="ds-toast__title">{item.title}</div>
           <button
-            aria-label="Dismiss toast."
+            aria-label={dismissLabel}
             type="button"
             onClick={onClose}
             className="ds-toast__close"
