@@ -1666,12 +1666,21 @@ body,
 /* ── Auth route: one app-owned card; Clerk inherits dasti chrome tokens ── */
 
 .dasti-auth-page {
+  --dasti-auth-page-padding-block: clamp(var(--space-5), 5vw, var(--space-8));
+  --dasti-auth-page-padding-inline: clamp(var(--space-5), 5vw, var(--space-8));
   box-sizing: border-box;
-  display: grid;
-  min-height: 100dvh;
-  place-items: center;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 0;
+  block-size: 100dvh;
   overflow-y: auto;
-  padding: clamp(var(--space-5), 5vw, var(--space-8));
+  overscroll-behavior: contain;
+  padding: var(--dasti-auth-page-padding-block)
+    var(--dasti-auth-page-padding-inline);
+  -webkit-overflow-scrolling: touch;
   background: radial-gradient(
       circle at 50% 0%,
       color-mix(in srgb, var(--color-surface-raised) 78%, transparent) 0%,
@@ -1681,8 +1690,14 @@ body,
 }
 
 .dasti-auth-card {
+  box-sizing: border-box;
+  flex: 0 0 auto;
   width: min(100%, var(--card-rail-sm));
-  overflow: hidden;
+  max-height: calc(100dvh - (var(--dasti-auth-page-padding-block) * 2));
+  min-height: 0;
+  margin-block: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-surface);
   background: var(--color-surface-raised);
@@ -1772,6 +1787,10 @@ body,
 .dasti-auth-card .cl-rootBox,
 .dasti-auth-card .cl-cardBox,
 .dasti-auth-card .cl-card {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
   width: 100%;
 }
 
@@ -1876,12 +1895,76 @@ body,
 
 @media (max-width: 540px) {
   .dasti-auth-page {
-    align-items: stretch;
-    padding: var(--space-4);
+    --dasti-auth-page-padding-block: var(--space-4);
+    --dasti-auth-page-padding-inline: var(--space-4);
   }
 
   .dasti-auth-card {
     width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  .dasti-auth-card__list {
+    display: none;
+  }
+
+  .dasti-auth-card__header {
+    padding-block: var(--space-4) var(--space-2);
+  }
+}
+
+@media (max-height: 760px) {
+  .dasti-auth-page {
+    --dasti-auth-page-padding-block: var(--space-3);
+  }
+
+  .dasti-auth-card__header {
+    padding-block: var(--space-4) var(--space-2);
+  }
+
+  .dasti-auth-card__back {
+    margin-bottom: var(--space-3);
+  }
+
+  .dasti-auth-card__title {
+    font-size: var(--text-title-size);
+    line-height: var(--text-title-line);
+  }
+
+  .dasti-auth-card__subtitle {
+    margin-top: var(--space-1);
+  }
+
+  .dasti-auth-card__list {
+    display: none;
+  }
+
+  .dasti-auth-card .cl-main {
+    padding-block: var(--space-2) var(--space-4);
+  }
+
+  .dasti-auth-card .cl-footerAction {
+    padding-block: var(--space-3);
+  }
+}
+
+@media (max-height: 640px) {
+  .dasti-auth-page {
+    --dasti-auth-page-padding-block: var(--space-2);
+  }
+
+  .dasti-auth-card__header {
+    padding-block: var(--space-3) var(--space-1);
+  }
+
+  .dasti-auth-card__back,
+  .dasti-auth-card__subtitle {
+    display: none;
+  }
+
+  .dasti-auth-card .cl-main {
+    padding-block: var(--space-1) var(--space-3);
   }
 }
 
