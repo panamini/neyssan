@@ -552,6 +552,103 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     },
   );
 
+  it("does not fall back to the applicant role in recipient metadata", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="Dear Hiring Manager,\n\nI can support the team."
+        proposalType="cover_letter"
+        templateId="film-foto-letterhead"
+        railTitle="Robert Cooper"
+        railMeta="Security Guard"
+        contactLine="email@email.com · Los Angeles"
+        letterDate="May 12, 2026"
+        recipientDetails={"Hiring Manager\n\nUs Smart Tools\n\n\nParis"}
+        documentTitle="Application for Security Guard"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        applicantHeader={{
+          name: "Robert Cooper",
+          role: "Security Guard",
+          company: "Acme",
+          email: "email@email.com",
+          phone: "3868683442",
+          linkedin: "linkedin.in",
+          website: "",
+          location: "Los Angeles",
+          tag: null,
+        }}
+      />,
+    );
+
+    const metaRow = container.querySelector(
+      ".proposal-cover-letter--film-foto .proposal-cover-letter__meta-row",
+    );
+    const metaItems = Array.from(
+      metaRow?.querySelectorAll(".proposal-cover-letter__meta-item") ?? [],
+    ).map((node) => node.textContent);
+
+    expect(metaItems).toEqual([
+      "Hiring Manager",
+      "Us Smart Tools",
+      "",
+      "May 12, 2026",
+    ]);
+  });
+
+  it("prioritizes a long Film und Foto role over the optional center title", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="Dear Hiring Manager,\n\nI can support the team."
+        proposalType="cover_letter"
+        templateId="film-foto-letterhead"
+        railTitle="Robert Cooper"
+        railMeta="Security Guard"
+        contactLine="email@email.com · Los Angeles"
+        letterDate="May 12, 2026"
+        recipientDetails={"Hiring Manager\n\nUs Smart Tools"}
+        documentTitle="Application for Security Guard"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        applicantHeader={{
+          name: "Robert Cooper",
+          role: "Security Guard",
+          company: "Acme",
+          email: "email@email.com",
+          phone: "3868683442",
+          linkedin: "linkedin.in",
+          website: "",
+          location: "Los Angeles",
+          tag: null,
+        }}
+      />,
+    );
+
+    const header = container.querySelector(
+      ".proposal-cover-letter--film-foto .proposal-cover-letter__film-header",
+    );
+
+    expect(header?.className).toContain(
+      "proposal-cover-letter__film-header--role-priority",
+    );
+    expect(
+      header?.querySelector(".proposal-cover-letter__film-company"),
+    ).toBeNull();
+    expect(
+      header?.querySelector(".proposal-cover-letter__film-title")?.textContent,
+    ).toBe("Security Guard");
+    expect(container.textContent).toContain("Us Smart Tools");
+  });
+
   it.each([
     {
       templateId: "director-letterhead" as const,
@@ -577,7 +674,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
           proposalType="cover_letter"
           templateId={templateId}
           railTitle="Robert Cooper"
-          railMeta="Senior Security Specialist"
+          railMeta="Designer"
           contactLine="email@email.com · Los Angeles"
           letterDate="May 12, 2026"
           recipientDetails="Hiring Manager"
@@ -591,7 +688,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
           }}
           applicantHeader={{
             name: "Robert Cooper",
-            role: "Senior Security Specialist",
+            role: "Designer",
             company: "Cooper Studio",
             email: "email@email.com",
             phone: "",
@@ -607,7 +704,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       expect(root?.querySelector(secondarySelector)?.textContent).toBe(
         "Cooper Studio",
       );
-      expect(root?.textContent).toContain("Senior Security Specialist");
+      expect(root?.textContent).toContain("Designer");
     },
   );
 

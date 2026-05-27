@@ -449,8 +449,10 @@ describe("proposal heading JSON pipeline", () => {
           "role": "Operations Associate",
         },
         "autoLetterDate": "Paris, May 11, 2026",
-        "autoRecipientDetails": "Talent Acquisition Lead
+        "autoRecipientDetails": "
+      Talent Acquisition Lead
       Northstar Studio
+
       jobs@northstar.example
       Paris",
         "autoSalutation": "Dear Talent Acquisition Lead,",
@@ -594,10 +596,10 @@ describe("proposal heading JSON pipeline", () => {
     });
 
     expect(result.resolvedRecipientDetails).toBe(
-      "Talent Acquisition Lead\nNorthstar Studio\njobs@northstar.example\nParis",
+      "\nTalent Acquisition Lead\nNorthstar Studio\n\njobs@northstar.example\nParis",
     );
     expect(result.previewSource.recipientDetails).toBe(
-      "Talent Acquisition Lead\nNorthstar Studio\njobs@northstar.example\nParis",
+      "Talent Acquisition Lead\nNorthstar Studio\n\njobs@northstar.example\nParis",
     );
     expect(result.resolvedSalutation).toBe("Dear Talent Acquisition Lead,");
     expect(result.exportSource.body[0]).toEqual({
