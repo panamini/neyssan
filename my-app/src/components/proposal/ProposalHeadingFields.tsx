@@ -21,6 +21,7 @@ const HEADING_FIELD_GROUPS = [
     fieldIds: [
       "applicant-name",
       "applicant-role",
+      "applicant-company",
       "contact-email",
       "contact-phone",
       "contact-location",

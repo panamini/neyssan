@@ -110,6 +110,7 @@ type StructuredHeaderValues = {
 type ProposalLetterheadViewModel = {
   candidateName: string;
   candidateRole: string;
+  candidateCompany: string;
   candidateContactLine: string;
   candidateDirectorContactLine: string;
   candidateDirectorContactMark: "T" | "@";
@@ -269,6 +270,7 @@ function buildProposalLetterheadViewModel(args: {
     args.railMeta?.trim() ||
     args.documentMeta?.trim() ||
     "";
+  const candidateCompany = args.applicantHeader?.company?.trim() ?? "";
   const candidatePhone = args.applicantHeader?.phone?.trim() ?? "";
   const candidateEmail = args.applicantHeader?.email?.trim() ?? "";
   const candidateWebsite = args.applicantHeader?.website?.trim() ?? "";
@@ -327,17 +329,20 @@ function buildProposalLetterheadViewModel(args: {
     ? recipientFields.role?.trim() ?? ""
     : "";
   const subject = visibility.showSubject ? args.documentTitle?.trim() ?? "" : "";
-  const secondaryTitle = resolveProposalLetterheadShortTitle({
-    recipientFields,
-    candidateLocation: resolvedContactParts.location,
-    showRecipient: visibility.showRecipient,
-  });
+  const secondaryTitle =
+    candidateCompany ||
+    resolveProposalLetterheadShortTitle({
+      recipientFields,
+      candidateLocation: "",
+      showRecipient: visibility.showRecipient,
+    });
   const metaRole = recipientRole || candidateRole;
   const shortRoleTitle = candidateRole || recipientRole;
 
   return {
     candidateName,
     candidateRole,
+    candidateCompany,
     candidateContactLine,
     candidateDirectorContactLine,
     candidateDirectorContactMark,
@@ -410,11 +415,22 @@ export function ProposalCoverLetterDirectorTemplate({
   isContinuationPage,
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
+  const hasSecondaryTitle = Boolean(viewModel.secondaryTitle);
+
   return (
     <>
       {!isContinuationPage ? (
         <>
-          <header className="proposal-cover-letter__masthead">
+          <header
+            className={[
+              "proposal-cover-letter__masthead",
+              hasSecondaryTitle
+                ? ""
+                : "proposal-cover-letter__masthead--no-secondary",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
             {viewModel.candidateName ? (
               <p className="proposal-cover-letter__masthead-primary">
                 {viewModel.candidateName}
@@ -517,12 +533,22 @@ export function ProposalCoverLetterFilmFotoTemplate({
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
   const largeTitle = viewModel.shortRoleTitle || viewModel.secondaryTitle;
+  const hasSecondaryTitle = Boolean(viewModel.secondaryTitle);
 
   return (
     <>
       {!isContinuationPage ? (
         <>
-          <header className="proposal-cover-letter__film-header">
+          <header
+            className={[
+              "proposal-cover-letter__film-header",
+              hasSecondaryTitle
+                ? ""
+                : "proposal-cover-letter__film-header--no-company",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
             {viewModel.candidateName ? (
               <p className="proposal-cover-letter__film-heading">
                 {viewModel.candidateName}
@@ -539,28 +565,30 @@ export function ProposalCoverLetterFilmFotoTemplate({
             <span className="proposal-cover-letter__film-rule" />
           </header>
           <section className="proposal-cover-letter__info-blocks">
-            <div>
-              <p className="proposal-cover-letter__info-label">sender</p>
-              {viewModel.candidateFilmSenderLine ? (
+            {viewModel.candidateFilmSenderLine ? (
+              <div>
+                <p className="proposal-cover-letter__info-label">sender</p>
                 <p>{viewModel.candidateFilmSenderLine}</p>
-              ) : null}
-            </div>
-            <div>
-              <p className="proposal-cover-letter__info-label">phone</p>
-              {viewModel.candidatePhone ? <p>{viewModel.candidatePhone}</p> : null}
-            </div>
-            <div>
-              <p className="proposal-cover-letter__info-label">portfolio</p>
-              {viewModel.candidateWebsite ? (
+              </div>
+            ) : null}
+            {viewModel.candidatePhone ? (
+              <div>
+                <p className="proposal-cover-letter__info-label">phone</p>
+                <p>{viewModel.candidatePhone}</p>
+              </div>
+            ) : null}
+            {viewModel.candidateWebsite ? (
+              <div>
+                <p className="proposal-cover-letter__info-label">portfolio</p>
                 <p>{viewModel.candidateWebsite}</p>
-              ) : null}
-            </div>
-            <div>
-              <p className="proposal-cover-letter__info-label">company</p>
-              {viewModel.recipientCompany ? (
+              </div>
+            ) : null}
+            {viewModel.recipientCompany ? (
+              <div>
+                <p className="proposal-cover-letter__info-label">company</p>
                 <p>{viewModel.recipientCompany}</p>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
           </section>
           <ProposalCoverLetterMetaRow viewModel={viewModel} />
           <ProposalCoverLetterSubjectRow viewModel={viewModel} />

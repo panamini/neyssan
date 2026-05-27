@@ -647,6 +647,7 @@ const COMPOSE_TOOLBAR_VISIBLE_VOICE_PRESETS = new Set<
 const FALLBACK_PROPOSAL_APPLICANT_HEADER: ProposalApplicantHeaderData = {
   name: null,
   role: null,
+  company: null,
   email: null,
   phone: null,
   linkedin: null,
@@ -665,6 +666,7 @@ function hasApplicantHeaderContent(
   return Boolean(
     header.name ||
       header.role ||
+      header.company ||
       header.email ||
       header.phone ||
       header.website ||
@@ -787,6 +789,7 @@ type ProposalDocumentMetadata = DocumentStyleMetadata & {
   templateBundleId?: ProposalTemplateBundleId;
   applicantName?: string;
   applicantRole?: string;
+  applicantCompany?: string;
   contactLine?: string;
   letterDate?: string;
   recipientDetails?: string;
@@ -3132,6 +3135,8 @@ export function ProposalForge(): JSX.Element {
         defaultPreviewApplicantHeader.role ||
         "",
     );
+  const [proposalApplicantCompany, setProposalApplicantCompany] =
+    React.useState<string>(storedOutputDraft?.proposalApplicantCompany || "");
   const [proposalContactLine, setProposalContactLine] = React.useState<string>(
     storedOutputDraft?.proposalContactLine ?? defaultPreviewContactLine,
   );
@@ -3383,6 +3388,7 @@ export function ProposalForge(): JSX.Element {
   const headingDirtyRef = React.useRef({
     applicantName: Boolean(storedOutputDraft?.proposalApplicantName),
     applicantRole: Boolean(storedOutputDraft?.proposalApplicantRole),
+    applicantCompany: Boolean(storedOutputDraft?.proposalApplicantCompany),
     contactLine: Boolean(storedOutputDraft?.proposalContactLine),
     letterDate: Boolean(storedOutputDraft?.proposalLetterDate),
     recipientDetails: Boolean(storedOutputDraft?.proposalRecipientDetails),
@@ -3400,6 +3406,7 @@ export function ProposalForge(): JSX.Element {
       headingDirtyRef.current = {
         applicantName: false,
         applicantRole: false,
+        applicantCompany: false,
         contactLine: false,
         letterDate: false,
         recipientDetails: false,
@@ -3456,6 +3463,13 @@ export function ProposalForge(): JSX.Element {
     (value: string) => {
       markHeadingFieldDirty("applicantRole");
       setProposalApplicantRole(value);
+    },
+    [markHeadingFieldDirty],
+  );
+  const handleProposalApplicantCompanyChange = React.useCallback(
+    (value: string) => {
+      markHeadingFieldDirty("applicantCompany");
+      setProposalApplicantCompany(value);
     },
     [markHeadingFieldDirty],
   );
@@ -3537,6 +3551,13 @@ export function ProposalForge(): JSX.Element {
         current,
         previousAuto: previousAuto.role,
         nextAuto: nextAuto.role,
+      });
+    });
+    setProposalApplicantCompany((current) => {
+      return resolveHeadingFieldFromAuto("applicantCompany", {
+        current,
+        previousAuto: "",
+        nextAuto: "",
       });
     });
     setProposalContactLine((current) => {
@@ -4924,6 +4945,7 @@ export function ProposalForge(): JSX.Element {
       buildProposalHeadingMetadataPatch({
         applicantName: sanitizeProposalApplicantName(proposalApplicantName),
         applicantRole: proposalApplicantRole,
+        applicantCompany: proposalApplicantCompany,
         contactLine: proposalContactLine,
         letterDate: proposalLetterDate,
         recipientDetails: proposalRecipientDetails,
@@ -4955,6 +4977,7 @@ export function ProposalForge(): JSX.Element {
     proposalRenderMetadata,
     proposalApplicantName,
     proposalApplicantRole,
+    proposalApplicantCompany,
     proposalContactLine,
     proposalContent,
     proposalHeaderVisibility,
@@ -6400,6 +6423,7 @@ export function ProposalForge(): JSX.Element {
       );
       setProposalApplicantName(defaultPreviewApplicantHeader.name || "");
       setProposalApplicantRole(defaultPreviewApplicantHeader.role || "");
+      setProposalApplicantCompany("");
       setProposalContactLine(defaultPreviewContactLine);
       setProposalLetterDate(
         getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
@@ -6489,6 +6513,7 @@ export function ProposalForge(): JSX.Element {
       proposalStyleChoice: "auto",
       proposalApplicantName: nextApplicantName,
       proposalApplicantRole: nextApplicantRole,
+      proposalApplicantCompany: "",
       proposalContactLine: defaultPreviewContactLine,
       proposalLetterDate: nextLetterDate,
       proposalRecipientDetails: "",
@@ -6991,6 +7016,12 @@ export function ProposalForge(): JSX.Element {
           "applicantRole",
         ) ?? "",
       );
+      setProposalApplicantCompany(
+        resolveProposalHeadingText(
+          openedSavedProposal.metadata,
+          "applicantCompany",
+        ) ?? "",
+      );
       setProposalContactLine(
         resolveProposalHeadingText(
           openedSavedProposal.metadata,
@@ -7212,6 +7243,9 @@ export function ProposalForge(): JSX.Element {
       proposalStyleChoice: nextStyleChoice,
       proposalApplicantName: nextApplicantName,
       proposalApplicantRole: nextApplicantRole,
+      proposalApplicantCompany:
+        resolveProposalHeadingText(draftProposal.metadata, "applicantCompany") ??
+        "",
       proposalContactLine: nextContactLine,
       proposalLetterDate: nextLetterDate,
       proposalRecipientDetails: nextRecipientDetails,
@@ -8061,6 +8095,7 @@ export function ProposalForge(): JSX.Element {
         proposalStyleChoice,
         proposalApplicantName: nextApplicantName,
         proposalApplicantRole: nextApplicantRole,
+        proposalApplicantCompany,
         proposalContactLine: nextContactLine,
         proposalLetterDate,
         proposalRecipientDetails,
@@ -8140,6 +8175,7 @@ export function ProposalForge(): JSX.Element {
           ...buildProposalHeadingMetadataPatch({
             applicantName: nextApplicantName,
             applicantRole: nextApplicantRole,
+            applicantCompany: proposalApplicantCompany,
             contactLine: nextContactLine,
             letterDate:
               proposalLetterDate ||
@@ -8208,6 +8244,7 @@ export function ProposalForge(): JSX.Element {
       formatProposalTypeLabel,
       proposalApplicantName,
       proposalApplicantRole,
+      proposalApplicantCompany,
       proposalContactLine,
       proposalCustomAccentHex,
       proposalDocumentTitle,
@@ -9128,6 +9165,11 @@ export function ProposalForge(): JSX.Element {
           openedSavedProposal.metadata,
           "applicantRole",
         ) ?? "";
+      const restoredApplicantCompany =
+        resolveProposalHeadingText(
+          openedSavedProposal.metadata,
+          "applicantCompany",
+        ) ?? "";
       const restoredContactLine =
         resolveProposalHeadingText(
           openedSavedProposal.metadata,
@@ -9169,6 +9211,7 @@ export function ProposalForge(): JSX.Element {
           ...buildProposalHeadingMetadataPatch({
             applicantName: restoredApplicantName,
             applicantRole: restoredApplicantRole,
+            applicantCompany: restoredApplicantCompany,
             contactLine: restoredContactLine,
             letterDate: restoredLetterDate,
             recipientDetails: restoredRecipientDetails,
@@ -9256,6 +9299,7 @@ export function ProposalForge(): JSX.Element {
       setProposalCustomAccentHex(restoredCustomAccentHex);
       setProposalApplicantName(restoredApplicantName);
       setProposalApplicantRole(restoredApplicantRole);
+      setProposalApplicantCompany(restoredApplicantCompany);
       setProposalContactLine(restoredContactLine);
       setProposalLetterDate(restoredLetterDate);
       setProposalRecipientDetails(restoredRecipientDetails);
@@ -9405,6 +9449,7 @@ export function ProposalForge(): JSX.Element {
       setProposalWorkspaceStyle(null);
       setProposalApplicantName(defaultPreviewApplicantHeader.name || "");
       setProposalApplicantRole(defaultPreviewApplicantHeader.role || "");
+      setProposalApplicantCompany("");
       setProposalContactLine(defaultPreviewContactLine);
       setProposalLetterDate(
         getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
@@ -9903,6 +9948,7 @@ export function ProposalForge(): JSX.Element {
     () => ({
       name: sanitizeProposalApplicantName(proposalApplicantName) || null,
       role: proposalApplicantRole.trim() || null,
+      company: proposalApplicantCompany.trim() || null,
       email: null,
       phone: null,
       linkedin: null,
@@ -9910,7 +9956,7 @@ export function ProposalForge(): JSX.Element {
       location: null,
       tag: null,
     }),
-    [proposalApplicantName, proposalApplicantRole],
+    [proposalApplicantName, proposalApplicantRole, proposalApplicantCompany],
   );
   const proposalContentSalutation = React.useMemo(
     () => readProposalSalutation(proposalContent),
@@ -11032,6 +11078,16 @@ export function ProposalForge(): JSX.Element {
         },
       },
       {
+        id: "applicant-company",
+        label: "Applicant company / studio",
+        value: proposalApplicantCompany,
+        placeholder: "Studio, company, or practice",
+        onChange: handleProposalApplicantCompanyChange,
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
         id: "contact-email",
         label: "Email",
         value: proposalStructuredContactFields.email,
@@ -11146,12 +11202,14 @@ export function ProposalForge(): JSX.Element {
       handleProposalDocumentTitleChange,
       handleProposalApplicantNameChange,
       handleProposalApplicantRoleChange,
+      handleProposalApplicantCompanyChange,
       handleProposalStructuredContactChange,
       handleProposalLetterDateChange,
       handleProposalRecipientDetailsChange,
       handleProposalSalutationChange,
       proposalApplicantName,
       proposalApplicantRole,
+      proposalApplicantCompany,
       proposalStructuredContactFields,
       proposalDocumentTitle,
       proposalLetterDate,

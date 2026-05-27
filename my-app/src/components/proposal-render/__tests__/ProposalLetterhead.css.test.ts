@@ -72,9 +72,15 @@ describe("proposal letterhead CSS", () => {
     expect(proposalCss).not.toContain("width: 168mm;");
   });
 
-  it("keeps top letterhead title slots on one line", () => {
+  it("truncates optional top title slots without ellipsizing the role", () => {
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__masthead-primary,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-title\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*text-overflow:\s*ellipsis;[\s\S]*\}/,
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__masthead-primary,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-company\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*text-overflow:\s*ellipsis;[\s\S]*\}/,
+    );
+    expect(proposalCss).not.toMatch(
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-title\s*\{[^}]*text-overflow:\s*ellipsis;/,
+    );
+    expect(proposalCss).not.toMatch(
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__masthead-role\s*\{[^}]*text-overflow:\s*ellipsis;/,
     );
   });
 });

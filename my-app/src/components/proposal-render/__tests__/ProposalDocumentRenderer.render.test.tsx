@@ -556,6 +556,65 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     {
       templateId: "director-letterhead" as const,
       scope: ".proposal-cover-letter--director",
+      secondarySelector: ".proposal-cover-letter__masthead-secondary",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: ".proposal-cover-letter--volk",
+      secondarySelector: ".proposal-cover-letter__volk-title--right",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: ".proposal-cover-letter--film-foto",
+      secondarySelector: ".proposal-cover-letter__film-company",
+    },
+  ])(
+    "renders applicant company as the optional letterhead title for $templateId",
+    ({ templateId, scope, secondarySelector }) => {
+      const { container } = render(
+        <ProposalDocumentRenderer
+          content="Dear Hiring Manager,\n\nI can support the team."
+          proposalType="cover_letter"
+          templateId={templateId}
+          railTitle="Robert Cooper"
+          railMeta="Senior Security Specialist"
+          contactLine="email@email.com · Los Angeles"
+          letterDate="May 12, 2026"
+          recipientDetails="Hiring Manager"
+          documentTitle="Application for Security Guard"
+          documentTypography={{
+            fontFamily: "Georgia, serif",
+            fontSize: "14px",
+            lineHeight: 1.5,
+            fontWeight: 400,
+            letterSpacing: "0em",
+          }}
+          applicantHeader={{
+            name: "Robert Cooper",
+            role: "Senior Security Specialist",
+            company: "Cooper Studio",
+            email: "email@email.com",
+            phone: "",
+            linkedin: null,
+            website: "",
+            location: "Los Angeles",
+            tag: null,
+          }}
+        />,
+      );
+      const root = container.querySelector(scope);
+
+      expect(root?.querySelector(secondarySelector)?.textContent).toBe(
+        "Cooper Studio",
+      );
+      expect(root?.textContent).toContain("Senior Security Specialist");
+    },
+  );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: ".proposal-cover-letter--director",
       headerSelector: ".proposal-cover-letter__masthead",
     },
     {
@@ -662,7 +721,6 @@ describe("ProposalDocumentRenderer volk register layout", () => {
         root?.querySelectorAll(headerSelector) ?? [],
       ).at(-1);
 
-      expect(header?.textContent).toContain("Los Angeles");
       expect(header?.textContent).not.toContain("1515 Pacific Ave");
       expect(header?.textContent).not.toContain("CA 90291");
       expect(header?.textContent).not.toContain("United States");
