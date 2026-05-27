@@ -239,6 +239,40 @@ function RegisterProposalDraft(): null {
   return null;
 }
 
+function RegisterDynamicProposalHeading(): JSX.Element {
+  const { openSurface } = useForgeTemplatePanel();
+  const [name, setName] = React.useState("Alex Martin");
+
+  useRegisterForgePanel(
+    React.useMemo(
+      () => ({
+        surface: "proposal-heading" as const,
+        title: "Heading",
+        ariaLabel: "Proposal heading",
+        renderContent: () => (
+          <ProposalHeadingFields
+            variableFields={[
+              {
+                id: "applicant-name",
+                label: "Full name",
+                value: name,
+                onChange: setName,
+              },
+            ]}
+          />
+        ),
+      }),
+      [name],
+    ),
+  );
+
+  return (
+    <button type="button" onClick={() => openSurface("proposal-heading")}>
+      Open heading
+    </button>
+  );
+}
+
 function renderEntryPoint(
   path: string,
   children: React.ReactNode,
@@ -359,6 +393,27 @@ describe("forge template entry points", () => {
     expect(within(panel).getByLabelText("Full name")).toHaveValue("Alex Martin");
     expect(within(panel).queryByRole("tab", { name: "Ask" })).not.toBeInTheDocument();
     expect(within(panel).queryByRole("tab", { name: "Style" })).not.toBeInTheDocument();
+  });
+
+  it("keeps a focused heading text input mounted while its panel registration updates", () => {
+    renderEntryPoint("/proposal", <RegisterDynamicProposalHeading />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open heading" }));
+    const input = screen.getByLabelText("Full name") as HTMLInputElement;
+    input.focus();
+    input.setSelectionRange(0, 0);
+
+    fireEvent.change(input, {
+      target: {
+        value: "ZAlex Martin",
+        selectionStart: 1,
+        selectionEnd: 1,
+      },
+    });
+
+    expect(screen.getByLabelText("Full name")).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(1);
   });
 
   it("opens proposal design from the proposal stage bar as one scrollable current document panel", () => {

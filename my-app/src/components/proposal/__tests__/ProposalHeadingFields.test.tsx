@@ -154,6 +154,42 @@ describe("ProposalHeadingFields", () => {
     expect(onBlur).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps cursor position when editing a controlled heading field", () => {
+    function ControlledHeading(): JSX.Element {
+      const [name, setName] = React.useState("Alex Martin");
+      return (
+        <ProposalHeadingFields
+          variableFields={[
+            {
+              id: "applicant-name",
+              label: "Full name",
+              value: name,
+              onChange: setName,
+            },
+          ]}
+        />
+      );
+    }
+
+    render(<ControlledHeading />);
+
+    const input = screen.getByLabelText("Full name") as HTMLInputElement;
+    input.focus();
+    input.setSelectionRange(4, 4);
+
+    fireEvent.change(input, {
+      target: {
+        value: "Alex  Martin",
+        selectionStart: 5,
+        selectionEnd: 5,
+      },
+    });
+
+    expect(input).toHaveValue("Alex  Martin");
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(5);
+  });
+
   it("renders remaining heading fields after known groups", () => {
     render(
       <ProposalHeadingFields

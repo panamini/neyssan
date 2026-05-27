@@ -7152,6 +7152,9 @@ export function ProposalForge(): JSX.Element {
       resolveProposalHeadingText(draftProposal.metadata, "applicantName") ?? "";
     const nextApplicantRole =
       resolveProposalHeadingText(draftProposal.metadata, "applicantRole") ?? "";
+    const nextApplicantCompany =
+      resolveProposalHeadingText(draftProposal.metadata, "applicantCompany") ??
+      "";
     const nextContactLine =
       resolveProposalHeadingText(draftProposal.metadata, "contactLine") ?? "";
     const nextLetterDate =
@@ -7224,6 +7227,7 @@ export function ProposalForge(): JSX.Element {
     setComposeDraftInitialSeed(nextSourceComposeDraft);
     setProposalApplicantName(nextApplicantName);
     setProposalApplicantRole(nextApplicantRole);
+    setProposalApplicantCompany(nextApplicantCompany);
     setProposalContactLine(nextContactLine);
     setProposalLetterDate(nextLetterDate);
     setProposalRecipientDetails(nextRecipientDetails);
@@ -7262,9 +7266,7 @@ export function ProposalForge(): JSX.Element {
       proposalStyleChoice: nextStyleChoice,
       proposalApplicantName: nextApplicantName,
       proposalApplicantRole: nextApplicantRole,
-      proposalApplicantCompany:
-        resolveProposalHeadingText(draftProposal.metadata, "applicantCompany") ??
-        "",
+      proposalApplicantCompany: nextApplicantCompany,
       proposalContactLine: nextContactLine,
       proposalLetterDate: nextLetterDate,
       proposalRecipientDetails: nextRecipientDetails,
@@ -8722,6 +8724,7 @@ export function ProposalForge(): JSX.Element {
       proposalStyleChoice,
       proposalApplicantName,
       proposalApplicantRole,
+      proposalApplicantCompany,
       proposalContactLine,
       proposalLetterDate,
       proposalRecipientDetails,
@@ -8763,6 +8766,7 @@ export function ProposalForge(): JSX.Element {
     proposalContent,
     proposalApplicantName,
     proposalApplicantRole,
+    proposalApplicantCompany,
     proposalContactLine,
     proposalHeaderVisibility,
     proposalLetterDate,
