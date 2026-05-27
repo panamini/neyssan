@@ -110,9 +110,70 @@ function RegisterCvTopbar(): null {
 
 describe("AppTopbar CV controls", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     clerkMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
     clerkMocks.useUser.mockReturnValue({ user: null });
   });
+
+  it("renders global command search chrome in English by default", () => {
+    const onOpenCommandPalette = vi.fn();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_1"]}>
+        <CvForgeTopbarProvider>
+          <RegisterCvTopbar />
+          <AppTopbar
+            commandPaletteOpen={false}
+            onOpenCommandPalette={onOpenCommandPalette}
+          />
+        </CvForgeTopbarProvider>
+      </MemoryRouter>,
+    );
+
+    const commandButton = screen.getByRole("button", {
+      name: "Open command palette",
+    });
+    expect(commandButton).toHaveTextContent("Search or run command");
+  });
+
+  it.each([
+    {
+      locale: "fr",
+      buttonLabel: "Ouvrir la palette de commandes",
+      visibleLabel: "Rechercher ou lancer une commande",
+    },
+    {
+      locale: "es",
+      buttonLabel: "Abrir paleta de comandos",
+      visibleLabel: "Buscar o ejecutar comando",
+    },
+  ])(
+    "renders global command search chrome in $locale",
+    ({ locale, buttonLabel, visibleLabel }) => {
+      window.localStorage.setItem("twoweeks:ui-language", locale);
+      window.localStorage.setItem("twoweeks:document-language", "ar");
+
+      render(
+        <MemoryRouter initialEntries={["/cv?id=cv_1"]}>
+          <CvForgeTopbarProvider>
+            <RegisterCvTopbar />
+            <AppTopbar
+              commandPaletteOpen={false}
+              onOpenCommandPalette={vi.fn()}
+            />
+          </CvForgeTopbarProvider>
+        </MemoryRouter>,
+      );
+
+      const commandButton = screen.getByRole("button", {
+        name: buttonLabel,
+      });
+      expect(commandButton).toHaveTextContent(visibleLabel);
+      expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+        "ar",
+      );
+    },
+  );
 
   it("renders CV status and share controls in the global topbar", async () => {
     const user = userEvent.setup();
