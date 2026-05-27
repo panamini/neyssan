@@ -74,6 +74,10 @@ import { getFactoryDocumentStyleSlot } from "../lib/document-style-slots";
 import { ProposalColorPickerPopover } from "../components/ProposalColorPickerPopover";
 import type { ToneBadgeTone } from "../components/ui/tone-badge";
 import { normalizeSettingsTab } from "../lib/settings-tabs";
+import {
+  PROPOSAL_LLM_MODEL_OPTIONS,
+  useProposalLlmModelPreference,
+} from "../lib/proposal-llm-preference";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1154,6 +1158,8 @@ export function SettingsPage(): JSX.Element {
   const { language: documentLanguage, setLanguage: setDocumentLanguage } =
     useDocumentLanguagePreference();
   const { accent: uiAccent, setAccent: setUiAccent } = useUiAccentPreference();
+  const { model: proposalLlmModel, setModel: setProposalLlmModel } =
+    useProposalLlmModelPreference();
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
   const isAuthReady = isAuthLoaded !== false;
@@ -2321,6 +2327,45 @@ export function SettingsPage(): JSX.Element {
                 data-pane="voice"
                 data-active="true"
               >
+                <div className="settings__group">
+                  <div className="settings__group-head">
+                    <div className="settings__group-title">AI generation</div>
+                    <div className="settings__group-desc">
+                      Defaults for LLM-assisted letter generation.
+                    </div>
+                  </div>
+                  <div className="settings__row">
+                    <div>
+                      <div className="settings__row-label">
+                        LLM for letter generation
+                      </div>
+                      <div className="settings__row-desc">
+                        Choose the model used when drafting new letters.
+                      </div>
+                    </div>
+                    <div
+                      className="settings-segmented settings-segmented--llm"
+                      role="group"
+                      aria-label="LLM for letter generation"
+                    >
+                      {PROPOSAL_LLM_MODEL_OPTIONS.map((option) => {
+                        const active = proposalLlmModel === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className="settings-segmented__button"
+                            data-active={active ? "true" : undefined}
+                            aria-pressed={active}
+                            onClick={() => setProposalLlmModel(option.value)}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
                 <div className="settings__group">
                   <div className="settings__group-head">
                     <div className="settings__group-title">Default tone</div>

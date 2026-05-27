@@ -2027,6 +2027,11 @@
   box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
+.settings-segmented--llm {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .settings-ui-accent-row {
   position: relative;
   display: flex;
