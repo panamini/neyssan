@@ -144,9 +144,28 @@ describe("SettingsPage preview controls", () => {
     expect(
       screen.queryByRole("group", { name: "Default tone" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("group", { name: "Letter Model" }),
+    ).not.toBeInTheDocument();
 
     renderSettings("/settings?tab=voice");
+    const llmGroup = screen.getByRole("group", {
+      name: "Letter Model",
+    });
     const toneGroup = screen.getByRole("group", { name: "Default tone" });
+    expect(
+      within(llmGroup).getByRole("button", { name: "Mistral Medium" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(
+      within(llmGroup).getByRole("button", { name: "Qwen3.7-Max" }),
+    );
+    expect(window.localStorage.getItem("twoweeks:proposal-llm-model")).toBe(
+      "qwen3.7-max",
+    );
+    expect(
+      within(llmGroup).getByRole("button", { name: "Qwen3.7-Max" }),
+    ).toHaveAttribute("aria-pressed", "true");
 
     await user.click(within(toneGroup).getByRole("button", { name: "Warm" }));
 

@@ -539,6 +539,11 @@ body,
   --dasti-toolbar-tooltip-transform-visible: translate(-50%, 0);
 }
 
+.sb[data-rail-compact="true"]
+  .sb-rail-button[data-toolbar-tooltip][aria-expanded="true"]::after {
+  display: block;
+}
+
 .sb-rail-button:hover {
   background: transparent;
   color: var(--tm2);
