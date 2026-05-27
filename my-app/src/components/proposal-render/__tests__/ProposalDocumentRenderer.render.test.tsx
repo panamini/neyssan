@@ -622,6 +622,57 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     {
       templateId: "director-letterhead" as const,
       scope: ".proposal-cover-letter--director",
+      headerSelector: ".proposal-cover-letter__masthead",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: ".proposal-cover-letter--volk",
+      headerSelector: ".proposal-cover-letter__volk-header",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: ".proposal-cover-letter--film-foto",
+      headerSelector: ".proposal-cover-letter__film-header",
+    },
+  ])(
+    "keeps full postal addresses out of the top title row for $templateId",
+    ({ templateId, scope, headerSelector }) => {
+      const { container } = render(
+        <ProposalDocumentRenderer
+          content="Dear Hiring Manager,\n\nI can support the team."
+          proposalType="cover_letter"
+          templateId={templateId}
+          railTitle="Robert Cooper"
+          railMeta="Security Guard"
+          contactLine="email@email.com · 1515 Pacific Ave Los Angeles · CA 90291 United States"
+          letterDate="May 12, 2026"
+          recipientDetails="Hiring Manager"
+          documentTitle="Application for Security Guard"
+          documentTypography={{
+            fontFamily: "Georgia, serif",
+            fontSize: "14px",
+            lineHeight: 1.5,
+            fontWeight: 400,
+            letterSpacing: "0em",
+          }}
+        />,
+      );
+      const root = container.querySelector(scope);
+      const header = Array.from(
+        root?.querySelectorAll(headerSelector) ?? [],
+      ).at(-1);
+
+      expect(header?.textContent).toContain("Los Angeles");
+      expect(header?.textContent).not.toContain("1515 Pacific Ave");
+      expect(header?.textContent).not.toContain("CA 90291");
+      expect(header?.textContent).not.toContain("United States");
+    },
+  );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: ".proposal-cover-letter--director",
     },
     {
       templateId: "volk-letterhead" as const,

@@ -3964,6 +3964,19 @@
   text-align: right;
 }
 
+.proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
+.proposal-cover-letter--director .proposal-cover-letter__masthead-secondary,
+.proposal-cover-letter--director .proposal-cover-letter__masthead-role,
+.proposal-cover-letter--volk .proposal-cover-letter__volk-title,
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-company,
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-rule {
   grid-column: 1 / -1;
   margin-top: 1.7mm;
