@@ -233,7 +233,7 @@ describe("Sidebar permanent rail", () => {
       "Today",
       "Jobs",
       "CV",
-      "Proposal",
+      "Letter",
       "Projects",
       "Templates",
       "Settings",
@@ -262,7 +262,7 @@ describe("Sidebar permanent rail", () => {
       "href",
       "/cv",
     );
-    expect(screen.getByRole("link", { name: "Proposal" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Letter" })).toHaveAttribute(
       "href",
       "/proposal",
     );
@@ -289,7 +289,7 @@ describe("Sidebar permanent rail", () => {
       "Aujourd'hui",
       "Offres",
       "CV",
-      "Proposition",
+      "Lettre",
       "Projets",
       "Modeles",
       "Parametres",
@@ -314,7 +314,7 @@ describe("Sidebar permanent rail", () => {
       "Hoy",
       "Empleos",
       "CV",
-      "Propuesta",
+      "Carta",
       "Proyectos",
       "Plantillas",
       "Ajustes",
@@ -352,7 +352,7 @@ describe("Sidebar permanent rail", () => {
         "Today",
         "Jobs",
         "CV",
-        "Proposal",
+        "Letter",
         "Projects",
         "Templates",
         "Settings",
@@ -383,7 +383,7 @@ describe("Sidebar permanent rail", () => {
       "Today",
       "Jobs",
       "CV",
-      "Proposal",
+      "Letter",
       "Projects",
       "Templates",
       "Settings",
@@ -400,7 +400,7 @@ describe("Sidebar permanent rail", () => {
       );
     }
 
-    expect(screen.getByRole("button", { name: "Proposal" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Letter" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -424,7 +424,7 @@ describe("Sidebar permanent rail", () => {
     ["/dashboard", "Today"],
     ["/jobs", "Jobs"],
     ["/cv", "CV"],
-    ["/proposal", "Proposal"],
+    ["/proposal", "Letter"],
     ["/documents", "Projects"],
     ["/templates", "Templates"],
     ["/settings", "Settings"],
@@ -533,7 +533,7 @@ describe("Sidebar permanent rail", () => {
     expect(cv).toHaveAttribute("aria-current", "page");
     expect(screen.getByTestId("location")).toHaveTextContent("/cv");
 
-    const proposal = screen.getByRole("link", { name: "Proposal" });
+    const proposal = screen.getByRole("link", { name: "Letter" });
     expect(proposal).toHaveAttribute("href", "/proposal");
     fireEvent.click(proposal);
     expect(screen.getByTestId("location")).toHaveTextContent("/proposal");
@@ -651,7 +651,7 @@ describe("Sidebar permanent rail", () => {
     expect(
       screen.getByRole("complementary", { name: "Proposal templates" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Proposal" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Letter" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -666,7 +666,7 @@ describe("Sidebar permanent rail", () => {
     mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
-    const proposal = screen.getByRole("button", { name: "Proposal" });
+    const proposal = screen.getByRole("button", { name: "Letter" });
     const cv = screen.getByRole("link", { name: "CV" });
 
     expect(proposal).toHaveAttribute("aria-current", "page");
@@ -712,7 +712,7 @@ describe("Sidebar permanent rail", () => {
     mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Proposal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Letter" }));
 
     expect(
       screen.getByRole("complementary", { name: "Saved proposals" }),
@@ -731,7 +731,7 @@ describe("Sidebar permanent rail", () => {
     mockFinePointer(true);
     renderSidebar("/proposal", <RegisterProposalPanels />);
 
-    const proposal = screen.getByRole("button", { name: "Proposal" });
+    const proposal = screen.getByRole("button", { name: "Letter" });
     fireEvent.pointerEnter(proposal, { pointerType: "mouse" });
     act(() => {
       vi.advanceTimersByTime(150);
@@ -1080,7 +1080,7 @@ describe("Sidebar permanent rail", () => {
     ["Jobs", "Attach job", "Open Jobs page", "/jobs"],
     ["CV", "Attach CV", "Open CV Forge", "/cv"],
     [
-      "Proposal",
+      "Letter",
       "Saved proposals",
       "Open Library",
       "/documents?type=proposals",
