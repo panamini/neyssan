@@ -1000,26 +1000,32 @@ export function ProposalDraftDrawer({
   const hasStagedSource = Boolean(stagedJobTitleValue || stagedCvTitleValue);
   const shouldShowGenerateFooter =
     !askReviewReady && (!hasExistingDraft || hasStagedSource);
+  const { resolvedLanguage } = useUiLanguagePreference();
   const footerGenerateLabel =
-    hasExistingDraft && hasStagedSource ? "Regenerate" : generateLabel;
+    hasExistingDraft && hasStagedSource
+      ? translateUi(resolvedLanguage, "workspace.regenerate")
+      : generateLabel;
   const resolvedJobTitle =
     jobContextKind === "pasted"
-      ? "Pasted job offer"
-      : jobTitle || "Job loaded";
+      ? translateUi(resolvedLanguage, "jobs.pasteJobOffer")
+      : jobTitle || translateUi(resolvedLanguage, "workspace.jobLoaded");
   const displayedJobTitle = stagedJobTitleValue || resolvedJobTitle;
+  const stagedSourceMeta = translateUi(
+    resolvedLanguage,
+    "workspace.stagedLetterUnchanged",
+  );
   const displayedJobMeta =
     stagedJobTitleValue
-      ? stagedJobMetaValue || "Staged. Letter unchanged."
+      ? stagedJobMetaValue || stagedSourceMeta
       : jobMeta || jobSummary;
   const hasDisplayedJobContext = hasActiveJobContext || Boolean(stagedJobTitleValue);
   const displayedCvTitle = stagedCvTitleValue || sourceCvTitle;
   const hasDisplayedCv = Boolean(displayedCvTitle);
-  const stagedSourceMeta = "Staged. Letter unchanged.";
   const canCancelStagedCv = Boolean(stagedCvTitleValue && onCancelStagedSource);
   const proposalTypeMenuSections = React.useMemo<MenuSection[]>(
     () => [
       {
-        label: "Document type",
+        label: translateUi(resolvedLanguage, "workspace.documentType"),
         items: proposalTypeOptions.map((option) => ({
           id: option.id,
           role: "menuitemradio" as const,
@@ -1030,12 +1036,12 @@ export function ProposalDraftDrawer({
         })),
       },
     ],
-    [onSelectProposalType, proposalTypeOptions],
+    [onSelectProposalType, proposalTypeOptions, resolvedLanguage],
   );
   const toneMenuSections = React.useMemo<MenuSection[]>(
     () => [
       {
-        label: "Tone",
+        label: translateUi(resolvedLanguage, "workspace.tone"),
         items: toneOptions.map((option) => ({
           id: option.id ?? "auto",
           role: "menuitemradio" as const,
@@ -1046,7 +1052,7 @@ export function ProposalDraftDrawer({
         })),
       },
     ],
-    [onSelectTone, toneOptions],
+    [onSelectTone, toneOptions, resolvedLanguage],
   );
 
   return (
@@ -1054,14 +1060,17 @@ export function ProposalDraftDrawer({
       <div className="forge-rail-drawer__draft-body">
         <section className="forge-rail-drawer__draft-section">
           <div className="forge-rail-drawer__section-title">
-            <span>JOB</span>
+            <span>{translateUi(resolvedLanguage, "workspace.jobSection")}</span>
           </div>
           {hasDisplayedJobContext ? (
             <article className="forge-rail-drawer__draft-card">
               <button
                 type="button"
                 className="forge-rail-drawer__draft-card-main"
-                aria-label={`Change job: ${displayedJobTitle}`}
+                aria-label={`${translateUi(
+                  resolvedLanguage,
+                  "workspace.changeJob",
+                )}: ${displayedJobTitle}`}
                 onClick={onOpenJobs}
               >
                 <span className="forge-rail-drawer__draft-card-copy">
@@ -1073,7 +1082,10 @@ export function ProposalDraftDrawer({
                 <button
                   type="button"
                   className="forge-rail-drawer__draft-remove"
-                  aria-label="Cancel staged source change"
+                  aria-label={translateUi(
+                    resolvedLanguage,
+                    "workspace.cancelStagedSourceChange",
+                  )}
                   onClick={onCancelStagedSource}
                 >
                   <X size={13} aria-hidden="true" />
@@ -1082,7 +1094,10 @@ export function ProposalDraftDrawer({
                 <button
                   type="button"
                   className="forge-rail-drawer__draft-remove"
-                  aria-label="Remove job context"
+                  aria-label={translateUi(
+                    resolvedLanguage,
+                    "workspace.removeJobContext",
+                  )}
                   onClick={onClearJobContext}
                 >
                   <X size={13} aria-hidden="true" />
@@ -1096,7 +1111,7 @@ export function ProposalDraftDrawer({
                 className="forge-rail-drawer__draft-row"
                 onClick={onOpenJobs}
               >
-                <span>Choose saved job</span>
+                <span>{translateUi(resolvedLanguage, "workspace.chooseSavedJob")}</span>
                 <CaretRight size={14} aria-hidden="true" />
               </button>
               {onOpenPasteJob ? (
@@ -1105,7 +1120,7 @@ export function ProposalDraftDrawer({
                   className="forge-rail-drawer__draft-row"
                   onClick={onOpenPasteJob}
                 >
-                  <span>Paste job offer</span>
+                  <span>{translateUi(resolvedLanguage, "jobs.pasteJobOffer")}</span>
                   <CaretRight size={14} aria-hidden="true" />
                 </button>
               ) : null}
@@ -1115,14 +1130,17 @@ export function ProposalDraftDrawer({
 
         <section className="forge-rail-drawer__draft-section">
           <div className="forge-rail-drawer__section-title">
-            <span>CV</span>
+            <span>{translateUi(resolvedLanguage, "workspace.cvSection")}</span>
           </div>
           {hasDisplayedCv ? (
             <article className="forge-rail-drawer__draft-card">
               <button
                 type="button"
                 className="forge-rail-drawer__draft-card-main"
-                aria-label={`Change attached CV: ${displayedCvTitle}`}
+                aria-label={`${translateUi(
+                  resolvedLanguage,
+                  "workspace.changeAttachedCv",
+                )}: ${displayedCvTitle}`}
                 onClick={onOpenCvs}
               >
                 <span className="forge-rail-drawer__draft-card-copy">
@@ -1135,8 +1153,11 @@ export function ProposalDraftDrawer({
                 className="forge-rail-drawer__draft-remove"
                 aria-label={
                   canCancelStagedCv
-                    ? "Cancel staged source change"
-                    : "Remove attached CV"
+                    ? translateUi(
+                        resolvedLanguage,
+                        "workspace.cancelStagedSourceChange",
+                      )
+                    : translateUi(resolvedLanguage, "workspace.removeAttachedCv")
                 }
                 onClick={
                   canCancelStagedCv && onCancelStagedSource
@@ -1153,7 +1174,7 @@ export function ProposalDraftDrawer({
               className="forge-rail-drawer__draft-row"
               onClick={onOpenCvs}
             >
-              <span>Pick a CV</span>
+              <span>{translateUi(resolvedLanguage, "workspace.pickCv")}</span>
               <CaretRight size={14} aria-hidden="true" />
             </button>
           )}
@@ -1161,10 +1182,10 @@ export function ProposalDraftDrawer({
 
         <section className="forge-rail-drawer__draft-section">
           <div className="forge-rail-drawer__section-title">
-            <span>SETTINGS</span>
+            <span>{translateUi(resolvedLanguage, "workspace.settingsSection")}</span>
           </div>
           <Menu
-            ariaLabel="Document type"
+            ariaLabel={translateUi(resolvedLanguage, "workspace.documentType")}
             align="start"
             side="top"
             matchTriggerWidth
@@ -1172,19 +1193,21 @@ export function ProposalDraftDrawer({
             trigger={
               <button
                 type="button"
-                aria-label="Document type"
+                aria-label={translateUi(resolvedLanguage, "workspace.documentType")}
                 className="dasti-proposal-skeleton-rail__setup-row dasti-proposal-skeleton-rail__setup-row--button"
               >
-                <span className="dasti-proposal-skeleton-rail__setup-label">Type</span>
+                <span className="dasti-proposal-skeleton-rail__setup-label">
+                  {translateUi(resolvedLanguage, "workspace.type")}
+                </span>
                 <span className="dasti-proposal-skeleton-rail__setup-value">
-                  {proposalTypeLabel || "Letter"}
+                  {proposalTypeLabel || translateUi(resolvedLanguage, "workspace.letter")}
                 </span>
                 <CaretRight className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
               </button>
             }
           />
           <Menu
-            ariaLabel="Tone"
+            ariaLabel={translateUi(resolvedLanguage, "workspace.tone")}
             align="start"
             side="top"
             matchTriggerWidth
@@ -1192,10 +1215,12 @@ export function ProposalDraftDrawer({
             trigger={
               <button
                 type="button"
-                aria-label="Tone"
+                aria-label={translateUi(resolvedLanguage, "workspace.tone")}
                 className="dasti-proposal-skeleton-rail__setup-row dasti-proposal-skeleton-rail__setup-row--button"
               >
-                <span className="dasti-proposal-skeleton-rail__setup-label">Tone</span>
+                <span className="dasti-proposal-skeleton-rail__setup-label">
+                  {translateUi(resolvedLanguage, "workspace.tone")}
+                </span>
                 <span className="dasti-proposal-skeleton-rail__setup-value">
                   {toneLabel}
                 </span>
@@ -1305,6 +1330,7 @@ function ForgeDrawerDocumentPreview({
   badge?: string | null;
   actionPill?: React.ReactNode;
 }): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
   const [hydratedCv, setHydratedCv] = React.useState<
     import("../types/cvDocument").CvDocument | null
   >(item.type === "cv" && item.cvDocument ? item.cvDocument : null);
@@ -1344,7 +1370,11 @@ function ForgeDrawerDocumentPreview({
   if (item.type === "cv" && !hydratedCv) {
     return (
       <DrawerUnavailableThumbnail
-        label={failed ? "Preview unavailable" : "Loading preview"}
+        label={
+          failed
+            ? translateUi(resolvedLanguage, "errors.previewUnavailable")
+            : translateUi(resolvedLanguage, "loading.preview")
+        }
       />
     );
   }
@@ -1727,7 +1757,7 @@ export function ProposalLibraryDrawer({
           <ForgeDrawerDocumentPreview
             item={item}
             hydrateCvDocument={hydrateCvDocument}
-            actionPill="Open"
+            actionPill={translateUi(resolvedLanguage, "common.open")}
           />
         </button>
         <button
@@ -1814,6 +1844,16 @@ export function ProjectsLibraryDrawer({
     resolvedLanguage,
     "workspace.openProposalsLibrary",
   );
+  const selectCvLabel = translateUi(resolvedLanguage, "workspace.selectCv");
+  const selectProposalLabel = translateUi(
+    resolvedLanguage,
+    "workspace.selectProposal",
+  );
+  const openCvLabel = translateUi(resolvedLanguage, "workspace.openCv");
+  const openProposalLabel = translateUi(
+    resolvedLanguage,
+    "workspace.openProposal",
+  );
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
     () => new Set(),
   );
@@ -1866,7 +1906,11 @@ export function ProjectsLibraryDrawer({
           <input
             type="checkbox"
             checked={selected}
-            aria-label={`Select ${item.type} ${item.title}`}
+            aria-label={
+              item.type === "cv"
+                ? `${selectCvLabel}: ${item.title}`
+                : `${selectProposalLabel}: ${item.title}`
+            }
             onChange={() => toggleSelected(item.id)}
             onClick={(event) => event.stopPropagation()}
           />
@@ -1877,7 +1921,11 @@ export function ProjectsLibraryDrawer({
         <button
           type="button"
           className="forge-template-card forge-rail-drawer__thumb-button"
-          aria-label={`Open ${item.type} ${item.title}`}
+          aria-label={
+            item.type === "cv"
+              ? `${openCvLabel}: ${item.title}`
+              : `${openProposalLabel}: ${item.title}`
+          }
           onClick={() => onOpenItem(item)}
         >
           <ForgeDrawerDocumentPreview
@@ -1983,11 +2031,14 @@ export function ProjectsLibraryDrawer({
           <button
             type="button"
             onClick={() => setSelectedIds(new Set())}
-            aria-label="Clear selection"
+            aria-label={translateUi(resolvedLanguage, "workspace.clearSelection")}
           >
             <X size={14} aria-hidden="true" />
           </button>
-          <span>{selectedItems.length} selected</span>
+          <span>
+            {selectedItems.length}{" "}
+            {translateUi(resolvedLanguage, "workspace.selected")}
+          </span>
           <button
             type="button"
             disabled={downloadableCount === 0}
@@ -4194,10 +4245,12 @@ export function ProposalForge(): JSX.Element {
       void navigate("/proposal", { replace: true });
     }
     openTemplateSurface("proposal-draft");
-    showToast("Job source changed.", {
+    showToast(translateUi(resolvedLanguage, "workspace.jobSourceChanged"), {
       variant: "success",
-      description:
-        "Your letter was not changed. Pick a CV or regenerate when ready.",
+      description: translateUi(
+        resolvedLanguage,
+        "workspace.letterUnchangedPickCvOrRegenerate",
+      ),
     });
   }, [
     canonicalJobId,
@@ -4209,6 +4262,7 @@ export function ProposalForge(): JSX.Element {
     outputSourceComposeDraft,
     proposalType,
     proposalVoicePreset,
+    resolvedLanguage,
     showToast,
     stagedSourceJobId,
     stagedSourceJobRecord,
@@ -9469,12 +9523,18 @@ export function ProposalForge(): JSX.Element {
         const nextSelection = resolveAttachedCvSelectionById(cvId);
         setStagedProposalCvSelection({
           id: nextSelection.id ?? cvId,
-          title: nextSelection.title ?? hydratedCv.title ?? "Selected CV",
+          title:
+            nextSelection.title ??
+            hydratedCv.title ??
+            translateUi(resolvedLanguage, "workspace.selectedCv"),
         });
         openTemplateSurface("proposal-draft");
-        showToast("CV source staged.", {
+        showToast(translateUi(resolvedLanguage, "workspace.cvSourceStaged"), {
           variant: "success",
-          description: "Your letter was not changed. Regenerate when ready.",
+          description: translateUi(
+            resolvedLanguage,
+            "workspace.letterUnchangedRegenerate",
+          ),
         });
         return;
       }
@@ -9486,6 +9546,7 @@ export function ProposalForge(): JSX.Element {
       hydrateCvDocument,
       openTemplateSurface,
       proposalContent,
+      resolvedLanguage,
       showToast,
     ],
   );
@@ -11380,17 +11441,29 @@ export function ProposalForge(): JSX.Element {
   }, [isWideEnoughForDockedForgePanel, openTemplateSurface]);
   const handleClearCvFromDraft = React.useCallback(() => {
     if (proposalContent?.trim()) {
-      setStagedProposalCvSelection({ id: null, title: "No CV" });
+      setStagedProposalCvSelection({
+        id: null,
+        title: translateUi(resolvedLanguage, "workspace.noCv"),
+      });
       openTemplateSurface("proposal-draft");
-      showToast("CV removal staged.", {
+      showToast(translateUi(resolvedLanguage, "workspace.cvRemovalStaged"), {
         variant: "success",
-        description: "Your letter was not changed. Regenerate when ready.",
+        description: translateUi(
+          resolvedLanguage,
+          "workspace.letterUnchangedRegenerate",
+        ),
       });
       return;
     }
 
     handleAttachedCvChange(null);
-  }, [handleAttachedCvChange, openTemplateSurface, proposalContent, showToast]);
+  }, [
+    handleAttachedCvChange,
+    openTemplateSurface,
+    proposalContent,
+    resolvedLanguage,
+    showToast,
+  ]);
   const handleReturnToDraftFromPasteJob = React.useCallback(() => {
     openTemplateSurface("proposal-draft");
   }, [openTemplateSurface]);

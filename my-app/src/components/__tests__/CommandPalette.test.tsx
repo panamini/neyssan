@@ -75,6 +75,11 @@ describe("CommandPalette", () => {
       emptyState: "Aucune commande trouvée.",
       placeholder: "Rechercher",
       oldPlaceholder: ["Rechercher", " ou lancer", " une commande..."].join(""),
+      goToGroup: "Aller à",
+      todayLabel: "Aujourd'hui",
+      jobsLabel: "Offres",
+      proposalLabel: "Lettre",
+      themeLabel: "Changer le thème",
     },
     {
       locale: "es",
@@ -82,10 +87,26 @@ describe("CommandPalette", () => {
       emptyState: "No se encontraron comandos.",
       placeholder: "Buscar",
       oldPlaceholder: ["Buscar", " o ejecutar", " un comando..."].join(""),
+      goToGroup: "Ir a",
+      todayLabel: "Hoy",
+      jobsLabel: "Empleos",
+      proposalLabel: "Carta",
+      themeLabel: "Cambiar tema",
     },
   ])(
-    "renders command palette shell chrome and replay action in $locale",
-    ({ locale, title, emptyState, placeholder, oldPlaceholder }) => {
+    "renders command palette shell chrome and command labels in $locale",
+    ({
+      locale,
+      title,
+      emptyState,
+      placeholder,
+      oldPlaceholder,
+      goToGroup,
+      todayLabel,
+      jobsLabel,
+      proposalLabel,
+      themeLabel,
+    }) => {
       window.localStorage.setItem("twoweeks:ui-language", locale);
       window.localStorage.setItem("twoweeks:document-language", "ar");
 
@@ -105,7 +126,20 @@ describe("CommandPalette", () => {
           name: locale === "fr" ? "Commandes" : "Comandos",
         }),
       ).toBeInTheDocument();
-      expect(screen.getByRole("option", { name: /Today/i })).toBeInTheDocument();
+      expect(screen.getByLabelText(goToGroup)).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: new RegExp(todayLabel) }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: new RegExp(jobsLabel) }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: new RegExp(proposalLabel) }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("option", { name: new RegExp(themeLabel) }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Go to")).not.toBeInTheDocument();
 
       expect(screen.queryByPlaceholderText(oldPlaceholder)).not.toBeInTheDocument();
       expect(
