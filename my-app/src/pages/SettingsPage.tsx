@@ -2328,25 +2328,16 @@ export function SettingsPage(): JSX.Element {
                 data-active="true"
               >
                 <div className="settings__group">
-                  <div className="settings__group-head">
-                    <div className="settings__group-title">AI generation</div>
-                    <div className="settings__group-desc">
-                      Defaults for LLM-assisted letter generation.
-                    </div>
-                  </div>
                   <div className="settings__row">
                     <div>
                       <div className="settings__row-label">
-                        LLM for letter generation
-                      </div>
-                      <div className="settings__row-desc">
-                        Choose the model used when drafting new letters.
+                        Letter Model
                       </div>
                     </div>
                     <div
                       className="settings-segmented settings-segmented--llm"
                       role="group"
-                      aria-label="LLM for letter generation"
+                      aria-label="Letter Model"
                     >
                       {PROPOSAL_LLM_MODEL_OPTIONS.map((option) => {
                         const active = proposalLlmModel === option.value;

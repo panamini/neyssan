@@ -145,12 +145,12 @@ describe("SettingsPage preview controls", () => {
       screen.queryByRole("group", { name: "Default tone" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("group", { name: "LLM for letter generation" }),
+      screen.queryByRole("group", { name: "Letter Model" }),
     ).not.toBeInTheDocument();
 
     renderSettings("/settings?tab=voice");
     const llmGroup = screen.getByRole("group", {
-      name: "LLM for letter generation",
+      name: "Letter Model",
     });
     const toneGroup = screen.getByRole("group", { name: "Default tone" });
 
