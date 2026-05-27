@@ -31,7 +31,10 @@ export type TemplateFamily =
   | "workshop-twocol"
   | "minimal"
   | "bold"
-  | "letterpress";
+  | "letterpress"
+  | "director-letterhead"
+  | "volk-letterhead"
+  | "film-foto-letterhead";
 
 type TemplateCard = {
   id: string;
@@ -80,6 +83,27 @@ const TEMPLATES: TemplateCard[] = [
     family: "letterpress",
     descriptionKey: "templates.description.letterpressLetter",
   },
+  {
+    id: "director-letterhead",
+    name: "Director Letterhead",
+    kind: "Cover letter",
+    family: "director-letterhead",
+    descriptionKey: "templates.description.minimalLetter",
+  },
+  {
+    id: "volk-letterhead",
+    name: "Volk Letterhead",
+    kind: "Cover letter",
+    family: "volk-letterhead",
+    descriptionKey: "templates.description.boldLetter",
+  },
+  {
+    id: "film-foto-letterhead",
+    name: "Film und Foto Letterhead",
+    kind: "Cover letter",
+    family: "film-foto-letterhead",
+    descriptionKey: "templates.description.letterpressLetter",
+  },
 ];
 
 const TEMPLATE_STYLE_PRESETS: Record<TemplateFamily, VerbatiStylePreset> = {
@@ -110,12 +134,30 @@ const TEMPLATE_STYLE_PRESETS: Record<TemplateFamily, VerbatiStylePreset> = {
     typography: "quiet-editorial",
     palette: "terre",
   }),
+  "director-letterhead": resolveVerbatiStyle({
+    familyId: "workshop",
+    typography: "expert",
+    palette: "terre",
+  }),
+  "volk-letterhead": resolveVerbatiStyle({
+    familyId: "workshop",
+    typography: "expert",
+    palette: "ochre",
+  }),
+  "film-foto-letterhead": resolveVerbatiStyle({
+    familyId: "workshop",
+    typography: "expert",
+    palette: "terre",
+  }),
 };
 
 const PROPOSAL_PREVIEW_TEMPLATES: Partial<Record<TemplateFamily, ProposalTemplateId>> = {
   minimal: "workshop_proposal_margin",
   bold: "modernist_signal",
   letterpress: "quire_margin",
+  "director-letterhead": "director-letterhead",
+  "volk-letterhead": "volk-letterhead",
+  "film-foto-letterhead": "film-foto-letterhead",
 };
 
 function filterMatches(template: TemplateCard, filter: TemplateFilter): boolean {
@@ -251,7 +293,12 @@ export function TemplatesPage(): JSX.Element {
       }
 
       const templateIntent = getCoverLetterTemplateIntent(template.family);
-      navigate(`/proposal${templateIntent ? `?templateId=${templateIntent}` : ""}`, {
+      const directTemplateId = PROPOSAL_PREVIEW_TEMPLATES[template.family] ?? null;
+      const templateIdParam =
+        templateIntent ?? (directTemplateId && template.family.includes("letterhead")
+          ? directTemplateId
+          : null);
+      navigate(`/proposal${templateIdParam ? `?templateId=${templateIdParam}` : ""}`, {
         state: createProposalWorkspaceResetState(),
       });
     },

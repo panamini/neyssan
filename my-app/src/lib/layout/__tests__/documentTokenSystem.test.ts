@@ -440,6 +440,69 @@ describe("document token system", () => {
       docxTokens.bodySizeHalfPt,
     );
   });
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      leftMm: 25,
+      rightMm: 25,
+      bodyStartMm: 118,
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      leftMm: 24,
+      rightMm: 26,
+      bodyStartMm: 122,
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      leftMm: 20,
+      rightMm: 22,
+      bodyStartMm: 120,
+    },
+  ])(
+    "derives $templateId preview, export, and DOCX geometry from proposal tokens",
+    ({ templateId, leftMm, rightMm, bodyStartMm }) => {
+      const stylePreset = resolveVerbatiStyle({
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "expert",
+        palette: "terre",
+      });
+      const previewTokens = normalizeProposalPreviewTokens({
+        templateId,
+        documentTypography: getProposalDocumentTypography("expert", stylePreset),
+        stylePreset,
+      });
+      const exportProfile = normalizeProposalExportTokens({
+        mode: "styled",
+        proposalTemplateId: templateId,
+        stylePreset,
+      });
+      const exportVars = serializeExportVars(exportProfile.canonical);
+      const docxTokens = resolveProposalDocxSurfaceTokens(
+        exportProfile.canonical,
+      );
+
+      expect(previewTokens.geometry.page.widthMm).toBe(210);
+      expect(previewTokens.geometry.page.heightMm).toBe(297);
+      expect(previewTokens.geometry.page.margin.leftMm).toBe(leftMm);
+      expect(previewTokens.geometry.page.margin.rightMm).toBe(rightMm);
+      expect(previewTokens.geometry.template?.bodyStartMm).toBe(bodyStartMm);
+      expect(exportProfile.shell).toBe("onecol");
+      expect(exportProfile.canonical.geometry.template).toEqual(
+        previewTokens.geometry.template,
+      );
+      expect(exportVars["--page-width"]).toBe("210mm");
+      expect(exportVars["--page-height"]).toBe("297mm");
+      expect(docxTokens.pageMarginsTwip.left).toBe(
+        mmToTwip(exportProfile.canonical.geometry.page.margin.leftMm),
+      );
+      expect(docxTokens.pageMarginsTwip.right).toBe(
+        mmToTwip(exportProfile.canonical.geometry.page.margin.rightMm),
+      );
+    },
+  );
 });
   it("resolves workshop preview and export resume tokens from the exact template id", () => {
     const stylePreset = resolveVerbatiStyle({

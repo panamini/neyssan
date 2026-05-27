@@ -426,6 +426,118 @@ describe("export-renderers", () => {
     expect(workshopCss).toContain("--robial-step-b: 18mm;");
   });
 
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
+      label: "Director Letterhead",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+      label: "Volk Letterhead",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: "proposal-cover-letter--film-foto",
+      label: "Film und Foto Letterhead",
+    },
+  ])(
+    "renders $label through styled proposal HTML export with scoped A4 CSS",
+    ({ templateId, scope }) => {
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            templateId,
+            body: [
+              { type: "salutation", text: "Dear Hiring Manager," },
+              { type: "paragraph", text: "First export paragraph." },
+              { type: "paragraph", text: "Second export paragraph." },
+              { type: "paragraph", text: "Third export paragraph." },
+              {
+                type: "closing",
+                signOff: "Sincerely,",
+                signatureName: "Alex Mercer",
+              },
+            ],
+          },
+          stylePreset: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "expert",
+            palette: "terre",
+          },
+        }),
+      );
+      const css = getInlineStyles(document);
+      const page = document.querySelector(`.${scope}`);
+      const blocks = Array.from(
+        document.querySelectorAll(`.${scope} .proposal-cover-letter__body .proposal-block`),
+      ).map((node) => node.textContent?.trim());
+
+      expect(document.body.className).toContain(
+        `proposal-template--${templateId}`,
+      );
+      expect(page).toBeTruthy();
+      expect(
+        document.querySelector(`.${scope} .proposal-cover-letter__film-kicker`),
+      ).toBeNull();
+      expect(css).toContain(`.${scope}.export-page`);
+      expect(css).toContain("width: 210mm;");
+      expect(css).toContain("min-height: 297mm;");
+      expect(document.body.textContent).toMatch(/Alex Mercer|alex mercer/);
+      expect(document.body.textContent).toContain("Studio Nord");
+      expect(blocks.slice(0, 4)).toEqual([
+        "Dear Hiring Manager,",
+        "First export paragraph.",
+        "Second export paragraph.",
+        "Third export paragraph.",
+      ]);
+      expect(blocks.at(-1)).toContain("Sincerely,");
+      expect(blocks.at(-1)).toContain("alex mercer");
+      expect(document.body.textContent).not.toContain("undefined");
+      expect(document.body.textContent).not.toContain("null");
+      expect(document.body.textContent).not.toContain("[object Object]");
+      expect(document.body.textContent).not.toMatch(
+        /Graphische|Berufsschule|volksverband|Werkbund|Postcheckkonto|Bankkonto|tschichold/i,
+      );
+    },
+  );
+
+  it("maps contact-line phone into the director letterhead telephone slot during export", () => {
+    const document = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          templateId: "director-letterhead",
+          contactLine: "zoe@loi.com · 09898777 · Paris · @zoe.com",
+          applicantHeader: {
+            ...proposalFixture.applicantHeader,
+            email: "",
+            phone: "",
+            location: "",
+            linkedin: "",
+            website: "",
+          },
+        },
+        stylePreset: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "expert",
+          palette: "terre",
+        },
+      }),
+    );
+    const phoneBlock = document.querySelector(
+      ".proposal-cover-letter--director .proposal-cover-letter__phone-block",
+    );
+
+    expect(phoneBlock?.textContent).toContain("T");
+    expect(phoneBlock?.textContent).toContain("09898777");
+    expect(phoneBlock?.textContent).not.toContain("zoe@loi.com");
+  });
+
   it("scopes Arabic proposal export language direction to the generated document root", () => {
     document.documentElement.lang = "en";
     document.documentElement.dir = "ltr";
