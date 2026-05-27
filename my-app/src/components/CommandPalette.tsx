@@ -52,6 +52,11 @@ export function CommandPalette({
     resolvedLanguage,
     "commandPalette.emptyState",
   );
+  const searchPlaceholderLabel = translateUi(
+    resolvedLanguage,
+    "search.placeholder",
+  );
+  const commandsLabel = translateUi(resolvedLanguage, "menu.commands");
 
   const filteredCommands = React.useMemo(
     () => APP_COMMANDS.filter((command) => commandMatches(command, query)),
@@ -208,12 +213,12 @@ export function CommandPalette({
         <input
           ref={inputRef}
           className="cmdk__input"
-          placeholder="Search or run a command..."
+          placeholder={searchPlaceholderLabel}
           autoComplete="off"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <div className="cmdk__list" role="listbox" aria-label="Commands">
+        <div className="cmdk__list" role="listbox" aria-label={commandsLabel}>
           {COMMAND_GROUPS.map((group) => {
             const groupCommands = filteredCommands.filter(
               (command) => command.group === group,

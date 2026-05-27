@@ -18,6 +18,9 @@ describe("UI i18n foundation", () => {
     expect(getUiMessage("es", "common.save")).toBe("Guardar");
 
     expect(translateUi("en", "nav.settings")).toBe("Settings");
+    expect(translateUi("en", "nav.proposal")).toBe("Letter");
+    expect(translateUi("fr", "nav.proposal")).toBe("Lettre");
+    expect(translateUi("es", "nav.proposal")).toBe("Carta");
     expect(translateUi("fr", "settings.interfaceLanguage")).toBe(
       "Langue de l'interface",
     );
