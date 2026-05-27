@@ -26,6 +26,7 @@ export type UiAccentPreference =
 const UI_LANGUAGE_STORAGE_KEY = "twoweeks:ui-language";
 const UI_ACCENT_STORAGE_KEY = "twoweeks:ui-accent";
 const UI_CUSTOM_ACCENT_STORAGE_KEY = "twoweeks:ui-custom-accent";
+const UI_LANGUAGE_CHANGE_EVENT = "twoweeks:ui-language-change";
 
 const NAMED_UI_ACCENTS: Exclude<UiAccentId, "default" | "custom">[] = [
   "cobalt",
@@ -91,6 +92,29 @@ export function readStoredUiLanguagePreference(): UiLanguageId {
   if (typeof window === "undefined") return "auto";
   const stored = window.localStorage.getItem(UI_LANGUAGE_STORAGE_KEY);
   return isUiLanguageId(stored) ? stored : "auto";
+}
+
+function subscribeUiLanguagePreference(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === UI_LANGUAGE_STORAGE_KEY) {
+      onStoreChange();
+    }
+  };
+  const handleLocalChange = () => onStoreChange();
+
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener(UI_LANGUAGE_CHANGE_EVENT, handleLocalChange);
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(UI_LANGUAGE_CHANGE_EVENT, handleLocalChange);
+  };
+}
+
+function notifyUiLanguagePreferenceChange(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(UI_LANGUAGE_CHANGE_EVENT));
 }
 
 function readStoredAccent(): UiAccentPreference {
@@ -163,8 +187,11 @@ export function useUiLanguagePreference(): {
   resolvedLanguage: Exclude<UiLanguageId, "auto">;
   setLanguage: (language: UiLanguageId) => void;
 } {
-  const [language, setLanguageState] =
-    React.useState<UiLanguageId>(readStoredUiLanguagePreference);
+  const language = React.useSyncExternalStore(
+    subscribeUiLanguagePreference,
+    readStoredUiLanguagePreference,
+    () => "auto",
+  );
   const resolvedLanguage = resolveUiLocale(language);
 
   React.useEffect(() => {
@@ -176,8 +203,9 @@ export function useUiLanguagePreference(): {
   }, [language, resolvedLanguage]);
 
   const setLanguage = React.useCallback((nextLanguage: UiLanguageId) => {
-    setLanguageState(nextLanguage);
+    if (typeof window === "undefined") return;
     window.localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, nextLanguage);
+    notifyUiLanguagePreferenceChange();
   }, []);
 
   return { language, resolvedLanguage, setLanguage };
