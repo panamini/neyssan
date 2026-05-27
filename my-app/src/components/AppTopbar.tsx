@@ -271,7 +271,9 @@ export function AppTopbar({
     }
     if (!isSignedIn) {
       void navigate("/sign-in");
+      return;
     }
+    void navigate("/settings");
   }, [isAccountReady, isSignedIn, navigate]);
   const cvDocumentStateLabel = cvTopbarRegistration?.exporting
     ? "Exporting PDF"
