@@ -259,28 +259,28 @@ export function DashboardPage(): JSX.Element {
               onClick={importCv}
               iconLeft={<Upload size={16} aria-hidden="true" />}
             >
-              Import CV
+              {t("today.actions.importCv")}
             </Button>
             <Button
               variant="secondary"
               onClick={() => navigate("/jobs")}
               iconLeft={<Target size={16} aria-hidden="true" />}
             >
-              Add job
+              {t("today.actions.addJob")}
             </Button>
             <Button
               variant="secondary"
               onClick={startNewProposal}
               iconLeft={<PencilLine size={16} aria-hidden="true" />}
             >
-              New proposal
+              {t("today.actions.newProposal")}
             </Button>
             <Button
               variant="secondary"
               onClick={() => navigate("/templates")}
               iconLeft={<Layout size={16} aria-hidden="true" />}
             >
-              Start from template
+              {t("today.actions.startFromTemplate")}
             </Button>
           </div>
         </section>
@@ -327,21 +327,21 @@ export function DashboardPage(): JSX.Element {
                   onClick={importCv}
                   iconLeft={<Upload size={16} aria-hidden="true" />}
                 >
-                  Import CV
+                  {t("today.actions.importCv")}
                 </Button>
                 <Button
                   variant="secondary"
                   onClick={() => navigate("/jobs")}
                   iconLeft={<Target size={16} aria-hidden="true" />}
                 >
-                  Add job
+                  {t("today.actions.addJob")}
                 </Button>
                 <Button
                   variant="primary"
                   onClick={startNewProposal}
                   iconLeft={<FilePlus size={16} aria-hidden="true" />}
                 >
-                  New proposal
+                  {t("today.actions.newProposal")}
                 </Button>
               </div>
             </div>
