@@ -278,6 +278,56 @@ describe("forge rail drawers", () => {
     ).toBeInTheDocument();
   });
 
+  it("localizes Proposal Draft drawer chrome in French without touching document language", () => {
+    window.localStorage.setItem("twoweeks:ui-language", "fr");
+    window.localStorage.setItem("twoweeks:document-language", "es");
+
+    render(
+      <ProposalDraftDrawer
+        jobTitle=""
+        jobMeta={null}
+        jobSummary={null}
+        jobContextKind="empty"
+        sourceCvTitle={null}
+        proposalTypeLabel=""
+        proposalTypeOptions={proposalTypeOptions}
+        onSelectProposalType={vi.fn()}
+        toneLabel="Auto"
+        toneOptions={toneOptions}
+        onSelectTone={vi.fn()}
+        generateLabel="Generate"
+        generateDisabled={false}
+        generateState="idle"
+        onGenerateDraft={vi.fn()}
+        onOpenJobs={vi.fn()}
+        onOpenPasteJob={vi.fn()}
+        onOpenCvs={vi.fn()}
+        onClearCv={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("OFFRE")).toBeInTheDocument();
+    expect(screen.getByText("CV")).toBeInTheDocument();
+    expect(screen.getByText("PARAMÈTRES")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Choisir une offre" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Coller une offre" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Choisir un CV" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Type de document" }),
+    ).toHaveTextContent("Lettre");
+    expect(screen.getByRole("button", { name: "Ton" })).toBeInTheDocument();
+    expect(screen.queryByText(/Proposition|proposition/)).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+      "es",
+    );
+  });
+
   it("shows staged job changes in the existing job field", () => {
     const onGenerateDraft = vi.fn();
     const onCancelStagedSource = vi.fn();
@@ -659,6 +709,7 @@ describe("forge rail drawers", () => {
     expect(
       screen.getAllByRole("button", { name: "Abrir carta: Carta one" })[0],
     ).toBeInTheDocument();
+    expect(screen.getAllByText("Abrir").length).toBeGreaterThan(0);
     expect(screen.queryByText(/propuesta/i)).not.toBeInTheDocument();
     expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
       "fr",
@@ -895,7 +946,7 @@ describe("forge rail drawers", () => {
 
     fireEvent.click(
       screen.getAllByRole("checkbox", {
-        name: /Select proposal Proposal one/i,
+        name: /Select proposal: Proposal one/i,
       })[0],
     );
     expect(screen.getByRole("status")).toHaveTextContent("1 selected");

@@ -2523,6 +2523,7 @@ function CvForgeDrawerPreview({
   badge?: string | null;
   actionPill?: React.ReactNode;
 }): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
   if (item.type === "proposal") {
     return (
       <DrawerDocumentTile item={item} badge={badge} actionPill={actionPill} />
@@ -2562,7 +2563,11 @@ function CvForgeDrawerPreview({
   if (!hydratedCv) {
     return (
       <DrawerUnavailableThumbnail
-        label={failed ? "Preview unavailable" : "Loading preview"}
+        label={
+          failed
+            ? translateUi(resolvedLanguage, "errors.previewUnavailable")
+            : translateUi(resolvedLanguage, "loading.preview")
+        }
       />
     );
   }

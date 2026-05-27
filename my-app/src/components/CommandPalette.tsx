@@ -15,6 +15,12 @@ type CommandPaletteProps = {
   onToggleTheme: () => void;
 };
 
+const COMMAND_GROUP_LABEL_KEYS = {
+  Create: "commandGroup.create",
+  "Go to": "commandGroup.goTo",
+  Actions: "commandGroup.actions",
+} satisfies Record<(typeof COMMAND_GROUPS)[number], Parameters<typeof translateUi>[1]>;
+
 function commandMatches(
   command: AppCommand,
   query: string,
@@ -67,6 +73,11 @@ export function CommandPalette({
       command.labelKey
         ? translateUi(resolvedLanguage, command.labelKey)
         : command.label,
+    [resolvedLanguage],
+  );
+  const getCommandGroupLabel = React.useCallback(
+    (group: (typeof COMMAND_GROUPS)[number]) =>
+      translateUi(resolvedLanguage, COMMAND_GROUP_LABEL_KEYS[group]),
     [resolvedLanguage],
   );
 
@@ -242,9 +253,11 @@ export function CommandPalette({
               return null;
             }
 
+            const groupLabel = getCommandGroupLabel(group);
+
             return (
-              <section key={group} className="cmdk__group" aria-label={group}>
-                <div className="cmdk__group-label">{group}</div>
+              <section key={group} className="cmdk__group" aria-label={groupLabel}>
+                <div className="cmdk__group-label">{groupLabel}</div>
                 {groupCommands.map((command) => {
                   const commandIndex = filteredCommands.indexOf(command);
                   const highlighted = commandIndex === activeIndex;
@@ -284,9 +297,9 @@ export function CommandPalette({
           ) : null}
         </div>
         <div className="cmdk__hint">
-          <span>Up/down navigate</span>
-          <span>Enter select</span>
-          <span>Esc close</span>
+          <span>{translateUi(resolvedLanguage, "commandPalette.hint.navigate")}</span>
+          <span>{translateUi(resolvedLanguage, "commandPalette.hint.select")}</span>
+          <span>{translateUi(resolvedLanguage, "commandPalette.hint.close")}</span>
         </div>
       </div>
     </div>,
