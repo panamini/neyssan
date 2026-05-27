@@ -198,7 +198,7 @@ describe("SettingsPage preview controls", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "Open custom interface accent color picker",
+        name: "Open custom color picker",
       }),
     );
     await user.click(
@@ -221,7 +221,7 @@ describe("SettingsPage preview controls", () => {
     });
     await user.click(
       within(interfaceLanguageGroup).getByRole("button", {
-        name: /Spanish Espanol/,
+        name: /Spanish Español/,
       }),
     );
     expect(document.documentElement.dataset.uiLanguage).toBe("es");
@@ -243,7 +243,7 @@ describe("SettingsPage preview controls", () => {
     expect(interfaceLanguageGroup).toBeInTheDocument();
     expect(
       within(documentLanguageGroup).getByRole("button", {
-        name: /Auto Match the job\/source language when available\./,
+        name: /Auto Match job\/source language\./,
       }),
     ).toBeInTheDocument();
   });
@@ -252,16 +252,14 @@ describe("SettingsPage preview controls", () => {
     {
       locale: "fr",
       interfaceLabel: "Langue de l'interface",
-      documentLabel: "Langue par defaut du document",
-      autoHelp:
-        "Utiliser la langue de l'offre/source quand elle est disponible.",
+      documentLabel: "Langue par défaut du document",
+      autoHelp: "Langue de l'offre/source.",
     },
     {
       locale: "es",
       interfaceLabel: "Idioma de la interfaz",
       documentLabel: "Idioma predeterminado del documento",
-      autoHelp:
-        "Coincidir con el idioma de la oferta/fuente cuando este disponible.",
+      autoHelp: "Idioma de la oferta/fuente.",
     },
   ])(
     "renders Settings language controls through $locale UI messages",
@@ -298,10 +296,10 @@ describe("SettingsPage preview controls", () => {
       within(group).getByRole("button", { name: /English English/ }),
     ).toBeInTheDocument();
     expect(
-      within(group).getByRole("button", { name: /French Francais/ }),
+      within(group).getByRole("button", { name: /French Français/ }),
     ).toBeInTheDocument();
     expect(
-      within(group).getByRole("button", { name: /Spanish Espanol/ }),
+      within(group).getByRole("button", { name: /Spanish Español/ }),
     ).toBeInTheDocument();
     expect(
       within(group).queryByRole("button", { name: /German/ }),
@@ -331,7 +329,7 @@ describe("SettingsPage preview controls", () => {
 
 	    expect(
 	      within(documentGroup).getByRole("button", {
-	        name: /Auto Match the job\/source language when available\./,
+	        name: /Auto Match job\/source language\./,
 	      }),
 	    ).toBeInTheDocument();
 	    expect(
@@ -341,20 +339,20 @@ describe("SettingsPage preview controls", () => {
 	      within(documentGroup).getByRole("button", { name: /Irish Gaeilge/ }),
 	    ).toBeInTheDocument();
 	    expect(
-	      within(documentGroup).getByRole("button", { name: /Greek Ellinika/ }),
+	      within(documentGroup).getByRole("button", { name: /Greek Ελληνικά/ }),
 	    ).toBeInTheDocument();
 	    expect(
-	      within(documentGroup).getByRole("button", { name: /Russian Russkiy/ }),
+	      within(documentGroup).getByRole("button", { name: /Russian Русский/ }),
 	    ).toBeInTheDocument();
 	    expect(
 	      within(documentGroup).getByRole("button", {
-	        name: /Arabic Al-Arabiyyah/,
+	        name: /Arabic العربية/,
 	      }),
 	    ).toBeInTheDocument();
 
 	    await user.click(
 	      within(documentGroup).getByRole("button", {
-	        name: /Arabic Al-Arabiyyah/,
+	        name: /Arabic العربية/,
       }),
     );
 
@@ -374,7 +372,7 @@ describe("SettingsPage preview controls", () => {
 
 	    await user.click(
 	      within(uiGroup).getByRole("button", {
-	        name: /Spanish Espanol/,
+	        name: /Spanish Español/,
 	      }),
 	    );
 
@@ -385,6 +383,46 @@ describe("SettingsPage preview controls", () => {
 	    expect(document.documentElement.lang).toBe("es");
 	    expect(document.documentElement.dir).toBe("ltr");
 	  });
+
+  it.each([
+    {
+      locale: "fr",
+      modeLabel: "Mode d'interface",
+      appearanceLabel: "Apparence",
+      lightLabel: "Clair",
+      darkLabel: "Sombre",
+      systemLabel: "Système",
+    },
+    {
+      locale: "es",
+      modeLabel: "Modo de interfaz",
+      appearanceLabel: "Apariencia",
+      lightLabel: "Claro",
+      darkLabel: "Oscuro",
+      systemLabel: "Sistema",
+    },
+  ])(
+    "renders Settings theme chrome through $locale UI messages",
+    ({ locale, modeLabel, appearanceLabel, lightLabel, darkLabel, systemLabel }) => {
+      window.localStorage.setItem("twoweeks:ui-language", locale);
+
+      renderSettings("/settings?tab=theme");
+
+      expect(screen.getByText(appearanceLabel)).toBeInTheDocument();
+      expect(
+        screen.getByRole("group", { name: modeLabel }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: lightLabel }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: darkLabel }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: systemLabel }),
+      ).toBeInTheDocument();
+    },
+  );
 
   it("hydrates default style slots from the onboarding document style set", () => {
     presetsQueryMock.mockReturnValue({
@@ -1050,7 +1088,7 @@ describe("SettingsPage preview controls", () => {
     const signatureGroup = screen.getByRole("group", { name: "Printed name" });
     await user.click(
       within(signatureGroup).getByRole("button", {
-        name: "FD Garamond printed name",
+        name: /FD Garamond/i,
       }),
     );
 

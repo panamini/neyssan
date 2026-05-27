@@ -19,7 +19,7 @@ export const LOCALE_REGISTRY = {
     qaStatus: "production",
   },
   fr: {
-    nativeName: "Francais",
+    nativeName: "Français",
     dir: "ltr",
     ui: true,
     documents: true,
@@ -27,7 +27,7 @@ export const LOCALE_REGISTRY = {
     qaStatus: "production",
   },
   es: {
-    nativeName: "Espanol",
+    nativeName: "Español",
     dir: "ltr",
     ui: true,
     documents: true,
@@ -51,7 +51,7 @@ export const LOCALE_REGISTRY = {
     qaStatus: "none",
   },
   pt: {
-    nativeName: "Portugues",
+    nativeName: "Português",
     dir: "ltr",
     ui: true,
     documents: true,
@@ -83,7 +83,7 @@ export const LOCALE_REGISTRY = {
     qaStatus: "none",
   },
   el: {
-    nativeName: "Ellinika",
+    nativeName: "Ελληνικά",
     dir: "ltr",
     ui: false,
     documents: true,
@@ -99,7 +99,7 @@ export const LOCALE_REGISTRY = {
     qaStatus: "none",
   },
   lt: {
-    nativeName: "Lietuviu",
+    nativeName: "Lietuvių",
     dir: "ltr",
     ui: false,
     documents: true,
@@ -115,7 +115,7 @@ export const LOCALE_REGISTRY = {
     qaStatus: "none",
   },
   ru: {
-    nativeName: "Russkiy",
+    nativeName: "Русский",
     dir: "ltr",
     ui: false,
     documents: true,
@@ -123,7 +123,7 @@ export const LOCALE_REGISTRY = {
     qaStatus: "none",
   },
   ar: {
-    nativeName: "Al-Arabiyyah",
+    nativeName: "العربية",
     dir: "rtl",
     ui: false,
     documents: true,

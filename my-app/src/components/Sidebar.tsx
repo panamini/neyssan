@@ -30,15 +30,15 @@ import { useUiLanguagePreference } from "../lib/ui-preferences";
 const COMPACT_RAIL_WIDTH = 768;
 
 const SETTINGS_DRAWER_GROUPS: Array<{
-  label: string;
+  labelKey: UiMessageKey;
   tabs: SettingsTab[];
 }> = [
-  { label: "Account", tabs: ["account", "team", "danger"] },
+  { labelKey: "settings.drawer.group.account", tabs: ["account", "team", "danger"] },
   {
-    label: "Defaults",
+    labelKey: "settings.drawer.group.defaults",
     tabs: ["theme", "language", "docstyle", "voice"],
   },
-  { label: "Payment", tabs: ["billing"] },
+  { labelKey: "settings.drawer.group.payment", tabs: ["billing"] },
 ];
 
 const NAV_MESSAGE_KEYS = {
@@ -216,18 +216,20 @@ function SidebarRailButton({
 
 function SettingsDrawerContent({
   activeTab,
+  labelFor,
   onSelectTab,
 }: {
   activeTab: string;
+  labelFor: (key: UiMessageKey) => string;
   onSelectTab: (tabId: (typeof SETTINGS_TABS)[number]["id"]) => void;
 }): JSX.Element {
   return (
     <div className="forge-rail-drawer forge-rail-drawer--settings">
       <div className="forge-rail-drawer__list" role="list">
         {SETTINGS_DRAWER_GROUPS.map((group) => (
-          <React.Fragment key={group.label}>
+          <React.Fragment key={group.labelKey}>
             <div className="forge-rail-drawer__category-label">
-              {group.label}
+              {labelFor(group.labelKey)}
             </div>
             {group.tabs.map((tabId) => {
               const tab = SETTINGS_TABS.find(
@@ -248,8 +250,8 @@ function SettingsDrawerContent({
                     aria-current={active ? "page" : undefined}
                     onClick={() => onSelectTab(tab.id)}
                   >
-                    <strong>{tab.label}</strong>
-                    <span>{tab.description}</span>
+                    <strong>{labelFor(tab.labelKey)}</strong>
+                    <span>{labelFor(tab.descriptionKey)}</span>
                   </button>
                 </article>
               );
@@ -281,22 +283,24 @@ export const Sidebar: React.FC = () => {
   const activeSettingsTab = normalizeSettingsTab(
     new URLSearchParams(location.search).get("tab"),
   );
+  const settingsSectionsLabel = navLabel("settings.drawer.sections");
   useRegisterForgePanel(
     React.useMemo(
       () => ({
         surface: "settings" as const,
         title: "",
-        ariaLabel: "Settings sections",
+        ariaLabel: settingsSectionsLabel,
         renderContent: () => (
           <SettingsDrawerContent
             activeTab={activeSettingsTab}
+            labelFor={navLabel}
             onSelectTab={(tabId) => {
               navigate(getSettingsTabPath(tabId));
             }}
           />
         ),
       }),
-      [activeSettingsTab, navigate],
+      [activeSettingsTab, navigate, settingsSectionsLabel, navLabel],
     ),
   );
   const [finePointer, setFinePointer] = React.useState(() =>

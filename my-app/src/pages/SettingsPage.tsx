@@ -25,7 +25,6 @@ import {
   isProposalPaletteId,
   type ProposalPaletteId,
 } from "../lib/proposal-style-display";
-import { getVoicePresetDisplayLabel } from "../lib/proposal-voice-label";
 import {
   VERBATI_FONT_PAIR_OPTIONS,
   type VerbatiFontPairId,
@@ -54,7 +53,7 @@ import {
   useUiLanguagePreference,
   type UiAccentId,
 } from "../lib/ui-preferences";
-import { translateUi } from "../lib/i18n";
+import { translateUi, type UiMessageKey } from "../lib/i18n";
 import {
   DOCUMENT_LANGUAGE_OPTIONS,
   useDocumentLanguagePreference,
@@ -121,42 +120,42 @@ type ProposalContactField = keyof ProposalContactSettings;
 
 const PROPOSAL_CONTACT_FIELDS: Array<{
   id: ProposalContactField;
-  label: string;
+  labelKey: UiMessageKey;
   type: React.HTMLInputTypeAttribute;
   placeholder: string;
   fallbackKey: "email" | "phone" | "location" | "linkedin" | "website";
 }> = [
   {
     id: "proposalDefaultContactEmail",
-    label: "Email",
+    labelKey: "settings.contact.email",
     type: "email",
     placeholder: "name@example.com",
     fallbackKey: "email",
   },
   {
     id: "proposalDefaultContactPhone",
-    label: "Phone",
+    labelKey: "settings.contact.phone",
     type: "tel",
     placeholder: "+33 6 00 00 00 00",
     fallbackKey: "phone",
   },
   {
     id: "proposalDefaultContactLocation",
-    label: "Location",
+    labelKey: "settings.contact.location",
     type: "text",
     placeholder: "Paris, France",
     fallbackKey: "location",
   },
   {
     id: "proposalDefaultContactLinkedin",
-    label: "LinkedIn",
+    labelKey: "settings.contact.linkedin",
     type: "url",
     placeholder: "https://linkedin.com/in/name",
     fallbackKey: "linkedin",
   },
   {
     id: "proposalDefaultContactWebsite",
-    label: "Website",
+    labelKey: "settings.contact.website",
     type: "url",
     placeholder: "https://example.com",
     fallbackKey: "website",
@@ -175,10 +174,10 @@ function cleanSettingsInput(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-const DEFAULT_SLOT_NAMES: Record<SlotIndex, string> = {
-  1: "Style 1",
-  2: "Style 2",
-  3: "Style 3",
+const DEFAULT_SLOT_NAME_KEYS: Record<SlotIndex, UiMessageKey> = {
+  1: "settings.style.slot1",
+  2: "settings.style.slot2",
+  3: "settings.style.slot3",
 };
 
 const DEFAULT_FONT_PAIR_ID = "geist-baskervville" as const;
@@ -216,34 +215,6 @@ function normalizeSettingsAccentHex(
   return /^#[0-9a-fA-F]{6}$/.test(normalized) ? normalized.toLowerCase() : null;
 }
 
-// ─── Tone options ──────────────────────────────────────────────────────────────
-const TONE_OPTIONS: Array<{
-  id: ToneId;
-  label: string;
-  description: string;
-}> = [
-  {
-    id: null,
-    label: getVoicePresetDisplayLabel(null),
-    description: "Chooses from the job and selected CV at generation time.",
-  },
-  {
-    id: "engaging",
-    label: getVoicePresetDisplayLabel("engaging"),
-    description: "Approachable. Personal touches.",
-  },
-  {
-    id: "signature",
-    label: getVoicePresetDisplayLabel("signature"),
-    description: "Conversational. Like you wrote it.",
-  },
-  {
-    id: "expert",
-    label: getVoicePresetDisplayLabel("expert"),
-    description: "Composed. Measured pacing.",
-  },
-];
-
 function settingsToneBadgeTone(id: ToneId): ToneBadgeTone {
   if (id === "engaging") return "warm";
   if (id === "expert") return "formal";
@@ -255,8 +226,7 @@ function settingsToneBadgeTone(id: ToneId): ToneBadgeTone {
 
 type StyleOption = {
   id: "auto" | "workshop" | "workshop-twocol";
-  label: string;
-  description: string;
+  labelKey: UiMessageKey;
   isAuto?: boolean;
   resumeTemplateId?: ResumeTemplateId;
 };
@@ -264,25 +234,49 @@ type StyleOption = {
 const STYLE_OPTIONS = [
   {
     id: "auto",
-    label: "Auto",
-    description: "Matches the look to the role.",
+    labelKey: "settings.style.auto.label",
     isAuto: true,
   },
   {
     id: "workshop",
-    label: "Minimal",
-    description:
-      "A clean one-column CV that works well with recruiters and application systems.",
+    labelKey: "settings.style.minimal.label",
     resumeTemplateId: WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   },
   {
     id: "workshop-twocol",
-    label: "French",
-    description:
-      "A structured two-column CV with clear sections and hierarchy.",
+    labelKey: "settings.style.french.label",
     resumeTemplateId: WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
   },
 ] satisfies StyleOption[];
+
+type ToneOption = {
+  id: ToneId;
+  labelKey: UiMessageKey;
+  descriptionKey: UiMessageKey;
+};
+
+const TONE_OPTIONS = [
+  {
+    id: null,
+    labelKey: "settings.tone.auto.label",
+    descriptionKey: "settings.tone.auto.description",
+  },
+  {
+    id: "engaging",
+    labelKey: "settings.tone.engaging.label",
+    descriptionKey: "settings.tone.engaging.description",
+  },
+  {
+    id: "signature",
+    labelKey: "settings.tone.signature.label",
+    descriptionKey: "settings.tone.signature.description",
+  },
+  {
+    id: "expert",
+    labelKey: "settings.tone.expert.label",
+    descriptionKey: "settings.tone.expert.description",
+  },
+] satisfies ToneOption[];
 
 function buildPresetSlotStylePreset(preset: PresetSlot): VerbatiStylePreset {
   const baseStyle = preset.verbatiStyle
@@ -445,10 +439,12 @@ const ZONE_INDICES = Array.from({ length: 25 }, (_, i) => i + 1);
 
 function SettingsLayoutCard({
   option,
+  label,
   active,
   onSelect,
 }: {
   option: StyleOption;
+  label: string;
   active: boolean;
   onSelect: () => void;
 }) {
@@ -494,7 +490,7 @@ function SettingsLayoutCard({
           </>
         )}
       </span>
-      <span className="layout-card__name">{option.label}</span>
+      <span className="layout-card__name">{label}</span>
     </button>
   );
 }
@@ -504,16 +500,16 @@ function SettingsLayoutCard({
 function HeroPreview({
   preset,
   slotName,
+  styleLabel,
 }: {
   preset: PresetSlot;
   slotName: string;
+  styleLabel: string;
 }) {
   const fontPair =
     VERBATI_FONT_PAIR_OPTIONS.find((f) => f.id === preset.fontPairId) ??
     DEFAULT_FONT_PAIR_OPTION;
-  const styleOption =
-    STYLE_OPTIONS.find((s) => s.id === resolvePresetLayoutSelection(preset)) ??
-    STYLE_OPTIONS[0];
+  const layoutSelection = resolvePresetLayoutSelection(preset);
   const paletteOption = PROPOSAL_PALETTE_OPTIONS.find(
     (p) => p.id === preset.paletteOverride,
   );
@@ -529,13 +525,13 @@ function HeroPreview({
     "color-mix(in srgb, var(--color-accent) 80%, white 20%)";
 
   const previewDef =
-    styleOption.id === "auto"
+    layoutSelection === "auto"
       ? PROPOSAL_AUTO_STYLE_PREVIEW
       : PROPOSAL_STYLE_PREVIEW_DEFINITIONS.balanced;
 
   return (
     <article
-      className={`dasti-settings-hero-preview dasti-settings-hero-preview--${styleOption.id}`}
+      className={`dasti-settings-hero-preview dasti-settings-hero-preview--${layoutSelection}`}
       data-font-pair-id={fontPair.id}
       style={{ "--hero-accent": accentColor } as React.CSSProperties}
     >
@@ -590,7 +586,7 @@ function HeroPreview({
             {fontPair?.headingLabel} / {fontPair?.bodyLabel}
           </span>
           <span className="dasti-settings-hero-preview__style-badge">
-            {styleOption.label}
+            {styleLabel}
           </span>
         </div>
       </div>
@@ -601,18 +597,23 @@ function HeroPreview({
 // ─── Slot card ─────────────────────────────────────────────────────────────────
 
 function SlotCard({
-  slotIndex,
+  slotName,
   preset,
   isEditing,
   isActive,
   onSelect,
 }: {
-  slotIndex: SlotIndex;
+  slotName: string;
   preset: PresetSlot;
   isEditing: boolean;
   isActive: boolean;
   onSelect: () => void;
 }) {
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const t = React.useCallback(
+    (key: UiMessageKey) => translateUi(resolvedLanguage, key),
+    [resolvedLanguage],
+  );
   const fontPair =
     VERBATI_FONT_PAIR_OPTIONS.find((f) => f.id === preset.fontPairId) ??
     DEFAULT_FONT_PAIR_OPTION;
@@ -623,7 +624,6 @@ function SlotCard({
     preset.accentHex ??
     paletteOption?.color ??
     "color-mix(in srgb, var(--color-accent) 80%, white 20%)";
-  const slotName = preset.name || DEFAULT_SLOT_NAMES[slotIndex];
 
   return (
     <button
@@ -637,17 +637,17 @@ function SlotCard({
         .join(" ")}
       onClick={onSelect}
       aria-pressed={isEditing}
-      title={`Edit ${slotName}`}
+      title={`${t("settings.editSlot")} ${slotName}`}
     >
       <div className="dasti-settings-slot-card__top">
         <span className="dasti-settings-slot-card__name">{slotName}</span>
         {isActive ? (
           <span
             className="dasti-settings-slot-card__active-badge"
-            aria-label="Active default"
+            aria-label={t("settings.activeDefault")}
           >
             <Check size={9} strokeWidth={2.6} aria-hidden="true" />
-            Default
+            {t("settings.defaultBadge")}
           </span>
         ) : null}
       </div>
@@ -682,11 +682,16 @@ function FontPairGrid({
   selectedId: VerbatiFontPairId | null;
   onChange: (id: VerbatiFontPairId) => void;
 }) {
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const t = React.useCallback(
+    (key: UiMessageKey) => translateUi(resolvedLanguage, key),
+    [resolvedLanguage],
+  );
   return (
     <div
       className="dasti-settings-font-grid"
       role="group"
-      aria-label="Font pair"
+      aria-label={t("settings.fontPair")}
     >
       {VERBATI_FONT_PAIR_OPTIONS.map((pair) => {
         const active = selectedId === pair.id;
@@ -795,9 +800,13 @@ async function readSignatureImageFile(file: File): Promise<string> {
 function SignatureDrawingPad({
   onImageReady,
   initialImageDataUrl,
+  clearLabel,
+  canvasLabel,
 }: {
   onImageReady: (imageDataUrl: string) => void;
   initialImageDataUrl?: string | null;
+  clearLabel: string;
+  canvasLabel: string;
 }) {
   const STROKE_WIDTH = 4.0;
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -909,7 +918,7 @@ function SignatureDrawingPad({
       <canvas
         ref={canvasRef}
         className="dasti-settings-signature-canvas"
-        aria-label="Draw signature"
+        aria-label={canvasLabel}
         onPointerDown={(event) => {
           const canvas = canvasRef.current;
           const point = getPoint(event);
@@ -942,7 +951,7 @@ function SignatureDrawingPad({
         onClick={clearDrawing}
       >
         <Eraser size={14} strokeWidth={1.8} aria-hidden="true" />
-        Clear
+        {clearLabel}
       </button>
     </div>
   );
@@ -959,6 +968,11 @@ function SignatureSelector({
 }) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const t = React.useCallback(
+    (key: UiMessageKey) => translateUi(resolvedLanguage, key),
+    [resolvedLanguage],
+  );
   const signatureRender = resolveProposalSignatureRender({
     settings,
     bodyFontFamily,
@@ -977,21 +991,31 @@ function SignatureSelector({
           imageDataUrl,
         });
       } catch (nextError) {
-        setError(
-          nextError instanceof Error
-            ? nextError.message
-            : "Could not import this signature image.",
-        );
+        const nextMessage =
+          nextError instanceof Error ? nextError.message : "";
+        if (nextMessage === "Use a PNG, JPG, or WebP signature image.") {
+          setError(t("settings.signature.usePngJpgWebp"));
+          return;
+        }
+        if (nextMessage === "Could not read the image.") {
+          setError(t("settings.signature.couldNotRead"));
+          return;
+        }
+        if (nextMessage === "Could not load the image.") {
+          setError(t("settings.signature.couldNotLoad"));
+          return;
+        }
+        setError(t("settings.signature.couldNotImport"));
       }
     },
-    [onChange, settings.fontId, settings.mode],
+    [onChange, settings.fontId, settings.mode, t],
   );
 
   return (
     <div
       className="dasti-settings-signature"
       role="group"
-      aria-label="Printed name"
+      aria-label={t("settings.printedName")}
     >
       <div className="sig-grid">
         <button
@@ -1013,7 +1037,7 @@ function SignatureSelector({
             {SIGNATURE_SAMPLE_NAME}
           </span>
           <span className="sig-card__name">
-            Auto — generated from your name
+            {t("settings.signature.autoGeneratedName")}
           </span>
         </button>
 
@@ -1026,7 +1050,7 @@ function SignatureSelector({
               type="button"
               className="sig-card"
               data-selected={active ? "true" : "false"}
-              aria-label={`${option.label} printed name`}
+              aria-label={`${option.label} ${t("settings.printedName")}`}
               aria-pressed={active}
               onClick={() =>
                 onChange({
@@ -1043,7 +1067,7 @@ function SignatureSelector({
                 {SIGNATURE_SAMPLE_NAME}
               </span>
               <span className="sig-card__name">
-                {option.label} — printed name font
+                {option.label} — {t("settings.signature.printedNameFont")}
               </span>
             </button>
           );
@@ -1057,7 +1081,7 @@ function SignatureSelector({
           onClick={() => fileInputRef.current?.click()}
         >
           <Upload size={14} strokeWidth={1.8} aria-hidden="true" />
-          Import image
+          {t("settings.signature.importImage")}
         </button>
         <input
           ref={fileInputRef}
@@ -1072,9 +1096,11 @@ function SignatureSelector({
 
         <div className="dasti-settings-signature-tool dasti-settings-signature-tool--canvas">
           <Pen size={14} strokeWidth={1.8} aria-hidden="true" />
-          Draw
+          {t("settings.signature.drawSignature")}
           <SignatureDrawingPad
             initialImageDataUrl={settings.imageDataUrl}
+            clearLabel={t("settings.signature.clear")}
+            canvasLabel={t("settings.signature.drawSignature")}
             onImageReady={(imageDataUrl) =>
               onChange({
                 mode: settings.mode === "font" ? "font" : "image",
@@ -1088,11 +1114,14 @@ function SignatureSelector({
 
       <div className="dasti-settings-signature-current" aria-live="polite">
         <span className="dasti-settings-signature-current__label">
-          Current printed name
+          {t("settings.signature.currentPrintedName")}
         </span>
         <span className="dasti-settings-signature-current__preview">
           {signatureRender.kind === "image" ? (
-            <img src={signatureRender.imageDataUrl} alt="Selected signature" />
+            <img
+              src={signatureRender.imageDataUrl}
+              alt={t("settings.signature.currentPrintedName")}
+            />
           ) : (
             <span style={{ fontFamily: signatureRender.fontFamily }}>
               {SIGNATURE_SAMPLE_NAME}
@@ -1112,7 +1141,7 @@ function SignatureSelector({
             }
           >
             <TrashSimple size={14} strokeWidth={1.8} aria-hidden="true" />
-            Remove image
+            {t("settings.signature.removeImage")}
           </button>
         ) : null}
       </div>
@@ -1155,6 +1184,10 @@ export function SettingsPage(): JSX.Element {
     resolvedLanguage: resolvedUiLanguage,
     setLanguage: setUiLanguage,
   } = useUiLanguagePreference();
+  const t = React.useCallback(
+    (key: UiMessageKey) => translateUi(resolvedUiLanguage, key),
+    [resolvedUiLanguage],
+  );
   const { language: documentLanguage, setLanguage: setDocumentLanguage } =
     useDocumentLanguagePreference();
   const { accent: uiAccent, setAccent: setUiAccent } = useUiAccentPreference();
@@ -1212,6 +1245,31 @@ export function SettingsPage(): JSX.Element {
     React.useState(false);
   const [isUiCustomColorPickerOpen, setIsUiCustomColorPickerOpen] =
     React.useState(false);
+  const styleOptions = React.useMemo(
+    () =>
+      STYLE_OPTIONS.map((option) => ({
+        ...option,
+        label: t(option.labelKey),
+      })),
+    [t],
+  );
+  const toneOptions = React.useMemo(
+    () =>
+      TONE_OPTIONS.map((option) => ({
+        ...option,
+        label: t(option.labelKey),
+        description: t(option.descriptionKey),
+      })),
+    [t],
+  );
+  const contactFieldOptions = React.useMemo(
+    () =>
+      PROPOSAL_CONTACT_FIELDS.map((field) => ({
+        ...field,
+        label: t(field.labelKey),
+      })),
+    [t],
+  );
 
   React.useEffect(() => {
     const handleResize = () => {
@@ -1476,31 +1534,31 @@ export function SettingsPage(): JSX.Element {
     async (voicePreset: ToneId) => {
       setSaveError(null);
       setDefaultVoicePreset(voicePreset);
-      if (!isSignedIn) {
-        setSaveError("Sign in to save voice settings.");
-        return;
-      }
-      try {
-        await setCurrentProposalSettings({ voicePreset });
-        flashSaved();
-      } catch (error) {
-        const message =
-          error instanceof Error && error.message
-            ? error.message
-            : "Could not save voice settings.";
-        setSaveError(message);
-      }
-    },
-    [flashSaved, isSignedIn, setCurrentProposalSettings],
+    if (!isSignedIn) {
+      setSaveError(t("settings.voice.signInToSave"));
+      return;
+    }
+    try {
+      await setCurrentProposalSettings({ voicePreset });
+      flashSaved();
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : t("settings.voice.couldNotSave");
+      setSaveError(message);
+    }
+  },
+    [flashSaved, isSignedIn, setCurrentProposalSettings, t],
   );
 
   const accountDisplayName =
     user?.fullName ??
     user?.primaryEmailAddress?.emailAddress ??
     user?.username ??
-    "Your account";
+    t("settings.account.yourAccount");
   const accountEmail =
-    user?.primaryEmailAddress?.emailAddress ?? "Not connected";
+    user?.primaryEmailAddress?.emailAddress ?? t("settings.account.notConnected");
   const isWideEnoughForSettingsDrawerDock =
     viewportWidth >= SETTINGS_DOCKED_DRAWER_MIN_VIEWPORT_WIDTH;
   const isSettingsDrawerDocked =
@@ -1581,11 +1639,10 @@ export function SettingsPage(): JSX.Element {
                     <div className="dasti-settings-slot-picker__header">
                       <div>
                         <h1 className="dasti-settings-page__title">
-                          Style profiles
+                          {t("settings.styleProfiles.title")}
                         </h1>
                         <p className="dasti-settings-page__subtitle">
-                          Assemble up to 3 style presets. The active one applies
-                          to new cover letters.
+                          {t("settings.styleProfiles.subtitle")}
                         </p>
                       </div>
                       {savedTick && (
@@ -1598,7 +1655,7 @@ export function SettingsPage(): JSX.Element {
                             strokeWidth={2.4}
                             aria-hidden="true"
                           />
-                          Saved.
+                          {t("settings.saved")}
                         </span>
                       )}
                       {saveError && (
@@ -1613,7 +1670,7 @@ export function SettingsPage(): JSX.Element {
                     <div
                       className="dasti-settings-slot-rail"
                       role="group"
-                      aria-label="Style preset slots"
+                      aria-label={t("settings.styleProfiles.slots")}
                     >
                       {([1, 2, 3] as SlotIndex[]).map((slot) => {
                         const isEditingSlot = editingSlot === slot;
@@ -1637,7 +1694,7 @@ export function SettingsPage(): JSX.Element {
                                         strokeWidth={2.4}
                                         aria-hidden="true"
                                       />
-                                      Set as default
+                                      {t("settings.setAsDefault")}
                                     </button>
                                   ) : null}
                                   <button
@@ -1647,13 +1704,17 @@ export function SettingsPage(): JSX.Element {
                                       handleResetPresetToFactory(slot)
                                     }
                                   >
-                                    Reset Style {slot}
+                                    {t("settings.resetStyle")}{" "}
+                                    {t(DEFAULT_SLOT_NAME_KEYS[slot])}
                                   </button>
                                 </>
                               ) : null}
                             </div>
                             <SlotCard
-                              slotIndex={slot}
+                              slotName={
+                                localPresets[slot].name ||
+                                t(DEFAULT_SLOT_NAME_KEYS[slot])
+                              }
                               preset={localPresets[slot]}
                               isEditing={isEditingSlot}
                               isActive={isActiveSlot}
@@ -1676,7 +1737,7 @@ export function SettingsPage(): JSX.Element {
                         <div className="dasti-settings-appearance-group dasti-settings-appearance-group--wide dasti-settings-appearance-group--typography">
                           <div className="dasti-settings-appearance-group__header">
                             <div className="dasti-settings-appearance-label">
-                              Font
+                              {t("settings.font")}
                             </div>
                           </div>
                           <FontPairGrid
@@ -1691,18 +1752,19 @@ export function SettingsPage(): JSX.Element {
                         <div className="dasti-settings-appearance-group dasti-settings-appearance-group--layout">
                           <div className="dasti-settings-appearance-group__header">
                             <div className="dasti-settings-appearance-label">
-                              Layout
+                              {t("settings.layout")}
                             </div>
                           </div>
                           <div
                             className="layout-grid"
                             role="group"
-                            aria-label="Layout"
+                            aria-label={t("settings.layout")}
                           >
-                            {STYLE_OPTIONS.map((option) => (
+                            {styleOptions.map((option) => (
                               <SettingsLayoutCard
                                 key={option.id}
                                 option={option}
+                                label={option.label}
                                 active={
                                   resolvePresetLayoutSelection(
                                     currentPreset,
@@ -1738,14 +1800,14 @@ export function SettingsPage(): JSX.Element {
                         <div className="dasti-settings-appearance-group dasti-settings-appearance-group--color">
                           <div className="dasti-settings-appearance-group__header">
                             <div className="dasti-settings-appearance-label">
-                              Color
+                              {t("settings.color")}
                             </div>
                           </div>
                           <div
                             ref={customColorSurfaceRef}
                             className="style-swatches"
                             role="group"
-                            aria-label="Color"
+                            aria-label={t("settings.color")}
                           >
                             {SETTINGS_ACCENT_OPTIONS.map((option) => {
                               const selectedPalette =
@@ -1794,13 +1856,13 @@ export function SettingsPage(): JSX.Element {
                               data-selected={
                                 currentCustomAccentHex ? "true" : "false"
                               }
-                              aria-label="Open custom color picker"
+                              aria-label={t("settings.openCustomColorPicker")}
                               aria-pressed={Boolean(currentCustomAccentHex)}
                               onClick={() => setIsCustomColorPickerOpen(true)}
                               title={
                                 currentCustomAccentHex
-                                  ? `Custom accent ${customAccentColor}`
-                                  : "Open custom color picker"
+                                  ? `${t("settings.customAccent")} ${customAccentColor}`
+                                  : t("settings.openCustomColorPicker")
                               }
                               style={
                                 {
@@ -1838,7 +1900,7 @@ export function SettingsPage(): JSX.Element {
                         <div className="dasti-settings-appearance-group dasti-settings-appearance-group--signature">
                           <div className="dasti-settings-appearance-group__header">
                             <div className="dasti-settings-appearance-label">
-                              Printed name
+                              {t("settings.printedName")}
                             </div>
                           </div>
                           <SignatureSelector
@@ -1863,14 +1925,21 @@ export function SettingsPage(): JSX.Element {
                     <div className="dasti-settings-builder__right">
                       <div className="dasti-settings-builder__preview-label">
                         {currentPreset.name ||
-                          DEFAULT_SLOT_NAMES[effectiveEditingSlot]}
+                          t(DEFAULT_SLOT_NAME_KEYS[effectiveEditingSlot])}
                       </div>
                       <HeroPreview
                         key={effectiveEditingSlot}
                         preset={currentPreset}
                         slotName={
                           currentPreset.name ||
-                          DEFAULT_SLOT_NAMES[effectiveEditingSlot]
+                          t(DEFAULT_SLOT_NAME_KEYS[effectiveEditingSlot])
+                        }
+                        styleLabel={
+                          styleOptions.find(
+                            (option) =>
+                              option.id ===
+                              resolvePresetLayoutSelection(currentPreset),
+                          )?.label ?? t("settings.style.auto.label")
                         }
                       />
                     </div>
@@ -1885,10 +1954,11 @@ export function SettingsPage(): JSX.Element {
               >
                 <div className="settings__group">
                   <div className="settings__group-head">
-                    <div className="settings__group-title">Profile</div>
+                    <div className="settings__group-title">
+                      {t("settings.account.profile")}
+                    </div>
                     <div className="settings__group-desc">
-                      Defaults come from your active CV profile. Add an override
-                      only when Proposal Forge should use something different.
+                      {t("settings.account.profileDescription")}
                     </div>
                   </div>
                   <div className="ds-field-group">
@@ -1896,19 +1966,21 @@ export function SettingsPage(): JSX.Element {
                       className="ds-field-label"
                       htmlFor="settings-full-name"
                     >
-                      Full name
+                      {t("settings.account.fullName")}
                     </label>
                     <input
                       id="settings-full-name"
                       className="ds-field"
                       value={
-                        isAuthReady ? accountDisplayName : "Checking account"
+                        isAuthReady
+                          ? accountDisplayName
+                          : t("settings.account.checkingAccount")
                       }
                       readOnly
                     />
                   </div>
                   <div className="settings-contact-grid">
-                    {PROPOSAL_CONTACT_FIELDS.map((field) => {
+                    {contactFieldOptions.map((field) => {
                       const fallbackValue =
                         activeCvContactDefaults[field.fallbackKey] ??
                         (field.id === "proposalDefaultContactEmail"
@@ -1945,7 +2017,8 @@ export function SettingsPage(): JSX.Element {
                             }
                           />
                           <span className="settings-contact-default">
-                            CV default: {fallbackValue || "empty"}
+                            {t("settings.account.cvDefault")}{" "}
+                            {fallbackValue || t("settings.account.empty")}
                           </span>
                         </div>
                       );
@@ -1955,13 +2028,17 @@ export function SettingsPage(): JSX.Element {
                 <div className="settings__group">
                   <div className="settings__group-head">
                     <div className="settings__group-title">
-                      Connected accounts
+                      {t("settings.account.connectedAccounts")}
                     </div>
                   </div>
                   <div className="settings__row">
                     <div>
-                      <div className="settings__row-label">Google</div>
-                      <div className="settings__row-desc">Used to sign in.</div>
+                      <div className="settings__row-label">
+                        {t("settings.account.google")}
+                      </div>
+                      <div className="settings__row-desc">
+                        {t("settings.account.usedToSignIn")}
+                      </div>
                     </div>
                     {isSignedIn ? (
                       <button
@@ -1969,7 +2046,7 @@ export function SettingsPage(): JSX.Element {
                         className="ds-btn ds-btn--sm ds-btn--secondary"
                         onClick={() => navigate("/sign-out")}
                       >
-                        Disconnect
+                        {t("settings.account.disconnect")}
                       </button>
                     ) : (
                       <button
@@ -1977,22 +2054,24 @@ export function SettingsPage(): JSX.Element {
                         className="ds-btn ds-btn--sm ds-btn--accent"
                         onClick={() => navigate("/sign-in")}
                       >
-                        Connect
+                        {t("settings.account.connect")}
                       </button>
                     )}
                   </div>
                   <div className="settings__row">
                     <div>
-                      <div className="settings__row-label">LinkedIn</div>
+                      <div className="settings__row-label">
+                        {t("settings.account.linkedin")}
+                      </div>
                       <div className="settings__row-desc">
-                        Imports profile and applications.
+                        {t("settings.account.importsProfileAndApplications")}
                       </div>
                     </div>
                     <button
                       type="button"
                       className="ds-btn ds-btn--sm ds-btn--accent"
                     >
-                      Connect
+                      {t("settings.account.connect")}
                     </button>
                   </div>
                 </div>
@@ -2005,23 +2084,26 @@ export function SettingsPage(): JSX.Element {
               >
                 <div className="settings__group">
                   <div className="settings__group-head">
-                    <div className="settings__group-title">Theme</div>
+                    <div className="settings__group-title">
+                      {t("settings.theme")}
+                    </div>
                     <div className="settings__group-desc">
-                      Keep the interface simple by choosing a mode and one
-                      accent.
+                      {t("settings.themeDescription")}
                     </div>
                   </div>
                   <div className="settings__row">
                     <div>
-                      <div className="settings__row-label">Appearance</div>
+                      <div className="settings__row-label">
+                        {t("settings.appearance")}
+                      </div>
                       <div className="settings__row-desc">
-                        Use light, dark, or your system setting.
+                        {t("settings.appearanceDescription")}
                       </div>
                     </div>
                     <div
                       className="settings-segmented"
                       role="group"
-                      aria-label="Theme mode"
+                      aria-label={t("settings.themeMode")}
                     >
                       <button
                         type="button"
@@ -2033,7 +2115,7 @@ export function SettingsPage(): JSX.Element {
                         onClick={() => setThemePreference("light")}
                       >
                         <Sun size={14} aria-hidden="true" />
-                        Light
+                        {t("settings.themeMode.light")}
                       </button>
                       <button
                         type="button"
@@ -2045,7 +2127,7 @@ export function SettingsPage(): JSX.Element {
                         onClick={() => setThemePreference("dark")}
                       >
                         <Moon size={14} aria-hidden="true" />
-                        Dark
+                        {t("settings.themeMode.dark")}
                       </button>
                       <button
                         type="button"
@@ -2057,23 +2139,24 @@ export function SettingsPage(): JSX.Element {
                         onClick={() => setThemePreference("system")}
                       >
                         <span className="settings-segmented__system-dot" />
-                        System
+                        {t("settings.themeMode.system")}
                       </button>
                     </div>
                   </div>
                   <div className="settings__row">
                     <div>
-                      <div className="settings__row-label">Accent color</div>
+                      <div className="settings__row-label">
+                        {t("settings.accentColor")}
+                      </div>
                       <div className="settings__row-desc">
-                        Changes interface highlights. Document colors stay in
-                        Document style.
+                        {t("settings.accentColorDescription")}
                       </div>
                     </div>
                     <div
                       ref={uiCustomColorSurfaceRef}
                       className="settings-ui-accent-row"
                       role="group"
-                      aria-label="Interface accent color"
+                      aria-label={t("settings.interfaceAccentColor")}
                     >
                       {UI_ACCENT_OPTIONS.map((option) => {
                         const active = uiAccent.id === option.id;
@@ -2095,7 +2178,7 @@ export function SettingsPage(): JSX.Element {
                             data-selected={active ? "true" : undefined}
                             aria-label={
                               isCustom
-                                ? "Open custom interface accent color picker"
+                                ? t("settings.openCustomColorPicker")
                                 : option.label
                             }
                             aria-pressed={active}
@@ -2150,17 +2233,19 @@ export function SettingsPage(): JSX.Element {
                   </div>
                   <div className="settings__row">
                     <div>
-                      <div className="settings__row-label">Reduce motion</div>
+                      <div className="settings__row-label">
+                        {t("settings.reduceMotion")}
+                      </div>
                       <div className="settings__row-desc">
-                        Disable animations and transitions.
+                        {t("settings.reduceMotionDescription")}
                       </div>
                     </div>
                     <span
                       className="settings-token-switch-shell"
                       data-toolbar-tooltip={
                         motionPreference === "reduced"
-                          ? "Use normal motion"
-                          : "Reduce interface motion"
+                          ? t("settings.useNormalMotion")
+                          : t("settings.reduceInterfaceMotion")
                       }
                       data-toolbar-tooltip-placement="below"
                     >
@@ -2176,7 +2261,7 @@ export function SettingsPage(): JSX.Element {
                           .filter(Boolean)
                           .join(" ")}
                         aria-pressed={motionPreference === "reduced"}
-                        aria-label="Reduce motion"
+                        aria-label={t("settings.reduceMotion")}
                         onClick={() =>
                           setMotionPreference(
                             motionPreference === "reduced"
@@ -2193,8 +2278,8 @@ export function SettingsPage(): JSX.Element {
                         </span>
                         <span className="dasti-theme-switch__label">
                           {motionPreference === "reduced"
-                            ? "Reduced"
-                            : "Motion"}
+                            ? t("settings.reduced")
+                            : t("settings.motion")}
                         </span>
                       </button>
                     </span>
@@ -2204,7 +2289,7 @@ export function SettingsPage(): JSX.Element {
                     <span className="settings-theme-preview__line settings-theme-preview__line--strong" />
                     <span className="settings-theme-preview__line" />
                     <span className="settings-theme-preview__pill">
-                      {themeMode}
+                      {t(`settings.themeMode.${themeMode}` as UiMessageKey)}
                     </span>
                   </div>
                 </div>
@@ -2217,9 +2302,11 @@ export function SettingsPage(): JSX.Element {
               >
                 <div className="settings__group">
                   <div className="settings__group-head">
-                    <div className="settings__group-title">Language</div>
+                    <div className="settings__group-title">
+                      {t("settings.language")}
+                    </div>
                     <div className="settings__group-desc">
-                      Choose the default language for the app interface.
+                      {t("settings.languageDescription")}
                     </div>
                   </div>
                   <div
@@ -2259,26 +2346,11 @@ export function SettingsPage(): JSX.Element {
                 </div>
                 <div className="settings__group">
                   <div className="settings__group-head">
-                    <div className="settings__group-title">Coverage</div>
-                    <div className="settings__group-desc">
-                      English, French, and Spanish are live for the interface.
-                      Additional document languages are prepared separately.
-                    </div>
-                  </div>
-                  <div className="settings-language-note">
-                    Interface language and generated document language stay
-                    separate. Document generation can target a different
-                    language from the app interface.
-                  </div>
-                </div>
-                <div className="settings__group">
-                  <div className="settings__group-head">
                     <div className="settings__group-title">
-                      Document generation
+                      {t("settings.documentGeneration")}
                     </div>
                     <div className="settings__group-desc">
-                      Choose the default language for generated CVs and
-                      proposals.
+                      {t("settings.documentGenerationDescription")}
                     </div>
                   </div>
                   <div
@@ -2331,13 +2403,13 @@ export function SettingsPage(): JSX.Element {
                   <div className="settings__row">
                     <div>
                       <div className="settings__row-label">
-                        Letter Model
+                        {t("settings.letterModel")}
                       </div>
                     </div>
                     <div
                       className="settings-segmented settings-segmented--llm"
                       role="group"
-                      aria-label="Letter Model"
+                      aria-label={t("settings.letterModel")}
                     >
                       {PROPOSAL_LLM_MODEL_OPTIONS.map((option) => {
                         const active = proposalLlmModel === option.value;
@@ -2359,18 +2431,19 @@ export function SettingsPage(): JSX.Element {
                 </div>
                 <div className="settings__group">
                   <div className="settings__group-head">
-                    <div className="settings__group-title">Default tone</div>
+                    <div className="settings__group-title">
+                      {t("settings.defaultTone")}
+                    </div>
                     <div className="settings__group-desc">
-                      Used when generating new proposals. You can override per
-                      document.
+                      {t("settings.defaultToneDescription")}
                     </div>
                   </div>
                   <div
                     className="settings__tone-row settings__tone-row--selectable dasti-toolbar--surface-tooltips"
                     role="group"
-                    aria-label="Default tone"
+                    aria-label={t("settings.defaultTone")}
                   >
-                    {TONE_OPTIONS.map((option) => {
+                    {toneOptions.map((option) => {
                       const active = defaultVoicePreset === option.id;
                       return (
                         <button
@@ -2405,20 +2478,22 @@ export function SettingsPage(): JSX.Element {
               >
                 <div className="settings__group">
                   <div className="settings__group-head">
-                    <div className="settings__group-title">Plan</div>
+                    <div className="settings__group-title">
+                      {t("settings.plan")}
+                    </div>
                   </div>
                   <div className="settings__row">
                     <div>
                       <div className="settings__row-label">Pro · €12/mo</div>
                       <div className="settings__row-desc">
-                        Renews on May 28.
+                        {t("settings.planRenewsOnMay28")}
                       </div>
                     </div>
                     <button
                       type="button"
                       className="ds-btn ds-btn--sm ds-btn--secondary"
                     >
-                      Manage
+                      {t("settings.manage")}
                     </button>
                   </div>
                 </div>
@@ -2431,10 +2506,12 @@ export function SettingsPage(): JSX.Element {
               >
                 <div className="settings__group">
                   <div className="settings__group-head">
-                    <div className="settings__group-title">Members</div>
+                    <div className="settings__group-title">
+                      {t("settings.members")}
+                    </div>
                   </div>
                   <div className="settings__placeholder">
-                    Solo workspace. Invite teammates from the dashboard.
+                    {t("settings.soloWorkspaceInviteTeammates")}
                   </div>
                 </div>
               </div>
@@ -2446,10 +2523,11 @@ export function SettingsPage(): JSX.Element {
               >
                 <div className="settings__group">
                   <div className="settings__group-head">
-                    <div className="settings__group-title">Delete account</div>
+                    <div className="settings__group-title">
+                      {t("settings.deleteAccountTitle")}
+                    </div>
                     <div className="settings__group-desc">
-                      Removes all proposals, CVs, and account data. Cannot be
-                      undone.
+                      {t("settings.deleteAccountDescription")}
                     </div>
                   </div>
                   <div>
@@ -2457,7 +2535,7 @@ export function SettingsPage(): JSX.Element {
                       type="button"
                       className="ds-btn ds-btn--md ds-btn--danger"
                     >
-                      Delete account
+                      {t("settings.deleteAccountAction")}
                     </button>
                   </div>
                 </div>
