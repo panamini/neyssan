@@ -24,6 +24,8 @@ import {
   normalizeSettingsTab,
   type SettingsTab,
 } from "../lib/settings-tabs";
+import { translateUi, type UiMessageKey } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 
 const COMPACT_RAIL_WIDTH = 768;
 
@@ -38,6 +40,16 @@ const SETTINGS_DRAWER_GROUPS: Array<{
   },
   { label: "Payment", tabs: ["billing"] },
 ];
+
+const NAV_MESSAGE_KEYS = {
+  today: "nav.today",
+  jobs: "nav.jobs",
+  cv: "nav.cv",
+  proposal: "nav.proposal",
+  projects: "nav.projects",
+  templates: "nav.templates",
+  settings: "nav.settings",
+} as const satisfies Record<string, UiMessageKey>;
 
 type RailIconComponent = React.ComponentType<IconProps>;
 
@@ -252,6 +264,11 @@ function SettingsDrawerContent({
 export const Sidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const navLabel = React.useCallback(
+    (key: UiMessageKey) => translateUi(resolvedLanguage, key),
+    [resolvedLanguage],
+  );
   const {
     activeSurface: activeTemplateSurface,
     open: templatePanelOpen,
@@ -461,7 +478,7 @@ export const Sidebar: React.FC = () => {
     >
       <nav className="sb__nav sb__nav--rail" aria-label="Primary navigation">
         <SidebarRailLink
-          label="Today"
+          label={navLabel(NAV_MESSAGE_KEYS.today)}
           href="/dashboard"
           active={dashboardActive}
           icon={CalendarDots}
@@ -470,7 +487,7 @@ export const Sidebar: React.FC = () => {
         />
         {proposalContextualRail && finePointer ? (
           <SidebarRailLink
-            label="Jobs"
+            label={navLabel(NAV_MESSAGE_KEYS.jobs)}
             href="/jobs"
             active={jobsActive}
             panelOpen={panelOpenFor("jobs")}
@@ -485,7 +502,7 @@ export const Sidebar: React.FC = () => {
           />
         ) : proposalContextualRail ? (
           <SidebarRailButton
-            label="Jobs"
+            label={navLabel(NAV_MESSAGE_KEYS.jobs)}
             panelOpen={panelOpenFor("jobs")}
             expanded={panelOpenFor("jobs")}
             hoverEnabled={finePointer}
@@ -498,7 +515,7 @@ export const Sidebar: React.FC = () => {
           />
         ) : (
           <SidebarRailLink
-            label="Jobs"
+            label={navLabel(NAV_MESSAGE_KEYS.jobs)}
             href="/jobs"
             active={jobsActive}
             icon={Briefcase}
@@ -508,7 +525,7 @@ export const Sidebar: React.FC = () => {
         )}
         {proposalContextualRail && finePointer ? (
           <SidebarRailLink
-            label="CV"
+            label={navLabel(NAV_MESSAGE_KEYS.cv)}
             href="/cv"
             active={cvActive}
             panelOpen={panelOpenFor("cvs")}
@@ -523,7 +540,7 @@ export const Sidebar: React.FC = () => {
           />
         ) : cvContextualRail ? (
           <SidebarRailButton
-            label="CV"
+            label={navLabel(NAV_MESSAGE_KEYS.cv)}
             panelOpen={panelOpenFor("cvs")}
             expanded={panelOpenFor("cvs")}
             active={cvActive}
@@ -537,7 +554,7 @@ export const Sidebar: React.FC = () => {
           />
         ) : proposalContextualRail || cvContextualRail ? (
           <SidebarRailButton
-            label="CV"
+            label={navLabel(NAV_MESSAGE_KEYS.cv)}
             panelOpen={panelOpenFor("cvs")}
             expanded={panelOpenFor("cvs")}
             active={cvActive}
@@ -551,7 +568,7 @@ export const Sidebar: React.FC = () => {
           />
         ) : (
           <SidebarRailLink
-            label="CV"
+            label={navLabel(NAV_MESSAGE_KEYS.cv)}
             href="/cv"
             active={cvActive}
             icon={FileUser}
@@ -561,7 +578,7 @@ export const Sidebar: React.FC = () => {
         )}
         {proposalContextualRail ? (
           <SidebarRailButton
-            label="Proposal"
+            label={navLabel(NAV_MESSAGE_KEYS.proposal)}
             panelOpen={panelOpenFor("proposals")}
             expanded={panelOpenFor("proposals")}
             active={proposalActive}
@@ -575,7 +592,7 @@ export const Sidebar: React.FC = () => {
           />
         ) : (
           <SidebarRailLink
-            label="Proposal"
+            label={navLabel(NAV_MESSAGE_KEYS.proposal)}
             href="/proposal"
             active={proposalActive}
             icon={FileText}
@@ -585,7 +602,7 @@ export const Sidebar: React.FC = () => {
         )}
         {(proposalContextualRail || cvContextualRail) && finePointer ? (
           <SidebarRailLink
-            label="Projects"
+            label={navLabel(NAV_MESSAGE_KEYS.projects)}
             href="/documents"
             active={projectsActive}
             panelOpen={panelOpenFor("documents")}
@@ -601,7 +618,7 @@ export const Sidebar: React.FC = () => {
           />
         ) : proposalContextualRail ? (
           <SidebarRailButton
-            label="Projects"
+            label={navLabel(NAV_MESSAGE_KEYS.projects)}
             panelOpen={panelOpenFor("documents")}
             expanded={panelOpenFor("documents")}
             hoverEnabled={finePointer}
@@ -615,7 +632,7 @@ export const Sidebar: React.FC = () => {
           />
         ) : cvContextualRail ? (
           <SidebarRailButton
-            label="Projects"
+            label={navLabel(NAV_MESSAGE_KEYS.projects)}
             panelOpen={panelOpenFor("documents")}
             expanded={panelOpenFor("documents")}
             hoverEnabled={finePointer}
@@ -629,7 +646,7 @@ export const Sidebar: React.FC = () => {
           />
         ) : (
           <SidebarRailLink
-            label="Projects"
+            label={navLabel(NAV_MESSAGE_KEYS.projects)}
             href="/documents"
             active={projectsActive}
             icon={FolderSimple}
@@ -640,7 +657,7 @@ export const Sidebar: React.FC = () => {
         )}
         {activeForgeSurface && finePointer ? (
           <SidebarRailLink
-            label="Templates"
+            label={navLabel(NAV_MESSAGE_KEYS.templates)}
             href="/templates"
             active={templatesActive}
             panelOpen={templatesOpen}
@@ -655,7 +672,7 @@ export const Sidebar: React.FC = () => {
           />
         ) : activeForgeSurface ? (
           <SidebarRailButton
-            label="Templates"
+            label={navLabel(NAV_MESSAGE_KEYS.templates)}
             panelOpen={templatesOpen}
             expanded={templatesOpen}
             hoverEnabled={finePointer}
@@ -668,7 +685,7 @@ export const Sidebar: React.FC = () => {
           />
         ) : (
           <SidebarRailLink
-            label="Templates"
+            label={navLabel(NAV_MESSAGE_KEYS.templates)}
             href="/templates"
             active={templatesActive}
             icon={Layout}
@@ -677,7 +694,7 @@ export const Sidebar: React.FC = () => {
           />
         )}
         <SidebarRailButton
-          label="Settings"
+          label={navLabel(NAV_MESSAGE_KEYS.settings)}
           active={settingsActive}
           panelOpen={panelOpenFor("settings")}
           expanded={panelOpenFor("settings")}

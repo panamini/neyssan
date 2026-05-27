@@ -19,6 +19,8 @@ import {
 } from "../lib/proposal-output-draft";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
 import { resolveCommandShortcutLabel } from "../lib/app-topbar";
+import { translateUi } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 import {
   ChevronDown,
   ClipboardText,
@@ -233,6 +235,7 @@ export function AppTopbar({
   const topbarDocumentTitle = useTopbarDocumentTitle();
   const cvTopbarRegistration = useCvForgeTopbarRegistration();
   const proposalTopbarRegistration = useProposalForgeTopbarRegistration();
+  const { resolvedLanguage } = useUiLanguagePreference();
   const pageLabel = resolvePageLabel(location.pathname);
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const { user } = useUser();
@@ -242,6 +245,19 @@ export function AppTopbar({
     [],
   );
   const clerkUserButtonRef = React.useRef<HTMLDivElement | null>(null);
+  const openCommandPaletteLabel = translateUi(
+    resolvedLanguage,
+    "topbar.openCommandPalette",
+  );
+  const searchOrRunCommandLabel = translateUi(
+    resolvedLanguage,
+    "topbar.searchOrRunCommand",
+  );
+  const accountLoadingLabel = translateUi(resolvedLanguage, "account.loading");
+  const accountOpenMenuLabel = translateUi(resolvedLanguage, "account.openMenu");
+  const accountSignInLabel = translateUi(resolvedLanguage, "account.signIn");
+  const accountLabel = translateUi(resolvedLanguage, "account.account");
+  const profileLabel = translateUi(resolvedLanguage, "account.profile");
 
   const handleProfile = React.useCallback(() => {
     const clerkTrigger =
@@ -681,7 +697,7 @@ export function AppTopbar({
         <button
           type="button"
           className="app-topbar__cmdk"
-          aria-label="Open command palette"
+          aria-label={openCommandPaletteLabel}
           aria-expanded={commandPaletteOpen}
           onClick={onOpenCommandPalette}
         >
@@ -689,7 +705,9 @@ export function AppTopbar({
             className="app-topbar__cmdk-icon app-topbar__icon"
             aria-hidden="true"
           />
-          <span className="app-topbar__cmdk-label">Search or run command</span>
+          <span className="app-topbar__cmdk-label">
+            {searchOrRunCommandLabel}
+          </span>
           <span className="app-topbar__kbd">{shortcutLabel}</span>
         </button>
         <span
@@ -843,10 +861,10 @@ export function AppTopbar({
           className="app-topbar__account-button"
           label={
             !isAccountReady
-              ? "Account loading"
+              ? accountLoadingLabel
               : isSignedIn
-                ? "Open account menu"
-                : "Sign in"
+                ? accountOpenMenuLabel
+                : accountSignInLabel
           }
           onClick={handleProfile}
           disabled={!isAccountReady}
@@ -864,10 +882,10 @@ export function AppTopbar({
         </IconButton>
         <span className="app-topbar__profile-name" aria-hidden="true">
           {!isAccountReady
-            ? "Account"
+            ? accountLabel
             : isSignedIn
-              ? user?.firstName ?? user?.username ?? "Profile"
-              : "Sign in"}
+              ? user?.firstName ?? user?.username ?? profileLabel
+              : accountSignInLabel}
         </span>
         {isSignedIn ? (
           <div ref={clerkUserButtonRef} className="app-topbar__clerk-button">

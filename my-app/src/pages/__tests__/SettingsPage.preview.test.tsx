@@ -211,6 +211,63 @@ describe("SettingsPage preview controls", () => {
     languageRender.unmount();
   });
 
+  it("renders Settings language controls through English UI messages by default", () => {
+    renderSettings("/settings?tab=language");
+
+    const interfaceLanguageGroup = screen.getByRole("group", {
+      name: "Interface language",
+    });
+    const documentLanguageGroup = screen.getByRole("group", {
+      name: "Default document language",
+    });
+
+    expect(interfaceLanguageGroup).toBeInTheDocument();
+    expect(
+      within(documentLanguageGroup).getByRole("button", {
+        name: /Auto Match the job\/source language when available\./,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    {
+      locale: "fr",
+      interfaceLabel: "Langue de l'interface",
+      documentLabel: "Langue par defaut du document",
+      autoHelp:
+        "Utiliser la langue de l'offre/source quand elle est disponible.",
+    },
+    {
+      locale: "es",
+      interfaceLabel: "Idioma de la interfaz",
+      documentLabel: "Idioma predeterminado del documento",
+      autoHelp:
+        "Coincidir con el idioma de la oferta/fuente cuando este disponible.",
+    },
+  ])(
+    "renders Settings language controls through $locale UI messages",
+    ({ locale, interfaceLabel, documentLabel, autoHelp }) => {
+      window.localStorage.setItem("twoweeks:ui-language", locale);
+      const autoHelpPattern = new RegExp(
+        `Auto ${autoHelp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+      );
+
+      renderSettings("/settings?tab=language");
+
+      expect(
+        screen.getByRole("group", { name: interfaceLabel }),
+      ).toBeInTheDocument();
+      const documentLanguageGroup = screen.getByRole("group", {
+        name: documentLabel,
+      });
+      expect(
+        within(documentLanguageGroup).getByRole("button", {
+          name: autoHelpPattern,
+        }),
+      ).toBeInTheDocument();
+    },
+  );
+
   it("shows only production UI languages in Settings", () => {
     renderSettings("/settings?tab=language");
 
@@ -289,6 +346,9 @@ describe("SettingsPage preview controls", () => {
 	    expect(document.documentElement.dataset.uiLanguage).toBe("en");
 	    expect(document.documentElement.lang).toBe("en");
 	    expect(document.documentElement.dir).toBe("ltr");
+	    expect(
+	      screen.getByRole("group", { name: "Interface language" }),
+	    ).toBeInTheDocument();
 	    expect(
 	      within(uiGroup).queryByRole("button", { name: /Arabic/ }),
 	    ).not.toBeInTheDocument();

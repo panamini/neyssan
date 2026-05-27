@@ -1,6 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { CommandPalette } from "../CommandPalette";
 
@@ -41,6 +41,76 @@ function PaletteHarness({
 }
 
 describe("CommandPalette", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("renders command palette shell chrome in English by default", () => {
+    render(
+      <MemoryRouter initialEntries={["/cv"]}>
+        <Routes>
+          <Route path="*" element={<PaletteHarness />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+    expect(
+      screen.getByRole("dialog", { name: "Command palette" }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Search or run a command..."), {
+      target: { value: "zzzz" },
+    });
+
+    expect(screen.getByText("No commands found.")).toBeInTheDocument();
+  });
+
+  it.each([
+    {
+      locale: "fr",
+      title: "Palette de commandes",
+      emptyState: "Aucune commande trouvee.",
+    },
+    {
+      locale: "es",
+      title: "Paleta de comandos",
+      emptyState: "No se encontraron comandos.",
+    },
+  ])(
+    "renders command palette shell chrome in $locale without migrating command items",
+    ({ locale, title, emptyState }) => {
+      window.localStorage.setItem("twoweeks:ui-language", locale);
+      window.localStorage.setItem("twoweeks:document-language", "ar");
+
+      render(
+        <MemoryRouter initialEntries={["/cv"]}>
+          <Routes>
+            <Route path="*" element={<PaletteHarness />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+
+      expect(screen.getByRole("dialog", { name: title })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: /Today/i })).toBeInTheDocument();
+
+      fireEvent.change(
+        screen.getByPlaceholderText("Search or run a command..."),
+        {
+          target: { value: "zzzz" },
+        },
+      );
+
+      expect(screen.getByText(emptyState)).toBeInTheDocument();
+      expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+        "ar",
+      );
+    },
+  );
+
   it("opens with Cmd/Ctrl+K and navigates with go-to commands", () => {
     render(
       <MemoryRouter initialEntries={["/cv"]}>
