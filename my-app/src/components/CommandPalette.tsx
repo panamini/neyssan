@@ -15,13 +15,18 @@ type CommandPaletteProps = {
   onToggleTheme: () => void;
 };
 
-function commandMatches(command: AppCommand, query: string): boolean {
+function commandMatches(
+  command: AppCommand,
+  query: string,
+  getCommandLabel: (command: AppCommand) => string,
+): boolean {
   if (!query) {
     return true;
   }
 
   const haystack = [
     command.label,
+    getCommandLabel(command),
     command.group,
     command.shortcut,
     ...(command.keywords ?? []),
@@ -57,10 +62,20 @@ export function CommandPalette({
     "search.placeholder",
   );
   const commandsLabel = translateUi(resolvedLanguage, "menu.commands");
+  const getCommandLabel = React.useCallback(
+    (command: AppCommand) =>
+      command.labelKey
+        ? translateUi(resolvedLanguage, command.labelKey)
+        : command.label,
+    [resolvedLanguage],
+  );
 
   const filteredCommands = React.useMemo(
-    () => APP_COMMANDS.filter((command) => commandMatches(command, query)),
-    [query],
+    () =>
+      APP_COMMANDS.filter((command) =>
+        commandMatches(command, query, getCommandLabel),
+      ),
+    [getCommandLabel, query],
   );
 
   React.useEffect(() => {
@@ -233,6 +248,7 @@ export function CommandPalette({
                 {groupCommands.map((command) => {
                   const commandIndex = filteredCommands.indexOf(command);
                   const highlighted = commandIndex === activeIndex;
+                  const commandLabel = getCommandLabel(command);
                   return (
                     <button
                       key={command.id}
@@ -245,9 +261,9 @@ export function CommandPalette({
                       onClick={() => runCommand(command)}
                     >
                       <span className="cmdk__item-icon" aria-hidden="true">
-                        {command.label.slice(0, 1)}
+                        {commandLabel.slice(0, 1)}
                       </span>
-                      <span className="cmdk__item-label">{command.label}</span>
+                      <span className="cmdk__item-label">{commandLabel}</span>
                       {command.shortcut ? (
                         <span className="cmdk__item-shortcut" aria-label={command.shortcut}>
                           {command.shortcut.split(" ").map((key) => (

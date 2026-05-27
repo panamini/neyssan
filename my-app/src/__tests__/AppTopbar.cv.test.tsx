@@ -133,23 +133,25 @@ describe("AppTopbar CV controls", () => {
     const commandButton = screen.getByRole("button", {
       name: "Open command palette",
     });
-    expect(commandButton).toHaveTextContent("Search or run command");
+    expect(commandButton).toHaveTextContent("Search");
   });
 
   it.each([
     {
       locale: "fr",
-      buttonLabel: "Ouvrir la palette de commandes",
-      visibleLabel: "Rechercher ou lancer une commande",
+      buttonLabel: "Ouvrir la palette",
+      visibleLabel: "Rechercher",
+      oldVisibleLabel: ["Rechercher", " ou lancer", " une commande"].join(""),
     },
     {
       locale: "es",
-      buttonLabel: "Abrir paleta de comandos",
-      visibleLabel: "Buscar o ejecutar comando",
+      buttonLabel: "Abrir comandos",
+      visibleLabel: "Buscar",
+      oldVisibleLabel: ["Buscar", " o ejecutar", " comando"].join(""),
     },
   ])(
     "renders global command search chrome in $locale",
-    ({ locale, buttonLabel, visibleLabel }) => {
+    ({ locale, buttonLabel, visibleLabel, oldVisibleLabel }) => {
       window.localStorage.setItem("twoweeks:ui-language", locale);
       window.localStorage.setItem("twoweeks:document-language", "ar");
 
@@ -169,6 +171,7 @@ describe("AppTopbar CV controls", () => {
         name: buttonLabel,
       });
       expect(commandButton).toHaveTextContent(visibleLabel);
+      expect(commandButton).not.toHaveTextContent(oldVisibleLabel);
       expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
         "ar",
       );
@@ -183,8 +186,8 @@ describe("AppTopbar CV controls", () => {
     },
     {
       locale: "es",
-      signedOutLabel: "Iniciar sesion",
-      signedInLabel: "Abrir menu de cuenta",
+      signedOutLabel: "Iniciar sesión",
+      signedInLabel: "Abrir menú de cuenta",
     },
   ])(
     "renders account chrome in $locale without touching document language",

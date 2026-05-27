@@ -21,7 +21,9 @@ import ProposalInputForm, {
   type ProposalGenerateControl,
 } from "../components/ProposalInputForm";
 import ProposalAIStream from "../components/proposal/ProposalAIStream";
-import ProposalDocumentStage from "../components/proposal/ProposalDocumentStage";
+import ProposalDocumentStage, {
+  type ProposalDocumentStageLabels,
+} from "../components/proposal/ProposalDocumentStage";
 import ProposalHeadingFields, {
   type ProposalHeadingField,
 } from "../components/proposal/ProposalHeadingFields";
@@ -102,6 +104,8 @@ import {
   type StoredProposalComposeDraft,
 } from "../lib/proposal-workspace-state";
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
+import { translateUi } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
 import {
   CANONICAL_PROPOSAL_TEMPLATE_ID,
@@ -901,6 +905,7 @@ function ForgeDrawerSearch({
   storageKey: string;
 }): JSX.Element {
   const [focused, setFocused] = React.useState(false);
+  const { resolvedLanguage } = useUiLanguagePreference();
   const { recentSearches, rememberSearch, clearRecentSearches } =
     useForgeDrawerRecentSearches(storageKey);
   const showRecentSearches =
@@ -933,13 +938,13 @@ function ForgeDrawerSearch({
       {showRecentSearches ? (
         <div className="forge-rail-drawer__recent-searches" role="listbox">
           <div className="forge-rail-drawer__recent-searches-head">
-            <span>Recent searches</span>
+            <span>{translateUi(resolvedLanguage, "search.recent")}</span>
             <button
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onClick={clearRecentSearches}
             >
-              Clear
+              {translateUi(resolvedLanguage, "search.clear")}
             </button>
           </div>
           {recentSearches.map((recent) => (
@@ -1229,6 +1234,7 @@ export function ProposalPasteJobDrawer({
   onCommit: () => void;
   onDone: () => void;
 }): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const resizeTextarea = React.useCallback(() => {
     const textarea = textareaRef.current;
@@ -1251,17 +1257,20 @@ export function ProposalPasteJobDrawer({
       <div className="forge-rail-drawer__draft-body">
         <section className="forge-rail-drawer__draft-section">
           <div className="forge-rail-drawer__section-title">
-            <span>Paste job offer</span>
+            <span>{translateUi(resolvedLanguage, "jobs.pasteJobOffer")}</span>
           </div>
           <p className="forge-rail-drawer__empty">
-            Paste the job text to use it as draft context.
+            {translateUi(resolvedLanguage, "jobs.pasteJobOfferHelp")}
           </p>
           <textarea
             ref={textareaRef}
             className="ds-field ds-field--textarea dasti-proposal-skeleton-rail__job-offer-input forge-rail-drawer__paste-job-input"
             value={value}
-            placeholder="Paste a job offer..."
-            aria-label="Paste a job offer"
+            placeholder={translateUi(
+              resolvedLanguage,
+              "jobs.pasteJobOfferPlaceholder",
+            )}
+            aria-label={translateUi(resolvedLanguage, "jobs.pasteJobOffer")}
             onChange={(event) => {
               onChange(event.currentTarget.value);
               resizeTextarea();
@@ -1276,7 +1285,7 @@ export function ProposalPasteJobDrawer({
           className="ds-btn ds-btn--md ds-btn--primary forge-rail-drawer__draft-generate"
           onClick={handleDone}
         >
-          Use job context
+          {translateUi(resolvedLanguage, "jobs.useJobContext")}
         </button>
       </div>
     </div>
@@ -1361,6 +1370,7 @@ export function ProposalJobsDrawer({
   onOpenJob: (jobId: string) => void;
   onOpenPasteJob?: () => void;
 }): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
   const [query, setQuery] = React.useState("");
   const allResultsRef = React.useRef<HTMLDivElement | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
@@ -1392,7 +1402,7 @@ export function ProposalJobsDrawer({
       <ForgeDrawerSearch
         value={query}
         onChange={setQuery}
-        placeholder="Search jobs"
+        placeholder={translateUi(resolvedLanguage, "search.jobs")}
         storageKey="twoweeks:forge-drawer:recent-job-searches"
       />
       {onOpenPasteJob ? (
@@ -1401,16 +1411,16 @@ export function ProposalJobsDrawer({
           className="forge-rail-drawer__draft-row"
           onClick={onOpenPasteJob}
         >
-          <span>Paste job offer</span>
+          <span>{translateUi(resolvedLanguage, "jobs.pasteJobOffer")}</span>
           <CaretRight size={14} aria-hidden="true" />
         </button>
       ) : null}
       <div className="forge-rail-drawer__list" role="list">
         <ForgeDrawerSectionTitle
-          title="Recently viewed"
+          title={translateUi(resolvedLanguage, "workspace.recentlyViewed")}
           actionLabel={
             filteredJobs.length > recentJobs.length
-              ? "Show all jobs"
+              ? translateUi(resolvedLanguage, "workspace.showAllJobs")
               : undefined
           }
           onAction={handleShowAll}
@@ -1424,7 +1434,7 @@ export function ProposalJobsDrawer({
           />
         ))}
         <ForgeDrawerSectionTitle
-          title="All results"
+          title={translateUi(resolvedLanguage, "workspace.allResults")}
           sectionRef={allResultsRef}
           focusable
         />
@@ -1437,7 +1447,9 @@ export function ProposalJobsDrawer({
           />
         ))}
         {filteredJobs.length === 0 ? (
-          <p className="forge-rail-drawer__empty">No jobs found.</p>
+          <p className="forge-rail-drawer__empty">
+            {translateUi(resolvedLanguage, "emptyState.noJobsFound")}
+          </p>
         ) : null}
       </div>
     </div>
@@ -1482,6 +1494,9 @@ function ForgeDrawerJobRow({
   onSelectJob: (jobId: string) => void;
   onOpenJob: (jobId: string) => void;
 }): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const openJobPageLabel = translateUi(resolvedLanguage, "jobs.openJobPage");
+  const untitledJobLabel = translateUi(resolvedLanguage, "jobs.untitled");
   return (
     <article className="forge-rail-drawer__row" role="listitem">
       <button
@@ -1489,10 +1504,10 @@ function ForgeDrawerJobRow({
         className="forge-rail-drawer__row-main"
         onClick={() => onSelectJob(job.id)}
       >
-        <strong>{job.title || "Untitled job"}</strong>
+        <strong>{job.title || untitledJobLabel}</strong>
         <span>
           {[job.company, job.location].filter(Boolean).join(" · ") ||
-            "Saved job"}
+            translateUi(resolvedLanguage, "jobs.savedJob")}
         </span>
         <span className="forge-rail-drawer__row-affordance">
           <Briefcase
@@ -1500,14 +1515,14 @@ function ForgeDrawerJobRow({
             size="var(--app-sidebar-icon-size)"
             aria-hidden="true"
           />
-          Attach job
+          {translateUi(resolvedLanguage, "jobs.attachJob")}
         </span>
       </button>
       <button
         type="button"
         className="forge-rail-drawer__row-icon"
-        aria-label={`Open job details for ${job.title}`}
-        data-toolbar-tooltip="Open job page"
+        aria-label={`${openJobPageLabel}: ${job.title || untitledJobLabel}`}
+        data-toolbar-tooltip={openJobPageLabel}
         onClick={(event) => {
           event.stopPropagation();
           onOpenJob(job.id);
@@ -1534,8 +1549,15 @@ export function ProposalCvDrawer({
   onSelectCv: (cvId: string) => void | Promise<void>;
   onOpenCv: (cvId: string) => void;
 }): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
   const [query, setQuery] = React.useState("");
   const allResultsRef = React.useRef<HTMLDivElement | null>(null);
+  const attachedLabel = translateUi(resolvedLanguage, "workspace.attached");
+  const attachCvLabel = translateUi(resolvedLanguage, "workspace.attachCv");
+  const openFullCvLabel = translateUi(
+    resolvedLanguage,
+    "workspace.openFullCv",
+  );
   const normalizedQuery = query.trim().toLowerCase();
   const filteredItems = items.filter((item) =>
     normalizedQuery
@@ -1574,18 +1596,18 @@ export function ProposalCvDrawer({
         <button
           type="button"
           className="forge-template-card forge-rail-drawer__thumb-button"
-          aria-label={`Attach CV: ${item.title}`}
+          aria-label={`${attachCvLabel}: ${item.title}`}
           aria-pressed={selected}
           onClick={() => void onSelectCv(sourceId)}
         >
           <ForgeDrawerDocumentPreview
             item={item}
             hydrateCvDocument={hydrateCvDocument}
-            badge={selected ? "Attached" : null}
+            badge={selected ? attachedLabel : null}
             actionPill={
               <>
                 <Paperclip size={12} aria-hidden="true" />
-                <span>Attach CV</span>
+                <span>{attachCvLabel}</span>
               </>
             }
           />
@@ -1593,8 +1615,8 @@ export function ProposalCvDrawer({
         <button
           type="button"
           className="forge-rail-drawer__thumb-menu forge-rail-drawer__thumb-menu--direct"
-          aria-label={`Open full CV: ${item.title}`}
-          data-toolbar-tooltip="Open full CV"
+          aria-label={`${openFullCvLabel}: ${item.title}`}
+          data-toolbar-tooltip={openFullCvLabel}
           onClick={(event) => {
             event.stopPropagation();
             onOpenCv(sourceId);
@@ -1611,28 +1633,30 @@ export function ProposalCvDrawer({
       <ForgeDrawerSearch
         value={query}
         onChange={setQuery}
-        placeholder="Search CVs"
+        placeholder={translateUi(resolvedLanguage, "search.cvs")}
         storageKey="twoweeks:forge-drawer:recent-cv-searches"
       />
       <div className="forge-rail-drawer__grid" role="list">
         <ForgeDrawerSectionTitle
-          title="Recently viewed"
+          title={translateUi(resolvedLanguage, "workspace.recentlyViewed")}
           actionLabel={
             filteredItems.length > recentItems.length
-              ? "Show all CVs"
+              ? translateUi(resolvedLanguage, "workspace.showAllCvs")
               : undefined
           }
           onAction={handleShowAll}
         />
         {recentItems.map((item) => renderCvItem(item, "recent-"))}
         <ForgeDrawerSectionTitle
-          title="All results"
+          title={translateUi(resolvedLanguage, "workspace.allResults")}
           sectionRef={allResultsRef}
           focusable
         />
         {filteredItems.map((item) => renderCvItem(item))}
         {filteredItems.length === 0 ? (
-          <p className="forge-rail-drawer__empty">No CVs found.</p>
+          <p className="forge-rail-drawer__empty">
+            {translateUi(resolvedLanguage, "emptyState.noCvsFound")}
+          </p>
         ) : null}
       </div>
     </div>
@@ -1652,8 +1676,17 @@ export function ProposalLibraryDrawer({
   onOpenItem: (item: LibraryItem) => void;
   onOpenProposal: (item: LibraryItem) => void;
 }): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
   const [query, setQuery] = React.useState("");
   const allResultsRef = React.useRef<HTMLDivElement | null>(null);
+  const openProposalLabel = translateUi(
+    resolvedLanguage,
+    "workspace.openProposal",
+  );
+  const openFullProposalLabel = translateUi(
+    resolvedLanguage,
+    "workspace.openFullProposal",
+  );
   const normalizedQuery = query.trim().toLowerCase();
   const filteredItems = items.filter((item) => {
     if (item.type !== "proposal") return false;
@@ -1688,7 +1721,7 @@ export function ProposalLibraryDrawer({
         <button
           type="button"
           className="forge-template-card forge-rail-drawer__thumb-button"
-          aria-label={`Open proposal ${item.title}`}
+          aria-label={`${openProposalLabel}: ${item.title}`}
           onClick={() => onOpenItem(item)}
         >
           <ForgeDrawerDocumentPreview
@@ -1700,8 +1733,8 @@ export function ProposalLibraryDrawer({
         <button
           type="button"
           className="forge-rail-drawer__thumb-menu forge-rail-drawer__thumb-menu--direct"
-          aria-label={`Open full proposal: ${item.title}`}
-          data-toolbar-tooltip="Open proposal"
+          aria-label={`${openFullProposalLabel}: ${item.title}`}
+          data-toolbar-tooltip={openProposalLabel}
           onClick={(event) => {
             event.stopPropagation();
             onOpenProposal(item);
@@ -1718,28 +1751,30 @@ export function ProposalLibraryDrawer({
       <ForgeDrawerSearch
         value={query}
         onChange={setQuery}
-        placeholder="Search proposals"
+        placeholder={translateUi(resolvedLanguage, "search.proposals")}
         storageKey="twoweeks:forge-drawer:recent-proposal-searches"
       />
       <div className="forge-rail-drawer__grid" role="list">
         <ForgeDrawerSectionTitle
-          title="Recently viewed"
+          title={translateUi(resolvedLanguage, "workspace.recentlyViewed")}
           actionLabel={
             filteredItems.length > recentItems.length
-              ? "Show all proposals"
+              ? translateUi(resolvedLanguage, "workspace.showAllProposals")
               : undefined
           }
           onAction={handleShowAll}
         />
         {recentItems.map((item) => renderProposalItem(item, "recent-"))}
         <ForgeDrawerSectionTitle
-          title="All results"
+          title={translateUi(resolvedLanguage, "workspace.allResults")}
           sectionRef={allResultsRef}
           focusable
         />
         {filteredItems.map((item) => renderProposalItem(item))}
         {filteredItems.length === 0 ? (
-          <p className="forge-rail-drawer__empty">No proposals found.</p>
+          <p className="forge-rail-drawer__empty">
+            {translateUi(resolvedLanguage, "emptyState.noProposalsFound")}
+          </p>
         ) : null}
       </div>
     </div>
@@ -1765,11 +1800,20 @@ export function ProjectsLibraryDrawer({
   onDownloadItems: (items: LibraryItem[]) => void;
   onDeleteItems: (items: LibraryItem[]) => void;
 }): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
   const [query, setQuery] = React.useState("");
   const [filter, setFilter] = React.useState<"all" | "cvs" | "proposals">(
     initialFilter,
   );
   const allResultsRef = React.useRef<HTMLDivElement | null>(null);
+  const openCvLibraryLabel = translateUi(
+    resolvedLanguage,
+    "workspace.openCvLibrary",
+  );
+  const openProposalsLibraryLabel = translateUi(
+    resolvedLanguage,
+    "workspace.openProposalsLibrary",
+  );
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
     () => new Set(),
   );
@@ -1846,11 +1890,13 @@ export function ProjectsLibraryDrawer({
           className="forge-rail-drawer__thumb-menu forge-rail-drawer__thumb-menu--direct"
           aria-label={
             item.type === "cv"
-              ? `Open CV library for ${item.title}`
-              : `Open proposals library for ${item.title}`
+              ? `${openCvLibraryLabel}: ${item.title}`
+              : `${openProposalsLibraryLabel}: ${item.title}`
           }
           data-toolbar-tooltip={
-            item.type === "cv" ? "Open CV library" : "Open proposals"
+            item.type === "cv"
+              ? openCvLibraryLabel
+              : openProposalsLibraryLabel
           }
           onClick={(event) => {
             event.stopPropagation();
@@ -1868,18 +1914,18 @@ export function ProjectsLibraryDrawer({
       <ForgeDrawerSearch
         value={query}
         onChange={setQuery}
-        placeholder="Search library"
+        placeholder={translateUi(resolvedLanguage, "search.library")}
         storageKey="twoweeks:forge-drawer:recent-library-searches"
       />
       <div
         className="forge-rail-drawer__tabs"
         role="tablist"
-        aria-label="Library filter"
+        aria-label={translateUi(resolvedLanguage, "workspace.libraryFilter")}
       >
         {[
-          ["all", "All"],
-          ["cvs", "CVs"],
-          ["proposals", "Proposals"],
+          ["all", translateUi(resolvedLanguage, "projects.all")],
+          ["cvs", translateUi(resolvedLanguage, "projects.cvs")],
+          ["proposals", translateUi(resolvedLanguage, "projects.proposals")],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -1897,15 +1943,15 @@ export function ProjectsLibraryDrawer({
       </div>
       <div className="forge-rail-drawer__grid" role="list">
         <ForgeDrawerSectionTitle
-          title="Recently viewed"
+          title={translateUi(resolvedLanguage, "workspace.recentlyViewed")}
           actionLabel={
             filteredItems.length <= recentItems.length
               ? undefined
               : filter === "cvs"
-                ? "Show all CVs"
+                ? translateUi(resolvedLanguage, "workspace.showAllCvs")
                 : filter === "proposals"
-                  ? "Show all proposals"
-                  : "Show all"
+                  ? translateUi(resolvedLanguage, "workspace.showAllProposals")
+                  : translateUi(resolvedLanguage, "workspace.showAll")
           }
           onAction={() => {
             setQuery("");
@@ -1917,13 +1963,15 @@ export function ProjectsLibraryDrawer({
         />
         {recentItems.map((item) => renderItem(item, "recent-"))}
         <ForgeDrawerSectionTitle
-          title="All results"
+          title={translateUi(resolvedLanguage, "workspace.allResults")}
           sectionRef={allResultsRef}
           focusable
         />
         {filteredItems.map((item) => renderItem(item))}
         {filteredItems.length === 0 ? (
-          <p className="forge-rail-drawer__empty">No documents found.</p>
+          <p className="forge-rail-drawer__empty">
+            {translateUi(resolvedLanguage, "emptyState.noDocumentsFound")}
+          </p>
         ) : null}
       </div>
       {selectedItems.length > 0 ? (
@@ -2393,6 +2441,7 @@ export function ProposalForge(): JSX.Element {
   const location = useLocation();
   const { search } = location;
   const navigate = useNavigate();
+  const { resolvedLanguage } = useUiLanguagePreference();
   const {
     activeSurface: activeTemplateSurface,
     open: templatePanelOpen,
@@ -9507,11 +9556,11 @@ export function ProposalForge(): JSX.Element {
   const jobsPanelRegistration = React.useMemo(
     () => ({
       surface: "jobs" as const,
-      title: "Attach job",
-      subtitle: "Select a captured job for this proposal.",
+      title: translateUi(resolvedLanguage, "jobs.attachJob"),
+      subtitle: translateUi(resolvedLanguage, "jobs.attachJobHelp"),
       icon: <Briefcase size={16} aria-hidden="true" />,
       backAction: {
-        ariaLabel: "Back to Draft",
+        ariaLabel: translateUi(resolvedLanguage, "workspace.backToDraft"),
         onSelect: () => openTemplateSurface("proposal-draft"),
       },
       renderContent: () => (
@@ -9523,7 +9572,7 @@ export function ProposalForge(): JSX.Element {
         />
       ),
       footer: {
-        label: "Open Jobs page",
+        label: translateUi(resolvedLanguage, "jobs.openJobsPage"),
         icon: <Briefcase size={13} aria-hidden="true" />,
         onSelect: () => navigate("/jobs"),
       },
@@ -9535,16 +9584,17 @@ export function ProposalForge(): JSX.Element {
       navigate,
       openTemplateSurface,
       proposalRailJobs,
+      resolvedLanguage,
     ],
   );
   useRegisterForgePanel(jobsPanelRegistration);
   const cvsPanelRegistration = React.useMemo(
     () => ({
       surface: "cvs" as const,
-      title: "Attach CV",
+      title: translateUi(resolvedLanguage, "workspace.attachCv"),
       icon: <FileUser size={16} aria-hidden="true" />,
       backAction: {
-        ariaLabel: "Back to Draft",
+        ariaLabel: translateUi(resolvedLanguage, "workspace.backToDraft"),
         onSelect: () => openTemplateSurface("proposal-draft"),
       },
       renderContent: () => (
@@ -9557,7 +9607,7 @@ export function ProposalForge(): JSX.Element {
         />
       ),
       footer: {
-        label: "Open CV Forge",
+        label: translateUi(resolvedLanguage, "workspace.openCvForge"),
         icon: <FileUser size={13} aria-hidden="true" />,
         onSelect: () =>
           navigate(
@@ -9573,13 +9623,14 @@ export function ProposalForge(): JSX.Element {
       navigate,
       openTemplateSurface,
       railCvItems,
+      resolvedLanguage,
     ],
   );
   useRegisterForgePanel(cvsPanelRegistration);
   const proposalsPanelRegistration = React.useMemo(
     () => ({
       surface: "proposals" as const,
-      title: "Proposals",
+      title: translateUi(resolvedLanguage, "nav.proposals"),
       icon: <FolderTree size={16} aria-hidden="true" />,
       renderContent: () => (
         <ProposalLibraryDrawer
@@ -9590,7 +9641,7 @@ export function ProposalForge(): JSX.Element {
         />
       ),
       footer: {
-        label: "Open Library",
+        label: translateUi(resolvedLanguage, "workspace.openLibrary"),
         icon: <FolderSimple size={13} aria-hidden="true" />,
         onSelect: () => navigate("/documents?type=proposals"),
       },
@@ -9600,13 +9651,14 @@ export function ProposalForge(): JSX.Element {
       hydrateCvDocument,
       navigate,
       railProposalItems,
+      resolvedLanguage,
     ],
   );
   useRegisterForgePanel(proposalsPanelRegistration);
   const documentsPanelRegistration = React.useMemo(
     () => ({
       surface: "documents" as const,
-      title: "Library",
+      title: translateUi(resolvedLanguage, "workspace.library"),
       icon: <FolderTree size={16} aria-hidden="true" />,
       renderContent: () => (
         <ProjectsLibraryDrawer
@@ -9622,7 +9674,7 @@ export function ProposalForge(): JSX.Element {
         />
       ),
       footer: {
-        label: "Open Library",
+        label: translateUi(resolvedLanguage, "workspace.openLibrary"),
         icon: <FolderSimple size={13} aria-hidden="true" />,
         onSelect: () => navigate("/documents?type=proposals"),
       },
@@ -9635,6 +9687,7 @@ export function ProposalForge(): JSX.Element {
       hydrateCvDocument,
       navigate,
       railLibraryModel.items,
+      resolvedLanguage,
     ],
   );
   useRegisterForgePanel(documentsPanelRegistration);
@@ -10794,7 +10847,10 @@ export function ProposalForge(): JSX.Element {
   const proposalTemplatePanelRegistration = React.useMemo(
     () => ({
       surface: "proposal" as const,
-      title: "Proposal templates",
+      title: translateUi(
+        resolvedLanguage,
+        "workspace.proposalTemplatesPanel",
+      ),
       subtitle: "A4 · 21 × 29.7 cm",
       activeItemId: effectiveProposalTemplateBundleId,
       items: proposalTemplatePanelItems,
@@ -10804,6 +10860,7 @@ export function ProposalForge(): JSX.Element {
       effectiveProposalTemplateBundleId,
       handleProposalStyleBundleSelect,
       proposalTemplatePanelItems,
+      resolvedLanguage,
     ],
   );
   useRegisterForgeTemplates(proposalTemplatePanelRegistration);
@@ -10914,13 +10971,16 @@ export function ProposalForge(): JSX.Element {
   const proposalHeadingPanelRegistration = React.useMemo(
     () => ({
       surface: "proposal-heading" as const,
-      title: "Heading",
-      ariaLabel: "Proposal heading",
+      title: translateUi(resolvedLanguage, "workspace.heading"),
+      ariaLabel: translateUi(
+        resolvedLanguage,
+        "workspace.proposalHeadingPanel",
+      ),
       renderContent: () => (
         <ProposalHeadingFields variableFields={proposalHeadingFields} />
       ),
     }),
-    [proposalHeadingFields],
+    [proposalHeadingFields, resolvedLanguage],
   );
   useRegisterForgePanel(proposalHeadingPanelRegistration);
   const proposalHeadingOpen =
@@ -10935,8 +10995,11 @@ export function ProposalForge(): JSX.Element {
   const proposalDesignPanelRegistration = React.useMemo(
     () => ({
       surface: "proposal-design" as const,
-      title: "Design",
-      ariaLabel: "Proposal design",
+      title: translateUi(resolvedLanguage, "workspace.design"),
+      ariaLabel: translateUi(
+        resolvedLanguage,
+        "workspace.proposalDesignPanel",
+      ),
       renderContent: () => (
         <ProposalDesignFields
           proposalTemplateId={effectiveProposalTemplateId}
@@ -10985,6 +11048,7 @@ export function ProposalForge(): JSX.Element {
       handleToggleSignature,
       proposalSignatureSettings.imageDataUrl,
       proposalTemplateBundleId,
+      resolvedLanguage,
     ],
   );
   useRegisterForgePanel(proposalDesignPanelRegistration);
@@ -11398,8 +11462,11 @@ export function ProposalForge(): JSX.Element {
   const proposalDraftPanelRegistration = React.useMemo(
     () => ({
       surface: "proposal-draft" as const,
-      title: "Draft",
-      ariaLabel: "Proposal draft drawer",
+      title: translateUi(resolvedLanguage, "workspace.draftProposalShort"),
+      ariaLabel: translateUi(
+        resolvedLanguage,
+        "workspace.proposalDraftPanel",
+      ),
       renderContent: () => (
         <ProposalDraftDrawer
           jobTitle={briefJobTitle}
@@ -11472,6 +11539,7 @@ export function ProposalForge(): JSX.Element {
       proposalRailToneOptions,
       proposalType,
       proposalTypeOptions,
+      resolvedLanguage,
       stagedProposalSourceMeta,
       stagedProposalSourcePreview,
       stagedProposalSourceTitle,
@@ -11483,10 +11551,10 @@ export function ProposalForge(): JSX.Element {
   const proposalPasteJobPanelRegistration = React.useMemo(
     () => ({
       surface: "proposal-paste-job" as const,
-      title: "Paste job offer",
-      ariaLabel: "Paste job offer drawer",
+      title: translateUi(resolvedLanguage, "jobs.pasteJobOffer"),
+      ariaLabel: translateUi(resolvedLanguage, "jobs.pasteJobOffer"),
       backAction: {
-        ariaLabel: "Back to Draft",
+        ariaLabel: translateUi(resolvedLanguage, "workspace.backToDraft"),
         onSelect: handleReturnToDraftFromPasteJob,
       },
       renderContent: () => (
@@ -11503,6 +11571,7 @@ export function ProposalForge(): JSX.Element {
       handleRailJobOfferTextChange,
       handleRailJobOfferTextCommit,
       handleReturnToDraftFromPasteJob,
+      resolvedLanguage,
     ],
   );
   useRegisterForgePanel(proposalPasteJobPanelRegistration);
@@ -11586,6 +11655,61 @@ export function ProposalForge(): JSX.Element {
   ]);
 
   const shouldShowSavedList = isSavedView && !selectedProposalId;
+  const proposalDocumentStageLabels = React.useMemo<ProposalDocumentStageLabels>(
+    () => ({
+      proposalToolbar: translateUi(resolvedLanguage, "workspace.proposalToolbar"),
+      proposalViewMode: translateUi(
+        resolvedLanguage,
+        "workspace.proposalViewMode",
+      ),
+      documentControls: translateUi(
+        resolvedLanguage,
+        "workspace.documentControls",
+      ),
+      switchToPreview: translateUi(
+        resolvedLanguage,
+        "workspace.switchToPreview",
+      ),
+      switchToEdit: translateUi(resolvedLanguage, "workspace.switchToEdit"),
+      edit: translateUi(resolvedLanguage, "workspace.edit"),
+      preview: translateUi(resolvedLanguage, "workspace.preview"),
+      editProposal: translateUi(resolvedLanguage, "workspace.editProposal"),
+      previewProposal: translateUi(
+        resolvedLanguage,
+        "workspace.previewProposal",
+      ),
+      heading: translateUi(resolvedLanguage, "workspace.heading"),
+      design: translateUi(resolvedLanguage, "workspace.design"),
+      templates: translateUi(resolvedLanguage, "workspace.templates"),
+      proposalUndoRedoActions: translateUi(
+        resolvedLanguage,
+        "workspace.proposalUndoRedoActions",
+      ),
+      undo: translateUi(resolvedLanguage, "workspace.undo"),
+      redo: translateUi(resolvedLanguage, "workspace.redo"),
+      proposalLibraryActions: translateUi(
+        resolvedLanguage,
+        "workspace.proposalLibraryActions",
+      ),
+      saveProposalToLibrary: translateUi(
+        resolvedLanguage,
+        "workspace.saveProposalToLibrary",
+      ),
+      saveToLibrary: translateUi(resolvedLanguage, "workspace.saveToLibrary"),
+      deleteDraft: translateUi(resolvedLanguage, "workspace.deleteDraft"),
+      primaryWritingAction: translateUi(
+        resolvedLanguage,
+        "workspace.primaryWritingAction",
+      ),
+      draftProposal: translateUi(resolvedLanguage, "workspace.draftProposal"),
+      draftProposalShort: translateUi(
+        resolvedLanguage,
+        "workspace.draftProposalShort",
+      ),
+      ask: translateUi(resolvedLanguage, "workspace.ask"),
+    }),
+    [resolvedLanguage],
+  );
 
   return (
     <div
@@ -11933,6 +12057,7 @@ export function ProposalForge(): JSX.Element {
                       <ProposalDocumentStage
                         mode={proposalOutputMode}
                         hasProposalContent={hasMeaningfulProposalContent}
+                        labels={proposalDocumentStageLabels}
                         styleControl={null}
                         headingOpen={proposalHeadingOpen}
                         onOpenHeading={handleOpenProposalHeading}

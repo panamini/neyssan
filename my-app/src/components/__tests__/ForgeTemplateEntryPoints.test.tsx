@@ -1,6 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { ForgeTemplatePanel } from "../ForgeTemplatePanel";
 import CvDesignFields from "../cv/CvDesignFields";
@@ -257,6 +257,10 @@ function renderEntryPoint(
 }
 
 describe("forge template entry points", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it("opens CV templates from the CV stage bar and keeps template selection wired", () => {
     const onSelect = vi.fn();
     renderEntryPoint("/cv", <CvTemplateEntryPoint onSelect={onSelect} />);
@@ -537,4 +541,46 @@ describe("forge template entry points", () => {
       screen.queryByRole("complementary", { name: "CV templates" }),
     ).not.toBeInTheDocument();
   });
+
+  it.each([
+    {
+      locale: "fr",
+      templates: "Modèles",
+      pin: "Épingler",
+      openTemplates: "Ouvrir les modèles",
+      collapse: "Replier le panneau",
+    },
+    {
+      locale: "es",
+      templates: "Plantillas",
+      pin: "Fijar panel",
+      openTemplates: "Abrir plantillas",
+      collapse: "Contraer panel",
+    },
+  ])(
+    "renders contextual template panel chrome in $locale",
+    ({ locale, templates, pin, openTemplates, collapse }) => {
+      window.localStorage.setItem("twoweeks:ui-language", locale);
+      window.localStorage.setItem("twoweeks:document-language", "ar");
+
+      renderEntryPoint("/cv", <CvTemplateEntryPoint onSelect={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole("button", { name: templates }));
+
+      const panel = screen.getByRole("complementary", {
+        name: "CV templates",
+      });
+      expect(within(panel).getByText(templates)).toBeInTheDocument();
+      expect(within(panel).getByRole("button", { name: pin })).toBeInTheDocument();
+      expect(
+        within(panel).getByRole("button", { name: openTemplates }),
+      ).toBeInTheDocument();
+      expect(
+        within(panel).getByRole("button", { name: collapse }),
+      ).toBeInTheDocument();
+      expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+        "ar",
+      );
+    },
+  );
 });

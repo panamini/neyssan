@@ -7,7 +7,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ProposalDraftDrawer,
@@ -136,6 +136,10 @@ function cvItem(id: string, title: string): LibraryItem {
 }
 
 describe("forge rail drawers", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it("keeps loaded Proposal Draft sources compact and opens settings menus upward", async () => {
     const onOpenJobs = vi.fn();
     const onOpenPasteJob = vi.fn();
@@ -442,7 +446,7 @@ describe("forge rail drawers", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Paste a job offer")).toHaveClass(
+    expect(screen.getByLabelText("Paste job offer")).toHaveClass(
       "forge-rail-drawer__paste-job-input",
     );
     expect(
@@ -480,7 +484,7 @@ describe("forge rail drawers", () => {
     expect(onSelectJob).toHaveBeenCalledWith("job-one");
 
     const openJob = screen.getAllByRole("button", {
-      name: "Open job details for Employment lawyer",
+      name: "Open job page: Employment lawyer",
     })[0];
     expect(openJob).toHaveAttribute("data-toolbar-tooltip", "Open job page");
     fireEvent.click(openJob);
@@ -536,7 +540,7 @@ describe("forge rail drawers", () => {
     );
 
     fireEvent.click(
-      screen.getAllByRole("button", { name: "Open proposal Proposal one" })[0],
+      screen.getAllByRole("button", { name: "Open proposal: Proposal one" })[0],
     );
     expect(onOpenItem).toHaveBeenLastCalledWith(item);
     expect(screen.getAllByText("Open").length).toBeGreaterThan(0);
@@ -574,14 +578,14 @@ describe("forge rail drawers", () => {
     );
 
     const openCv = screen.getAllByRole("button", {
-      name: "Open CV library for CV one",
+      name: "Open CV library: CV one",
     })[0];
     expect(openCv).toHaveAttribute("data-toolbar-tooltip", "Open CV library");
     fireEvent.click(openCv);
     expect(onOpenLibraryType).toHaveBeenLastCalledWith("cvs");
 
     const openProposal = screen.getAllByRole("button", {
-      name: "Open proposals library for Proposal one",
+      name: "Open proposals: Proposal one",
     })[0];
     expect(openProposal).toHaveAttribute(
       "data-toolbar-tooltip",
@@ -589,6 +593,76 @@ describe("forge rail drawers", () => {
     );
     fireEvent.click(openProposal);
     expect(onOpenLibraryType).toHaveBeenLastCalledWith("proposals");
+  });
+
+  it("localizes CV Forge drawer search chrome in French", () => {
+    window.localStorage.setItem("twoweeks:ui-language", "fr");
+    window.localStorage.setItem("twoweeks:document-language", "ar");
+    window.localStorage.setItem(
+      "twoweeks:forge-drawer:recent-cvforge-library-searches",
+      JSON.stringify(["portfolio"]),
+    );
+    render(
+      <CvForgeLibraryDrawer
+        items={[cvItem("cv-one", "CV one"), proposalItem("one", "Lettre one")]}
+        currentCvId="cv-one"
+        hydrateCvDocument={hydrateCvDocument}
+        onSelectCv={vi.fn()}
+        onOpenItem={vi.fn()}
+        onOpenLibraryType={vi.fn()}
+      />,
+    );
+
+    const search = screen.getByPlaceholderText("Rechercher la bibliothèque");
+    fireEvent.focus(search);
+
+    expect(
+      screen.getByRole("tablist", { name: "Filtre de bibliothèque" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Recherches récentes")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Effacer" })).toBeInTheDocument();
+    expect(screen.getByText("Vus récemment")).toBeInTheDocument();
+    expect(screen.getByText("Tous les résultats")).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", {
+        name: "Ouvrir la bibliothèque CV: CV one",
+      })[0],
+    ).toHaveAttribute("data-toolbar-tooltip", "Ouvrir la bibliothèque CV");
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+      "ar",
+    );
+  });
+
+  it("localizes proposal drawer search chrome in Spanish without propuesta terminology", () => {
+    window.localStorage.setItem("twoweeks:ui-language", "es");
+    window.localStorage.setItem("twoweeks:document-language", "fr");
+    window.localStorage.setItem(
+      "twoweeks:forge-drawer:recent-proposal-searches",
+      JSON.stringify(["legal"]),
+    );
+    render(
+      <ProposalLibraryDrawer
+        items={[proposalItem("one", "Carta one")]}
+        hydrateCvDocument={hydrateCvDocument}
+        onOpenItem={vi.fn()}
+        onOpenProposal={vi.fn()}
+      />,
+    );
+
+    const search = screen.getByPlaceholderText("Buscar cartas");
+    fireEvent.focus(search);
+
+    expect(screen.getByText("Búsquedas recientes")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Borrar" })).toBeInTheDocument();
+    expect(screen.getByText("Visto recientemente")).toBeInTheDocument();
+    expect(screen.getByText("Todos los resultados")).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Abrir carta: Carta one" })[0],
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/propuesta/i)).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+      "fr",
+    );
   });
 
   it("applies library selection ring only to the preview object", () => {
@@ -1011,7 +1085,7 @@ describe("forge rail drawers", () => {
       screen.queryByRole("button", { name: "More actions for CV one" }),
     ).not.toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: "Open CV library for CV one" }),
+      screen.getByRole("button", { name: "Open CV library: CV one" }),
     );
     expect(onOpenLibraryType).toHaveBeenCalledWith("cvs");
     expect(screen.getByText("All results")).toBeInTheDocument();

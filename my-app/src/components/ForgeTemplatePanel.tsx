@@ -4,12 +4,15 @@ import { ArrowLeft, ArrowSquareOut, CaretLeft, Pin } from "../lib/icons";
 import { useForgeTemplatePanel } from "../contexts/ForgeTemplatePanelContext";
 import { TemplateDocumentPreview } from "../pages/TemplatesPage";
 import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../lib/document-stage";
+import { translateUi } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 
 const TEMPLATE_THUMBNAIL_WIDTH_PX = 156;
 const TEMPLATE_THUMBNAIL_SCALE =
   TEMPLATE_THUMBNAIL_WIDTH_PX / A4_PAGE_WIDTH_PX;
 
 export function ForgeTemplatePanel(): JSX.Element | null {
+  const { resolvedLanguage } = useUiLanguagePreference();
   const {
     open,
     openMode,
@@ -55,6 +58,16 @@ export function ForgeTemplatePanel(): JSX.Element | null {
   }
   const docked = openMode === "docked";
   const showCollapse = openMode === "overlay" || docked;
+  const pinDrawerLabel = translateUi(resolvedLanguage, "panel.pinDrawer");
+  const collapseDrawerLabel = translateUi(
+    resolvedLanguage,
+    "panel.collapseDrawer",
+  );
+  const templatesLabel = translateUi(resolvedLanguage, "workspace.templates");
+  const openTemplatesLabel = translateUi(
+    resolvedLanguage,
+    "templates.openTemplates",
+  );
   const handlePinDrawer = () => {
     openSurface(activeRegistration.surface, { mode: "docked" });
   };
@@ -96,7 +109,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
                 className="forge-template-panel__head-action"
                 onClick={handlePinDrawer}
               >
-                Pin drawer
+                {pinDrawerLabel}
                 <Pin size={13} aria-hidden="true" />
               </button>
             ) : null}
@@ -118,8 +131,8 @@ export function ForgeTemplatePanel(): JSX.Element | null {
           <button
             type="button"
             className="forge-template-panel__collapse"
-            aria-label="Collapse drawer"
-            title="Collapse drawer"
+            aria-label={collapseDrawerLabel}
+            title={collapseDrawerLabel}
             onClick={closePanel}
           >
             <CaretLeft size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -149,7 +162,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
       {...panelHoverProps}
     >
       <div className="forge-template-panel__head">
-        <span className="forge-template-panel__head-title">Templates</span>
+        <span className="forge-template-panel__head-title">{templatesLabel}</span>
         <span className="forge-template-panel__head-actions">
           {!docked ? (
             <button
@@ -157,7 +170,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
               className="forge-template-panel__head-action"
               onClick={handlePinDrawer}
             >
-              Pin drawer
+              {pinDrawerLabel}
               <Pin size={13} aria-hidden="true" />
             </button>
           ) : null}
@@ -166,7 +179,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
             className="forge-template-panel__head-action"
             onClick={handleBrowseAllTemplates}
           >
-            Open Templates
+            {openTemplatesLabel}
             <ArrowSquareOut size={13} aria-hidden="true" />
           </button>
         </span>
@@ -175,8 +188,8 @@ export function ForgeTemplatePanel(): JSX.Element | null {
         <button
           type="button"
           className="forge-template-panel__collapse"
-          aria-label="Collapse drawer"
-          title="Collapse drawer"
+          aria-label={collapseDrawerLabel}
+          title={collapseDrawerLabel}
           onClick={closePanel}
         >
           <CaretLeft size={14} strokeWidth={1.8} aria-hidden="true" />

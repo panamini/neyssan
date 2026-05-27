@@ -291,8 +291,8 @@ describe("Sidebar permanent rail", () => {
       "CV",
       "Lettre",
       "Projets",
-      "Modeles",
-      "Parametres",
+      "Modèles",
+      "Paramètres",
     ]);
     expect(screen.getByRole("link", { name: "Offres" })).toHaveAttribute(
       "href",
@@ -487,11 +487,11 @@ describe("Sidebar permanent rail", () => {
     window.localStorage.setItem("twoweeks:ui-language", "fr");
     renderSidebar("/dashboard");
 
-    fireEvent.click(screen.getByRole("button", { name: "Parametres" }));
+    fireEvent.click(screen.getByRole("button", { name: "Paramètres" }));
 
     await waitFor(() => {
       expect(
-        screen.getByRole("complementary", { name: "Sections des parametres" }),
+        screen.getByRole("complementary", { name: "Sections des paramètres" }),
       ).toBeInTheDocument();
     });
     expect(
