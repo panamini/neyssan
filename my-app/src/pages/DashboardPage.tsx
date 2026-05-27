@@ -48,6 +48,8 @@ import {
 } from "../lib/proposal-personalization";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import type { CvDocument } from "../types/cvDocument";
+import { translateUi, type UiMessageKey } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 
 const TODAY_PROPOSAL_PREVIEW_STYLE = resolveVerbatiStyle({
   familyId: "workshop",
@@ -55,12 +57,15 @@ const TODAY_PROPOSAL_PREVIEW_STYLE = resolveVerbatiStyle({
   palette: "sauge",
 });
 
-function formatUpdatedLabel(value: number): string {
-  if (!value) return "Recently updated";
+function formatUpdatedLabel(
+  value: number,
+  t: (key: UiMessageKey) => string,
+): string {
+  if (!value) return t("dashboard.updatedRecently");
   const elapsedMs = Math.max(0, Date.now() - value);
   const hourMs = 60 * 60 * 1000;
   const dayMs = 24 * hourMs;
-  if (elapsedMs < hourMs) return "Updated just now";
+  if (elapsedMs < hourMs) return t("dashboard.updatedJustNow");
   if (elapsedMs < dayMs) {
     const hours = Math.max(1, Math.floor(elapsedMs / hourMs));
     return `Updated ${hours}h ago`;
@@ -113,32 +118,43 @@ function itemSourceId(item: LibraryItem): string {
   return item.id.slice(item.id.indexOf(":") + 1);
 }
 
-function itemActionLabel(item: LibraryItem): string {
-  if (item.type === "cv") return "Open CV";
-  if (item.type === "proposal") return "Continue";
-  return "Open";
-}
-
 function itemTypeLabel(item: LibraryItem): "CV" | "Proposal" | "Job" {
   if (item.type === "cv") return "CV";
   if (item.type === "job") return "Job";
   return "Proposal";
 }
 
-function itemContextLabel(item: LibraryItem): string {
-  if (item.type === "cv") return "CV profile";
-  if (item.type === "job") return "Job";
-  const jobPart = item.jobId || item.jobTitle ? "Job linked" : "No job";
+function itemActionLabelI18n(
+  item: LibraryItem,
+  t: (key: UiMessageKey) => string,
+): string {
+  if (item.type === "cv") return t("dashboard.openCv");
+  if (item.type === "proposal") return t("dashboard.continue");
+  return t("dashboard.open");
+}
+
+function itemContextLabel(
+  item: LibraryItem,
+  t: (key: UiMessageKey) => string,
+): string {
+  if (item.type === "cv") return t("dashboard.cvProfile");
+  if (item.type === "job") return t("dashboard.job");
+  const jobPart = item.jobId || item.jobTitle ? t("dashboard.jobLinked") : t("dashboard.noJob");
   const cvPart = item.linkedCvTitle
     ? `CV: ${item.linkedCvTitle}`
     : item.linkedCvId
-      ? "CV linked"
-      : "No CV linked";
+      ? t("dashboard.cvLinked")
+      : t("dashboard.noCvLinked");
   return `${jobPart} · ${cvPart}`;
 }
 
 export function DashboardPage(): JSX.Element {
   const navigate = useNavigate();
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const t = React.useCallback(
+    (key: UiMessageKey) => translateUi(resolvedLanguage, key),
+    [resolvedLanguage],
+  );
   const { isLoaded, isSignedIn } = useAuth();
   const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
   const { currentCv, currentCvId, cvs, deleteCv } = useCvLibrary();
@@ -223,10 +239,10 @@ export function DashboardPage(): JSX.Element {
         <header className="dashboard-head today-head">
           <div>
             <h1 id="today-title" className="dashboard-head__title page-head__title">
-              Today
+              {t("today.title")}
             </h1>
             <p className="dashboard-head__sub page-head__sub">
-              Pick up the next proposal task and keep the work moving.
+              {t("today.subtitle")}
             </p>
           </div>
         </header>
@@ -234,8 +250,8 @@ export function DashboardPage(): JSX.Element {
         <section className="today-section" aria-labelledby="create-title">
           <SectionHeading
             id="create-title"
-            title="Create"
-            copy="Start a concrete workflow."
+            title={t("today.create.title")}
+            copy={t("today.create.copy")}
           />
           <div className="today-create-actions">
             <Button
@@ -272,8 +288,8 @@ export function DashboardPage(): JSX.Element {
         <section className="today-section" aria-labelledby="continue-title">
           <SectionHeading
             id="continue-title"
-            title="Continue"
-            copy="Pick up the document you recognize."
+            title={t("today.continue.title")}
+            copy={t("today.continue.copy")}
           />
           {primaryContinueItem ? (
             <div className="today-preview-board">
@@ -283,6 +299,7 @@ export function DashboardPage(): JSX.Element {
                 onOpen={() => navigateTarget(primaryContinueItem.routeTarget, navigate)}
                 onDelete={() => deleteItem(primaryContinueItem)}
                 onDownload={() => downloadItem(primaryContinueItem)}
+                t={t}
               />
               {secondaryContinueItems.length > 0 ? (
                 <div className="today-preview-board__side">
@@ -294,6 +311,7 @@ export function DashboardPage(): JSX.Element {
                       onOpen={() => navigateTarget(item.routeTarget, navigate)}
                       onDelete={() => deleteItem(item)}
                       onDownload={() => downloadItem(item)}
+                      t={t}
                     />
                   ))}
                 </div>
@@ -301,8 +319,8 @@ export function DashboardPage(): JSX.Element {
             </div>
           ) : (
             <div className="today-empty-work">
-              <strong>NO WORK YET.</strong>
-              <span>Import a CV. Add a job. Draft when ready.</span>
+              <strong>{t("today.empty.title")}</strong>
+              <span>{t("today.empty.copy")}</span>
               <div>
                 <Button
                   variant="secondary"
@@ -333,8 +351,8 @@ export function DashboardPage(): JSX.Element {
         <section className="today-section" aria-labelledby="recent-work-title">
           <SectionHeading
             id="recent-work-title"
-            title="Recent work"
-            copy="Recent CVs and proposals."
+            title={t("today.recentWork.title")}
+            copy={t("today.recentWork.copy")}
           />
           {recentItems.length > 0 ? (
             <div className="today-recent-grid">
@@ -346,11 +364,12 @@ export function DashboardPage(): JSX.Element {
                   onOpen={() => navigateTarget(item.routeTarget, navigate)}
                   onDelete={() => deleteItem(item)}
                   onDownload={() => downloadItem(item)}
+                  t={t}
                     />
                   ))}
             </div>
           ) : (
-            <p className="dash-tip">No recent work yet.</p>
+            <p className="dash-tip">{t("today.recentWork.empty")}</p>
           )}
         </section>
 
@@ -379,11 +398,13 @@ function SectionHeading({
 function WorkDocumentPreview({
   item,
   scale = "default",
+  t,
 }: {
   item: LibraryItem;
   scale?: "default" | "small";
+  t: (key: UiMessageKey) => string;
 }) {
-  const context = itemContextLabel(item);
+  const context = itemContextLabel(item, t);
   if (item.type === "proposal") {
     return (
       <div
@@ -487,12 +508,14 @@ function WorkPreviewCard({
   onOpen,
   onDelete,
   onDownload,
+  t,
 }: {
   item: LibraryItem;
   variant: "primary" | "secondary" | "compact";
   onOpen: () => void;
   onDelete: () => void;
   onDownload: () => void;
+  t: (key: UiMessageKey) => string;
 }) {
   const label = itemTypeLabel(item);
   return (
@@ -504,7 +527,7 @@ function WorkPreviewCard({
           sections={[
             {
               items: [
-                { id: "open", label: itemActionLabel(item), onSelect: onOpen },
+                { id: "open", label: itemActionLabelI18n(item, t), onSelect: onOpen },
                 {
                   id: "download",
                   label: "Download PDF",
@@ -535,7 +558,11 @@ function WorkPreviewCard({
       </div>
       <button type="button" className="today-preview-card__surface" onClick={onOpen}>
         <span className="today-preview-card__preview-shell">
-          <WorkDocumentPreview item={item} scale={variant === "compact" ? "small" : "default"} />
+          <WorkDocumentPreview
+            item={item}
+            scale={variant === "compact" ? "small" : "default"}
+            t={t}
+          />
         </span>
         <span className="today-preview-card__meta">
           {item.type === "proposal" ? (
@@ -543,8 +570,8 @@ function WorkPreviewCard({
           ) : null}
           <strong>{item.title}</strong>
           <span className="today-preview-card__bottom">
-            <span>{itemContextLabel(item)}</span>
-            <span>{formatUpdatedLabel(item.updatedAt)}</span>
+            <span>{itemContextLabel(item, t)}</span>
+            <span>{formatUpdatedLabel(item.updatedAt, t)}</span>
           </span>
         </span>
       </button>

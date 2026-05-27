@@ -20,6 +20,8 @@ import { planWorkshopResumePages } from "../lib/resume/resumePagination";
 import { createProposalWorkspaceResetState } from "../lib/proposal-workspace-state";
 import { templatePreviewApplicant, templatePreviewProposal } from "./templatePreviewSamples";
 import type { CvDocument } from "../types/cvDocument";
+import { translateUi, type UiMessageKey } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 
 const TEMPLATE_FILTERS = ["cover letters", "resume"] as const;
 type TemplateFilter = (typeof TEMPLATE_FILTERS)[number];
@@ -121,8 +123,13 @@ function filterMatches(template: TemplateCard, filter: TemplateFilter): boolean 
   return template.kind === "Resume";
 }
 
-function filterLabel(filter: TemplateFilter): string {
-  return filter === "resume" ? "Resume" : "Cover letters";
+function filterLabelI18n(
+  filter: TemplateFilter,
+  t: (key: UiMessageKey) => string,
+): string {
+  return filter === "resume"
+    ? t("templates.resume")
+    : t("templates.coverLetters");
 }
 
 function getResumeTemplateIntent(
@@ -212,6 +219,11 @@ export function TemplateDocumentPreview({
 
 export function TemplatesPage(): JSX.Element {
   const navigate = useNavigate();
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const t = React.useCallback(
+    (key: UiMessageKey) => translateUi(resolvedLanguage, key),
+    [resolvedLanguage],
+  );
   const { currentCv, cvs } = useCvLibrary();
   const [activeFilter, setActiveFilter] = React.useState<TemplateFilter>("cover letters");
   const previewCv = React.useMemo(() => currentCv ?? cvs[0] ?? null, [currentCv, cvs]);
@@ -244,9 +256,11 @@ export function TemplatesPage(): JSX.Element {
       <div className="dasti-page-shell dasti-templates-page">
         <div className="dasti-page-header dasti-templates-page__head">
           <div className="dasti-stack">
-            <h1 className="dasti-stack__title page-head__title">Templates</h1>
+            <h1 className="dasti-stack__title page-head__title">
+              {t("templates.title")}
+            </h1>
             <p className="dasti-stack__subtitle page-head__sub">
-              Pick a starting point. Customize fonts and accent in document style.
+              {t("templates.subtitle")}
             </p>
           </div>
           <div className="dasti-page-actions">
@@ -262,7 +276,7 @@ export function TemplatesPage(): JSX.Element {
         </div>
 
         <div className="dasti-template-filter">
-          <div className="library-tabs" role="tablist" aria-label="Template type">
+          <div className="library-tabs" role="tablist" aria-label={t("templates.type")}>
             {TEMPLATE_FILTERS.map((filter) => (
               <button
                 key={filter}
@@ -272,13 +286,17 @@ export function TemplatesPage(): JSX.Element {
                 data-active={activeFilter === filter ? "true" : undefined}
                 onClick={() => setActiveFilter(filter)}
               >
-                {filterLabel(filter)}
+                {filterLabelI18n(filter, t)}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="dasti-template-grid" data-template-filter={activeFilter} aria-label="Templates">
+        <div
+          className="dasti-template-grid"
+          data-template-filter={activeFilter}
+          aria-label={t("templates.templates")}
+        >
           {visibleTemplates.map((template) => {
             const useTemplateLabel = `Use ${template.name} template`;
 

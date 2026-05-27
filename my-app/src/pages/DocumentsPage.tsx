@@ -59,6 +59,8 @@ import {
   X,
 } from "../lib/icons";
 import type { CvDocument } from "../types/cvDocument";
+import { translateUi, type UiMessageKey } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 
 const TYPE_FILTERS = ["all", "cvs", "proposals"] as const;
 type TypeFilter = (typeof TYPE_FILTERS)[number];
@@ -77,10 +79,13 @@ const PROJECTS_PROPOSAL_PREVIEW_STYLE = resolveVerbatiStyle({
   palette: "sauge",
 });
 
-function typeLabel(filter: TypeFilter): string {
-  if (filter === "all") return "All";
-  if (filter === "cvs") return "CVs";
-  return "Proposals";
+function typeLabelI18n(
+  filter: TypeFilter,
+  t: (key: UiMessageKey) => string,
+): string {
+  if (filter === "all") return t("projects.all");
+  if (filter === "cvs") return t("projects.cvs");
+  return t("projects.proposals");
 }
 
 function formatUpdatedLabel(value: number): string {
@@ -260,6 +265,11 @@ function matchesSearch(query: string, item: LibraryItem): boolean {
 
 export function DocumentsPage(): JSX.Element {
   const navigate = useNavigate();
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const t = React.useCallback(
+    (key: UiMessageKey) => translateUi(resolvedLanguage, key),
+    [resolvedLanguage],
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const { isLoaded, isSignedIn } = useAuth();
   const {
@@ -449,9 +459,9 @@ export function DocumentsPage(): JSX.Element {
     useBatchedProjectPreviewLoader(filteredItems);
 
   const authStatusMessage = !isLoaded || isConvexAuthLoading
-    ? "Loading projects."
+    ? t("projects.loading")
     : !isSignedIn || !isConvexAuthenticated
-      ? "Sign in to sync proposals. Local CVs and generated proposals still appear here."
+      ? t("projects.signInHint")
       : null;
 
   return (
@@ -459,9 +469,11 @@ export function DocumentsPage(): JSX.Element {
       <div className="dasti-page-shell dasti-documents-page projects-page">
         <div className="dasti-page-header dasti-documents-page__head">
           <div className="dasti-stack">
-            <h1 className="dasti-stack__title page-head__title">Projects</h1>
+            <h1 className="dasti-stack__title page-head__title">
+              {t("projects.title")}
+            </h1>
             <p className="dasti-stack__subtitle page-head__sub">
-              Jobs, CVs, and proposals in one place.
+              {t("projects.subtitle")}
             </p>
           </div>
           <div className="dasti-page-actions">
@@ -478,9 +490,9 @@ export function DocumentsPage(): JSX.Element {
         </div>
 
         <div className="dasti-documents-toolbar projects-toolbar">
-          <div className="projects-filter-group" aria-label="Type filter">
-            <span>Type</span>
-            <div className="library-tabs" role="tablist" aria-label="Type">
+          <div className="projects-filter-group" aria-label={t("projects.typeFilter")}>
+            <span>{t("projects.type")}</span>
+            <div className="library-tabs" role="tablist" aria-label={t("projects.type")}>
               {TYPE_FILTERS.map((filter) => (
                 <button
                   key={filter}
@@ -490,12 +502,12 @@ export function DocumentsPage(): JSX.Element {
                   data-active={typeFilter === filter ? "true" : undefined}
                   onClick={() => updateTypeFilter(filter)}
                 >
-                  {typeLabel(filter)}
+                  {typeLabelI18n(filter, t)}
                 </button>
               ))}
             </div>
           </div>
-          <div className="library-tabs projects-view-toggle" role="tablist" aria-label="View">
+          <div className="library-tabs projects-view-toggle" role="tablist" aria-label={t("projects.view")}>
             <button
               type="button"
               role="tab"
@@ -504,7 +516,7 @@ export function DocumentsPage(): JSX.Element {
               onClick={() => setViewMode("grid")}
             >
               <SquaresFour size={14} aria-hidden="true" />
-              Grid
+              {t("projects.grid")}
             </button>
             <button
               type="button"
@@ -514,17 +526,17 @@ export function DocumentsPage(): JSX.Element {
               onClick={() => setViewMode("list")}
             >
               <List size={14} aria-hidden="true" />
-              List
+              {t("projects.list")}
             </button>
           </div>
           <label className="dasti-documents-toolbar__search">
-            <span className="sr-only">Search projects</span>
+            <span className="sr-only">{t("projects.search")}</span>
             <Input
               type="search"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.currentTarget.value)}
-              placeholder="Search projects"
-              aria-label="Search projects"
+              placeholder={t("projects.search")}
+              aria-label={t("projects.search")}
             />
           </label>
         </div>
@@ -534,7 +546,7 @@ export function DocumentsPage(): JSX.Element {
         {viewMode === "grid" ? (
           filteredItems.length > 0 ? (
             <ProjectSection
-              title="Recent work"
+              title={t("projects.recentWork")}
               items={filteredItems}
               renderItem={(item, index) => (
                 <LibraryItemCard

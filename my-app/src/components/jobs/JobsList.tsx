@@ -15,6 +15,8 @@ import {
   getProposalExtensionSourceLinks,
 } from "../../lib/proposal-source-platforms";
 import { resolveVisibleJobVerdict } from "../../lib/jobs/visibleJobVerdict";
+import { translateUi, type UiMessageKey } from "../../lib/i18n";
+import { useUiLanguagePreference } from "../../lib/ui-preferences";
 
 type JobsListItem = {
   id: string;
@@ -111,10 +113,13 @@ const JOBS_SORT_OPTIONS = [
   },
 ] as const;
 
-function resolveLocationModeLabel(value: string): string {
+function resolveLocationModeLabel(
+  value: string,
+  t: (key: UiMessageKey) => string,
+): string {
   const normalizedValue = String(value ?? "").trim();
   if (!normalizedValue) {
-    return "Location unavailable";
+    return t("jobs.locationUnavailable");
   }
   const locationParts = normalizedValue
     .split(/\s*·\s*/)
@@ -196,9 +201,37 @@ export function JobsList({
   isProposalSelectionMode = false,
   onCancelProposalSelection,
 }: JobsListProps): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const t = React.useCallback(
+    (key: UiMessageKey) => translateUi(resolvedLanguage, key),
+    [resolvedLanguage],
+  );
+  const jobsSortOptions = React.useMemo(
+    () =>
+      JOBS_SORT_OPTIONS.map((option) => ({
+        ...option,
+        label:
+          option.value === "recent"
+            ? t("jobs.recentActivity")
+            : option.value === "oldest"
+              ? t("filters.sortOldestFirst")
+              : option.value === "title"
+                ? t("filters.sortTitle")
+                : t("jobs.company"),
+        description:
+          option.value === "recent"
+            ? t("jobs.latestActivityFirst")
+            : option.value === "oldest"
+              ? t("filters.sortOldestSavedFirst")
+              : option.value === "title"
+                ? t("jobs.alphabeticalByRole")
+                : t("jobs.alphabeticalByCompany"),
+      })),
+    [t],
+  );
   const jobsCountLabel =
     filteredJobs.length === displayedJobsCount
-      ? `${displayedJobsCount} jobs`
+      ? `${displayedJobsCount} ${t("jobs.count")}`
       : `${filteredJobs.length} of ${displayedJobsCount}`;
   const addJobSourceLinks = React.useMemo(
     () => getProposalExtensionSourceLinks(),
@@ -206,26 +239,26 @@ export function JobsList({
   );
 
   return (
-    <section className="dasti-jobs-list-pane jobs__list" aria-label="Jobs list">
+    <section className="dasti-jobs-list-pane jobs__list" aria-label={t("jobs.list")}>
       {isProposalSelectionMode ? (
         <div className="dasti-jobs-selection-banner">
           <div>
-            <strong>Choose a job for this proposal.</strong>
-            <span>Pick one job to attach it to your draft.</span>
+            <strong>{t("jobs.chooseForProposal")}</strong>
+            <span>{t("jobs.chooseForProposalHelp")}</span>
           </div>
           <button
             type="button"
             className="dasti-button dasti-button--secondary dasti-button--sm"
             onClick={onCancelProposalSelection}
           >
-            Cancel
+            {t("common.cancel")}
           </button>
         </div>
       ) : null}
       <div className="dasti-jobs-chrome">
         <div className="dasti-jobs-toolbar-stack">
           <div className="dasti-jobs-toolbar__search">
-            <span className="sr-only">Search jobs</span>
+            <span className="sr-only">{t("jobs.search")}</span>
             <span className="dasti-jobs-toolbar__search-icon" aria-hidden="true">
               <ListMagnifyingGlass size={16} strokeWidth={1.7} />
             </span>
@@ -233,15 +266,15 @@ export function JobsList({
               type="search"
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
-              placeholder="Search jobs"
-              aria-label="Search jobs"
+              placeholder={t("jobs.search")}
+              aria-label={t("jobs.search")}
               className="dasti-select dasti-select--sm"
             />
             {searchQuery ? (
               <button
                 type="button"
                 className="dasti-jobs-toolbar__clear"
-                aria-label="Clear search"
+                aria-label={t("jobs.clearSearch")}
                 onClick={() => onSearchQueryChange("")}
               >
                 <X size={16} strokeWidth={1.8} aria-hidden="true" />
@@ -255,24 +288,24 @@ export function JobsList({
           <div className="dasti-jobs-sort-row">
             <div className="dasti-jobs-sort-control">
               <LibraryFilterMenu
-                label="Sort jobs"
+                label={t("jobs.sort")}
                 value={sortOrder}
-                options={JOBS_SORT_OPTIONS}
+                options={jobsSortOptions}
                 onChange={onSortOrderChange}
                 align="start"
               />
             </div>
             <Menu
-              ariaLabel="Add job"
+              ariaLabel={t("jobs.addJob")}
               align="end"
               menuClassName="dasti-jobs-add-menu"
               sections={[
                 {
-                  label: "Primary",
+                  label: t("jobs.primary"),
                   items: [
                     {
                       id: "install-extension",
-                      label: "Install Chrome extension",
+                      label: t("jobs.installChromeExtension"),
                       onSelect: () =>
                         openExternalJobCaptureLink(
                           PROPOSAL_EXTENSION_INSTALL_LINK.href,
@@ -281,7 +314,7 @@ export function JobsList({
                   ],
                 },
                 {
-                  label: "Job boards",
+                  label: t("jobs.jobBoards"),
                   items: addJobSourceLinks.map((link) => ({
                     id: link.key,
                     label: link.label,
@@ -291,7 +324,7 @@ export function JobsList({
               ]}
               trigger={
                 <button type="button" className="dasti-jobs-add-action">
-                  + Add job
+                  + {t("jobs.addJob")}
                 </button>
               }
             />
@@ -300,7 +333,7 @@ export function JobsList({
 
         <div
           className="dasti-jobs-filter-chips dasti-jobs-view-toggle"
-          aria-label="Job views"
+          aria-label={t("jobs.views")}
           role="group"
         >
           <button
@@ -315,7 +348,7 @@ export function JobsList({
             aria-pressed={jobsView === "active"}
             onClick={() => onViewChange("active")}
           >
-            Active
+            {t("jobs.active")}
           </button>
           <button
             type="button"
@@ -329,14 +362,14 @@ export function JobsList({
             aria-pressed={jobsView === "archived"}
             onClick={() => onViewChange("archived")}
           >
-            Archived
+            {t("jobs.archived")}
           </button>
         </div>
 
         {jobsView === "active" ? (
           <div
             className="dasti-jobs-filter-chips dasti-jobs-quick-filter-row"
-            aria-label="Quick job filters"
+            aria-label={t("jobs.quickFilters")}
           >
             <FilterChip
               isActive={matchFilter === "worth_plus"}
@@ -346,13 +379,13 @@ export function JobsList({
                 )
               }
             >
-              Worth a shot
+              {t("jobs.worthAShot")}
             </FilterChip>
             <FilterChip
               isActive={needsReviewOnly}
               onClick={() => onNeedsReviewOnlyChange(!needsReviewOnly)}
             >
-              New
+              {t("jobs.new")}
             </FilterChip>
             <button
               type="button"
@@ -363,9 +396,9 @@ export function JobsList({
               ]
                 .filter(Boolean)
                 .join(" ")}
-              aria-label="Favorites"
+              aria-label={t("jobs.favorites")}
               aria-pressed={favoritesOnly}
-              title="Favorites"
+              title={t("jobs.favorites")}
               onClick={() => onFavoritesOnlyChange(!favoritesOnly)}
             >
               <Star
@@ -376,44 +409,44 @@ export function JobsList({
               />
             </button>
             <Menu
-              ariaLabel="Additional job filters"
+              ariaLabel={t("jobs.additionalFilters")}
               align="start"
               menuClassName="dasti-jobs-filter-menu"
               sections={[
                 {
-                  label: "Match quality",
+                  label: t("jobs.matchQuality"),
                   items: [
                     {
                       id: "all-match-tiers",
-                      label: "All match tiers",
+                      label: t("jobs.allMatchTiers"),
                       role: "menuitemradio",
                       selected: matchFilter === "all",
                       onSelect: () => onMatchFilterChange("all"),
                     },
                     {
                       id: "strong-match",
-                      label: "Strong match",
+                      label: t("jobs.strongMatch"),
                       role: "menuitemradio",
                       selected: matchFilter === "strong",
                       onSelect: () => onMatchFilterChange("strong"),
                     },
                     {
                       id: "worth-it",
-                      label: "Worth a shot",
+                      label: t("jobs.worthAShot"),
                       role: "menuitemradio",
                       selected: matchFilter === "worth_plus",
                       onSelect: () => onMatchFilterChange("worth_plus"),
                     },
                     {
                       id: "maybe",
-                      label: "Maybe",
+                      label: t("jobs.maybe"),
                       role: "menuitemradio",
                       selected: matchFilter === "unknown",
                       onSelect: () => onMatchFilterChange("unknown"),
                     },
                     {
                       id: "probably-skip",
-                      label: "Probably skip",
+                      label: t("jobs.probablySkip"),
                       role: "menuitemradio",
                       selected: matchFilter === "weak",
                       onSelect: () => onMatchFilterChange("weak"),
@@ -421,11 +454,11 @@ export function JobsList({
                   ],
                 },
                 {
-                  label: "Documents",
+                  label: t("jobs.documents"),
                   items: [
                     {
                       id: "all-docs",
-                      label: "All documents",
+                      label: t("jobs.allDocuments"),
                       role: "menuitemradio",
                       selected: !hasDocsOnly && !noDocsOnly,
                       onSelect: () => {
@@ -435,14 +468,14 @@ export function JobsList({
                     },
                     {
                       id: "has-docs",
-                      label: "Has docs",
+                      label: t("jobs.hasDocs"),
                       role: "menuitemradio",
                       selected: hasDocsOnly,
                       onSelect: () => onHasDocsOnlyChange(!hasDocsOnly),
                     },
                     {
                       id: "no-docs",
-                      label: "No docs",
+                      label: t("jobs.noDocs"),
                       role: "menuitemradio",
                       selected: noDocsOnly,
                       onSelect: () => onNoDocsOnlyChange(!noDocsOnly),
@@ -450,18 +483,18 @@ export function JobsList({
                   ],
                 },
                 {
-                  label: "Job traits",
+                  label: t("jobs.traits"),
                   items: [
                     {
                       id: "remote",
-                      label: "Remote",
+                      label: t("jobs.remote"),
                       role: "menuitemradio",
                       selected: remoteOnly,
                       onSelect: () => onRemoteOnlyChange(!remoteOnly),
                     },
                     {
                       id: "senior",
-                      label: "Senior",
+                      label: t("jobs.senior"),
                       role: "menuitemradio",
                       selected: seniorOnly,
                       onSelect: () => onSeniorOnlyChange(!seniorOnly),
@@ -471,7 +504,7 @@ export function JobsList({
               ]}
               trigger={
                 <button type="button" className="dasti-jobs-filter-chip">
-                  + Filters
+                  + {t("jobs.filters")}
                 </button>
               }
             />
@@ -483,22 +516,22 @@ export function JobsList({
         <div className="dasti-empty-state dasti-empty-state--panel">
           <FileText size={28} strokeWidth={1.2} aria-hidden="true" />
           <div className="dasti-empty-state__title">
-            {jobsView === "archived" ? "No archived jobs" : "No jobs match this search"}
+            {jobsView === "archived" ? t("jobs.noArchivedJobs") : t("jobs.noJobsMatch")}
           </div>
           <p className="dasti-empty-state__subtitle">
-            {jobsView === "archived" ? "Archive a job to see it here." : "Try a wider search."}
+            {jobsView === "archived" ? t("jobs.archiveHint") : t("jobs.widerSearchHint")}
           </p>
         </div>
       ) : (
         <div className="dasti-jobs-list" role="list">
           {filteredJobs.map((job) => {
             const isActive = job.id === selectedJobId;
-            const title = job.title.trim() || "Untitled job";
-            const company = job.company.trim() || "Unknown company";
-            const locationLabel = resolveLocationModeLabel(job.location);
+            const title = job.title.trim() || t("jobs.untitled");
+            const company = job.company.trim() || t("jobs.unknownCompany");
+            const locationLabel = resolveLocationModeLabel(job.location, t);
             const lastActivityLabel =
               formatUiDate(optimisticActivityById[job.id] ?? job.lastActivityAt) ??
-              "Recent";
+              t("jobs.recent");
             const isFavorite =
               optimisticFavoriteById[job.id] ?? job.isFavorite;
             const { label: matchLabel, tone: matchTone } =
@@ -528,7 +561,7 @@ export function JobsList({
                       <span className="dasti-jobs-row__title-copy">
                         <span>{title}</span>
                         {job.isSample ? (
-                          <span className="dasti-jobs-sample-badge">Sample</span>
+                          <span className="dasti-jobs-sample-badge">{t("jobs.sample")}</span>
                         ) : null}
                       </span>
                     </div>
@@ -542,7 +575,9 @@ export function JobsList({
                         <span className="dasti-jobs-row__meta-pill">
                           <span>{job.linkedDocumentCount}</span>
                         </span>
-                        <span>Last activity {lastActivityLabel}</span>
+                        <span>
+                          {t("jobs.lastActivity")} {lastActivityLabel}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -555,7 +590,7 @@ export function JobsList({
                     </span>
                     {isProposalSelectionMode ? (
                       <span className="dasti-jobs-row__select-hint">
-                        Select job
+                        {t("jobs.selectJob")}
                         <CaretCircleRight size={14} aria-hidden="true" />
                       </span>
                     ) : null}
@@ -601,7 +636,7 @@ export function JobsList({
                                         },
                                         {
                                           id: "cancel-delete",
-                                          label: "Cancel",
+                                          label: t("common.cancel"),
                                           onSelect: () =>
                                             onConfirmPermanentDeleteJobIdChange(null),
                                         },
@@ -642,7 +677,7 @@ export function JobsList({
                       {isFavorite ? (
                         <span
                           className="dasti-jobs-row__favorite-slot"
-                          aria-label="Favorite"
+                          aria-label={t("jobs.favorite")}
                         >
                           <Star
                             size={13}
