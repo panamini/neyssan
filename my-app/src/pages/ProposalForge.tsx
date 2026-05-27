@@ -195,12 +195,15 @@ import { deriveCvTitleFromSections } from "../lib/normalize-cv";
 import {
   buildProposalHeaderVisibilityFromContent,
   buildProposalLetterDateLine,
+  buildProposalRecipientDetails,
   buildProposalRecipientPrefill,
   buildProposalSalutation,
+  parseProposalRecipientDetails,
   readProposalSalutation,
   replaceProposalSalutation,
   resolveProposalHeaderVisibility,
   type ProposalHeaderVisibility,
+  type ProposalRecipientFields,
 } from "../lib/proposal-header";
 import {
   buildProposalApplicantContactLine,
@@ -3520,6 +3523,22 @@ export function ProposalForge(): JSX.Element {
     (value: string) => {
       markHeadingFieldDirty("recipientDetails");
       setProposalRecipientDetails(value);
+    },
+    [markHeadingFieldDirty],
+  );
+  const proposalRecipientFields = React.useMemo(
+    () => parseProposalRecipientDetails(proposalRecipientDetails),
+    [proposalRecipientDetails],
+  );
+  const handleProposalRecipientFieldChange = React.useCallback(
+    (field: keyof ProposalRecipientFields, value: string) => {
+      markHeadingFieldDirty("recipientDetails");
+      setProposalRecipientDetails((current) =>
+        buildProposalRecipientDetails({
+          ...parseProposalRecipientDetails(current),
+          [field]: value,
+        }),
+      );
     },
     [markHeadingFieldDirty],
   );
@@ -8556,11 +8575,6 @@ export function ProposalForge(): JSX.Element {
         });
         return;
       }
-      showToast("Save failed.", {
-        variant: "error",
-        description:
-          "The proposal text changed locally but could not be saved.",
-      });
     }
   }, [
     buildComposeSaveSnapshot,
@@ -8598,10 +8612,6 @@ export function ProposalForge(): JSX.Element {
       });
     } catch (error) {
       console.error("Failed to persist saved proposal edits:", error);
-      showToast("Save failed.", {
-        variant: "error",
-        description: "The saved proposal could not be updated.",
-      });
     } finally {
       setIsSavingSavedProposal(false);
     }
@@ -10679,10 +10689,6 @@ export function ProposalForge(): JSX.Element {
           lastSavedProposalTitleRef.current = normalizedTitle;
         } catch (saveError) {
           console.error("Failed to persist proposal title:", saveError);
-          showToast("Save failed.", {
-            variant: "error",
-            description: "The proposal title could not be updated.",
-          });
         }
         return;
       }
@@ -10694,10 +10700,6 @@ export function ProposalForge(): JSX.Element {
         }
       } catch (saveError) {
         console.error("Failed to persist proposal title:", saveError);
-        showToast("Save failed.", {
-          variant: "error",
-          description: "The proposal title changed locally but could not be saved.",
-        });
       }
     },
     [
@@ -11174,13 +11176,63 @@ export function ProposalForge(): JSX.Element {
         },
       },
       {
-        id: "recipient-details",
-        label: "Recipient information",
-        value: proposalRecipientDetails,
-        placeholder:
-          "Hiring manager or team\nCompany name\nCompany city / remote",
-        multiline: true,
-        onChange: handleProposalRecipientDetailsChange,
+        id: "recipient-name",
+        label: "Recipient name / team",
+        value: proposalRecipientFields.name,
+        placeholder: "Hiring manager or team",
+        onChange: (value) => handleProposalRecipientFieldChange("name", value),
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "recipient-company",
+        label: "Recipient company",
+        value: proposalRecipientFields.company,
+        placeholder: "Company name",
+        onChange: (value) =>
+          handleProposalRecipientFieldChange("company", value),
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "recipient-city",
+        label: "Recipient city / location",
+        value: proposalRecipientFields.city,
+        placeholder: "Company city / remote",
+        onChange: (value) => handleProposalRecipientFieldChange("city", value),
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "recipient-role",
+        label: "Recipient role / contact title",
+        value: proposalRecipientFields.role,
+        placeholder: "Talent acquisition, recruiter, or contact title",
+        onChange: (value) => handleProposalRecipientFieldChange("role", value),
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "recipient-address",
+        label: "Recipient address",
+        value: proposalRecipientFields.address,
+        placeholder: "Street address",
+        onChange: (value) =>
+          handleProposalRecipientFieldChange("address", value),
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "recipient-email",
+        label: "Recipient email",
+        value: proposalRecipientFields.email,
+        placeholder: "recipient@example.com",
+        onChange: (value) => handleProposalRecipientFieldChange("email", value),
         onBlur: () => {
           void handleProposalDocumentCommit();
         },
@@ -11205,6 +11257,7 @@ export function ProposalForge(): JSX.Element {
       handleProposalApplicantCompanyChange,
       handleProposalStructuredContactChange,
       handleProposalLetterDateChange,
+      handleProposalRecipientFieldChange,
       handleProposalRecipientDetailsChange,
       handleProposalSalutationChange,
       proposalApplicantName,
@@ -11213,6 +11266,7 @@ export function ProposalForge(): JSX.Element {
       proposalStructuredContactFields,
       proposalDocumentTitle,
       proposalLetterDate,
+      proposalRecipientFields,
       proposalRecipientDetails,
       proposalSalutationValue,
     ],

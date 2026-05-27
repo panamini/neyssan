@@ -336,7 +336,7 @@ function buildProposalLetterheadViewModel(args: {
       candidateLocation: "",
       showRecipient: visibility.showRecipient,
     });
-  const metaRole = recipientRole || candidateRole;
+  const metaRole = recipientRole;
   const shortRoleTitle = candidateRole || recipientRole;
 
   return {
@@ -533,7 +533,9 @@ export function ProposalCoverLetterFilmFotoTemplate({
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
   const largeTitle = viewModel.shortRoleTitle || viewModel.secondaryTitle;
-  const hasSecondaryTitle = Boolean(viewModel.secondaryTitle);
+  const rolePriority =
+    Boolean(viewModel.secondaryTitle) && largeTitle.trim().length > 10;
+  const hasSecondaryTitle = Boolean(viewModel.secondaryTitle) && !rolePriority;
 
   return (
     <>
@@ -545,6 +547,9 @@ export function ProposalCoverLetterFilmFotoTemplate({
               hasSecondaryTitle
                 ? ""
                 : "proposal-cover-letter__film-header--no-company",
+              rolePriority
+                ? "proposal-cover-letter__film-header--role-priority"
+                : "",
             ]
               .filter(Boolean)
               .join(" ")}
@@ -554,7 +559,7 @@ export function ProposalCoverLetterFilmFotoTemplate({
                 {viewModel.candidateName}
               </p>
             ) : null}
-            {viewModel.secondaryTitle ? (
+            {hasSecondaryTitle ? (
               <p className="proposal-cover-letter__film-company">
                 {viewModel.secondaryTitle}
               </p>
@@ -572,7 +577,7 @@ export function ProposalCoverLetterFilmFotoTemplate({
               </div>
             ) : null}
             {viewModel.candidatePhone ? (
-              <div>
+              <div className="proposal-cover-letter__info-block proposal-cover-letter__info-block--phone">
                 <p className="proposal-cover-letter__info-label">phone</p>
                 <p>{viewModel.candidatePhone}</p>
               </div>

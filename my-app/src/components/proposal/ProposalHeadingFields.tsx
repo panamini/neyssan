@@ -33,7 +33,15 @@ const HEADING_FIELD_GROUPS = [
   {
     id: "recipient",
     label: "Recipient details",
-    fieldIds: ["recipient-details"],
+    fieldIds: [
+      "recipient-name",
+      "recipient-company",
+      "recipient-city",
+      "recipient-role",
+      "recipient-address",
+      "recipient-email",
+      "recipient-details",
+    ],
   },
   {
     id: "letter-formulas",

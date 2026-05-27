@@ -83,4 +83,16 @@ describe("proposal letterhead CSS", () => {
       /\.proposal-cover-letter--director\s+\.proposal-cover-letter__masthead-role\s*\{[^}]*text-overflow:\s*ellipsis;/,
     );
   });
+
+  it("keeps Film und Foto role and phone fields from arbitrary wrapping", () => {
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto[\s\S]*?\.proposal-cover-letter__film-header--role-priority\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*70mm\)\s+minmax\(0,\s*1fr\);[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-title\s*\{[\s\S]*overflow-wrap:\s*normal;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto[\s\S]*?\.proposal-cover-letter__info-block--phone[\s\S]*?\{[\s\S]*overflow-wrap:\s*normal;[\s\S]*white-space:\s*nowrap;[\s\S]*\}/,
+    );
+  });
 });

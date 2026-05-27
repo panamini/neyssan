@@ -677,7 +677,7 @@ describe("export-renderers", () => {
             applicantHeader: {
               ...proposalFixture.applicantHeader,
               name: "Robert Cooper",
-              role: "Senior Security Specialist",
+              role: "Designer",
               company: "Cooper Studio",
               email: "email@email.com",
               phone: "",
@@ -700,9 +700,59 @@ describe("export-renderers", () => {
       expect(page?.querySelector(secondarySelector)?.textContent).toBe(
         "Cooper Studio",
       );
-      expect(page?.textContent).toContain("Senior Security Specialist");
+      expect(page?.textContent).toContain("Designer");
     },
   );
+
+  it("keeps Film und Foto export metadata recipient-only and prioritizes long role titles", () => {
+    const document = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          templateId: "film-foto-letterhead",
+          recipientDetails: "Hiring Manager\n\nUs Smart Tools\n\n\nParis",
+          documentTitle: "Application for Security Guard",
+          applicantHeader: {
+            ...proposalFixture.applicantHeader,
+            name: "Robert Cooper",
+            role: "Security Guard",
+            company: "Acme",
+            email: "email@email.com",
+            phone: "3868683442",
+            linkedin: "linkedin.in",
+            website: "",
+            location: "Los Angeles",
+            tag: "",
+          },
+        },
+        stylePreset: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "expert",
+          palette: "terre",
+        },
+      }),
+    );
+    const page = document.querySelector(".proposal-cover-letter--film-foto");
+    const header = page?.querySelector(".proposal-cover-letter__film-header");
+    const metaItems = Array.from(
+      page?.querySelectorAll(".proposal-cover-letter__meta-item") ?? [],
+    ).map((node) => node.textContent);
+
+    expect(header?.className).toContain(
+      "proposal-cover-letter__film-header--role-priority",
+    );
+    expect(header?.querySelector(".proposal-cover-letter__film-company")).toBeNull();
+    expect(header?.querySelector(".proposal-cover-letter__film-title")?.textContent).toBe(
+      "Security Guard",
+    );
+    expect(metaItems).toEqual([
+      "Hiring Manager",
+      "Us Smart Tools",
+      "",
+      expect.stringContaining("15 avril 2026"),
+    ]);
+  });
 
   it.each([
     {

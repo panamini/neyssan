@@ -1103,6 +1103,11 @@ function buildStyledProposalAppearanceCss(): string {
       grid-template-columns: minmax(0, 70mm) minmax(0, 1fr);
     }
 
+    .proposal-cover-letter--film-foto
+      .proposal-cover-letter__film-header--role-priority {
+      grid-template-columns: minmax(0, 70mm) minmax(0, 1fr);
+    }
+
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-heading {
       margin: 0;
       min-width: 0;
@@ -1122,7 +1127,14 @@ function buildStyledProposalAppearanceCss(): string {
       font-weight: 800;
       color: var(--accent);
       text-transform: lowercase;
+    }
+
+    .proposal-cover-letter--film-foto .proposal-cover-letter__film-company {
       overflow-wrap: anywhere;
+    }
+
+    .proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
+      overflow-wrap: normal;
     }
 
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-company {
@@ -1141,7 +1153,7 @@ function buildStyledProposalAppearanceCss(): string {
       .proposal-cover-letter__film-header--no-company
       .proposal-cover-letter__film-title {
       grid-column: 2;
-      max-width: 82mm;
+      max-width: 96mm;
     }
 
     .proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
@@ -1167,7 +1179,7 @@ function buildStyledProposalAppearanceCss(): string {
       right: 8mm;
       top: 42mm;
       display: grid;
-      grid-template-columns: 80mm 11mm 37mm minmax(0, 1fr);
+      grid-template-columns: 76mm 26mm 34mm minmax(0, 1fr);
       column-gap: 4mm;
     }
 
@@ -1216,6 +1228,13 @@ function buildStyledProposalAppearanceCss(): string {
       color: var(--accent);
       overflow-wrap: anywhere;
       text-transform: lowercase;
+    }
+
+    .proposal-cover-letter--film-foto
+      .proposal-cover-letter__info-block--phone
+      p:not(.proposal-cover-letter__info-label) {
+      overflow-wrap: normal;
+      white-space: nowrap;
     }
 
     .proposal-cover-letter--director .proposal-cover-letter__meta-item,
@@ -2832,7 +2851,7 @@ function buildProposalLetterheadExportViewModel(
       candidateLocation: "",
       showRecipient: data.headerVisibility.showRecipient,
     });
-  const metaRole = recipientRole || candidateRole;
+  const metaRole = recipientRole;
   const shortRoleTitle = candidateRole || recipientRole;
 
   return {
@@ -2959,20 +2978,25 @@ function renderProposalLetterheadExportPage(args: {
   }
 
   const largeTitle = viewModel.shortRoleTitle || viewModel.secondaryTitle;
-  const filmHeaderClass = viewModel.secondaryTitle
-    ? "proposal-cover-letter__film-header"
-    : "proposal-cover-letter__film-header proposal-cover-letter__film-header--no-company";
+  const rolePriority =
+    Boolean(viewModel.secondaryTitle) && largeTitle.trim().length > 10;
+  const filmHeaderClass =
+    viewModel.secondaryTitle && !rolePriority
+      ? "proposal-cover-letter__film-header"
+      : `proposal-cover-letter__film-header proposal-cover-letter__film-header--no-company${
+          rolePriority ? " proposal-cover-letter__film-header--role-priority" : ""
+        }`;
 
   return `<main class="export-page ${scopeClass}" data-export-doc="proposal">
     <header class="${filmHeaderClass}">
       ${renderExportParagraph(viewModel.candidateName, "proposal-cover-letter__film-heading")}
-      ${renderExportParagraph(viewModel.secondaryTitle, "proposal-cover-letter__film-company")}
+      ${!rolePriority ? renderExportParagraph(viewModel.secondaryTitle, "proposal-cover-letter__film-company") : ""}
       ${renderExportParagraph(largeTitle, "proposal-cover-letter__film-title")}
       <span class="proposal-cover-letter__film-rule"></span>
     </header>
     <section class="proposal-cover-letter__info-blocks">
       ${viewModel.filmSenderLine ? `<div><p class="proposal-cover-letter__info-label">sender</p>${renderExportParagraph(viewModel.filmSenderLine, "")}</div>` : ""}
-      ${viewModel.candidatePhone ? `<div><p class="proposal-cover-letter__info-label">phone</p>${renderExportParagraph(viewModel.candidatePhone, "")}</div>` : ""}
+      ${viewModel.candidatePhone ? `<div class="proposal-cover-letter__info-block proposal-cover-letter__info-block--phone"><p class="proposal-cover-letter__info-label">phone</p>${renderExportParagraph(viewModel.candidatePhone, "")}</div>` : ""}
       ${viewModel.candidateWebsite ? `<div><p class="proposal-cover-letter__info-label">portfolio</p>${renderExportParagraph(viewModel.candidateWebsite, "")}</div>` : ""}
       ${viewModel.recipientCompany ? `<div><p class="proposal-cover-letter__info-label">company</p>${renderExportParagraph(viewModel.recipientCompany, "")}</div>` : ""}
     </section>

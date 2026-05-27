@@ -50,12 +50,26 @@ function fields(
       onBlur: vi.fn(),
     },
     {
-      id: "recipient-details",
-      label: "Recipient information",
-      value: "Northstar\nParis",
-      placeholder:
-        "Hiring manager or team\nCompany name\nCompany city / remote",
-      multiline: true,
+      id: "recipient-name",
+      label: "Recipient name / team",
+      value: "Hiring Manager",
+      placeholder: "Hiring manager or team",
+      onChange: vi.fn(),
+      onBlur: vi.fn(),
+    },
+    {
+      id: "recipient-company",
+      label: "Recipient company",
+      value: "Northstar",
+      placeholder: "Company name",
+      onChange: vi.fn(),
+      onBlur: vi.fn(),
+    },
+    {
+      id: "recipient-city",
+      label: "Recipient city / location",
+      value: "Paris",
+      placeholder: "Company city / remote",
       onChange: vi.fn(),
       onBlur: vi.fn(),
     },
@@ -80,9 +94,8 @@ describe("ProposalHeadingFields", () => {
     expect(screen.getByText("Recipient details")).toBeInTheDocument();
     expect(screen.getByText("Letter details")).toBeInTheDocument();
     expect(screen.getByLabelText("Full name")).toHaveValue("Alex Martin");
-    expect(screen.getByLabelText("Recipient information")).toHaveValue(
-      "Northstar\nParis",
-    );
+    expect(screen.getByLabelText("Recipient company")).toHaveValue("Northstar");
+    expect(screen.getByLabelText("Recipient city / location")).toHaveValue("Paris");
   });
 
   it("supports structured applicant contact fields in the applicant group", () => {
@@ -186,6 +199,8 @@ describe("ProposalHeadingFields", () => {
           {},
           { value: "" },
           { value: "" },
+          { value: "" },
+          { value: "" },
         ])}
       />,
     );
@@ -197,13 +212,9 @@ describe("ProposalHeadingFields", () => {
         "email · phone · location · LinkedIn · website",
       ),
     ).toHaveValue("");
-    const recipient = screen.getByLabelText("Recipient information");
-    expect(recipient).toHaveAttribute(
-      "placeholder",
-      "Hiring manager or team\nCompany name\nCompany city / remote",
-    );
-    expect(recipient).toHaveAttribute("rows", "3");
-    expect(recipient).toHaveValue("");
+    expect(screen.getByPlaceholderText("Hiring manager or team")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Company name")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Company city / remote")).toHaveValue("");
     expect(screen.getByPlaceholderText("Dear Hiring Manager,")).toHaveValue("");
   });
 });
