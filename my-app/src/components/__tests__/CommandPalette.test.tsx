@@ -110,7 +110,7 @@ describe("CommandPalette", () => {
       expect(screen.queryByPlaceholderText(oldPlaceholder)).not.toBeInTheDocument();
       expect(
         screen.getByRole("option", {
-          name: locale === "fr" ? /Revoir l'accueil/i : /Repetir bienvenida/i,
+          name: locale === "fr" ? /Visite guidée/i : /Guía inicial/i,
         }),
       ).toBeInTheDocument();
 
@@ -165,7 +165,7 @@ describe("CommandPalette", () => {
     );
 
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
-    fireEvent.click(screen.getByRole("option", { name: /Replay onboarding/i }));
+    fireEvent.click(screen.getByRole("option", { name: /Starter tour/i }));
 
     expect(onReplayOnboarding).toHaveBeenCalledTimes(1);
 
@@ -193,7 +193,7 @@ describe("CommandPalette", () => {
 
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     fireEvent.click(
-      screen.getByRole("option", { name: /Revoir l'accueil/i }),
+      screen.getByRole("option", { name: /Visite guidée/i }),
     );
 
     expect(onReplayOnboarding).toHaveBeenCalledTimes(1);

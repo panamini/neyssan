@@ -19,6 +19,12 @@ function renderReplay() {
   );
 }
 
+function renderReplayWithLocale(locale: "fr" | "es") {
+  window.localStorage.setItem("twoweeks:ui-language", locale);
+  window.localStorage.setItem("twoweeks:document-language", "ar");
+  renderReplay();
+}
+
 function renderReplayAtJobsStep() {
   render(
     <OnboardingReplay
@@ -33,6 +39,7 @@ function renderReplayAtJobsStep() {
 
 describe("OnboardingReplay", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     onClose.mockClear();
     onNavigate.mockClear();
     onOpenCommandPalette.mockClear();
@@ -49,11 +56,11 @@ describe("OnboardingReplay", () => {
       ),
     ).toEqual(["Intro", "Style", "Tone", "CV", "Jobs", "Done"]);
     expect(
-      screen.getByRole("heading", { name: "Two weeks. One offer." }),
+      screen.getByRole("heading", { name: "twoweeks. One offer." }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "twoweeks turns your CV into tailored cover letters for jobs that actually match your profile. Let's get you set up in three minutes.",
+        "twoweeks turns your CV into tailored letters for jobs that match. Setup takes 3 minutes.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("No spinners.")).toBeInTheDocument();
@@ -66,7 +73,7 @@ describe("OnboardingReplay", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "You can change it any time. Fonts, sizes, accent — everything is editable.",
+        "Change it any time. Fonts, sizes, accent. Everything stays editable.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Style 1/ })).toBeInTheDocument();
@@ -118,10 +125,10 @@ describe("OnboardingReplay", () => {
 
     await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(
-      screen.getByRole("heading", { name: "How do you sound?" }),
+      screen.getByRole("heading", { name: "Your voice." }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Your default voice. Change it per letter."),
+      screen.getByText("Default voice. Change it per letter."),
     ).toBeInTheDocument();
     expect(screen.getByText(/Human\. Direct\./)).toHaveTextContent(
       "Human. Direct. Still professional.",
@@ -161,7 +168,7 @@ describe("OnboardingReplay", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Import a PDF, paste text, or start from scratch. We'll keep your style and tone choices in place.",
+        "Import a PDF, paste text, or start blank. Style and tone stay in place.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -200,7 +207,7 @@ describe("OnboardingReplay", () => {
     expect(onNavigate).not.toHaveBeenCalled();
     expect(
       screen.getByText(
-        "PDF import is selected. Choose a file now or continue and import it from the final step.",
+        "PDF import is selected. Choose a file now or continue from the final step.",
       ),
     ).toBeInTheDocument();
 
@@ -242,9 +249,7 @@ describe("OnboardingReplay", () => {
     onClose.mockClear();
     onNavigate.mockClear();
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(
-      screen.getByRole("heading", { name: "You're set." }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "You're set." })).toBeInTheDocument();
     expect(
       screen.getByText("Start with the next document step that matters most."),
     ).toBeInTheDocument();
@@ -284,6 +289,75 @@ describe("OnboardingReplay", () => {
     expect(screen.getByText("Step 5 of 6")).toBeInTheDocument();
   });
 
+  it.each([
+    {
+      locale: "fr" as const,
+      intro: "twoweeks. Une offre.",
+      introCopy:
+        "twoweeks transforme votre CV en lettres ciblées pour les offres qui correspondent. Configuration en 3 minutes.",
+      style: "Choisir un style.",
+      styleCopy:
+        "Modifiable à tout moment. Polices, tailles, accent. Tout reste éditable.",
+      tone: "Votre voix.",
+      toneChoice: "Chaleureux",
+      cv: "Ajouter le CV.",
+      cvCopy:
+        "Importez un PDF, collez du texte ou partez de zéro. Style et ton restent en place.",
+      jobs: "Capturer les offres.",
+      done: "C'est prêt.",
+      step: "Étape 6 sur 6",
+      finalAction: "Rédiger la lettre",
+      notBrandTranslation: /Deux semaines/i,
+    },
+    {
+      locale: "es" as const,
+      intro: "twoweeks. Una oferta.",
+      introCopy:
+        "twoweeks convierte tu CV en cartas ajustadas a empleos que encajan. Configuración en 3 minutos.",
+      style: "Elige un estilo.",
+      styleCopy:
+        "Cámbialo cuando quieras. Fuentes, tamaños, acento. Todo sigue editable.",
+      tone: "Tu voz.",
+      toneChoice: "Cercano",
+      cv: "Añade tu CV.",
+      cvCopy:
+        "Importa un PDF, pega texto o empieza en blanco. Estilo y tono quedan activos.",
+      jobs: "Captura empleos.",
+      done: "Todo listo.",
+      step: "Paso 6 de 6",
+      finalAction: "Redactar carta",
+      notBrandTranslation: /Dos semanas/i,
+    },
+  ])("renders every onboarding slide in $locale", async (copy) => {
+    const user = userEvent.setup();
+    renderReplayWithLocale(copy.locale);
+
+    expect(screen.getByRole("heading", { name: copy.intro })).toBeInTheDocument();
+    expect(screen.getByText(copy.introCopy)).toBeInTheDocument();
+    expect(screen.queryByText(copy.notBrandTranslation)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: copy.locale === "fr" ? "Continuer" : "Continuar" }));
+    expect(screen.getByRole("heading", { name: copy.style })).toBeInTheDocument();
+    expect(screen.getByText(copy.styleCopy)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: copy.locale === "fr" ? "Continuer" : "Continuar" }));
+    expect(screen.getByRole("heading", { name: copy.tone })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: new RegExp(copy.toneChoice) })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: copy.locale === "fr" ? "Continuer" : "Continuar" }));
+    expect(screen.getByRole("heading", { name: copy.cv })).toBeInTheDocument();
+    expect(screen.getByText(copy.cvCopy)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: copy.locale === "fr" ? "Continuer" : "Continuar" }));
+    expect(screen.getByRole("heading", { name: copy.jobs })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: copy.locale === "fr" ? "Continuer" : "Continuar" }));
+    expect(screen.getByRole("heading", { name: copy.done })).toBeInTheDocument();
+    expect(screen.getByText(copy.step)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: copy.finalAction })).toBeInTheDocument();
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe("ar");
+  });
+
   it("marks blank CV locally without navigating before onboarding completion", async () => {
     const user = userEvent.setup();
     renderReplay();
@@ -308,7 +382,7 @@ describe("OnboardingReplay", () => {
     onClose.mockClear();
     onNavigate.mockClear();
     await user.click(
-      screen.getByRole("button", { name: "Write first proposal" }),
+      screen.getByRole("button", { name: "Write first letter" }),
     );
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onNavigate).toHaveBeenCalledWith("/proposal", undefined);
