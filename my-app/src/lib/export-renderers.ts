@@ -881,6 +881,33 @@ function buildStyledProposalAppearanceCss(): string {
       position: absolute;
     }
 
+    .proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
+    .proposal-cover-letter--director .proposal-cover-letter__masthead-secondary,
+    .proposal-cover-letter--director .proposal-cover-letter__masthead-role,
+    .proposal-cover-letter--director .proposal-cover-letter__phone-mark,
+    .proposal-cover-letter--director .proposal-cover-letter__subject-label,
+    .proposal-cover-letter--director .proposal-cover-letter__subject-value,
+    .proposal-cover-letter--volk .proposal-cover-letter__volk-title,
+    .proposal-cover-letter--volk .proposal-cover-letter__volk-subtitle,
+    .proposal-cover-letter--volk .proposal-cover-letter__subject-label,
+    .proposal-cover-letter--volk .proposal-cover-letter__subject-value,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__film-title,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
+      font-family: var(--heading-font, var(--font-heading-family));
+    }
+
+    .proposal-cover-letter--director .proposal-cover-letter__sender-label,
+    .proposal-cover-letter--director .proposal-cover-letter__sender-lines p,
+    .proposal-cover-letter--director .proposal-cover-letter__phone-block p,
+    .proposal-cover-letter--director .proposal-cover-letter__meta-item,
+    .proposal-cover-letter--volk .proposal-cover-letter__volk-sender,
+    .proposal-cover-letter--volk .proposal-cover-letter__meta-item,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__meta-item {
+      font-family: var(--body-font, var(--font-body-family));
+    }
+
     .proposal-cover-letter--director .proposal-cover-letter__masthead {
       left: 25mm;
       top: 22.8mm;
@@ -1194,6 +1221,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--film-foto .proposal-cover-letter__body .proposal-signoff,
     .proposal-cover-letter--film-foto .proposal-cover-letter__body .proposal-signature {
       margin: 0;
+      font-family: var(--body-font, var(--font-body-family));
       font-size: 3.15mm;
       line-height: 1.48;
       color: var(--ink);
