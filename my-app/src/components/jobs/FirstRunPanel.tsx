@@ -2,6 +2,8 @@ import React from "react";
 import { useMutation } from "convex/react";
 import { NewspaperClipping } from "@/lib/icons";
 import { api } from "../../../convex/_generated/api";
+import { translateUi } from "../../lib/i18n";
+import { useUiLanguagePreference } from "../../lib/ui-preferences";
 
 type FirstRunPanelProps = {
   onImportFirstJob: () => void;
@@ -16,6 +18,7 @@ export function FirstRunPanel({
   isSeedingSample = false,
   errorMessage = null,
 }: FirstRunPanelProps): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
   const recordFirstRunPath = useMutation(
     ((api as any).jobsPublic?.recordFirstRunPath ??
       "jobsPublic.recordFirstRunPath") as any,
@@ -39,8 +42,12 @@ export function FirstRunPanel({
         <div className="dasti-jobs-empty-state__icon-slot" aria-hidden="true">
           <NewspaperClipping size={34} strokeWidth={1.25} />
         </div>
-        <h2 className="onb-replay__title">Start with one job.</h2>
-        <p className="onb-replay__copy">Import a role. Or try a sample.</p>
+        <h2 className="onb-replay__title">
+          {translateUi(resolvedLanguage, "jobs.startWithOne")}
+        </h2>
+        <p className="onb-replay__copy">
+          {translateUi(resolvedLanguage, "jobs.startWithOneHelp")}
+        </p>
         <div className="onb-replay__choices">
           <button
             type="button"
@@ -52,9 +59,11 @@ export function FirstRunPanel({
               onImportFirstJob();
             }}
           >
-            <span className="onb-replay__choice-title">Add a job</span>
+            <span className="onb-replay__choice-title">
+              {translateUi(resolvedLanguage, "jobs.addAJob")}
+            </span>
             <span className="onb-replay__choice-desc">
-              Capture a role with the extension.
+              {translateUi(resolvedLanguage, "jobs.captureWithExtension")}
             </span>
           </button>
           <button
@@ -67,10 +76,12 @@ export function FirstRunPanel({
             }}
           >
             <span className="onb-replay__choice-title">
-              {isSeedingSample ? "Loading sample" : "Try a sample"}
+              {isSeedingSample
+                ? translateUi(resolvedLanguage, "jobs.loadingSample")
+                : translateUi(resolvedLanguage, "jobs.trySample")}
             </span>
             <span className="onb-replay__choice-desc">
-              Load an example role.
+              {translateUi(resolvedLanguage, "jobs.loadExampleRole")}
             </span>
           </button>
         </div>

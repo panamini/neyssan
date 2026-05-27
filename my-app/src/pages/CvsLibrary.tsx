@@ -10,6 +10,8 @@ import {
 } from "../lib/proposal-personalization";
 import { createQuickStartLocationState } from "../lib/quick-start-routing";
 import { formatUiDate } from "../lib/ui-date";
+import { translateUi } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 import type {
   CvDocument,
   IExperienceItem,
@@ -75,6 +77,26 @@ function readProfileContact(cv: CvDocument): {
 export function CvsLibrary(): JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const cvSortOptions = React.useMemo(
+    () =>
+      CV_SORT_OPTIONS.map((option) => ({
+        ...option,
+        label:
+          option.value === "newest"
+            ? translateUi(resolvedLanguage, "filters.sortNewest")
+            : option.value === "oldest"
+              ? translateUi(resolvedLanguage, "filters.sortOldest")
+              : translateUi(resolvedLanguage, "filters.sortTitle"),
+        description:
+          option.value === "newest"
+            ? translateUi(resolvedLanguage, "filters.sortRecentlyUpdatedFirst")
+            : option.value === "oldest"
+              ? translateUi(resolvedLanguage, "filters.sortOldestSavedFirst")
+              : translateUi(resolvedLanguage, "filters.sortAlphabeticalByTitle"),
+      })),
+    [resolvedLanguage],
+  );
   const { cvs, currentCvId, loadCv, createNewCv, deleteCv } = useCvLibrary();
   const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -221,7 +243,9 @@ export function CvsLibrary(): JSX.Element {
       >
         <div className="dasti-page-header">
           <div className="dasti-stack">
-            <h1 className="dasti-stack__title">All resumes</h1>
+            <h1 className="dasti-stack__title">
+              {translateUi(resolvedLanguage, "documents.allResumes")}
+            </h1>
           </div>
           <div className="dasti-page-actions">
             <button
@@ -242,20 +266,22 @@ export function CvsLibrary(): JSX.Element {
           <>
             <div className="dasti-proposal-library-utility-row">
               <label className="dasti-proposal-library-utility-row__search">
-                <span className="sr-only">Search all resumes</span>
+                <span className="sr-only">
+                  {translateUi(resolvedLanguage, "documents.searchAllResumes")}
+                </span>
                 <Input
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search all resumes"
-                  aria-label="Search all resumes"
+                  placeholder={translateUi(resolvedLanguage, "documents.searchAllResumes")}
+                  aria-label={translateUi(resolvedLanguage, "documents.searchAllResumes")}
                   className="dasti-proposal-library-utility-row__input"
                 />
               </label>
               <LibraryFilterMenu
-                label="Sort all resumes"
+                label={translateUi(resolvedLanguage, "documents.sortAllResumes")}
                 value={sortOrder}
-                options={CV_SORT_OPTIONS}
+                options={cvSortOptions}
                 onChange={setSortOrder}
               />
               <span className="dasti-proposal-library-utility-row__count">
@@ -265,10 +291,10 @@ export function CvsLibrary(): JSX.Element {
             {sorted.length === 0 ? (
               <div className="dasti-empty-state">
                 <div className="dasti-empty-state__title">
-                  No resumes match this search
+                  {translateUi(resolvedLanguage, "documents.noResumesMatch")}
                 </div>
                 <p className="dasti-empty-state__subtitle">
-                  Search checks the title, profile details, summary, and recent roles.
+                  {translateUi(resolvedLanguage, "documents.noResumesMatchHelp")}
                 </p>
               </div>
             ) : (
@@ -303,9 +329,14 @@ export function CvsLibrary(): JSX.Element {
               });
               const isConfirming = confirmingId === cv.id;
               const jobTitles = readFirstJobTitles(cv);
-              const displayTitle = position || cardTitle || "Resume";
+              const displayTitle =
+                position ||
+                cardTitle ||
+                translateUi(resolvedLanguage, "documents.resumeFallbackTitle");
               const displaySubtitle =
-                profileName || identityLine || "Draft resume";
+                profileName ||
+                identityLine ||
+                translateUi(resolvedLanguage, "documents.draftResume");
 
               return (
                 <div
@@ -431,9 +462,11 @@ export function CvsLibrary(): JSX.Element {
           </>
         ) : (
           <div className="dasti-empty-state">
-            <div className="dasti-empty-state__title">No resumes yet</div>
+            <div className="dasti-empty-state__title">
+              {translateUi(resolvedLanguage, "documents.noResumesYet")}
+            </div>
             <p className="dasti-empty-state__subtitle">
-              Create or import a resume to start editing and personalizing it.
+              {translateUi(resolvedLanguage, "documents.noResumesYetHelp")}
             </p>
             <div
               style={{
