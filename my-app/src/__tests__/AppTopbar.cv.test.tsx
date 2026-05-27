@@ -175,6 +175,73 @@ describe("AppTopbar CV controls", () => {
     },
   );
 
+  it.each([
+    {
+      locale: "fr",
+      signedOutLabel: "Se connecter",
+      signedInLabel: "Ouvrir le menu du compte",
+    },
+    {
+      locale: "es",
+      signedOutLabel: "Iniciar sesion",
+      signedInLabel: "Abrir menu de cuenta",
+    },
+  ])(
+    "renders account chrome in $locale without touching document language",
+    ({ locale, signedOutLabel, signedInLabel }) => {
+      window.localStorage.setItem("twoweeks:ui-language", locale);
+      window.localStorage.setItem("twoweeks:document-language", "ar");
+
+      const { unmount } = render(
+        <MemoryRouter initialEntries={["/cv?id=cv_1"]}>
+          <CvForgeTopbarProvider>
+            <RegisterCvTopbar />
+            <AppTopbar
+              commandPaletteOpen={false}
+              onOpenCommandPalette={vi.fn()}
+            />
+          </CvForgeTopbarProvider>
+        </MemoryRouter>,
+      );
+
+      expect(screen.getByRole("button", { name: signedOutLabel })).toHaveClass(
+        "app-topbar__account-button",
+      );
+      expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+        "ar",
+      );
+
+      unmount();
+      clerkMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
+      clerkMocks.useUser.mockReturnValue({
+        user: {
+          firstName: "Nina",
+          username: "nini",
+          primaryEmailAddress: { emailAddress: "nina@example.com" },
+        },
+      });
+
+      render(
+        <MemoryRouter initialEntries={["/cv?id=cv_1"]}>
+          <CvForgeTopbarProvider>
+            <RegisterCvTopbar />
+            <AppTopbar
+              commandPaletteOpen={false}
+              onOpenCommandPalette={vi.fn()}
+            />
+          </CvForgeTopbarProvider>
+        </MemoryRouter>,
+      );
+
+      expect(screen.getByRole("button", { name: signedInLabel })).toHaveClass(
+        "app-topbar__account-button",
+      );
+      expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+        "ar",
+      );
+    },
+  );
+
   it("renders CV status and share controls in the global topbar", async () => {
     const user = userEvent.setup();
 

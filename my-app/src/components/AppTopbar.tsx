@@ -253,6 +253,11 @@ export function AppTopbar({
     resolvedLanguage,
     "topbar.searchOrRunCommand",
   );
+  const accountLoadingLabel = translateUi(resolvedLanguage, "account.loading");
+  const accountOpenMenuLabel = translateUi(resolvedLanguage, "account.openMenu");
+  const accountSignInLabel = translateUi(resolvedLanguage, "account.signIn");
+  const accountLabel = translateUi(resolvedLanguage, "account.account");
+  const profileLabel = translateUi(resolvedLanguage, "account.profile");
 
   const handleProfile = React.useCallback(() => {
     const clerkTrigger =
@@ -856,10 +861,10 @@ export function AppTopbar({
           className="app-topbar__account-button"
           label={
             !isAccountReady
-              ? "Account loading"
+              ? accountLoadingLabel
               : isSignedIn
-                ? "Open account menu"
-                : "Sign in"
+                ? accountOpenMenuLabel
+                : accountSignInLabel
           }
           onClick={handleProfile}
           disabled={!isAccountReady}
@@ -877,10 +882,10 @@ export function AppTopbar({
         </IconButton>
         <span className="app-topbar__profile-name" aria-hidden="true">
           {!isAccountReady
-            ? "Account"
+            ? accountLabel
             : isSignedIn
-              ? user?.firstName ?? user?.username ?? "Profile"
-              : "Sign in"}
+              ? user?.firstName ?? user?.username ?? profileLabel
+              : accountSignInLabel}
         </span>
         {isSignedIn ? (
           <div ref={clerkUserButtonRef} className="app-topbar__clerk-button">
