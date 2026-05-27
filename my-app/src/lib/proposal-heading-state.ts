@@ -110,6 +110,10 @@ function isWebsiteContactPart(value: string): boolean {
   );
 }
 
+function isContactPlaceholderPart(value: string): boolean {
+  return /^(?:letter|sender)$/i.test(value.trim());
+}
+
 export function parseProposalContactLine(
   value: string | null | undefined,
 ): ProposalStructuredContactFields {
@@ -124,6 +128,9 @@ export function parseProposalContactLine(
   const other: string[] = [];
 
   for (const part of splitProposalContactLine(value)) {
+    if (isContactPlaceholderPart(part)) {
+      continue;
+    }
     if (!result.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(part)) {
       result.email = part;
     } else if (!result.phone && isPhoneContactPart(part)) {

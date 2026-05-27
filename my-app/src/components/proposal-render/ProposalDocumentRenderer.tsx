@@ -110,6 +110,8 @@ type ProposalLetterheadViewModel = {
   candidateName: string;
   candidateRole: string;
   candidateContactLine: string;
+  candidateDirectorContactLine: string;
+  candidateFilmSenderLine: string;
   candidateLocationLine: string;
   candidatePhone: string;
   candidateEmail: string;
@@ -262,12 +264,9 @@ function buildProposalLetterheadViewModel(args: {
     args.documentMeta?.trim() ||
     "";
   const candidatePhone = args.applicantHeader?.phone?.trim() ?? "";
-  const candidateEmail =
-    args.applicantHeader?.email?.trim() || args.documentMeta?.trim() || "";
-  const candidateWebsite =
-    args.applicantHeader?.website?.trim() ||
-    args.applicantHeader?.linkedin?.trim() ||
-    "";
+  const candidateEmail = args.applicantHeader?.email?.trim() ?? "";
+  const candidateWebsite = args.applicantHeader?.website?.trim() ?? "";
+  const candidateLinkedin = args.applicantHeader?.linkedin?.trim() ?? "";
   const candidateLocationLine = args.applicantHeader?.location?.trim() ?? "";
   const explicitContactLine = normalizeDocumentContactLine(args.contactLine);
   const explicitContactParts = parseProposalContactLine(explicitContactLine);
@@ -275,13 +274,24 @@ function buildProposalLetterheadViewModel(args: {
     email: candidateEmail || explicitContactParts.email,
     phone: candidatePhone || explicitContactParts.phone,
     location: candidateLocationLine || explicitContactParts.location,
-    linkedin: args.applicantHeader?.linkedin?.trim() || explicitContactParts.linkedin,
+    linkedin: candidateLinkedin || explicitContactParts.linkedin,
     website: candidateWebsite || explicitContactParts.website,
     other: explicitContactParts.other,
   };
   const candidateContactLine =
     buildProposalContactLineFromParts(resolvedContactParts) ||
     explicitContactLine;
+  const candidateDirectorContactLine = buildProposalContactLineFromParts({
+    email: resolvedContactParts.email,
+    linkedin: resolvedContactParts.linkedin,
+    website: resolvedContactParts.website,
+    other: resolvedContactParts.other,
+  });
+  const candidateFilmSenderLine = buildProposalContactLineFromParts({
+    email: resolvedContactParts.email,
+    location: resolvedContactParts.location,
+    other: resolvedContactParts.other,
+  });
   const recipientName = visibility.showRecipient
     ? recipientFields.name?.trim() ?? ""
     : "";
@@ -299,6 +309,8 @@ function buildProposalLetterheadViewModel(args: {
     candidateName,
     candidateRole,
     candidateContactLine,
+    candidateDirectorContactLine,
+    candidateFilmSenderLine,
     candidateLocationLine: resolvedContactParts.location,
     candidatePhone: resolvedContactParts.phone,
     candidateEmail: resolvedContactParts.email,
@@ -391,8 +403,8 @@ export function ProposalCoverLetterDirectorTemplate({
               {viewModel.candidateLocationLine ? (
                 <p>{viewModel.candidateLocationLine}</p>
               ) : null}
-              {viewModel.candidateContactLine ? (
-                <p>{viewModel.candidateContactLine}</p>
+              {viewModel.candidateDirectorContactLine ? (
+                <p>{viewModel.candidateDirectorContactLine}</p>
               ) : null}
             </div>
           </section>
@@ -472,6 +484,11 @@ export function ProposalCoverLetterFilmFotoTemplate({
       {!isContinuationPage ? (
         <>
           <header className="proposal-cover-letter__film-header">
+            {viewModel.candidateName ? (
+              <p className="proposal-cover-letter__film-heading">
+                {viewModel.candidateName}
+              </p>
+            ) : null}
             {largeTitle ? (
               <p className="proposal-cover-letter__film-title">{largeTitle}</p>
             ) : null}
@@ -480,8 +497,8 @@ export function ProposalCoverLetterFilmFotoTemplate({
           <section className="proposal-cover-letter__info-blocks">
             <div>
               <p className="proposal-cover-letter__info-label">sender</p>
-              {viewModel.candidateContactLine ? (
-                <p>{viewModel.candidateContactLine}</p>
+              {viewModel.candidateFilmSenderLine ? (
+                <p>{viewModel.candidateFilmSenderLine}</p>
               ) : null}
             </div>
             <div>

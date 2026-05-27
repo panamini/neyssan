@@ -892,6 +892,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--volk .proposal-cover-letter__subject-label,
     .proposal-cover-letter--volk .proposal-cover-letter__subject-value,
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-title,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__film-heading,
     .proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
     .proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
       font-family: var(--heading-font, var(--font-heading-family));
@@ -1078,12 +1079,24 @@ function buildStyledProposalAppearanceCss(): string {
       top: 23.1mm;
       right: 3mm;
       display: grid;
-      grid-template-columns: minmax(0, 1fr);
+      grid-template-columns: minmax(0, 70mm) minmax(0, 1fr);
       align-items: baseline;
+    }
+
+    .proposal-cover-letter--film-foto .proposal-cover-letter__film-heading {
+      margin: 0;
+      min-width: 0;
+      font-size: 3.25mm;
+      line-height: 1;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: lowercase;
+      overflow-wrap: anywhere;
     }
 
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
       margin: 0;
+      grid-column: 2;
       justify-self: end;
       max-width: 178mm;
       text-align: right;
@@ -2702,23 +2715,33 @@ function buildProposalLetterheadExportViewModel(
   const candidateName = data.applicantHeader.name.trim();
   const candidateRole = data.applicantHeader.role.trim() || data.documentMeta.trim();
   const candidatePhone = data.applicantHeader.phone.trim();
-  const candidateEmail =
-    data.applicantHeader.email.trim() || data.documentMeta.trim();
-  const candidateWebsite =
-    data.applicantHeader.website.trim() || data.applicantHeader.linkedin.trim();
+  const candidateEmail = data.applicantHeader.email.trim();
+  const candidateWebsite = data.applicantHeader.website.trim();
+  const candidateLinkedin = data.applicantHeader.linkedin.trim();
   const candidateLocationLine = data.applicantHeader.location.trim();
   const explicitContactParts = parseProposalContactLine(data.contactLine);
   const resolvedContactParts = {
     email: candidateEmail || explicitContactParts.email,
     phone: candidatePhone || explicitContactParts.phone,
     location: candidateLocationLine || explicitContactParts.location,
-    linkedin: data.applicantHeader.linkedin.trim() || explicitContactParts.linkedin,
+    linkedin: candidateLinkedin || explicitContactParts.linkedin,
     website: candidateWebsite || explicitContactParts.website,
     other: explicitContactParts.other,
   };
   const contactLine =
     buildProposalContactLineFromParts(resolvedContactParts) ||
     data.contactLine.trim();
+  const directorContactLine = buildProposalContactLineFromParts({
+    email: resolvedContactParts.email,
+    linkedin: resolvedContactParts.linkedin,
+    website: resolvedContactParts.website,
+    other: resolvedContactParts.other,
+  });
+  const filmSenderLine = buildProposalContactLineFromParts({
+    email: resolvedContactParts.email,
+    location: resolvedContactParts.location,
+    other: resolvedContactParts.other,
+  });
   const subject = data.headerVisibility.showSubject
     ? normalizeLocaleTypography(data.documentTitle, locale).trim()
     : "";
@@ -2747,6 +2770,8 @@ function buildProposalLetterheadExportViewModel(
       resolvedContactParts.website || resolvedContactParts.linkedin,
     candidateLocationLine: resolvedContactParts.location,
     contactLine,
+    directorContactLine,
+    filmSenderLine,
     recipientName,
     recipientCompany,
     recipientRole,
@@ -2820,7 +2845,7 @@ function renderProposalLetterheadExportPage(args: {
         <div class="proposal-cover-letter__sender-lines">
           ${renderExportParagraph(viewModel.candidateName, "")}
           ${renderExportParagraph(viewModel.candidateLocationLine, "")}
-          ${renderExportParagraph(viewModel.contactLine, "")}
+          ${renderExportParagraph(viewModel.directorContactLine, "")}
         </div>
       </section>
       ${viewModel.candidatePhone ? `<section class="proposal-cover-letter__phone-block">
@@ -2854,11 +2879,12 @@ function renderProposalLetterheadExportPage(args: {
 
   return `<main class="export-page ${scopeClass}" data-export-doc="proposal">
     <header class="proposal-cover-letter__film-header">
+      ${renderExportParagraph(viewModel.candidateName, "proposal-cover-letter__film-heading")}
       ${renderExportParagraph(largeTitle, "proposal-cover-letter__film-title")}
       <span class="proposal-cover-letter__film-rule"></span>
     </header>
     <section class="proposal-cover-letter__info-blocks">
-      <div><p class="proposal-cover-letter__info-label">sender</p>${renderExportParagraph(viewModel.contactLine, "")}</div>
+      <div><p class="proposal-cover-letter__info-label">sender</p>${renderExportParagraph(viewModel.filmSenderLine, "")}</div>
       <div><p class="proposal-cover-letter__info-label">phone</p>${renderExportParagraph(viewModel.candidatePhone, "")}</div>
       <div><p class="proposal-cover-letter__info-label">portfolio</p>${renderExportParagraph(viewModel.candidateWebsite, "")}</div>
       <div><p class="proposal-cover-letter__info-label">company</p>${renderExportParagraph(viewModel.recipientCompany, "")}</div>
