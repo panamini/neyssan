@@ -4,6 +4,8 @@ import React from "react";
 import clsx from "clsx";
 import { X } from "@/lib/icons";
 import { BodyPortal } from "@/components/ui/body-portal";
+import { translateUi } from "@/lib/i18n";
+import { useUiLanguagePreference } from "@/lib/ui-preferences";
 
 export interface SheetProps {
   open: boolean;
@@ -58,6 +60,8 @@ export function Sheet({
   footerClassName,
   modal = true,
 }: SheetProps): JSX.Element | null {
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const closePanelLabel = translateUi(resolvedLanguage, "common.closePanel");
   const titleId = React.useId();
   const descriptionId = React.useId();
   const panelRef = React.useRef<HTMLElement | null>(null);
@@ -167,7 +171,7 @@ export function Sheet({
             className={clsx("ds-sheet__overlay", overlayClassName)}
             data-state={surfaceState}
             onClick={() => onOpenChange(false)}
-            aria-label="Close panel"
+            aria-label={closePanelLabel}
           />
         ) : (
           <div
@@ -215,7 +219,7 @@ export function Sheet({
             <button
               type="button"
               className="ds-sheet__close"
-              aria-label="Close panel."
+              aria-label={closePanelLabel}
               onClick={() => onOpenChange(false)}
             >
               <X size={16} strokeWidth={1.8} aria-hidden="true" />
