@@ -111,6 +111,8 @@ type ProposalLetterheadViewModel = {
   candidateRole: string;
   candidateContactLine: string;
   candidateDirectorContactLine: string;
+  candidateDirectorContactMark: "T" | "@";
+  candidateDirectorContactLines: string[];
   candidateFilmSenderLine: string;
   candidateLocationLine: string;
   candidatePhone: string;
@@ -122,6 +124,8 @@ type ProposalLetterheadViewModel = {
   date: string;
   subject: string;
   secondaryTitle: string;
+  metaRole: string;
+  shortRoleTitle: string;
 };
 
 type ProposalCoverLetterTemplateProps = {
@@ -287,6 +291,14 @@ function buildProposalLetterheadViewModel(args: {
     website: resolvedContactParts.website,
     other: resolvedContactParts.other,
   });
+  const candidateDigitalContactLines = [
+    resolvedContactParts.email,
+    resolvedContactParts.website || resolvedContactParts.linkedin,
+  ].filter(Boolean);
+  const candidateDirectorContactMark = resolvedContactParts.phone ? "T" : "@";
+  const candidateDirectorContactLines = resolvedContactParts.phone
+    ? [resolvedContactParts.phone]
+    : candidateDigitalContactLines.slice(0, 2);
   const candidateFilmSenderLine = buildProposalContactLineFromParts({
     email: resolvedContactParts.email,
     location: resolvedContactParts.location,
@@ -303,13 +315,20 @@ function buildProposalLetterheadViewModel(args: {
     : "";
   const subject = visibility.showSubject ? args.documentTitle?.trim() ?? "" : "";
   const secondaryTitle =
-    recipientCompany || subject || candidateRole || args.documentMeta?.trim() || "";
+    recipientCompany ||
+    (visibility.showRecipient ? recipientFields.city?.trim() ?? "" : "") ||
+    resolvedContactParts.location ||
+    "";
+  const metaRole = recipientRole || candidateRole;
+  const shortRoleTitle = candidateRole || recipientRole;
 
   return {
     candidateName,
     candidateRole,
     candidateContactLine,
     candidateDirectorContactLine,
+    candidateDirectorContactMark,
+    candidateDirectorContactLines,
     candidateFilmSenderLine,
     candidateLocationLine: resolvedContactParts.location,
     candidatePhone: resolvedContactParts.phone,
@@ -322,6 +341,8 @@ function buildProposalLetterheadViewModel(args: {
     date: visibility.showDate ? args.letterDate?.trim() ?? "" : "",
     subject,
     secondaryTitle,
+    metaRole,
+    shortRoleTitle,
   };
 }
 
@@ -333,7 +354,7 @@ function ProposalCoverLetterMetaRow({
   const values = [
     viewModel.recipientName,
     viewModel.recipientCompany,
-    viewModel.recipientRole || viewModel.subject,
+    viewModel.metaRole,
     viewModel.date,
   ];
 
@@ -408,11 +429,15 @@ export function ProposalCoverLetterDirectorTemplate({
               ) : null}
             </div>
           </section>
-          {viewModel.candidatePhone ? (
+          {viewModel.candidateDirectorContactLines.length ? (
             <section className="proposal-cover-letter__phone-block">
-              <p className="proposal-cover-letter__phone-mark">T</p>
+              <p className="proposal-cover-letter__phone-mark">
+                {viewModel.candidateDirectorContactMark}
+              </p>
               <div>
-                <p>{viewModel.candidatePhone}</p>
+                {viewModel.candidateDirectorContactLines.map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
               </div>
             </section>
           ) : null}
@@ -477,7 +502,7 @@ export function ProposalCoverLetterFilmFotoTemplate({
   isContinuationPage,
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
-  const largeTitle = viewModel.secondaryTitle || viewModel.subject;
+  const largeTitle = viewModel.shortRoleTitle || viewModel.secondaryTitle;
 
   return (
     <>
@@ -487,6 +512,11 @@ export function ProposalCoverLetterFilmFotoTemplate({
             {viewModel.candidateName ? (
               <p className="proposal-cover-letter__film-heading">
                 {viewModel.candidateName}
+              </p>
+            ) : null}
+            {viewModel.secondaryTitle ? (
+              <p className="proposal-cover-letter__film-company">
+                {viewModel.secondaryTitle}
               </p>
             ) : null}
             {largeTitle ? (

@@ -556,6 +556,72 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     {
       templateId: "director-letterhead" as const,
       scope: ".proposal-cover-letter--director",
+      headerSelector: ".proposal-cover-letter__masthead",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: ".proposal-cover-letter--volk",
+      headerSelector: ".proposal-cover-letter__volk-header",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: ".proposal-cover-letter--film-foto",
+      headerSelector: ".proposal-cover-letter__film-header",
+    },
+  ])(
+    "keeps the long generated subject out of short title regions for $templateId",
+    ({ templateId, scope, headerSelector }) => {
+      const longSubject =
+        "Application for the position of Security Guard Full Time Airport Unarmed at Us Smart Tools";
+      const { container } = render(
+        <ProposalDocumentRenderer
+          content="Dear Hiring Manager,\n\nI can support the team."
+          proposalType="cover_letter"
+          templateId={templateId}
+          railTitle="Robert Cooper"
+          railMeta="Security Guard"
+          contactLine="email@email.com · CA 90291 United States"
+          letterDate="May 12, 2026"
+          recipientDetails={"Hiring Manager\nSecurity Guard\nUs Smart Tools"}
+          documentTitle={longSubject}
+          documentTypography={{
+            fontFamily: "Georgia, serif",
+            fontSize: "14px",
+            lineHeight: 1.5,
+            fontWeight: 400,
+            letterSpacing: "0em",
+          }}
+          applicantHeader={{
+            name: "Robert Cooper",
+            role: "Security Guard",
+            email: "email@email.com",
+            phone: "+3586853442",
+            linkedin: null,
+            website: "",
+            location: "CA 90291 United States",
+            tag: null,
+          }}
+        />,
+      );
+      const root = container.querySelector(scope);
+      const renderedPage = Array.from(
+        root?.querySelectorAll(".dasti-proposal-document__page") ?? [],
+      ).at(-1);
+      const header = renderedPage?.querySelector(headerSelector);
+      const metaRow = renderedPage?.querySelector(".proposal-cover-letter__meta-row");
+
+      expect(countTextOccurrences(renderedPage?.textContent ?? "", longSubject)).toBe(1);
+      expect(header?.textContent).not.toContain(longSubject);
+      expect(metaRow?.textContent).not.toContain(longSubject);
+      expect(renderedPage?.textContent).toContain("Security Guard");
+      expect(renderedPage?.textContent).toContain("Us Smart Tools");
+    },
+  );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: ".proposal-cover-letter--director",
     },
     {
       templateId: "volk-letterhead" as const,
@@ -675,5 +741,35 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(phoneBlock?.textContent).toContain("T");
     expect(phoneBlock?.textContent).toContain("09898777");
     expect(phoneBlock?.textContent).not.toContain("zoe@loi.com");
+  });
+
+  it("uses a digital @ contact block in the director letterhead when no phone exists", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="Dear Hiring Manager,\n\nI can support the team."
+        proposalType="cover_letter"
+        templateId="director-letterhead"
+        railTitle="Zoe Lund"
+        railMeta="Security Guard"
+        contactLine="zoe@loi.com · Paris · zoe.com"
+        documentTitle="Security Guard"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    const phoneBlock = container.querySelector(
+      ".proposal-cover-letter--director .proposal-cover-letter__phone-block",
+    );
+
+    expect(phoneBlock?.textContent).toContain("@");
+    expect(phoneBlock?.textContent).toContain("zoe@loi.com");
+    expect(phoneBlock?.textContent).toContain("zoe.com");
+    expect(phoneBlock?.textContent).not.toContain("T");
   });
 });

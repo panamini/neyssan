@@ -551,6 +551,104 @@ describe("export-renderers", () => {
     expect(phoneBlock?.textContent).not.toContain("zoe@loi.com");
   });
 
+  it("uses a digital @ contact block in the director letterhead export when no phone exists", () => {
+    const document = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          templateId: "director-letterhead",
+          contactLine: "zoe@loi.com · Paris · zoe.com",
+          applicantHeader: {
+            ...proposalFixture.applicantHeader,
+            email: "",
+            phone: "",
+            location: "",
+            linkedin: "",
+            website: "",
+          },
+        },
+        stylePreset: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "expert",
+          palette: "terre",
+        },
+      }),
+    );
+    const phoneBlock = document.querySelector(
+      ".proposal-cover-letter--director .proposal-cover-letter__phone-block",
+    );
+
+    expect(phoneBlock?.textContent).toContain("@");
+    expect(phoneBlock?.textContent).toContain("zoe@loi.com");
+    expect(phoneBlock?.textContent).toContain("zoe.com");
+    expect(phoneBlock?.textContent).not.toContain("T");
+  });
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
+      headerSelector: ".proposal-cover-letter__masthead",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+      headerSelector: ".proposal-cover-letter__volk-header",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: "proposal-cover-letter--film-foto",
+      headerSelector: ".proposal-cover-letter__film-header",
+    },
+  ])(
+    "keeps the long generated subject out of short export title regions for $templateId",
+    ({ templateId, scope, headerSelector }) => {
+      const longSubject =
+        "Application for the position of Security Guard Full Time Airport Unarmed at Us Smart Tools";
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            templateId,
+            documentTitle: longSubject,
+            documentMeta: "Security Guard",
+            recipientDetails: "Hiring Manager\nSecurity Guard\nUs Smart Tools",
+            applicantHeader: {
+              name: "Robert Cooper",
+              role: "Security Guard",
+              email: "email@email.com",
+              phone: "+3586853442",
+              linkedin: "",
+              website: "",
+              location: "CA 90291 United States",
+              tag: "",
+            },
+            body: [
+              { type: "salutation", text: "Dear Hiring Manager," },
+              { type: "paragraph", text: "I can support the team." },
+            ],
+          },
+          stylePreset: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "expert",
+            palette: "terre",
+          },
+        }),
+      );
+      const page = document.querySelector(`.${scope}`);
+      const header = page?.querySelector(headerSelector);
+      const metaRow = page?.querySelector(".proposal-cover-letter__meta-row");
+
+      expect(countTextOccurrences(page?.textContent ?? "", longSubject)).toBe(1);
+      expect(header?.textContent).not.toContain(longSubject);
+      expect(metaRow?.textContent).not.toContain(longSubject);
+      expect(page?.textContent).toContain("Security Guard");
+      expect(page?.textContent).toContain("Us Smart Tools");
+    },
+  );
+
   it.each([
     {
       templateId: "director-letterhead" as const,
